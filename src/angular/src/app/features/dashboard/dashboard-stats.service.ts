@@ -4,10 +4,11 @@ import {
   FilterListsService as FilterListsApiService,
   ForwardersService as ForwardersApiService,
   NinlilWebService,
+  StatusResponse,
   WebhooksService as WebhooksApiService,
   ZonesService as ZonesApiService,
 } from '../../api-client';
-import { QuickStat, StatusResponse } from './dashboard.model';
+import { QuickStat } from './dashboard.model';
 
 /**
  * This interface describes the one field every one of the 4 paged-list responses this service
@@ -33,14 +34,9 @@ export class DashboardStatsService {
   private readonly filterListsApi = inject(FilterListsApiService);
   private readonly webhooksApi = inject(WebhooksApiService);
 
-  /**
-   * This method fetches `GET /status`. See {@link StatusResponse}'s own doc comment for why the
-   * generated client types this call as `Observable<any>` and this method casts the response
-   * through a hand-written interface instead of a generated model.
-   */
+  /** This method fetches `GET /status`. */
   async fetchStatus(): Promise<StatusResponse> {
-    const response = await firstValueFrom(this.statusApi.statusGet());
-    return response as StatusResponse;
+    return firstValueFrom(this.statusApi.statusGet());
   }
 
   /**

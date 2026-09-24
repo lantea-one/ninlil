@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This class carries the fields used to create or fully replace a global upstream forwarder (`POST`/`PUT /api/forwarders`).
+ */
 export interface ForwarderWriteRequest { 
+    /**
+     * An operator-chosen, human-readable, unique name for this forwarder.
+     */
     name?: string | null;
+    /**
+     * The forwarder\'s own Technitium/AdGuard Home-style definition string -- a bare address, a `udp://`/`tcp://`/`tls://`/`https://`/`quic://` URL, or an `sdns://` DNSCrypt stamp -- validated against the real `IUpstreamForwarderDefinitionParser` (and, for an `sdns://` stamp, `DnsCryptStampParser`) before this forwarder is ever persisted, rather than accepting an arbitrary string, the same \"validate against the real codec/parser\" discipline Ninlil.Web.Controllers.RecordsController already applies to a record\'s own `data` field.
+     */
     definitionString?: string | null;
+    /**
+     * This forwarder\'s own position among every other configured global forwarder -- lower values are preferred first.
+     */
     sortOrder?: number;
+    /**
+     * Whether the forwarder starts out (or is currently) disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this forwarder.
+     */
     comments?: string | null;
 }
 

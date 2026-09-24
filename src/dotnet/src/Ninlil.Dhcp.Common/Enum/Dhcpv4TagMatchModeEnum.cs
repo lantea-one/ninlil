@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 // Define our namespace.
 namespace Ninlil.Dhcp.Common.Enum;
 
@@ -12,7 +14,13 @@ namespace Ninlil.Dhcp.Common.Enum;
 ///     "the whole thing must match" rule is always what an operator wants (a fleet of similar
 ///     devices often share a common vendor-class prefix -- "MSFT 5.0", "udhcp 1.30.1", and
 ///     similar -- while trailing characters vary by firmware build).
+///     <para>
+///         The REST API sends this as its member name. The converter sits on the type rather than
+///         on each DTO property so the OpenAPI document describes it as a string enum too:
+///         Swashbuckle reads a type-level converter but ignores a property-level one.
+///     </para>
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<Dhcpv4TagMatchModeEnum>))]
 public enum Dhcpv4TagMatchModeEnum
 {
     /// <summary>

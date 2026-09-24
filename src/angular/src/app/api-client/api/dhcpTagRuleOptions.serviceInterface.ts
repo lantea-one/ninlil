@@ -52,7 +52,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every option a tag rule contributes.
      * 
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpTagRuleOptionDetailPagedResult>;
 
     /**
-     * 
+     * This action removes an option from the tag rule.
      * 
      * @endpoint delete /api/dhcp-tag-rules/{tagRuleId}/options/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsIdDelete(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single option by its identifier.
      * 
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsIdGet(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpTagRuleOptionDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing option\&#39;s own fields, keeping its own identifier and owning rule.
      * 
      * @endpoint put /api/dhcp-tag-rules/{tagRuleId}/options/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DhcpTagRuleOptionsServiceInterface {
     apiDhcpTagRulesTagRuleIdOptionsIdPut(requestParameters: ApiDhcpTagRulesTagRuleIdOptionsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new option to a tag rule.
      * 
      * @endpoint post /api/dhcp-tag-rules/{tagRuleId}/options
 * @param requestParameters

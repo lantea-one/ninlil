@@ -38,7 +38,7 @@ describe('DashboardStatsService', () => {
     service = TestBed.inject(DashboardStatsService);
   });
 
-  it('fetchStatus() returns the raw /status response, cast to StatusResponse', async () => {
+  it('fetchStatus() returns the /status response', async () => {
     statusApiSpy.statusGet.and.returnValue(
       of({
         status: 'Healthy',

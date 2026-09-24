@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the fields used to start a new instant pause (`POST /api/clients/{clientId}/pause` and its client-group counterpart) -- a duration, rather than an explicit timestamp, since a one-click \"15 min / 1 hour / until tomorrow morning\" UI is this feature\'s own primary use case, and a duration needs no client-side time-zone/clock-skew reasoning at all: the server always computes `PausedUntilUtc` as its own current instant plus this duration.
+ */
 export interface InstantPauseRequest { 
+    /**
+     * How many minutes, from now, to pause for. Must be a positive number -- zero or negative is rejected with a `400`Ninlil.Dns.Common.Exceptions.ValidationException.
+     */
     durationMinutes?: number;
 }
 

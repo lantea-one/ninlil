@@ -10,16 +10,46 @@
 import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
+/**
+ * This class carries the fields used to create a new outbound webhook subscription (`POST /api/webhooks`). See Ninlil.Web.Models.WebhookSubscriptionCreateResponse for the one place Ninlil.Web.Models.WebhookSubscriptionCreateRequest.AuthCredentials/the resulting HMAC signing secret are ever shown.
+ */
 export interface WebhookSubscriptionCreateRequest { 
+    /**
+     * An operator-chosen, human-readable, unique name for this subscription.
+     */
     name?: string | null;
+    /**
+     * The absolute URL every matching event is POSTed to.
+     */
     targetUrl?: string | null;
+    /**
+     * Which event types this subscription wants delivered, by their own registered `DnsServerEventTypeRegistry` name (for example, `\"DnsZoneChanged\"`) -- validated against that real registry before this subscription is ever persisted, rather than accepting an arbitrary string, the same \"validate against the real registry/parser\" discipline Ninlil.Web.Models.ForwarderWriteRequest\'s own `DefinitionString` already applies.
+     */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
+    /**
+     * This subscription\'s own outbound authentication credential(s), required when Ninlil.Web.Models.WebhookSubscriptionCreateRequest.AuthMode is not `None` -- `{\"BearerToken\":\"...\"}` for `Bearer`, or `{\"Username\":\"...\",\"Password\":\"...\"}` for `Basic`. These are always operator-supplied (this server never generates a bearer token or password on an operator\'s behalf, unlike a TSIG key\'s own shared secret) and are returned exactly once, in this endpoint\'s own response, and never again afterward.
+     */
     authCredentials?: { [key: string]: string | null; } | null;
+    /**
+     * Whether this subscription signs its own outbound payloads with an HMAC secret, delivered via a header the delivery engine adds (for example, `X-Ninlil-Signature`) so the receiver can verify authenticity.
+     */
     enableHmacSigning?: boolean;
+    /**
+     * This subscription\'s own HMAC payload-signing secret, used only when Ninlil.Web.Models.WebhookSubscriptionCreateRequest.EnableHmacSigning is true. When omitted, a cryptographically random secret is generated instead -- either way, the plaintext secret is only ever shown once, in this endpoint\'s own response; every later request for this subscription omits it. Once set, this secret can only be rotated or disabled by deleting and recreating the subscription -- neither `PUT` nor `PATCH` can touch it, the same reveal-once limitation Ninlil.Web.Models.TsigKeyWriteRequest already documents for a TSIG key\'s own server-generated secret.
+     */
     hmacSigningSecret?: string | null;
+    /**
+     * The maximum number of delivery attempts the delivery engine makes for a single event before giving up and logging the failure.
+     */
     maxDeliveryAttempts?: number;
+    /**
+     * Whether the subscription starts out disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this subscription.
+     */
     comments?: string | null;
 }
 export namespace WebhookSubscriptionCreateRequest {

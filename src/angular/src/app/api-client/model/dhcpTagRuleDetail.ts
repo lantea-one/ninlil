@@ -10,6 +10,9 @@
 import { Dhcpv4TagMatchModeEnum } from './dhcpv4TagMatchModeEnum';
 
 
+/**
+ * This class carries a tag rule\'s own metadata, for list, single-item, and creation responses.
+ */
 export interface DhcpTagRuleDetail { 
     id?: string;
     name?: string | null;

@@ -12,14 +12,32 @@ import { DnsFilterListKindEnum } from './dnsFilterListKindEnum';
 import { DnsFilterListSourceEnum } from './dnsFilterListSourceEnum';
 
 
+/**
+ * This class carries the fields used to create a new block/allow list (`POST /api/filter-lists`).
+ */
 export interface FilterListWriteRequest { 
+    /**
+     * An operator-chosen, human-readable, unique name for this list.
+     */
     name?: string | null;
     kind?: DnsFilterListKindEnum;
     action?: DnsFilterListActionEnum;
     source?: DnsFilterListSourceEnum;
+    /**
+     * The URL a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are periodically fetched from. Required when Ninlil.Web.Models.FilterListWriteRequest.Source is Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed, otherwise ignored.
+     */
     subscriptionUrl?: string | null;
+    /**
+     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are refetched. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
+     */
     refreshInterval?: string | null;
+    /**
+     * Whether the list starts out disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the list.
+     */
     comments?: string | null;
 }
 export namespace FilterListWriteRequest {

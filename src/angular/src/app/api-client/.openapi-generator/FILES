@@ -399,6 +399,8 @@ model/selfUpdateStatusDetail.ts
 model/smtpSettingsDetail.ts
 model/sqliteStorageConnectionFields.ts
 model/ssoStatusResult.ts
+model/statusComponent.ts
+model/statusResponse.ts
 model/storageEngineEnum.ts
 model/storageEngineSwitchApiRequest.ts
 model/storageEngineSwitchResult.ts

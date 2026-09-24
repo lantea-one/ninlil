@@ -33,14 +33,14 @@ export interface ApiTokensServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every API token belonging to the current caller, without exposing any token\&#39;s own secret value.
      * 
      * @endpoint get /api/api-tokens
 */
     apiApiTokensGet(extraHttpRequestParams?: any): Observable<Array<ApiTokenSummary>>;
 
     /**
-     * 
+     * This action revokes one of the current caller\&#39;s own API tokens, so it can no longer be used to authenticate.
      * 
      * @endpoint delete /api/api-tokens/{id}
 * @param requestParameters
@@ -48,7 +48,7 @@ export interface ApiTokensServiceInterface {
     apiApiTokensIdDelete(requestParameters: ApiApiTokensIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action issues a new API token for the current caller, returning its raw, secret value -- shown this one time only.
      * 
      * @endpoint post /api/api-tokens
 * @param requestParameters

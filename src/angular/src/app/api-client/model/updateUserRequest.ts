@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This class carries the settings that can be changed on an existing user account. Password changes are handled separately, not through this endpoint.
+ */
 export interface UpdateUserRequest { 
+    /**
+     * The account\'s new friendly display name.
+     */
     displayName?: string | null;
+    /**
+     * The account\'s new e-mail address.
+     */
     email?: string | null;
+    /**
+     * Whether the account should be disabled (rejected at sign-in).
+     */
     isDisabled?: boolean;
 }
 

@@ -42,6 +42,7 @@ export class RecursiveSettingsService extends BaseService implements RecursiveSe
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live -- reflecting any write M:Ninlil.Web.Controllers.RecursiveSettingsController.Patch(System.Text.Json.JsonElement) has made to every field except the two override lists, even without a restart) recursive resolver settings.
      * @endpoint get /api/recursive-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class RecursiveSettingsService extends BaseService implements RecursiveSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Recursive&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. See this class\&#39;s own doc comment for which fields take effect immediately and which need a restart.
      * @endpoint patch /api/recursive-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

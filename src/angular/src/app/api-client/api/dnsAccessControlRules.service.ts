@@ -48,6 +48,7 @@ export class DnsAccessControlRulesService extends BaseService implements DnsAcce
     }
 
     /**
+     * This action lists every access-control rule this server knows about, enabled or not.
      * @endpoint get /api/access-control-rules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -128,6 +129,7 @@ export class DnsAccessControlRulesService extends BaseService implements DnsAcce
     }
 
     /**
+     * This action permanently deletes an access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache no longer grants anything on its behalf.
      * @endpoint delete /api/access-control-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -186,6 +188,7 @@ export class DnsAccessControlRulesService extends BaseService implements DnsAcce
     }
 
     /**
+     * This action looks up a single access-control rule by its identifier.
      * @endpoint get /api/access-control-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -247,6 +250,7 @@ export class DnsAccessControlRulesService extends BaseService implements DnsAcce
     }
 
     /**
+     * This action fully replaces an existing access-control rule\&#39;s fields, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks up the change without a restart.
      * @endpoint put /api/access-control-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -318,6 +322,7 @@ export class DnsAccessControlRulesService extends BaseService implements DnsAcce
     }
 
     /**
+     * This action creates a new access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks it up without a restart.
      * @endpoint post /api/access-control-rules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -25,7 +25,8 @@ public class SelfUpdateStatusDetailExample : IExamplesProvider<SelfUpdateStatusD
             true,
             "https://example.com/ninlil/releases/0.4.0",
             "Fixes a real DNSSEC validation edge case; adds native DNS64 support.",
-            DateTimeOffset.UtcNow,
+            // A fixed date, not the clock, so the committed OpenAPI snapshot is the same on every regeneration.
+            DateTimeOffset.Parse("2026-06-15T10:00:00+00:00"),
             null,
             "Version 0.4.0.0 is available (currently running 0.1.0.0). Download the new release "
                 + "from https://example.com/ninlil/releases/0.4.0, replace this server's own "

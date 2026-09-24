@@ -68,6 +68,15 @@ public record DnssecKeyWriteRequest(bool IsRetired = false, string Comments = nu
 /// <param name="Comments">Free-form operator notes about the key.</param>
 /// <param name="CreatedAtUtc">When the key was created.</param>
 /// <param name="UpdatedAtUtc">When the key's own metadata was last updated, if ever.</param>
+/// <param name="DnsKeyRecord">The key's DNSKEY record in presentation format, as published in the zone.</param>
+/// <param name="DsRecord">
+///     The SHA-256 DS record a parent zone publishes for this key, in presentation format, or
+///     <see langword="null" /> for a ZSK, which the parent never references.
+/// </param>
+/// <param name="DsDigest">
+///     The digest part of <paramref name="DsRecord" /> on its own, as uppercase hexadecimal, for
+///     registrars that ask for the key tag, algorithm, digest type and digest separately.
+/// </param>
 public record DnssecKeyDetail(
     Guid Id,
     Guid ZoneId,
@@ -82,7 +91,10 @@ public record DnssecKeyDetail(
     DnssecKeyLifecycleStateEnum LifecycleState,
     DateTimeOffset PublishedAtUtc,
     DateTimeOffset? RetiredAtUtc,
-    DateTimeOffset? ParentDsConfirmedAtUtc
+    DateTimeOffset? ParentDsConfirmedAtUtc,
+    string DnsKeyRecord,
+    string DsRecord,
+    string DsDigest
 );
 
 /// <summary>

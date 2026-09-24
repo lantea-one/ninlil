@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Dnssec;
 using Ninlil.Web.Examples.DnssecKeys;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -61,7 +62,8 @@ public class DnssecKeysController(
         CancellationToken stoppingToken
     )
     {
-        if (await zoneRepository.GetByIdAsync(zoneId, stoppingToken) is null)
+        ZoneEntity zone = await zoneRepository.GetByIdAsync(zoneId, stoppingToken);
+        if (zone is null)
             throw new NotFoundException("Zone", zoneId.ToString());
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
@@ -78,7 +80,12 @@ public class DnssecKeysController(
         int totalCount = await dnssecKeyRepository.CountByZoneIdAsync(zoneId, stoppingToken);
 
         return Ok(
-            new PagedResult<DnssecKeyDetail>([.. keys.Select(ToDetail)], skip, take, totalCount)
+            new PagedResult<DnssecKeyDetail>(
+                [.. keys.Select(key => ToDetail(key, zone.Name))],
+                skip,
+                take,
+                totalCount
+            )
         );
     }
 
@@ -98,7 +105,12 @@ public class DnssecKeysController(
         if (key is null || key.ZoneId != zoneId)
             throw new NotFoundException("DnssecKey", id.ToString());
 
-        return Ok(ToDetail(key));
+        // The zone's name is the owner name of the DNSKEY and DS records in the response.
+        ZoneEntity zone = await zoneRepository.GetByIdAsync(zoneId, stoppingToken);
+        if (zone is null)
+            throw new NotFoundException("Zone", zoneId.ToString());
+
+        return Ok(ToDetail(key, zone.Name));
     }
 
     /// <summary>
@@ -140,7 +152,7 @@ public class DnssecKeysController(
         // SignedZoneCache reloads and re-signs the zone with the new key included.
         eventPublisher.Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, zoneId, zone.Name));
 
-        return CreatedAtAction(nameof(Get), new { zoneId, id = key.Id }, ToDetail(key));
+        return CreatedAtAction(nameof(Get), new { zoneId, id = key.Id }, ToDetail(key, zone.Name));
     }
 
     /// <summary>
@@ -296,7 +308,7 @@ public class DnssecKeysController(
         return CreatedAtAction(
             nameof(Get),
             new { zoneId, id = replacement.Id },
-            ToDetail(replacement)
+            ToDetail(replacement, zone.Name)
         );
     }
 
@@ -329,8 +341,17 @@ public class DnssecKeysController(
     ///     This method converts a DNSSEC key entity into its REST representation, deliberately
     ///     never including its own private key material.
     /// </summary>
-    private static DnssecKeyDetail ToDetail(DnssecKeyEntity key) =>
-        new(
+    private static DnssecKeyDetail ToDetail(DnssecKeyEntity key, string zoneName)
+    {
+        (string dnsKeyRecord, string dsRecord, string dsDigest) = DnssecParentRecords.Describe(
+            zoneName,
+            key.Role,
+            key.Algorithm,
+            key.PublicKeyWireFormat,
+            key.KeyTag
+        );
+
+        return new(
             key.Id,
             key.ZoneId,
             key.Role,
@@ -344,6 +365,10 @@ public class DnssecKeysController(
             key.LifecycleState,
             key.PublishedAtUtc,
             key.RetiredAtUtc,
-            key.ParentDsConfirmedAtUtc
+            key.ParentDsConfirmedAtUtc,
+            dnsKeyRecord,
+            dsRecord,
+            dsDigest
         );
+    }
 }

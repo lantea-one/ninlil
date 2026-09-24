@@ -13,28 +13,88 @@ import { ZoneTransferTransportEnum } from './zoneTransferTransportEnum';
 import { DnssecDenialOfExistenceModeEnum } from './dnssecDenialOfExistenceModeEnum';
 
 
+/**
+ * This class carries every writable field of a `ZoneEntity` -- used both to create a new zone (`POST /api/zones`) and to fully replace an existing one (`PUT /api/zones/{id}`), since the two share an identical field set. A zone\'s records (starting with its own SOA) are managed separately, through the nested `/api/zones/{zoneId}/records` endpoints -- creating a zone here only creates its metadata shell.
+ */
 export interface ZoneWriteRequest { 
+    /**
+     * The zone\'s fully-qualified name, without a trailing dot.
+     */
     name?: string | null;
     type?: ZoneTypeEnum;
+    /**
+     * Whether the zone is signed with DNSSEC.
+     */
     isDnssecSigned?: boolean;
     dnssecAlgorithm?: DnssecAlgorithmEnum;
     denialOfExistenceMode?: DnssecDenialOfExistenceModeEnum;
+    /**
+     * How many additional times a signed zone\'s NSEC3 chain hashes.
+     */
     nsec3Iterations?: number;
+    /**
+     * A signed zone\'s NSEC3 salt, as hexadecimal text.
+     */
     nsec3SaltHex?: string | null;
+    /**
+     * Whether the zone is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * The upstream name servers this zone transfers from, for a secondary/stub zone.
+     */
     primaryServerAddresses?: Array<string> | null;
+    /**
+     * The addresses this zone forwards every query to.
+     */
     forwarderAddresses?: Array<string> | null;
+    /**
+     * The secondaries this zone sends an outbound NOTIFY to.
+     */
     notifyAddresses?: Array<string> | null;
+    /**
+     * The TSIG key this zone signs its outbound transfer requests with.
+     */
     tsigKeyName?: string | null;
+    /**
+     * Whether this zone accepts RFC 2136 dynamic updates.
+     */
     dynamicUpdateEnabled?: boolean;
+    /**
+     * Free-form operator notes about the zone.
+     */
     comments?: string | null;
+    /**
+     * The credential this zone syncs against, for a cloud zone.
+     */
     cloudProviderCredentialId?: string | null;
+    /**
+     * This zone\'s own identifier at its cloud provider.
+     */
     cloudProviderZoneId?: string | null;
+    /**
+     * How often this zone\'s cloud sync runs.
+     */
     cloudSyncInterval?: string | null;
+    /**
+     * Whether the CAA auto-management feature reconciles this zone\'s CAA records. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
+     */
     autoManageCaaRecords?: boolean | null;
+    /**
+     * This zone\'s own override of which CA issuer domain CAA auto-management writes into the CAA records it creates. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
+     */
     caaIssuerDomain?: string | null;
+    /**
+     * Whether the PTR/reverse-zone sync feature mirrors this zone\'s own A/AAAA records into the enclosing reverse zone. null inherits `PtrSyncOptions.DefaultEnabled` (which itself defaults to false -- unlike CAA auto-management, this feature is opt-in).
+     */
     autoManagePtrRecords?: boolean | null;
+    /**
+     * This zone\'s own override of the IPv4 reverse-zone grouping granularity, in bits, or null to inherit `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`. A value of `24` (the conventional octet boundary) behaves exactly as before RFC 2317 support existed; `25`-`30` switches to RFC 2317\'s own classless delegation. Validated at the write boundary to be either `null` or within `24`-`30` inclusive.
+     */
     ptrIpv4PrefixLength?: number | null;
+    /**
+     * This zone\'s own override of the IPv6 reverse-zone grouping granularity, in bits, or null to inherit `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`. Validated at the write boundary to be either `null` or a multiple of `4` between `16` and `124` inclusive.
+     */
     ptrIpv6PrefixLength?: number | null;
     transferTransport?: ZoneTransferTransportEnum;
 }

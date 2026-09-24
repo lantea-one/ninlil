@@ -19,8 +19,9 @@ public class AcmeCertificateInventoryEntryExample : IExamplesProvider<AcmeCertif
         new(
             Domain: "dns.example.com",
             HasCertificate: true,
-            IssuedAtUtc: DateTimeOffset.UtcNow,
-            ExpiresAtUtc: DateTimeOffset.UtcNow.AddDays(90),
+            // Fixed dates, not the clock, so the committed OpenAPI snapshot is the same on every regeneration.
+            IssuedAtUtc: DateTimeOffset.Parse("2026-06-15T10:00:00+00:00"),
+            ExpiresAtUtc: DateTimeOffset.Parse("2026-09-13T10:00:00+00:00"),
             IsDueForRenewal: false,
             LastFailureAtUtc: null,
             LastFailureMessage: null

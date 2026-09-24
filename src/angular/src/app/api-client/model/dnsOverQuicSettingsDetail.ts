@@ -10,10 +10,25 @@
 import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
+/**
+ * This record is the REST representation of DNS-over-QUIC\'s own `DnsOverQuicOptions`.
+ */
 export interface DnsOverQuicSettingsDetail { 
+    /**
+     * Whether this transport listens at all. <b>Genuinely live</b>: toggling this field starts or stops the real, already-running `dns-over-quic` listener registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart.
+     */
     enable?: boolean;
+    /**
+     * The port this transport binds to. Restart-required.
+     */
     port?: number;
+    /**
+     * How long a QUIC connection may sit completely idle before this server closes it. Restart-required.
+     */
     idleTimeout?: string;
+    /**
+     * How many bidirectional streams a single QUIC connection may have open at once. Restart-required.
+     */
     maxConcurrentBidirectionalStreams?: number;
     certificate?: TlsCertificateSettingsDetail;
 }

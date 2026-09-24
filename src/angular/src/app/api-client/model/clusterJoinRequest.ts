@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This class carries the fields used to consume an invite code and join a cluster (`POST /api/cluster/nodes/join`).
+ */
 export interface ClusterJoinRequest { 
+    /**
+     * The opaque code copied from the inviting node\'s own Angular \"Cluster\" page.
+     */
     inviteCode?: string | null;
+    /**
+     * An optional display name for the inviter\'s own new row in this node\'s registry -- falls back to a name derived from the inviter\'s node identifier when omitted.
+     */
     displayName?: string | null;
 }
 

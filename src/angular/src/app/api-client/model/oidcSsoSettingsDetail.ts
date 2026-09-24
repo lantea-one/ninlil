@@ -9,12 +9,33 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `OidcSsoOptions`. Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured stands in for the real client secret, never returned by a `GET` -- the same reveal-once posture every other secret-bearing setting in this project already follows.
+ */
 export interface OidcSsoSettingsDetail { 
+    /**
+     * Whether this host is configured to federate admin sign-in through OpenID Connect.
+     */
     enable?: boolean;
+    /**
+     * The label the Angular admin SPA\'s own login page renders on its \"Sign in with SSO\" button.
+     */
     displayName?: string | null;
+    /**
+     * The identity provider\'s own issuer URL.
+     */
     authority?: string | null;
+    /**
+     * The OAuth 2.0 client identifier this host was registered under.
+     */
     clientId?: string | null;
+    /**
+     * Whether `OidcSsoOptions.ClientSecretEncrypted` currently has a value -- the secret itself is never returned by a `GET`.
+     */
     clientSecretConfigured?: boolean;
+    /**
+     * The OpenID Connect scopes requested during the authorization code flow.
+     */
     scopes?: Array<string> | null;
 }
 

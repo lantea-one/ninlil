@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record carries `ActiveMqEventBrokerOptions`\'s own settings, minus `Password` -- see Ninlil.Web.Models.RabbitMqBrokerSettingsDetail\'s own doc comment.
+ */
 export interface ActiveMqBrokerSettingsDetail { 
     hostName?: string | null;
     port?: number;

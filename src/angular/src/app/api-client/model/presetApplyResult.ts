@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is returned after a preset is successfully applied.
+ */
 export interface PresetApplyResult { 
+    /**
+     * The preset that was applied.
+     */
     name?: string | null;
+    /**
+     * When the preset was applied.
+     */
     appliedAtUtc?: string;
+    /**
+     * A reminder that some settings this preset touches are only read via Microsoft.Extensions.Options.IOptions`1, not Microsoft.Extensions.Options.IOptionsMonitor`1, and therefore need a restart before they take effect.
+     */
     note?: string | null;
 }
 

@@ -10,8 +10,14 @@
 import { AdminPasswordResetMode } from './adminPasswordResetMode';
 
 
+/**
+ * This class carries the outcome of an administrator-driven password reset.
+ */
 export interface AdminResetPasswordResult { 
     mode?: AdminPasswordResetMode;
+    /**
+     * The newly-generated password, shown exactly this once -- set only when Mode is Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate; null for Ninlil.Web.Models.AdminPasswordResetMode.EmailLink, since that mode never learns the account holder\'s new password at all.
+     */
     generatedPassword?: string | null;
 }
 export namespace AdminResetPasswordResult {

@@ -10,6 +10,9 @@
 import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
+/**
+ * This class carries a cloud DNS provider credential set\'s own metadata, for list, single-item, and (nested inside Ninlil.Web.Models.CloudProviderCredentialCreateResponse) creation responses. The credential set\'s own secret material is never included here -- see Ninlil.Web.Models.CloudProviderCredentialCreateResponse for the one place it ever appears.
+ */
 export interface CloudProviderCredentialDetail { 
     id?: string;
     name?: string | null;

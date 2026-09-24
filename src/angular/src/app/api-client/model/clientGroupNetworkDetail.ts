@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This class carries a single client group network\'s own fields, for list, single-item, and creation responses.
+ */
 export interface ClientGroupNetworkDetail { 
     id?: string;
     clientGroupId?: string;

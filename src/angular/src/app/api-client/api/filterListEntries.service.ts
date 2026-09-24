@@ -48,6 +48,7 @@ export class FilterListEntriesService extends BaseService implements FilterListE
     }
 
     /**
+     * This action lists every entry stored in a list.
      * @endpoint get /api/filter-lists/{listId}/entries
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class FilterListEntriesService extends BaseService implements FilterListE
     }
 
     /**
+     * This action removes an entry from the list. Rejected with &#x60;409 Conflict&#x60; for a subscribed list, the same as M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken)/M:Ninlil.Web.Controllers.FilterListEntriesController.Replace(System.Guid,System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken).
      * @endpoint delete /api/filter-lists/{listId}/entries/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class FilterListEntriesService extends BaseService implements FilterListE
     }
 
     /**
+     * This action looks up a single entry by its identifier.
      * @endpoint get /api/filter-lists/{listId}/entries/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class FilterListEntriesService extends BaseService implements FilterListE
     }
 
     /**
+     * This action fully replaces an existing entry\&#39;s own value/comment, keeping its own identifier. Rejected with &#x60;409 Conflict&#x60; for a subscribed list, the same as M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken).
      * @endpoint put /api/filter-lists/{listId}/entries/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class FilterListEntriesService extends BaseService implements FilterListE
     }
 
     /**
+     * This action adds a new entry to a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list. Rejected with &#x60;409 Conflict&#x60; for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list -- see this controller\&#39;s own summary for why.
      * @endpoint post /api/filter-lists/{listId}/entries
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

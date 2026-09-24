@@ -10,6 +10,9 @@
 import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
+/**
+ * This record is the REST representation of one `TrustAnchorOption` entry within Ninlil.Web.Models.RecursiveSettingsDetail.TrustAnchorsOverride.
+ */
 export interface RecursiveTrustAnchorDetail { 
     keyTag?: number;
     algorithm?: DnssecAlgorithmEnum;

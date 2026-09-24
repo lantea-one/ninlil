@@ -28,7 +28,7 @@ export interface DhcpOptionCatalogServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action returns every catalog entry for one protocol version -- the full contents of Ninlil.Dhcp.Common.OptionCatalog.Dhcpv4OptionCatalog.Entries or Ninlil.Dhcp.Common.OptionCatalog.Dhcpv6OptionCatalog.Entries, mapped onto this controller\&#39;s own REST response shape, in the same ascending tag/code order the underlying catalog itself is declared in.
      * 
      * @endpoint get /api/dhcp-option-catalog
 * @param requestParameters

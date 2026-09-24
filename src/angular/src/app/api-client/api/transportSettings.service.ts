@@ -54,6 +54,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action reads DNS-over-HTTPS\&#39;s own currently-effective settings.
      * @endpoint get /api/transport-settings/dns-over-https
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -110,6 +111,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which needs a full process restart -- Ninlil.Web.Models.DnsOverHttpsSettingsDetail\&#39;s own doc comment explains why &#x60;path&#x60;/&#x60;maxMessageSizeBytes&#x60; specifically need the whole process to restart, not merely this one transport.
      * @endpoint patch /api/transport-settings/dns-over-https
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -180,6 +182,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action reads DNS-over-QUIC\&#39;s own currently-effective settings.
      * @endpoint get /api/transport-settings/dns-over-quic
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -236,6 +239,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverQuic&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which is restart-required.
      * @endpoint patch /api/transport-settings/dns-over-quic
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -306,6 +310,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action reads DNS-over-TLS\&#39;s own currently-effective settings.
      * @endpoint get /api/transport-settings/dns-over-tls
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -362,6 +367,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverTls&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which is restart-required.
      * @endpoint patch /api/transport-settings/dns-over-tls
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -432,6 +438,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action reads DNSCrypt\&#39;s own currently-effective settings.
      * @endpoint get /api/transport-settings/dnscrypt
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -488,6 +495,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsCrypt&#x60;. See this class\&#39;s own doc comment for which field is genuinely live (and why a live enable toggle here starts/stops three registered services, not one) and which is restart-required.
      * @endpoint patch /api/transport-settings/dnscrypt
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -558,6 +566,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action reads Plain DNS\&#39;s own currently-effective settings.
      * @endpoint get /api/transport-settings/plain
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -614,6 +623,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Protocol:Plain&#x60;. Every field here is restart-required -- see this class\&#39;s own doc comment.
      * @endpoint patch /api/transport-settings/plain
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

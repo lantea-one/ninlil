@@ -42,6 +42,7 @@ export class DnsPipelineSettingsService extends BaseService implements DnsPipeli
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective pipeline sizing/tuning settings.
      * @endpoint get /api/dns-pipeline-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class DnsPipelineSettingsService extends BaseService implements DnsPipeli
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. The response note names exactly which of this class\&#39;s own three documented cases applies, depending on whether &#x60;workerCount&#x60;/&#x60;channelCapacity&#x60; were touched, a UDP safety field was touched, or both were touched in the same write.
      * @endpoint patch /api/dns-pipeline-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

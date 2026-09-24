@@ -10,11 +10,26 @@
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries the fields used to create or fully replace a manual static address-to-client-identity mapping (`POST`/`PUT /api/client-static-address-mappings`).
+ */
 export interface DnsClientStaticAddressMappingWriteRequest { 
+    /**
+     * The source address or network this mapping pins to ClientIdentifier -- a bare IP address (exact match only) or a `/`-qualified CIDR network (matches every address it contains). Validated against M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@)/ M:System.Net.IPAddress.TryParse(System.String,System.Net.IPAddress@) (whichever the value\'s own shape calls for), the same dual-format acceptance `Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver` itself matches a query\'s own source address against at resolution time.
+     */
     cidr?: string | null;
+    /**
+     * The persistent client identifier a query whose source address matches Cidr resolves to -- a colon-separated hardware (MAC) address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one.
+     */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
+    /**
+     * Whether the mapping starts out (or is currently) disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-text operator notes about this mapping.
+     */
     comments?: string | null;
 }
 export namespace DnsClientStaticAddressMappingWriteRequest {

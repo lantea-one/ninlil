@@ -10,14 +10,38 @@
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries the fields used to register a new known client device (`POST /api/clients`) together with its first address -- Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier/ Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion become that address\'s own entire identity, immutable afterward exactly like every other address (see Ninlil.Web.Controllers.ClientsController\'s own doc comment); a second, or further, address is added later via M:Ninlil.Web.Controllers.ClientAddressesController.Create(System.Guid,Ninlil.Web.Models.ClientAddressWriteRequest,System.Threading.CancellationToken), never through this request. See Ninlil.Web.Models.ClientWriteRequest (used for `PUT`/`PATCH` instead) for the device\'s own fields that remain editable.
+ */
 export interface ClientCreateRequest { 
+    /**
+     * A colon-separated MAC address for an IPv4 client, or a DUID for an IPv6 one.
+     */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
+    /**
+     * An optional, operator-chosen, human-readable name for this client.
+     */
     displayName?: string | null;
+    /**
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity this client is explicitly assigned to, or null for no explicit override.
+     */
     clientGroupId?: string | null;
+    /**
+     * Whether the client starts out disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Optional free-text operator notes about this client.
+     */
     comments?: string | null;
+    /**
+     * An optional device icon, named by its Ninlil.Dns.Common.Enum.DnsClientDeviceIconEnum value (for example `Laptop`); any other value is rejected with a `400`. Omitted or null leaves the choice unset, so the vendor-based suggestion applies.
+     */
     deviceIconKey?: string | null;
+    /**
+     * Whether the client starts out starred as a favorite.
+     */
     isFavorite?: boolean;
 }
 export namespace ClientCreateRequest {

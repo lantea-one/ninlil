@@ -10,8 +10,14 @@
 import { TsigKeyDetail } from './tsigKeyDetail';
 
 
+/**
+ * This class carries a newly created TSIG key\'s own metadata alongside its plaintext shared secret -- the only response that will ever include Ninlil.Web.Models.TsigKeyCreateResponse.Secret, per this project\'s reveal-once-then-omitted exposure policy for every secret-bearing entity type.
+ */
 export interface TsigKeyCreateResponse { 
     key?: TsigKeyDetail;
+    /**
+     * The key\'s shared secret, base64-encoded.
+     */
     secret?: string | null;
 }
 

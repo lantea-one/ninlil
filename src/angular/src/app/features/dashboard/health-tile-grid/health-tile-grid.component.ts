@@ -2,7 +2,7 @@ import { NgClass } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { BadgeComponent, CardBodyComponent, CardComponent } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
-import { StatusResponse } from '../dashboard.model';
+import { StatusResponse } from '../../../api-client';
 
 /** This interface describes one rendered tile, precomputed once per {@link status} change. */
 interface TileViewModel {
@@ -90,10 +90,10 @@ export class HealthTileGridComponent {
     if (!components) return [];
 
     return components.map((component) => ({
-      name: component.name,
-      status: component.status,
-      description: component.description,
-      error: component.error,
+      name: component.name ?? '',
+      status: component.status ?? 'Unknown',
+      description: component.description ?? '',
+      error: component.error ?? null,
       cssClass: statusCssClass(component.status),
       icon: statusIcon(component.status),
       badgeColor: statusBadgeColor(component.status),

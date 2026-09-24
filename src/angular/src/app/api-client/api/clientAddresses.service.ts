@@ -47,6 +47,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
     }
 
     /**
+     * This action lists every address belonging to a known client device.
      * @endpoint get /api/clients/{clientId}/addresses
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -131,6 +132,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
     }
 
     /**
+     * This action removes an address from the known client device. Rejected with &#x60;409 Conflict&#x60; when this is the device\&#39;s own last remaining address -- a device with no address at all could never be resolved by anything again, so removing one always leaves at least one behind; delete the whole device (M:Ninlil.Web.Controllers.ClientsController.Delete(System.Guid,System.Threading.CancellationToken)) instead when it should no longer be tracked at all.
      * @endpoint delete /api/clients/{clientId}/addresses/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -193,6 +195,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
     }
 
     /**
+     * This action looks up a single address by its identifier.
      * @endpoint get /api/clients/{clientId}/addresses/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -258,6 +261,7 @@ export class ClientAddressesService extends BaseService implements ClientAddress
     }
 
     /**
+     * This action adds a further address to the known client device. Rejected with &#x60;409 Conflict&#x60; when this exact identifier/protocol pair already belongs to any device (this one included) -- the same real, storage-level uniqueness Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity\&#39;s own composite index enforces, translated here via a pre-check against M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientAddressRepository.GetByIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken), mirroring M:Ninlil.Web.Controllers.ClientsController.Create(Ninlil.Web.Models.ClientCreateRequest,System.Threading.CancellationToken)\&#39;s own identical pre-check.
      * @endpoint post /api/clients/{clientId}/addresses
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

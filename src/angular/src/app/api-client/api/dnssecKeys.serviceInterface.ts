@@ -71,7 +71,7 @@ export interface DnssecKeysServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every DNSSEC key belonging to a zone.
      * 
      * @endpoint get /api/zones/{zoneId}/dnssec-keys
 * @param requestParameters
@@ -79,7 +79,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysGet(requestParameters: ApiZonesZoneIdDnssecKeysGetRequestParams, extraHttpRequestParams?: any): Observable<DnssecKeyDetailPagedResult>;
 
     /**
-     * 
+     * This action records that an operator has confirmed a Key-Signing Key rollover\&#39;s own new DS record has actually been published at a real, externally-hosted parent zone -- see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync(System.Guid,System.Threading.CancellationToken) for exactly when this is needed at all.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/confirm-parent-ds-updated
 * @param requestParameters
@@ -87,7 +87,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdConfirmParentDsUpdatedPost(requestParameters: ApiZonesZoneIdDnssecKeysIdConfirmParentDsUpdatedPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action permanently deletes a DNSSEC key. Prefer retiring a key (M:Ninlil.Web.Controllers.DnssecKeysController.Patch(System.Guid,System.Guid,System.Text.Json.JsonElement,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.DnssecKeysController.Replace(System.Guid,System.Guid,Ninlil.Web.Models.DnssecKeyWriteRequest,System.Threading.CancellationToken) with &#x60;isRetired: true&#x60;) over deleting it outright, unless the key is already retired and no longer needed for signature validation continuity.
      * 
      * @endpoint delete /api/zones/{zoneId}/dnssec-keys/{id}
 * @param requestParameters
@@ -95,7 +95,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdDelete(requestParameters: ApiZonesZoneIdDnssecKeysIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single DNSSEC key by its identifier.
      * 
      * @endpoint get /api/zones/{zoneId}/dnssec-keys/{id}
 * @param requestParameters
@@ -103,7 +103,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdGet(requestParameters: ApiZonesZoneIdDnssecKeysIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnssecKeyDetail>;
 
     /**
-     * 
+     * This action partially updates an existing key\&#39;s own mutable state via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
      * 
      * @endpoint patch /api/zones/{zoneId}/dnssec-keys/{id}
 * @param requestParameters
@@ -111,7 +111,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdPatch(requestParameters: ApiZonesZoneIdDnssecKeysIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing key\&#39;s own mutable state (retirement status and comments) -- see Ninlil.Web.Models.DnssecKeyWriteRequest for why nothing else is writable.
      * 
      * @endpoint put /api/zones/{zoneId}/dnssec-keys/{id}
 * @param requestParameters
@@ -119,7 +119,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdPut(requestParameters: ApiZonesZoneIdDnssecKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action starts a real, automated RFC 6781 key rollover, replacing an existing currently-active key -- see M:Ninlil.Dns.Server.Dnssec.IDnssecKeyManagementService.StartRolloverAsync(System.Guid,System.Guid,System.Nullable{Ninlil.Dns.Common.Enum.DnssecAlgorithmEnum},System.Int32,System.Threading.CancellationToken) for exactly what happens next, and which scheme (Pre-Publish or Double-Signature) is chosen automatically from the existing key\&#39;s own role.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys/{id}/roll
 * @param requestParameters
@@ -127,7 +127,7 @@ export interface DnssecKeysServiceInterface {
     apiZonesZoneIdDnssecKeysIdRollPost(requestParameters: ApiZonesZoneIdDnssecKeysIdRollPostRequestParams, extraHttpRequestParams?: any): Observable<DnssecKeyDetail>;
 
     /**
-     * 
+     * This action generates a brand-new DNSSEC key for the zone, already active.
      * 
      * @endpoint post /api/zones/{zoneId}/dnssec-keys
 * @param requestParameters

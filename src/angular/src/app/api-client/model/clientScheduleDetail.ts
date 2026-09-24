@@ -10,6 +10,9 @@
 import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 
 
+/**
+ * This class carries a single client schedule\'s own fields, for list, single-item, and creation responses.
+ */
 export interface ClientScheduleDetail { 
     id?: string;
     clientId?: string;

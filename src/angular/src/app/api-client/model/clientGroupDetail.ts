@@ -9,14 +9,41 @@
  */
 
 
+/**
+ * This class carries a client group\'s own metadata, for list, single-item, and creation responses.
+ */
 export interface ClientGroupDetail { 
+    /**
+     * This group\'s own unique identifier.
+     */
     id?: string;
+    /**
+     * This group\'s own operator-chosen, human-readable, unique name.
+     */
     name?: string | null;
+    /**
+     * Whether this is the fallback group a client matching no other group\'s own networks is treated as belonging to.
+     */
     isDefault?: boolean;
+    /**
+     * Whether the group is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * When this row was first created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this row was last updated, or null if never.
+     */
     updatedAtUtc?: string | null;
+    /**
+     * The instant, in UTC, until which this group\'s instant pause blocks every member\'s own DNS resolution -- see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.PausedUntilUtc. null when this group is not currently pausing its members.
+     */
     pausedUntilUtc?: string | null;
+    /**
+     * Whether PausedUntilUtc is currently in effect -- computed at read time against the current instant, the same way Ninlil.Web.Models.ClientDetail.IsCurrentlyPaused is.
+     */
     isCurrentlyPaused?: boolean;
 }
 

@@ -11,17 +11,47 @@ import { MacVendorDataSourceEnum } from './macVendorDataSourceEnum';
 import { MacVendorRefreshResultEnum } from './macVendorRefreshResultEnum';
 
 
+/**
+ * This record reports the vendor data currently answering lookups and the refresh history behind it -- returned inside Ninlil.Web.Models.MacVendorSettingsDetail and by an on-demand refresh.
+ */
 export interface MacVendorDataStatusDetail { 
     dataSource?: MacVendorDataSourceEnum;
+    /**
+     * When the loaded data was downloaded from the IEEE.
+     */
     generatedAtUtc?: string;
+    /**
+     * How many MA-L (24-bit) prefixes are loaded.
+     */
     maLEntryCount?: number;
+    /**
+     * How many MA-M (28-bit) prefixes are loaded.
+     */
     maMEntryCount?: number;
+    /**
+     * How many MA-S (36-bit) prefixes are loaded.
+     */
     maSEntryCount?: number;
+    /**
+     * How many prefixes are loaded across all three registries.
+     */
     totalEntryCount?: number;
+    /**
+     * When a refresh was last attempted, or null if never.
+     */
     lastRefreshAttemptUtc?: string | null;
     lastRefreshResult?: MacVendorRefreshResultEnum;
+    /**
+     * Why that attempt failed, or null when it did not.
+     */
     lastRefreshError?: string | null;
+    /**
+     * When a refresh last completed successfully, or null if never.
+     */
     lastSuccessfulCheckUtc?: string | null;
+    /**
+     * When the next automatic refresh is due, or null while automatic refresh is disabled.
+     */
     nextRefreshDueUtc?: string | null;
 }
 export namespace MacVendorDataStatusDetail {

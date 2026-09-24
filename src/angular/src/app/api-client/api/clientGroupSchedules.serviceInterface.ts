@@ -52,7 +52,7 @@ export interface ClientGroupSchedulesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every schedule belonging to a client group.
      * 
      * @endpoint get /api/client-groups/{groupId}/schedules
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface ClientGroupSchedulesServiceInterface {
     apiClientGroupsGroupIdSchedulesGet(requestParameters: ApiClientGroupsGroupIdSchedulesGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupScheduleDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a schedule from the client group.
      * 
      * @endpoint delete /api/client-groups/{groupId}/schedules/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface ClientGroupSchedulesServiceInterface {
     apiClientGroupsGroupIdSchedulesIdDelete(requestParameters: ApiClientGroupsGroupIdSchedulesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single schedule by its identifier.
      * 
      * @endpoint get /api/client-groups/{groupId}/schedules/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface ClientGroupSchedulesServiceInterface {
     apiClientGroupsGroupIdSchedulesIdGet(requestParameters: ApiClientGroupsGroupIdSchedulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupScheduleDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing schedule\&#39;s own fields, keeping its own identifier and owning client group.
      * 
      * @endpoint put /api/client-groups/{groupId}/schedules/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ClientGroupSchedulesServiceInterface {
     apiClientGroupsGroupIdSchedulesIdPut(requestParameters: ApiClientGroupsGroupIdSchedulesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new schedule to the client group.
      * 
      * @endpoint post /api/client-groups/{groupId}/schedules
 * @param requestParameters

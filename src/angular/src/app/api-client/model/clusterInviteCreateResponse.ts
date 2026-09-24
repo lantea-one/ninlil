@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This class carries a freshly created invite\'s own opaque code and expiry (`POST /api/cluster/nodes/invite`). The code itself is this project\'s one deliberate exception to its usual \"never return a secret except at creation time, and never as plain text\" posture beyond that single reveal -- see `ClusterInviteCode`\'s own doc comment.
+ */
 export interface ClusterInviteCreateResponse { 
+    /**
+     * The opaque code to hand to the joining node\'s own operator.
+     */
     inviteCode?: string | null;
+    /**
+     * The UTC moment after which this code can no longer be consumed.
+     */
     expiresAtUtc?: string;
 }
 

@@ -42,6 +42,7 @@ export class ZoneTransferClientSettingsService extends BaseService implements Zo
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) zone-transfer-pulling settings.
      * @endpoint get /api/zone-transfer-client-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class ZoneTransferClientSettingsService extends BaseService implements Zo
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
      * @endpoint patch /api/zone-transfer-client-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

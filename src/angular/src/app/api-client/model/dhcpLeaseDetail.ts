@@ -11,6 +11,9 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 import { LeaseStateEnum } from './leaseStateEnum';
 
 
+/**
+ * This class carries a single DHCP lease\'s own fields, for list and single-item responses. There is deliberately no corresponding write request -- a lease is a live artifact the allocation engine itself creates and updates as clients come and go, never an operator-created resource. Ninlil.Web.Models.DhcpLeaseDetail.PrefixLength is populated only for a DHCPv6 Prefix Delegation lease -- null for every ordinary address lease, per `LeaseEntity.PrefixLength`\'s own doc comment.
+ */
 export interface DhcpLeaseDetail { 
     id?: string;
     protocolVersion?: InternetProtocolVersionEnum;

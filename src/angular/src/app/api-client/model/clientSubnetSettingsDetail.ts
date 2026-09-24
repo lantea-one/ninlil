@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `EdnsClientSubnetOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface ClientSubnetSettingsDetail { 
     enable?: boolean;
     sourcePrefixLengthIPv4?: number;

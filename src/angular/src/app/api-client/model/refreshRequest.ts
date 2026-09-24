@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the refresh token a caller exchanges for a new access token, or revokes at sign-out.
+ */
 export interface RefreshRequest { 
+    /**
+     * The refresh token to act on. Omit it (send `{}`) to act on the browser\'s refresh cookie instead; the response then rotates that cookie rather than returning a token.
+     */
     refreshToken?: string | null;
 }
 

@@ -437,6 +437,15 @@ against (via the automatic `prebuild` step, `npm run generate:api`), so this is 
 separate, manual step, not something that happens automatically. **Building this workspace
 requires a Java runtime** on top of Node/npm, since the generator wraps a Java-based tool.
 
+`OpenApiSnapshotTests` in `Ninlil.Web.Tests` fails whenever the snapshot no longer matches the
+controllers. To regenerate it without a running backend, run this from the repository root, then
+`npm run generate:api` here:
+
+```bash
+NINLIL_UPDATE_OPENAPI_SNAPSHOT=true dotnet test src/dotnet/tests/Ninlil.Web.Tests \
+  --filter FullyQualifiedName~OpenApiSnapshotTests
+```
+
 ### Standard verification loop
 
 Before considering a change done, both sides of the codebase have the same shape of gate:

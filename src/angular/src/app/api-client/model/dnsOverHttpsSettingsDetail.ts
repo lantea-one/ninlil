@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of DNS-over-HTTPS\'s own `DnsOverHttpsOptions`, as actually consulted by this combined host: `Port` and `Certificate` are deliberately excluded, because M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder) maps RFC 8484\'s GET/POST forms directly onto this host\'s own already-running shared Kestrel instance -- both fields are specific to `DnsOverHttpsHostedService`\'s own separate, self-hosted Kestrel instance, which this composition root never starts, and would be silently ignored (misleadingly, if exposed here as if they mattered) if written through this controller. This host\'s own shared HTTP(S) port and certificate decide both instead.
+ */
 export interface DnsOverHttpsSettingsDetail { 
+    /**
+     * Whether a DNS-over-HTTPS request reaching the already-mapped route is answered. <b>Genuinely live</b>: toggling this field starts or stops the real `dns-over-https` transport gate registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart -- the route itself is always mapped, regardless of this flag\'s own value at process startup, so there is no \"route was never mapped\" edge case left to work around (see that extension method\'s own doc comment).
+     */
     enable?: boolean;
+    /**
+     * The HTTP path both the GET and POST forms of a DoH query are answered at. Needs a full <b>process</b> restart, not merely a listener restart -- ASP.NET Core\'s Minimal API routing has no supported \"remap this route\" operation once the host has started.
+     */
     path?: string | null;
+    /**
+     * How large a single DNS message this transport accepts may be. Needs a full process restart for the same reason as Ninlil.Web.Models.DnsOverHttpsSettingsDetail.Path -- both are captured once, into the closure the route itself was mapped with.
+     */
     maxMessageSizeBytes?: number;
 }
 

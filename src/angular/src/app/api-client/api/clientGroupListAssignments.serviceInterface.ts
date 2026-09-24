@@ -46,7 +46,7 @@ export interface ClientGroupListAssignmentsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every list assignment belonging to a client group.
      * 
      * @endpoint get /api/client-groups/{groupId}/list-assignments
 * @param requestParameters
@@ -54,7 +54,7 @@ export interface ClientGroupListAssignmentsServiceInterface {
     apiClientGroupsGroupIdListAssignmentsGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupListAssignmentDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a list assignment from the client group.
      * 
      * @endpoint delete /api/client-groups/{groupId}/list-assignments/{id}
 * @param requestParameters
@@ -62,7 +62,7 @@ export interface ClientGroupListAssignmentsServiceInterface {
     apiClientGroupsGroupIdListAssignmentsIdDelete(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single list assignment by its identifier.
      * 
      * @endpoint get /api/client-groups/{groupId}/list-assignments/{id}
 * @param requestParameters
@@ -70,7 +70,7 @@ export interface ClientGroupListAssignmentsServiceInterface {
     apiClientGroupsGroupIdListAssignmentsIdGet(requestParameters: ApiClientGroupsGroupIdListAssignmentsIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupListAssignmentDetail>;
 
     /**
-     * 
+     * This action assigns a block/allow list to the client group. Rejected with &#x60;400 Bad Request&#x60; if the referenced list does not exist -- treated as an invalid value on the assignment being created, not a lookup of the list itself, so this stays a Ninlil.Dns.Common.Exceptions.ValidationException rather than a Ninlil.Dns.Common.Exceptions.NotFoundException -- and &#x60;409 Conflict&#x60; if this exact group/list pairing is already assigned -- an unenforced duplicate would be harmless to &#x60;DnsFilterEngine&#x60; itself (it collects assigned list identifiers into a System.Collections.Generic.HashSet&#x60;1 before resolving them, see &#x60;DnsFilterEngine.ResolveApplicableListsAsync&#x60;), but is still rejected here to avoid letting an operator accumulate meaningless duplicate rows.
      * 
      * @endpoint post /api/client-groups/{groupId}/list-assignments
 * @param requestParameters

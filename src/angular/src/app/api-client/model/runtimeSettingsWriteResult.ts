@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This record is returned after a runtime settings `PATCH` is written to the configuration file.
+ */
 export interface RuntimeSettingsWriteResult { 
+    /**
+     * A reminder that this write does not necessarily take effect immediately -- see Ninlil.Web.Options.RuntimeConfigurationOptions\'s own doc comment.
+     */
     note?: string | null;
 }
 

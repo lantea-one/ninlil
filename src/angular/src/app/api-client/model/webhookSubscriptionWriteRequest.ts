@@ -10,14 +10,38 @@
 import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
+/**
+ * This class carries the fields used to fully replace an existing webhook subscription\'s metadata and auth credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key\'s own server-generated shared secret, Ninlil.Web.Models.WebhookSubscriptionWriteRequest.AuthCredentials is always operator-supplied -- the caller already knows the exact plaintext value being submitted in this very request -- so, exactly like Ninlil.Web.Models.CloudProviderCredentialWriteRequest, a `PUT` may replace it too, with no \"how do we reveal a rotated value again\" problem. This subscription\'s own HMAC signing secret (see Ninlil.Web.Models.WebhookSubscriptionCreateRequest.HmacSigningSecret) cannot be touched this way at all -- delete and recreate the subscription instead.
+ */
 export interface WebhookSubscriptionWriteRequest { 
+    /**
+     * The subscription\'s name.
+     */
     name?: string | null;
+    /**
+     * The absolute URL every matching event is POSTed to.
+     */
     targetUrl?: string | null;
+    /**
+     * Which event types this subscription wants delivered, replacing the entire set.
+     */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
+    /**
+     * This subscription\'s own outbound authentication credential(s), replacing them entirely.
+     */
     authCredentials?: { [key: string]: string | null; } | null;
+    /**
+     * The maximum number of delivery attempts the delivery engine makes.
+     */
     maxDeliveryAttempts?: number;
+    /**
+     * Whether the subscription is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this subscription.
+     */
     comments?: string | null;
 }
 export namespace WebhookSubscriptionWriteRequest {

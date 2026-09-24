@@ -42,6 +42,7 @@ export class ClientPresenceSettingsService extends BaseService implements Client
     }
 
     /**
+     * This action returns the currently-effective client presence settings.
      * @endpoint get /api/client-presence-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class ClientPresenceSettingsService extends BaseService implements Client
     }
 
     /**
+     * This action applies a JSON merge patch to the client presence settings. Every interval must be a positive System.TimeSpan.
      * @endpoint patch /api/client-presence-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

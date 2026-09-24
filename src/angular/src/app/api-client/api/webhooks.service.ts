@@ -56,6 +56,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action lists every outbound webhook subscription this server knows about.
      * @endpoint get /api/webhooks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -136,6 +137,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action permanently deletes an outbound webhook subscription.
      * @endpoint delete /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action lists a single webhook subscription\&#39;s own persisted delivery-attempt history, most-recently-created first -- every real delivery &#x60;WebhookDeliveryService&#x60;/&#x60;WebhookDeliveryRetrySweepService&#x60; has ever recorded for it, from its very first attempt through to whichever terminal outcome (or ongoing retry) it currently stands at. This is a read-only view: there is no action anywhere on this controller to create, edit, or manually trigger a retry of a delivery attempt -- a row here is written exclusively by the delivery engine itself, on the server\&#39;s own schedule, never by an operator.
      * @endpoint get /api/webhooks/{id}/delivery-attempts
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -278,6 +281,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action looks up a single outbound webhook subscription by its identifier.
      * @endpoint get /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -339,6 +343,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action partially updates an existing webhook subscription via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it. As with M:Ninlil.Web.Controllers.WebhooksController.Replace(System.Guid,Ninlil.Web.Models.WebhookSubscriptionWriteRequest,System.Threading.CancellationToken), this subscription\&#39;s own HMAC signing secret cannot be changed this way.
      * @endpoint patch /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -410,6 +415,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action fully replaces an existing webhook subscription\&#39;s metadata and auth credentials. The subscription\&#39;s own HMAC signing secret is left untouched -- see Ninlil.Web.Models.WebhookSubscriptionWriteRequest for why.
      * @endpoint put /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -481,6 +487,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
+     * This action creates a new outbound webhook subscription. The plaintext auth credential(s) and (if enabled) HMAC signing secret are returned exactly once, in this action\&#39;s own response -- every later request for this subscription omits both.
      * @endpoint post /api/webhooks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -49,6 +49,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action lists every DNS rewrite this server knows about.
      * @endpoint get /api/dns-rewrites
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -129,6 +130,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action permanently deletes a DNS rewrite. No other entity references a rewrite by identifier, so there is nothing to check or clean up before removing it.
      * @endpoint delete /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -187,6 +189,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action looks up a single DNS rewrite by its identifier.
      * @endpoint get /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -248,6 +251,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action partially updates an existing DNS rewrite via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any present field overwrites it.
      * @endpoint patch /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -319,6 +323,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action fully replaces an existing DNS rewrite\&#39;s fields.
      * @endpoint put /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -390,6 +395,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
+     * This action creates a new DNS rewrite.
      * @endpoint post /api/dns-rewrites
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

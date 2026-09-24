@@ -10,19 +10,55 @@
 import { Dhcpv4TagMatchModeEnum } from './dhcpv4TagMatchModeEnum';
 
 
+/**
+ * This class carries the fields used to create or fully replace a tag-based conditional option delivery rule (`POST`/`PUT /api/dhcp-tag-rules`). See `Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity`\'s own doc comment for the full match/priority/conflict-resolution semantics every field here drives.
+ */
 export interface DhcpTagRuleWriteRequest { 
+    /**
+     * An operator-chosen, descriptive name for this rule.
+     */
     name?: string | null;
+    /**
+     * Optionally restricts this rule to one specific scope; null makes it eligible against a client resolved into any scope.
+     */
     scopeId?: string | null;
+    /**
+     * This rule\'s own evaluation order, ascending.
+     */
     priority?: number;
+    /**
+     * Whether the rule starts out (or is currently) disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * The Vendor Class Identifier value this rule matches against, if any.
+     */
     vendorClassIdentifierMatch?: string | null;
     vendorClassIdentifierMatchMode?: Dhcpv4TagMatchModeEnum;
+    /**
+     * The User Class value this rule matches against, if any.
+     */
     userClassMatch?: string | null;
     userClassMatchMode?: Dhcpv4TagMatchModeEnum;
+    /**
+     * The Agent Circuit ID value this rule requires, as hex, if any (DHCPv4 only).
+     */
     relayAgentCircuitIdHex?: string | null;
+    /**
+     * The Agent/DHCPv6 Remote ID value this rule requires, as hex, if any.
+     */
     relayAgentRemoteIdHex?: string | null;
+    /**
+     * The DHCPv6 Interface-ID value this rule requires, as hex, if any (DHCPv6 only).
+     */
     relayInterfaceIdHex?: string | null;
+    /**
+     * The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, if any (DHCPv6 only).
+     */
     vendorClassEnterpriseNumber?: number | null;
+    /**
+     * Free-form operator notes about this rule.
+     */
     comments?: string | null;
 }
 export namespace DhcpTagRuleWriteRequest {

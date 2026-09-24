@@ -9,12 +9,33 @@
  */
 
 
+/**
+ * This class carries a single curated \"blocked service\" catalog entry\'s own metadata, together with whether it is currently enabled on this server -- the response shape for `GET /api/blocked-services`.
+ */
 export interface BlockedServiceDetail { 
+    /**
+     * The catalog entry\'s own stable identifier (e.g. `tiktok`).
+     */
     key?: string | null;
+    /**
+     * The human-readable service name.
+     */
     displayName?: string | null;
+    /**
+     * A short, honest description of what enabling this entry blocks.
+     */
     description?: string | null;
+    /**
+     * The real, third-party-hosted domain list this entry subscribes to when enabled -- see `BlockedServiceCatalog`\'s own doc comment for its source and license.
+     */
     subscriptionUrl?: string | null;
+    /**
+     * Whether this server currently has a managed, subscribed filter list for this entry.
+     */
     isEnabled?: boolean;
+    /**
+     * The identifier of this entry\'s own managed `DnsFilterListEntity`, when Ninlil.Web.Models.BlockedServiceDetail.IsEnabled is true (so an operator can jump straight to it in the ordinary Filter Lists page, e.g. to inspect its currently-fetched entries); otherwise null.
+     */
     filterListId?: string | null;
 }
 

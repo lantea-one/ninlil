@@ -48,6 +48,7 @@ export class ClientGroupNetworksService extends BaseService implements ClientGro
     }
 
     /**
+     * This action lists every network belonging to a client group.
      * @endpoint get /api/client-groups/{groupId}/networks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class ClientGroupNetworksService extends BaseService implements ClientGro
     }
 
     /**
+     * This action removes a network from the client group.
      * @endpoint delete /api/client-groups/{groupId}/networks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class ClientGroupNetworksService extends BaseService implements ClientGro
     }
 
     /**
+     * This action looks up a single network by its identifier.
      * @endpoint get /api/client-groups/{groupId}/networks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class ClientGroupNetworksService extends BaseService implements ClientGro
     }
 
     /**
+     * This action fully replaces an existing network\&#39;s own CIDR value, keeping its own identifier.
      * @endpoint put /api/client-groups/{groupId}/networks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class ClientGroupNetworksService extends BaseService implements ClientGro
     }
 
     /**
+     * This action adds a new network to the client group.
      * @endpoint post /api/client-groups/{groupId}/networks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

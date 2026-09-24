@@ -42,6 +42,7 @@ export class ReverseProxySettingsService extends BaseService implements ReverseP
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live and running) reverse-proxy trust settings, for both the shared HTTP listener and DNS-over-TLS. Ninlil.Web.Options.ReverseProxyOptions.SharedSecret itself is never returned -- only whether one is currently configured at all, via Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured.
      * @endpoint get /api/reverse-proxy-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class ReverseProxySettingsService extends BaseService implements ReverseP
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:ReverseProxy&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file -- including &#x60;sharedSecret&#x60;, which is always operator-supplied (there is no server-generated value the way a TSIG key\&#39;s secret can be), so it is rotatable in place with no reveal-once problem, the same posture a cloud provider credential\&#39;s own secret already follows. &#x60;knownProxies&#x60;/ &#x60;knownNetworks&#x60; are each treated as one atomic field: present replaces the whole array, absent leaves the stored list completely untouched -- matching &#x60;CloudProviderCredentialsController&#x60;\&#39;s own \&quot;whole-object replacement, not a deep merge\&quot; precedent for a field whose own shape is a collection rather than a scalar. A &#x60;dnsOverTls&#x60; sub-object, when present, merges into the entirely separate &#x60;DnsServer:Protocol:DnsOverTls:ProxyProtocol&#x60; section the identical way -- present replaces the whole &#x60;knownProxies&#x60;/&#x60;knownNetworks&#x60; array, absent leaves it untouched, mirroring &#x60;EventBrokerSettingsController&#x60;\&#39;s own &#x60;rabbitMq&#x60;/ &#x60;activeMq&#x60; nested-sub-object precedent for merging more than one configuration section from a single &#x60;PATCH&#x60; body. There is no &#x60;sharedSecret&#x60; field inside it at all -- see &#x60;DnsOverTlsProxyProtocolSettingsDetail&#x60;\&#39;s own doc comment for why.
      * @endpoint patch /api/reverse-proxy-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

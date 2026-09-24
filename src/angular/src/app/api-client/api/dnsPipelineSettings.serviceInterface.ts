@@ -28,14 +28,14 @@ export interface DnsPipelineSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective pipeline sizing/tuning settings.
      * 
      * @endpoint get /api/dns-pipeline-settings
 */
     apiDnsPipelineSettingsGet(extraHttpRequestParams?: any): Observable<DnsPipelineSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. The response note names exactly which of this class\&#39;s own three documented cases applies, depending on whether &#x60;workerCount&#x60;/&#x60;channelCapacity&#x60; were touched, a UDP safety field was touched, or both were touched in the same write.
      * 
      * @endpoint patch /api/dns-pipeline-settings
 * @param requestParameters

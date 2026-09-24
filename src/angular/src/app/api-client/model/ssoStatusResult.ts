@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This record tells an anonymous caller (the Angular admin SPA\'s own login page, before any sign-in has happened) whether this host currently has a working OpenID Connect federation scheme to challenge against, and what to label the button that starts it.
+ */
 export interface SsoStatusResult { 
+    /**
+     * Whether the OpenID Connect authentication scheme is actually registered on this running process right now -- see M:Ninlil.Web.Controllers.SsoController.Get\'s own doc comment for why this is not simply `OidcSsoOptions.Enable`\'s own raw value.
+     */
     enabled?: boolean;
+    /**
+     * The label to render on the \"Sign in with SSO\" button.
+     */
     displayName?: string | null;
 }
 

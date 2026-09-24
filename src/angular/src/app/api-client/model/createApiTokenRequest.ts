@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This class carries the settings for a new API token.
+ */
 export interface CreateApiTokenRequest { 
+    /**
+     * A human-readable name describing what the token is used for.
+     */
     name?: string | null;
+    /**
+     * Whether the token should be consumed the first time it is used (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.OneTime) rather than kept working until revoked or expired (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.Static).
+     */
     oneTime?: boolean;
+    /**
+     * The UTC date and time the token stops being valid, or null for a token that does not expire on its own.
+     */
     expiresAtUtc?: string | null;
 }
 

@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of one `RootHintServerOption` entry within Ninlil.Web.Models.RecursiveSettingsDetail.RootHintServersOverride.
+ */
 export interface RecursiveRootHintServerDetail { 
     name?: string | null;
     addresses?: Array<string> | null;

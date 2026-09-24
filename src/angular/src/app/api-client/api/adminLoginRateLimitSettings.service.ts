@@ -42,6 +42,7 @@ export class AdminLoginRateLimitSettingsService extends BaseService implements A
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live and running) admin-login rate limit settings.
      * @endpoint get /api/admin-login-rate-limit-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class AdminLoginRateLimitSettingsService extends BaseService implements A
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * @endpoint patch /api/admin-login-rate-limit-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

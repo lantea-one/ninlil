@@ -24,8 +24,9 @@ public class AcmeCertificateInventoryListExample
             new AcmeCertificateInventoryEntry(
                 Domain: "dns.example.com",
                 HasCertificate: true,
-                IssuedAtUtc: DateTimeOffset.UtcNow.AddDays(-10),
-                ExpiresAtUtc: DateTimeOffset.UtcNow.AddDays(80),
+                // Fixed dates, not the clock, so the committed OpenAPI snapshot is the same on every regeneration.
+                IssuedAtUtc: DateTimeOffset.Parse("2026-06-05T10:00:00+00:00"),
+                ExpiresAtUtc: DateTimeOffset.Parse("2026-09-03T10:00:00+00:00"),
                 IsDueForRenewal: false,
                 LastFailureAtUtc: null,
                 LastFailureMessage: null
@@ -45,7 +46,7 @@ public class AcmeCertificateInventoryListExample
                 IssuedAtUtc: null,
                 ExpiresAtUtc: null,
                 IsDueForRenewal: true,
-                LastFailureAtUtc: DateTimeOffset.UtcNow.AddHours(-2),
+                LastFailureAtUtc: DateTimeOffset.Parse("2026-06-15T08:00:00+00:00"),
                 LastFailureMessage: "The ACME DNS-01 challenge was reported invalid by the CA: DNS problem: NXDOMAIN"
             ),
         ];

@@ -28,14 +28,14 @@ export interface Dns64SettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live) DNS64 settings.
      * 
      * @endpoint get /api/dns64-settings
 */
     apiDns64SettingsGet(extraHttpRequestParams?: any): Observable<Dns64SettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Dns64&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix is validated here, at write time, against the same RFC 6052 §2.2 rule &#x60;Dns64SynthesisService.TryParsePrefix&#x60; enforces at synthesis time, so a misconfigured prefix is rejected immediately rather than silently disabling synthesis later.
      * 
      * @endpoint patch /api/dns64-settings
 * @param requestParameters

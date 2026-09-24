@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the role a user should be granted or revoked.
+ */
 export interface UserRoleAssignmentRequest { 
+    /**
+     * The name of the role to grant or revoke.
+     */
     roleName?: string | null;
 }
 

@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries a single permission claim to grant or revoke directly on a user, independent of any role they hold.
+ */
 export interface UserPermissionRequest { 
+    /**
+     * The permission string, such as `zones:write`.
+     */
     permission?: string | null;
 }
 

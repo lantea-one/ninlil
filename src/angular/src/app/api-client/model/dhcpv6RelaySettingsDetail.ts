@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This record is the REST representation of `Ninlil.Dhcp.Server.Relay.Dhcpv6RelayOptions` -- whether and how this server acts as an RFC 8415 DHCPv6 relay agent instead of answering requests itself from local scope/lease state, the DHCPv6 analogue of Ninlil.Web.Models.DhcpRelaySettingsDetail.
+ */
 export interface Dhcpv6RelaySettingsDetail { 
+    /**
+     * Whether this server acts as a DHCPv6 relay agent at all.
+     */
     enable?: boolean;
+    /**
+     * The IPv6 addresses of every upstream DHCPv6 server this relay forwards a RELAY-FORW envelope to.
+     */
     upstreamServerAddresses?: Array<string> | null;
+    /**
+     * The UDP port every configured upstream DHCPv6 server listens on -- 547 is the IANA-assigned DHCPv6 server port.
+     */
     upstreamServerPort?: number;
+    /**
+     * The IPv6 address this relay identifies itself with via RELAY-FORW\'s own \"link-address\" field, or null for auto-detection at startup.
+     */
     relayLinkAddress?: string | null;
+    /**
+     * The RFC 8415 Section 21.18 Interface-ID text this relay adds to every RELAY-FORW it sends, if any.
+     */
     interfaceId?: string | null;
 }
 

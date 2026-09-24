@@ -52,7 +52,7 @@ export interface DnsRewritesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every DNS rewrite this server knows about.
      * 
      * @endpoint get /api/dns-rewrites
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesGet(requestParameters: ApiDnsRewritesGetRequestParams, extraHttpRequestParams?: any): Observable<DnsRewriteDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a DNS rewrite. No other entity references a rewrite by identifier, so there is nothing to check or clean up before removing it.
      * 
      * @endpoint delete /api/dns-rewrites/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdDelete(requestParameters: ApiDnsRewritesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single DNS rewrite by its identifier.
      * 
      * @endpoint get /api/dns-rewrites/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdGet(requestParameters: ApiDnsRewritesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsRewriteDetail>;
 
     /**
-     * 
+     * This action partially updates an existing DNS rewrite via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any present field overwrites it.
      * 
      * @endpoint patch /api/dns-rewrites/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdPatch(requestParameters: ApiDnsRewritesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing DNS rewrite\&#39;s fields.
      * 
      * @endpoint put /api/dns-rewrites/{id}
 * @param requestParameters
@@ -92,7 +92,7 @@ export interface DnsRewritesServiceInterface {
     apiDnsRewritesIdPut(requestParameters: ApiDnsRewritesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new DNS rewrite.
      * 
      * @endpoint post /api/dns-rewrites
 * @param requestParameters

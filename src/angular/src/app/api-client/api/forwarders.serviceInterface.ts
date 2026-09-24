@@ -52,7 +52,7 @@ export interface ForwardersServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every global upstream forwarder this server knows about.
      * 
      * @endpoint get /api/forwarders
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface ForwardersServiceInterface {
     apiForwardersGet(requestParameters: ApiForwardersGetRequestParams, extraHttpRequestParams?: any): Observable<ForwarderDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a global upstream forwarder. No zone or other entity references a global forwarder by identifier -- unlike a TSIG key\&#39;s own soft-referenced &#x60;TsigKeyName&#x60; or a cloud credential\&#39;s own &#x60;CloudProviderCredentialId&#x60;, this entity is only ever consulted as a set, read fresh on every query -- so there is nothing to check or clean up before removing it.
      * 
      * @endpoint delete /api/forwarders/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdDelete(requestParameters: ApiForwardersIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single global upstream forwarder by its identifier.
      * 
      * @endpoint get /api/forwarders/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdGet(requestParameters: ApiForwardersIdGetRequestParams, extraHttpRequestParams?: any): Observable<ForwarderDetail>;
 
     /**
-     * 
+     * This action partially updates an existing global upstream forwarder via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
      * 
      * @endpoint patch /api/forwarders/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdPatch(requestParameters: ApiForwardersIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing global upstream forwarder\&#39;s fields.
      * 
      * @endpoint put /api/forwarders/{id}
 * @param requestParameters
@@ -92,7 +92,7 @@ export interface ForwardersServiceInterface {
     apiForwardersIdPut(requestParameters: ApiForwardersIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new global upstream forwarder.
      * 
      * @endpoint post /api/forwarders
 * @param requestParameters

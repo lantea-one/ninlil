@@ -10,6 +10,9 @@
 import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 
 
+/**
+ * This class carries a single client group schedule\'s own fields, for list, single-item, and creation responses.
+ */
 export interface ClientGroupScheduleDetail { 
     id?: string;
     clientGroupId?: string;

@@ -51,58 +51,66 @@ public static class EndpointRouteBuilderStatusExtension
     /// <returns>The modified <paramref name="endpoints" /> instance.</returns>
     public static IEndpointRouteBuilder MapNinlilDnsStatus(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet(
-            "/status",
-            async (
-                HttpContext httpContext,
-                HealthCheckService healthCheckService,
-                IAuthorizationService authorizationService,
-                CancellationToken cancellationToken
-            ) =>
-            {
-                // Run the real health-check sweep once regardless of who is asking -- the overall
-                // status alone (never the per-component detail) is always safe to hand back to an
-                // anonymous caller, so there is no reason to skip the check itself based on
-                // authentication state.
-                HealthReport report = await healthCheckService.CheckHealthAsync(cancellationToken);
-                string overallStatus = report.Status.ToString();
-
-                // Only an authenticated caller can even hold the status:read permission, so check
-                // IsAuthenticated first as a cheap short-circuit before bothering the
-                // authorization service at all -- an anonymous request never reaches the
-                // permission check and always gets the summary-only shape below.
-                bool includeDetail = false;
-
-                if (httpContext.User.Identity?.IsAuthenticated == true)
+        endpoints
+            .MapGet(
+                "/status",
+                async (
+                    HttpContext httpContext,
+                    HealthCheckService healthCheckService,
+                    IAuthorizationService authorizationService,
+                    CancellationToken cancellationToken
+                ) =>
                 {
-                    AuthorizationResult authorization = await authorizationService.AuthorizeAsync(
-                        httpContext.User,
-                        PermissionPolicyProvider.PolicyPrefix + ReadPermission
+                    // Run the real health-check sweep once regardless of who is asking -- the overall
+                    // status alone (never the per-component detail) is always safe to hand back to an
+                    // anonymous caller, so there is no reason to skip the check itself based on
+                    // authentication state.
+                    HealthReport report = await healthCheckService.CheckHealthAsync(
+                        cancellationToken
                     );
-                    includeDetail = authorization.Succeeded;
+                    string overallStatus = report.Status.ToString();
+
+                    // Only an authenticated caller can even hold the status:read permission, so check
+                    // IsAuthenticated first as a cheap short-circuit before bothering the
+                    // authorization service at all -- an anonymous request never reaches the
+                    // permission check and always gets the summary-only shape below.
+                    bool includeDetail = false;
+
+                    if (httpContext.User.Identity?.IsAuthenticated == true)
+                    {
+                        AuthorizationResult authorization =
+                            await authorizationService.AuthorizeAsync(
+                                httpContext.User,
+                                PermissionPolicyProvider.PolicyPrefix + ReadPermission
+                            );
+                        includeDetail = authorization.Succeeded;
+                    }
+
+                    // The two response shapes this endpoint's own doc comment describes: a bare
+                    // overall status with a null component list for everyone, or that same status
+                    // plus the full per-component breakdown additively layered on top for a caller
+                    // who actually holds the permission -- never a different overall status value
+                    // between the two, only whether the detail list is populated.
+                    if (!includeDetail)
+                        return Results.Json(new StatusResponse(overallStatus, null));
+
+                    List<StatusComponent> components =
+                    [
+                        .. report.Entries.Select(entry => new StatusComponent(
+                            entry.Key,
+                            entry.Value.Status.ToString(),
+                            entry.Value.Description,
+                            entry.Value.Exception?.Message
+                        )),
+                    ];
+
+                    return Results.Json(new StatusResponse(overallStatus, components));
                 }
-
-                // The two response shapes this endpoint's own doc comment describes: a bare
-                // overall status with a null component list for everyone, or that same status
-                // plus the full per-component breakdown additively layered on top for a caller
-                // who actually holds the permission -- never a different overall status value
-                // between the two, only whether the detail list is populated.
-                if (!includeDetail)
-                    return Results.Json(new StatusResponse(overallStatus, null));
-
-                List<StatusComponent> components =
-                [
-                    .. report.Entries.Select(entry => new StatusComponent(
-                        entry.Key,
-                        entry.Value.Status.ToString(),
-                        entry.Value.Description,
-                        entry.Value.Exception?.Message
-                    )),
-                ];
-
-                return Results.Json(new StatusResponse(overallStatus, components));
-            }
-        );
+            )
+            // Results.Json hides the body type from the API explorer, so name it here; without
+            // this the OpenAPI document gives /status no response schema and generated clients
+            // type it as "any".
+            .Produces<StatusResponse>();
 
         return endpoints;
     }

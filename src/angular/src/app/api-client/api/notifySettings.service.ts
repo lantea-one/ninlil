@@ -42,6 +42,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) NOTIFY settings.
      * @endpoint get /api/notify-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class NotifySettingsService extends BaseService implements NotifySettings
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:Notify&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
      * @endpoint patch /api/notify-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

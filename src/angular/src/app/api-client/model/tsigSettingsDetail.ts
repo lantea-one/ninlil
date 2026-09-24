@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `TsigServiceOptions` -- the clock-skew tolerance written into every message this server signs. Exposed as a plain System.Int32 even though the underlying options property is a System.UInt16, since JSON has no unsigned 16-bit numeric type; a `PATCH` to the same endpoint rejects anything outside 0-65535. This record\'s own field is the exact same one a `PATCH` to the same endpoint accepts.
+ */
 export interface TsigSettingsDetail { 
     defaultFudgeSeconds?: number;
 }

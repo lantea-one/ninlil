@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of `CaaAutoManagementOptions`\'s own global defaults, nested within Ninlil.Web.Models.AcmeSettingsDetail.CaaAutoManagement.
+ */
 export interface CaaAutoManagementSettingsDetail { 
     defaultEnabled?: boolean;
     defaultIssuerDomain?: string | null;

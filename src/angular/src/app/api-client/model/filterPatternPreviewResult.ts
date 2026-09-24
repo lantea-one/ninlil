@@ -10,9 +10,21 @@
 import { FilterPatternPreviewMatch } from './filterPatternPreviewMatch';
 
 
+/**
+ * This class carries the result of previewing a candidate filter-list-entry pattern -- the response shape for `POST /api/filter-pattern-preview`.
+ */
 export interface FilterPatternPreviewResult { 
+    /**
+     * Whether Ninlil.Web.Models.FilterPatternPreviewRequest.Value actually compiles as the requested Ninlil.Web.Models.FilterPatternPreviewRequest.Kind -- the exact same compilation `FilterListEntriesController` itself requires before persisting a Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Wildcard/Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Regex entry, run here read-only, before the operator has even saved anything.
+     */
     isValid?: boolean;
+    /**
+     * A human-readable reason Ninlil.Web.Models.FilterPatternPreviewResult.IsValid is false, or null when it is true.
+     */
     error?: string | null;
+    /**
+     * Every sample domain actually tested, and whether the pattern matched it -- empty when Ninlil.Web.Models.FilterPatternPreviewResult.IsValid is false, since an uncompilable pattern is never tested against anything.
+     */
     matches?: Array<FilterPatternPreviewMatch> | null;
 }
 

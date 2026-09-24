@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of `Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ProtocolOptions` -- the DHCPv6 UDP transport\'s own bind/port settings, the DHCPv6 analogue of Ninlil.Web.Models.DhcpProtocolSettingsDetail.
+ */
 export interface Dhcpv6ProtocolSettingsDetail { 
+    /**
+     * Whether this listener binds its socket and answers DHCPv6 traffic at all.
+     */
     enable?: boolean;
+    /**
+     * The port this listener binds to -- 547 is the IANA-assigned DHCPv6 server port.
+     */
     serverPort?: number;
+    /**
+     * The port a reply is unicast back to -- 546 is the IANA-assigned DHCPv6 client port.
+     */
     clientPort?: number;
 }
 

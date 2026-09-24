@@ -10,11 +10,26 @@
 import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
+/**
+ * This class carries the fields used to fully replace an existing cloud DNS provider credential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike a TSIG key\'s own shared secret (see Ninlil.Web.Models.TsigKeyWriteRequest), a cloud provider credential\'s own secret material genuinely is something an operator supplied and may need to rotate -- Cloudflare/Route 53/DigitalOcean all expect a real operator to periodically rotate an API token or access key themselves, entirely outside this project\'s own control. A `PUT` therefore replaces Ninlil.Web.Models.CloudProviderCredentialWriteRequest.Credentials too, alongside every other field, matching ordinary full-replacement semantics -- there is no reveal-again concern here the way there would be for a server-generated secret, since the caller already knows the plaintext value they are supplying in this very request. To change only metadata (name, comments, disabled) without touching the stored credentials, use `PATCH` instead and omit `credentials` from the patch document.
+ */
 export interface CloudProviderCredentialWriteRequest { 
+    /**
+     * The credential set\'s name.
+     */
     name?: string | null;
     providerType?: CloudDnsProviderTypeEnum;
+    /**
+     * The credential set\'s own secret material, replacing it entirely.
+     */
     credentials?: { [key: string]: string | null; } | null;
+    /**
+     * Whether the credential set is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the credential set.
+     */
     comments?: string | null;
 }
 export namespace CloudProviderCredentialWriteRequest {

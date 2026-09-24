@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries a single catalog zone\'s own currently-enumerated member zone names -- `GET /api/zones/{id}/catalog-members`\'s own response body.
+ */
 export interface ZoneCatalogMembersResponse { 
+    /**
+     * Every member zone name the catalog currently lists, alphabetically.
+     */
     memberZoneNames?: Array<string> | null;
 }
 

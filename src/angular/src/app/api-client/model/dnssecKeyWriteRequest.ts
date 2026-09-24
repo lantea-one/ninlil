@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This class carries the fields used to fully replace an existing DNSSEC key\'s own mutable state (`PUT /api/zones/{zoneId}/dnssec-keys/{id}`). A key\'s role, algorithm, and key material are permanent once generated -- rolling to a different algorithm or role means generating a brand-new key and retiring the old one, not editing this one in place -- so retirement status and operator notes are the only fields this resource ever exposes as writable.
+ */
 export interface DnssecKeyWriteRequest { 
+    /**
+     * Whether the key is retired (taken out of active signing use).
+     */
     isRetired?: boolean;
+    /**
+     * Free-form operator notes about the key.
+     */
     comments?: string | null;
 }
 

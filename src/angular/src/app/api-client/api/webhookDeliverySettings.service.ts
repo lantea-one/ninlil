@@ -42,6 +42,7 @@ export class WebhookDeliverySettingsService extends BaseService implements Webho
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) webhook-delivery-timing settings.
      * @endpoint get /api/webhook-delivery-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class WebhookDeliverySettingsService extends BaseService implements Webho
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Webhooks:Delivery&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. The response note names exactly which of the three notes this class\&#39;s own doc comment describes applies, depending on whether &#x60;requestTimeout&#x60; was touched alone, alongside another field, or not at all.
      * @endpoint patch /api/webhook-delivery-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

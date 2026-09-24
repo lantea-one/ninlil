@@ -37,14 +37,14 @@ export interface QueryLogServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action permanently removes every entry currently in the query log -- an explicit, operator-triggered action distinct from Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService\&#39;s own automatic, retention-driven pruning.
      * 
      * @endpoint delete /api/query-log
 */
     apiQueryLogDelete(extraHttpRequestParams?: any): Observable<QueryLogClearResult>;
 
     /**
-     * 
+     * This action searches the query log, newest entries first, narrowed by whichever of clientAddress/domain/queriedType/ responseCode/fromUtc/toUtc the caller supplied.
      * 
      * @endpoint get /api/query-log
 * @param requestParameters

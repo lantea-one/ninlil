@@ -10,12 +10,27 @@
 import { StorageEngineEnum } from './storageEngineEnum';
 
 
+/**
+ * This record is returned once a storage-engine switch has finished successfully -- the process is, at the moment this is returned, already reading and writing through Ninlil.Web.Models.StorageEngineSwitchResult.NewEngine, with every row Ninlil.Web.Models.StorageEngineSwitchResult.TotalEntitiesRestored counts already carried across from Ninlil.Web.Models.StorageEngineSwitchResult.PreviousEngine.
+ */
 export interface StorageEngineSwitchResult { 
     previousEngine?: StorageEngineEnum;
     newEngine?: StorageEngineEnum;
+    /**
+     * The total number of rows restored into Ninlil.Web.Models.StorageEngineSwitchResult.NewEngine, across every entity type.
+     */
     totalEntitiesRestored?: number;
+    /**
+     * How many rows of each entity type were restored, by name.
+     */
     entityCounts?: { [key: string]: number; } | null;
+    /**
+     * When this switch began.
+     */
     startedAt?: string;
+    /**
+     * When this switch finished.
+     */
     completedAt?: string;
 }
 export namespace StorageEngineSwitchResult {

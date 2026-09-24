@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `AdminLoginRateLimitOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface AdminLoginRateLimitSettingsDetail { 
+    /**
+     * Whether this limiter is wired into the request pipeline at all.
+     */
     enable?: boolean;
+    /**
+     * How many sign-in attempts are allowed within a single Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.Window.
+     */
     permitLimit?: number;
+    /**
+     * The fixed window Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.PermitLimit is counted over, and this limiter\'s own effective lockout duration.
+     */
     window?: string;
 }
 

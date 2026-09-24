@@ -52,7 +52,7 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
 type RaRouteFormGroup = FormGroup<{
   prefix: FormControl<string>;
   prefixLength: FormControl<number>;
-  preference: FormControl<string>;
+  preference: FormControl<RaRoutePreferenceEnum>;
   routeLifetime: FormControl<string>;
 }>;
 
@@ -122,15 +122,6 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
  * control for an override's own would-be nested `prefixes`/`routes` lists -- see
  * `DhcpRaInterfaceOverrideDetail`'s own doc comment for why, mirroring this same page's own
  * `Prefixes` scope boundary one level deeper; both remain config-file-only within an override.
- *
- * <p><b>A generated-client quirk, not a bug in this form</b> (the same one
- * `DhcpTagRuleFormComponent`'s own doc comment already documents for
- * `Dhcpv4TagMatchModeEnum`): each route row's own `preference` control works in the real wire
- * string values (`'High'`/`'Medium'`/`'Low'`) rather than the generated `RaRoutePreferenceEnum`
- * type, since Swashbuckle's OpenAPI schema generation does not reflect
- * `RaRoutePreferenceEnum`'s own server-side `JsonStringEnumConverter`, so the generated TypeScript
- * type is inaccurately numeric. The cast to `RaRoutePreferenceEnum` happens only at the one point
- * a `DhcpRaSettingsPatchRequest` is actually built.
  */
 @Component({
   selector: 'app-dhcp-settings',
@@ -290,9 +281,7 @@ export class DhcpSettingsComponent implements OnInit {
         route?.prefixLength ?? 64,
         [Validators.required, Validators.min(0), Validators.max(128)],
       ],
-      // See this class's own doc comment for why this control works in the real wire string
-      // value rather than the generated (inaccurately numeric) RaRoutePreferenceEnum type.
-      preference: [(route?.preference as unknown as string) ?? 'Medium'],
+      preference: [route?.preference ?? RaRoutePreferenceEnum.Medium],
       routeLifetime: [route?.routeLifetime ?? '00:30:00', [Validators.required]],
     });
   }
@@ -547,7 +536,7 @@ export class DhcpSettingsComponent implements OnInit {
             routes: value.routes.map((route) => ({
               prefix: route.prefix || null,
               prefixLength: route.prefixLength,
-              preference: route.preference as unknown as RaRoutePreferenceEnum,
+              preference: route.preference,
               routeLifetime: route.routeLifetime,
             })),
             interfaceOverrides: value.interfaceOverrides.map((override) => ({

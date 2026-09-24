@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries a single verification code, used both to confirm a newly-enrolled authenticator and to disable two-factor authentication.
+ */
 export interface TwoFactorCodeRequest { 
+    /**
+     * The time-based (authenticator app) or e-mailed verification code.
+     */
     code?: string | null;
 }
 

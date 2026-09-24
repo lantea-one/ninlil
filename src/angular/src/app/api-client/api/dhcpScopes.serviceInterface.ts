@@ -57,7 +57,7 @@ export interface DhcpScopesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every DHCP scope this server manages.
      * 
      * @endpoint get /api/dhcp-scopes
 * @param requestParameters
@@ -65,7 +65,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesGet(requestParameters: ApiDhcpScopesGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a DHCP scope, every reservation it contains, and every custom option it contains -- removed explicitly, rather than relying on the relational backend\&#39;s own cascade delete, since MongoDB has no equivalent mechanism at all, the same reasoning M:Ninlil.Web.Controllers.ClientGroupsController.Delete(System.Guid,System.Threading.CancellationToken) already applies to a deleted client group\&#39;s own dependent rows. Any lease already recorded against this scope (keyed by its own &#x60;ScopeName&#x60;, not this scope\&#39;s identifier) is left untouched -- a lease is historical/operational data, not configuration this deletion owns, the same \&quot;never touch operational telemetry on a configuration delete\&quot; posture &#x60;Server.Backup.BackupEntityCatalog&#x60; already establishes. A tag rule that names this scope\&#39;s own identifier (&#x60;DhcpTagRuleEntity.ScopeId&#x60;) is also left untouched -- it simply becomes permanently ineligible to match any future client, exactly like a rule naming a scope that was never created in the first place.
      * 
      * @endpoint delete /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -73,7 +73,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdDelete(requestParameters: ApiDhcpScopesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single DHCP scope by its identifier.
      * 
      * @endpoint get /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -81,7 +81,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdGet(requestParameters: ApiDhcpScopesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeDetail>;
 
     /**
-     * 
+     * This action partially updates an existing DHCP scope via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any other present field overwrites it.
      * 
      * @endpoint patch /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -89,7 +89,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPatch(requestParameters: ApiDhcpScopesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing DHCP scope\&#39;s own fields.
      * 
      * @endpoint put /api/dhcp-scopes/{id}
 * @param requestParameters
@@ -97,7 +97,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdPut(requestParameters: ApiDhcpScopesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action reports a single DHCP scope\&#39;s own real, current utilization -- total addresses/prefixes in the scope\&#39;s own configured range, how many are currently leased or tentatively offered, how many the scope\&#39;s own static reservations account for, and how many remain genuinely available -- computed fresh from this scope\&#39;s own configuration and its real, currently-recorded lease/reservation rows on every call, never a cached or approximate figure. See Ninlil.Dhcp.Server.Core.Statistics.IDhcpScopeStatisticsService\&#39;s own doc comment for exactly how each field is derived.
      * 
      * @endpoint get /api/dhcp-scopes/{id}/statistics
 * @param requestParameters
@@ -105,7 +105,7 @@ export interface DhcpScopesServiceInterface {
     apiDhcpScopesIdStatisticsGet(requestParameters: ApiDhcpScopesIdStatisticsGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeStatisticsDetail>;
 
     /**
-     * 
+     * This action creates a new DHCP scope.
      * 
      * @endpoint post /api/dhcp-scopes
 * @param requestParameters

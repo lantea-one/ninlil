@@ -28,14 +28,14 @@ export interface SecondaryZoneRefreshSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) secondary-zone-refresh-polling settings.
      * 
      * @endpoint get /api/secondary-zone-refresh-settings
 */
     apiSecondaryZoneRefreshSettingsGet(extraHttpRequestParams?: any): Observable<SecondaryZoneRefreshSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:SecondaryZoneRefresh&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/secondary-zone-refresh-settings
 * @param requestParameters

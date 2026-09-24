@@ -10,11 +10,26 @@
 import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
+/**
+ * This class carries the fields used to create a new cloud DNS provider credential set (`POST /api/cloud-provider-credentials`).
+ */
 export interface CloudProviderCredentialCreateRequest { 
+    /**
+     * An operator-chosen, human-readable, unique name for this credential set.
+     */
     name?: string | null;
     providerType?: CloudDnsProviderTypeEnum;
+    /**
+     * The credential set\'s own secret material, keyed by field name -- shape depends on Ninlil.Web.Models.CloudProviderCredentialCreateRequest.ProviderType. Encrypted at rest immediately; the exact values supplied here are returned exactly once, in this endpoint\'s own response, and never again afterward.
+     */
     credentials?: { [key: string]: string | null; } | null;
+    /**
+     * Whether the credential set starts out disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the credential set.
+     */
     comments?: string | null;
 }
 export namespace CloudProviderCredentialCreateRequest {

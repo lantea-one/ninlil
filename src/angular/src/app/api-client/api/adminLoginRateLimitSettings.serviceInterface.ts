@@ -28,14 +28,14 @@ export interface AdminLoginRateLimitSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live and running) admin-login rate limit settings.
      * 
      * @endpoint get /api/admin-login-rate-limit-settings
 */
     apiAdminLoginRateLimitSettingsGet(extraHttpRequestParams?: any): Observable<AdminLoginRateLimitSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * 
      * @endpoint patch /api/admin-login-rate-limit-settings
 * @param requestParameters

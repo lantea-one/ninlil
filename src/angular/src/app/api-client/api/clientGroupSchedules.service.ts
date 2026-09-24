@@ -48,6 +48,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
+     * This action lists every schedule belonging to a client group.
      * @endpoint get /api/client-groups/{groupId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
+     * This action removes a schedule from the client group.
      * @endpoint delete /api/client-groups/{groupId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
+     * This action looks up a single schedule by its identifier.
      * @endpoint get /api/client-groups/{groupId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
+     * This action fully replaces an existing schedule\&#39;s own fields, keeping its own identifier and owning client group.
      * @endpoint put /api/client-groups/{groupId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class ClientGroupSchedulesService extends BaseService implements ClientGr
     }
 
     /**
+     * This action adds a new schedule to the client group.
      * @endpoint post /api/client-groups/{groupId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -38,7 +38,7 @@ export interface DhcpLeasesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every DHCP lease this server has recorded, optionally narrowed to one scope via scopeId.
      * 
      * @endpoint get /api/dhcp-leases
 * @param requestParameters
@@ -46,7 +46,7 @@ export interface DhcpLeasesServiceInterface {
     apiDhcpLeasesGet(requestParameters: ApiDhcpLeasesGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpLeaseDetailPagedResult>;
 
     /**
-     * 
+     * This action looks up a single lease by its identifier.
      * 
      * @endpoint get /api/dhcp-leases/{id}
 * @param requestParameters
@@ -54,7 +54,7 @@ export interface DhcpLeasesServiceInterface {
     apiDhcpLeasesIdGet(requestParameters: ApiDhcpLeasesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpLeaseDetail>;
 
     /**
-     * 
+     * This action force-releases a lease by its own identifier, letting an operator reclaim a stuck or stale address without waiting for the client itself to send a real DHCP RELEASE or for this server\&#39;s own natural expiry sweep to eventually catch it. Delegates directly to M:Ninlil.Dhcp.Server.Core.Administration.IDhcpLeaseAdministrationService.ForceReleaseAsync(System.Guid,System.Threading.CancellationToken) -- see that method\&#39;s own doc comment for exactly what it does (the identical mutation, and the identical downstream &#x60;DhcpLeaseChangedEvent&#x60;, a real client-initiated release already produces, so the address is genuinely available for reallocation immediately, and any DNS record this lease auto-registered is cleaned up exactly as it would be for a real release). Idempotent: releasing an already-released lease is a safe no-op that still returns &#x60;200 OK&#x60;.
      * 
      * @endpoint post /api/dhcp-leases/{id}/release
 * @param requestParameters

@@ -12,12 +12,24 @@ import { ActiveMqBrokerSettingsDetail } from './activeMqBrokerSettingsDetail';
 import { RabbitMqBrokerSettingsDetail } from './rabbitMqBrokerSettingsDetail';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective message- broker event-transport configuration. Only the section matching Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is ever populated -- the other is null, since a value read from Microsoft.Extensions.Options.IOptions`1 for a broker that was never selected (and therefore never had its own `Configure<TOptions>` called) would otherwise just be that options class\'s own compiled-in defaults, which would misleadingly look like real, live configuration.
+ */
 export interface EventBrokerSettingsDetail { 
     transport?: EventTransportEnum;
+    /**
+     * Whether the active broker transport currently reports itself connected -- null when Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is Ninlil.Dns.Common.Enum.EventTransportEnum.InMemory, since \"connected\" has no meaning there.
+     */
     isConnected?: boolean | null;
     rabbitMq?: RabbitMqBrokerSettingsDetail;
     activeMq?: ActiveMqBrokerSettingsDetail;
+    /**
+     * When this settings section was last written (the cluster\'s own operational config sync), or null if it has never been written through this REST surface.
+     */
     lastModifiedUtc?: string | null;
+    /**
+     * The cluster node this settings section was last written on, or null alongside Ninlil.Web.Models.EventBrokerSettingsDetail.LastModifiedUtc.
+     */
     originatingNodeId?: string | null;
 }
 export namespace EventBrokerSettingsDetail {

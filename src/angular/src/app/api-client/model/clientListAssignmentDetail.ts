@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This class carries a single client list assignment\'s own fields, for list, single-item, and creation responses.
+ */
 export interface ClientListAssignmentDetail { 
     id?: string;
     clientId?: string;

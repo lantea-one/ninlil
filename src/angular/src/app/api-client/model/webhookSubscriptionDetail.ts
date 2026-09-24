@@ -10,17 +10,50 @@
 import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
+/**
+ * This class carries a webhook subscription\'s own metadata, for list, single-item, and (nested inside Ninlil.Web.Models.WebhookSubscriptionCreateResponse) creation responses. Neither the subscription\'s own auth credential(s) nor its HMAC signing secret are ever included here -- see Ninlil.Web.Models.WebhookSubscriptionCreateResponse for the one place Ninlil.Web.Models.WebhookSubscriptionCreateResponse.AuthCredentials/ Ninlil.Web.Models.WebhookSubscriptionCreateResponse.HmacSigningSecret ever appear.
+ */
 export interface WebhookSubscriptionDetail { 
+    /**
+     * The subscription\'s own identifier.
+     */
     id?: string;
+    /**
+     * The subscription\'s own name.
+     */
     name?: string | null;
+    /**
+     * The absolute URL every matching event is POSTed to.
+     */
     targetUrl?: string | null;
+    /**
+     * Which event types this subscription is subscribed to.
+     */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
+    /**
+     * Whether this subscription has an HMAC signing secret configured -- a plain boolean flag, never the secret itself, so a caller can tell whether payload signing is active without this response ever exposing the secret it would need to verify one.
+     */
     hasHmacSigningSecret?: boolean;
+    /**
+     * The maximum number of delivery attempts the delivery engine makes.
+     */
     maxDeliveryAttempts?: number;
+    /**
+     * Whether this subscription is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this subscription.
+     */
     comments?: string | null;
+    /**
+     * When this subscription was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this subscription was last modified, or null if never.
+     */
     updatedAtUtc?: string | null;
 }
 export namespace WebhookSubscriptionDetail {

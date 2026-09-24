@@ -42,6 +42,7 @@ export class SmtpSettingsService extends BaseService implements SmtpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) SMTP settings. Ninlil.Dns.Identity.Options.EmailSenderOptions.Password is never returned -- see Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured\&#39;s own doc comment.
      * @endpoint get /api/smtp-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class SmtpSettingsService extends BaseService implements SmtpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;Email&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file -- including &#x60;password&#x60;, letting an operator change, say, only &#x60;smtpHost&#x60; without ever having to resupply a credential this endpoint\&#39;s own M:Ninlil.Web.Controllers.SmtpSettingsController.Get action never reveals back to them. Every field hot-reloads immediately -- see this class\&#39;s own doc comment.
      * @endpoint patch /api/smtp-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

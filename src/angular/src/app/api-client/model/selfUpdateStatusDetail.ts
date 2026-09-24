@@ -9,15 +9,45 @@
  */
 
 
+/**
+ * This record is the REST representation of the self-update checker\'s own currently-known status -- the one field this whole feature exists to surface, plus enough context for an operator to act on it. See `Controllers.SelfUpdateController`\'s own doc comment for what \"acting on it\" means today.
+ */
 export interface SelfUpdateStatusDetail { 
+    /**
+     * Whether a real release feed URL has ever been set.
+     */
     configured?: boolean;
+    /**
+     * This running process\'s own current version, as a plain dotted string.
+     */
     currentVersion?: string | null;
+    /**
+     * The newest version the release feed has ever reported, as a plain dotted string, or null if no check has ever completed successfully.
+     */
     latestKnownVersion?: string | null;
+    /**
+     * Whether a genuinely newer release is currently known.
+     */
     updateAvailable?: boolean;
+    /**
+     * A human-facing URL for the latest known release.
+     */
     releaseUrl?: string | null;
+    /**
+     * Free-text release notes for the latest known release.
+     */
     releaseNotes?: string | null;
+    /**
+     * When a check was last attempted, or null if none has ever run.
+     */
     lastCheckedAtUtc?: string | null;
+    /**
+     * A short description of the most recent check\'s own failure, or null if it succeeded.
+     */
     lastCheckError?: string | null;
+    /**
+     * A plain-language description of what an operator should actually do about Ninlil.Web.Models.SelfUpdateStatusDetail.UpdateAvailable -- see `Controllers.SelfUpdateController`\'s own doc comment for why this is honest, written guidance rather than a button that silently does nothing.
+     */
     updateInstructions?: string | null;
 }
 

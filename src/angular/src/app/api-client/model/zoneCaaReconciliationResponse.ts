@@ -9,10 +9,25 @@
  */
 
 
+/**
+ * This record is `POST /api/zones/{id}/reconcile-caa`\'s own response body -- what one on-demand CAA reconciliation pass actually did, or why it did nothing at all. A thin REST wrapper over `Server.Acme.Caa.CaaReconciliationResult`, following this project\'s own \"never expose an internal service-layer result type directly over REST\" convention (the same reasoning `ZoneCatalogMembersResponse` already establishes for `CatalogZoneMembershipService.ListMembersAsync`\'s own return value).
+ */
 export interface ZoneCaaReconciliationResponse { 
+    /**
+     * How many CAA records this pass created.
+     */
     recordsAdded?: number;
+    /**
+     * How many CAA records this pass removed as no longer desired.
+     */
     recordsRemoved?: number;
+    /**
+     * Whether this pass did no work at all (see SkipReason) -- distinct from a pass that ran but found nothing to change (reported as false here with zero counts).
+     */
     skipped?: boolean;
+    /**
+     * Why this pass was skipped, populated only when Skipped is true.
+     */
     skipReason?: string | null;
 }
 

@@ -12,21 +12,69 @@ import { DnssecKeyLifecycleStateEnum } from './dnssecKeyLifecycleStateEnum';
 import { DnssecKeyRoleEnum } from './dnssecKeyRoleEnum';
 
 
+/**
+ * This class carries a DNSSEC key\'s own metadata, for list and single-item responses. This deliberately never includes the key\'s own private key material -- unlike a TSIG shared secret or a cloud provider credential, a DNSSEC private key never needs to leave this server; it exists purely for `Server.Authoritative`\'s own internal signing, so it stays encrypted at rest and is never exposed over this REST API at all, at any point in a key\'s lifecycle.
+ */
 export interface DnssecKeyDetail { 
+    /**
+     * The key\'s own identifier.
+     */
     id?: string;
+    /**
+     * The identifier of the zone this key belongs to.
+     */
     zoneId?: string;
     role?: DnssecKeyRoleEnum;
     algorithm?: DnssecAlgorithmEnum;
+    /**
+     * The key\'s public key material, base64-encoded.
+     */
     publicKeyWireFormat?: string | null;
+    /**
+     * The key\'s precomputed key tag (RFC 4034 Appendix B).
+     */
     keyTag?: number;
+    /**
+     * Whether the key has been fully withdrawn from the zone\'s own DNSKEY RRset -- equivalent to `LifecycleState == Removed`, kept as its own field for the REST/UI contract that predates Ninlil.Web.Models.DnssecKeyDetail.LifecycleState.
+     */
     isRetired?: boolean;
+    /**
+     * Free-form operator notes about the key.
+     */
     comments?: string | null;
+    /**
+     * When the key was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When the key\'s own metadata was last updated, if ever.
+     */
     updatedAtUtc?: string | null;
     lifecycleState?: DnssecKeyLifecycleStateEnum;
+    /**
+     * When the key was first published in the zone\'s own DNSKEY RRset.
+     */
     publishedAtUtc?: string;
+    /**
+     * When the key most recently stopped being its zone\'s own canonical, currently-signing key of its role, or null if it never has.
+     */
     retiredAtUtc?: string | null;
+    /**
+     * When an operator confirmed a KSK rollover\'s own new DS record has actually been published at a real, externally-hosted parent zone, or null if no such confirmation has been recorded (either because no rollover needs one, or because it is still awaited).
+     */
     parentDsConfirmedAtUtc?: string | null;
+    /**
+     * The key\'s DNSKEY record in presentation format, as published in the zone.
+     */
+    dnsKeyRecord?: string | null;
+    /**
+     * The SHA-256 DS record a parent zone publishes for this key, in presentation format, or null for a ZSK, which the parent never references.
+     */
+    dsRecord?: string | null;
+    /**
+     * The digest part of DsRecord on its own, as uppercase hexadecimal, for registrars that ask for the key tag, algorithm, digest type and digest separately.
+     */
+    dsDigest?: string | null;
 }
 export namespace DnssecKeyDetail {
 }

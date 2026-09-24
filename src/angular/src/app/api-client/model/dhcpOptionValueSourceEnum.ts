@@ -10,8 +10,8 @@
 
 
 export const DhcpOptionValueSourceEnum = {
-    NUMBER_0: 0,
-    NUMBER_1: 1,
+    Custom: 'Custom',
+    ServerAddress: 'ServerAddress',
 } as const;
 export type DhcpOptionValueSourceEnum = typeof DhcpOptionValueSourceEnum[keyof typeof DhcpOptionValueSourceEnum];
 

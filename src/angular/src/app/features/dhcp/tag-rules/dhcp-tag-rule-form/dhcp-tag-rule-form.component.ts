@@ -66,7 +66,7 @@ type DhcpTagRuleOptionRowFormGroup = FormGroup<{
   id: FormControl<string | null>;
   catalogSelection: FormControl<string>;
   optionTag: FormControl<number>;
-  valueSource: FormControl<'Custom' | 'ServerAddress'>;
+  valueSource: FormControl<DhcpOptionValueSourceEnum>;
   value: FormControl<string>;
 }>;
 
@@ -89,20 +89,6 @@ interface DhcpOptionRowViewState {
  * flag is this table's only real on/off switch). Saving reconciles this table's current rows
  * against `DhcpTagRuleOptionsController`'s own real per-row CRUD endpoints via
  * {@link planDhcpOptionReconciliation}, exactly like the scope form's own table.
- *
- * <p><b>A generated-client quirk, not a bug in this form</b>: `vendorClassIdentifierMatchMode`/
- * `userClassMatchMode` are real, server-side `[JsonConverter(JsonStringEnumConverter<...>)]`
- * string-serialized fields (confirmed live against the running backend: a real write round-trips
- * as `"Exact"`/`"Prefix"`, never a bare number) -- but Swashbuckle's own OpenAPI schema generation
- * does not reflect that per-property converter, so the committed `openapi/swagger.json` describes
- * this field as a plain integer enum, and the generated `Dhcpv4TagMatchModeEnum` TypeScript type is
- * therefore `0 | 1`, not the real `'Exact' | 'Prefix'` string union the wire format actually uses.
- * This form works entirely in the real string values and casts them to the generated (inaccurate)
- * type only at the exact two points a `DhcpTagRuleWriteRequest` is built, so a fix to the backend's
- * own schema annotation later needs no change here. The identical quirk affects
- * `DhcpOptionValueSourceEnum` (confirmed the same way -- see `Ninlil.Dhcp.Common.Enum
- * .DhcpOptionValueSourceEnum` and `DhcpModels.cs`'s own per-property `JsonConverter` attribute) --
- * this table's own `valueSource` rows use the exact same real-string/cast-at-the-boundary pattern.
  */
 @Component({
   selector: 'app-dhcp-tag-rule-form',
@@ -166,10 +152,10 @@ export class DhcpTagRuleFormComponent implements OnInit {
     priority: [0, [Validators.required]],
     isDisabled: [false],
     vendorClassIdentifierMatch: [''],
-    vendorClassIdentifierMatchMode: ['Exact'],
+    vendorClassIdentifierMatchMode: [Dhcpv4TagMatchModeEnum.Exact as Dhcpv4TagMatchModeEnum],
     vendorClassEnterpriseNumber: [null as number | null],
     userClassMatch: [''],
-    userClassMatchMode: ['Exact'],
+    userClassMatchMode: [Dhcpv4TagMatchModeEnum.Exact as Dhcpv4TagMatchModeEnum],
     relayAgentCircuitIdHex: [''],
     relayAgentRemoteIdHex: [''],
     relayInterfaceIdHex: [''],
@@ -213,7 +199,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     }
 
     row.controls.value.setValue('');
-    row.controls.valueSource.setValue('Custom');
+    row.controls.valueSource.setValue(DhcpOptionValueSourceEnum.Custom);
     this.recomputeOptionRowViewState();
   }
 
@@ -237,19 +223,16 @@ export class DhcpTagRuleFormComponent implements OnInit {
     }
 
     const value = this.form.getRawValue();
-    // See this class's own doc comment for why the two match-mode fields are cast here rather
-    // than typed as Dhcpv4TagMatchModeEnum throughout this component.
     const request: DhcpTagRuleWriteRequest = {
       name: value.name,
       scopeId: value.scopeId || null,
       priority: value.priority,
       isDisabled: value.isDisabled,
       vendorClassIdentifierMatch: value.vendorClassIdentifierMatch || null,
-      vendorClassIdentifierMatchMode:
-        value.vendorClassIdentifierMatchMode as unknown as Dhcpv4TagMatchModeEnum,
+      vendorClassIdentifierMatchMode: value.vendorClassIdentifierMatchMode,
       vendorClassEnterpriseNumber: value.vendorClassEnterpriseNumber ?? null,
       userClassMatch: value.userClassMatch || null,
-      userClassMatchMode: value.userClassMatchMode as unknown as Dhcpv4TagMatchModeEnum,
+      userClassMatchMode: value.userClassMatchMode,
       relayAgentCircuitIdHex: value.relayAgentCircuitIdHex || null,
       relayAgentRemoteIdHex: value.relayAgentRemoteIdHex || null,
       relayInterfaceIdHex: value.relayInterfaceIdHex || null,
@@ -377,10 +360,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     existing: DhcpTagRuleOptionDetail | null,
   ): DhcpTagRuleOptionRowFormGroup {
     const optionTag = existing?.optionTag ?? 1;
-    // See this class's own doc comment for why `valueSource` is real string data at runtime
-    // despite its generated TypeScript type claiming a numeric 0/1.
-    const normalizedValueSource: 'Custom' | 'ServerAddress' =
-      (existing?.valueSource as unknown as string) === 'ServerAddress' ? 'ServerAddress' : 'Custom';
+    const valueSource = existing?.valueSource ?? DhcpOptionValueSourceEnum.Custom;
 
     const candidates = existing
       ? this.combinedCatalog().filter((candidate) => candidate.entry.code === optionTag)
@@ -389,7 +369,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     let matchingEntry: CombinedCatalogEntry | undefined;
     let displayValue = '';
 
-    if (existing && normalizedValueSource === 'Custom' && candidates.length > 0) {
+    if (existing && valueSource === DhcpOptionValueSourceEnum.Custom && candidates.length > 0) {
       const decodable = candidates
         .map((candidate) => {
           try {
@@ -425,7 +405,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
       id: [existing?.id ?? (null as string | null)],
       catalogSelection: [catalogSelection],
       optionTag: [optionTag, [Validators.required, Validators.min(0), Validators.max(255)]],
-      valueSource: [normalizedValueSource],
+      valueSource: [valueSource],
       value: [displayValue],
     });
   }
@@ -437,7 +417,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     return this.options.controls.map((row, index) => {
       const raw = row.getRawValue();
       const combined = this.catalogEntryFor(row);
-      const isServerAddress = raw.valueSource === 'ServerAddress';
+      const isServerAddress = raw.valueSource === DhcpOptionValueSourceEnum.ServerAddress;
 
       let valueHex = '';
       if (!isServerAddress) {
@@ -456,9 +436,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
         request: {
           optionTag: raw.optionTag,
           valueHex,
-          valueSource: (isServerAddress
-            ? 'ServerAddress'
-            : 'Custom') as unknown as DhcpOptionValueSourceEnum,
+          valueSource: raw.valueSource,
         },
       };
     });
@@ -514,10 +492,10 @@ export class DhcpTagRuleFormComponent implements OnInit {
         isDisabled: rule.isDisabled ?? false,
         vendorClassIdentifierMatch: rule.vendorClassIdentifierMatch ?? '',
         vendorClassIdentifierMatchMode:
-          (rule.vendorClassIdentifierMatchMode as unknown as string) ?? 'Exact',
+          rule.vendorClassIdentifierMatchMode ?? Dhcpv4TagMatchModeEnum.Exact,
         vendorClassEnterpriseNumber: rule.vendorClassEnterpriseNumber ?? null,
         userClassMatch: rule.userClassMatch ?? '',
-        userClassMatchMode: (rule.userClassMatchMode as unknown as string) ?? 'Exact',
+        userClassMatchMode: rule.userClassMatchMode ?? Dhcpv4TagMatchModeEnum.Exact,
         relayAgentCircuitIdHex: rule.relayAgentCircuitIdHex ?? '',
         relayAgentRemoteIdHex: rule.relayAgentRemoteIdHex ?? '',
         relayInterfaceIdHex: rule.relayInterfaceIdHex ?? '',

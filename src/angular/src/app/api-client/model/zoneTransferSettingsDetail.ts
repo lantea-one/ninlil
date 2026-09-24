@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `ZoneTransferOptions` -- how this server chunks AXFR/IXFR responses it serves out to a secondary. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface ZoneTransferSettingsDetail { 
     recordsPerMessage?: number;
 }

@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries a single permission to grant or revoke on a role.
+ */
 export interface RolePermissionRequest { 
+    /**
+     * The permission string, such as `zones:write`.
+     */
     permission?: string | null;
 }
 

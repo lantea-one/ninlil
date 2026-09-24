@@ -9,10 +9,25 @@
  */
 
 
+/**
+ * This record is the REST representation of one built-in Ninlil.Dns.Server.Presets.PresetDefinition -- summary only, not the full leaf-by-leaf settings list, since a preset is applied as one atomic action, never inspected field-by-field through this endpoint.
+ */
 export interface PresetSummary { 
+    /**
+     * The preset\'s own stable name, for example `\"Baseline\"`.
+     */
     name?: string | null;
+    /**
+     * A short, human-readable summary of what this preset changes and why.
+     */
     description?: string | null;
+    /**
+     * How many individual configuration leaves this preset overwrites.
+     */
     configurationSettingCount?: number;
+    /**
+     * How many block/allow-list subscriptions this preset attaches.
+     */
     filterListSubscriptionCount?: number;
 }
 

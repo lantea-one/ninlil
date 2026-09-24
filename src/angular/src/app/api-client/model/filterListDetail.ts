@@ -12,6 +12,9 @@ import { DnsFilterListKindEnum } from './dnsFilterListKindEnum';
 import { DnsFilterListSourceEnum } from './dnsFilterListSourceEnum';
 
 
+/**
+ * This class carries a block/allow list\'s own metadata, for list, single-item, and creation responses.
+ */
 export interface FilterListDetail { 
     id?: string;
     name?: string | null;

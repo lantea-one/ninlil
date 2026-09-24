@@ -42,6 +42,7 @@ export class WebListenSettingsService extends BaseService implements WebListenSe
     }
 
     /**
+     * This action reads this host\&#39;s own web listener configuration as it was at process startup -- see this class\&#39;s own doc comment for why this can never be \&quot;live\&quot; the way every other settings controller\&#39;s own &#x60;Get&#x60; action is.
      * @endpoint get /api/web-listen-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class WebListenSettingsService extends BaseService implements WebListenSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Web&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Written to the configuration file immediately, but never applied to this already-running process -- see this class\&#39;s own doc comment.
      * @endpoint patch /api/web-listen-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

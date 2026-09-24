@@ -42,6 +42,7 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live) ECS settings.
      * @endpoint get /api/client-subnet-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class ClientSubnetSettingsService extends BaseService implements ClientSu
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * @endpoint patch /api/client-subnet-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

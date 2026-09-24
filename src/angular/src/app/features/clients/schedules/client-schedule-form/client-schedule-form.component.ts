@@ -77,9 +77,7 @@ const DAY_FULL_NAMES: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
  * `daysOfWeek` as a plain `string` throughout its own form model, building/parsing the
  * comma-separated wire value directly from/to seven ordinary checkbox controls
  * ({@link DAY_CONTROL_NAMES}), and casts only at the two points a real
- * `ClientScheduleWriteRequest` is actually built -- the same `as unknown as` workaround, for the
- * same underlying reason, `DhcpTagRuleFormComponent` already documents for
- * `Dhcpv4TagMatchModeEnum`.</p>
+ * `ClientScheduleWriteRequest` is actually built.</p>
  *
  * <p><strong>Time zone selection</strong> uses the real, complete IANA time zone database this
  * browser ships (`Intl.supportedValuesOf('timeZone')`) when available, falling back to a small

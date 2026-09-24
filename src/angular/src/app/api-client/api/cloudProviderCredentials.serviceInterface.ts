@@ -54,7 +54,7 @@ export interface CloudProviderCredentialsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every cloud DNS provider credential set this server knows about.
      * 
      * @endpoint get /api/cloud-provider-credentials
 * @param requestParameters
@@ -62,7 +62,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsGet(requestParameters: ApiCloudProviderCredentialsGetRequestParams, extraHttpRequestParams?: any): Observable<CloudProviderCredentialDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a cloud DNS provider credential set. Any zone still referencing it by identifier (see Ninlil.Web.Controllers.ZonesController\&#39;s own &#x60;CloudProviderCredentialId&#x60;) simply stops being able to sync against it -- this project does not track or block on that soft reference, the same laxness M:Ninlil.Web.Controllers.TsigKeysController.Delete(System.Guid,System.Threading.CancellationToken) already accepts for a TSIG key\&#39;s own &#x60;TsigKeyName&#x60; reference.
      * 
      * @endpoint delete /api/cloud-provider-credentials/{id}
 * @param requestParameters
@@ -70,7 +70,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsIdDelete(requestParameters: ApiCloudProviderCredentialsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single cloud DNS provider credential set by its identifier.
      * 
      * @endpoint get /api/cloud-provider-credentials/{id}
 * @param requestParameters
@@ -78,7 +78,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsIdGet(requestParameters: ApiCloudProviderCredentialsIdGetRequestParams, extraHttpRequestParams?: any): Observable<CloudProviderCredentialDetail>;
 
     /**
-     * 
+     * This action partially updates an existing cloud DNS provider credential set via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any other present field overwrites it. When &#x60;credentials&#x60; is present, it replaces the entire stored secret-material object atomically (this project treats it as one opaque value, not a deep-merged one, matching Ninlil.Dns.Data.Abstractions.Entity.CloudDnsProviderCredentialEntity.CredentialsEncrypted\&#39;s own \&quot;opaque payload\&quot; shape) -- omit it to rotate only metadata (name, provider type, disabled, comments) without touching the stored credentials at all.
      * 
      * @endpoint patch /api/cloud-provider-credentials/{id}
 * @param requestParameters
@@ -86,7 +86,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsIdPatch(requestParameters: ApiCloudProviderCredentialsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing cloud DNS provider credential set, including its own secret material -- see Ninlil.Web.Models.CloudProviderCredentialWriteRequest for why this is deliberately different from how M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken) handles a TSIG key\&#39;s own shared secret.
      * 
      * @endpoint put /api/cloud-provider-credentials/{id}
 * @param requestParameters
@@ -94,7 +94,7 @@ export interface CloudProviderCredentialsServiceInterface {
     apiCloudProviderCredentialsIdPut(requestParameters: ApiCloudProviderCredentialsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new cloud DNS provider credential set. The plaintext secret material supplied here is returned exactly once, in this action\&#39;s own response -- every later request for this credential set omits it entirely.
      * 
      * @endpoint post /api/cloud-provider-credentials
 * @param requestParameters

@@ -42,6 +42,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
     }
 
     /**
+     * This action lists every catalog entry this server offers, together with whether each is currently fully enabled (every one of its own hostname mappings present as an enabled rewrite) -- globally by default, or for a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named -- see this class\&#39;s own doc comment for the full scoping contract.
      * @endpoint get /api/safe-search
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -122,6 +123,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
     }
 
     /**
+     * This action disables a single catalog entry: removes every rewrite row, within the given scope only, that exactly matches one of its own hostname mappings (source domain and target both) -- globally by default, or scoped to a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, leaving every other scope\&#39;s own rows (global rows, or another target\&#39;s own rows) completely untouched. Never touches Ninlil.Dns.Server.Rewrites.DnsRewriteOptions.Enable -- see this class\&#39;s own doc comment for why. A no-op, not an error, for a mapping with no matching row in the given scope, or for an unrecognized target (nothing in that scope could ever exist to remove).
      * @endpoint delete /api/safe-search/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -203,6 +205,7 @@ export class SafeSearchService extends BaseService implements SafeSearchServiceI
     }
 
     /**
+     * This action enables a single catalog entry: for every one of its own hostname mappings, creates a matching rewrite row if none exists, or re-enables one that was previously disabled -- globally by default, or scoped to a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, see this class\&#39;s own doc comment. Rejected with &#x60;400 Bad Request&#x60; if both are given, or if a named target does not actually exist. Rejected with &#x60;409 Conflict&#x60;, with nothing at all written, if any mapping would collide with an existing, unrelated CNAME-classified rewrite for the same hostname &lt;em&gt;within the same scope&lt;/em&gt; pointing somewhere else -- validated for every mapping before any write is made, so a rejected request never leaves this entry partially applied. Also turns Ninlil.Dns.Server.Rewrites.DnsRewriteOptions.Enable on if it was off, regardless of scope -- see this class\&#39;s own doc comment for why that side effect exists and is deliberately not reversed on disable.
      * @endpoint post /api/safe-search/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

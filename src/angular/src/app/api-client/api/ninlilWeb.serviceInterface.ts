@@ -11,6 +11,7 @@ import { HttpHeaders }                                       from '@angular/comm
 
 import { Observable }                                        from 'rxjs';
 
+import { StatusResponse } from '../model/models';
 
 
 import { Configuration }                                     from '../configuration';
@@ -33,6 +34,6 @@ export interface NinlilWebServiceInterface {
      * 
      * @endpoint get /status
 */
-    statusGet(extraHttpRequestParams?: any): Observable<{}>;
+    statusGet(extraHttpRequestParams?: any): Observable<StatusResponse>;
 
 }

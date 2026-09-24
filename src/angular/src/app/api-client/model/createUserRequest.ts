@@ -9,10 +9,25 @@
  */
 
 
+/**
+ * This class carries the settings for a newly-created user account.
+ */
 export interface CreateUserRequest { 
+    /**
+     * The account\'s sign-in name.
+     */
     userName?: string | null;
+    /**
+     * The account\'s initial password.
+     */
     password?: string | null;
+    /**
+     * The account\'s e-mail address, if any.
+     */
     email?: string | null;
+    /**
+     * The account\'s friendly display name, if any.
+     */
     displayName?: string | null;
 }
 

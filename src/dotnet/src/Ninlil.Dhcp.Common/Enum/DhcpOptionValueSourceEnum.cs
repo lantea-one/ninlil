@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 // Define our namespace.
 namespace Ninlil.Dhcp.Common.Enum;
 
@@ -11,7 +13,13 @@ namespace Ninlil.Dhcp.Common.Enum;
 ///     live deployment's existing custom options and tag-rule options keep delivering their own
 ///     already-configured raw value, byte-for-byte unchanged, across an upgrade that adds this
 ///     property.
+///     <para>
+///         The REST API sends this as its member name. The converter sits on the type rather than
+///         on each DTO property so the OpenAPI document describes it as a string enum too:
+///         Swashbuckle reads a type-level converter but ignores a property-level one.
+///     </para>
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<DhcpOptionValueSourceEnum>))]
 public enum DhcpOptionValueSourceEnum
 {
     /// <summary>

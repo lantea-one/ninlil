@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This class carries the token-based password reset a caller submits from this project\'s shared \"set new password\" landing page, reachable via M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). Shared by both an administrator-driven reset e-mail (`UsersController.ResetPassword`\'s own `EmailLink` delivery mode) and the self-service Forgot Password request (M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)) alike -- neither the account holder nor an administrator is authenticated at this point, so this action is `[AllowAnonymous]`, and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token/Ninlil.Web.Models.ConfirmPasswordResetRequest.UserId together are the only proof of authorization it has.
+ */
 export interface ConfirmPasswordResetRequest { 
+    /**
+     * The account this reset applies to, carried in the landing page\'s own link.
+     */
     userId?: string;
+    /**
+     * The password-reset token from `UserManager<TUser>.GeneratePasswordResetTokenAsync`, Base64Url-encoded for safe transport through a URL query string (a raw Identity token can contain `+`/`/`/`=`, unsafe to place directly in a query string) -- decoded back to the real token here before being checked.
+     */
     token?: string | null;
+    /**
+     * The new password to set, once Ninlil.Web.Models.ConfirmPasswordResetRequest.Token checks out.
+     */
     newPassword?: string | null;
 }
 

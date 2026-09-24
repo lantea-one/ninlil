@@ -9,19 +9,61 @@
  */
 
 
+/**
+ * This record is the REST representation of one `Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions` entry -- one network interface\'s own distinct Router Advertisement content, nested inside Ninlil.Web.Models.DhcpRaSettingsDetail/the `PATCH ra` merge-patch body\'s own `interfaceOverrides` array. Every scalar field below is nullable and, left null, inherits Ninlil.Web.Models.DhcpRaSettingsDetail\'s own matching global field verbatim for this one interface -- the same shape `Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions`\'s own doc comment describes in full, including Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail.RecursiveDnsServers/Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail.DnsSearchListDomains\'s own \"null inherits the global list, non-null (even empty) wholesale-replaces it\" list-level rule.  <b>Deliberately excludes an override\'s own would-be `Prefixes`/`Routes`     lists</b>, exactly mirroring Ninlil.Web.Models.DhcpRaSettingsDetail\'s own established     \"`Prefixes` stays config-file-only\" scope boundary -- extended here to     `Routes` as well, since nesting a repeatable route list inside this already-     repeatable interface-override list is a materially bigger REST/UI lift than everything     else this record carries. Both remain fully configurable directly in the JSON     configuration file (`RaInterfaceOverrideOptions.Prefixes`/`.Routes`), a     genuine, deliberate scope cut rather than an oversight.
+ */
 export interface DhcpRaInterfaceOverrideDetail { 
+    /**
+     * The OS-reported network interface name this override applies to (for example `eth0`), matched case-insensitively.
+     */
     interfaceName?: string | null;
+    /**
+     * When true, this interface is excluded from Router Advertisement entirely; every field below is then ignored.
+     */
     exclude?: boolean;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.ManagedAddressConfiguration for this interface, or inherits it when null.
+     */
     managedAddressConfiguration?: boolean | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.OtherConfiguration for this interface, or inherits it when null.
+     */
     otherConfiguration?: boolean | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.RouterLifetime for this interface, or inherits it when null.
+     */
     routerLifetime?: string | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.CurrentHopLimit for this interface, or inherits it when null.
+     */
     currentHopLimit?: number | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.ReachableTime for this interface, or inherits it when null.
+     */
     reachableTime?: string | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.RetransTimer for this interface, or inherits it when null.
+     */
     retransTimer?: string | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.LinkMtu for this interface, or inherits it when null.
+     */
     linkMtu?: number | null;
+    /**
+     * Wholesale-replaces Ninlil.Web.Models.DhcpRaSettingsDetail.RecursiveDnsServers for this interface when non-null, or inherits the global list when null.
+     */
     recursiveDnsServers?: Array<string> | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.RecursiveDnsServerLifetime for this interface, or inherits it when null.
+     */
     recursiveDnsServerLifetime?: string | null;
+    /**
+     * Wholesale-replaces Ninlil.Web.Models.DhcpRaSettingsDetail.DnsSearchListDomains for this interface when non-null, or inherits the global list when null.
+     */
     dnsSearchListDomains?: Array<string> | null;
+    /**
+     * Overrides Ninlil.Web.Models.DhcpRaSettingsDetail.DnsSearchListLifetime for this interface, or inherits it when null.
+     */
     dnsSearchListLifetime?: string | null;
 }
 

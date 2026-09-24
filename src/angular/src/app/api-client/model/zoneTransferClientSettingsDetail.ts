@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `ZoneTransferClientOptions` -- how this server pulls AXFR/IXFR transfers from a primary as a secondary. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface ZoneTransferClientSettingsDetail { 
     primaryPort?: number;
     connectTimeout?: string;

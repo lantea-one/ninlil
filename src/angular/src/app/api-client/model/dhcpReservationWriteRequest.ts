@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This class carries the fields used to create or fully replace a static reservation belonging to a DHCP scope (`POST`/`PUT /api/dhcp-scopes/{scopeId}/reservations`).
+ */
 export interface DhcpReservationWriteRequest { 
+    /**
+     * The client\'s identifier: a MAC address for DHCPv4, or a DUID for DHCPv6.
+     */
     clientIdentifier?: string | null;
+    /**
+     * The fixed IP address reserved for this client.
+     */
     ipAddress?: string | null;
+    /**
+     * An operator-supplied host name for this reservation, if any.
+     */
     hostName?: string | null;
+    /**
+     * Whether the reservation starts out (or is currently) disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this reservation.
+     */
     comments?: string | null;
 }
 

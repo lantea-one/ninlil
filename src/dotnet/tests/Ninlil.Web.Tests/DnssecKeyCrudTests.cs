@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Ninlil.Web.Models;
@@ -180,6 +181,67 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
             $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
         );
         Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task KeyDetail_CarriesTheRecordsAParentZoneNeeds()
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        HttpResponseMessage kskResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new { role = "KSK", algorithm = "ECDSAP256SHA256" }
+        );
+        Assert.Equal(HttpStatusCode.Created, kskResponse.StatusCode);
+        DnssecKeyDetail ksk = await kskResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+
+        // The digest is recomputed here from RFC 4034 §5.1.4 directly -- owner name in
+        // lowercase wire form, then the DNSKEY RDATA (flags 257, protocol 3, algorithm 13, key)
+        // -- rather than through the server's own helpers, so a mistake there can't hide.
+        byte[] publicKey = Convert.FromBase64String(ksk.PublicKeyWireFormat);
+        List<byte> input = [];
+        foreach (string label in zone.Name.TrimEnd('.').ToLowerInvariant().Split('.'))
+        {
+            input.Add((byte)label.Length);
+            input.AddRange(Encoding.ASCII.GetBytes(label));
+        }
+        input.Add(0);
+        input.AddRange([0x01, 0x01, 3, 13]);
+        input.AddRange(publicKey);
+        string expectedDigest = Convert.ToHexString(SHA256.HashData([.. input]));
+
+        string owner = zone.Name.TrimEnd('.') + ".";
+        Assert.Equal(
+            $"{owner} IN DNSKEY 257 3 13 {ksk.PublicKeyWireFormat}",
+            ksk.DnsKeyRecord,
+            ignoreCase: true
+        );
+        Assert.Equal(expectedDigest, ksk.DsDigest);
+        Assert.Equal(
+            $"{owner} IN DS {ksk.KeyTag} 13 2 {expectedDigest}",
+            ksk.DsRecord,
+            ignoreCase: true
+        );
+
+        // The same fields come back from the single-key read and the list.
+        DnssecKeyDetail fetched = await client.GetFromJsonAsync<DnssecKeyDetail>(
+            $"/api/zones/{zone.Id}/dnssec-keys/{ksk.Id}"
+        );
+        Assert.Equal(ksk.DsRecord, fetched.DsRecord);
+
+        // A ZSK is never referenced from the parent, so it has a DNSKEY but no DS.
+        HttpResponseMessage zskResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new { role = "ZSK", algorithm = "ECDSAP256SHA256" }
+        );
+        DnssecKeyDetail zsk = await zskResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+        Assert.StartsWith(
+            $"{owner} IN DNSKEY 256 3 13 ",
+            zsk.DnsKeyRecord,
+            StringComparison.OrdinalIgnoreCase
+        );
+        Assert.Null(zsk.DsRecord);
+        Assert.Null(zsk.DsDigest);
     }
 
     [Fact]

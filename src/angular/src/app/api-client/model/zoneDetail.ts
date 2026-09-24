@@ -13,33 +13,105 @@ import { ZoneTransferTransportEnum } from './zoneTransferTransportEnum';
 import { DnssecDenialOfExistenceModeEnum } from './dnssecDenialOfExistenceModeEnum';
 
 
+/**
+ * This class carries a zone\'s full state, for both list and single-item responses.
+ */
 export interface ZoneDetail { 
+    /**
+     * The zone\'s own identifier.
+     */
     id?: string;
+    /**
+     * The zone\'s fully-qualified name, without a trailing dot.
+     */
     name?: string | null;
     type?: ZoneTypeEnum;
+    /**
+     * Whether the zone is signed with DNSSEC.
+     */
     isDnssecSigned?: boolean;
     dnssecAlgorithm?: DnssecAlgorithmEnum;
     denialOfExistenceMode?: DnssecDenialOfExistenceModeEnum;
+    /**
+     * How many additional times a signed zone\'s NSEC3 chain hashes.
+     */
     nsec3Iterations?: number;
+    /**
+     * A signed zone\'s NSEC3 salt, as hexadecimal text.
+     */
     nsec3SaltHex?: string | null;
+    /**
+     * Whether the zone is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * The upstream name servers this zone transfers from, for a secondary/stub zone.
+     */
     primaryServerAddresses?: Array<string> | null;
+    /**
+     * The addresses this zone forwards every query to.
+     */
     forwarderAddresses?: Array<string> | null;
+    /**
+     * The secondaries this zone sends an outbound NOTIFY to.
+     */
     notifyAddresses?: Array<string> | null;
+    /**
+     * The TSIG key this zone signs its outbound transfer requests with.
+     */
     tsigKeyName?: string | null;
+    /**
+     * Whether this zone accepts RFC 2136 dynamic updates.
+     */
     dynamicUpdateEnabled?: boolean;
+    /**
+     * Free-form operator notes about the zone.
+     */
     comments?: string | null;
+    /**
+     * The credential this zone syncs against, for a cloud zone.
+     */
     cloudProviderCredentialId?: string | null;
+    /**
+     * This zone\'s own identifier at its cloud provider.
+     */
     cloudProviderZoneId?: string | null;
+    /**
+     * How often this zone\'s cloud sync runs.
+     */
     cloudSyncInterval?: string;
+    /**
+     * Whether the CAA auto-management feature reconciles this zone\'s CAA records. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
+     */
     autoManageCaaRecords?: boolean | null;
+    /**
+     * This zone\'s own override of which CA issuer domain CAA auto-management writes into the CAA records it creates. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
+     */
     caaIssuerDomain?: string | null;
+    /**
+     * Whether the PTR/reverse-zone sync feature mirrors this zone\'s own A/AAAA records into the enclosing reverse zone. null inherits `PtrSyncOptions.DefaultEnabled`.
+     */
     autoManagePtrRecords?: boolean | null;
+    /**
+     * This zone\'s own override of the IPv4 reverse-zone grouping granularity, in bits. null inherits `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`.
+     */
     ptrIpv4PrefixLength?: number | null;
+    /**
+     * This zone\'s own override of the IPv6 reverse-zone grouping granularity, in bits. null inherits `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`.
+     */
     ptrIpv6PrefixLength?: number | null;
+    /**
+     * When the zone was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When the zone was last updated, if it ever has been.
+     */
     updatedAtUtc?: string | null;
     transferTransport?: ZoneTransferTransportEnum;
+    /**
+     * The identifier of the RFC 9432 catalog zone this zone is a member of, or null if it participates in none. Read-only here -- set or cleared only through `POST`/`DELETE /api/zones/{id}/catalog-membership`, never through this record\'s own create/replace/patch counterparts.
+     */
     memberOfCatalogZoneId?: string | null;
 }
 export namespace ZoneDetail {

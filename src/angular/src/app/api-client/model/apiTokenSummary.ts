@@ -10,13 +10,34 @@
 import { ApiTokenTypeEnum } from './apiTokenTypeEnum';
 
 
+/**
+ * This class carries an API token\'s own metadata, without ever exposing its secret value.
+ */
 export interface ApiTokenSummary { 
+    /**
+     * The token\'s own identifier.
+     */
     id?: string;
+    /**
+     * The token\'s human-readable name.
+     */
     name?: string | null;
     type?: ApiTokenTypeEnum;
+    /**
+     * The UTC date and time the token was issued.
+     */
     createdAtUtc?: string;
+    /**
+     * The UTC date and time the token stops being valid, if any.
+     */
     expiresAtUtc?: string | null;
+    /**
+     * The UTC date and time a one-time token was used, if any.
+     */
     consumedAtUtc?: string | null;
+    /**
+     * The UTC date and time the token was revoked, if any.
+     */
     revokedAtUtc?: string | null;
 }
 export namespace ApiTokenSummary {

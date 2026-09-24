@@ -28,14 +28,14 @@ export interface SelfUpdateSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live) self-update settings.
      * 
      * @endpoint get /api/self-update-settings
 */
     apiSelfUpdateSettingsGet(extraHttpRequestParams?: any): Observable<SelfUpdateSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:SelfUpdate&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. &#x60;releaseFeedUrl&#x60; is validated as either blank (clearing it back to \&quot;nothing to check against\&quot;) or a well-formed absolute HTTP/HTTPS URL -- never followed or fetched here, only shape-checked, so a typo is caught immediately rather than surfacing only as a repeatedly-failing background check.
      * 
      * @endpoint patch /api/self-update-settings
 * @param requestParameters

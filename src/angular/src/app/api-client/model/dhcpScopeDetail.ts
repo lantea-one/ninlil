@@ -11,6 +11,9 @@ import { DhcpScopeKindEnum } from './dhcpScopeKindEnum';
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries a DHCP scope\'s own metadata, for list, single-item, and creation responses.
+ */
 export interface DhcpScopeDetail { 
     id?: string;
     name?: string | null;

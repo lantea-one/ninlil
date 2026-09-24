@@ -42,6 +42,7 @@ export class DhcpOptionCatalogService extends BaseService implements DhcpOptionC
     }
 
     /**
+     * This action returns every catalog entry for one protocol version -- the full contents of Ninlil.Dhcp.Common.OptionCatalog.Dhcpv4OptionCatalog.Entries or Ninlil.Dhcp.Common.OptionCatalog.Dhcpv6OptionCatalog.Entries, mapped onto this controller\&#39;s own REST response shape, in the same ascending tag/code order the underlying catalog itself is declared in.
      * @endpoint get /api/dhcp-option-catalog
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

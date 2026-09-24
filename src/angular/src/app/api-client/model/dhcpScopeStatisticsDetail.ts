@@ -11,15 +11,39 @@ import { DhcpScopeKindEnum } from './dhcpScopeKindEnum';
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This record is the REST representation of `Ninlil.Dhcp.Server.Core.Statistics.DhcpScopeStatistics` -- a single DHCP scope\'s own genuine, freshly-computed utilization, never a cached or approximate figure (see that class\'s own doc comment for exactly how each field is derived). Ninlil.Web.Models.DhcpScopeStatisticsDetail.TotalSlots/Ninlil.Web.Models.DhcpScopeStatisticsDetail.AvailableSlots are carried as a decimal string, not a JSON number: an IPv6 `AddressAssignment` scope\'s own configured range can legitimately hold far more addresses than fit in a JSON number\'s own safe-integer range (an ordinary `/64` alone holds 2^64 of them) without losing precision.
+ */
 export interface DhcpScopeStatisticsDetail { 
+    /**
+     * The identifier of the scope these figures describe.
+     */
     scopeId?: string;
+    /**
+     * The name of the scope these figures describe.
+     */
     scopeName?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     kind?: DhcpScopeKindEnum;
+    /**
+     * The total number of slots the scope\'s own configured range holds, as a decimal string -- an ordinary address for an Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.AddressAssignment scope, or a block-aligned delegable prefix for a Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation one.
+     */
     totalSlots?: string | null;
+    /**
+     * The number of currently actively-leased slots.
+     */
     leasedCount?: number;
+    /**
+     * The number of slots currently tentatively offered, awaiting confirmation.
+     */
     offeredCount?: number;
+    /**
+     * The number of this scope\'s own currently-enabled static reservations.
+     */
     reservedCount?: number;
+    /**
+     * TotalSlots minus every distinct slot currently occupied by a blocking                 lease or an enabled reservation, as a decimal string -- never negative.
+     */
     availableSlots?: string | null;
 }
 export namespace DhcpScopeStatisticsDetail {

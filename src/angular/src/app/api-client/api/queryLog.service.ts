@@ -42,6 +42,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
     }
 
     /**
+     * This action permanently removes every entry currently in the query log -- an explicit, operator-triggered action distinct from Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService\&#39;s own automatic, retention-driven pruning.
      * @endpoint delete /api/query-log
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class QueryLogService extends BaseService implements QueryLogServiceInter
     }
 
     /**
+     * This action searches the query log, newest entries first, narrowed by whichever of clientAddress/domain/queriedType/ responseCode/fromUtc/toUtc the caller supplied.
      * @endpoint get /api/query-log
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

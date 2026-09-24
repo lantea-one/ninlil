@@ -11,14 +11,35 @@ import { DnsResourceRecordTypeEnum } from './dnsResourceRecordTypeEnum';
 import { DnsClassEnum } from './dnsClassEnum';
 
 
+/**
+ * This class carries every writable field of a `RecordEntity` -- used both to create a new record (`POST /api/zones/{zoneId}/records`) and to fully replace an existing one (`PUT /api/zones/{zoneId}/records/{id}`).
+ */
 export interface RecordWriteRequest { 
+    /**
+     * The record\'s owner name.
+     */
     name?: string | null;
     type?: DnsResourceRecordTypeEnum;
+    /**
+     * The record\'s time-to-live, in seconds.
+     */
     timeToLiveSeconds?: number;
+    /**
+     * The record\'s type-specific data, shaped exactly like the record type\'s own wire-format model -- an `A` record\'s `{ \"address\": \"203.0.113.5\" }`, an `MX` record\'s `{ \"preference\": 10, \"exchange\": \"mail.example.com\" }`, and so on.
+     */
     data?: any | null;
     'class'?: DnsClassEnum;
+    /**
+     * Whether the record is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the record.
+     */
     comments?: string | null;
+    /**
+     * Whether the record is local-only, excluded from every sync path.
+     */
     excludeFromSync?: boolean;
 }
 export namespace RecordWriteRequest {

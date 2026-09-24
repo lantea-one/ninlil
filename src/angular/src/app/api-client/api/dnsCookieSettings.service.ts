@@ -42,6 +42,7 @@ export class DnsCookieSettingsService extends BaseService implements DnsCookieSe
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (live and running) DNS Cookie settings.
      * @endpoint get /api/dns-cookie-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class DnsCookieSettingsService extends BaseService implements DnsCookieSe
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Cookies&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * @endpoint patch /api/dns-cookie-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

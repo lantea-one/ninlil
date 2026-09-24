@@ -28,14 +28,14 @@ export interface NotifySettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) NOTIFY settings.
      * 
      * @endpoint get /api/notify-settings
 */
     apiNotifySettingsGet(extraHttpRequestParams?: any): Observable<NotifySettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:Notify&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/notify-settings
 * @param requestParameters

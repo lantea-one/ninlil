@@ -49,6 +49,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action lists every record stored in a zone.
      * @endpoint get /api/zones/{zoneId}/records
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -133,6 +134,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action removes a record from the zone. A zone\&#39;s own SOA record cannot be removed this way -- every zone must always have exactly one; delete the zone itself instead.
      * @endpoint delete /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -195,6 +197,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action looks up a single record by its identifier.
      * @endpoint get /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -260,6 +263,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action partially updates an existing record via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
      * @endpoint patch /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -335,6 +339,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action fully replaces an existing record\&#39;s fields, keeping its own identifier.
      * @endpoint put /api/zones/{zoneId}/records/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -410,6 +415,7 @@ export class RecordsService extends BaseService implements RecordsServiceInterfa
     }
 
     /**
+     * This action adds a new record to the zone. A zone\&#39;s very first record must be its own SOA record -- there is otherwise no serial to advance -- so this bootstraps the zone via M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken) exactly once; every later addition goes through the ordinary M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken) path instead.
      * @endpoint post /api/zones/{zoneId}/records
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

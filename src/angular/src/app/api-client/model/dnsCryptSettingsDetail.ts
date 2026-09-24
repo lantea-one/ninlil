@@ -9,15 +9,45 @@
  */
 
 
+/**
+ * This record is the REST representation of DNSCrypt\'s own `DnsCryptOptions`.
+ */
 export interface DnsCryptSettingsDetail { 
+    /**
+     * Whether this transport listens at all. <b>Genuinely live</b>: toggling this field starts or stops the real, already-running `dnscrypt-udp`/`dnscrypt-tcp` listeners <em>and</em>`dnscrypt-certificate-rotation` (the background loop that actually issues this resolver\'s own DNSCrypt certificates -- with no certificate, a live-started listener could accept connections but never answer a real encrypted query), all three registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart.
+     */
     enable?: boolean;
+    /**
+     * The port this transport binds to, for both UDP and TCP. Restart-required.
+     */
     port?: number;
+    /**
+     * The zone this resolver advertises its DNSCrypt certificate discovery TXT record under. Restart-required -- read once, at this transport\'s own startup.
+     */
     providerName?: string | null;
+    /**
+     * How long a TCP connection may sit completely idle before this server closes it. Restart-required.
+     */
     tcpIdleTimeout?: string;
+    /**
+     * How many TCP connections this server accepts at once. Restart-required.
+     */
     maxConcurrentTcpConnections?: number;
+    /**
+     * Every DNSCrypt cipher this resolver keeps a continuously valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). Restart-required -- `DnsCryptCertificateRotationService` reads this once per rotation check, not per request, so a change here needs that background loop (or the whole transport, since this controller restarts it together with the listeners) to restart before it takes effect.
+     */
     enabledEsVersions?: Array<string> | null;
+    /**
+     * How often a fresh certificate is considered for every enabled cipher. Restart-required.
+     */
     certificateRotationInterval?: string;
+    /**
+     * How long a newly generated certificate stays valid for. Restart-required.
+     */
     certificateValidityDuration?: string;
+    /**
+     * How far in the past a newly generated certificate\'s own validity start is backdated. Restart-required.
+     */
     certificateClockSkewTolerance?: string;
 }
 

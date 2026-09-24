@@ -47,6 +47,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
     }
 
     /**
+     * This action lists every list assignment belonging to a known client.
      * @endpoint get /api/clients/{clientId}/list-assignments
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -131,6 +132,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
     }
 
     /**
+     * This action removes a list assignment from the known client.
      * @endpoint delete /api/clients/{clientId}/list-assignments/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -193,6 +195,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
     }
 
     /**
+     * This action looks up a single list assignment by its identifier.
      * @endpoint get /api/clients/{clientId}/list-assignments/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -258,6 +261,7 @@ export class ClientListAssignmentsService extends BaseService implements ClientL
     }
 
     /**
+     * This action assigns a block/allow list to the known client. Rejected with &#x60;400 Bad Request&#x60; if the referenced list does not exist -- treated as an invalid value on the assignment being created, not a lookup of the list itself, so this stays a Ninlil.Dns.Common.Exceptions.ValidationException rather than a Ninlil.Dns.Common.Exceptions.NotFoundException -- and &#x60;409 Conflict&#x60; if this exact client/list pairing is already assigned -- an unenforced duplicate would be harmless to &#x60;DnsFilterEngine&#x60; itself (it collects assigned list identifiers into a System.Collections.Generic.HashSet&#x60;1 before resolving them, see &#x60;DnsFilterEngine.ResolveApplicableListsAsync&#x60;), but is still rejected here to avoid letting an operator accumulate meaningless duplicate rows -- the same reasoning M:Ninlil.Web.Controllers.ClientGroupListAssignmentsController.Create(System.Guid,Ninlil.Web.Models.ClientGroupListAssignmentWriteRequest,System.Threading.CancellationToken) already documents.
      * @endpoint post /api/clients/{clientId}/list-assignments
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

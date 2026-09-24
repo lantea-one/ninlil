@@ -28,14 +28,14 @@ export interface ZoneSigningSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) zone-signing timing configuration.
      * 
      * @endpoint get /api/zone-signing-settings
 */
     apiZoneSigningSettingsGet(extraHttpRequestParams?: any): Observable<ZoneSigningSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneSigning&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field hot-reloads immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/zone-signing-settings
 * @param requestParameters

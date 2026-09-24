@@ -10,8 +10,17 @@
 import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
+/**
+ * This class carries the fields used to create a new entry directly in a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list (`POST /api/filter-lists/{listId}/entries`). See Ninlil.Web.Controllers.FilterListEntriesController for why this, and every other write action on this nested resource, is rejected for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list.
+ */
 export interface FilterListEntryWriteRequest { 
+    /**
+     * The entry\'s own value -- a domain name, wildcard glob, or regular expression (depending on Ninlil.Web.Models.FilterListEntryWriteRequest.Kind) for a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.Domain list, or an IP address/CIDR network for a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ResponseIp/ Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ClientSource list (where Ninlil.Web.Models.FilterListEntryWriteRequest.Kind must be Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain, the default).
+     */
     value?: string | null;
+    /**
+     * Free-form operator notes about this entry.
+     */
     comment?: string | null;
     kind?: DnsFilterEntryKindEnum;
 }

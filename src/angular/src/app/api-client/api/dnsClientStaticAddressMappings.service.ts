@@ -48,6 +48,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
+     * This action lists every static address mapping this server knows about, enabled or not.
      * @endpoint get /api/client-static-address-mappings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -128,6 +129,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
+     * This action permanently deletes a static address mapping.
      * @endpoint delete /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -186,6 +188,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
+     * This action looks up a single static address mapping by its identifier.
      * @endpoint get /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -247,6 +250,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
+     * This action fully replaces an existing static address mapping\&#39;s own fields.
      * @endpoint put /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -318,6 +322,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
+     * This action creates a new static address mapping.
      * @endpoint post /api/client-static-address-mappings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

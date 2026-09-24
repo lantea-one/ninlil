@@ -52,7 +52,7 @@ export interface DhcpReservationsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every reservation belonging to a DHCP scope.
      * 
      * @endpoint get /api/dhcp-scopes/{scopeId}/reservations
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface DhcpReservationsServiceInterface {
     apiDhcpScopesScopeIdReservationsGet(requestParameters: ApiDhcpScopesScopeIdReservationsGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpReservationDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a reservation from the DHCP scope.
      * 
      * @endpoint delete /api/dhcp-scopes/{scopeId}/reservations/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface DhcpReservationsServiceInterface {
     apiDhcpScopesScopeIdReservationsIdDelete(requestParameters: ApiDhcpScopesScopeIdReservationsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single reservation by its identifier.
      * 
      * @endpoint get /api/dhcp-scopes/{scopeId}/reservations/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface DhcpReservationsServiceInterface {
     apiDhcpScopesScopeIdReservationsIdGet(requestParameters: ApiDhcpScopesScopeIdReservationsIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpReservationDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing reservation\&#39;s own fields, keeping its own identifier and owning scope.
      * 
      * @endpoint put /api/dhcp-scopes/{scopeId}/reservations/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DhcpReservationsServiceInterface {
     apiDhcpScopesScopeIdReservationsIdPut(requestParameters: ApiDhcpScopesScopeIdReservationsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new static reservation to a DHCP scope. Rejected with &#x60;409 Conflict&#x60; when either the client identifier or the IP address is already reserved elsewhere in this same scope -- the same \&quot;unique per scope per client/per address\&quot; shape a lease already has, per Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity\&#39;s own doc comment.
      * 
      * @endpoint post /api/dhcp-scopes/{scopeId}/reservations
 * @param requestParameters

@@ -47,7 +47,7 @@ export interface DnsClientStaticAddressMappingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every static address mapping this server knows about, enabled or not.
      * 
      * @endpoint get /api/client-static-address-mappings
 * @param requestParameters
@@ -55,7 +55,7 @@ export interface DnsClientStaticAddressMappingsServiceInterface {
     apiClientStaticAddressMappingsGet(requestParameters: ApiClientStaticAddressMappingsGetRequestParams, extraHttpRequestParams?: any): Observable<DnsClientStaticAddressMappingDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a static address mapping.
      * 
      * @endpoint delete /api/client-static-address-mappings/{id}
 * @param requestParameters
@@ -63,7 +63,7 @@ export interface DnsClientStaticAddressMappingsServiceInterface {
     apiClientStaticAddressMappingsIdDelete(requestParameters: ApiClientStaticAddressMappingsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single static address mapping by its identifier.
      * 
      * @endpoint get /api/client-static-address-mappings/{id}
 * @param requestParameters
@@ -71,7 +71,7 @@ export interface DnsClientStaticAddressMappingsServiceInterface {
     apiClientStaticAddressMappingsIdGet(requestParameters: ApiClientStaticAddressMappingsIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsClientStaticAddressMappingDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing static address mapping\&#39;s own fields.
      * 
      * @endpoint put /api/client-static-address-mappings/{id}
 * @param requestParameters
@@ -79,7 +79,7 @@ export interface DnsClientStaticAddressMappingsServiceInterface {
     apiClientStaticAddressMappingsIdPut(requestParameters: ApiClientStaticAddressMappingsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new static address mapping.
      * 
      * @endpoint post /api/client-static-address-mappings
 * @param requestParameters

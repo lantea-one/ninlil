@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This class carries the fields used to create a new TSIG key (`POST /api/tsig-keys`).
+ */
 export interface TsigKeyCreateRequest { 
+    /**
+     * The key\'s name, matched against a signed message\'s own key name.
+     */
     name?: string | null;
+    /**
+     * The key\'s MAC algorithm. Ninlil implements only HMAC-SHA256; omitted or left blank, this defaults to that algorithm.
+     */
     algorithmName?: string | null;
+    /**
+     * The key\'s own shared secret, base64-encoded. When omitted, a cryptographically random 32-byte secret is generated instead -- either way, the plaintext secret is only ever shown once, in this endpoint\'s own response; every later request for this key omits it.
+     */
     secret?: string | null;
+    /**
+     * Whether the key starts out disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the key.
+     */
     comments?: string | null;
 }
 

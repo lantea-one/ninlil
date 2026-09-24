@@ -10,10 +10,25 @@
 import { QueryLogPrivacyLevelEnum } from './queryLogPrivacyLevelEnum';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `QueryLoggingOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface QueryLoggingSettingsDetail { 
+    /**
+     * Whether an already-answered query is persisted to the query log at all.
+     */
     enable?: boolean;
+    /**
+     * How long a query log entry is kept before it ages out.
+     */
     retentionPeriod?: string;
+    /**
+     * The largest number of entries the query log is ever allowed to hold.
+     */
     maxRetainedEntries?: number;
+    /**
+     * How often the retention sweep runs.
+     */
     cleanupInterval?: string;
     privacyLevel?: QueryLogPrivacyLevelEnum;
 }

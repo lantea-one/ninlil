@@ -63,6 +63,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads the settings shared by every local DHCP protocol engine.
      * @endpoint get /api/dhcp-settings/core
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -119,6 +120,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * @endpoint patch /api/dhcp-settings/core
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -189,6 +191,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads the DHCPv6 UDP transport\&#39;s own bind/port settings.
      * @endpoint get /api/dhcp-settings/dhcpv6-protocol
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -245,6 +248,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv6&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
      * @endpoint patch /api/dhcp-settings/dhcpv6-protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -315,6 +319,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own DHCPv6 relay agent settings.
      * @endpoint get /api/dhcp-settings/dhcpv6-relay
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -371,6 +376,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv6&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. See this controller\&#39;s own doc comment for why enabling this relay -- mutually exclusive with the local DHCPv6 engine -- always needs a restart to actually take over answering DHCPv6 requests.
      * @endpoint patch /api/dhcp-settings/dhcpv6-relay
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -441,6 +447,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads the DHCPv4 UDP transport\&#39;s own bind/port settings.
      * @endpoint get /api/dhcp-settings/protocol
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -497,6 +504,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv4&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
      * @endpoint patch /api/dhcp-settings/protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -567,6 +575,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own Router Advertisement content settings -- see this controller\&#39;s own doc comment for why Ninlil.Dhcp.Server.Ra.RaOptions.Prefixes is deliberately left out while Ninlil.Dhcp.Server.Ra.RaOptions.Routes is included.
      * @endpoint get /api/dhcp-settings/ra
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -623,6 +632,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
      * @endpoint patch /api/dhcp-settings/ra
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -693,6 +703,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own Router Advertisement transport/timing settings.
      * @endpoint get /api/dhcp-settings/ra-protocol
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -749,6 +760,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Ra&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
      * @endpoint patch /api/dhcp-settings/ra-protocol
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -819,6 +831,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own DHCPv4 relay agent settings.
      * @endpoint get /api/dhcp-settings/relay
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -875,6 +888,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv4&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. See this controller\&#39;s own doc comment for why enabling this relay -- mutually exclusive with the local DHCP engine -- always needs a restart to actually take over answering DHCPv4 requests.
      * @endpoint patch /api/dhcp-settings/relay
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -945,6 +959,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action reads this host\&#39;s own bundled read-only TFTP server settings.
      * @endpoint get /api/dhcp-settings/tftp
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -1001,6 +1016,7 @@ export class DhcpSettingsService extends BaseService implements DhcpSettingsServ
     }
 
     /**
+     * This action merges a partial update into &#x60;DhcpServer:Tftp&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
      * @endpoint patch /api/dhcp-settings/tftp
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -28,14 +28,14 @@ export interface OidcSsoSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live) OIDC SSO settings. Ninlil.Dns.Identity.Options.OidcSsoOptions.ClientSecretEncrypted is never returned -- see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured\&#39;s own doc comment.
      * 
      * @endpoint get /api/sso-settings
 */
     apiSsoSettingsGet(extraHttpRequestParams?: any): Observable<OidcSsoSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;Identity:Sso&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file -- including &#x60;clientSecret&#x60;, letting an operator change, say, only &#x60;displayName&#x60; without ever having to resupply a credential this endpoint\&#39;s own M:Ninlil.Web.Controllers.OidcSsoSettingsController.Get action never reveals back to them.
      * 
      * @endpoint patch /api/sso-settings
 * @param requestParameters

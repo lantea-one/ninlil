@@ -9,12 +9,33 @@
  */
 
 
+/**
+ * This class carries a single Safe Search catalog entry\'s own metadata, together with whether it is currently enabled on this server -- the response shape for `GET /api/safe-search`.
+ */
 export interface SafeSearchDetail { 
+    /**
+     * The catalog entry\'s own stable identifier (e.g. `google`).
+     */
     key?: string | null;
+    /**
+     * The human-readable engine name.
+     */
     displayName?: string | null;
+    /**
+     * A short, honest description of what enabling this entry does.
+     */
     description?: string | null;
+    /**
+     * The engine\'s own official documentation page this entry\'s rewrite mappings were read from.
+     */
     sourceDocumentationUrl?: string | null;
+    /**
+     * How many hostnames this entry redirects when enabled -- a quick indicator without echoing every raw mapping back.
+     */
     hostnameCount?: number;
+    /**
+     * Whether this server currently has every one of this entry\'s own rewrite mappings in place as an enabled `DnsRewriteEntity` row.
+     */
     isEnabled?: boolean;
 }
 

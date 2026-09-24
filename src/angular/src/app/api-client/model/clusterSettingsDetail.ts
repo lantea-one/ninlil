@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This class carries this node\'s own currently-effective cluster settings (`GET /api/cluster-settings`). Ninlil.Web.Models.ClusterSettingsDetail.NodeId is read-only, included for an operator\'s own diagnostic reference -- it is never writable through `ClusterSettingsController.Patch`, per `ClusterOptions.NodeId`\'s own doc comment. Ninlil.Web.Models.ClusterSettingsDetail.AddressReconcileInterval is a genuinely distinct, cluster-adjacent options class -- `CatalogSyncOptions`, not `ClusterOptions` itself -- folded into this same settings surface rather than given a controller/page of its own, since it exists purely to keep a catalog-managed zone\'s own NOTIFY/primary address lists reconciled against this node\'s own live cluster membership; see `CatalogClusterAddressSyncService`\'s own doc comment.
+ */
 export interface ClusterSettingsDetail { 
     enable?: boolean;
     nodeId?: string;

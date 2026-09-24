@@ -52,7 +52,7 @@ export interface FilterListsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every block/allow list this server knows about.
      * 
      * @endpoint get /api/filter-lists
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsGet(requestParameters: ApiFilterListsGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a block/allow list. Any client-group assignment still referencing it (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController) is removed first -- unlike M:Ninlil.Web.Controllers.TsigKeysController.Delete(System.Guid,System.Threading.CancellationToken)\&#39;s deliberately lax stance on a zone\&#39;s own soft-reference &#x60;TsigKeyName&#x60;, Ninlil.Dns.Server.Filtering.DnsFilterEngine already tolerates a dangling assignment gracefully (confirmed by inspection: it simply skips a list it cannot find), but this project cleans it up explicitly anyway to avoid accumulating orphaned join rows, the same reasoning M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) already applies to a deleted zone\&#39;s own records and DNSSEC keys.
      * 
      * @endpoint delete /api/filter-lists/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdDelete(requestParameters: ApiFilterListsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single block/allow list by its identifier.
      * 
      * @endpoint get /api/filter-lists/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetail>;
 
     /**
-     * 
+     * This action partially updates an existing block/allow list\&#39;s metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
      * 
      * @endpoint patch /api/filter-lists/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdPatch(requestParameters: ApiFilterListsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing block/allow list\&#39;s metadata. Note that changing Ninlil.Web.Models.FilterListWriteRequest.Source from Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local to Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed does not itself touch the list\&#39;s existing entries -- they remain as-is until the next scheduled refresh replaces them wholesale.
      * 
      * @endpoint put /api/filter-lists/{id}
 * @param requestParameters
@@ -92,7 +92,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdPut(requestParameters: ApiFilterListsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new block/allow list.
      * 
      * @endpoint post /api/filter-lists
 * @param requestParameters

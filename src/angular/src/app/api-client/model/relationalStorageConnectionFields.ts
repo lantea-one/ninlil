@@ -9,12 +9,33 @@
  */
 
 
+/**
+ * This record carries the structured connection fields `POST /api/storage/switch` accepts for a PostgreSQL, MySQL, or SQL Server target -- all three server-based relational engines share this same field shape. Ninlil.Web.Models.RelationalStorageConnectionFields.EncryptionMode\'s accepted values differ by engine (each is validated against that engine\'s own real enum by Ninlil.Web.Services.Storage.StorageConnectionStringAssembler, never a shared, invented one) -- see that class\'s own doc comment for the exact accepted values per engine.
+ */
 export interface RelationalStorageConnectionFields { 
+    /**
+     * The database server\'s hostname or IP address.
+     */
     host?: string | null;
+    /**
+     * The database server\'s port, 1-65535.
+     */
     port?: number;
+    /**
+     * The name of the database (already-existing, empty or freely overwritable) to connect to.
+     */
     databaseName?: string | null;
+    /**
+     * The username to authenticate with.
+     */
     userName?: string | null;
+    /**
+     * The password to authenticate with. Never echoed back by any `GET` -- there is nothing to echo, since this REST boundary never stores this value anywhere itself; it exists only for the single, synchronous duration of one `POST /api/storage/switch` call.
+     */
     password?: string | null;
+    /**
+     * The engine\'s own connection-encryption mode, as a string matching one of that engine\'s own real values -- see Ninlil.Web.Services.Storage.StorageConnectionStringAssembler\'s own doc comment for the exact accepted values per engine.
+     */
     encryptionMode?: string | null;
 }
 

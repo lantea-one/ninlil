@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the catalog zone a caller wants a zone to join -- `POST /api/zones/{id}/catalog-membership`\'s own request body.
+ */
 export interface ZoneCatalogMembershipRequest { 
+    /**
+     * The identifier of the Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog zone to join.
+     */
     catalogZoneId?: string;
 }
 

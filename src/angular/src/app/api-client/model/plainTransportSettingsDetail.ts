@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of Plain DNS\'s own `PlainProtocolOptions`. Deliberately has no `Enable` field -- Plain DNS has none of its own either, since it is this project\'s baseline \"this is a DNS server at all\" transport rather than a capability-expanding toggle, and starts unconditionally.
+ */
 export interface PlainTransportSettingsDetail { 
+    /**
+     * The port both the UDP and TCP listeners bind to.
+     */
     port?: number;
+    /**
+     * How long a TCP connection may sit completely idle before this server closes it.
+     */
     tcpIdleTimeout?: string;
+    /**
+     * How many TCP connections this server accepts at once.
+     */
     maxConcurrentTcpConnections?: number;
 }
 

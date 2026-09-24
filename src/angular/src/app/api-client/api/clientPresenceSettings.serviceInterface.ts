@@ -28,14 +28,14 @@ export interface ClientPresenceSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action returns the currently-effective client presence settings.
      * 
      * @endpoint get /api/client-presence-settings
 */
     apiClientPresenceSettingsGet(extraHttpRequestParams?: any): Observable<ClientPresenceSettingsDetail>;
 
     /**
-     * 
+     * This action applies a JSON merge patch to the client presence settings. Every interval must be a positive System.TimeSpan.
      * 
      * @endpoint patch /api/client-presence-settings
 * @param requestParameters

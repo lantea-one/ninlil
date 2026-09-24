@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of `Ninlil.Dhcp.Server.Core.DhcpServerOptions` -- the settings shared by every local DHCP protocol engine.
+ */
 export interface DhcpCoreSettingsDetail { 
+    /**
+     * The IPv4 address this server identifies itself as, or null for auto-detection at startup.
+     */
     serverIdentifierAddress?: string | null;
+    /**
+     * How long a tentatively offered address is held aside before being reclaimed.
+     */
     offerHoldDuration?: string;
+    /**
+     * How long a client-declined address is kept out of circulation.
+     */
     declinedAddressQuarantineDuration?: string;
 }
 

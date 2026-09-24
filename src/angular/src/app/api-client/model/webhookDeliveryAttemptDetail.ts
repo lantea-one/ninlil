@@ -10,20 +10,62 @@
 import { WebhookDeliveryAttemptStatusEnum } from './webhookDeliveryAttemptStatusEnum';
 
 
+/**
+ * This class carries a single persisted webhook delivery attempt\'s own current state, for `GET /api/webhooks/{id}/delivery-attempts` -- the real, on-disk delivery history `Server.Webhooks`\'s own `WebhookDeliveryAttemptEntity` tracks, surfaced entirely read-only. There is no corresponding write DTO: a delivery attempt is written exclusively by `WebhookDeliveryService`/`WebhookDeliveryRetrySweepService` as a real delivery is attempted, never authored or edited by an operator.
+ */
 export interface WebhookDeliveryAttemptDetail { 
+    /**
+     * This delivery\'s own identifier.
+     */
     id?: string;
+    /**
+     * The identifier of the subscription this delivery targets.
+     */
     subscriptionId?: string;
+    /**
+     * The subscription\'s own name, snapshotted at the moment this delivery was first created -- so a delivery record stays meaningful even if the subscription it targeted has since been renamed or deleted.
+     */
     subscriptionName?: string | null;
+    /**
+     * The registered event type name this delivery carries (for example, `\"DnsZoneChanged\"`).
+     */
     eventTypeName?: string | null;
+    /**
+     * The exact outbound JSON request body this delivery sends (or already sent) on every attempt -- captured once, at creation time, so a retry (by the same process or a freshly restarted one) always sends byte-identical content.
+     */
     payloadJson?: string | null;
     status?: WebhookDeliveryAttemptStatusEnum;
+    /**
+     * How many delivery attempts have actually been made so far.
+     */
     attemptCount?: number;
+    /**
+     * The maximum number of delivery attempts this delivery may ever make -- a snapshot of the target subscription\'s own Ninlil.Web.Models.WebhookSubscriptionDetail.MaxDeliveryAttempts at the moment this row was first created.
+     */
     maxAttempts?: number;
+    /**
+     * When this delivery\'s own most recent attempt occurred, or null if never attempted yet.
+     */
     lastAttemptedAtUtc?: string | null;
+    /**
+     * When this delivery\'s own next retry attempt is due, or null once Ninlil.Web.Models.WebhookDeliveryAttemptDetail.Status has reached a terminal outcome.
+     */
     nextRetryDueUtc?: string | null;
+    /**
+     * The HTTP status code the subscriber\'s own endpoint returned on this delivery\'s own most recent attempt, or null if that attempt failed before a response was ever received.
+     */
     lastHttpStatusCode?: number | null;
+    /**
+     * A short, human-readable description of this delivery\'s own most recent failure, or null if its most recent (or only) attempt succeeded.
+     */
     lastErrorMessage?: string | null;
+    /**
+     * When this delivery reached its own terminal outcome, or null while still pending.
+     */
     completedAtUtc?: string | null;
+    /**
+     * When this delivery was first recorded (its own first attempt).
+     */
     createdAtUtc?: string;
 }
 export namespace WebhookDeliveryAttemptDetail {

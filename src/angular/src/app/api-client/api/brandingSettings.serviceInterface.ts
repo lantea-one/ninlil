@@ -29,21 +29,21 @@ export interface BrandingSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads only the small, non-sensitive slice of this host\&#39;s own branding every authenticated session needs to render the SPA\&#39;s own page title/logo correctly -- see Ninlil.Web.Models.BrandingEffectiveDetail\&#39;s own doc comment for why this needs no specific permission, unlike M:Ninlil.Web.Controllers.BrandingSettingsController.Get.
      * 
      * @endpoint get /api/branding-settings/effective
 */
     apiBrandingSettingsEffectiveGet(extraHttpRequestParams?: any): Observable<BrandingEffectiveDetail>;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live -- reflecting any write M:Ninlil.Web.Controllers.BrandingSettingsController.Patch(System.Text.Json.JsonElement) has made, even without a restart) branding configuration.
      * 
      * @endpoint get /api/branding-settings
 */
     apiBrandingSettingsGet(extraHttpRequestParams?: any): Observable<BrandingSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Branding&#x60; (&#x60;siteTitle&#x60;/ &#x60;logoDataUri&#x60;) and/or &#x60;DnsServer:Authoritative&#x60; (&#x60;hostnameString&#x60;/ &#x60;versionString&#x60;/&#x60;enableChaosVersionQueries&#x60;) via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style -- a single write can touch either section, or both, at once. A field absent from patch is left exactly as it was in the file; a field present with a JSON &#x60;null&#x60; clears &#x60;siteTitle&#x60;/&#x60;logoDataUri&#x60; back to \&quot;unset\&quot; (this project\&#39;s every other settings controller treats a JSON &#x60;null&#x60; the same way for a nullable field). Every field takes effect immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/branding-settings
 * @param requestParameters

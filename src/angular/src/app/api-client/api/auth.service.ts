@@ -59,6 +59,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action starts a genuinely self-service password reset: given only an e-mail address, with no sign-in of any kind, it looks up the matching account and -- if one exists, is not disabled, has an e-mail address on file, and this server has SMTP configured -- sends it a real reset-link e-mail via the exact same Ninlil.Web.Services.PasswordResetLinkSender round trip &#x60;UsersController.ResetPassword&#x60;\&#39;s own &#x60;EmailLink&#x60; delivery mode uses.  &lt;b&gt;Security-critical, deliberate departure from that admin-driven counterpart&lt;/b&gt;:     this action\&#39;s response is always the exact same Ninlil.Web.Models.ForgotPasswordResult,     with the exact same &#x60;200&#x60; status, no matter which of those conditions failed --     including the \&quot;no account with this address exists at all\&quot; case. An authenticated     administrator resetting a known account\&#39;s password may legitimately learn whether     that specific account has an e-mail address or whether SMTP is configured; a     completely anonymous caller submitting an arbitrary address must never be able to     use response shape, status code, or timing to enumerate which e-mail addresses have     accounts on this server -- a classic account-enumeration risk for exactly this kind     of endpoint. A real delivery-time failure (e.g. the SMTP server rejects the message)     is caught and logged here rather than allowed to surface as a &#x60;500&#x60;, for the     same reason -- an attacker distinguishing \&quot;delivery attempted and failed\&quot; from     \&quot;delivery never attempted\&quot; is exactly as much of a leak as distinguishing \&quot;sent\&quot; from     \&quot;not sent\&quot; would be.
      * @endpoint post /api/auth/forgot-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -129,6 +130,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action checks a username and password, returning either a completed sign-in\&#39;s tokens or, for an account with two-factor authentication enabled, a pending challenge token to submit to M:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken).
      * @endpoint post /api/auth/login
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -199,6 +201,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action completes a sign-in M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) flagged as requiring a second factor, by checking the submitted code against the pending sign-in\&#39;s own account.
      * @endpoint post /api/auth/login/two-factor
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -269,6 +272,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action revokes a refresh token, so it can no longer be exchanged for a new access token -- the one named in the body, otherwise the browser\&#39;s refresh cookie, which is cleared either way. Possessing the raw refresh token is itself sufficient authorization to revoke it -- the same reasoning M:Ninlil.Web.Controllers.AuthController.Refresh(Ninlil.Web.Models.RefreshRequest,System.Threading.CancellationToken) already applies -- so this endpoint does not require a currently-valid access token.
      * @endpoint post /api/auth/logout
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -336,6 +340,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action exchanges a still-valid refresh token for a new access/refresh token pair, revoking the refresh token it was exchanged for (rotation) so it cannot be reused. The token comes from the request body when one is named there, otherwise from the browser\&#39;s refresh cookie -- in which case the rotated token goes back as a new cookie, not in the body. The new session keeps the old one\&#39;s Ninlil.Dns.Data.Abstractions.Entity.SessionEntity.IsPersistent choice.  A failed cookie exchange deliberately leaves the cookie alone rather than clearing     it. Two tabs reloading together both present the same cookie; the first rotates it,     and the second\&#39;s now-stale request fails. Had that failure cleared the cookie, its     response would erase the fresh cookie the first tab just received and sign both     out. Left alone, the second tab simply retries and the browser sends the rotated     cookie. A genuinely dead cookie costs nothing but a 401; M:Ninlil.Web.Controllers.AuthController.Logout(Ninlil.Web.Models.RefreshRequest,System.Threading.CancellationToken)     clears it.
      * @endpoint post /api/auth/refresh
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -406,6 +411,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
+     * This action completes a token-based password reset from this project\&#39;s shared \&quot;set new password\&quot; landing page -- the confirming half of both &#x60;UsersController.ResetPassword&#x60;\&#39;s own &#x60;EmailLink&#x60; delivery mode and this controller\&#39;s own M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken) above, which share this exact same confirmation action unchanged. Neither caller is authenticated at this point, so this action is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute, exactly like M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken)/ M:Ninlil.Web.Controllers.AuthController.Refresh(Ninlil.Web.Models.RefreshRequest,System.Threading.CancellationToken)/M:Ninlil.Web.Controllers.AuthController.Logout(Ninlil.Web.Models.RefreshRequest,System.Threading.CancellationToken) above -- Ninlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization this action has, checked for real by M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) itself (a wrong/expired/already- consumed token fails there, not here). A missing account or an unparseable token both report the exact same generic message, deliberately, so this action never confirms or denies whether a given account exists.
      * @endpoint post /api/auth/reset-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

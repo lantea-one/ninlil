@@ -10,7 +10,13 @@
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries the fields used to add a further address to an existing known client device (`POST /api/clients/{clientId}/addresses`) -- the only way, alongside Ninlil.Web.Models.ClientCreateRequest\'s own initial address, that a device ever gains an identifier of its own. Rejected with `409 Conflict` when this exact identifier/protocol pair already belongs to any device (this one included), the same real, storage-level uniqueness Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity\'s own composite index enforces.
+ */
 export interface ClientAddressWriteRequest { 
+    /**
+     * A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.
+     */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
 }

@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective branding configuration -- `BrandingOptions`\'s own site title/logo, alongside the already- existing `AuthoritativeServerOptions` fields that drive the real CHAOS-class `version.bind`/`hostname.bind` TXT query answers, exposed here on the same settings surface rather than a separate one.
+ */
 export interface BrandingSettingsDetail { 
+    /**
+     * This host\'s own custom browser-tab/page title, or null when unset (in which case the Angular admin SPA keeps its own compiled-in default title).
+     */
     siteTitle?: string | null;
+    /**
+     * This host\'s own custom logo, as a complete data URI, or null when no custom logo has been uploaded.
+     */
     logoDataUri?: string | null;
+    /**
+     * The value this server answers a `hostname.bind`/`id.server` CHAOS query with, when EnableChaosVersionQueries is enabled.
+     */
     hostnameString?: string | null;
+    /**
+     * The value this server answers a `version.bind`/`version.server` CHAOS query with, when EnableChaosVersionQueries is enabled.
+     */
     versionString?: string | null;
+    /**
+     * Whether this server answers the traditional CHAOS-class fingerprinting queries at all.
+     */
     enableChaosVersionQueries?: boolean;
 }
 

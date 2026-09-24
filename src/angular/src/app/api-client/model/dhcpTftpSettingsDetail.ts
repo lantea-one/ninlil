@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This record is the REST representation of `Ninlil.Dhcp.Server.Tftp.TftpServerOptions` -- this server\'s own bundled, read-only RFC 1350 TFTP server.
+ */
 export interface DhcpTftpSettingsDetail { 
+    /**
+     * Whether this server binds its socket and answers TFTP requests at all.
+     */
     enable?: boolean;
+    /**
+     * The UDP port this server listens for incoming Read/Write Requests on.
+     */
     port?: number;
+    /**
+     * The directory this server serves files from.
+     */
     rootDirectory?: string | null;
+    /**
+     * How long, in seconds, this server waits for an Acknowledgment before retransmitting a block.
+     */
     retransmitTimeoutSeconds?: number;
+    /**
+     * The greatest number of times this server retransmits one block before giving up on a transfer.
+     */
     maxRetransmissions?: number;
 }
 

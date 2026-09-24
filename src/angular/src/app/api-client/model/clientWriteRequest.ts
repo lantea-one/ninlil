@@ -9,12 +9,33 @@
  */
 
 
+/**
+ * This class carries the fields used to fully replace an existing known client\'s own editable metadata (`PUT /api/clients/{id}`) -- deliberately omitting Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier/Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion, since Ninlil.Web.Controllers.ClientsController never allows either to change once a row exists. To actually change a client\'s own identifier, delete this row and create a new one -- the same \"immutable field, delete and recreate\" precedent Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity\'s own shared secret already establishes.
+ */
 export interface ClientWriteRequest { 
+    /**
+     * An operator-chosen, human-readable name for this client.
+     */
     displayName?: string | null;
+    /**
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity this client is explicitly assigned to, or null for no explicit override.
+     */
     clientGroupId?: string | null;
+    /**
+     * Whether the client is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Optional free-text operator notes about this client.
+     */
     comments?: string | null;
+    /**
+     * The device icon, named by its Ninlil.Dns.Common.Enum.DnsClientDeviceIconEnum value, or null to clear an explicit choice; any other value is rejected with a `400`.
+     */
     deviceIconKey?: string | null;
+    /**
+     * Whether the client is starred as a favorite.
+     */
     isFavorite?: boolean;
 }
 

@@ -10,8 +10,8 @@
 
 
 export const Dhcpv4TagMatchModeEnum = {
-    NUMBER_0: 0,
-    NUMBER_1: 1,
+    Exact: 'Exact',
+    Prefix: 'Prefix',
 } as const;
 export type Dhcpv4TagMatchModeEnum = typeof Dhcpv4TagMatchModeEnum[keyof typeof Dhcpv4TagMatchModeEnum];
 

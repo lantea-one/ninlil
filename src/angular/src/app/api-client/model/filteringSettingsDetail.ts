@@ -11,6 +11,9 @@ import { DnsFilterListPrecedenceEnum } from './dnsFilterListPrecedenceEnum';
 import { DnsFilterBlockResponseModeEnum } from './dnsFilterBlockResponseModeEnum';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `DnsFilterOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface FilteringSettingsDetail { 
     enable?: boolean;
     blockResponseMode?: DnsFilterBlockResponseModeEnum;

@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This record is the request body for M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken).
+ */
 export interface BackupCreateRequest { 
+    /**
+     * The passphrase to encrypt the resulting archive with, or null/blank to deliberately skip encryption and produce a clearly-marked unencrypted archive instead -- an honest, explicit choice, not a weak or default-derived key. When supplied, this server never stores it anywhere -- losing it means losing the ability to ever decrypt this specific archive again.
+     */
     passphrase?: string | null;
 }
 

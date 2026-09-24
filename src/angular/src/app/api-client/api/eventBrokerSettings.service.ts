@@ -42,6 +42,7 @@ export class EventBrokerSettingsService extends BaseService implements EventBrok
     }
 
     /**
+     * This action reads this host\&#39;s own currently-effective (that is, live and running, not merely written to the configuration file) message-broker settings.
      * @endpoint get /api/event-broker-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class EventBrokerSettingsService extends BaseService implements EventBrok
     }
 
     /**
+     * This action merges a partial update into &#x60;DnsServer:Events&#x60;/ &#x60;DnsServer:Events:RabbitMq&#x60;/&#x60;DnsServer:Events:ActiveMq&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style at every level: a field absent from patch (at either the top level or within &#x60;rabbitMq&#x60;/&#x60;activeMq&#x60;) is left exactly as it was in the file, including &#x60;password&#x60; -- letting an operator change, say, only &#x60;hostName&#x60; without ever having to resupply a credential this endpoint\&#39;s own M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) action never reveals back to them.
      * @endpoint patch /api/event-broker-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

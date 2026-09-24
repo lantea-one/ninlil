@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `WebhookDeliveryOptions` -- the shared retry/backoff timing and outbound HTTP timeout every webhook subscription\'s own deliveries use. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface WebhookDeliverySettingsDetail { 
     initialRetryDelay?: string;
     maxRetryDelay?: string;

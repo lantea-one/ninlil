@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `DnssecKeyRolloverOptions` -- the RFC 6781 §4.1.1.1/§4.1.2 key-rollover timing `DnssecKeyRolloverBackgroundService` walks every locally signed zone\'s own keys against. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface DnssecKeyRolloverSettingsDetail { 
     propagationDelay?: string;
     externalParentDsTtl?: string;

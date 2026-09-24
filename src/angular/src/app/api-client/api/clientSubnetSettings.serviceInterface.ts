@@ -28,14 +28,14 @@ export interface ClientSubnetSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live) ECS settings.
      * 
      * @endpoint get /api/client-subnet-settings
 */
     apiClientSubnetSettingsGet(extraHttpRequestParams?: any): Observable<ClientSubnetSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
      * 
      * @endpoint patch /api/client-subnet-settings
 * @param requestParameters

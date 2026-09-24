@@ -10,11 +10,26 @@
 import { DhcpOptionValueTypeEnum } from './dhcpOptionValueTypeEnum';
 
 
+/**
+ * This record is the REST representation of one Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry -- see Ninlil.Web.Controllers.DhcpOptionCatalogController\'s own doc comment for why this project\'s read-only option-metadata catalog is exposed through a dedicated model rather than serializing Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry itself.
+ */
 export interface DhcpOptionCatalogEntryDetail { 
+    /**
+     * The option\'s own raw numeric tag/code -- see Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry.Code\'s own doc comment.
+     */
     code?: number;
+    /**
+     * A short, human-readable name for this option.
+     */
     name?: string | null;
+    /**
+     * A longer, human-readable description of what this option carries and which RFC/section defines it.
+     */
     description?: string | null;
     valueType?: DhcpOptionValueTypeEnum;
+    /**
+     * Whether an operator picking this option\'s value should be offered \"use this server\'s own address\" as an alternative to typing one in.
+     */
     isServerAddressEligible?: boolean;
 }
 export namespace DhcpOptionCatalogEntryDetail {

@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the fields used to create a new list assignment for a client group (`POST /api/client-groups/{groupId}/list-assignments`). There is deliberately no corresponding `PUT`/`PATCH` -- an assignment is just a join between a group and a list with no mutable fields of its own; changing which list is assigned means deleting one assignment and creating another.
+ */
 export interface ClientGroupListAssignmentWriteRequest { 
+    /**
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity to assign to this group.
+     */
     listId?: string;
 }
 

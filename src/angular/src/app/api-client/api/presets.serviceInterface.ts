@@ -28,14 +28,14 @@ export interface PresetsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every built-in preset this server can apply.
      * 
      * @endpoint get /api/presets
 */
     apiPresetsGet(extraHttpRequestParams?: any): Observable<Array<PresetSummary>>;
 
     /**
-     * 
+     * This action applies a named preset -- both halves, its configuration-file merge and its filter-list subscriptions -- via M:Ninlil.Dns.Server.Presets.PresetApplier.ApplyAsync(Ninlil.Dns.Server.Presets.PresetDefinition,System.String,System.Threading.CancellationToken), exactly the deliberate \&quot;overwrite-then-editable\&quot; semantics: only the specific leaves this preset names are overwritten, and every setting stays fully editable afterward.
      * 
      * @endpoint post /api/presets/{name}/apply
 * @param requestParameters

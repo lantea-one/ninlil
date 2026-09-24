@@ -9,15 +9,45 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective password- complexity and account-lockout policy -- Microsoft.AspNetCore.Identity.IdentityOptions.Password and Microsoft.AspNetCore.Identity.IdentityOptions.Lockout, ASP.NET Core Identity\'s own built-in policy classes, which shipped inside this project\'s identity layer from the very start but, before this controller existed, had zero admin-facing configuration surface: changing either one required hand-editing the configuration file\'s own `Identity` section and restarting. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Deliberately excludes Microsoft.AspNetCore.Identity.IdentityOptions.User/Microsoft.AspNetCore.Identity.IdentityOptions.SignIn/ Microsoft.AspNetCore.Identity.IdentityOptions.Tokens/Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity/ Microsoft.AspNetCore.Identity.IdentityOptions.Stores -- structural choices this project\'s own identity wiring depends on (unique e-mail enforcement, for one, which rejects an account with no e-mail), not tunable policy in the sense this controller\'s own name promises.
+ */
 export interface IdentitySettingsDetail { 
+    /**
+     * The fewest characters a new password may contain.
+     */
     requiredLength?: number;
+    /**
+     * The fewest distinct characters a new password must contain.
+     */
     requiredUniqueChars?: number;
+    /**
+     * Whether a new password must contain at least one digit.
+     */
     requireDigit?: boolean;
+    /**
+     * Whether a new password must contain at least one lowercase letter.
+     */
     requireLowercase?: boolean;
+    /**
+     * Whether a new password must contain at least one uppercase letter.
+     */
     requireUppercase?: boolean;
+    /**
+     * Whether a new password must contain at least one non-alphanumeric character.
+     */
     requireNonAlphanumeric?: boolean;
+    /**
+     * How long an account is locked out once Ninlil.Web.Models.IdentitySettingsDetail.MaxFailedAccessAttempts is reached.
+     */
     defaultLockoutTimeSpan?: string;
+    /**
+     * How many consecutive failed sign-in attempts trigger a lockout.
+     */
     maxFailedAccessAttempts?: number;
+    /**
+     * Whether lockout applies to a brand-new account, not only an established one.
+     */
     allowedForNewUsers?: boolean;
 }
 

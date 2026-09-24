@@ -28,14 +28,14 @@ export interface ClusterSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this node\&#39;s own currently-effective (live) cluster settings.
      * 
      * @endpoint get /api/cluster-settings
 */
     apiClusterSettingsGet(extraHttpRequestParams?: any): Observable<ClusterSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;Cluster&#x60; (and, for &#x60;addressReconcileInterval&#x60;, the separate &#x60;CatalogSync&#x60; section) via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Ninlil.Dns.Server.Cluster.Options.ClusterOptions.NodeId has no field here at all -- it is generated once, automatically, and never operator-editable.
      * 
      * @endpoint patch /api/cluster-settings
 * @param requestParameters

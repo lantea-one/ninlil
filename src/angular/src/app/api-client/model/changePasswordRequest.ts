@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This class carries the current caller\'s own self-service password change, reachable via M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest). Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword is required and checked for real (via `UserManager<TUser>.ChangePasswordAsync`) -- unlike the administrator-driven reset below, a caller changing their own password must prove they still know it.
+ */
 export interface ChangePasswordRequest { 
+    /**
+     * The account\'s current password.
+     */
     currentPassword?: string | null;
+    /**
+     * The password to change to.
+     */
     newPassword?: string | null;
 }
 

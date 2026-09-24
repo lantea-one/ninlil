@@ -33,7 +33,7 @@ export interface BackupServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action creates a complete backup archive and streams it back as a downloadable file -- never a JSON response body, since the archive itself is the whole point of this action. Encrypted when Ninlil.Web.Models.BackupCreateRequest.Passphrase is supplied, or deliberately, clearly-markedly unencrypted when it is not.
      * 
      * @endpoint post /api/backup
 * @param requestParameters
@@ -41,7 +41,7 @@ export interface BackupServiceInterface {
     apiBackupPost(requestParameters: ApiBackupPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action restores this server\&#39;s own full database, Data Protection key ring, TLS certificate, and runtime configuration file from a previously created archive, of either kind -- encrypted or, per its own envelope header, deliberately unencrypted. Every entity currently persisted is wiped and replaced -- there is no partial or merge restore. The archive is fully decrypted (if encrypted) and structurally validated before any of that happens, so a rejected request (wrong or missing passphrase, corrupted or tampered archive, unrecognized format) is guaranteed to have left this server\&#39;s own data completely untouched.
      * 
      * @endpoint post /api/backup/restore
 * @param requestParameters

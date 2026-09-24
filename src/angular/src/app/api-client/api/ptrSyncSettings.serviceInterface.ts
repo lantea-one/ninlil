@@ -28,14 +28,14 @@ export interface PtrSyncSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) PTR sync default.
      * 
      * @endpoint get /api/ptr-sync-settings
 */
     apiPtrSyncSettingsGet(extraHttpRequestParams?: any): Observable<PtrSyncSettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:PtrSync&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. The single field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/ptr-sync-settings
 * @param requestParameters

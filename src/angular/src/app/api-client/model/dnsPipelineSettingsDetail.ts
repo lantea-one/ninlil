@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `DnsQueryProcessingPipelineOptions` -- worker-pool/queue sizing plus UDP amplification-guard tuning. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface DnsPipelineSettingsDetail { 
     workerCount?: number;
     channelCapacity?: number;

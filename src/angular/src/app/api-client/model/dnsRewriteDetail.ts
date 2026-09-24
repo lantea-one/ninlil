@@ -10,17 +10,50 @@
 import { DnsRewriteTargetKindEnum } from './dnsRewriteTargetKindEnum';
 
 
+/**
+ * This class carries a single DNS rewrite\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity, so, unlike `TsigKeyDetail`/`DnssecKeyDetail`/`CloudProviderCredentialDetail`/ `WebhookSubscriptionDetail`, there is no reveal-once policy to apply here at all.
+ */
 export interface DnsRewriteDetail { 
+    /**
+     * This rewrite\'s own identifier.
+     */
     id?: string;
+    /**
+     * This rewrite\'s own domain pattern, exactly as stored.
+     */
     domain?: string | null;
+    /**
+     * This rewrite\'s own target, exactly as stored.
+     */
     target?: string | null;
     targetKind?: DnsRewriteTargetKindEnum;
+    /**
+     * Whether this rewrite is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this rewrite.
+     */
     comments?: string | null;
+    /**
+     * When this rewrite was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this rewrite was last modified, or null if never.
+     */
     updatedAtUtc?: string | null;
+    /**
+     * The cluster node this rewrite was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     */
     originatingNodeId?: string | null;
+    /**
+     * The single known client (`Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity`) this rewrite is scoped to, or null if it is unscoped (global) or scoped to a client group instead -- read-only here: the ordinary create/replace/patch actions on this controller never set it, since the only real write path that ever scopes a rewrite is `SafeSearchController.Enable`\'s own optional target. Surfaced so an operator browsing the ordinary Rewrites page can tell a Safe-Search-scoped row apart from a global one, rather than seeing what would otherwise look like an unexplained, untargetable duplicate.
+     */
     clientId?: string | null;
+    /**
+     * The single client group this rewrite is scoped to, or null if it is unscoped or scoped to one specific client instead -- the same read-only, informational purpose Ninlil.Web.Models.DnsRewriteDetail.ClientId serves.
+     */
     clientGroupId?: string | null;
 }
 export namespace DnsRewriteDetail {

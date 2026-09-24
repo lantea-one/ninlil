@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the success response body for M:Ninlil.Web.Controllers.BackupController.Restore(Ninlil.Web.Models.BackupRestoreRequest,System.Threading.CancellationToken). M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken)\'s own successful response, by contrast, streams the encrypted archive itself as the response body -- never this or any other JSON wrapper around it.
+ */
 export interface BackupRestoreResponse { 
+    /**
+     * The total number of rows imported across every entity type.
+     */
     totalEntitiesImported?: number;
+    /**
+     * How many rows of each entity type were imported, by name.
+     */
     entityCounts?: { [key: string]: number; } | null;
+    /**
+     * A note explaining that a restart is required before the restored database connection, Data Protection key ring, and TLS certificate actually take effect -- this project\'s own established convention for every runtime-settings write, extended here to the single most consequential write this REST API can ever perform.
+     */
     note?: string | null;
 }
 

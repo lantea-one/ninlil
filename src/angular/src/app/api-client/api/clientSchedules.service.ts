@@ -48,6 +48,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
+     * This action lists every schedule belonging to a known client.
      * @endpoint get /api/clients/{clientId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
+     * This action removes a schedule from the known client.
      * @endpoint delete /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
+     * This action looks up a single schedule by its identifier.
      * @endpoint get /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
+     * This action fully replaces an existing schedule\&#39;s own fields, keeping its own identifier and owning client.
      * @endpoint put /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
+     * This action adds a new schedule to the known client.
      * @endpoint post /api/clients/{clientId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

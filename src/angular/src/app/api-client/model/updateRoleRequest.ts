@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the settings that can be changed on an existing role.
+ */
 export interface UpdateRoleRequest { 
+    /**
+     * The role\'s new description.
+     */
     description?: string | null;
 }
 

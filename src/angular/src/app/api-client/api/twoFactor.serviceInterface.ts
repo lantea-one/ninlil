@@ -34,7 +34,7 @@ export interface TwoFactorServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action confirms a TOTP enrollment by checking a freshly-generated code, and only then turns on the requirement to supply a second factor at sign-in.
      * 
      * @endpoint post /api/auth/two-factor/authenticator/enable
 * @param requestParameters
@@ -42,14 +42,14 @@ export interface TwoFactorServiceInterface {
     apiAuthTwoFactorAuthenticatorEnablePost(requestParameters: ApiAuthTwoFactorAuthenticatorEnablePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action generates a fresh TOTP shared secret for the current caller, replacing any previously-generated (and not yet confirmed) one. Two-factor authentication is not yet required at this point -- M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must still confirm it.
      * 
      * @endpoint post /api/auth/two-factor/authenticator/setup
 */
     apiAuthTwoFactorAuthenticatorSetupPost(extraHttpRequestParams?: any): Observable<AuthenticatorSetupResult>;
 
     /**
-     * 
+     * This action turns off the requirement to supply a second factor at sign-in, after confirming the caller can still produce a valid code -- so a stolen access token alone is not enough to disable this protection.
      * 
      * @endpoint post /api/auth/two-factor/disable
 * @param requestParameters
@@ -57,21 +57,21 @@ export interface TwoFactorServiceInterface {
     apiAuthTwoFactorDisablePost(requestParameters: ApiAuthTwoFactorDisablePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action e-mails the current caller a one-time verification code, for use as a second factor at sign-in when an authenticator app is not available. The caller\&#39;s e-mail address must already be confirmed.
      * 
      * @endpoint post /api/auth/two-factor/email/send
 */
     apiAuthTwoFactorEmailSendPost(extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action generates a fresh batch of 10 single-use two-factor recovery codes for the current caller, replacing (invalidating) any previously-generated batch entirely. Two- factor authentication must already be enabled -- a recovery code exists purely as a fallback for a second factor this account does not otherwise require, so generating one first would have nothing to be a fallback *for*, mirroring the guard M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) itself already establishes for a similar reason.
      * 
      * @endpoint post /api/auth/two-factor/recovery-codes/generate
 */
     apiAuthTwoFactorRecoveryCodesGeneratePost(extraHttpRequestParams?: any): Observable<RecoveryCodesResult>;
 
     /**
-     * 
+     * This action reports the current caller\&#39;s own two-factor enrollment state -- whether two-factor sign-in is currently required, and whether an authenticator app has already been confirmed. Built for the self-service account-security page, which has no other way to learn this: &#x60;UserClaimsBuilder&#x60; never places a two-factor claim on an issued access token (a stale, cached \&quot;enabled\&quot; claim on an already-issued token would be actively misleading the moment it changed), and the only other place this state is exposed at all, &#x60;UsersController&#x60;\&#39;s own &#x60;UserSummary&#x60;, requires the &#x60;users:read&#x60; permission an ordinary, non-administrative account has no reason to hold.
      * 
      * @endpoint get /api/auth/two-factor/status
 */

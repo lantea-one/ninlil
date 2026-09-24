@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries the outcome of an explicit \"clear the log\" action.
+ */
 export interface QueryLogClearResult { 
+    /**
+     * How many entries were permanently removed.
+     */
     deletedCount?: number;
 }
 

@@ -10,6 +10,9 @@
 import { ForwarderFailoverStrategyEnum } from './forwarderFailoverStrategyEnum';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `ForwardingOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries themselves (the actual upstream addresses) are a separate resource, already fully CRUD-able via `ForwardersController` -- this record covers only the engine-level toggle and failover/health-check tuning that applies across every configured forwarder.
+ */
 export interface ForwardingSettingsDetail { 
     enable?: boolean;
     failoverStrategy?: ForwarderFailoverStrategyEnum;

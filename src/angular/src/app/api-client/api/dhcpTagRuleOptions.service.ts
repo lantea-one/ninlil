@@ -48,6 +48,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
+     * This action lists every option a tag rule contributes.
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
+     * This action removes an option from the tag rule.
      * @endpoint delete /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
+     * This action looks up a single option by its identifier.
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
+     * This action fully replaces an existing option\&#39;s own fields, keeping its own identifier and owning rule.
      * @endpoint put /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
+     * This action adds a new option to a tag rule.
      * @endpoint post /api/dhcp-tag-rules/{tagRuleId}/options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

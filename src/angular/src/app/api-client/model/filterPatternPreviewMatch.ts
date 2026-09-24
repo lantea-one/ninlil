@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This class carries whether one sample domain matched a previewed pattern.
+ */
 export interface FilterPatternPreviewMatch { 
     domain?: string | null;
     isMatch?: boolean;

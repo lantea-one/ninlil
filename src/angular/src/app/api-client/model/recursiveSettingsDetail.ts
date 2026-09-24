@@ -11,6 +11,9 @@ import { RecursiveRootHintServerDetail } from './recursiveRootHintServerDetail';
 import { RecursiveTrustAnchorDetail } from './recursiveTrustAnchorDetail';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `RecursiveServerOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface RecursiveSettingsDetail { 
     enableRecursion?: boolean;
     enableDnssecValidation?: boolean;

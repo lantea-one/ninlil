@@ -77,7 +77,7 @@ export interface ZonesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every zone this server hosts or references.
      * 
      * @endpoint get /api/zones
 * @param requestParameters
@@ -85,7 +85,7 @@ export interface ZonesServiceInterface {
     apiZonesGet(requestParameters: ApiZonesGetRequestParams, extraHttpRequestParams?: any): Observable<ZoneDetailPagedResult>;
 
     /**
-     * 
+     * This action lists the member zone names an RFC 9432 catalog zone (either the Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog original or a Ninlil.Dns.Common.Enum.ZoneTypeEnum.SecondaryCatalog copy of it) currently enumerates, parsed live from its own stored PTR records -- how an operator actually sees a catalog\&#39;s own current membership.
      * 
      * @endpoint get /api/zones/{id}/catalog-members
 * @param requestParameters
@@ -93,7 +93,7 @@ export interface ZonesServiceInterface {
     apiZonesIdCatalogMembersGet(requestParameters: ApiZonesIdCatalogMembersGetRequestParams, extraHttpRequestParams?: any): Observable<ZoneCatalogMembersResponse>;
 
     /**
-     * 
+     * This action removes a zone\&#39;s own membership in whichever catalog zone it currently belongs to, deleting its member PTR record from that catalog zone\&#39;s content. A no-op if the zone is not currently a member of any catalog.
      * 
      * @endpoint delete /api/zones/{id}/catalog-membership
 * @param requestParameters
@@ -101,7 +101,7 @@ export interface ZonesServiceInterface {
     apiZonesIdCatalogMembershipDelete(requestParameters: ApiZonesIdCatalogMembershipDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a Ninlil.Dns.Common.Enum.ZoneTypeEnum.Primary/Ninlil.Dns.Common.Enum.ZoneTypeEnum.CloudPrimary zone this server originates as a member of a Ninlil.Dns.Common.Enum.ZoneTypeEnum.Catalog zone it also originates -- writing the member\&#39;s own RFC 9432 PTR record into the catalog zone\&#39;s content and merging every currently healthy cluster peer\&#39;s own address into both zones\&#39; &#x60;NotifyAddresses&#x60;, so the change propagates cluster-wide with no further, manually-maintained configuration. See M:Ninlil.Dns.Server.Authoritative.CatalogSync.CatalogZoneMembershipService.JoinAsync(System.Guid,System.Guid,System.Threading.CancellationToken) for the full mechanics.
      * 
      * @endpoint post /api/zones/{id}/catalog-membership
 * @param requestParameters
@@ -109,7 +109,7 @@ export interface ZonesServiceInterface {
     apiZonesIdCatalogMembershipPost(requestParameters: ApiZonesIdCatalogMembershipPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action permanently deletes a zone, every record it contains, and every DNSSEC key belonging to it.
      * 
      * @endpoint delete /api/zones/{id}
 * @param requestParameters
@@ -117,7 +117,7 @@ export interface ZonesServiceInterface {
     apiZonesIdDelete(requestParameters: ApiZonesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single zone by its identifier.
      * 
      * @endpoint get /api/zones/{id}
 * @param requestParameters
@@ -125,7 +125,7 @@ export interface ZonesServiceInterface {
     apiZonesIdGet(requestParameters: ApiZonesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ZoneDetail>;
 
     /**
-     * 
+     * This action partially updates an existing zone\&#39;s metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
      * 
      * @endpoint patch /api/zones/{id}
 * @param requestParameters
@@ -133,7 +133,7 @@ export interface ZonesServiceInterface {
     apiZonesIdPatch(requestParameters: ApiZonesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing zone\&#39;s metadata.
      * 
      * @endpoint put /api/zones/{id}
 * @param requestParameters
@@ -141,7 +141,7 @@ export interface ZonesServiceInterface {
     apiZonesIdPut(requestParameters: ApiZonesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action triggers one real, synchronous CAA reconciliation pass for the zone right now, rather than waiting for the next &#x60;DnsZoneChangedEvent&#x60; to trigger one automatically -- useful right after changing &#x60;CaaAutoManagementOptions&#x60;\&#39;s own global default, or simply to confirm a zone\&#39;s CAA records are already up to date without waiting on the event bus. Delegates directly to M:Ninlil.Dns.Server.Acme.Caa.CaaRecordReconciliationService.ReconcileZoneAsync(System.Guid,System.Threading.CancellationToken) -- the exact same reconciliation logic the automatic path already uses, so this action can never behave differently from what would have happened anyway.
      * 
      * @endpoint post /api/zones/{id}/reconcile-caa
 * @param requestParameters
@@ -149,7 +149,7 @@ export interface ZonesServiceInterface {
     apiZonesIdReconcileCaaPost(requestParameters: ApiZonesIdReconcileCaaPostRequestParams, extraHttpRequestParams?: any): Observable<ZoneCaaReconciliationResponse>;
 
     /**
-     * 
+     * This action triggers one real, synchronous PTR/reverse-zone sync reconciliation pass for the zone right now, the same on-demand convenience M:Ninlil.Web.Controllers.ZonesController.ReconcileCaa(System.Guid,System.Threading.CancellationToken) offers for CAA reconciliation. Delegates directly to M:Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService.ReconcileZoneAsync(System.Guid,System.Threading.CancellationToken) -- the exact same reconciliation logic both the automatic (&#x60;DnsZoneChangedEvent&#x60;-triggered) path and this on-demand path share, including RFC 2317 classless-delegation glue when this zone\&#39;s own &#x60;PtrIpv4PrefixLength&#x60; (or the global default) calls for it.
      * 
      * @endpoint post /api/zones/{id}/reconcile-ptr
 * @param requestParameters
@@ -157,7 +157,7 @@ export interface ZonesServiceInterface {
     apiZonesIdReconcilePtrPost(requestParameters: ApiZonesIdReconcilePtrPostRequestParams, extraHttpRequestParams?: any): Observable<ZonePtrReconciliationResponse>;
 
     /**
-     * 
+     * This action creates a new zone\&#39;s metadata shell. The zone has no records -- not even its own SOA -- until the caller adds them through Ninlil.Web.Controllers.RecordsController.
      * 
      * @endpoint post /api/zones
 * @param requestParameters

@@ -9,13 +9,37 @@
  */
 
 
+/**
+ * This class carries a role\'s own summary, including every permission it currently grants.
+ */
 export interface RoleSummary { 
+    /**
+     * The role\'s own identifier.
+     */
     id?: string;
+    /**
+     * The role\'s display name.
+     */
     name?: string | null;
+    /**
+     * The role\'s own description.
+     */
     description?: string | null;
+    /**
+     * Every permission string currently granted by this role.
+     */
     permissions?: Array<string> | null;
+    /**
+     * The cluster node this role was most recently created or modified on, or null on a single-node deployment -- mirrors `UserSummary`\'s own field of the same name.
+     */
     originatingNodeId?: string | null;
+    /**
+     * A human-readable explanation of a genuine cluster role-name collision this role lost, or null for the overwhelming majority of roles -- mirrors `UserSummary.ClusterConflictNote`\'s own field.
+     */
     clusterConflictNote?: string | null;
+    /**
+     * The instant this role was last created or modified -- mirrors <c>UserSummary .LastModifiedUtc</c>\'s own field of the same name and purpose.
+     */
     lastModifiedUtc?: string | null;
 }
 

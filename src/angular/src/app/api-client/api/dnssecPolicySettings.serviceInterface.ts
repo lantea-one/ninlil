@@ -28,14 +28,14 @@ export interface DnssecPolicySettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action reads this host\&#39;s own currently-effective (live, even without a restart) DNSSEC algorithm policy.
      * 
      * @endpoint get /api/dnssec-policy-settings
 */
     apiDnssecPolicySettingsGet(extraHttpRequestParams?: any): Observable<DnssecPolicySettingsDetail>;
 
     /**
-     * 
+     * This action merges a partial update into &#x60;DnsServer:Dnssec&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field hot-reloads immediately -- see this class\&#39;s own doc comment.
      * 
      * @endpoint patch /api/dnssec-policy-settings
 * @param requestParameters

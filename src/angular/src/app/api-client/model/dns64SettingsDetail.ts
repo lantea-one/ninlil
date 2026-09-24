@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `Dns64Options`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface Dns64SettingsDetail { 
     enable?: boolean;
     synthesisPrefix?: string | null;

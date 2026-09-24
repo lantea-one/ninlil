@@ -10,14 +10,38 @@
 import { DnsOverTlsProxyProtocolSettingsDetail } from './dnsOverTlsProxyProtocolSettingsDetail';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective reverse-proxy trust configuration. Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured reports whether a shared secret is set without ever revealing its value -- the same \"configured/not configured\" indicator `TwoFactorStatus.HasAuthenticator` and a webhook subscription\'s own read-only HMAC-signing-secret indicator already use for a secret this endpoint\'s own `Get` action never returns.
+ */
 export interface ReverseProxySettingsDetail { 
+    /**
+     * Whether forwarded headers are currently honored at all.
+     */
     enable?: boolean;
+    /**
+     * Every individual IP address allowed to claim a forwarded client address.
+     */
     knownProxies?: Array<string> | null;
+    /**
+     * Every CIDR network allowed to claim a forwarded client address.
+     */
     knownNetworks?: Array<string> | null;
+    /**
+     * The request header a shared secret is read from, when one is configured.
+     */
     sharedSecretHeaderName?: string | null;
+    /**
+     * Whether a shared secret is currently configured.
+     */
     sharedSecretConfigured?: boolean;
     dnsOverTls?: DnsOverTlsProxyProtocolSettingsDetail;
+    /**
+     * When this settings section was last written (the cluster\'s own operational config sync), or null if it has never been written through this REST surface.
+     */
     lastModifiedUtc?: string | null;
+    /**
+     * The cluster node this settings section was last written on, or null alongside Ninlil.Web.Models.ReverseProxySettingsDetail.LastModifiedUtc.
+     */
     originatingNodeId?: string | null;
 }
 

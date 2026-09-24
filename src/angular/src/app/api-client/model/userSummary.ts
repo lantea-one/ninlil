@@ -9,17 +9,53 @@
  */
 
 
+/**
+ * This class carries a user account\'s own summary, for administrative listing purposes.
+ */
 export interface UserSummary { 
+    /**
+     * The account\'s own identifier.
+     */
     id?: string;
+    /**
+     * The account\'s sign-in name.
+     */
     userName?: string | null;
+    /**
+     * The account\'s e-mail address, if any.
+     */
     email?: string | null;
+    /**
+     * The account\'s friendly display name, if any.
+     */
     displayName?: string | null;
+    /**
+     * Whether the account is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Whether the account requires a second authentication factor.
+     */
     twoFactorEnabled?: boolean;
+    /**
+     * The names of every role this account currently holds.
+     */
     roles?: Array<string> | null;
+    /**
+     * Every permission granted to this account directly, independent of any role it holds -- distinct from whatever a role it holds might separately grant, mirroring Ninlil.Web.Models.RoleSummary.Permissions\'s own shape one level down.
+     */
     directPermissions?: Array<string> | null;
+    /**
+     * The cluster node this account was most recently created or modified on, or null on a single-node deployment (or for an account that predates Phase 9-6d\'s own identity/RBAC cluster federation) -- mirrors `FilterListDetail`\'s own field of the same name and purpose, rendered the same way via the Angular admin SPA\'s shared `ClusterSyncInfoComponent`.
+     */
     originatingNodeId?: string | null;
+    /**
+     * A human-readable explanation of a genuine cluster username collision this account lost, surfaced so an administrator can see it was renamed/overwritten rather than silently dropped or merged -- see `UserEntity.ClusterConflictNote`\'s own doc comment. null for the overwhelming majority of accounts, which never collided with anything.
+     */
     clusterConflictNote?: string | null;
+    /**
+     * The instant this account was last created or modified (<c>AuditableEntityBaseExtensions .GetLastModifiedUtc()</c>) -- paired with Ninlil.Web.Models.UserSummary.OriginatingNodeId by the Angular admin SPA\'s own shared `ClusterSyncInfoComponent`, mirroring every cluster-synced entity summary\'s own field of the same name and purpose.
+     */
     lastModifiedUtc?: string | null;
 }
 

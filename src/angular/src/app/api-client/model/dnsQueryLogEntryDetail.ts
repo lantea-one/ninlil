@@ -13,15 +13,36 @@ import { DnsTransportProtocolEnum } from './dnsTransportProtocolEnum';
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries a single persisted query log entry\'s own fields, for `QueryLogController`\'s own search response. No secret material is involved anywhere in this entity, so, unlike several other entity types in this project, there is no reveal-once policy to apply here at all -- every field is always fully visible to any caller holding `querylog:read`.
+ */
 export interface DnsQueryLogEntryDetail { 
+    /**
+     * This entry\'s own identifier.
+     */
     id?: string;
+    /**
+     * The UTC date and time the query finished being answered.
+     */
     occurredAtUtc?: string;
+    /**
+     * The querying client\'s own source address, or null if none was known.
+     */
     clientAddress?: string | null;
     protocol?: DnsTransportProtocolEnum;
+    /**
+     * The queried name\'s own presentation form, or null if the query carried no question at all.
+     */
     queriedName?: string | null;
     queriedType?: DnsResourceRecordTypeEnum;
     responseCode?: DnsResponseCodeEnum;
+    /**
+     * How many records the answer\'s own Answer section carried.
+     */
     answerCount?: number;
+    /**
+     * The querying client\'s own persistent identifier (a MAC address or DUID), resolved once at write time, or null when it was never resolved or the configured query logging privacy level suppresses it -- see Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber\'s own doc comment for the full reasoning.
+     */
     clientIdentifier?: string | null;
     clientProtocolVersion?: InternetProtocolVersionEnum;
 }

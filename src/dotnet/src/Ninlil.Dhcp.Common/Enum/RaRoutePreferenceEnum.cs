@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 // Define our namespace.
 namespace Ninlil.Dhcp.Common.Enum;
 
@@ -16,7 +18,13 @@ namespace Ninlil.Dhcp.Common.Enum;
 ///         peer that sends it on the wire is rejected by
 ///         <see cref="Wire.Ra.RaRouteInformationOption.TryDecode" /> as a genuine decode failure.
 ///     </para>
+///     <para>
+///         The REST API sends this as its member name. The converter sits on the type rather than
+///         on each DTO property so the OpenAPI document describes it as a string enum too:
+///         Swashbuckle reads a type-level converter but ignores a property-level one.
+///     </para>
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<RaRoutePreferenceEnum>))]
 public enum RaRoutePreferenceEnum : byte
 {
     /// <summary>

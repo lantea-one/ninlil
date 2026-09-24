@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This record is `POST /api/zones/{id}/reconcile-ptr`\'s own response body -- what one on-demand PTR/reverse-zone sync reconciliation pass actually did, or why it did nothing at all. A thin REST wrapper over `Server.Authoritative.Ptr.PtrReconciliationResult`, the same shape Ninlil.Web.Models.ZoneCaaReconciliationResponse uses for its own equivalent result.
+ */
 export interface ZonePtrReconciliationResponse { 
+    /**
+     * How many PTR/delegation-CNAME records this pass created, across every reverse zone and (for a classless IPv4 grouping) every RFC 2317 delegating parent zone touched.
+     */
     recordsAdded?: number;
+    /**
+     * The same, for records removed as no longer desired.
+     */
     recordsRemoved?: number;
+    /**
+     * How many distinct zones this pass created, wrote into, or visited for stale-record cleanup.
+     */
     reverseZonesTouched?: number;
+    /**
+     * Whether this pass did no work at all (see SkipReason) -- distinct from a pass that ran but found nothing to change (reported as false here with zero counts).
+     */
     skipped?: boolean;
+    /**
+     * Why this pass was skipped, populated only when Skipped is true.
+     */
     skipReason?: string | null;
 }
 

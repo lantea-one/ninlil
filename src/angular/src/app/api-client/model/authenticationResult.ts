@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This class carries a completed sign-in\'s issued credentials.
+ */
 export interface AuthenticationResult { 
+    /**
+     * The signed JSON Web Token access token.
+     */
     accessToken?: string | null;
+    /**
+     * The UTC date and time Ninlil.Web.Models.AuthenticationResult.AccessToken expires.
+     */
     expiresAtUtc?: string;
+    /**
+     * The opaque refresh token, or null when it was delivered as a cookie.
+     */
     refreshToken?: string | null;
 }
 

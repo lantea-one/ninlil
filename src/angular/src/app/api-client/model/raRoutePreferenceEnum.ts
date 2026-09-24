@@ -10,9 +10,9 @@
 
 
 export const RaRoutePreferenceEnum = {
-    NUMBER_0: 0,
-    NUMBER_1: 1,
-    NUMBER_3: 3,
+    Medium: 'Medium',
+    High: 'High',
+    Low: 'Low',
 } as const;
 export type RaRoutePreferenceEnum = typeof RaRoutePreferenceEnum[keyof typeof RaRoutePreferenceEnum];
 

@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This record carries the structured connection fields `POST /api/storage/switch` accepts for a SQLite target -- a single file path this process must be able to create and write to.
+ */
 export interface SqliteStorageConnectionFields { 
+    /**
+     * The path of the SQLite database file to switch onto.
+     */
     filePath?: string | null;
 }
 

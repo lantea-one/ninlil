@@ -10,16 +10,46 @@
 import { UpstreamForwarderProtocolEnum } from './upstreamForwarderProtocolEnum';
 
 
+/**
+ * This class carries a single global upstream forwarder\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity -- a forwarder definition string is not a credential -- so, unlike `TsigKeyDetail`/ `DnssecKeyDetail`/`CloudProviderCredentialDetail`, there is no reveal-once policy to apply here at all.
+ */
 export interface ForwarderDetail { 
+    /**
+     * This forwarder\'s own identifier.
+     */
     id?: string;
+    /**
+     * This forwarder\'s own human-readable name.
+     */
     name?: string | null;
+    /**
+     * This forwarder\'s own definition string, exactly as stored.
+     */
     definitionString?: string | null;
     protocol?: UpstreamForwarderProtocolEnum;
+    /**
+     * This forwarder\'s own position among every other configured global forwarder.
+     */
     sortOrder?: number;
+    /**
+     * Whether this forwarder is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this forwarder.
+     */
     comments?: string | null;
+    /**
+     * When this forwarder was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this forwarder was last modified, or null if never.
+     */
     updatedAtUtc?: string | null;
+    /**
+     * The cluster node this forwarder was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     */
     originatingNodeId?: string | null;
 }
 export namespace ForwarderDetail {

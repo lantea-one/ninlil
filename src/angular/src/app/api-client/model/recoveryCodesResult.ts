@@ -9,7 +9,13 @@
  */
 
 
+/**
+ * This class carries a freshly-generated batch of single-use two-factor recovery codes, for use as a fallback second factor when an authenticator app or a confirmed e-mail address is unavailable. Exactly like every other secret this project generates (a TSIG key\'s shared secret, a webhook subscription\'s own HMAC signing secret), these codes are shown exactly once, in this one response -- Ninlil.Web.Models.TwoFactorStatus.RecoveryCodesRemaining is the only thing any later request can ever learn about them again.
+ */
 export interface RecoveryCodesResult { 
+    /**
+     * The 10 freshly-generated codes, each usable exactly once via `POST /api/auth/login/two-factor` with `\"RecoveryCode\"` as its own Ninlil.Web.Models.TwoFactorLoginRequest.Provider. Generating a new batch immediately invalidates every code from any previous batch, the same \"replace wholesale\" shape a TSIG key\'s own secret rotation would have, if one existed.
+     */
     codes?: Array<string> | null;
 }
 

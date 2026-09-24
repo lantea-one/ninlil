@@ -10,9 +10,18 @@
 import { StorageEngineEnum } from './storageEngineEnum';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently active storage engine -- deliberately omits the connection string itself (which may embed a password), the same \"never echo a raw secret back over the API\" posture this project already applies to every other credential type.
+ */
 export interface StorageStatus { 
     engine?: StorageEngineEnum;
+    /**
+     * Whether a call to `POST /api/storage/switch` is genuinely underway in this process right now.
+     */
     switchInProgress?: boolean;
+    /**
+     * Every engine `POST /api/storage/switch` can genuinely switch to or from without a restart -- the four relational engines Entity Framework Core serves against one shared model. Ninlil.Dns.Common.Enum.StorageEngineEnum.MongoDb is deliberately absent: it is served by an entirely separate repository implementation chosen once at process startup, not merely a different connection through the same model, so switching to or from it still requires editing configuration and restarting.
+     */
     liveSwitchSupportedEngines?: Array<StorageEngineEnum> | null;
 }
 export namespace StorageStatus {

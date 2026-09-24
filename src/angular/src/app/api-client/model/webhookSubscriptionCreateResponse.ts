@@ -10,9 +10,18 @@
 import { WebhookSubscriptionDetail } from './webhookSubscriptionDetail';
 
 
+/**
+ * This class carries a newly created webhook subscription\'s own metadata alongside its plaintext auth credential(s) and, if enabled, its plaintext HMAC signing secret -- the only response that will ever include either, per this project\'s reveal-once-then-omitted exposure policy for every secret-bearing entity type.
+ */
 export interface WebhookSubscriptionCreateResponse { 
     subscription?: WebhookSubscriptionDetail;
+    /**
+     * The subscription\'s own outbound authentication credential(s), or null when Ninlil.Web.Models.WebhookSubscriptionDetail.AuthMode is `None`.
+     */
     authCredentials?: { [key: string]: string | null; } | null;
+    /**
+     * The subscription\'s own HMAC signing secret (caller-supplied or freshly generated), or null when signing was not enabled.
+     */
     hmacSigningSecret?: string | null;
 }
 

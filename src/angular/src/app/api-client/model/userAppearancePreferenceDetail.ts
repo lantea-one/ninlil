@@ -11,6 +11,9 @@ import { UiThemeModeEnum } from './uiThemeModeEnum';
 import { UiThemePaletteEnum } from './uiThemePaletteEnum';
 
 
+/**
+ * This record is the REST representation of the current caller\'s own appearance preference: their own override, if any, alongside the effective value the Angular admin SPA\'s own theming engine should actually render, after falling back to this host\'s own global default for whichever field (if either) is not overridden.
+ */
 export interface UserAppearancePreferenceDetail { 
     palette?: UiThemePaletteEnum;
     mode?: UiThemeModeEnum;

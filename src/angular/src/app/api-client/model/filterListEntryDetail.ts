@@ -10,6 +10,9 @@
 import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
+/**
+ * This class carries a single filter list entry\'s own fields, for list, single-item, and creation responses.
+ */
 export interface FilterListEntryDetail { 
     id?: string;
     listId?: string;

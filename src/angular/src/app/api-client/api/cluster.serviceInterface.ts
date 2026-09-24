@@ -50,7 +50,7 @@ export interface ClusterServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every peer node currently in this node\&#39;s own registry.
      * 
      * @endpoint get /api/cluster/nodes
 * @param requestParameters
@@ -58,7 +58,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesGet(requestParameters: ApiClusterNodesGetRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a peer node from this node\&#39;s own registry -- purely local: it does not notify the peer, and does not affect the peer\&#39;s own registry entry for this node (an operator who wants a clean, two-sided break must remove the relationship from both nodes\&#39; own \&quot;Cluster\&quot; pages, a deliberate \&quot;no cross-node cleanup\&quot; posture documented as an accepted limitation).
      * 
      * @endpoint delete /api/cluster/nodes/{id}
 * @param requestParameters
@@ -66,7 +66,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdDelete(requestParameters: ApiClusterNodesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single peer node by its own local registry row identifier.
      * 
      * @endpoint get /api/cluster/nodes/{id}
 * @param requestParameters
@@ -74,7 +74,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdGet(requestParameters: ApiClusterNodesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetail>;
 
     /**
-     * 
+     * This action partially updates a peer\&#39;s own display name and/or notes via RFC 7396 JSON Merge Patch -- see Ninlil.Web.Models.ClusterNodeWriteRequest for why every other field is fixed once a peer row exists.
      * 
      * @endpoint patch /api/cluster/nodes/{id}
 * @param requestParameters
@@ -82,14 +82,14 @@ export interface ClusterServiceInterface {
     apiClusterNodesIdPatch(requestParameters: ApiClusterNodesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a fresh cluster invite -- see Ninlil.Dns.Server.Cluster.Invite.ClusterInviteService for the real generation logic this delegates to.
      * 
      * @endpoint post /api/cluster/nodes/invite
 */
     apiClusterNodesInvitePost(extraHttpRequestParams?: any): Observable<ClusterInviteCreateResponse>;
 
     /**
-     * 
+     * This action consumes an invite code, completing the join handshake against the inviting node -- see Ninlil.Dns.Server.Cluster.Join.ClusterJoinService for the real handshake logic this delegates to.
      * 
      * @endpoint post /api/cluster/nodes/join
 * @param requestParameters
@@ -97,7 +97,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesJoinPost(requestParameters: ApiClusterNodesJoinPostRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetail>;
 
     /**
-     * 
+     * This action serves the aggregate cluster dashboard: this node\&#39;s own live query-stats snapshot, plus one row per known peer, each peer\&#39;s own row collected live over the existing TSIG-authenticated + TLS-encrypted cluster channel via Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator. A peer that could not be reached is still included in the response, marked unreachable with every count null -- never silently omitted, so an operator can tell \&quot;this peer has no query traffic\&quot; apart from \&quot;this node could not reach this peer right now.\&quot; Returns an empty peer list (this node\&#39;s own row only) when clustering is disabled or no peer is currently known.
      * 
      * @endpoint get /api/cluster/nodes/stats
 */

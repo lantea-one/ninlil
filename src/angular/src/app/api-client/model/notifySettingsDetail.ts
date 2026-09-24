@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `NotifyOptions` -- how this server sends RFC 1996 NOTIFY messages to a zone\'s configured secondaries. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ */
 export interface NotifySettingsDetail { 
     maxAttempts?: number;
     responseTimeout?: string;

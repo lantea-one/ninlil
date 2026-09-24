@@ -10,17 +10,50 @@
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries a single persistent identifier a known client device answers to, for inclusion in Ninlil.Web.Models.ClientDetail.Addresses and for Ninlil.Web.Controllers.ClientAddressesController\'s own list/single-item/creation responses.
+ */
 export interface ClientAddressDetail { 
+    /**
+     * This address row\'s own unique identifier.
+     */
     id?: string;
+    /**
+     * The owning device\'s own unique identifier.
+     */
     clientId?: string;
+    /**
+     * A colon-separated MAC address for an IPv4 identity, or a DUID for an IPv6 one.
+     */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
+    /**
+     * The most recently observed source IP address this identifier answered from, or null if none has been recorded yet.
+     */
     address?: string | null;
+    /**
+     * When this identifier was first recorded against this device.
+     */
     firstSeenUtc?: string;
+    /**
+     * When this identifier was most recently observed, or null if no presence-tracking signal has updated it yet.
+     */
     lastSeenUtc?: string | null;
+    /**
+     * When this address row was first created.
+     */
     createdAtUtc?: string;
+    /**
+     * The MAC address ClientIdentifier embeds (directly, or inside a DHCPv4 client-id or a link-layer DUID), as lowercase colon-separated hexadecimal, or null when it embeds none.
+     */
     macAddress?: string | null;
+    /**
+     * The organization IEEE assigned MacAddress\'s block to -- computed at read time. null when there is no MAC, it is randomized, or no registry lists it.
+     */
     vendor?: string | null;
+    /**
+     * Whether MacAddress is a randomized (locally administered) address, which is never looked up because it names no manufacturer.
+     */
     isRandomizedMacAddress?: boolean;
 }
 export namespace ClientAddressDetail {

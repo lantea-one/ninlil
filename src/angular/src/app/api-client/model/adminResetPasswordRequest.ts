@@ -10,6 +10,9 @@
 import { AdminPasswordResetMode } from './adminPasswordResetMode';
 
 
+/**
+ * This class carries which delivery mode an administrator-driven password reset (see M:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken)) should use -- see Ninlil.Web.Models.AdminPasswordResetMode\'s own doc comment for what each mode does.
+ */
 export interface AdminResetPasswordRequest { 
     mode?: AdminPasswordResetMode;
 }

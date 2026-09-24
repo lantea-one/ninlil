@@ -23,14 +23,14 @@ export interface SelfUpdateServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action triggers a real, immediate check against the currently-configured release feed, waits for it to finish, and returns the fresh result -- the same underlying check Ninlil.Dns.Server.SelfUpdate.SelfUpdateCheckService\&#39;s own periodic loop runs automatically, just run on demand rather than waited out.
      * 
      * @endpoint post /api/self-update/check
 */
     apiSelfUpdateCheckPost(extraHttpRequestParams?: any): Observable<SelfUpdateStatusDetail>;
 
     /**
-     * 
+     * This action reads the self-update checker\&#39;s own currently-known status -- whatever the most recent check (automatic or manually triggered) last recorded, never a fresh check of its own. See M:Ninlil.Web.Controllers.SelfUpdateController.Check(System.Threading.CancellationToken) to trigger a fresh one.  &lt;b&gt;Why there is no \&quot;apply now\&quot; button.&lt;/b&gt; This server has no real, safe, in-process     way to replace its own running binary -- there is no installer, no systemd-unit     management, and no established release-artifact packaging for this project yet     (Ninlil.Dns.Server.SelfUpdate.SelfUpdateOptions\&#39;s own doc comment covers the parallel gap on the     feed side). Building a fake button that reports success without genuinely     re-executing a new binary would be actively dishonest, and building a real one     without that missing infrastructure would risk leaving a homelab DNS server     half-replaced or simply dead, with nobody around to notice. Instead,     Ninlil.Web.Models.SelfUpdateStatusDetail.UpdateInstructions tells an operator, in plain     language, exactly what to do by hand -- an honest instruction rather than an action     this project cannot yet perform safely.
      * 
      * @endpoint get /api/self-update
 */

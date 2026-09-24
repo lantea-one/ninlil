@@ -9,11 +9,29 @@
  */
 
 
+/**
+ * This record is the REST representation of a TLS-based transport\'s own server certificate configuration (Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions) -- shared by DNS-over-TLS and DNS-over-QUIC, the two transports that actually consult it inside this host\'s own combined process (DNS-over-HTTPS, mapped onto this host\'s shared Kestrel instance rather than self-hosting its own, uses that shared listener\'s own certificate instead -- see Ninlil.Web.Models.DnsOverHttpsSettingsDetail\'s own doc comment for why no equivalent field exists there). Reflects the exact same \"operator-provided PFX path, or a self-managed self-signed certificate\" shape Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions itself already uses -- this record does not introduce a raw-key-material upload flow, deliberately.
+ */
 export interface TlsCertificateSettingsDetail { 
+    /**
+     * The path to an operator-provided PKCS#12 certificate file, including its private key. Empty means \"generate and manage a self-signed certificate instead.\"
+     */
     pfxPath?: string | null;
+    /**
+     * Whether Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions.PfxPassword currently has a value -- the password itself is never returned by a `GET`, the same reveal-once posture every other secret-bearing setting in this project already follows.
+     */
     pfxPasswordConfigured?: boolean;
+    /**
+     * The subject alternative names a self-signed certificate (generated only when Ninlil.Web.Models.TlsCertificateSettingsDetail.PfxPath is empty) is issued for.
+     */
     selfSignedSubjectAlternativeNames?: Array<string> | null;
+    /**
+     * How often this transport\'s own Ninlil.Dns.Server.Core.Certificates.ReloadableTlsCertificateProvider re-checks whether the certificate this configuration points at has been replaced on disk.
+     */
     certificateReloadPollInterval?: string;
+    /**
+     * Which TLS protocol versions this transport\'s own handshake will accept, by name (for example `[\"Tls12\", \"Tls13\"]`). An empty list means System.Security.Authentication.SslProtocols.None -- let the OS/runtime negotiate its own best-available default, per Ninlil.Dns.Server.Core.Certificates.TlsCertificateOptions.AllowedProtocols\'s own doc comment.
+     */
     allowedProtocols?: Array<string> | null;
 }
 

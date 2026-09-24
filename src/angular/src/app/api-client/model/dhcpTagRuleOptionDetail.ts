@@ -10,6 +10,9 @@
 import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
 
 
+/**
+ * This class carries a tag rule option\'s own fields, for list, single-item, and creation responses.
+ */
 export interface DhcpTagRuleOptionDetail { 
     id?: string;
     tagRuleId?: string;

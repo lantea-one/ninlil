@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record carries `RabbitMqEventBrokerOptions`\'s own settings, minus `Password` -- deliberately never returned by a `GET`, the same reveal-once posture this project\'s every other secret-bearing entity already follows, even though this particular secret lives in a plaintext config file rather than an `IDataProtector`- encrypted column.
+ */
 export interface RabbitMqBrokerSettingsDetail { 
     hostName?: string | null;
     port?: number;

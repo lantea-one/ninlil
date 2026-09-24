@@ -33,7 +33,10 @@ public class DnssecKeyDetailPagedResultExample : IExamplesProvider<PagedResult<D
                     DnssecKeyLifecycleStateEnum.Active,
                     DateTimeOffset.Parse("2026-08-01T09:00:00+00:00"),
                     null,
-                    null
+                    null,
+                    "example.com. IN DNSKEY 257 3 13 AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw==",
+                    "example.com. IN DS 12345 13 2 186EA634D4CF62F2671F3C757F507F8D3FE985FE431A1181B661F8EED27A59CA",
+                    "186EA634D4CF62F2671F3C757F507F8D3FE985FE431A1181B661F8EED27A59CA"
                 ),
                 new DnssecKeyDetail(
                     Guid.Parse("5e6f7081-92a3-4b4c-a5d6-e7f8091a2b3c"),
@@ -48,6 +51,9 @@ public class DnssecKeyDetailPagedResultExample : IExamplesProvider<PagedResult<D
                     null,
                     DnssecKeyLifecycleStateEnum.Active,
                     DateTimeOffset.Parse("2026-08-01T09:00:00+00:00"),
+                    null,
+                    null,
+                    "example.com. IN DNSKEY 256 3 13 MDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5f",
                     null,
                     null
                 ),

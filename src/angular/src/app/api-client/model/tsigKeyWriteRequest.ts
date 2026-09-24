@@ -9,10 +9,25 @@
  */
 
 
+/**
+ * This class carries the fields used to fully replace an existing TSIG key\'s metadata (`PUT /api/tsig-keys/{id}`). The key\'s own shared secret cannot be rotated this way -- delete and recreate the key instead -- since the reveal-once-on-creation exposure policy has no later point at which a rotated secret could be shown again through a `PUT`\'s own no-body `204` response.
+ */
 export interface TsigKeyWriteRequest { 
+    /**
+     * The key\'s name.
+     */
     name?: string | null;
+    /**
+     * The key\'s MAC algorithm.
+     */
     algorithmName?: string | null;
+    /**
+     * Whether the key is currently disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about the key.
+     */
     comments?: string | null;
 }
 

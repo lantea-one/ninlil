@@ -42,6 +42,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
+     * This action lists every catalog entry this server offers, together with whether each is currently enabled -- globally by default, or for a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, see this class\&#39;s own doc comment for the full targeting contract.
      * @endpoint get /api/blocked-services
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -122,6 +123,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
+     * This action disables a single catalog entry. With neither target given, this keeps doing exactly what it always has: permanently deletes its own managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity and every client-group &lt;em&gt;and&lt;/em&gt; (now that one can exist at all, see this class\&#39;s own doc comment) client-level assignment still referencing it, mirroring M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken)\&#39;s own identical cleanup. With a single optional &#x60;clientId&#x60;/&#x60;clientGroupId&#x60; target given, this instead removes &lt;em&gt;only that target\&#39;s own assignment&lt;/em&gt;, leaving the shared managed list -- and every other target\&#39;s own assignment -- completely untouched: an operator un-blocking a service for one specific child\&#39;s device must not also silently un-block it for everyone else who has it assigned. A no-op, not an error, when there is nothing to remove in the given scope (the entry has no managed list at all, or the named target simply has no assignment of its own).
      * @endpoint delete /api/blocked-services/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -203,6 +205,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
+     * This action enables a single catalog entry: creates its own managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity if none exists yet, or re-enables (clears Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity.IsDisabled on) one that was previously disabled -- unaffected by scoping, see this class\&#39;s own doc comment. Idempotent -- enabling an already-enabled entry (in the same scope) simply returns its current state. When a single optional &#x60;clientId&#x60;/&#x60;clientGroupId&#x60; target (mutually exclusive) is given, this action additionally creates that target\&#39;s own assignment of the managed list, if it does not already have one -- rejected with &#x60;400 Bad Request&#x60; if both are given, or if the named target does not actually exist.
      * @endpoint post /api/blocked-services/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -52,7 +52,7 @@ export interface DhcpScopeCustomOptionsServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every custom option belonging to a DHCP scope.
      * 
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface DhcpScopeCustomOptionsServiceInterface {
     apiDhcpScopesScopeIdCustomOptionsGet(requestParameters: ApiDhcpScopesScopeIdCustomOptionsGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeCustomOptionDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a custom option from the DHCP scope.
      * 
      * @endpoint delete /api/dhcp-scopes/{scopeId}/custom-options/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface DhcpScopeCustomOptionsServiceInterface {
     apiDhcpScopesScopeIdCustomOptionsIdDelete(requestParameters: ApiDhcpScopesScopeIdCustomOptionsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single custom option by its identifier.
      * 
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface DhcpScopeCustomOptionsServiceInterface {
     apiDhcpScopesScopeIdCustomOptionsIdGet(requestParameters: ApiDhcpScopesScopeIdCustomOptionsIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpScopeCustomOptionDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing custom option\&#39;s own fields, keeping its own identifier and owning scope.
      * 
      * @endpoint put /api/dhcp-scopes/{scopeId}/custom-options/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DhcpScopeCustomOptionsServiceInterface {
     apiDhcpScopesScopeIdCustomOptionsIdPut(requestParameters: ApiDhcpScopesScopeIdCustomOptionsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new custom option to a DHCP scope. See Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity\&#39;s own doc comment for how a custom option interacts with this project\&#39;s own standard-option computation and a client\&#39;s Parameter Request List.
      * 
      * @endpoint post /api/dhcp-scopes/{scopeId}/custom-options
 * @param requestParameters

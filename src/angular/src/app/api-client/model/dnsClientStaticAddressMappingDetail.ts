@@ -10,14 +10,38 @@
 import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
+/**
+ * This class carries a single static address mapping\'s own fields, for list, single-item, and creation responses.
+ */
 export interface DnsClientStaticAddressMappingDetail { 
+    /**
+     * This mapping\'s own identifier.
+     */
     id?: string;
+    /**
+     * This mapping\'s own source address or network, exactly as stored.
+     */
     cidr?: string | null;
+    /**
+     * The persistent client identifier this mapping resolves to.
+     */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
+    /**
+     * Whether this mapping is currently disabled -- a disabled mapping is never consulted by `StaticAddressMappingClientIdentityResolver`.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-text operator notes about this mapping.
+     */
     comments?: string | null;
+    /**
+     * When this mapping was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this mapping was last modified, or null if never.
+     */
     updatedAtUtc?: string | null;
 }
 export namespace DnsClientStaticAddressMappingDetail {

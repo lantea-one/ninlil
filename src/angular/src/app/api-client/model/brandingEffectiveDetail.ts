@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This record is the REST representation of the small, non-sensitive slice of this host\'s own branding an authenticated caller may read with no specific permission at all -- mirroring `AppearanceSettingsController.GetMine`\'s own \"self-service, no permission needed\" bar. Knowing the site\'s own configured title/logo carries no confidentiality concern the way editing it (or reading the CHAOS-query fingerprinting fields, which stay behind `branding:read`) would -- every signed-in session, regardless of role, needs this to render the SPA\'s own page title/branding correctly.
+ */
 export interface BrandingEffectiveDetail { 
+    /**
+     * This host\'s own custom browser-tab/page title, or null.
+     */
     siteTitle?: string | null;
+    /**
+     * This host\'s own custom logo, as a complete data URI, or null.
+     */
     logoDataUri?: string | null;
 }
 

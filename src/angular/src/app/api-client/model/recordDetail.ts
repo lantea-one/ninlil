@@ -11,6 +11,9 @@ import { DnsResourceRecordTypeEnum } from './dnsResourceRecordTypeEnum';
 import { DnsClassEnum } from './dnsClassEnum';
 
 
+/**
+ * This class carries a record\'s full state, for both list and single-item responses.
+ */
 export interface RecordDetail { 
     id?: string;
     zoneId?: string;

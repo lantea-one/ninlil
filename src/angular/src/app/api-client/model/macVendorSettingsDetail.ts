@@ -10,12 +10,33 @@
 import { MacVendorDataStatusDetail } from './macVendorDataStatusDetail';
 
 
+/**
+ * This record is the REST representation of MAC vendor lookup\'s currently-effective `MacVendorLookupOptions`, plus a read-only report of the vendor data currently loaded. Every settings field except DataFilePath is also accepted by a `PATCH` to the same endpoint; that one is an on-disk path, read once at startup and configuration-file-only like every other state path.
+ */
 export interface MacVendorSettingsDetail { 
+    /**
+     * Whether the IEEE registries are periodically re-downloaded.
+     */
     enableAutomaticRefresh?: boolean;
+    /**
+     * How long to wait after a successful check before checking again.
+     */
     refreshInterval?: string;
+    /**
+     * Where the MA-L (24-bit) registry CSV is downloaded from.
+     */
     maLRegistryUrl?: string | null;
+    /**
+     * Where the MA-M (28-bit) registry CSV is downloaded from.
+     */
     maMRegistryUrl?: string | null;
+    /**
+     * Where the MA-S (36-bit) registry CSV is downloaded from.
+     */
     maSRegistryUrl?: string | null;
+    /**
+     * Where refreshed data is persisted (read-only here).
+     */
     dataFilePath?: string | null;
     status?: MacVendorDataStatusDetail;
 }

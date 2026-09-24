@@ -10,9 +10,18 @@
 import { DhcpServiceKindEnum } from './dhcpServiceKindEnum';
 
 
+/**
+ * This record is the REST representation of one DHCP-family service\'s own current state -- both its configured Ninlil.Web.Models.DhcpServiceStatus.Enabled flag (whether it starts automatically at host boot) and its actual, live Ninlil.Web.Models.DhcpServiceStatus.IsRunning signal, which can legitimately differ from it in either direction: a service configured false can still be running right now (started live, after boot, through this same controller), and a service configured true can legitimately not be running (stopped live, or -- Ninlil.Web.Models.DhcpServiceKindEnum.Tftp only -- declined to bind at all for a real, non-throwing precondition failure such as a missing root directory; see `TftpServer`\'s own doc comment) -- see `Ninlil.Dhcp.Common.Control.IDhcpProtocolService`\'s own doc comment for why these two are deliberately distinct concepts throughout this whole feature.
+ */
 export interface DhcpServiceStatus { 
     kind?: DhcpServiceKindEnum;
+    /**
+     * Whether this service is configured to start automatically at the next host boot -- this server\'s own `Enable` option for this protocol, read fresh on every call, never a stale snapshot.
+     */
     enabled?: boolean;
+    /**
+     * Whether this service\'s own listener is genuinely bound and serving traffic right now.
+     */
     isRunning?: boolean;
 }
 export namespace DhcpServiceStatus {

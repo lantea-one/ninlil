@@ -219,6 +219,8 @@ export * from './selfUpdateStatusDetail';
 export * from './smtpSettingsDetail';
 export * from './sqliteStorageConnectionFields';
 export * from './ssoStatusResult';
+export * from './statusComponent';
+export * from './statusResponse';
 export * from './storageEngineEnum';
 export * from './storageEngineSwitchApiRequest';
 export * from './storageEngineSwitchResult';

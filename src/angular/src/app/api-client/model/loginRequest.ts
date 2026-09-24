@@ -10,9 +10,21 @@
 import { RefreshTokenDeliveryEnum } from './refreshTokenDeliveryEnum';
 
 
+/**
+ * This class carries the credentials a caller signs in with.
+ */
 export interface LoginRequest { 
+    /**
+     * The account\'s sign-in name.
+     */
     userName?: string | null;
+    /**
+     * The account\'s password.
+     */
     password?: string | null;
+    /**
+     * With Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Cookie delivery, whether the session should outlive the browser: a persistent cookie and the long refresh lifetime when true, otherwise a browser-session cookie and the short browser-session lifetime. Ignored for Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Body delivery, whose sessions are always long-lived, exactly as before cookie delivery existed.
+     */
     rememberMe?: boolean;
     refreshTokenDelivery?: RefreshTokenDeliveryEnum;
 }

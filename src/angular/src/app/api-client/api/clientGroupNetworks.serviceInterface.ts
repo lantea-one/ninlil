@@ -52,7 +52,7 @@ export interface ClientGroupNetworksServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every network belonging to a client group.
      * 
      * @endpoint get /api/client-groups/{groupId}/networks
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksGet(requestParameters: ApiClientGroupsGroupIdNetworksGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupNetworkDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a network from the client group.
      * 
      * @endpoint delete /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdDelete(requestParameters: ApiClientGroupsGroupIdNetworksIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single network by its identifier.
      * 
      * @endpoint get /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdGet(requestParameters: ApiClientGroupsGroupIdNetworksIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupNetworkDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing network\&#39;s own CIDR value, keeping its own identifier.
      * 
      * @endpoint put /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdPut(requestParameters: ApiClientGroupsGroupIdNetworksIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new network to the client group.
      * 
      * @endpoint post /api/client-groups/{groupId}/networks
 * @param requestParameters

@@ -9,14 +9,41 @@
  */
 
 
+/**
+ * This class carries a single access-control rule\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity, so, unlike `TsigKeyDetail`/`DnssecKeyDetail`/ `CloudProviderCredentialDetail`, there is no reveal-once policy to apply here at all.
+ */
 export interface DnsAccessControlRuleDetail { 
+    /**
+     * This rule\'s own identifier.
+     */
     id?: string;
+    /**
+     * This rule\'s own human-readable name.
+     */
     name?: string | null;
+    /**
+     * This rule\'s own network, in CIDR notation, exactly as stored.
+     */
     cidr?: string | null;
+    /**
+     * Every capability this rule currently grants, as an explicit array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names -- see Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Capabilities\'s own doc comment for why this is not the raw stored bitmask.
+     */
     capabilities?: Array<string> | null;
+    /**
+     * Whether this rule is currently disabled -- a disabled rule is never consulted by the enforcement engine, per Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity.IsDisabled\'s own doc comment.
+     */
     isDisabled?: boolean;
+    /**
+     * When this rule was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When this rule was last modified, or null if never.
+     */
     updatedAtUtc?: string | null;
+    /**
+     * The cluster node this rule was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     */
     originatingNodeId?: string | null;
 }
 

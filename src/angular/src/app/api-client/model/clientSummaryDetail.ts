@@ -9,13 +9,37 @@
  */
 
 
+/**
+ * This class carries the known-client registry\'s headline counts (`GET /api/clients/summary`), each computed fresh by a pushed-down count query against the same filters `GET /api/clients` accepts, so a count and the list it links to can never disagree about which devices it means.
+ */
 export interface ClientSummaryDetail { 
+    /**
+     * Every known client.
+     */
     totalCount?: number;
+    /**
+     * Clients with any address seen within OnlineWindow.
+     */
     onlineCount?: number;
+    /**
+     * Clients not seen within OnlineWindow, including clients never seen at all.
+     */
     offlineCount?: number;
+    /**
+     * Clients registered at or after NewSinceUtc.
+     */
     newCount?: number;
+    /**
+     * Clients an operator has starred as a favorite.
+     */
     favoriteCount?: number;
+    /**
+     * The instant NewCount counts from.
+     */
     newSinceUtc?: string;
+    /**
+     * The online window the presence counts were evaluated against.
+     */
     onlineWindow?: string;
 }
 

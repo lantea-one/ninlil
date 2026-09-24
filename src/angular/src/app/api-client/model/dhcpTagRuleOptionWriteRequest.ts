@@ -10,8 +10,17 @@
 import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
 
 
+/**
+ * This class carries the fields used to create or fully replace an option a tag rule contributes (`POST`/`PUT /api/dhcp-tag-rules/{tagRuleId}/options`).
+ */
 export interface DhcpTagRuleOptionWriteRequest { 
+    /**
+     * The option\'s own raw numeric tag (0-255).
+     */
     optionTag?: number;
+    /**
+     * The option\'s own raw value bytes, as an uppercase hexadecimal string -- ignored entirely at delivery time (and may be omitted/left blank) when ValueSource is Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress.
+     */
     valueHex?: string | null;
     valueSource?: DhcpOptionValueSourceEnum;
 }

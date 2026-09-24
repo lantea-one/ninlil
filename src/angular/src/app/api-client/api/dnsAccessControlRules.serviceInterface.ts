@@ -47,7 +47,7 @@ export interface DnsAccessControlRulesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every access-control rule this server knows about, enabled or not.
      * 
      * @endpoint get /api/access-control-rules
 * @param requestParameters
@@ -55,7 +55,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesGet(requestParameters: ApiAccessControlRulesGetRequestParams, extraHttpRequestParams?: any): Observable<DnsAccessControlRuleDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes an access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache no longer grants anything on its behalf.
      * 
      * @endpoint delete /api/access-control-rules/{id}
 * @param requestParameters
@@ -63,7 +63,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdDelete(requestParameters: ApiAccessControlRulesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single access-control rule by its identifier.
      * 
      * @endpoint get /api/access-control-rules/{id}
 * @param requestParameters
@@ -71,7 +71,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdGet(requestParameters: ApiAccessControlRulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsAccessControlRuleDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing access-control rule\&#39;s fields, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks up the change without a restart.
      * 
      * @endpoint put /api/access-control-rules/{id}
 * @param requestParameters
@@ -79,7 +79,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdPut(requestParameters: ApiAccessControlRulesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks it up without a restart.
      * 
      * @endpoint post /api/access-control-rules
 * @param requestParameters

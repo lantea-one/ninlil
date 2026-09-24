@@ -10,8 +10,17 @@
 import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `WebListenOptions` -- the admin web listener\'s own port/certificate configuration, shared by the REST API, the SignalR hub, and DNS-over-HTTPS. No secret material other than Ninlil.Web.Models.WebListenSettingsDetail.Certificate\'s own reveal-once `PfxPasswordConfigured` field is involved, so every other field is the exact same one a `PATCH` to the same endpoint accepts.
+ */
 export interface WebListenSettingsDetail { 
+    /**
+     * The plain HTTP port this host binds to.
+     */
     httpPort?: number;
+    /**
+     * The HTTPS port this host binds to.
+     */
     httpsPort?: number;
     certificate?: TlsCertificateSettingsDetail;
 }

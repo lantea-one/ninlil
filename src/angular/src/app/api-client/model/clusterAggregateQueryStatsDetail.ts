@@ -9,13 +9,37 @@
  */
 
 
+/**
+ * This class carries one node\'s own aggregate query-stats row for the cluster dashboard (`GET /api/cluster/nodes/stats`) -- either this node itself (Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelftrue, always Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.Reachable) or one known peer, reported unreachable rather than omitted when its own live snapshot could not be collected. See Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator\'s own doc comment for why an unreachable peer is never simply left out of the list.
+ */
 export interface ClusterAggregateQueryStatsDetail { 
+    /**
+     * This node\'s own local registry row id for the peer, or null for Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelf\'s own row (this node has no registry entry for itself).
+     */
     clusterNodeRegistryId?: string | null;
+    /**
+     * The node\'s own display name.
+     */
     nodeName?: string | null;
+    /**
+     * Whether this row describes the node answering the request itself.
+     */
     isSelf?: boolean;
+    /**
+     * Whether a live snapshot was actually collected for this row.
+     */
     reachable?: boolean;
+    /**
+     * How many queries this node logged in the last hour, or null when unreachable.
+     */
     queriesLastHour?: number | null;
+    /**
+     * How many queries this node logged in the last 24 hours, or null when unreachable.
+     */
     queriesLast24Hours?: number | null;
+    /**
+     * How many query-log rows this node currently retains, or null when unreachable.
+     */
     totalRetainedQueries?: number | null;
 }
 

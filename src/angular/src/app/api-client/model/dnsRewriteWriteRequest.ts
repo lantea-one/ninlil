@@ -9,10 +9,25 @@
  */
 
 
+/**
+ * This class carries the fields used to create or fully replace a DNS rewrite (`POST`/`PUT /api/dns-rewrites`).
+ */
 export interface DnsRewriteWriteRequest { 
+    /**
+     * The queried domain this rewrite matches -- an exact name with no `*` character, or a shell-style wildcard glob (`*.example.com`) with one. Validated as a syntactically valid domain name before this rewrite is ever persisted.
+     */
     domain?: string | null;
+    /**
+     * Either a literal IP address (an A/AAAA-style rewrite) or another domain name (a CNAME-style rewrite) -- validated against the real `DnsRewriteTargetClassifier.TryClassify` before this rewrite is ever persisted, the same \"validate against the real codec/parser\" discipline Ninlil.Web.Controllers.RecordsController already applies to a record\'s own `data` field.
+     */
     target?: string | null;
+    /**
+     * Whether the rewrite starts out (or is currently) disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Free-form operator notes about this rewrite.
+     */
     comments?: string | null;
 }
 

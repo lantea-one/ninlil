@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This class carries a DHCP reservation\'s own fields, for list, single-item, and creation responses.
+ */
 export interface DhcpReservationDetail { 
     id?: string;
     scopeId?: string;

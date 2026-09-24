@@ -9,13 +9,37 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `EmailSenderOptions` -- the SMTP server this host sends e-mail through (most notably, e-mail-based two-factor authentication codes; a future self-service Forgot Password flow will reuse the same infrastructure).
+ */
 export interface SmtpSettingsDetail { 
+    /**
+     * The SMTP server\'s host name.
+     */
     smtpHost?: string | null;
+    /**
+     * The SMTP server\'s port.
+     */
     smtpPort?: number;
+    /**
+     * Whether the connection to the SMTP server is secured with TLS.
+     */
     useTls?: boolean;
+    /**
+     * The username authenticated to the SMTP server with, or empty if it accepts anonymous connections.
+     */
     username?: string | null;
+    /**
+     * Whether `EmailSenderOptions.Password` currently has a value -- the password itself is never returned by a `GET`, the same reveal-once posture every other secret-bearing setting in this project already follows.
+     */
     passwordConfigured?: boolean;
+    /**
+     * The e-mail address messages are sent from.
+     */
     fromAddress?: string | null;
+    /**
+     * The display name messages are sent from.
+     */
     fromDisplayName?: string | null;
 }
 

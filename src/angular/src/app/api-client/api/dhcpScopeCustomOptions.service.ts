@@ -48,6 +48,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
+     * This action lists every custom option belonging to a DHCP scope.
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -132,6 +133,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
+     * This action removes a custom option from the DHCP scope.
      * @endpoint delete /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,6 +196,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
+     * This action looks up a single custom option by its identifier.
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -259,6 +262,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
+     * This action fully replaces an existing custom option\&#39;s own fields, keeping its own identifier and owning scope.
      * @endpoint put /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -334,6 +338,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
+     * This action adds a new custom option to a DHCP scope. See Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity\&#39;s own doc comment for how a custom option interacts with this project\&#39;s own standard-option computation and a client\&#39;s Parameter Request List.
      * @endpoint post /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

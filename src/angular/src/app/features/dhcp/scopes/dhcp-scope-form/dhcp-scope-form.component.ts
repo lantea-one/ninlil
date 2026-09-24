@@ -54,17 +54,13 @@ import { joinLines, splitLines } from './dhcp-scope-form.model';
  * dropdown's own bound value -- either a catalog entry's `code` (as a string) or the literal
  * sentinel `'custom'` for a genuinely uncataloged raw tag; `optionTag` is the real numeric tag
  * this row actually submits, kept in sync with `catalogSelection` by
- * {@link DhcpScopeFormComponent.onOptionCatalogSelectionChange}. `valueSource` is a real,
- * server-side string-enum field (`DhcpOptionValueSourceEnum`) worked around the same
- * generated-client-quirk way `DhcpTagRuleFormComponent`'s own match-mode fields already are (see
- * that class's own doc comment) -- kept as a plain `'Custom' | 'ServerAddress'` string throughout
- * this component and cast only at the two points a write request is actually built.
+ * {@link DhcpScopeFormComponent.onOptionCatalogSelectionChange}.
  */
 type DhcpScopeOptionRowFormGroup = FormGroup<{
   id: FormControl<string | null>;
   catalogSelection: FormControl<string>;
   optionTag: FormControl<number>;
-  valueSource: FormControl<'Custom' | 'ServerAddress'>;
+  valueSource: FormControl<DhcpOptionValueSourceEnum>;
   value: FormControl<string>;
   isDisabled: FormControl<boolean>;
   comments: FormControl<string>;
@@ -312,7 +308,7 @@ export class DhcpScopeFormComponent implements OnInit {
     }
 
     row.controls.value.setValue('');
-    row.controls.valueSource.setValue('Custom');
+    row.controls.valueSource.setValue(DhcpOptionValueSourceEnum.Custom);
     this.recomputeOptionRowViewState();
   }
 
@@ -440,12 +436,7 @@ export class DhcpScopeFormComponent implements OnInit {
     existing: DhcpScopeCustomOptionDetail | null,
   ): DhcpScopeOptionRowFormGroup {
     const optionTag = existing?.optionTag ?? 1;
-    // `existing.valueSource` is real, server-side string-enum data at runtime ("Custom" /
-    // "ServerAddress") despite its generated TypeScript type claiming a numeric 0/1 -- the same
-    // generated-client quirk `DhcpTagRuleFormComponent`'s own doc comment documents for
-    // `Dhcpv4TagMatchModeEnum`.
-    const normalizedValueSource: 'Custom' | 'ServerAddress' =
-      (existing?.valueSource as unknown as string) === 'ServerAddress' ? 'ServerAddress' : 'Custom';
+    const valueSource = existing?.valueSource ?? DhcpOptionValueSourceEnum.Custom;
 
     // A loaded row's own catalogSelection starts as the matching catalog entry's own code (as a
     // string) if one exists for the current catalog snapshot, or the "Custom / other option..."
@@ -460,7 +451,7 @@ export class DhcpScopeFormComponent implements OnInit {
     const catalogSelection = matchingEntry ? String(matchingEntry.code) : CUSTOM_TAG_SELECTION;
 
     let displayValue = '';
-    if (existing && normalizedValueSource === 'Custom') {
+    if (existing && valueSource === DhcpOptionValueSourceEnum.Custom) {
       try {
         displayValue = decodeDhcpOptionValue(
           matchingEntry?.valueType ?? null,
@@ -479,7 +470,7 @@ export class DhcpScopeFormComponent implements OnInit {
       id: [existing?.id ?? (null as string | null)],
       catalogSelection: [catalogSelection],
       optionTag: [optionTag, [Validators.required, Validators.min(0), Validators.max(255)]],
-      valueSource: [normalizedValueSource],
+      valueSource: [valueSource],
       value: [displayValue],
       isDisabled: [existing?.isDisabled ?? false],
       comments: [existing?.comments ?? ''],
@@ -494,7 +485,7 @@ export class DhcpScopeFormComponent implements OnInit {
     return this.options.controls.map((row, index) => {
       const raw = row.getRawValue();
       const entry = this.catalogEntryFor(row);
-      const isServerAddress = raw.valueSource === 'ServerAddress';
+      const isServerAddress = raw.valueSource === DhcpOptionValueSourceEnum.ServerAddress;
 
       let valueHex = '';
       if (!isServerAddress) {
@@ -514,9 +505,7 @@ export class DhcpScopeFormComponent implements OnInit {
           optionTag: raw.optionTag,
           valueHex,
           isDisabled: raw.isDisabled,
-          valueSource: (isServerAddress
-            ? 'ServerAddress'
-            : 'Custom') as unknown as DhcpOptionValueSourceEnum,
+          valueSource: raw.valueSource,
           comments: raw.comments || null,
         },
       };

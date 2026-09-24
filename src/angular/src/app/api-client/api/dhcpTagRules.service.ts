@@ -49,6 +49,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action lists every tag rule this server manages.
      * @endpoint get /api/dhcp-tag-rules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -129,6 +130,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action permanently deletes a tag rule and every option it contributes -- removed explicitly, rather than relying on the relational backend\&#39;s own cascade delete, since MongoDB has no equivalent mechanism at all, the same reasoning M:Ninlil.Web.Controllers.ClientGroupsController.Delete(System.Guid,System.Threading.CancellationToken) already applies to a deleted client group\&#39;s own dependent rows.
      * @endpoint delete /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -187,6 +189,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action looks up a single tag rule by its identifier.
      * @endpoint get /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -248,6 +251,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action partially updates an existing tag rule via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any other present field overwrites it.
      * @endpoint patch /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -319,6 +323,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action fully replaces an existing tag rule\&#39;s own fields.
      * @endpoint put /api/dhcp-tag-rules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -390,6 +395,7 @@ export class DhcpTagRulesService extends BaseService implements DhcpTagRulesServ
     }
 
     /**
+     * This action creates a new tag rule.
      * @endpoint post /api/dhcp-tag-rules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

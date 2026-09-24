@@ -54,7 +54,7 @@ export interface TsigKeysServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every TSIG key this server knows about.
      * 
      * @endpoint get /api/tsig-keys
 * @param requestParameters
@@ -62,7 +62,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysGet(requestParameters: ApiTsigKeysGetRequestParams, extraHttpRequestParams?: any): Observable<TsigKeyDetailPagedResult>;
 
     /**
-     * 
+     * This action permanently deletes a TSIG key. Any zone still referencing it by name (see Ninlil.Web.Controllers.ZonesController) simply stops being able to sign or verify transfers against it -- this project does not track or block on that soft reference, the same laxness Ninlil.Web.Controllers.ZonesController itself already accepts for &#x60;TsigKeyName&#x60;.
      * 
      * @endpoint delete /api/tsig-keys/{id}
 * @param requestParameters
@@ -70,7 +70,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdDelete(requestParameters: ApiTsigKeysIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single TSIG key by its identifier.
      * 
      * @endpoint get /api/tsig-keys/{id}
 * @param requestParameters
@@ -78,7 +78,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdGet(requestParameters: ApiTsigKeysIdGetRequestParams, extraHttpRequestParams?: any): Observable<TsigKeyDetail>;
 
     /**
-     * 
+     * This action partially updates an existing TSIG key\&#39;s metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it. As with M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken), the key\&#39;s own shared secret cannot be changed this way.
      * 
      * @endpoint patch /api/tsig-keys/{id}
 * @param requestParameters
@@ -86,7 +86,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPatch(requestParameters: ApiTsigKeysIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action fully replaces an existing TSIG key\&#39;s metadata. The key\&#39;s own shared secret is left untouched -- see Ninlil.Web.Models.TsigKeyWriteRequest for why.
      * 
      * @endpoint put /api/tsig-keys/{id}
 * @param requestParameters
@@ -94,7 +94,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPut(requestParameters: ApiTsigKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action creates a new TSIG key. When the caller does not supply Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a cryptographically random secret is generated instead. Either way, the plaintext secret is returned exactly once, in this action\&#39;s own response -- every later request for this key omits it entirely.
      * 
      * @endpoint post /api/tsig-keys
 * @param requestParameters

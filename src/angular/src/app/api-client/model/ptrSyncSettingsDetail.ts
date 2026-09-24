@@ -9,9 +9,21 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `PtrSyncOptions` -- the global default for whether a `ZoneTypeEnum.Primary`/`ZoneTypeEnum.CloudPrimary` zone\'s own A/AAAA record set is automatically mirrored into its enclosing reverse zone, used whenever a zone\'s own `ZoneEntity.AutoManagePtrRecords` is not explicitly set. No secret material is involved, so this record\'s own field is the exact same one a `PATCH` to the same endpoint accepts.
+ */
 export interface PtrSyncSettingsDetail { 
+    /**
+     * The global default -- overridable per zone via `ZoneEntity.AutoManagePtrRecords`, which this setting supplies a value for only when that field is left unset.
+     */
     defaultEnabled?: boolean;
+    /**
+     * The global default IPv4 reverse-zone grouping granularity, in bits -- overridable per zone via `ZoneEntity.PtrIpv4PrefixLength`. `24` is the conventional octet boundary; `25`-`30` groups at an RFC 2317 classless boundary instead.
+     */
     defaultIpv4ReverseZonePrefixBits?: number;
+    /**
+     * The global default IPv6 reverse-zone grouping granularity, in bits -- overridable per zone via `ZoneEntity.PtrIpv6PrefixLength`.
+     */
     defaultIpv6ReverseZonePrefixBits?: number;
 }
 

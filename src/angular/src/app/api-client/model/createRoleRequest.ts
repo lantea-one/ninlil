@@ -9,8 +9,17 @@
  */
 
 
+/**
+ * This class carries the settings for a newly-created role.
+ */
 export interface CreateRoleRequest { 
+    /**
+     * The role\'s display name.
+     */
     name?: string | null;
+    /**
+     * A short, human-readable explanation of what the role is for.
+     */
     description?: string | null;
 }
 

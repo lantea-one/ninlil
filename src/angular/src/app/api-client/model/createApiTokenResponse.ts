@@ -10,7 +10,13 @@
 import { ApiTokenSummary } from './apiTokenSummary';
 
 
+/**
+ * This class carries a newly-issued API token\'s raw, secret value. This is the only time the raw value is ever returned; every subsequent listing only ever shows Ninlil.Web.Models.ApiTokenSummary.
+ */
 export interface CreateApiTokenResponse { 
+    /**
+     * The raw, secret token value -- shown once, at issuance, only.
+     */
     rawToken?: string | null;
     token?: ApiTokenSummary;
 }

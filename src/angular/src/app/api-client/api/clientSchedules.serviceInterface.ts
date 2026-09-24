@@ -52,7 +52,7 @@ export interface ClientSchedulesServiceInterface {
     configuration: Configuration;
 
     /**
-     * 
+     * This action lists every schedule belonging to a known client.
      * 
      * @endpoint get /api/clients/{clientId}/schedules
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface ClientSchedulesServiceInterface {
     apiClientsClientIdSchedulesGet(requestParameters: ApiClientsClientIdSchedulesGetRequestParams, extraHttpRequestParams?: any): Observable<ClientScheduleDetailPagedResult>;
 
     /**
-     * 
+     * This action removes a schedule from the known client.
      * 
      * @endpoint delete /api/clients/{clientId}/schedules/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface ClientSchedulesServiceInterface {
     apiClientsClientIdSchedulesIdDelete(requestParameters: ApiClientsClientIdSchedulesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action looks up a single schedule by its identifier.
      * 
      * @endpoint get /api/clients/{clientId}/schedules/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface ClientSchedulesServiceInterface {
     apiClientsClientIdSchedulesIdGet(requestParameters: ApiClientsClientIdSchedulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientScheduleDetail>;
 
     /**
-     * 
+     * This action fully replaces an existing schedule\&#39;s own fields, keeping its own identifier and owning client.
      * 
      * @endpoint put /api/clients/{clientId}/schedules/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ClientSchedulesServiceInterface {
     apiClientsClientIdSchedulesIdPut(requestParameters: ApiClientsClientIdSchedulesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * 
+     * This action adds a new schedule to the known client.
      * 
      * @endpoint post /api/clients/{clientId}/schedules
 * @param requestParameters

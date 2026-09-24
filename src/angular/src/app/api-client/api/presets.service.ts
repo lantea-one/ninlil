@@ -42,6 +42,7 @@ export class PresetsService extends BaseService implements PresetsServiceInterfa
     }
 
     /**
+     * This action lists every built-in preset this server can apply.
      * @endpoint get /api/presets
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -98,6 +99,7 @@ export class PresetsService extends BaseService implements PresetsServiceInterfa
     }
 
     /**
+     * This action applies a named preset -- both halves, its configuration-file merge and its filter-list subscriptions -- via M:Ninlil.Dns.Server.Presets.PresetApplier.ApplyAsync(Ninlil.Dns.Server.Presets.PresetDefinition,System.String,System.Threading.CancellationToken), exactly the deliberate \&quot;overwrite-then-editable\&quot; semantics: only the specific leaves this preset names are overwritten, and every setting stays fully editable afterward.
      * @endpoint post /api/presets/{name}/apply
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

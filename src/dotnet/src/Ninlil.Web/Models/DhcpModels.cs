@@ -186,8 +186,7 @@ public record DhcpScopeCustomOptionWriteRequest(
     byte OptionTag,
     string ValueHex,
     bool IsDisabled = false,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<DhcpOptionValueSourceEnum>))]
-        DhcpOptionValueSourceEnum ValueSource = DhcpOptionValueSourceEnum.Custom,
+    DhcpOptionValueSourceEnum ValueSource = DhcpOptionValueSourceEnum.Custom,
     string Comments = null
 );
 
@@ -201,8 +200,7 @@ public record DhcpScopeCustomOptionDetail(
     byte OptionTag,
     string ValueHex,
     bool IsDisabled,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<DhcpOptionValueSourceEnum>))]
-        DhcpOptionValueSourceEnum ValueSource,
+    DhcpOptionValueSourceEnum ValueSource,
     string Comments,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? UpdatedAtUtc
@@ -236,11 +234,9 @@ public record DhcpTagRuleWriteRequest(
     int Priority = 0,
     bool IsDisabled = false,
     string VendorClassIdentifierMatch = null,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<Dhcpv4TagMatchModeEnum>))]
-        Dhcpv4TagMatchModeEnum VendorClassIdentifierMatchMode = Dhcpv4TagMatchModeEnum.Exact,
+    Dhcpv4TagMatchModeEnum VendorClassIdentifierMatchMode = Dhcpv4TagMatchModeEnum.Exact,
     string UserClassMatch = null,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<Dhcpv4TagMatchModeEnum>))]
-        Dhcpv4TagMatchModeEnum UserClassMatchMode = Dhcpv4TagMatchModeEnum.Exact,
+    Dhcpv4TagMatchModeEnum UserClassMatchMode = Dhcpv4TagMatchModeEnum.Exact,
     string RelayAgentCircuitIdHex = null,
     string RelayAgentRemoteIdHex = null,
     string RelayInterfaceIdHex = null,
@@ -259,11 +255,9 @@ public record DhcpTagRuleDetail(
     int Priority,
     bool IsDisabled,
     string VendorClassIdentifierMatch,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<Dhcpv4TagMatchModeEnum>))]
-        Dhcpv4TagMatchModeEnum VendorClassIdentifierMatchMode,
+    Dhcpv4TagMatchModeEnum VendorClassIdentifierMatchMode,
     string UserClassMatch,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<Dhcpv4TagMatchModeEnum>))]
-        Dhcpv4TagMatchModeEnum UserClassMatchMode,
+    Dhcpv4TagMatchModeEnum UserClassMatchMode,
     string RelayAgentCircuitIdHex,
     string RelayAgentRemoteIdHex,
     string RelayInterfaceIdHex,
@@ -290,8 +284,7 @@ public record DhcpTagRuleDetail(
 public record DhcpTagRuleOptionWriteRequest(
     byte OptionTag,
     string ValueHex,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<DhcpOptionValueSourceEnum>))]
-        DhcpOptionValueSourceEnum ValueSource = DhcpOptionValueSourceEnum.Custom
+    DhcpOptionValueSourceEnum ValueSource = DhcpOptionValueSourceEnum.Custom
 );
 
 /// <summary>
@@ -303,8 +296,7 @@ public record DhcpTagRuleOptionDetail(
     Guid TagRuleId,
     byte OptionTag,
     string ValueHex,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<DhcpOptionValueSourceEnum>))]
-        DhcpOptionValueSourceEnum ValueSource,
+    DhcpOptionValueSourceEnum ValueSource,
     DateTimeOffset CreatedAtUtc
 );
 
@@ -522,8 +514,7 @@ public record DhcpRaSettingsDetail(
 public record DhcpRaRouteDetail(
     string Prefix,
     int PrefixLength,
-    [property: JsonConverter(typeof(JsonStringEnumConverter<RaRoutePreferenceEnum>))]
-        RaRoutePreferenceEnum Preference,
+    RaRoutePreferenceEnum Preference,
     TimeSpan RouteLifetime
 );
 

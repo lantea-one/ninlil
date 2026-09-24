@@ -44,6 +44,7 @@ export class MacVendorSettingsService extends BaseService implements MacVendorSe
     }
 
     /**
+     * This action returns the currently-effective settings and the loaded vendor data\&#39;s status.
      * @endpoint get /api/mac-vendor-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -100,6 +101,7 @@ export class MacVendorSettingsService extends BaseService implements MacVendorSe
     }
 
     /**
+     * This action applies a JSON merge patch to the vendor refresh settings. &#x60;refreshInterval&#x60; must be at least one day; each registry URL must be an absolute HTTP or HTTPS URL (shape-checked only, never fetched here).
      * @endpoint patch /api/mac-vendor-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -170,6 +172,7 @@ export class MacVendorSettingsService extends BaseService implements MacVendorSe
     }
 
     /**
+     * This action re-downloads the registries right now, regardless of schedule or of whether automatic refresh is enabled, waits for it to finish, and returns the resulting status. A failed or implausible download is reported in the status, never as an error response, and never replaces the data already loaded.
      * @endpoint post /api/mac-vendor-settings/refresh
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

@@ -9,6 +9,9 @@
  */
 
 
+/**
+ * This record is the REST representation of this host\'s own currently-effective `DnsRewriteOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Rewrite entries themselves (each individual domain/target override) are a separate resource, already fully CRUD-able via `DnsRewritesController` -- this record covers only the engine-level toggle and synthesized-answer TTL that applies across every configured rewrite.
+ */
 export interface RewriteSettingsDetail { 
     enable?: boolean;
     timeToLiveSeconds?: number;
