@@ -116,11 +116,26 @@ public sealed class Dhcpv6RelayAgentTests
                 {
                     Enable = true,
                     UpstreamServerAddresses = [.. upstreamServerAddresses],
-                    UpstreamServerPort = 547,
+                    // Never the real DHCPv6 server port: a DHCP server may be listening there.
+                    UpstreamServerPort = GetFreePort(),
                 }
             ),
             Options.Create(new Dhcpv6ProtocolOptions()),
             new FixedDhcpv6RelayAgentAddressProvider(IPAddress.Parse("2001:db8:1::1")),
             NullLogger<Dhcpv6RelayAgent>.Instance
         );
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused port, by binding to port 0
+    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
+    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
+    ///     so no test listener ever uses a fixed or well-known port.
+    /// </summary>
+    /// <returns>A free TCP port number.</returns>
+    private static int GetFreePort()
+    {
+        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    }
 }

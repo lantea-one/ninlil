@@ -110,20 +110,22 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         // privileged ports (53, 80, 443) real Kestrel/socket listeners under WebApplicationFactory
         // actually attempt to open (unlike the ones that only exist through TestServer's
         // in-memory abstraction), which would fail without root and isn't what any of these tests
-        // are actually exercising. Random high ports keep every real listener this host starts
-        // out of the way without disabling anything.
-        PlainDnsPort = Random.Shared.Next(20000, 25000);
+        // are actually exercising. Ports the operating system reports as free keep every real
+        // listener this host starts out of the way -- of the DNS, DHCP, and web services the
+        // machine running the tests may host, and of another copy of this suite running
+        // alongside -- without disabling anything.
+        PlainDnsPort = GetFreePort();
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
             PlainDnsPort.ToString()
         );
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_WEB_HTTP_PORT",
-            Random.Shared.Next(25000, 30000).ToString()
+            GetFreePort().ToString()
         );
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_WEB_HTTPS_PORT",
-            Random.Shared.Next(30000, 35000).ToString()
+            GetFreePort().ToString()
         );
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH",
@@ -225,5 +227,17 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         {
             // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
         }
+    }
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused port, by binding to port 0
+    ///     on loopback and reading back what was assigned.
+    /// </summary>
+    /// <returns>A free TCP port number.</returns>
+    private static int GetFreePort()
+    {
+        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

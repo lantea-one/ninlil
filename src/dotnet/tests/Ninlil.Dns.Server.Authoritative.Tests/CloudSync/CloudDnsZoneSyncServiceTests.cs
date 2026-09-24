@@ -470,11 +470,24 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
     {
         await RunOneSyncPassAsync();
 
-        CachedZone pullZone = _cache.FindZone(DnsName.Parse("remote-only.pull.example.com"));
+        // The cache reloads the zone in the background, off the DnsZoneChangedEvent the sync
+        // publishes; on a busy machine that can land after RunOneSyncPassAsync returns, so wait
+        // for the record to appear (bounded) rather than assuming it already has.
+        DnsName remoteOnly = DnsName.Parse("remote-only.pull.example.com");
+        CachedZone pullZone = _cache.FindZone(remoteOnly);
+        for (
+            int attempt = 0;
+            attempt < 200 && !(pullZone?.NameExists(remoteOnly) ?? false);
+            attempt++
+        )
+        {
+            await Task.Delay(50);
+            pullZone = _cache.FindZone(remoteOnly);
+        }
 
         Assert.Equal(_pullZoneId, pullZone.Zone.Id);
         Assert.True(
-            pullZone.NameExists(DnsName.Parse("remote-only.pull.example.com")),
+            pullZone.NameExists(remoteOnly),
             "The newly pulled-in record should be visible through the cache, not just the database, once the sync-driven DnsZoneChangedEvent has been processed."
         );
     }

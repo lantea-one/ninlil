@@ -22,7 +22,7 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
     /// <summary>
     ///     This constant contains the fixed UDP/TCP port every test in this suite connects to.
     /// </summary>
-    public const int Port = 45463;
+    public static readonly int Port = GetFreePort();
 
     /// <summary>
     ///     This constant contains the provider name this suite's resolver advertises its
@@ -172,5 +172,19 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
             },
             resolverSecretKey
         );
+    }
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused port, by binding to port 0
+    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
+    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
+    ///     so no test listener ever uses a fixed or well-known port.
+    /// </summary>
+    /// <returns>A free TCP port number.</returns>
+    private static int GetFreePort()
+    {
+        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

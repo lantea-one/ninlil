@@ -8,7 +8,7 @@
 # carry. The packages are built from the binaries this pipeline run just produced (the release
 # they would download from is published only after this step), and the checksums are still
 # verified against them. The package only copies files, so both architectures are built here,
-# on whatever architecture the runner has, in a stock Arch Linux container.
+# on whatever architecture the runner has, with the runner's own makepkg.
 #
 # Usage: arch-packages.sh <binaries-directory>
 #
@@ -61,28 +61,20 @@ fi
 cp "${binaries}/ninlil-linux-amd64" "${package}/ninlil-${pkgver}-x86_64"
 cp "${binaries}/ninlil-linux-arm64" "${package}/ninlil-${pkgver}-aarch64"
 
-# makepkg refuses to run as root, so it runs as an unprivileged user in the container, building
-# from a writable copy of the package directory into a world-writable output directory. -d skips
-# the (runtime-only) dependency check, and a per-architecture makepkg.conf sets CARCH.
+# The runners are Arch Linux, so the host's own makepkg builds the packages. -d skips the
+# (runtime-only) dependency check, and a per-architecture copy of makepkg.conf sets CARCH, so an
+# x86_64 runner builds the aarch64 package and vice versa.
 output="${work}/output"
 mkdir -p "${output}"
-chmod 0755 "${work}" "${package}"
-chmod 0644 "${package}"/*
-chmod 0777 "${output}"
-docker run --rm --user 65534:65534 --env HOME=/tmp \
-    --volume "${package}:/source:ro" \
-    --volume "${output}:/output" \
-    docker.io/library/archlinux:base-devel \
-    sh -euc '
-        cp -r /source /tmp/package
-        cd /tmp/package
-        makepkg --printsrcinfo > /output/.SRCINFO
-        for arch in x86_64 aarch64; do
-            sed "s/^CARCH=.*/CARCH=\"${arch}\"/" /etc/makepkg.conf > "/tmp/makepkg-${arch}.conf"
-            PKGDEST=/output makepkg --config "/tmp/makepkg-${arch}.conf" \
-                --nodeps --force --noconfirm
-        done
-    '
+(
+    cd "${package}"
+    makepkg --printsrcinfo > "${output}/.SRCINFO"
+    for arch in x86_64 aarch64; do
+        sed "s/^CARCH=.*/CARCH=\"${arch}\"/" /etc/makepkg.conf > "${work}/makepkg-${arch}.conf"
+        PKGDEST="${output}" BUILDDIR="${work}/build" SRCDEST="${package}" \
+            makepkg --config "${work}/makepkg-${arch}.conf" --nodeps --force --noconfirm
+    done
+)
 
 cp "${output}"/ninlil-bin-*.pkg.tar.zst "${binaries}/"
 ls -l "${binaries}"/ninlil-bin-*.pkg.tar.zst

@@ -25,7 +25,7 @@ namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 /// </summary>
 public sealed class PlainForwarderClientTests : IAsyncLifetime
 {
-    private const int TestPort = 18053;
+    private static readonly int TestPort = GetFreePort();
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.77");
 
     private DnsQueryProcessingPipeline _pipeline;
@@ -190,5 +190,19 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {
         public void Publish(IDnsServerEvent domainEvent) { }
+    }
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused port, by binding to port 0
+    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
+    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
+    ///     so no test listener ever uses a fixed or well-known port.
+    /// </summary>
+    /// <returns>A free TCP port number.</returns>
+    private static int GetFreePort()
+    {
+        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

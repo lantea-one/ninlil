@@ -389,14 +389,17 @@ trial.
 
 ### Building the image yourself
 
-The [`Dockerfile`](./Dockerfile) builds every distributable output, selected with `--target`, and
-cross-compiles on the build machine's own architecture — no CPU emulation is needed for either
-image architecture:
+The image holds nothing but a prebuilt, self-contained `ninlil-linux-<arch>` executable, so
+build those first (see [Publishing the binaries](#publishing-the-binaries)), then point the
+[`Dockerfile`](./Dockerfile)'s `binaries` build context at them. It only copies files, so a
+two-architecture image needs no CPU emulation:
 
 ```bash
-docker build -t ninlil .                                                    # the runtime image
-docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/ninlil --push .
-docker buildx build --target binaries --output type=local,dest=dist .       # the four binaries
+.forgejo/scripts/publish-binary.sh linux-amd64 dist
+.forgejo/scripts/publish-binary.sh linux-arm64 dist
+docker buildx build --build-context binaries=dist -t ninlil .
+docker buildx build --build-context binaries=dist \
+  --platform linux/amd64,linux/arm64 -t <registry>/ninlil --push .
 ```
 
 ## Development
@@ -443,22 +446,32 @@ Before considering a change done, both sides of the codebase have the same shape
    sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
 2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
 
-The pipeline runs exactly these checks inside Docker, and so can you, with nothing but Docker
-installed:
+The pipeline runs exactly these checks. The admin console's are run in Docker, so they need
+nothing installed but Docker:
 
 ```bash
-docker buildx build --target test-admin-console .          # lint, format check, Karma suite
-docker build --target test-dotnet -t ninlil-test .          # format check and Release build
-docker run --rm --add-host host.docker.internal:host-gateway \
-  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-  --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
-  -v /var/run/docker.sock:/var/run/docker.sock ninlil-test  # every xUnit project
+docker buildx build --target test-admin-console .   # lint, format check, Karma suite
 ```
 
-The test container needs the Docker socket because a few tests start their own database
-containers through Testcontainers, which it reaches through the host gateway. It runs in its own
-network namespace, so no DNS, DHCP, or Router Advertisement test can collide with a real service
-on the machine or answer a real client on its network.
+A few .NET tests start their own database containers through Testcontainers, so the .NET suite
+needs Docker running too. Every test listener takes a port the operating system reports as free,
+never a fixed or well-known one, and the suite never needs root, so it can run on a machine that
+already hosts DNS, DHCP, web, or database services.
+
+### Publishing the binaries
+
+[`.forgejo/scripts/publish-binary.sh`](./.forgejo/scripts/publish-binary.sh) builds one
+self-contained, single-file executable — the same command the pipeline runs — with the admin
+console embedded, so export the console's production build first:
+
+```bash
+docker buildx build --target admin-console-dist \
+  --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+.forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64
+```
+
+[`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
+packages the same way: `.forgejo/scripts/pack-packages.sh 'Ninlil.*' packages`.
 
 ## Releases and versioning
 
@@ -519,13 +532,16 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`ninlil-builder` Forgejo runners:
+`archlinux` Forgejo runners, which need the .NET SDK, `msquic`, `makepkg` (`base-devel`), Docker
+with buildx, `git`, `curl`, and `jq`. The .NET work runs directly on the runner; Docker builds the
+admin console (its Node.js, Java, and Chromium toolchain lives in the build image) and the
+container image.
 
 | Workflow | Runs on | Does |
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; .NET and admin console tests; then, in parallel, one job per binary, the Arch Linux packages, the multi-architecture image, and one job per NuGet package family; and finally publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages and the multi-architecture image from the Linux binaries; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 
 A build publishes nothing until every test has passed, and its release stays an invisible draft

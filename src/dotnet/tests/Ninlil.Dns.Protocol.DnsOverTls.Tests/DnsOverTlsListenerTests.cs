@@ -33,7 +33,7 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.Tests;
 /// </summary>
 public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 {
-    private const int TestPort = 18853;
+    private static readonly int TestPort = GetFreePort();
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.123");
 
     private DnsQueryProcessingPipeline _pipeline;
@@ -255,7 +255,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task RestrictingAllowedProtocolsToTls12AndTls13StillHandshakesSuccessfully()
     {
-        const int restrictedPort = TestPort + 1;
+        int restrictedPort = GetFreePort();
 
         DnsQueryDispatcher dispatcher = new(
             [new AlwaysAnswerAResolver(ExpectedAnswer)],
@@ -439,7 +439,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAValidV1Header_UsesTheClaimedClientAddress()
     {
-        const int port = TestPort + 2;
+        int port = GetFreePort();
         IPAddress claimedAddress = IPAddress.Parse("203.0.113.9");
 
         (
@@ -483,7 +483,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAValidV2Header_UsesTheClaimedClientAddress()
     {
-        const int port = TestPort + 3;
+        int port = GetFreePort();
         IPAddress claimedAddress = IPAddress.Parse("203.0.113.42");
 
         (
@@ -525,7 +525,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAnUnknownSource_SendingAForgedProxyHeader_IsNeverInspectedForOne()
     {
-        const int port = TestPort + 4;
+        int port = GetFreePort();
 
         // The PROXY protocol feature is enabled, but only for a source that is not loopback --
         // a spoofed header from an untrusted connection must never even be read as one.
@@ -567,7 +567,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionFromAKnownProxySource_WithAMalformedHeader_IsRejected()
     {
-        const int port = TestPort + 5;
+        int port = GetFreePort();
 
         (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
             await StartProxyProtocolListenerAsync(
@@ -717,5 +717,19 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             DnsQueryContext context,
             CancellationToken stoppingToken = default
         ) => CreateAxfrResponseAsync(context, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method asks the operating system for a currently unused port, by binding to port 0
+    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
+    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
+    ///     so no test listener ever uses a fixed or well-known port.
+    /// </summary>
+    /// <returns>A free TCP port number.</returns>
+    private static int GetFreePort()
+    {
+        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

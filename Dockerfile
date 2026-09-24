@@ -1,46 +1,38 @@
 # syntax=docker/dockerfile:1
 #
-# Ninlil build and container image definition.
+# Ninlil's container image, and the admin console's Docker-based build and tests.
 #
-# This one file produces both of Ninlil's distributable outputs, selected with --target:
+# The .NET side of Ninlil -- tests, the self-contained binaries, and the NuGet packages -- is
+# built with the .NET SDK directly (see .forgejo/scripts/). This file covers the rest, selected
+# with --target:
 #
-#   runtime   (default) The hardened container image: the combined host (REST API, DNS and DHCP
-#             engines, admin console) on Microsoft's chiseled ASP.NET Core base image, which has
-#             no shell and no package manager and runs as a non-root user.
-#   binaries  The self-contained, single-file executables for Linux and macOS, written out with
-#             `--output type=local,dest=<dir>` rather than packaged as an image.
-#   packages  The NuGet packages for every library project (everything except the Ninlil.Web
-#             host itself), written out the same way.
+#   runtime (default)
+#             The hardened container image: a prebuilt, self-contained ninlil-linux-<arch>
+#             executable (REST API, DNS and DHCP engines, and the admin console, all in one file)
+#             on Microsoft's chiseled runtime-deps base image, which has no shell and no package
+#             manager and runs as a non-root user. The executables come from a named build
+#             context called "binaries", a directory holding ninlil-linux-amd64 and/or
+#             ninlil-linux-arm64 (see .forgejo/scripts/publish-binary.sh).
+#   admin-console-dist
+#             The admin console's production build, written out with
+#             `--output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot` so a .NET build can
+#             embed or serve it.
 #   test-admin-console
 #             Lint, formatting, and the Jasmine/Karma suite for the admin console. It produces no
 #             output: building the target succeeds only if all of it passes.
-#   test-dotnet
-#             Formatting and the full Release build of the solution, as an image whose default
-#             command runs every xUnit test project. The tests run in a container rather than
-#             during the build because some of them start their own database containers
-#             (Testcontainers), which needs the Docker socket, and reach those containers'
-#             published ports through the host gateway. Run them as an unprivileged user:
-#               docker build --target test-dotnet -t ninlil-test .
-#               docker run --rm --add-host host.docker.internal:host-gateway \
-#                 -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-#                 --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
-#                 -v /var/run/docker.sock:/var/run/docker.sock ninlil-test
 #
-# Every build stage runs on the build machine's own architecture ($BUILDPLATFORM) and
-# cross-compiles for the target, so a multi-platform build (linux/amd64 + linux/arm64) needs no
-# CPU emulation at all: the runtime stage is the only one that belongs to the target platform,
-# and it only copies files.
+# The runtime image contains no compiled code of its own, only files copied into place, so a
+# multi-platform build (linux/amd64 + linux/arm64) needs no CPU emulation.
 #
 # Local usage, from the repository root:
-#   docker build -t ninlil .
-#   docker buildx build --target binaries --output type=local,dest=dist .
-#
-# The pipeline passes the computed build version in through the NINLIL_* build arguments below;
-# a local build without them is versioned 0.0.0-local.
+#   docker buildx build --target admin-console-dist \
+#     --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+#   .forgejo/scripts/publish-binary.sh linux-amd64 dist
+#   docker buildx build --build-context binaries=dist -t ninlil .
 
-ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble
-ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
+ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra
 ARG NODE_IMAGE=node:22-bookworm-slim
+ARG FETCH_IMAGE=buildpack-deps:noble-curl
 
 # ---------------------------------------------------------------------------------------------
 # admin-console-source: the Angular workspace with its dependencies installed.
@@ -69,6 +61,13 @@ FROM admin-console-source AS admin-console
 RUN npm run build
 
 # ---------------------------------------------------------------------------------------------
+# admin-console-dist: just the production build, for `--output type=local`.
+# ---------------------------------------------------------------------------------------------
+FROM scratch AS admin-console-dist
+
+COPY --from=admin-console /workspace/src/angular/dist/angular/browser/ /
+
+# ---------------------------------------------------------------------------------------------
 # test-admin-console: lint, formatting, and the Jasmine/Karma suite in headless Chromium.
 # ---------------------------------------------------------------------------------------------
 FROM admin-console-source AS test-admin-console
@@ -84,218 +83,48 @@ RUN npm run lint \
     && npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
 
 # ---------------------------------------------------------------------------------------------
-# source: the .NET sources with the admin console already in place under wwwroot/.
+# native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target, plus
+# the empty directories the shell-less runtime stage cannot create itself.
 # ---------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ${SDK_IMAGE} AS source
-
-WORKDIR /workspace
-
-# Directory.Build.props and global.json are found by MSBuild's upward directory search, so they
-# keep their place at the root of the tree. Test projects are never referenced by the host and
-# are left out of the context.
-COPY Directory.Build.props global.json ./
-COPY src/dotnet/src/ ./src/dotnet/src/
-COPY --from=admin-console /workspace/src/angular/dist/angular/browser/ ./src/dotnet/src/Ninlil.Web/wwwroot/
-
-ARG NINLIL_VERSION=0.0.0-local
-ARG NINLIL_PACKAGE_VERSION=0.0.0-local
-ARG NINLIL_ASSEMBLY_VERSION=0.0.0.0
-
-# Shared by every publish below. NinlilSkipAngularBuild stops Ninlil.Web.csproj from trying to
-# rebuild the admin console itself: its output was copied in above.
-ENV NINLIL_PUBLISH_PROPERTIES="-p:Version=${NINLIL_PACKAGE_VERSION} \
-    -p:AssemblyVersion=${NINLIL_ASSEMBLY_VERSION} \
-    -p:FileVersion=${NINLIL_ASSEMBLY_VERSION} \
-    -p:InformationalVersion=${NINLIL_VERSION} \
-    -p:ContinuousIntegrationBuild=true \
-    -p:NinlilSkipAngularBuild=true"
-
-# ---------------------------------------------------------------------------------------------
-# test-dotnet: formatting and the full solution build; running the image runs every test.
-# ---------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ${SDK_IMAGE} AS test-dotnet
-
-# libmsquic, from Microsoft's package repository, for the DNS-over-QUIC tests.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
-    && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
-        -o /tmp/packages-microsoft-prod.deb \
-    && dpkg -i /tmp/packages-microsoft-prod.deb \
-    && rm /tmp/packages-microsoft-prod.deb \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends libmsquic \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /workspace
-
-# The package cache lives inside the image (not under /root), so the unprivileged user the tests
-# run as can read it.
-ENV NUGET_PACKAGES=/nuget
-
-COPY .config/ ./.config/
-RUN dotnet tool restore
-
-COPY .editorconfig Directory.Build.props global.json Ninlil.slnx ./
-COPY src/dotnet/ ./src/dotnet/
-# The web host's integration tests serve the real admin console (SPA fallback routing, static
-# assets), exactly as a published host does.
-COPY --from=admin-console /workspace/src/angular/dist/angular/browser/ ./src/dotnet/src/Ninlil.Web/wwwroot/
-
-# The tests run as an unprivileged user (see test-dotnet in the header above), who needs to write
-# test results and temporary files next to the build output.
-RUN dotnet csharpier check . \
-    && dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true \
-    && chmod -R a+rwX /workspace /nuget
-
-ENV HOME=/tmp \
-    DOTNET_CLI_HOME=/tmp \
-    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    DOTNET_NOLOGO=1
-
-CMD ["dotnet", "test", "Ninlil.slnx", "--no-build", "--configuration", "Release"]
-
-# ---------------------------------------------------------------------------------------------
-# publish-image: the framework-dependent host for the container image's architecture.
-# ---------------------------------------------------------------------------------------------
-FROM source AS publish-image
-
-ARG TARGETARCH
-
-RUN case "${TARGETARCH}" in \
-        amd64) rid='linux-x64' ;; \
-        arm64) rid='linux-arm64' ;; \
-        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-    && dotnet publish src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj \
-        --configuration Release \
-        --runtime "${rid}" \
-        --no-self-contained \
-        ${NINLIL_PUBLISH_PROPERTIES} \
-        --output /app \
-    # The persistent data directory has to exist, owned by the image's non-root user, before
-    # the shell-less runtime stage copies it in.
-    && mkdir -p /staging/data
-
-# ---------------------------------------------------------------------------------------------
-# native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target.
-# ---------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ${SDK_IMAGE} AS native-libraries
+FROM --platform=$BUILDPLATFORM ${FETCH_IMAGE} AS native-libraries
 
 ARG TARGETARCH
 
 COPY docker/fetch-native-libraries.sh /usr/local/bin/fetch-native-libraries.sh
-RUN sh /usr/local/bin/fetch-native-libraries.sh "${TARGETARCH}" /native
-
-# ---------------------------------------------------------------------------------------------
-# publish-binaries: self-contained single-file executables for every release platform.
-# ---------------------------------------------------------------------------------------------
-FROM source AS publish-binaries
-
-# Each binary carries the .NET runtime, every native library (extracted to a per-user cache
-# directory on first start), and the admin console (NinlilEmbedWebRoot) inside one file. macOS
-# binaries are ad-hoc code signed by the SDK itself, which Apple Silicon requires before it will
-# run them at all.
-#
-# NINLIL_BINARIES selects which of them to build (the pipeline builds each in its own job).
-ARG NINLIL_BINARIES="linux-amd64 linux-arm64 macos-amd64 macos-arm64"
-RUN set -eu; \
-    mkdir -p /binaries; \
-    for name in ${NINLIL_BINARIES}; do \
-        case "${name}" in \
-            linux-amd64) rid='linux-x64' ;; \
-            linux-arm64) rid='linux-arm64' ;; \
-            macos-amd64) rid='osx-x64' ;; \
-            macos-arm64) rid='osx-arm64' ;; \
-            *) echo "Unknown binary: ${name}" >&2; exit 1 ;; \
-        esac; \
-        dotnet publish src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj \
-            --configuration Release \
-            --runtime "${rid}" \
-            --self-contained \
-            -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:EnableCompressionInSingleFile=true \
-            -p:NinlilEmbedWebRoot=true \
-            -p:DebugType=none \
-            ${NINLIL_PUBLISH_PROPERTIES} \
-            --output "/publish/${rid}"; \
-        cp "/publish/${rid}/Ninlil.Web" "/binaries/ninlil-${name}"; \
-        chmod 0755 "/binaries/ninlil-${name}"; \
-    done; \
-    ls -l /binaries
-
-# ---------------------------------------------------------------------------------------------
-# binaries: just the executables, for `--output type=local`.
-# ---------------------------------------------------------------------------------------------
-FROM scratch AS binaries
-
-COPY --from=publish-binaries /binaries/ /
-
-# ---------------------------------------------------------------------------------------------
-# publish-packages: NuGet packages for every library project.
-# ---------------------------------------------------------------------------------------------
-FROM source AS publish-packages
-
-# Every project under src/dotnet/src except the Ninlil.Web host is a reusable library. A project
-# reference between two of them becomes a NuGet dependency on the same version, so a set of
-# packages from one build always depends on exactly that build's other packages. Debug symbols
-# are embedded in each assembly so a consumer can step into the code with no symbol server.
-#
-# NINLIL_PACKAGES selects which projects to pack, as shell patterns matched against the project
-# directory names (the pipeline packs one family of projects per job).
-ARG NINLIL_PACKAGES="Ninlil.*"
-RUN set -eu; \
-    dotnet new sln --name packages --format slnx --output /packing; \
-    for project in src/dotnet/src/*/*.csproj; do \
-        directory="$(basename "$(dirname "${project}")")"; \
-        [ "${directory}" = 'Ninlil.Web' ] && continue; \
-        selected=''; \
-        set -f; \
-        for pattern in ${NINLIL_PACKAGES}; do \
-            case "${directory}" in ${pattern}) selected='yes' ;; esac; \
-        done; \
-        set +f; \
-        [ -n "${selected}" ] || continue; \
-        dotnet sln /packing/packages.slnx add "${project}"; \
-    done; \
-    dotnet pack /packing/packages.slnx \
-        --configuration Release \
-        -p:DebugType=embedded \
-        ${NINLIL_PUBLISH_PROPERTIES} \
-        --output /packages; \
-    ls -l /packages
-
-# ---------------------------------------------------------------------------------------------
-# packages: just the .nupkg files, for `--output type=local`.
-# ---------------------------------------------------------------------------------------------
-FROM scratch AS packages
-
-COPY --from=publish-packages /packages/ /
+RUN sh /usr/local/bin/fetch-native-libraries.sh "${TARGETARCH}" /native \
+    && mkdir -p /staging/data /staging/wwwroot
 
 # ---------------------------------------------------------------------------------------------
 # runtime: the hardened container image.
 # ---------------------------------------------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime
 
-ARG NINLIL_VERSION=0.0.0-local
-ARG NINLIL_REVISION=unknown
-ARG NINLIL_SOURCE=https://git.lantea.one/Lantea.One/ninlil
+ARG TARGETARCH
+ARG BUILD_VERSION=0.0.0-local
+ARG BUILD_REVISION=unknown
+ARG BUILD_SOURCE=https://git.lantea.one/Lantea.One/ninlil
 
 LABEL org.opencontainers.image.title="Ninlil" \
       org.opencontainers.image.description="DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="${NINLIL_SOURCE}" \
-      org.opencontainers.image.version="${NINLIL_VERSION}" \
-      org.opencontainers.image.revision="${NINLIL_REVISION}"
+      org.opencontainers.image.source="${BUILD_SOURCE}" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_REVISION}"
 
 COPY --from=native-libraries /native/ /
 
-# The application itself stays root-owned and therefore read-only to the non-root user it runs
-# as; only the data directory is writable.
-COPY --from=publish-image /app/ /app/
-COPY --from=publish-image --chown=1654:1654 /staging/data/ /app/data/
+# The executable stays root-owned and therefore read-only to the non-root user it runs as; only
+# the data directory is writable. The web root is deliberately empty: the admin console is
+# served from inside the executable, and an existing directory keeps ASP.NET Core from trying
+# to create one in the read-only /app.
+COPY --from=binaries --chmod=0755 ninlil-linux-${TARGETARCH} /app/ninlil
+COPY --from=native-libraries /staging/wwwroot/ /app/wwwroot/
+COPY --from=native-libraries --chown=1654:1654 /staging/data/ /app/data/
 
 WORKDIR /app
+
+# The executable extracts its bundled native libraries on first start.
+ENV DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp
 
 # The base image's non-root "app" user (uid 1654). Docker lets an unprivileged process in a
 # container bind ports below 1024 on bridge networking (it sets ip_unprivileged_port_start=0 in
@@ -315,7 +144,8 @@ EXPOSE 80/tcp 443/tcp 53/udp 53/tcp
 # host directory here in any real deployment.
 VOLUME ["/app/data"]
 
-# The data directory doubles as the content root, so appsettings.json is read from and written
-# to the persistent volume rather than the read-only application directory. Configuration is
-# otherwise supplied through NINLIL_-prefixed environment variables (see ENVIRONMENT.md).
-ENTRYPOINT ["dotnet", "/app/Ninlil.Web.dll", "--contentRoot=/app/data", "--webroot=/app/wwwroot"]
+# The server keeps its data directory next to the executable, at /app/data. It doubles as the
+# content root, so appsettings.json is read from and written to the persistent volume rather
+# than the read-only application directory. Configuration is otherwise supplied through
+# NINLIL_-prefixed environment variables (see ENVIRONMENT.md).
+ENTRYPOINT ["/app/ninlil", "--contentRoot=/app/data", "--webroot=/app/wwwroot"]

@@ -3,20 +3,27 @@ name: 'Ninlil Pipeline'
 ## The build, test, and publish pipeline shared by every entry point: branch builds
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
-## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
-## needs only Docker (with buildx), git, curl, and jq -- never a matching .NET, Node.js, or Java
-## installation. Every stage cross-compiles on the runner's own architecture, so any
-## 'ninlil-builder' runner can build every platform, including both container image architectures.
+## Every 'archlinux' runner has the .NET SDK, msquic, and makepkg installed, so the .NET work --
+## the tests, the self-contained binaries, and the NuGet packages -- runs directly on the runner,
+## and the Arch Linux packages are built with its own makepkg. Docker covers the rest: the admin
+## console (Node.js, Java, and Chromium live in its build image, not on the runners) and the
+## container image, which is only the prebuilt Linux executables copied onto a chiseled base.
+## Everything cross-compiles, so any runner builds every platform.
+##
+## Tests run natively as the runner's unprivileged user, so they cannot bind a port below 1024;
+## every test listener takes a port the operating system reports as free, so none of them can
+## collide with the DNS, DHCP, web, and database services the runners host, or with another copy
+## of the suite running on the same runner.
 ##
 ## Job graph:
 ##
-##   version ─┬─ test-dotnet ────────┬─ draft ── binaries (×4) ── arch-packages ─┬─ publish
-##            └─ test-admin-console ─┼─ image ───────────────────────────────────┤
-##                                   └─ packages (×4) ───────────────────────────┘
+##   version ─┬─ test-dotnet ────────┬─ draft ── binaries (×4) ─┬─ arch-packages ─┬─ publish
+##            └─ test-admin-console ─┤                          └─ image ─────────┤
+##                                   └─ packages (×4) ────────────────────────────┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
-## executable to it, the Arch Linux job builds its packages from the two Linux executables it
-## downloads back from it, and publish turns the draft into the visible release.
+## executable to it, and the Arch Linux and image jobs build from the two Linux executables they
+## download back from it. Publish turns the draft into the visible release.
 ##
 on:
   workflow_call:
@@ -32,13 +39,15 @@ env:
   REGISTRY: 'git.lantea.one'
   IMAGE: 'git.lantea.one/lantea.one/ninlil'
   PLATFORMS: 'linux/amd64,linux/arm64'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
 jobs:
   ##
   version:
     name: 'Compute Version'
     if: >-
       inputs.kind != 'verify'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     outputs:
       version: '${{ steps.version.outputs.version }}'
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
@@ -79,7 +88,7 @@ jobs:
   ##
   test-dotnet:
     name: 'Test .NET'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -88,48 +97,36 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
+      - name: 'Build the Admin Console'
+        run: |-
+          # The web host's integration tests serve the real admin console (SPA fallback routing,
+          # static assets), exactly as a published host does.
+          docker buildx build --progress=plain --target admin-console-dist \
+            --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+        shell: 'bash'
+      ##
       - name: 'Format Check and Build'
         run: |-
-          docker buildx build --progress=plain --target test-dotnet --load \
-            --tag "ninlil-test:${{ forgejo.run_id }}" .
+          dotnet tool restore
+          dotnet csharpier check .
+          dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true
         shell: 'bash'
       ##
       - name: 'Run Every Test Project'
         run: |-
-          # The tests run in their own network namespace, so nothing they bind can collide with,
-          # or answer for, the DNS, DHCP, or web services already running on the runner. Some of
-          # them start their own database containers through the Docker socket and reach those
-          # containers' published ports through the host gateway. They run as the runner's own
-          # unprivileged user, plus the Docker socket's group.
-          run_tests() {
-            docker run --rm \
-              --add-host host.docker.internal:host-gateway \
-              --env TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c %g /var/run/docker.sock)" \
-              --volume /var/run/docker.sock:/var/run/docker.sock \
-              "ninlil-test:${{ forgejo.run_id }}" \
-              dotnet test Ninlil.slnx --no-build --configuration Release "$@"
-          }
-
           # The live DNSSEC key-rollover test compresses a real rollover into two-second TTLs, so
           # it is sensitive to CPU contention while the other test projects run in parallel. It
           # runs on its own, after everything else, rather than being skipped.
           timing_sensitive='DnssecKeyRolloverZskPrePublishLiveTests'
-          run_tests --filter "FullyQualifiedName!~${timing_sensitive}"
-          run_tests --filter "FullyQualifiedName~${timing_sensitive}"
-        shell: 'bash'
-      ##
-      - name: 'Remove the Test Image'
-        if: >-
-          always()
-        run: |-
-          docker image rm --force "ninlil-test:${{ forgejo.run_id }}" || true
+          dotnet test Ninlil.slnx --no-build --configuration Release \
+            --filter "FullyQualifiedName!~${timing_sensitive}"
+          dotnet test Ninlil.slnx --no-build --configuration Release \
+            --filter "FullyQualifiedName~${timing_sensitive}"
         shell: 'bash'
   ##
   test-admin-console:
     name: 'Test Admin Console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -151,7 +148,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -180,7 +177,7 @@ jobs:
     needs:
       - 'version'
       - 'draft'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     strategy:
       matrix:
         binary:
@@ -196,17 +193,20 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
+      - name: 'Build the Admin Console'
+        run: |-
+          docker buildx build --progress=plain --target admin-console-dist \
+            --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+        shell: 'bash'
+      ##
       - name: 'Build ninlil-${{ matrix.binary }}'
+        env:
+          BUILD_VERSION: '${{ needs.version.outputs.version }}'
+          BUILD_PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
+          BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
         run: |-
           rm -rf dist
-          docker buildx build --progress=plain \
-            --target binaries \
-            --build-arg "NINLIL_BINARIES=${{ matrix.binary }}" \
-            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
-            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
-            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
-            --output type=local,dest=dist \
-            .
+          ./.forgejo/scripts/publish-binary.sh '${{ matrix.binary }}' dist
         shell: 'bash'
       ##
       - name: 'Attach to the Draft Release'
@@ -224,7 +224,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -260,9 +260,8 @@ jobs:
       inputs.kind != 'verify'
     needs:
       - 'version'
-      - 'test-dotnet'
-      - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+      - 'binaries'
+    runs-on: 'archlinux'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -270,6 +269,16 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Fetch the Linux Binaries From the Draft Release'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+        run: |-
+          rm -rf dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-amd64 dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-arm64 dist
+        shell: 'bash'
       ##
       - name: 'Build and Push linux/amd64 and linux/arm64'
         env:
@@ -295,10 +304,9 @@ jobs:
           docker buildx build --progress=plain \
             --platform "${PLATFORMS}" \
             --target runtime \
-            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
-            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
-            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
-            --build-arg "NINLIL_REVISION=${{ forgejo.sha }}" \
+            --build-context binaries=dist \
+            --build-arg "BUILD_VERSION=${{ needs.version.outputs.version }}" \
+            --build-arg "BUILD_REVISION=${{ forgejo.sha }}" \
             "${tags[@]}" \
             --provenance=false \
             --push \
@@ -313,7 +321,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     strategy:
       matrix:
         include:
@@ -334,16 +342,13 @@ jobs:
           ref: '${{ forgejo.sha }}'
       ##
       - name: 'Pack ${{ matrix.projects }}'
+        env:
+          BUILD_VERSION: '${{ needs.version.outputs.version }}'
+          BUILD_PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
+          BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
         run: |-
           rm -rf packages
-          docker buildx build --progress=plain \
-            --target packages \
-            --build-arg "NINLIL_PACKAGES=${{ matrix.projects }}" \
-            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
-            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
-            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
-            --output type=local,dest=packages \
-            .
+          ./.forgejo/scripts/pack-packages.sh '${{ matrix.projects }}' packages
         shell: 'bash'
       ##
       - name: 'Push to the Forgejo NuGet Registry'
@@ -381,7 +386,7 @@ jobs:
       - 'arch-packages'
       - 'image'
       - 'packages'
-    runs-on: 'ninlil-builder'
+    runs-on: 'archlinux'
     steps:
       ##
       - name: 'Checkout Sources'
