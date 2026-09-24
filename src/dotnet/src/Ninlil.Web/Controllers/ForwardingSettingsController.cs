@@ -148,6 +148,37 @@ public class ForwardingSettingsController(
                 "'perForwarderTimeout' must be a valid TimeSpan (for example \"00:00:03\")."
             );
 
+        if (patch.TryGetMergePatchField("enableCache", out JsonElement enableCache))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    ForwardingOptions.SectionName,
+                    nameof(ForwardingOptions.EnableCache),
+                    enableCache.GetBoolean()
+                )
+            );
+
+        if (patch.TryGetMergePatchField("maxCacheEntries", out JsonElement maxCacheEntries))
+        {
+            // Zero or less would make every sweep empty the cache while it is still switched
+            // on, which is never what an operator means; "enableCache": false is the off switch.
+            if (
+                maxCacheEntries.ValueKind != JsonValueKind.Number
+                || !maxCacheEntries.TryGetInt32(out int maxCacheEntriesValue)
+                || maxCacheEntriesValue < 1
+            )
+                throw new ValidationException(
+                    "'maxCacheEntries' must be a whole number of at least 1."
+                );
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    ForwardingOptions.SectionName,
+                    nameof(ForwardingOptions.MaxCacheEntries),
+                    maxCacheEntriesValue
+                )
+            );
+        }
+
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
@@ -186,6 +217,8 @@ public class ForwardingSettingsController(
             options.Enable,
             options.FailoverStrategy,
             options.HealthCheckInterval,
-            options.PerForwarderTimeout
+            options.PerForwarderTimeout,
+            options.EnableCache,
+            options.MaxCacheEntries
         );
 }

@@ -9,6 +9,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
+using Ninlil.Dns.Server.Forwarding.Caching;
 using Ninlil.Dns.Server.Recursive;
 using Ninlil.Dns.Server.Recursive.Resolution;
 using Ninlil.Dns.Server.Recursive.Validation;
@@ -34,6 +35,20 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///         identically to the forwarder itself having failed (tried next, or fallen through to
 ///         iteration) -- a forwarder that returns a plausible-looking but cryptographically
 ///         invalid answer gets no more trust than one that timed out.
+///     </para>
+///     <para>
+///         <b>Caching.</b> Answers are cached here, inside this resolver, rather than around the
+///         whole dispatcher: only this resolver knows which forwarder set a name goes to and
+///         which ECS subnet it sends, both of which are part of what makes two questions "the
+///         same" (see <see cref="ForwardedResponseCacheKey" />), and authoritative, rewritten or
+///         recursively resolved answers already have their own sources of truth. The lookup
+///         happens after the forwarder set is chosen and before anything is sent; a validated,
+///         cacheable answer is stored before it is returned. Because filtering, CNAME-cloaking
+///         checks and rewrites run in the pipeline on whatever the dispatcher returns, a cache hit
+///         is filtered per client exactly like a fresh answer, and the cache itself only ever
+///         holds the upstream's unfiltered answer. When every forwarder fails, an expired answer
+///         is served stale if the server-wide RFC 8767 serve-stale setting allows it, before
+///         falling through to recursion.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
@@ -74,6 +89,11 @@ namespace Ninlil.Dns.Server.Forwarding;
 ///     establish for a similarly optional engine -- in which case no ECS option is ever attached,
 ///     functionally identical to <see cref="EdnsClientSubnetOptions.Enable" /> being off.
 /// </param>
+/// <param name="responseCache">
+///     The forwarded-response cache. Defaults to <see langword="null" />, the same
+///     optional-dependency idiom as <paramref name="clientSubnetService" />, in which case every
+///     query goes upstream exactly as it did before the cache existed.
+/// </param>
 public sealed class ForwarderQueryResolver(
     IServiceScopeFactory scopeFactory,
     IEnumerable<IUpstreamForwarderClient> clients,
@@ -83,7 +103,8 @@ public sealed class ForwarderQueryResolver(
     IOptionsMonitor<ForwardingOptions> forwardingOptions,
     IOptionsMonitor<RecursiveServerOptions> recursiveOptions,
     ILogger<ForwarderQueryResolver> logger,
-    EdnsClientSubnetService clientSubnetService = null
+    EdnsClientSubnetService clientSubnetService = null,
+    IForwardedResponseCache responseCache = null
 ) : IDnsQueryResolver
 {
     private readonly IReadOnlyDictionary<
@@ -143,6 +164,29 @@ public sealed class ForwarderQueryResolver(
             ? context.Request
             : EdnsClientSubnetService.AttachToRequest(context.Request, clientSubnetOption);
 
+        bool validationEnabled = recursiveOptions.CurrentValue.EnableDnssecValidation;
+
+        // Only a plain, single-question QUERY is cached: that is all a stub resolver ever sends,
+        // and anything else (a NOTIFY or UPDATE that reached here, a multi-question message) has
+        // no well-defined "same question" to reuse an answer for.
+        ForwardedResponseCacheKey? cacheKey =
+            responseCache is not null
+            && context.Request.Opcode == DnsOpcodeEnum.Query
+            && context.Request.Questions.Count == 1
+                ? ForwardedResponseCacheKey.Create(
+                    context.Request,
+                    outboundRequest,
+                    definitionStrings,
+                    validationEnabled
+                )
+                : null;
+
+        if (
+            cacheKey is { } lookupKey
+            && responseCache.TryGet(lookupKey, context.Request) is { } cached
+        )
+            return DnsQueryResolution.Handled(cached);
+
         foreach (UpstreamForwarderDefinition definition in ordered)
         {
             if (
@@ -181,8 +225,8 @@ public sealed class ForwarderQueryResolver(
 
             response.Id = context.Request.Id;
 
-            if (!recursiveOptions.CurrentValue.EnableDnssecValidation)
-                return DnsQueryResolution.Handled(response);
+            if (!validationEnabled)
+                return Answer(cacheKey, response);
 
             DnssecValidationStateEnum state = await ValidateAsync(
                 question,
@@ -201,10 +245,38 @@ public sealed class ForwarderQueryResolver(
                 continue;
             }
 
-            return DnsQueryResolution.Handled(response);
+            return Answer(cacheKey, response);
+        }
+
+        // Every forwarder failed. RFC 8767: an expired answer still inside the serve-stale
+        // window is better than none -- the same server-wide setting the recursive resolver's
+        // own stale fallback honours. Nothing cached means falling through as before.
+        if (
+            cacheKey is { } staleKey
+            && responseCache.TryGetStale(staleKey, context.Request) is { } stale
+        )
+        {
+            logger.LogDebug(
+                "Every forwarder failed for {Name}; serving a stale cached answer.",
+                question.Name
+            );
+            return DnsQueryResolution.Handled(stale);
         }
 
         return DnsQueryResolution.NotHandled;
+    }
+
+    /// <summary>
+    ///     This method caches an accepted upstream answer (when it is cacheable at all) and hands
+    ///     it back as this resolver's result. The cache takes its own copy, so the pipeline is
+    ///     free to change <paramref name="response" /> afterwards.
+    /// </summary>
+    private DnsQueryResolution Answer(ForwardedResponseCacheKey? cacheKey, DnsMessage response)
+    {
+        if (cacheKey is { } key)
+            responseCache.TryStore(key, response);
+
+        return DnsQueryResolution.Handled(response);
     }
 
     /// <summary>

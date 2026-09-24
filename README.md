@@ -33,7 +33,8 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
   off by default; see [Enabling additional transports](#enabling-additional-transports).
 - **General upstream forwarding** with health-checked failover, independent of the recursive
-  resolver, supporting the full `sdns://` DNSCrypt stamp grammar.
+  resolver, supporting the full `sdns://` DNSCrypt stamp grammar, and a TTL-honouring answer cache
+  (RFC 2308 negative caching, serve-stale) that operators can inspect and flush from the console.
 - **TSIG (RFC 8945)** signed transfers and dynamic updates, and an **ACME (RFC 8555) DNS-01
   client** for automated certificate issuance against zones this server hosts itself, with
   optional automated CAA record and PTR/reverse-zone management (including RFC 2317 classless

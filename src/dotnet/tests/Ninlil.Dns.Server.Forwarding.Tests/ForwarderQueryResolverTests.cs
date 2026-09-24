@@ -16,6 +16,7 @@ using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Dnssec;
 using Ninlil.Dns.Server.Dnssec.Algorithms;
+using Ninlil.Dns.Server.Forwarding.Caching;
 using Ninlil.Dns.Server.Forwarding.Clients;
 using Ninlil.Dns.Server.Forwarding.Definition;
 using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
@@ -405,7 +406,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     private ForwarderQueryResolver CreateResolver(
         ForwardingOptions forwardingOptions = null,
         RecursiveServerOptions recursiveOptions = null,
-        IDnssecValidator validator = null
+        IDnssecValidator validator = null,
+        IForwardedResponseCache responseCache = null
     )
     {
         ForwardingOptions effectiveForwardingOptions =
@@ -442,7 +444,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             new StaticOptionsMonitor<RecursiveServerOptions>(
                 recursiveOptions ?? new RecursiveServerOptions { EnableDnssecValidation = false }
             ),
-            NullLogger<ForwarderQueryResolver>.Instance
+            NullLogger<ForwarderQueryResolver>.Instance,
+            responseCache: responseCache
         );
     }
 
@@ -751,6 +754,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _loop;
 
+        private int _queryCount;
+
         private FakeUdpUpstream(Socket socket, byte[] responseBytes)
         {
             _socket = socket;
@@ -758,6 +763,12 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         }
 
         public int Port => ((IPEndPoint)_socket.LocalEndPoint).Port;
+
+        /// <summary>
+        ///     This property contains how many queries this upstream has received -- how the
+        ///     cache tests prove a cached answer never went upstream.
+        /// </summary>
+        public int QueryCount => Volatile.Read(ref _queryCount);
 
         public static FakeUdpUpstream Start(byte[] responseBytes)
         {
@@ -780,6 +791,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
                         new IPEndPoint(IPAddress.Any, 0),
                         stoppingToken
                     );
+
+                    Interlocked.Increment(ref _queryCount);
 
                     // Echo the real query's own transaction ID (the DNS header's first two
                     // octets, RFC 1035 §4.1.1) into the canned response before sending it back --

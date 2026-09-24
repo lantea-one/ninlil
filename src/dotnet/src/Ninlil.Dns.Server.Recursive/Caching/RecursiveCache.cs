@@ -1,63 +1,70 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Events;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Recursive.Caching;
 
 /// <summary>
-///     This class implements <see cref="IRecursiveCache" /> with a single, thread-safe,
-///     in-memory dictionary.
+///     This class implements <see cref="IRecursiveCache" /> on top of the shared
+///     <see cref="DnsCacheStore{TKey, TEntry}" />, keyed by (name, type, class). It is also the
+///     recursive half of the operator-facing <see cref="IDnsCache" /> surface: its statistics,
+///     flush and per-name removal are what the cache REST endpoint reports and acts on, and
+///     <see cref="DnsCacheEvictionService" /> sweeps it alongside the forwarded-response cache.
+///     <para>
+///         Its hit and miss counts include the iterative engine's own internal lookups (name
+///         server addresses, delegations, CNAME hops), not only lookups for a client's question,
+///         so they describe how much upstream traffic the cache saves rather than a per-query
+///         hit rate.
+///     </para>
 /// </summary>
 /// <param name="options">
-///     This cache's own capacity limit, read live via <see cref="IOptionsMonitor{TOptions}" /> --
-///     see <see cref="Resolution.RecursiveQueryResolver" />'s own doc comment for why this cache,
-///     registered as a singleton, cannot use the usual snapshotted <see cref="IOptions{TOptions}" />
-///     instead.
+///     This cache's own capacity limit and serve-stale window, read live via
+///     <see cref="IOptionsMonitor{TOptions}" /> -- see <see cref="Resolution.RecursiveQueryResolver" />'s
+///     own doc comment for why this cache, registered as a singleton, cannot use the usual
+///     snapshotted <see cref="IOptions{TOptions}" /> instead.
 /// </param>
 /// <param name="eventPublisher">The publisher this cache reports its own evictions through.</param>
 public sealed class RecursiveCache(
     IOptionsMonitor<RecursiveServerOptions> options,
     IDnsServerEventPublisher eventPublisher
-) : IRecursiveCache
+) : IRecursiveCache, IDnsCache
 {
-    private readonly ConcurrentDictionary<
+    /// <summary>
+    ///     This constant contains this cache's <see cref="IDnsCache.Name" />.
+    /// </summary>
+    public const string CacheName = "recursive";
+
+    private readonly DnsCacheStore<
         (DnsName Name, DnsResourceRecordTypeEnum Type, DnsClassEnum Class),
         RecursiveCacheEntry
-    > _entries = new();
+    > _store = new(
+        CacheName,
+        key => key.Name,
+        () => options.CurrentValue.MaxCacheEntries,
+        // A TTL-expired entry is kept for this resolver's own stale-serve grace window (zero,
+        // when RFC 8767 serve-stale is disabled entirely) -- TryGetStale needs it until then.
+        () =>
+            options.CurrentValue.EnableServeStale
+                ? options.CurrentValue.MaxStaleServeAge
+                : TimeSpan.Zero,
+        eventPublisher,
+        "expired-or-capacity"
+    );
 
-    /// <summary>
-    ///     This field tracks when each entry was last actually looked up (a real hit, fresh or
-    ///     stale), independent of <see cref="_entries" /> itself -- the "is this name still being
-    ///     queried" signal <see cref="GetPrefetchCandidates" /> needs, and that a
-    ///     <see cref="RecursiveCacheEntry" /> record's own immutable shape has no room for without
-    ///     turning every write into a full replace on every single read.
-    /// </summary>
-    private readonly ConcurrentDictionary<
-        (DnsName Name, DnsResourceRecordTypeEnum Type, DnsClassEnum Class),
-        DateTimeOffset
-    > _lastAccessedUtc = new();
+    /// <inheritdoc />
+    public string Name => CacheName;
 
     /// <inheritdoc />
     public RecursiveCacheEntry TryGet(
         DnsName name,
         DnsResourceRecordTypeEnum type,
         DnsClassEnum recordClass
-    )
-    {
-        (DnsName, DnsResourceRecordTypeEnum, DnsClassEnum) key = (name, type, recordClass);
-
-        if (_entries.TryGetValue(key, out RecursiveCacheEntry entry) && !entry.IsExpired)
-        {
-            _lastAccessedUtc[key] = DateTimeOffset.UtcNow;
-            return entry;
-        }
-
-        return null;
-    }
+    ) =>
+        _store.TryGetFresh((name, type, recordClass), out RecursiveCacheEntry entry) ? entry : null;
 
     /// <inheritdoc />
     public RecursiveCacheEntry TryGetStale(
@@ -65,19 +72,10 @@ public sealed class RecursiveCache(
         DnsResourceRecordTypeEnum type,
         DnsClassEnum recordClass,
         TimeSpan maxStaleAge
-    )
-    {
-        (DnsName, DnsResourceRecordTypeEnum, DnsClassEnum) key = (name, type, recordClass);
-
-        if (
-            !_entries.TryGetValue(key, out RecursiveCacheEntry entry)
-            || DateTimeOffset.UtcNow >= entry.ExpiresAtUtc + maxStaleAge
-        )
-            return null;
-
-        _lastAccessedUtc[key] = DateTimeOffset.UtcNow;
-        return entry;
-    }
+    ) =>
+        _store.TryGetStale((name, type, recordClass), maxStaleAge, out RecursiveCacheEntry entry)
+            ? entry
+            : null;
 
     /// <inheritdoc />
     public void StorePositive(
@@ -93,13 +91,16 @@ public sealed class RecursiveCache(
 
         uint ttlSeconds = records.Min(record => record.TimeToLive);
 
-        _entries[(name, type, recordClass)] = new RecursiveCacheEntry(
-            false,
-            records,
-            dnssecRecords,
-            DnsResponseCodeEnum.NoError,
-            null,
-            DateTimeOffset.UtcNow.AddSeconds(ttlSeconds)
+        _store.Set(
+            (name, type, recordClass),
+            new RecursiveCacheEntry(
+                false,
+                records,
+                dnssecRecords,
+                DnsResponseCodeEnum.NoError,
+                null,
+                _store.UtcNow.AddSeconds(ttlSeconds)
+            )
         );
     }
 
@@ -121,71 +122,30 @@ public sealed class RecursiveCache(
 
         uint ttlSeconds = Math.Min(soa.TimeToLive, soaData.MinimumTtlSeconds);
 
-        _entries[(name, type, recordClass)] = new RecursiveCacheEntry(
-            true,
-            [],
-            dnssecRecords,
-            responseCode,
-            soa,
-            DateTimeOffset.UtcNow.AddSeconds(ttlSeconds)
+        _store.Set(
+            (name, type, recordClass),
+            new RecursiveCacheEntry(
+                true,
+                [],
+                dnssecRecords,
+                responseCode,
+                soa,
+                _store.UtcNow.AddSeconds(ttlSeconds)
+            )
         );
     }
 
+    /// <inheritdoc cref="IRecursiveCache.EvictExpiredAndOverCapacity" />
+    public int EvictExpiredAndOverCapacity() => _store.EvictExpiredAndOverCapacity();
+
     /// <inheritdoc />
-    public int EvictExpiredAndOverCapacity()
-    {
-        int evictedCount = 0;
+    public DnsCacheStatistics GetStatistics() => _store.GetStatistics();
 
-        // A TTL-expired entry is only actually removed once it has also aged past this
-        // resolver's own configured stale-serve grace window (zero, when RFC 8767 serve-stale is
-        // disabled entirely) -- TryGetStale's own future callers need it to still be here until
-        // then. Over-capacity pressure below still evicts an entry regardless of that grace
-        // window; a hard memory ceiling takes priority over stale-serve reach.
-        TimeSpan staleRetention = options.CurrentValue.EnableServeStale
-            ? options.CurrentValue.MaxStaleServeAge
-            : TimeSpan.Zero;
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+    /// <inheritdoc />
+    public int Flush() => _store.Flush();
 
-        foreach (
-            var pair in _entries
-                .Where(pair => now >= pair.Value.ExpiresAtUtc + staleRetention)
-                .ToList()
-        )
-            if (_entries.TryRemove(pair.Key, out _))
-            {
-                _lastAccessedUtc.TryRemove(pair.Key, out _);
-                evictedCount++;
-            }
-
-        int overCapacityCount = _entries.Count - options.CurrentValue.MaxCacheEntries;
-
-        if (overCapacityCount > 0)
-        {
-            // Evict whichever remaining entries expire soonest first -- a simple, if not
-            // perfectly LRU, approximation of "least likely to still be useful."
-            List<(DnsName Name, DnsResourceRecordTypeEnum Type, DnsClassEnum Class)> keysToEvict =
-            [
-                .. _entries
-                    .OrderBy(pair => pair.Value.ExpiresAtUtc)
-                    .Take(overCapacityCount)
-                    .Select(pair => pair.Key),
-            ];
-
-            foreach (var key in keysToEvict)
-                if (_entries.TryRemove(key, out _))
-                {
-                    _lastAccessedUtc.TryRemove(key, out _);
-                    evictedCount++;
-                }
-        }
-
-        if (evictedCount > 0)
-            eventPublisher.Publish(
-                new DnsCacheEvictedEvent(DateTimeOffset.UtcNow, "expired-or-capacity", evictedCount)
-            );
-
-        return evictedCount;
-    }
+    /// <inheritdoc />
+    public int Remove(DnsName name) => _store.RemoveName(name);
 
     /// <inheritdoc />
     public IReadOnlyList<(
@@ -194,19 +154,20 @@ public sealed class RecursiveCache(
         DnsClassEnum Class
     )> GetPrefetchCandidates(TimeSpan prefetchWindow, TimeSpan recentAccessWindow)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = _store.UtcNow;
 
         return
         [
-            .. _entries
-                .Where(pair =>
-                    !pair.Value.IsNegative
-                    && !pair.Value.IsExpired
-                    && pair.Value.ExpiresAtUtc - now <= prefetchWindow
-                    && _lastAccessedUtc.TryGetValue(pair.Key, out DateTimeOffset lastAccessed)
+            .. _store
+                .Snapshot()
+                .Where(item =>
+                    !item.Entry.IsNegative
+                    && now < item.Entry.ExpiresAtUtc
+                    && item.Entry.ExpiresAtUtc - now <= prefetchWindow
+                    && item.LastAccessedUtc is { } lastAccessed
                     && now - lastAccessed <= recentAccessWindow
                 )
-                .Select(pair => pair.Key),
+                .Select(item => item.Key),
         ];
     }
 }

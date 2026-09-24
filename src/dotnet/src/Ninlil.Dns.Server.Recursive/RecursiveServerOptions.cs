@@ -188,7 +188,7 @@ public class RecursiveServerOptions
     /// <summary>
     ///     This property contains how long past its own TTL expiry a cache entry remains eligible
     ///     to be served stale (see <see cref="EnableServeStale" />) before
-    ///     <see cref="Caching.RecursiveCacheEvictionService" /> discards it for good. Defaults to
+    ///     <c>Ninlil.Dns.Server.Core.Caching.DnsCacheEvictionService</c> discards it for good. Defaults to
     ///     24 hours -- RFC 8767 §4 recommends a resolver keep expired data available "for a period
     ///     on the order of a day or more" while cautioning against keeping it indefinitely (its own
     ///     illustrative examples cap a stale-serve window at a small number of days); one day is

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Recursive.Caching;
 using Ninlil.Dns.Server.Recursive.Resolution;
@@ -38,8 +39,14 @@ public static class ServiceCollectionRecursiveExtension
         // IRecursiveCache is a singleton -- an iterative resolution's whole point is to build up
         // shared knowledge (name servers, glue, answers) that every future query benefits from,
         // not something scoped to a single request.
-        instance.AddSingleton<IRecursiveCache, RecursiveCache>();
-        instance.AddHostedService<RecursiveCacheEvictionService>();
+        instance.AddSingleton<RecursiveCache>();
+        instance.AddSingleton<IRecursiveCache>(provider =>
+            provider.GetRequiredService<RecursiveCache>()
+        );
+
+        // The same instance is also an IDnsCache, which is how Server.Core's own
+        // DnsCacheEvictionService sweeps it and the cache REST endpoint reports and flushes it.
+        instance.AddSingleton<IDnsCache>(provider => provider.GetRequiredService<RecursiveCache>());
         instance.AddHostedService<RecursiveCachePrefetchService>();
 
         instance.AddSingleton<IUpstreamDnsClient, UpstreamDnsClient>();

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
-import { RecursiveSettingsService } from '../../../api-client';
+import { DnsCacheService, RecursiveSettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
   RecursiveSettingsComponent,
@@ -19,6 +19,7 @@ describe('RecursiveSettingsComponent', () => {
     apiRecursiveSettingsPatch: jasmine.Spy;
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
+  let cacheApiSpy: { apiDnsCacheGet: jasmine.Spy };
 
   async function createComponent(
     configureApi?: () => void,
@@ -29,6 +30,10 @@ describe('RecursiveSettingsComponent', () => {
       'apiRecursiveSettingsPatch',
     ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
+    cacheApiSpy = jasmine.createSpyObj('DnsCacheService', ['apiDnsCacheGet']);
+    cacheApiSpy.apiDnsCacheGet.and.returnValue(
+      of([{ name: 'forwarded', entryCount: 12, maxEntries: 10000, hits: 30, misses: 10 }]),
+    );
 
     apiSpy.apiRecursiveSettingsGet.and.returnValue(
       of({
@@ -62,6 +67,7 @@ describe('RecursiveSettingsComponent', () => {
       providers: [
         { provide: RecursiveSettingsService, useValue: apiSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        { provide: DnsCacheService, useValue: cacheApiSpy },
       ],
     }).compileComponents();
 
@@ -71,6 +77,15 @@ describe('RecursiveSettingsComponent', () => {
     fixture.detectChanges();
     return fixture;
   }
+
+  it('shows the answer cache card below the settings form', async () => {
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(cacheApiSpy.apiDnsCacheGet).toHaveBeenCalled();
+    expect(element.querySelector('app-dns-cache-card')).not.toBeNull();
+    expect(element.querySelector('tr[data-cache="forwarded"]')?.textContent).toContain('75%');
+  });
 
   it('loads the current effective settings on init', async () => {
     const fixture = await createComponent();

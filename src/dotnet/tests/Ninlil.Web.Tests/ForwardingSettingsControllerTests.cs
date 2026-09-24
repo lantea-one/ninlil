@@ -69,6 +69,58 @@ public class ForwardingSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         Assert.False(detail.Enable);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.HealthCheckInterval);
         Assert.Equal(TimeSpan.FromSeconds(3), detail.PerForwarderTimeout);
+
+        // The forwarded-answer cache, unlike forwarding itself, is on by default.
+        Assert.True(detail.EnableCache);
+        Assert.Equal(10000, detail.MaxCacheEntries);
+    }
+
+    [Fact]
+    public async Task Patch_WithCacheSettings_WritesThemToTheConfigurationFile()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    "/api/forwarding-settings",
+                    new { enableCache = false, maxCacheEntries = 2500 }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            JsonObject root = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+            JsonObject section = (JsonObject)root["DnsServer"]["Forwarding"];
+            Assert.False(section["EnableCache"].GetValue<bool>());
+            Assert.Equal(2500, section["MaxCacheEntries"].GetValue<int>());
+        }
+        finally
+        {
+            // Restored so later tests in this shared host see the defaults again.
+            await client.SendAsync(
+                PatchRequest(
+                    "/api/forwarding-settings",
+                    new { enableCache = true, maxCacheEntries = 10000 }
+                )
+            );
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData("lots")]
+    public async Task Patch_WithAnInvalidMaxCacheEntries_ReturnsBadRequest(object maxCacheEntries)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/forwarding-settings", new { maxCacheEntries })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

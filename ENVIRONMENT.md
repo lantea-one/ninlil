@@ -364,6 +364,8 @@ General upstream forwarding with health-checked failover — independent of the 
 | `NINLIL_DNS_SERVER_FORWARDING_FAILOVER_STRATEGY` | How multiple forwarders are chosen between: `TryInOrder` or `HealthCheckedRoundRobin`. | `HealthCheckedRoundRobin` |
 | `NINLIL_DNS_SERVER_FORWARDING_HEALTH_CHECK_INTERVAL` | How often each forwarder's health is probed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_FORWARDING_PER_FORWARDER_TIMEOUT` | Per-query timeout against a single forwarder before failing over. | `00:00:03` |
+| `NINLIL_DNS_SERVER_FORWARDING_ENABLE_CACHE` | Whether forwarded answers are cached until their TTL runs out (negative answers per RFC 2308, capped at 3 hours). Filtering and rewrites still apply per client on a cached answer. Serve-stale follows `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_SERVE_STALE`. | `true` |
+| `NINLIL_DNS_SERVER_FORWARDING_MAX_CACHE_ENTRIES` | Upper bound on how many forwarded answers are cached; the soonest-to-expire are evicted first. | `10000` |
 
 ## Client presence & MAC vendor lookup
 

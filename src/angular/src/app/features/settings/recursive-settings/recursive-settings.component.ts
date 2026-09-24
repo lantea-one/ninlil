@@ -34,6 +34,7 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import { DnsCacheCardComponent } from '../dns-cache-card/dns-cache-card.component';
 
 /** One root hint server row: a name server's name and its addresses, comma-separated. */
 type RootHintServerFormGroup = FormGroup<{
@@ -80,10 +81,15 @@ const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
  * startup or first seed by design. Those two lists are edited as repeatable rows at the bottom of
  * the form, and are only sent when they actually changed, so saving an unrelated field never
  * triggers the backend's restart-required note.
+ *
+ * <p>Below the form, {@link DnsCacheCardComponent} shows the answer caches themselves (forwarded and
+ * recursive) and lets an operator flush them -- this page already owns the cache size and
+ * serve-stale settings, and its permissions are the ones the cache endpoints use.
  */
 @Component({
   selector: 'app-recursive-settings',
   imports: [
+    DnsCacheCardComponent,
     IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,

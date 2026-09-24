@@ -1,6 +1,7 @@
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Recursive.Caching;
 using Ninlil.Dns.Server.Recursive.Tests.Fakes;
@@ -473,5 +474,84 @@ public class RecursiveCacheTests
             (name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet),
             candidates
         );
+    }
+
+    [Fact]
+    public void AsAnIDnsCache_ReportsStatisticsUnderTheRecursiveName()
+    {
+        IDnsCache cache = CreateCache(maxEntries: 500);
+        RecursiveCache recursive = (RecursiveCache)cache;
+        DnsName name = DnsName.Parse("example.com");
+
+        recursive.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 300)],
+            []
+        );
+        recursive.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet);
+        recursive.TryGet(name, DnsResourceRecordTypeEnum.Aaaa, DnsClassEnum.Internet);
+
+        DnsCacheStatistics statistics = cache.GetStatistics();
+        Assert.Equal("recursive", cache.Name);
+        Assert.Equal(1, statistics.EntryCount);
+        Assert.Equal(500, statistics.MaxEntries);
+        Assert.Equal(1, statistics.Hits);
+        Assert.Equal(1, statistics.Misses);
+    }
+
+    [Fact]
+    public void AsAnIDnsCache_FlushEmptiesTheCache()
+    {
+        RecursiveCache cache = CreateCache();
+        DnsName name = DnsName.Parse("example.com");
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 300)],
+            []
+        );
+
+        Assert.Equal(1, cache.Flush());
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+    }
+
+    [Fact]
+    public void AsAnIDnsCache_RemoveForgetsEveryTypeForOneNameOnly()
+    {
+        RecursiveCache cache = CreateCache();
+        DnsName name = DnsName.Parse("example.com");
+        DnsName other = DnsName.Parse("www.example.com");
+        DnsResourceRecord soa = BuildSoaRecord(name, 300);
+
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 300)],
+            []
+        );
+        cache.StoreNegative(
+            name,
+            DnsResourceRecordTypeEnum.Aaaa,
+            DnsClassEnum.Internet,
+            DnsResponseCodeEnum.NoError,
+            soa,
+            []
+        );
+        cache.StorePositive(
+            other,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(other, 300)],
+            []
+        );
+
+        Assert.Equal(2, cache.Remove(DnsName.Parse("Example.COM")));
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
+        Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.Aaaa, DnsClassEnum.Internet));
+        Assert.NotNull(cache.TryGet(other, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
     }
 }

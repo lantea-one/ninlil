@@ -1,5 +1,6 @@
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Server.Core.Caching;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Recursive.Caching;
@@ -38,7 +39,7 @@ public sealed record RecursiveCacheEntry(
     DnsResponseCodeEnum NegativeResponseCode,
     DnsResourceRecord Soa,
     DateTimeOffset ExpiresAtUtc
-)
+) : IDnsCacheEntry
 {
     /// <summary>
     ///     This property indicates whether this entry is still valid to serve from cache.

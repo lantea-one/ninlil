@@ -55,6 +55,38 @@
           round robin" -- "Try in order" tries every configured forwarder in its own configured
           order, with no background probing.
         </div>
+
+        <c-form-check class="mt-3 mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="forwarding-enable-cache"
+            formControlName="enableCache"
+          />
+          <label cFormCheckLabel for="forwarding-enable-cache"
+            >Cache forwarded answers until their TTL runs out</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="forwarding-max-cache-entries">Cache size (answers)</label>
+            <input
+              cFormControl
+              id="forwarding-max-cache-entries"
+              type="number"
+              min="1"
+              formControlName="maxCacheEntries"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="override-note">
+          Filtering and rewrites still apply to every client on a cached answer. Expired answers are
+          served stale during an upstream outage when serve-stale is on. See cache statistics, and
+          flush the cache, on the
+          <a routerLink="/settings/recursive">Recursive Resolver</a> page.
+        </div>
       </form>
     </c-card-body>
 

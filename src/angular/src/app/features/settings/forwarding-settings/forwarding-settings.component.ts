@@ -18,6 +18,7 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { firstValueFrom } from 'rxjs';
+import { RouterLink } from '@angular/router';
 import { ForwarderFailoverStrategyEnum, ForwardingSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
@@ -29,7 +30,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * (`forwardingsettings:read`/`forwardingsettings:write`). Forwarder entries themselves (the actual
  * upstream addresses) are a separate page (Forwarders); this page covers only whether the
  * forwarding resolver consults them at query time at all, plus how it picks among multiple
- * configured forwarders.
+ * configured forwarders, and whether (and how many) forwarded answers are cached. The cache's
+ * statistics and flush controls live on the Recursive Resolver page, beside the serve-stale
+ * setting forwarded answers also follow.
  *
  * <p>Every field this form edits takes effect immediately, with no restart -- `ForwarderQueryResolver`
  * is now always constructed and registered as a query resolver regardless of `Enable`'s own value
@@ -42,6 +45,7 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
   imports: [
     IfPermissionDirective,
     ReactiveFormsModule,
+    RouterLink,
     AlertComponent,
     ButtonDirective,
     CardBodyComponent,
@@ -86,6 +90,8 @@ export class ForwardingSettingsComponent implements OnInit {
     ],
     healthCheckInterval: ['00:00:30', [Validators.required]],
     perForwarderTimeout: ['00:00:03', [Validators.required]],
+    enableCache: [true],
+    maxCacheEntries: [10_000, [Validators.required, Validators.min(1)]],
   });
 
   ngOnInit(): void {
@@ -125,6 +131,8 @@ export class ForwardingSettingsComponent implements OnInit {
           settings.failoverStrategy ?? ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin,
         healthCheckInterval: settings.healthCheckInterval ?? '00:00:30',
         perForwarderTimeout: settings.perForwarderTimeout ?? '00:00:03',
+        enableCache: settings.enableCache ?? true,
+        maxCacheEntries: settings.maxCacheEntries ?? 10_000,
       });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load forwarding settings.'));

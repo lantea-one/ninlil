@@ -39,7 +39,7 @@ public sealed class RecursiveCachePrefetchService(
 {
     /// <summary>
     ///     This constant contains how often this service sweeps the cache for prefetch
-    ///     candidates. Deliberately much shorter than <see cref="RecursiveCacheEvictionService" />'s
+    ///     candidates. Deliberately much shorter than <c>DnsCacheEvictionService</c>'s
     ///     own one-minute sweep interval: <see cref="RecursiveServerOptions.PrefetchWindow" />'s
     ///     own default is only 10 seconds, so a sweep cadence anywhere near a minute would miss
     ///     most entries during the one brief window they actually qualify in. Five seconds

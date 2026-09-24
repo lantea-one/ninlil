@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ForwardingSettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
@@ -29,6 +30,8 @@ describe('ForwardingSettingsComponent', () => {
         failoverStrategy: 'HealthCheckedRoundRobin',
         healthCheckInterval: '00:00:30',
         perForwarderTimeout: '00:00:03',
+        enableCache: false,
+        maxCacheEntries: 2500,
       }),
     );
     configureApi?.();
@@ -36,6 +39,7 @@ describe('ForwardingSettingsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ForwardingSettingsComponent],
       providers: [
+        provideRouter([]),
         { provide: ForwardingSettingsService, useValue: apiSpy },
         { provide: NotificationService, useValue: notificationSpy },
       ],
@@ -75,6 +79,31 @@ describe('ForwardingSettingsComponent', () => {
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('takes effect immediately'),
     );
+  });
+
+  it('loads and saves the answer cache settings', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiForwardingSettingsPatch.and.returnValue(of({ note: 'saved' }));
+    });
+    const form = fixture.componentInstance.form;
+
+    expect(form.controls.enableCache.value).toBeFalse();
+    expect(form.controls.maxCacheEntries.value).toBe(2500);
+
+    form.patchValue({ enableCache: true, maxCacheEntries: 5000 });
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiForwardingSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ enableCache: true, maxCacheEntries: 5000 }),
+    });
+  });
+
+  it('rejects a cache size below one', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.patchValue({ maxCacheEntries: 0 });
+
+    expect(fixture.componentInstance.form.controls.maxCacheEntries.valid).toBeFalse();
   });
 
   it('rejects a malformed duration', async () => {

@@ -13700,6 +13700,198 @@
         }
       }
     },
+    "/api/dns-cache": {
+      "get": {
+        "tags": [
+          "DnsCache"
+        ],
+        "summary": "This action reports every cache's size and hit rate.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DnsCacheDetail"
+                  }
+                },
+                "example": [
+                  {
+                    "name": "forwarded",
+                    "entryCount": 1842,
+                    "maxEntries": 10000,
+                    "hits": 51377,
+                    "misses": 9120
+                  },
+                  {
+                    "name": "recursive",
+                    "entryCount": 27,
+                    "maxEntries": 100000,
+                    "hits": 12,
+                    "misses": 40
+                  }
+                ]
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DnsCacheDetail"
+                  }
+                },
+                "example": [
+                  {
+                    "name": "forwarded",
+                    "entryCount": 1842,
+                    "maxEntries": 10000,
+                    "hits": 51377,
+                    "misses": 9120
+                  },
+                  {
+                    "name": "recursive",
+                    "entryCount": 27,
+                    "maxEntries": 100000,
+                    "hits": 12,
+                    "misses": 40
+                  }
+                ]
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DnsCacheDetail"
+                  }
+                },
+                "example": [
+                  {
+                    "name": "forwarded",
+                    "entryCount": 1842,
+                    "maxEntries": 10000,
+                    "hits": 51377,
+                    "misses": 9120
+                  },
+                  {
+                    "name": "recursive",
+                    "entryCount": 27,
+                    "maxEntries": 100000,
+                    "hits": 12,
+                    "misses": 40
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "DnsCache"
+        ],
+        "summary": "This action empties every cache, or only the one named by cache,\nand resets its hit and miss counters. The next query for any name goes upstream.",
+        "parameters": [
+          {
+            "name": "cache",
+            "in": "query",
+            "description": "A cache name (`forwarded` or `recursive`) to flush alone; omit to flush every cache.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dns-cache/entries/{name}": {
+      "delete": {
+        "tags": [
+          "DnsCache"
+        ],
+        "summary": "This action forgets every cached answer for exactly one name -- every record type,\nand in the forwarded cache every upstream set -- so the next query for it goes\nupstream. Names below it are left alone. Removing a name that is not cached is not an\nerror; it simply removes nothing.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The name to forget, for example `www.example.com`; a trailing dot is optional.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache",
+            "in": "query",
+            "description": "A cache name to remove it from alone; omit to remove it from every cache.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCacheRemovalResult"
+                },
+                "example": {
+                  "removedEntryCount": 3
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/client-static-address-mappings": {
       "get": {
         "tags": [
@@ -18966,7 +19158,9 @@
                   "enable": true,
                   "failoverStrategy": "HealthCheckedRoundRobin",
                   "healthCheckInterval": "00:00:30",
-                  "perForwarderTimeout": "00:00:03"
+                  "perForwarderTimeout": "00:00:03",
+                  "enableCache": true,
+                  "maxCacheEntries": 10000
                 }
               },
               "application/json": {
@@ -18977,7 +19171,9 @@
                   "enable": true,
                   "failoverStrategy": "HealthCheckedRoundRobin",
                   "healthCheckInterval": "00:00:30",
-                  "perForwarderTimeout": "00:00:03"
+                  "perForwarderTimeout": "00:00:03",
+                  "enableCache": true,
+                  "maxCacheEntries": 10000
                 }
               },
               "text/json": {
@@ -18988,7 +19184,9 @@
                   "enable": true,
                   "failoverStrategy": "HealthCheckedRoundRobin",
                   "healthCheckInterval": "00:00:30",
-                  "perForwarderTimeout": "00:00:03"
+                  "perForwarderTimeout": "00:00:03",
+                  "enableCache": true,
+                  "maxCacheEntries": 10000
                 }
               }
             }
@@ -40839,6 +41037,50 @@
         "additionalProperties": false,
         "description": "This class carries the fields used to create or fully replace a per-client/network\naccess-control rule (`POST`/`PUT /api/access-control-rules`)."
       },
+      "DnsCacheDetail": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The cache's short name, which the flush and remove actions accept to address it alone.",
+            "nullable": true
+          },
+          "entryCount": {
+            "type": "integer",
+            "description": "How many entries it holds right now, including expired ones kept for serve-stale.",
+            "format": "int32"
+          },
+          "maxEntries": {
+            "type": "integer",
+            "description": "The configured size bound it is trimmed back to.",
+            "format": "int32"
+          },
+          "hits": {
+            "type": "integer",
+            "description": "Lookups that found a fresh entry since startup or the last flush.",
+            "format": "int64"
+          },
+          "misses": {
+            "type": "integer",
+            "description": "Lookups that found nothing fresh over the same period.",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record is the REST representation of one in-memory DNS answer cache on this node:\nthe forwarded-response cache (`forwarded`) or the recursive resolver's cache\n(`recursive`). The counts are this node's only; caches are never shared across a\ncluster."
+      },
+      "DnsCacheRemovalResult": {
+        "type": "object",
+        "properties": {
+          "removedEntryCount": {
+            "type": "integer",
+            "description": "How many cache entries were removed, across every cache acted on.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "This record reports what a flush or a single-name removal did."
+      },
       "DnsClassEnum": {
         "enum": [
           "IN",
@@ -42324,22 +42566,34 @@
         "type": "object",
         "properties": {
           "enable": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether configured forwarders are consulted at all."
           },
           "failoverStrategy": {
             "$ref": "#/components/schemas/ForwarderFailoverStrategyEnum"
           },
           "healthCheckInterval": {
             "type": "string",
+            "description": "How often each forwarder's health is probed.",
             "format": "date-span"
           },
           "perForwarderTimeout": {
             "type": "string",
+            "description": "How long one forwarder may take before the next is tried.",
             "format": "date-span"
+          },
+          "enableCache": {
+            "type": "boolean",
+            "description": "Whether forwarded answers are cached."
+          },
+          "maxCacheEntries": {
+            "type": "integer",
+            "description": "How many forwarded answers may be cached before the soonest-to-expire are evicted.",
+            "format": "int32"
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST representation of this host's own currently-effective\n`ForwardingOptions`. No secret material is involved, so this record's own fields are\nthe exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries\nthemselves (the actual upstream addresses) are a separate resource, already fully\nCRUD-able via `ForwardersController` -- this record covers only the engine-level\ntoggle and failover/health-check tuning that applies across every configured forwarder."
+        "description": "This record is the REST representation of this host's own currently-effective\n`ForwardingOptions`. No secret material is involved, so this record's own fields are\nthe exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries\nthemselves (the actual upstream addresses) are a separate resource, already fully\nCRUD-able via `ForwardersController` -- this record covers only the engine-level\ntoggle, failover/health-check tuning and forwarded-answer cache settings that apply across\nevery configured forwarder."
       },
       "IdentitySettingsDetail": {
         "type": "object",
@@ -45222,6 +45476,9 @@
     },
     {
       "name": "DnsAccessControlRules"
+    },
+    {
+      "name": "DnsCache"
     },
     {
       "name": "DnsClientStaticAddressMappings"

@@ -110,6 +110,8 @@ export * from './dns64SettingsDetail';
 export * from './dnsAccessControlRuleDetail';
 export * from './dnsAccessControlRuleDetailPagedResult';
 export * from './dnsAccessControlRuleWriteRequest';
+export * from './dnsCacheDetail';
+export * from './dnsCacheRemovalResult';
 export * from './dnsClassEnum';
 export * from './dnsClientDeviceIconEnum';
 export * from './dnsClientOriginEnum';

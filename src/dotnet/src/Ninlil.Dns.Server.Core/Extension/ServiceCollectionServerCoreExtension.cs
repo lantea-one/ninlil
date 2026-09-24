@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.ClientSubnet;
 using Ninlil.Dns.Server.Core.Cookies;
 using Ninlil.Dns.Server.Core.Dns64;
@@ -92,6 +93,10 @@ public static class ServiceCollectionServerCoreExtension
         // references registers the transport itself; this project only needs the consumer loop
         // to exist so that registration has somewhere to plug into.
         instance.AddHostedService<BrokerEventConsumerService>();
+
+        // One sweep for every IDnsCache the resolver projects register (the recursive cache and
+        // the forwarded-response cache); with none registered it simply has nothing to sweep.
+        instance.AddHostedService<DnsCacheEvictionService>();
 
         // DnsQueryProcessingPipeline is likewise registered once, as a singleton, so that a
         // transport can inject it directly to call EnqueueAsync, while also being started and

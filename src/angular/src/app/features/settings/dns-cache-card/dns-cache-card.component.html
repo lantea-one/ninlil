@@ -1,0 +1,112 @@
+<c-card class="cache-card">
+  <c-card-header class="d-flex justify-content-between align-items-center">
+    <strong>Answer cache</strong>
+    <button
+      cButton
+      size="sm"
+      variant="ghost"
+      color="secondary"
+      aria-label="Refresh cache statistics"
+      [disabled]="loading() || busy()"
+      (click)="load()"
+    >
+      <svg cIcon name="cilReload" size="sm"></svg>
+      Refresh
+    </button>
+  </c-card-header>
+
+  <c-card-body>
+    <p cFormText class="cache-intro">
+      Answers from forwarders and from recursive resolution are kept until their TTL runs out, so a
+      repeat lookup is answered locally. Filtering and rewrites still apply to every client on a
+      cached answer. These figures are for this server only; other cluster nodes keep their own
+      cache.
+    </p>
+
+    @if (errorMessage()) {
+      <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+    }
+
+    @if (loading() && caches().length === 0) {
+      <c-spinner class="loading-spinner" />
+    } @else if (caches().length > 0) {
+      <table cTable responsive class="cache-table">
+        <thead>
+          <tr>
+            <th scope="col">Cache</th>
+            <th scope="col" class="numeric">Entries</th>
+            <th scope="col" class="numeric">Limit</th>
+            <th scope="col" class="numeric">Hits</th>
+            <th scope="col" class="numeric">Misses</th>
+            <th scope="col" class="numeric">Hit rate</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (cache of caches(); track cache.name) {
+            <tr [attr.data-cache]="cache.name">
+              <td>{{ label(cache) }}</td>
+              <td class="numeric">{{ cache.entryCount ?? 0 }}</td>
+              <td class="numeric">{{ cache.maxEntries ?? 0 }}</td>
+              <td class="numeric">{{ cache.hits ?? 0 }}</td>
+              <td class="numeric">{{ cache.misses ?? 0 }}</td>
+              <td class="numeric">{{ hitRate(cache) }}</td>
+              <td class="actions-cell">
+                <button
+                  *appIfPermission="'recursivesettings:write'"
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="danger"
+                  [disabled]="busy()"
+                  [attr.aria-label]="'Flush the ' + label(cache) + ' cache'"
+                  (click)="flush(cache)"
+                >
+                  Flush
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </c-card-body>
+
+  <c-card-footer *appIfPermission="'recursivesettings:write'">
+    <form class="remove-form" [formGroup]="removeForm" (ngSubmit)="removeName()">
+      <div class="field">
+        <label cLabel for="dns-cache-remove-name">Forget one name</label>
+        <input
+          cFormControl
+          id="dns-cache-remove-name"
+          formControlName="name"
+          placeholder="www.example.com"
+          autocomplete="off"
+        />
+      </div>
+      <button cButton type="submit" color="secondary" [disabled]="removeForm.invalid || busy()">
+        Remove
+      </button>
+      <button
+        cButton
+        type="button"
+        color="danger"
+        variant="outline"
+        class="flush-all"
+        [disabled]="busy()"
+        (click)="flush()"
+      >
+        Flush all
+      </button>
+    </form>
+    <div cFormText>
+      Removes every cached record type for exactly that name; names below it are kept.
+    </div>
+  </c-card-footer>
+</c-card>
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

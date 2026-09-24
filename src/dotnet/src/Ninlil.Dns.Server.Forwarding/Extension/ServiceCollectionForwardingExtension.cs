@@ -2,8 +2,10 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Forwarding;
 using Ninlil.Dns.Server.Core.Resolution;
+using Ninlil.Dns.Server.Forwarding.Caching;
 using Ninlil.Dns.Server.Forwarding.Clients;
 using Ninlil.Dns.Server.Forwarding.Definition;
 
@@ -74,6 +76,17 @@ public static class ServiceCollectionForwardingExtension
         instance.AddSingleton<ForwarderHealthTracker>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<ForwarderHealthTracker>()
+        );
+
+        // One process-wide forwarded-response cache, registered under both its resolver-facing
+        // interface and IDnsCache, so Server.Core's DnsCacheEvictionService sweeps it and the
+        // cache REST endpoint can report and flush it alongside the recursive cache.
+        instance.AddSingleton<ForwardedResponseCache>();
+        instance.AddSingleton<IForwardedResponseCache>(provider =>
+            provider.GetRequiredService<ForwardedResponseCache>()
+        );
+        instance.AddSingleton<IDnsCache>(provider =>
+            provider.GetRequiredService<ForwardedResponseCache>()
         );
 
         instance.AddSingleton<IDnsQueryResolver, ForwarderQueryResolver>();

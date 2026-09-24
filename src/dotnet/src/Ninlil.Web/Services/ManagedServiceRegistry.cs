@@ -10,6 +10,7 @@ using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.CloudSync;
 using Ninlil.Dns.Server.Authoritative.Dnssec;
 using Ninlil.Dns.Server.Authoritative.Refresh;
+using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Events.Broker;
 using Ninlil.Dns.Server.Core.Pipeline;
@@ -295,9 +296,9 @@ public sealed class ManagedServiceRegistry : IManagedServiceRegistry
                 isAlreadyRunning: true
             ),
             new ManagedServiceRegistration(
-                "recursive-cache-eviction",
+                "dns-cache-eviction",
                 ManagedServiceCategoryEnum.Background,
-                Resolve<RecursiveCacheEvictionService>(),
+                Resolve<DnsCacheEvictionService>(),
                 isAlreadyRunning: true
             ),
             new ManagedServiceRegistration(

@@ -11,13 +11,30 @@ import { ForwarderFailoverStrategyEnum } from './forwarderFailoverStrategyEnum';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ForwardingOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries themselves (the actual upstream addresses) are a separate resource, already fully CRUD-able via `ForwardersController` -- this record covers only the engine-level toggle and failover/health-check tuning that applies across every configured forwarder.
+ * This record is the REST representation of this host\'s own currently-effective `ForwardingOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries themselves (the actual upstream addresses) are a separate resource, already fully CRUD-able via `ForwardersController` -- this record covers only the engine-level toggle, failover/health-check tuning and forwarded-answer cache settings that apply across every configured forwarder.
  */
 export interface ForwardingSettingsDetail { 
+    /**
+     * Whether configured forwarders are consulted at all.
+     */
     enable?: boolean;
     failoverStrategy?: ForwarderFailoverStrategyEnum;
+    /**
+     * How often each forwarder\'s health is probed.
+     */
     healthCheckInterval?: string;
+    /**
+     * How long one forwarder may take before the next is tried.
+     */
     perForwarderTimeout?: string;
+    /**
+     * Whether forwarded answers are cached.
+     */
+    enableCache?: boolean;
+    /**
+     * How many forwarded answers may be cached before the soonest-to-expire are evicted.
+     */
+    maxCacheEntries?: number;
 }
 export namespace ForwardingSettingsDetail {
 }

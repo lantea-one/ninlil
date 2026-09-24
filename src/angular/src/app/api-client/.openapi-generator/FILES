@@ -71,6 +71,8 @@ api/dns64Settings.service.ts
 api/dns64Settings.serviceInterface.ts
 api/dnsAccessControlRules.service.ts
 api/dnsAccessControlRules.serviceInterface.ts
+api/dnsCache.service.ts
+api/dnsCache.serviceInterface.ts
 api/dnsClientStaticAddressMappings.service.ts
 api/dnsClientStaticAddressMappings.serviceInterface.ts
 api/dnsCookieSettings.service.ts
@@ -289,6 +291,8 @@ model/dns64SettingsDetail.ts
 model/dnsAccessControlRuleDetail.ts
 model/dnsAccessControlRuleDetailPagedResult.ts
 model/dnsAccessControlRuleWriteRequest.ts
+model/dnsCacheDetail.ts
+model/dnsCacheRemovalResult.ts
 model/dnsClassEnum.ts
 model/dnsClientDeviceIconEnum.ts
 model/dnsClientOriginEnum.ts

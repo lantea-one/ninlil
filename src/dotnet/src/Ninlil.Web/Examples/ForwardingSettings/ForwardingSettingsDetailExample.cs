@@ -15,13 +15,15 @@ public class ForwardingSettingsDetailExample : IExamplesProvider<ForwardingSetti
     /// <summary>
     ///     This method returns a realistic, deliberately-opted-in configuration: forwarding on,
     ///     the health-checked round-robin failover strategy (this class's own default), and this
-    ///     class's own compiled-in default timeouts.
+    ///     class's own compiled-in default timeouts and cache settings.
     /// </summary>
     public ForwardingSettingsDetail GetExamples() =>
         new(
             Enable: true,
             FailoverStrategy: ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin,
             HealthCheckInterval: TimeSpan.FromSeconds(30),
-            PerForwarderTimeout: TimeSpan.FromSeconds(3)
+            PerForwarderTimeout: TimeSpan.FromSeconds(3),
+            EnableCache: true,
+            MaxCacheEntries: 10000
         );
 }
