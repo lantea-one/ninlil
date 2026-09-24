@@ -446,7 +446,8 @@ Before considering a change done, both sides of the codebase have the same shape
    sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
 2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
 
-The pipeline runs exactly these checks, the same way. A few .NET tests start their own database
+The pipeline runs exactly these checks, each in a throwaway container of the matching toolchain
+(see [The pipeline](#the-pipeline)). A few .NET tests start their own database
 containers through Testcontainers, so the .NET suite needs Docker running. Every test listener,
 Karma's included, takes a port the operating system reports as free, never a fixed or well-known
 one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
@@ -465,6 +466,10 @@ console embedded, so build the console into `Ninlil.Web/wwwroot` first:
 
 [`.forgejo/scripts/pack-packages.sh`](./.forgejo/scripts/pack-packages.sh) builds the NuGet
 packages the same way: `.forgejo/scripts/pack-packages.sh 'Ninlil.*' packages`.
+
+Each script uses whatever Node.js or .NET SDK is installed. To use the pipeline's own toolchains
+instead, needing nothing but Docker, prefix it with `.forgejo/scripts/in-container.sh node` or
+`.forgejo/scripts/in-container.sh dotnet`.
 
 ## Releases and versioning
 
@@ -525,10 +530,12 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`archlinux` Forgejo runners, which need the .NET SDK, Node.js 24 with `npm`, a Java runtime
-(`jre-openjdk-headless`), `chromium`, `msquic`, `makepkg` (`base-devel`), Docker with buildx,
-`git`, `curl`, and `jq`. Everything runs directly on the runner except the container image, which
-Docker assembles from the prebuilt Linux binaries.
+`archlinux` Forgejo runners, which need only Docker with buildx, `git`, `curl`, and `jq`. Every
+build and test step runs in a throwaway container of one of the toolchains in
+[`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
+`makepkg`) with just the checkout mounted, through
+[`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The Arch Linux toolchain
+exists for amd64 only, so an arm64 runner runs it under emulation (`qemu-user-static-binfmt`).
 
 | Workflow | Runs on | Does |
 |---|---|---|

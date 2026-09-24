@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Builds the Angular admin console with the host's Node.js and installs its production output
+# Builds the Angular admin console with Node.js and installs its production output
 # into src/dotnet/src/Ninlil.Web/wwwroot/, where a .NET build serves it (the web host's tests) or
 # embeds it (the single-file binaries).
 #
 # `npm run build` regenerates the typed API client from the committed openapi/swagger.json
-# snapshot first, with openapi-generator-cli, so a Java runtime must be installed too.
+# snapshot first, with openapi-generator-cli, so a Java runtime must be installed too. The
+# pipeline runs it in the node toolchain container, which has both:
+#   .forgejo/scripts/in-container.sh node .forgejo/scripts/build-admin-console.sh
 #
 # Usage: build-admin-console.sh
 

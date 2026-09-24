@@ -3,17 +3,17 @@ name: 'Ninlil Pipeline'
 ## The build, test, and publish pipeline shared by every entry point: branch builds
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
-## Every 'archlinux' runner has the .NET SDK, Node.js with npm, a Java runtime, Chromium, msquic,
-## and makepkg installed, so almost everything runs directly on the runner: the .NET and admin
-## console tests, the admin console build, the self-contained binaries, the NuGet packages, and
-## the Arch Linux packages. Docker only assembles the container image, which is the prebuilt Linux
-## executables copied onto a chiseled base. Everything cross-compiles, so any runner builds every
-## platform.
+## Every build and test step runs in a throwaway container of one of the toolchains in
+## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg), through
+## .forgejo/scripts/in-container.sh, with only the checkout mounted. The runners themselves need
+## just Docker, git, curl, and jq, for the version, the release API calls, and the container
+## image, which is the prebuilt Linux executables copied onto a chiseled base. Everything
+## cross-compiles, so any runner builds every platform.
 ##
-## Tests run as the runner's unprivileged user, so they cannot bind a port below 1024; every test
-## listener (Karma's included) takes a port the operating system reports as free, so none can
-## collide with the DNS, DHCP, web, and database services the runners host, or with another copy
-## of the suite running on the same runner.
+## Tests run as the runner's unprivileged user on Docker's own network, so they can neither bind a
+## port below 1024 nor collide with the DNS, DHCP, web, and database services the runners host;
+## every test listener (Karma's included) also takes a port the operating system reports as free,
+## so two copies of the suite never meet.
 ##
 ## Job graph:
 ##
@@ -101,26 +101,33 @@ jobs:
         run: |-
           # The web host's integration tests serve the real admin console (SPA fallback routing,
           # static assets), exactly as a published host does.
-          ./.forgejo/scripts/build-admin-console.sh
+          ./.forgejo/scripts/in-container.sh node ./.forgejo/scripts/build-admin-console.sh
         shell: 'bash'
       ##
       - name: 'Format Check and Build'
         run: |-
-          dotnet tool restore
-          dotnet csharpier check .
-          dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true
+          ./.forgejo/scripts/in-container.sh dotnet bash -c '
+            set -euo pipefail
+            dotnet tool restore
+            dotnet csharpier check .
+            dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true
+          '
         shell: 'bash'
       ##
       - name: 'Run Every Test Project'
         run: |-
           # The live DNSSEC key-rollover test compresses a real rollover into two-second TTLs, so
           # it is sensitive to CPU contention while the other test projects run in parallel. It
-          # runs on its own, after everything else, rather than being skipped.
-          timing_sensitive='DnssecKeyRolloverZskPrePublishLiveTests'
-          dotnet test Ninlil.slnx --no-build --configuration Release \
-            --filter "FullyQualifiedName!~${timing_sensitive}"
-          dotnet test Ninlil.slnx --no-build --configuration Release \
-            --filter "FullyQualifiedName~${timing_sensitive}"
+          # runs on its own, after everything else, rather than being skipped. The PostgreSQL
+          # query-log tests start their own database container, hence --docker.
+          ./.forgejo/scripts/in-container.sh --docker dotnet bash -c '
+            set -euo pipefail
+            timing_sensitive="DnssecKeyRolloverZskPrePublishLiveTests"
+            dotnet test Ninlil.slnx --no-build --configuration Release \
+              --filter "FullyQualifiedName!~${timing_sensitive}"
+            dotnet test Ninlil.slnx --no-build --configuration Release \
+              --filter "FullyQualifiedName~${timing_sensitive}"
+          '
         shell: 'bash'
   ##
   test-admin-console:
@@ -135,23 +142,30 @@ jobs:
           ref: '${{ forgejo.sha }}'
       ##
       - name: 'Install Dependencies'
-        working-directory: 'src/angular'
         run: |-
-          npm ci --no-audit --no-fund
+          ./.forgejo/scripts/in-container.sh node bash -c '
+            cd src/angular
+            npm ci --no-audit --no-fund
+          '
         shell: 'bash'
       ##
       - name: 'Lint and Format Check'
-        working-directory: 'src/angular'
         run: |-
-          npm run lint
-          npm run format:check
+          ./.forgejo/scripts/in-container.sh node bash -c '
+            set -euo pipefail
+            cd src/angular
+            npm run lint
+            npm run format:check
+          '
         shell: 'bash'
       ##
       - name: 'Run the Jasmine/Karma Suite'
-        working-directory: 'src/angular'
         run: |-
           # Headless Chromium; Karma listens on a free loopback port (karma.conf.js).
-          npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
+          ./.forgejo/scripts/in-container.sh node bash -c '
+            cd src/angular
+            npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
+          '
         shell: 'bash'
   ##
   draft:
@@ -209,7 +223,7 @@ jobs:
       ##
       - name: 'Build the Admin Console'
         run: |-
-          ./.forgejo/scripts/build-admin-console.sh
+          ./.forgejo/scripts/in-container.sh node ./.forgejo/scripts/build-admin-console.sh
         shell: 'bash'
       ##
       - name: 'Build ninlil-${{ matrix.binary }}'
@@ -219,7 +233,8 @@ jobs:
           BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
         run: |-
           rm -rf dist
-          ./.forgejo/scripts/publish-binary.sh '${{ matrix.binary }}' dist
+          ./.forgejo/scripts/in-container.sh dotnet \
+            ./.forgejo/scripts/publish-binary.sh '${{ matrix.binary }}' dist
         shell: 'bash'
       ##
       - name: 'Attach to the Draft Release'
@@ -259,7 +274,7 @@ jobs:
       ##
       - name: 'Build ninlil-bin for x86_64 and aarch64'
         run: |-
-          ./.forgejo/scripts/arch-packages.sh dist
+          ./.forgejo/scripts/in-container.sh arch ./.forgejo/scripts/arch-packages.sh dist
         shell: 'bash'
       ##
       - name: 'Attach to the Draft Release'
@@ -361,7 +376,8 @@ jobs:
           BUILD_ASSEMBLY_VERSION: '${{ needs.version.outputs.assembly-version }}'
         run: |-
           rm -rf packages
-          ./.forgejo/scripts/pack-packages.sh '${{ matrix.projects }}' packages
+          ./.forgejo/scripts/in-container.sh dotnet \
+            ./.forgejo/scripts/pack-packages.sh '${{ matrix.projects }}' packages
         shell: 'bash'
       ##
       - name: 'Push to the Forgejo NuGet Registry'

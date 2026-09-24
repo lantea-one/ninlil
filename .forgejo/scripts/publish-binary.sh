@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Publishes one self-contained, single-file Ninlil executable with the host's .NET SDK.
+# Publishes one self-contained, single-file Ninlil executable with the .NET SDK. The pipeline runs
+# it in the dotnet toolchain container (in-container.sh dotnet publish-binary.sh ...).
 #
 # The executable carries the .NET runtime, every native library (extracted to a per-user cache
 # directory on first start), and the admin console (NinlilEmbedWebRoot) inside one file. macOS
@@ -7,7 +8,7 @@
 # will run them at all; that works from a Linux host too.
 #
 # The admin console's production build must already be in src/dotnet/src/Ninlil.Web/wwwroot/
-# (the pipeline exports it there from the Dockerfile's admin-console-dist target).
+# (build-admin-console.sh puts it there).
 #
 # Usage: publish-binary.sh <linux-amd64|linux-arm64|macos-amd64|macos-arm64> <output-directory>
 #

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Packs NuGet packages for a family of Ninlil's library projects with the host's .NET SDK.
+# Packs NuGet packages for a family of Ninlil's library projects with the .NET SDK. The pipeline
+# runs it in the dotnet toolchain container (in-container.sh dotnet pack-packages.sh ...).
 #
 # Every project under src/dotnet/src except the Ninlil.Web host is a reusable library. A project
 # reference between two of them becomes a NuGet dependency on the same version, so a set of

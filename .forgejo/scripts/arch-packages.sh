@@ -8,7 +8,7 @@
 # carry. The packages are built from the binaries this pipeline run just produced (the release
 # they would download from is published only after this step), and the checksums are still
 # verified against them. The package only copies files, so both architectures are built here,
-# on whatever architecture the runner has, with the runner's own makepkg.
+# with makepkg; the pipeline runs this in the arch toolchain container (in-container.sh arch ...).
 #
 # Usage: arch-packages.sh <binaries-directory>
 #
@@ -61,9 +61,8 @@ fi
 cp "${binaries}/ninlil-linux-amd64" "${package}/ninlil-${pkgver}-x86_64"
 cp "${binaries}/ninlil-linux-arm64" "${package}/ninlil-${pkgver}-aarch64"
 
-# The runners are Arch Linux, so the host's own makepkg builds the packages. -d skips the
-# (runtime-only) dependency check, and a per-architecture copy of makepkg.conf sets CARCH, so an
-# x86_64 runner builds the aarch64 package and vice versa.
+# --nodeps skips the (runtime-only) dependency check, and a per-architecture copy of makepkg.conf
+# sets CARCH, so an x86_64 makepkg builds the aarch64 package too.
 output="${work}/output"
 mkdir -p "${output}"
 (
