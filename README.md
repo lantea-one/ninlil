@@ -519,7 +519,7 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`ninlil-builder` Forgejo runners:
+`asgard` Forgejo runner:
 
 | Workflow | Runs on | Does |
 |---|---|---|

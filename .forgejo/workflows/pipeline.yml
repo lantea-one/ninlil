@@ -5,8 +5,8 @@ name: 'Ninlil Pipeline'
 ##
 ## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
 ## needs only Docker (with buildx), git, curl, and jq -- never a matching .NET, Node.js, or Java
-## installation. Every stage cross-compiles on the runner's own architecture, so any
-## 'ninlil-builder' runner can build every platform, including both container image architectures.
+## installation. Every stage cross-compiles on the runner's own architecture, so the 'asgard'
+## runner builds every platform, including both container image architectures.
 ##
 ## Job graph:
 ##
@@ -38,7 +38,7 @@ jobs:
     name: 'Compute Version'
     if: >-
       inputs.kind != 'verify'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     outputs:
       version: '${{ steps.version.outputs.version }}'
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
@@ -79,7 +79,7 @@ jobs:
   ##
   test-dotnet:
     name: 'Test .NET'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -129,7 +129,7 @@ jobs:
   ##
   test-admin-console:
     name: 'Test Admin Console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -151,7 +151,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -180,7 +180,7 @@ jobs:
     needs:
       - 'version'
       - 'draft'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     strategy:
       matrix:
         binary:
@@ -224,7 +224,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -262,7 +262,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -313,7 +313,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     strategy:
       matrix:
         include:
@@ -381,7 +381,7 @@ jobs:
       - 'arch-packages'
       - 'image'
       - 'packages'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'

@@ -22,7 +22,7 @@ jobs:
   ##
   cleanup:
     name: 'Expire Pre-Releases'
-    runs-on: 'ninlil-builder'
+    runs-on: 'asgard'
     steps:
       ##
       - name: 'Checkout Sources'
