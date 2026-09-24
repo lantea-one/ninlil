@@ -97,7 +97,13 @@
               @if (!preview.isValid) {
                 <p class="preview-error">{{ preview.error }}</p>
               } @else {
-                <p class="preview-label">Preview against a sample domain set:</p>
+                <p class="preview-label">
+                  {{
+                    sampleDomainsControl.value.trim()
+                      ? 'Preview against your test domains:'
+                      : 'Preview against a sample domain set:'
+                  }}
+                </p>
                 <div class="preview-matches">
                   @for (match of preview.matches; track match.domain) {
                     <c-badge [color]="match.isMatch ? 'danger' : 'secondary'">{{
@@ -108,6 +114,20 @@
               }
             </div>
           }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="filter-list-entry-samples">Test domains (optional)</label>
+          <input
+            cFormControl
+            id="filter-list-entry-samples"
+            [formControl]="sampleDomainsControl"
+            placeholder="ads.example.com, tracker.example.net"
+          />
+          <p class="hint">
+            Check the value against your own domains, separated by spaces or commas (up to
+            {{ maxSampleDomains }}). Only used for the preview above; it isn't saved.
+          </p>
         </div>
 
         <div class="field full-width">

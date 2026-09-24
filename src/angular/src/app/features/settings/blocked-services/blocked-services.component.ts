@@ -9,6 +9,7 @@ import {
   CardHeaderComponent,
   SpinnerComponent,
 } from '@coreui/angular';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { BlockedServiceDetail, BlockedServicesService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
@@ -36,6 +37,7 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
   selector: 'app-blocked-services',
   imports: [
     IfPermissionDirective,
+    RouterLink,
     AlertComponent,
     BadgeComponent,
     ButtonDirective,

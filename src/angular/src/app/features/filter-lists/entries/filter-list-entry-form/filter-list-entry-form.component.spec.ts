@@ -11,7 +11,11 @@ import {
   FilterPatternPreviewService,
 } from '../../../../api-client';
 import { NotificationService } from '../../../../shared/notification/notification.service';
-import { FilterListEntryFormComponent } from './filter-list-entry-form.component';
+import {
+  FilterListEntryFormComponent,
+  MAX_SAMPLE_DOMAINS,
+  parseSampleDomains,
+} from './filter-list-entry-form.component';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -245,7 +249,11 @@ describe('FilterListEntryFormComponent', () => {
     await flushPreviewDebounce();
 
     expect(previewApiSpy.apiFilterPatternPreviewPost).toHaveBeenCalledWith({
-      filterPatternPreviewRequest: { kind: DnsFilterEntryKindEnum.Domain, value: '*.example.com' },
+      filterPatternPreviewRequest: {
+        kind: DnsFilterEntryKindEnum.Domain,
+        value: '*.example.com',
+        sampleDomains: null,
+      },
     });
     expect(fixture.componentInstance.previewResult()?.matches.length).toBe(2);
   });
@@ -275,5 +283,59 @@ describe('FilterListEntryFormComponent', () => {
 
     expect(fixture.componentInstance.previewResult()).toBeNull();
     expect(fixture.componentInstance.form.controls.value.value).toBe('ads.example.com');
+  });
+  it("sends the operator's own test domains with the preview", async () => {
+    const fixture = await createComponent(null, DnsFilterListSourceEnum.Local);
+    const component = fixture.componentInstance;
+
+    component.form.controls.value.setValue('ads.example.com');
+    component.sampleDomainsControl.setValue('ads.example.com, cdn.example.net');
+    await flushPreviewDebounce();
+
+    const request =
+      previewApiSpy.apiFilterPatternPreviewPost.calls.mostRecent().args[0]
+        .filterPatternPreviewRequest;
+    expect(request.sampleDomains).toEqual(['ads.example.com', 'cdn.example.net']);
+  });
+
+  it('lets the server use its own samples when no test domains are given', async () => {
+    const fixture = await createComponent(null, DnsFilterListSourceEnum.Local);
+
+    fixture.componentInstance.form.controls.value.setValue('ads.example.com');
+    await flushPreviewDebounce();
+
+    const request =
+      previewApiSpy.apiFilterPatternPreviewPost.calls.mostRecent().args[0]
+        .filterPatternPreviewRequest;
+    expect(request.sampleDomains).toBeNull();
+  });
+
+  it('re-runs the preview when only the test domains change', async () => {
+    const fixture = await createComponent(null, DnsFilterListSourceEnum.Local);
+    const component = fixture.componentInstance;
+
+    component.form.controls.value.setValue('ads.example.com');
+    await flushPreviewDebounce();
+    const callsBefore = previewApiSpy.apiFilterPatternPreviewPost.calls.count();
+
+    component.sampleDomainsControl.setValue('tracker.example.org');
+    await flushPreviewDebounce();
+
+    expect(previewApiSpy.apiFilterPatternPreviewPost.calls.count()).toBe(callsBefore + 1);
+  });
+
+  describe('parseSampleDomains', () => {
+    it('splits on spaces, commas and new lines and drops blanks and duplicates', () => {
+      expect(parseSampleDomains(' a.example ,b.example\n\na.example  c.example ')).toEqual([
+        'a.example',
+        'b.example',
+        'c.example',
+      ]);
+    });
+
+    it('keeps at most the cap', () => {
+      const many = Array.from({ length: MAX_SAMPLE_DOMAINS + 5 }, (_, i) => `d${i}.example`);
+      expect(parseSampleDomains(many.join(' ')).length).toBe(MAX_SAMPLE_DOMAINS);
+    });
   });
 });

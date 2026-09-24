@@ -23,8 +23,9 @@ describe('EmptyStateComponent', () => {
       imports: [EmptyStateComponent, EmptyStateTestHostComponent],
     }).compileComponents();
 
-    // See PlaceholderComponent's own spec for why this seeding is necessary at unit-test scope --
-    // IconSetService holds no icons by default outside the real app bootstrap that registers them.
+    // IconSetService starts empty outside a full app bootstrap (app.config.ts's app initializer is
+    // what normally registers the icons), so seed the one icon this component renders; otherwise
+    // cIcon warns about an unregistered name on every render.
     TestBed.inject(IconSetService).icons = { cilStorage };
   });
 

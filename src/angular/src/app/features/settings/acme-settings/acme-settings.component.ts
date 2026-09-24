@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { CdkTableModule } from '@angular/cdk/table';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
@@ -58,6 +59,7 @@ function linesToArray(raw: string): string[] {
 @Component({
   selector: 'app-acme-settings',
   imports: [
+    DatePipe,
     IfPermissionDirective,
     ReactiveFormsModule,
     CdkTableModule,

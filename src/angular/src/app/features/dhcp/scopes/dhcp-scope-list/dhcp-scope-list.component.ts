@@ -176,7 +176,9 @@ export class DhcpScopeListComponent {
 
   /**
    * This method formats one scope's own utilization -- `${leased} leased, ${available}
-   * available of ${total}` -- with every figure grouped via `bigint.toLocaleString()`, which
+   * available of ${total}`, with the offered (awaiting the client's confirmation) and reserved
+   * counts added only when there are any, so a typical row stays short -- with every figure
+   * grouped via `bigint.toLocaleString()`, which
    * formats losslessly at any size (an IPv6 `AddressAssignment` scope's own total can genuinely
    * exceed `Number.MAX_SAFE_INTEGER` by many orders of magnitude, e.g. 2^64 for an ordinary
    * `/64`) since `DhcpScopeStatisticsDetail.totalSlots`/`availableSlots` are always decimal
@@ -185,7 +187,11 @@ export class DhcpScopeListComponent {
   utilizationText(statistics: DhcpScopeStatisticsDetail): string {
     const total = BigInt(statistics.totalSlots ?? '0');
     const available = BigInt(statistics.availableSlots ?? '0');
-    return `${statistics.leasedCount ?? 0} leased, ${available.toLocaleString()} available of ${total.toLocaleString()}`;
+    const parts = [`${statistics.leasedCount ?? 0} leased`];
+    if (statistics.offeredCount) parts.push(`${statistics.offeredCount} offered`);
+    if (statistics.reservedCount) parts.push(`${statistics.reservedCount} reserved`);
+    parts.push(`${available.toLocaleString()} available of ${total.toLocaleString()}`);
+    return parts.join(', ');
   }
 
   /**

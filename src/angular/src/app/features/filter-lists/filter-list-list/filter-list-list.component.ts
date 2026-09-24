@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { CdkTableModule } from '@angular/cdk/table';
 import { RouterLink } from '@angular/router';
 import {
@@ -39,6 +40,7 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-filter-list-list',
   imports: [
+    DatePipe,
     IfPermissionDirective,
     HasPermissionPipe,
     RouterLink,

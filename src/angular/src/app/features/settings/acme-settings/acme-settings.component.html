@@ -202,17 +202,30 @@
 
           <ng-container cdkColumnDef="issued">
             <th cdk-header-cell *cdkHeaderCellDef>Issued</th>
-            <td cdk-cell *cdkCellDef="let entry">{{ entry.issuedAtUtc ?? '—' }}</td>
+            <td cdk-cell *cdkCellDef="let entry">
+              {{ entry.issuedAtUtc ? (entry.issuedAtUtc | date: 'medium') : '—' }}
+            </td>
           </ng-container>
 
           <ng-container cdkColumnDef="expires">
             <th cdk-header-cell *cdkHeaderCellDef>Expires</th>
-            <td cdk-cell *cdkCellDef="let entry">{{ entry.expiresAtUtc ?? '—' }}</td>
+            <td cdk-cell *cdkCellDef="let entry">
+              {{ entry.expiresAtUtc ? (entry.expiresAtUtc | date: 'medium') : '—' }}
+            </td>
           </ng-container>
 
           <ng-container cdkColumnDef="lastFailure">
             <th cdk-header-cell *cdkHeaderCellDef>Last failure</th>
-            <td cdk-cell *cdkCellDef="let entry">{{ entry.lastFailureMessage ?? '—' }}</td>
+            <td cdk-cell *cdkCellDef="let entry">
+              @if (entry.lastFailureMessage) {
+                {{ entry.lastFailureMessage }}
+                @if (entry.lastFailureAtUtc) {
+                  <div class="failure-time">{{ entry.lastFailureAtUtc | date: 'medium' }}</div>
+                }
+              } @else {
+                —
+              }
+            </td>
           </ng-container>
 
           <ng-container cdkColumnDef="actions">

@@ -73,6 +73,33 @@
         </td>
       </ng-container>
 
+      <ng-container cdkColumnDef="completedAtUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Completed</th>
+        <td cdk-cell *cdkCellDef="let attempt">
+          {{ attempt.completedAtUtc ? (attempt.completedAtUtc | date: 'medium') : '—' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="payload">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let attempt" class="actions-cell">
+          @if (attempt.payloadJson) {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="secondary"
+              type="button"
+              cTooltip="View the request body"
+              aria-label="View the request body"
+              (click)="showPayload(attempt)"
+            >
+              <svg cIcon name="cilCode" size="sm"></svg>
+            </button>
+          }
+        </td>
+      </ng-container>
+
       <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
       <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
     </table>
@@ -85,3 +112,28 @@
     />
   </div>
 }
+
+<c-modal
+  [visible]="payloadAttempt() !== null"
+  (visibleChange)="$event || closePayload()"
+  alignment="center"
+  size="lg"
+  scrollable
+>
+  <c-modal-header>
+    <h5 cModalTitle>{{ payloadAttempt()?.eventTypeName }} request body</h5>
+  </c-modal-header>
+  <c-modal-body>
+    <p class="payload-hint">
+      The JSON body this delivery sends on every attempt, exactly as the subscriber receives it.
+    </p>
+    <pre class="payload">{{ formattedPayload() }}</pre>
+  </c-modal-body>
+  <c-modal-footer>
+    <button cButton color="secondary" variant="ghost" type="button" (click)="copyPayload()">
+      <svg cIcon [name]="payloadCopied() ? 'cilCheck' : 'cilCopy'" size="sm"></svg>
+      {{ payloadCopied() ? 'Copied' : 'Copy' }}
+    </button>
+    <button cButton color="secondary" type="button" (click)="closePayload()">Close</button>
+  </c-modal-footer>
+</c-modal>

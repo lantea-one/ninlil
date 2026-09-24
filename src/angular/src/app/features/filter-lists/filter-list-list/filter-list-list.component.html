@@ -60,6 +60,13 @@
               class="subscription-icon"
               [cTooltip]="'Subscribed from ' + list.subscriptionUrl"
             ></svg>
+            <div class="fetched">
+              {{
+                list.lastFetchedAtUtc
+                  ? 'Fetched ' + (list.lastFetchedAtUtc | date: 'medium')
+                  : 'Not fetched yet'
+              }}
+            </div>
           }
         </td>
       </ng-container>

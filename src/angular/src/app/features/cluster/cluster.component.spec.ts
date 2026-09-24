@@ -4,7 +4,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { ClusterService } from '../../api-client';
 import { NotificationService } from '../../shared/notification/notification.service';
-import { ClusterComponent } from './cluster.component';
+import { Clipboard } from '@angular/cdk/clipboard';
+import { ClusterComponent, shortThumbprint } from './cluster.component';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -41,6 +42,9 @@ describe('ClusterComponent', () => {
             remoteNodeId: 'remote-1',
             host: '10.0.1.20',
             port: 443,
+            tsigKeyName: 'cluster-office.',
+            tlsCertificateThumbprint:
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
             status: 'Healthy',
             lastHeartbeatAtUtc: '2026-09-04T14:00:00Z',
             missedHeartbeatCount: 0,
@@ -225,5 +229,32 @@ describe('ClusterComponent', () => {
 
     expect(fixture.componentInstance.statsErrorMessage()).toBe('stats unavailable');
     expect(fixture.componentInstance.nodes().length).toBe(1);
+  });
+  it("shows each peer's pinned TSIG key and shortened certificate thumbprint", async () => {
+    const fixture = await createComponent();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    expect(text).toContain('cluster-office.');
+    expect(text).toContain('01234567…89abcdef');
+  });
+
+  it('copies the full thumbprint and marks that row as copied', async () => {
+    const fixture = await createComponent();
+    const component = fixture.componentInstance;
+    const copySpy = spyOn(TestBed.inject(Clipboard), 'copy').and.returnValue(true);
+
+    component.copyThumbprint(component.nodes()[0]);
+
+    expect(copySpy).toHaveBeenCalledWith(
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    );
+    expect(component.copiedThumbprintNodeId()).toBe('node-1');
+  });
+
+  describe('shortThumbprint', () => {
+    it('leaves a short value alone and handles a missing one', () => {
+      expect(shortThumbprint('abc')).toBe('abc');
+      expect(shortThumbprint(null)).toBe('');
+    });
   });
 });

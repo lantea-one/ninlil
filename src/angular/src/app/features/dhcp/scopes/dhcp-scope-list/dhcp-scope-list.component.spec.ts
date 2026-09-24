@@ -160,8 +160,21 @@ describe('DhcpScopeListComponent', () => {
     const statistics = fixture.componentInstance.statisticsByScopeId().get('scope-1')!;
 
     expect(fixture.componentInstance.utilizationText(statistics)).toBe(
-      '12 leased, 85 available of 101',
+      '12 leased, 1 offered, 3 reserved, 85 available of 101',
     );
+  });
+
+  it('utilizationText() leaves out offered and reserved counts of zero', async () => {
+    const fixture = await createComponent();
+    const statistics = fixture.componentInstance.statisticsByScopeId().get('scope-1')!;
+
+    expect(
+      fixture.componentInstance.utilizationText({
+        ...statistics,
+        offeredCount: 0,
+        reservedCount: 0,
+      }),
+    ).toBe('12 leased, 85 available of 101');
   });
 
   it('utilizationColor() reports success/warning/danger/secondary correctly, including at astronomical IPv6 scale', async () => {

@@ -29,6 +29,14 @@
         </c-card-header>
         <c-card-body>
           <p>{{ service.description }}</p>
+          @if (service.filterListId) {
+            <a
+              *appIfPermission="'filterlists:read'"
+              class="list-link"
+              [routerLink]="['/filter-lists', service.filterListId, 'entries']"
+              >See the domains this blocks</a
+            >
+          }
         </c-card-body>
         <c-card-footer *appIfPermission="'filterlists:write'" class="d-flex justify-content-end">
           <button

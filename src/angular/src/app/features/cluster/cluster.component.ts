@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { Clipboard } from '@angular/cdk/clipboard';
 import { CdkTableModule } from '@angular/cdk/table';
 import { DatePipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -95,6 +96,7 @@ const DEFAULT_PAGE_SIZE = 25;
 })
 export class ClusterComponent {
   private readonly clusterApi = inject(ClusterService);
+  private readonly clipboard = inject(Clipboard);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
@@ -104,9 +106,14 @@ export class ClusterComponent {
     'status',
     'lastHeartbeat',
     'missedHeartbeats',
+    'identity',
     'actions',
   ];
+
+  /** The node whose thumbprint was just copied, to swap that row's copy icon for a check. */
+  readonly copiedThumbprintNodeId = signal<string | null>(null);
   readonly statuses = ClusterNodeStatusEnum;
+  readonly shortThumbprint = shortThumbprint;
 
   readonly nodes = signal<ClusterNodeDetail[]>([]);
   readonly totalCount = signal(0);
@@ -308,4 +315,21 @@ export class ClusterComponent {
       this.loading.set(false);
     }
   }
+
+  /** This method copies a peer's full pinned certificate thumbprint. */
+  copyThumbprint(node: ClusterNodeDetail): void {
+    if (!node.tlsCertificateThumbprint) return;
+    if (this.clipboard.copy(node.tlsCertificateThumbprint)) {
+      this.copiedThumbprintNodeId.set(node.id ?? null);
+    }
+  }
+}
+
+/**
+ * This function shortens a SHA-256 thumbprint to its first and last 8 hex digits, enough to
+ * compare by eye against the peer's own; the full value is in the tooltip and on the clipboard.
+ */
+export function shortThumbprint(thumbprint: string | null | undefined): string {
+  if (!thumbprint) return '';
+  return thumbprint.length <= 20 ? thumbprint : `${thumbprint.slice(0, 8)}…${thumbprint.slice(-8)}`;
 }

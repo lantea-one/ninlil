@@ -138,6 +138,34 @@ describe('SelfUpdateSettingsComponent', () => {
     expect(notificationSpy.success).toHaveBeenCalledWith(jasmine.stringContaining('2.0.0.0'));
   });
 
+  it("shows the latest release's notes, expanded when an update is available", async () => {
+    const fixture = await createComponent(() => {
+      statusApiSpy.apiSelfUpdateCheckPost.and.returnValue(
+        of({
+          configured: true,
+          currentVersion: '1.0.0.0',
+          latestKnownVersion: '2.0.0.0',
+          updateAvailable: true,
+          releaseNotes: 'Faster zone transfers.\nFixes a DHCP renewal bug.',
+          lastCheckedAtUtc: '2026-09-04T00:00:00Z',
+        }),
+      );
+    });
+
+    await fixture.componentInstance.checkNow();
+    fixture.detectChanges();
+
+    const notes: HTMLDetailsElement | null = (fixture.nativeElement as HTMLElement).querySelector(
+      'details.release-notes',
+    );
+    expect(notes?.open).toBeTrue();
+    expect(notes?.textContent).toContain('Fixes a DHCP renewal bug.');
+    // The raw ISO timestamp is formatted for reading, not shown as-is.
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      '2026-09-04T00:00:00Z',
+    );
+  });
+
   it('shows an error message when checking now fails', async () => {
     const fixture = await createComponent(() => {
       statusApiSpy.apiSelfUpdateCheckPost.and.returnValue(

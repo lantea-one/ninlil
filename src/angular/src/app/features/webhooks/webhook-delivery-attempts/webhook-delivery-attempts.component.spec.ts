@@ -7,7 +7,11 @@ import {
   WebhookDeliveryAttemptStatusEnum,
   WebhooksService,
 } from '../../../api-client';
-import { WebhookDeliveryAttemptsComponent } from './webhook-delivery-attempts.component';
+import { Clipboard } from '@angular/cdk/clipboard';
+import {
+  WebhookDeliveryAttemptsComponent,
+  formatPayload,
+} from './webhook-delivery-attempts.component';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -50,6 +54,8 @@ describe('WebhookDeliveryAttemptsComponent', () => {
             maxAttempts: 5,
             lastAttemptedAtUtc: '2026-09-10T22:03:11+00:00',
             lastHttpStatusCode: 200,
+            payloadJson: '{"zoneId":"z-1","changeKind":"Updated"}',
+            completedAtUtc: '2026-09-10T22:03:12+00:00',
           },
         ],
         skip: 0,
@@ -150,5 +156,51 @@ describe('WebhookDeliveryAttemptsComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.errorMessage()).toBe('not found');
+  });
+  it("shows a delivery's request body, pretty-printed, in the payload dialog", async () => {
+    const fixture = await createComponent();
+    const component = fixture.componentInstance;
+
+    component.showPayload(component.attempts()[0]);
+    fixture.detectChanges();
+
+    expect(component.formattedPayload()).toBe(
+      JSON.stringify({ zoneId: 'z-1', changeKind: 'Updated' }, null, 2),
+    );
+    const pre: HTMLElement | null = document.querySelector('pre.payload');
+    expect(pre?.textContent).toContain('"changeKind": "Updated"');
+
+    component.closePayload();
+    expect(component.payloadAttempt()).toBeNull();
+  });
+
+  it('copies the payload exactly as sent, not the pretty-printed form', async () => {
+    const fixture = await createComponent();
+    const component = fixture.componentInstance;
+    const copySpy = spyOn(TestBed.inject(Clipboard), 'copy').and.returnValue(true);
+
+    component.showPayload(component.attempts()[0]);
+    component.copyPayload();
+
+    expect(copySpy).toHaveBeenCalledWith('{"zoneId":"z-1","changeKind":"Updated"}');
+    expect(component.payloadCopied()).toBeTrue();
+  });
+
+  it('shows when each delivery completed', async () => {
+    const fixture = await createComponent();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    expect(fixture.componentInstance.displayedColumns).toContain('completedAtUtc');
+    expect(text).toContain('Completed');
+  });
+
+  describe('formatPayload', () => {
+    it('shows text that is not valid JSON unchanged', () => {
+      expect(formatPayload('not json')).toBe('not json');
+    });
+
+    it('shows nothing for a missing payload', () => {
+      expect(formatPayload(null)).toBe('');
+    });
   });
 });

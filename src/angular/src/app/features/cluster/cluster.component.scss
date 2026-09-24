@@ -110,3 +110,26 @@
   background: var(--cui-secondary-bg-subtle, #e2e3e5);
   color: var(--cui-secondary, #6c757d);
 }
+
+// A peer's pinned TSIG key and certificate, one labelled line each, so an operator can check them
+// against what the peer itself reports.
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  white-space: nowrap;
+  font-size: var(--ninlil-font-size-xs);
+
+  code {
+    color: inherit;
+  }
+}
+
+.identity-label {
+  min-width: 5.5rem;
+  color: var(--cui-secondary-color);
+}
+
+.copy-button {
+  padding: 0 var(--ninlil-space-1);
+}

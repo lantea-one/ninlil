@@ -24,7 +24,7 @@ export interface NavItem {
 
 /**
  * This constant contains every top-level nav destination this shell knows about, each backed by
- * its own real feature page rather than a `PlaceholderComponent` stand-in. Every permission string
+ * its own feature page. Every permission string
  * below is a real, already-checked-against-the-backend value (see `RequirePermissionAttribute`
  * usages across `Ninlil.Web/Controllers`), not a guess -- so the permission-gating pattern this
  * array demonstrates is always wired to the exact claims each real page requires. Icon names are

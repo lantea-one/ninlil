@@ -51,3 +51,24 @@
   margin: 0 var(--ninlil-space-5) var(--ninlil-space-2);
   color: var(--cui-danger, #e55353);
 }
+
+.actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.payload-hint {
+  color: var(--cui-secondary-color);
+  margin-bottom: var(--ninlil-space-2);
+}
+
+// Long JSON lines wrap instead of scrolling sideways inside the dialog.
+.payload {
+  margin: 0;
+  padding: var(--ninlil-space-2) var(--ninlil-space-3);
+  background: var(--cui-tertiary-bg);
+  border-radius: 0.25rem;
+  font-size: var(--ninlil-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

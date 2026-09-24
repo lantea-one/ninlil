@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   AlertComponent,
@@ -18,7 +19,11 @@ import {
   SpinnerComponent,
 } from '@coreui/angular';
 import { firstValueFrom } from 'rxjs';
-import { SelfUpdateService, SelfUpdateSettingsService } from '../../../api-client';
+import {
+  SelfUpdateService,
+  SelfUpdateSettingsService,
+  SelfUpdateStatusDetail,
+} from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
@@ -40,6 +45,7 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
 @Component({
   selector: 'app-self-update-settings',
   imports: [
+    DatePipe,
     IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
@@ -79,6 +85,8 @@ export class SelfUpdateSettingsComponent implements OnInit {
   readonly updateInstructions = signal<string | null>(null);
   readonly lastCheckedAtUtc = signal<string | null>(null);
   readonly lastCheckError = signal<string | null>(null);
+  /** The latest known release's notes, as the release feed wrote them (plain text). */
+  readonly releaseNotes = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
     enableAutomaticCheck: [true],
@@ -162,19 +170,13 @@ export class SelfUpdateSettingsComponent implements OnInit {
     }
   }
 
-  private applyStatus(status: {
-    currentVersion?: string | null;
-    latestKnownVersion?: string | null;
-    updateAvailable?: boolean;
-    updateInstructions?: string | null;
-    lastCheckedAtUtc?: string | null;
-    lastCheckError?: string | null;
-  }): void {
+  private applyStatus(status: SelfUpdateStatusDetail): void {
     this.currentVersion.set(status.currentVersion ?? null);
     this.latestKnownVersion.set(status.latestKnownVersion ?? null);
     this.updateAvailable.set(status.updateAvailable ?? false);
     this.updateInstructions.set(status.updateInstructions ?? null);
     this.lastCheckedAtUtc.set(status.lastCheckedAtUtc ?? null);
     this.lastCheckError.set(status.lastCheckError ?? null);
+    this.releaseNotes.set(status.releaseNotes?.trim() || null);
   }
 }

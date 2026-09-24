@@ -34,3 +34,18 @@
   color: var(--cui-secondary-color);
   font-size: var(--ninlil-font-size-base);
 }
+
+// The feed's notes are plain text; keep its own line breaks.
+.release-notes {
+  margin-bottom: var(--ninlil-space-3);
+
+  summary {
+    cursor: pointer;
+    color: var(--cui-secondary-color);
+  }
+
+  p {
+    margin: var(--ninlil-space-2) 0 0;
+    white-space: pre-line;
+  }
+}

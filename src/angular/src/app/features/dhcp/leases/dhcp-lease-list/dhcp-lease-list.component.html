@@ -74,7 +74,15 @@
 
       <ng-container cdkColumnDef="leaseExpiresAtUtc">
         <th cdk-header-cell *cdkHeaderCellDef>Expires</th>
-        <td cdk-cell *cdkCellDef="let lease">
+        <td
+          cdk-cell
+          *cdkCellDef="let lease"
+          [cTooltip]="
+            lease.leaseObtainedAtUtc
+              ? 'Obtained ' + (lease.leaseObtainedAtUtc | date: 'medium')
+              : ''
+          "
+        >
           {{ lease.leaseExpiresAtUtc ? (lease.leaseExpiresAtUtc | date: 'medium') : '—' }}
         </td>
       </ng-container>

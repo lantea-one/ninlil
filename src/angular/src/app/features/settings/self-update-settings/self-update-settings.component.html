@@ -22,12 +22,19 @@
         </p>
       }
 
+      @if (releaseNotes()) {
+        <details class="release-notes" [open]="updateAvailable()">
+          <summary>Release notes for {{ latestKnownVersion() }}</summary>
+          <p>{{ releaseNotes() }}</p>
+        </details>
+      }
+
       @if (updateInstructions()) {
         <div cFormText class="update-instructions">{{ updateInstructions() }}</div>
       }
 
       @if (lastCheckedAtUtc()) {
-        <p class="last-checked">Last checked: {{ lastCheckedAtUtc() }}</p>
+        <p class="last-checked">Last checked: {{ lastCheckedAtUtc() | date: 'medium' }}</p>
       }
 
       @if (lastCheckError()) {

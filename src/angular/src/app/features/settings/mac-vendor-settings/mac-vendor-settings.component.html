@@ -51,6 +51,11 @@
             }
           </dd>
 
+          @if (current.lastSuccessfulCheckUtc && current.lastRefreshError) {
+            <dt>Last successful refresh</dt>
+            <dd>{{ current.lastSuccessfulCheckUtc | date: 'medium' }}</dd>
+          }
+
           <dt>Next automatic refresh</dt>
           <dd>
             @if (current.nextRefreshDueUtc) {

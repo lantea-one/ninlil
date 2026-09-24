@@ -44,10 +44,30 @@ describe('FilterListListComponent', () => {
             source: DnsFilterListSourceEnum.Local,
             isDisabled: false,
           },
+          {
+            id: 'list-2',
+            name: 'community-ads',
+            kind: DnsFilterListKindEnum.Domain,
+            action: DnsFilterListActionEnum.Block,
+            source: DnsFilterListSourceEnum.Subscribed,
+            subscriptionUrl: 'https://lists.example/ads.txt',
+            lastFetchedAtUtc: '2026-09-20T03:00:00Z',
+            isDisabled: false,
+          },
+          {
+            id: 'list-3',
+            name: 'new-subscription',
+            kind: DnsFilterListKindEnum.Domain,
+            action: DnsFilterListActionEnum.Block,
+            source: DnsFilterListSourceEnum.Subscribed,
+            subscriptionUrl: 'https://lists.example/new.txt',
+            lastFetchedAtUtc: null,
+            isDisabled: false,
+          },
         ],
         skip: 0,
         take: 25,
-        totalCount: 1,
+        totalCount: 3,
       }),
     );
 
@@ -71,8 +91,8 @@ describe('FilterListListComponent', () => {
     const fixture = await createComponent();
 
     expect(filterListsApiSpy.apiFilterListsGet).toHaveBeenCalledWith({ skip: 0, take: 25 });
-    expect(fixture.componentInstance.lists().length).toBe(1);
-    expect(fixture.componentInstance.totalCount()).toBe(1);
+    expect(fixture.componentInstance.lists().length).toBe(3);
+    expect(fixture.componentInstance.totalCount()).toBe(3);
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
@@ -138,5 +158,17 @@ describe('FilterListListComponent', () => {
     await deletePromise;
 
     expect(notificationSpy.error).toHaveBeenCalledWith('in use');
+  });
+  it('shows when each subscribed list was last fetched, and flags one never fetched', async () => {
+    const fixture = await createComponent();
+    const fetched = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.fetched'),
+      (element) => element.textContent?.trim(),
+    );
+
+    expect(fetched.length).toBe(2);
+    expect(fetched[0]).toMatch(/^Fetched /);
+    expect(fetched[0]).not.toContain('2026-09-20T03:00:00Z');
+    expect(fetched[1]).toBe('Not fetched yet');
   });
 });

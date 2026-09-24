@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { AuthService } from '../../../core/auth/auth.service';
 import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BlockedServicesService } from '../../../api-client';
@@ -17,7 +19,7 @@ describe('BlockedServicesComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent() {
+  async function createComponent(canReadFilterLists = false) {
     apiSpy = jasmine.createSpyObj('BlockedServicesService', [
       'apiBlockedServicesGet',
       'apiBlockedServicesKeyPost',
@@ -35,16 +37,29 @@ describe('BlockedServicesComponent', () => {
           isEnabled: false,
           filterListId: null,
         },
+        {
+          key: 'reddit',
+          displayName: 'Reddit',
+          description: 'Blocks Reddit.',
+          subscriptionUrl: 'https://example.test/reddit.txt',
+          isEnabled: true,
+          filterListId: 'list-reddit',
+        },
       ]),
     );
 
     await TestBed.configureTestingModule({
       imports: [BlockedServicesComponent],
       providers: [
+        provideRouter([]),
         { provide: BlockedServicesService, useValue: apiSpy },
         { provide: NotificationService, useValue: notificationSpy },
       ],
     }).compileComponents();
+
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => canReadFilterLists && permission === 'filterlists:read',
+    );
 
     const fixture = TestBed.createComponent(BlockedServicesComponent);
     fixture.detectChanges();
@@ -57,7 +72,7 @@ describe('BlockedServicesComponent', () => {
     const fixture = await createComponent();
 
     expect(apiSpy.apiBlockedServicesGet).toHaveBeenCalled();
-    expect(fixture.componentInstance.services().length).toBe(1);
+    expect(fixture.componentInstance.services().length).toBe(2);
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
@@ -121,6 +136,7 @@ describe('BlockedServicesComponent', () => {
     await TestBed.configureTestingModule({
       imports: [BlockedServicesComponent],
       providers: [
+        provideRouter([]),
         { provide: BlockedServicesService, useValue: apiSpy },
         { provide: NotificationService, useValue: notificationSpy },
       ],
@@ -144,5 +160,18 @@ describe('BlockedServicesComponent', () => {
     expect(apiSpy.apiBlockedServicesKeyPost).toHaveBeenCalledWith(
       jasmine.objectContaining({ key: 'tiktok', clientId: 'client-123' }),
     );
+  });
+  it('links a blocked service to the filter list behind it, for users who can read lists', async () => {
+    const fixture = await createComponent(true);
+    const links = (fixture.nativeElement as HTMLElement).querySelectorAll('a.list-link');
+
+    expect(links.length).toBe(1);
+    expect(links[0].getAttribute('href')).toBe('/filter-lists/list-reddit/entries');
+  });
+
+  it("shows no filter-list link to users who can't read lists", async () => {
+    const fixture = await createComponent(false);
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('a.list-link')).toBeNull();
   });
 });

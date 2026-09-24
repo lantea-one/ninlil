@@ -68,7 +68,9 @@
     <table cdk-table cTable hover responsive [dataSource]="nodes()" class="node-table">
       <ng-container cdkColumnDef="name">
         <th cdk-header-cell *cdkHeaderCellDef>Name</th>
-        <td cdk-cell *cdkCellDef="let node">{{ node.name }}</td>
+        <td cdk-cell *cdkCellDef="let node">
+          <span [cTooltip]="'Node ID ' + node.remoteNodeId">{{ node.name }}</span>
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="host">
@@ -100,6 +102,43 @@
       <ng-container cdkColumnDef="missedHeartbeats">
         <th cdk-header-cell *cdkHeaderCellDef>Missed heartbeats</th>
         <td cdk-cell *cdkCellDef="let node">{{ node.missedHeartbeatCount ?? 0 }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="identity">
+        <th cdk-header-cell *cdkHeaderCellDef>Pinned identity</th>
+        <td cdk-cell *cdkCellDef="let node">
+          <div class="identity">
+            <span class="identity-label">TSIG key</span>
+            <code>{{ node.tsigKeyName || '—' }}</code>
+          </div>
+          @if (node.tlsCertificateThumbprint) {
+            <div class="identity">
+              <span class="identity-label">Certificate</span>
+              <code [cTooltip]="'SHA-256 ' + node.tlsCertificateThumbprint">{{
+                shortThumbprint(node.tlsCertificateThumbprint)
+              }}</code>
+              <button
+                cButton
+                size="sm"
+                variant="ghost"
+                color="secondary"
+                type="button"
+                class="copy-button"
+                [cTooltip]="
+                  copiedThumbprintNodeId() === node.id ? 'Copied!' : 'Copy the full thumbprint'
+                "
+                aria-label="Copy the full certificate thumbprint"
+                (click)="copyThumbprint(node)"
+              >
+                <svg
+                  cIcon
+                  [name]="copiedThumbprintNodeId() === node.id ? 'cilCheck' : 'cilCopy'"
+                  size="sm"
+                ></svg>
+              </button>
+            </div>
+          }
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="actions">

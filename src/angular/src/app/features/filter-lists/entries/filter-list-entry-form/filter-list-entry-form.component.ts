@@ -1,12 +1,13 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import {
+  FormControl,
   NonNullableFormBuilder,
   ReactiveFormsModule,
   Validators,
   ValidationErrors,
 } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { catchError, debounceTime, firstValueFrom, of, Subscription } from 'rxjs';
+import { catchError, debounceTime, firstValueFrom, merge, of, Subscription } from 'rxjs';
 import {
   AlertComponent,
   BadgeComponent,
@@ -147,6 +148,16 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
     matches: FilterPatternPreviewMatch[];
   } | null>(null);
 
+  /**
+   * The operator's own domains to test the pattern against, as typed (separated by spaces, commas
+   * or new lines). Kept outside {@link form} because it's only for the preview and is never
+   * saved. Left empty, the preview uses the server's built-in sample set.
+   */
+  readonly sampleDomainsControl = new FormControl('', { nonNullable: true });
+
+  /** The cap {@link parseSampleDomains} applies, shown in the field's hint. */
+  readonly maxSampleDomains = MAX_SAMPLE_DOMAINS;
+
   private readonly previewSubscription: Subscription;
 
   constructor() {
@@ -161,9 +172,12 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
       this.runPreview(this.form.controls.value.value, kind);
     });
 
-    this.previewSubscription = this.form.controls.value.valueChanges
+    this.previewSubscription = merge(
+      this.form.controls.value.valueChanges,
+      this.sampleDomainsControl.valueChanges,
+    )
       .pipe(debounceTime(300))
-      .subscribe((value) => this.runPreview(value, this.selectedKind()));
+      .subscribe(() => this.runPreview(this.form.controls.value.value, this.selectedKind()));
   }
 
   ngOnInit(): void {
@@ -185,9 +199,17 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const sampleDomains = parseSampleDomains(this.sampleDomainsControl.value);
+
     firstValueFrom(
       this.previewApi
-        .apiFilterPatternPreviewPost({ filterPatternPreviewRequest: { kind, value } })
+        .apiFilterPatternPreviewPost({
+          filterPatternPreviewRequest: {
+            kind,
+            value,
+            sampleDomains: sampleDomains.length > 0 ? sampleDomains : null,
+          },
+        })
         .pipe(catchError(() => of(null))),
     ).then((result) => {
       if (!result) return;
@@ -280,4 +302,19 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
 
     return isValidEntryPattern(kind, value ?? '') ? null : { invalidPattern: true };
   }
+}
+
+/** The most sample domains one preview sends, enough to test a pattern without a huge request. */
+export const MAX_SAMPLE_DOMAINS = 20;
+
+/**
+ * This function turns the operator's free-text sample list into distinct, trimmed domains, split
+ * on spaces, commas and new lines, keeping at most {@link MAX_SAMPLE_DOMAINS}.
+ */
+export function parseSampleDomains(text: string): string[] {
+  const domains = text
+    .split(/[\s,]+/)
+    .map((domain) => domain.trim())
+    .filter((domain) => domain.length > 0);
+  return [...new Set(domains)].slice(0, MAX_SAMPLE_DOMAINS);
 }

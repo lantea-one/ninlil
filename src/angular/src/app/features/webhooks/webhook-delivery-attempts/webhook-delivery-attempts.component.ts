@@ -1,9 +1,16 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Clipboard } from '@angular/cdk/clipboard';
 import { CdkTableModule } from '@angular/cdk/table';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   BadgeComponent,
+  ButtonDirective,
+  ModalBodyComponent,
+  ModalComponent,
+  ModalFooterComponent,
+  ModalHeaderComponent,
+  ModalTitleDirective,
   SpinnerComponent,
   TableDirective,
   TooltipDirective,
@@ -43,6 +50,12 @@ const DEFAULT_PAGE_SIZE = 25;
     RouterLink,
     CdkTableModule,
     BadgeComponent,
+    ButtonDirective,
+    ModalBodyComponent,
+    ModalComponent,
+    ModalFooterComponent,
+    ModalHeaderComponent,
+    ModalTitleDirective,
     SpinnerComponent,
     TableDirective,
     TooltipDirective,
@@ -56,6 +69,7 @@ const DEFAULT_PAGE_SIZE = 25;
 export class WebhookDeliveryAttemptsComponent {
   private readonly webhooksApi = inject(WebhooksService);
   private readonly route = inject(ActivatedRoute);
+  private readonly clipboard = inject(Clipboard);
 
   /** The subscription identifier this history view targets, taken from the route's own `:id` segment. */
   private readonly subscriptionId = this.route.snapshot.paramMap.get('id') ?? '';
@@ -68,7 +82,18 @@ export class WebhookDeliveryAttemptsComponent {
     'nextRetryDueUtc',
     'lastHttpStatusCode',
     'lastErrorMessage',
+    'completedAtUtc',
+    'payload',
   ];
+
+  /** The delivery whose request body is shown in the payload dialog, or `null` while it's closed. */
+  readonly payloadAttempt = signal<WebhookDeliveryAttemptDetail | null>(null);
+
+  /** The shown payload, pretty-printed; the stored text as-is if it somehow isn't valid JSON. */
+  readonly formattedPayload = computed(() => formatPayload(this.payloadAttempt()?.payloadJson));
+
+  /** Whether the dialog's copy button has just copied, to swap its icon and tooltip. */
+  readonly payloadCopied = signal(false);
 
   /** The targeted subscription's own name, shown in this page's heading once loaded. */
   readonly subscription = signal<WebhookSubscriptionDetail | null>(null);
@@ -102,6 +127,24 @@ export class WebhookDeliveryAttemptsComponent {
       default:
         return 'warning';
     }
+  }
+
+  /** This method opens the payload dialog for one delivery. */
+  showPayload(attempt: WebhookDeliveryAttemptDetail): void {
+    this.payloadCopied.set(false);
+    this.payloadAttempt.set(attempt);
+  }
+
+  /** This method closes the payload dialog. */
+  closePayload(): void {
+    this.payloadAttempt.set(null);
+  }
+
+  /** This method copies the payload exactly as it was sent, not the pretty-printed form. */
+  copyPayload(): void {
+    const payload = this.payloadAttempt()?.payloadJson;
+    if (!payload) return;
+    this.payloadCopied.set(this.clipboard.copy(payload));
   }
 
   private async loadSubscription(): Promise<void> {
@@ -147,5 +190,18 @@ export class WebhookDeliveryAttemptsComponent {
     } finally {
       this.loading.set(false);
     }
+  }
+}
+
+/**
+ * This function pretty-prints a delivery's stored request body for reading. The body is what the
+ * server sent, so anything that doesn't parse is shown unchanged rather than hidden.
+ */
+export function formatPayload(payloadJson: string | null | undefined): string {
+  if (!payloadJson) return '';
+  try {
+    return JSON.stringify(JSON.parse(payloadJson), null, 2);
+  } catch {
+    return payloadJson;
   }
 }

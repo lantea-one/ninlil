@@ -146,4 +146,28 @@ describe('AcmeSettingsComponent', () => {
 
     expect(fixture.componentInstance.certificatesErrorMessage()).toBe('boom');
   });
+  it('shows certificate dates formatted for reading, and when the last failure happened', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiAcmeSettingsCertificatesGet.and.returnValue(
+        of([
+          {
+            domain: 'dns.example.com',
+            hasCertificate: true,
+            issuedAtUtc: '2026-06-01T08:00:00Z',
+            expiresAtUtc: '2026-08-30T08:00:00Z',
+            isDueForRenewal: true,
+            lastFailureAtUtc: '2026-08-01T08:00:00Z',
+            lastFailureMessage: 'Rate limited by the CA',
+          },
+        ]),
+      );
+    });
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Rate limited by the CA');
+    expect(fixture.nativeElement.querySelector('.failure-time')).not.toBeNull();
+    expect(text).not.toContain('2026-06-01T08:00:00Z');
+    expect(text).not.toContain('2026-08-30T08:00:00Z');
+  });
 });
