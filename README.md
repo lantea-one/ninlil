@@ -446,27 +446,20 @@ Before considering a change done, both sides of the codebase have the same shape
    sockets/TLS/HTTP) — a passing build is not evidence anything works at runtime.
 2. For Angular: `npm run lint` / `npm run format:check` / `npm run build` / `npm test`, all clean.
 
-The pipeline runs exactly these checks. The admin console's are run in Docker, so they need
-nothing installed but Docker:
-
-```bash
-docker buildx build --target test-admin-console .   # lint, format check, Karma suite
-```
-
-A few .NET tests start their own database containers through Testcontainers, so the .NET suite
-needs Docker running too. Every test listener takes a port the operating system reports as free,
-never a fixed or well-known one, and the suite never needs root, so it can run on a machine that
-already hosts DNS, DHCP, web, or database services.
+The pipeline runs exactly these checks, the same way. A few .NET tests start their own database
+containers through Testcontainers, so the .NET suite needs Docker running. Every test listener,
+Karma's included, takes a port the operating system reports as free, never a fixed or well-known
+one, and neither suite needs root, so both can run on a machine that already hosts DNS, DHCP,
+web, or database services.
 
 ### Publishing the binaries
 
 [`.forgejo/scripts/publish-binary.sh`](./.forgejo/scripts/publish-binary.sh) builds one
 self-contained, single-file executable — the same command the pipeline runs — with the admin
-console embedded, so export the console's production build first:
+console embedded, so build the console into `Ninlil.Web/wwwroot` first:
 
 ```bash
-docker buildx build --target admin-console-dist \
-  --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+.forgejo/scripts/build-admin-console.sh               # npm ci + npm run build, then into wwwroot
 .forgejo/scripts/publish-binary.sh linux-amd64 dist   # or linux-arm64, macos-amd64, macos-arm64
 ```
 
@@ -532,10 +525,10 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`archlinux` Forgejo runners, which need the .NET SDK, `msquic`, `makepkg` (`base-devel`), Docker
-with buildx, `git`, `curl`, and `jq`. The .NET work runs directly on the runner; Docker builds the
-admin console (its Node.js, Java, and Chromium toolchain lives in the build image) and the
-container image.
+`archlinux` Forgejo runners, which need the .NET SDK, Node.js 24 with `npm`, a Java runtime
+(`jre-openjdk-headless`), `chromium`, `msquic`, `makepkg` (`base-devel`), Docker with buildx,
+`git`, `curl`, and `jq`. Everything runs directly on the runner except the container image, which
+Docker assembles from the prebuilt Linux binaries.
 
 | Workflow | Runs on | Does |
 |---|---|---|

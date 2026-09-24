@@ -1,86 +1,25 @@
 # syntax=docker/dockerfile:1
 #
-# Ninlil's container image, and the admin console's Docker-based build and tests.
+# Ninlil's container image.
 #
-# The .NET side of Ninlil -- tests, the self-contained binaries, and the NuGet packages -- is
-# built with the .NET SDK directly (see .forgejo/scripts/). This file covers the rest, selected
-# with --target:
+# Everything else -- the tests, the admin console, the self-contained binaries, and the NuGet
+# packages -- is built directly with the .NET SDK and Node.js (see .forgejo/scripts/). This image
+# is a prebuilt, self-contained ninlil-linux-<arch> executable (REST API, DNS and DHCP engines,
+# and the admin console, all in one file) on Microsoft's chiseled runtime-deps base image, which
+# has no shell and no package manager and runs as a non-root user.
 #
-#   runtime (default)
-#             The hardened container image: a prebuilt, self-contained ninlil-linux-<arch>
-#             executable (REST API, DNS and DHCP engines, and the admin console, all in one file)
-#             on Microsoft's chiseled runtime-deps base image, which has no shell and no package
-#             manager and runs as a non-root user. The executables come from a named build
-#             context called "binaries", a directory holding ninlil-linux-amd64 and/or
-#             ninlil-linux-arm64 (see .forgejo/scripts/publish-binary.sh).
-#   admin-console-dist
-#             The admin console's production build, written out with
-#             `--output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot` so a .NET build can
-#             embed or serve it.
-#   test-admin-console
-#             Lint, formatting, and the Jasmine/Karma suite for the admin console. It produces no
-#             output: building the target succeeds only if all of it passes.
-#
-# The runtime image contains no compiled code of its own, only files copied into place, so a
-# multi-platform build (linux/amd64 + linux/arm64) needs no CPU emulation.
+# The executables come from a named build context called "binaries", a directory holding
+# ninlil-linux-amd64 and/or ninlil-linux-arm64. The image contains no compiled code of its own,
+# only files copied into place, so a multi-platform build (linux/amd64 + linux/arm64) needs no
+# CPU emulation.
 #
 # Local usage, from the repository root:
-#   docker buildx build --target admin-console-dist \
-#     --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+#   .forgejo/scripts/build-admin-console.sh
 #   .forgejo/scripts/publish-binary.sh linux-amd64 dist
 #   docker buildx build --build-context binaries=dist -t ninlil .
 
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra
-ARG NODE_IMAGE=node:22-bookworm-slim
 ARG FETCH_IMAGE=buildpack-deps:noble-curl
-
-# ---------------------------------------------------------------------------------------------
-# admin-console-source: the Angular workspace with its dependencies installed.
-# ---------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS admin-console-source
-
-# `npm run build` first regenerates the OpenAPI client from the committed
-# openapi/swagger.json snapshot with openapi-generator-cli, which is a Java tool.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends default-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /workspace/src/angular
-
-# The manifests alone first, so the dependency install is its own cached layer.
-COPY src/angular/package.json src/angular/package-lock.json ./
-RUN npm ci
-
-COPY src/angular/ ./
-
-# ---------------------------------------------------------------------------------------------
-# admin-console: the Angular admin console's production build.
-# ---------------------------------------------------------------------------------------------
-FROM admin-console-source AS admin-console
-
-RUN npm run build
-
-# ---------------------------------------------------------------------------------------------
-# admin-console-dist: just the production build, for `--output type=local`.
-# ---------------------------------------------------------------------------------------------
-FROM scratch AS admin-console-dist
-
-COPY --from=admin-console /workspace/src/angular/dist/angular/browser/ /
-
-# ---------------------------------------------------------------------------------------------
-# test-admin-console: lint, formatting, and the Jasmine/Karma suite in headless Chromium.
-# ---------------------------------------------------------------------------------------------
-FROM admin-console-source AS test-admin-console
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV CHROME_BIN=/usr/bin/chromium
-
-RUN npm run lint \
-    && npm run format:check \
-    && npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
 
 # ---------------------------------------------------------------------------------------------
 # native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target, plus

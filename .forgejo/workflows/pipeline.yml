@@ -3,15 +3,15 @@ name: 'Ninlil Pipeline'
 ## The build, test, and publish pipeline shared by every entry point: branch builds
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
-## Every 'archlinux' runner has the .NET SDK, msquic, and makepkg installed, so the .NET work --
-## the tests, the self-contained binaries, and the NuGet packages -- runs directly on the runner,
-## and the Arch Linux packages are built with its own makepkg. Docker covers the rest: the admin
-## console (Node.js, Java, and Chromium live in its build image, not on the runners) and the
-## container image, which is only the prebuilt Linux executables copied onto a chiseled base.
-## Everything cross-compiles, so any runner builds every platform.
+## Every 'archlinux' runner has the .NET SDK, Node.js with npm, a Java runtime, Chromium, msquic,
+## and makepkg installed, so almost everything runs directly on the runner: the .NET and admin
+## console tests, the admin console build, the self-contained binaries, the NuGet packages, and
+## the Arch Linux packages. Docker only assembles the container image, which is the prebuilt Linux
+## executables copied onto a chiseled base. Everything cross-compiles, so any runner builds every
+## platform.
 ##
-## Tests run natively as the runner's unprivileged user, so they cannot bind a port below 1024;
-## every test listener takes a port the operating system reports as free, so none of them can
+## Tests run as the runner's unprivileged user, so they cannot bind a port below 1024; every test
+## listener (Karma's included) takes a port the operating system reports as free, so none can
 ## collide with the DNS, DHCP, web, and database services the runners host, or with another copy
 ## of the suite running on the same runner.
 ##
@@ -101,8 +101,7 @@ jobs:
         run: |-
           # The web host's integration tests serve the real admin console (SPA fallback routing,
           # static assets), exactly as a published host does.
-          docker buildx build --progress=plain --target admin-console-dist \
-            --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+          ./.forgejo/scripts/build-admin-console.sh
         shell: 'bash'
       ##
       - name: 'Format Check and Build'
@@ -135,9 +134,24 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Lint, Format Check, and Test'
+      - name: 'Install Dependencies'
+        working-directory: 'src/angular'
         run: |-
-          docker buildx build --progress=plain --target test-admin-console .
+          npm ci --no-audit --no-fund
+        shell: 'bash'
+      ##
+      - name: 'Lint and Format Check'
+        working-directory: 'src/angular'
+        run: |-
+          npm run lint
+          npm run format:check
+        shell: 'bash'
+      ##
+      - name: 'Run the Jasmine/Karma Suite'
+        working-directory: 'src/angular'
+        run: |-
+          # Headless Chromium; Karma listens on a free loopback port (karma.conf.js).
+          npm run test -- --watch=false --browsers=ChromeHeadlessNoSandbox
         shell: 'bash'
   ##
   draft:
@@ -195,8 +209,7 @@ jobs:
       ##
       - name: 'Build the Admin Console'
         run: |-
-          docker buildx build --progress=plain --target admin-console-dist \
-            --output type=local,dest=src/dotnet/src/Ninlil.Web/wwwroot .
+          ./.forgejo/scripts/build-admin-console.sh
         shell: 'bash'
       ##
       - name: 'Build ninlil-${{ matrix.binary }}'

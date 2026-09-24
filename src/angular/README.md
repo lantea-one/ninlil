@@ -24,9 +24,9 @@ REST API (see the repository's main `README.md`).
 Chromium or Chrome for the tests — set `CHROME_BIN` if it is not found automatically, e.g.
 `CHROME_BIN=/usr/bin/chromium npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox`.
 
-`npm run lint`, `npm run format:check`, the build, and the test suite are all pipeline gates. With
-only Docker installed, `docker buildx build --target test-admin-console .` from the repository root
-runs the same checks the pipeline does.
+`npm run lint`, `npm run format:check`, the build, and the test suite are all pipeline gates, run
+exactly as above. Karma listens on a free loopback port the operating system assigns, never its
+fixed default of 9876, so more than one run can share a machine.
 
 ## The generated API client
 
