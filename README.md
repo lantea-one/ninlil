@@ -535,7 +535,9 @@ build and test step runs in a throwaway container of one of the toolchains in
 [`docker/ci.Dockerfile`](./docker/ci.Dockerfile) (.NET SDK; Node.js with Java and Chromium;
 `makepkg`) with just the checkout mounted, through
 [`.forgejo/scripts/in-container.sh`](./.forgejo/scripts/in-container.sh). The Arch Linux toolchain
-exists for amd64 only, so an arm64 runner runs it under emulation (`qemu-user-static-binfmt`).
+exists for amd64 only, so an arm64 runner runs it under emulation, which must be registered for
+containers and at every boot: `qemu-user-static-binfmt`, or
+`docker run --privileged --rm tonistiigi/binfmt --install amd64` from a boot-time unit.
 
 | Workflow | Runs on | Does |
 |---|---|---|
