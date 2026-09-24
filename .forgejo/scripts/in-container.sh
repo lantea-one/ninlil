@@ -37,9 +37,15 @@ if [[ "${toolchain}" == 'arch' ]]; then
 fi
 
 # Built from the Dockerfile alone, with no build context; after the first build on a host every
-# layer is cached.
-docker build --quiet "${platform[@]}" --target "${toolchain}" --tag "${image}" \
-    - < "${repository_root}/docker/ci.Dockerfile" > /dev/null
+# layer is cached. The build's own output is shown only if it fails.
+build_log="$(mktemp)"
+trap 'rm -f "${build_log}"' EXIT
+if ! docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
+    - < "${repository_root}/docker/ci.Dockerfile" > "${build_log}" 2>&1; then
+    cat "${build_log}" >&2
+    exit 1
+fi
+rm -f "${build_log}"
 
 arguments=(
     --rm
