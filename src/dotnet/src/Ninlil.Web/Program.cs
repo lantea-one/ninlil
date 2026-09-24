@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Ninlil.Common.Configuration;
+using Ninlil.Common.Serializer.Converter;
 using Ninlil.Dhcp.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dhcp.Data.MongoDb.Extension;
 using Ninlil.Dhcp.Protocol.Dhcpv4.Extension;
@@ -778,7 +780,18 @@ builder.Services.AddSingleton<IDnsServerEventSubscriber<DnsCacheEvictedEvent>>(p
     provider.GetRequiredService<DnsEventsHubBroadcaster>()
 );
 
-builder.Services.AddSignalR();
+// The hub's payloads need the same IPAddress and enum handling the rest of the app serializes
+// with: System.Text.Json can't write an IPAddress on its own (reading an IPv4 address's ScopeId
+// throws), so without the converter every DnsQueryReceived/DnsQueryAnswered broadcast failed to
+// serialize and never reached a client, and the dashboard expects enums (protocol, response
+// code) as their names rather than numbers.
+builder
+    .Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.Converters.Add(new IpAddressJsonConverter());
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 // The health-check /status endpoint -- nine checks, one per subsystem, each reusing
 // that subsystem's own already-tracked live state rather than adding a second, redundant
@@ -1013,7 +1026,11 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
-app.MapHub<DnsEventsHub>("/hubs/events");
+
+// CloseOnAuthenticationExpiration ends a hub connection when the access token it opened with
+// expires, so the client reconnects with its current token and the permission groups
+// DnsEventsHub.OnConnectedAsync puts it in never outlive the permissions that token carried.
+app.MapHub<DnsEventsHub>("/hubs/events", options => options.CloseOnAuthenticationExpiration = true);
 app.MapNinlilDnsOverHttps();
 app.MapNinlilDnsStatus();
 
