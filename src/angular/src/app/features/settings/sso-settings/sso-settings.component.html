@@ -1,0 +1,109 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Single Sign-On</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <p class="hint">
+        Federate admin sign-in through OpenID Connect against any standards-compliant identity
+        provider -- Authelia, Authentik, Keycloak, or any other real OIDC issuer works equally. A
+        first-time sign-in through this provider automatically creates a local account for it, with
+        no roles or permissions granted -- an administrator must grant those separately, under
+        Users, the same as for any other new account.
+      </p>
+
+      <p class="hint">
+        <strong>Warning:</strong> turning this on (or changing the issuer/client id below) needs a
+        process restart before it actually takes effect -- the OpenID Connect sign-in scheme is only
+        ever set up once, when this host starts. Every other field on this page is saved
+        immediately, but won't matter to anyone signing in until that restart happens.
+      </p>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="sso-enable" formControlName="enable" />
+          <label cFormCheckLabel for="sso-enable">Enable single sign-on</label>
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="sso-display-name">Button label</label>
+          <input
+            cFormControl
+            id="sso-display-name"
+            formControlName="displayName"
+            placeholder="Single Sign-On"
+          />
+          <p class="hint">Shown on the login page's own "Sign in with ..." button.</p>
+        </div>
+
+        <div class="field">
+          <label cLabel for="sso-authority">Issuer (authority)</label>
+          <input
+            cFormControl
+            id="sso-authority"
+            formControlName="authority"
+            placeholder="https://auth.example.com"
+          />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="sso-client-id">Client ID</label>
+            <input cFormControl id="sso-client-id" formControlName="clientId" />
+          </div>
+
+          <div class="field">
+            <label cLabel for="sso-client-secret">Client secret</label>
+            <input
+              cFormControl
+              id="sso-client-secret"
+              type="password"
+              formControlName="clientSecret"
+              placeholder="Leave blank to keep the current secret"
+              autocomplete="new-password"
+            />
+            <p class="hint">
+              @if (clientSecretConfigured()) {
+                A client secret is currently on file. It is never shown here -- leave this blank to
+                keep it unchanged.
+              } @else {
+                No client secret is currently on file.
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="sso-scopes">Scopes</label>
+          <input
+            cFormControl
+            id="sso-scopes"
+            formControlName="scopesText"
+            placeholder="openid profile email"
+          />
+          <p class="hint">
+            Space- or comma-separated. Must include <code>openid</code> -- without it, this isn't an
+            OpenID Connect request at all.
+          </p>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

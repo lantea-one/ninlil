@@ -1,0 +1,100 @@
+<div class="list-header">
+  <h1>TSIG Keys</h1>
+  <a cButton color="primary" routerLink="/tsig-keys/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New key
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (keys().length === 0) {
+  <app-empty-state
+    icon="cilLockLocked"
+    heading="No TSIG keys yet"
+    description="Create one to authenticate zone transfers or dynamic updates."
+  >
+    <a cButton color="primary" routerLink="/tsig-keys/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New key
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="keys()" class="key-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let key">{{ key.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="algorithmName">
+        <th cdk-header-cell *cdkHeaderCellDef>Algorithm</th>
+        <td cdk-cell *cdkCellDef="let key">{{ key.algorithmName }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let key">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="key.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="key.isDisabled ? 'Enable this key' : 'Disable this key'"
+            (click)="toggleDisabled(key)"
+          >
+            {{ key.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let key" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/tsig-keys', key.id, 'edit']"
+            cTooltip="Edit key"
+            aria-label="Edit key"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete key"
+            aria-label="Delete key"
+            (click)="deleteKey(key)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

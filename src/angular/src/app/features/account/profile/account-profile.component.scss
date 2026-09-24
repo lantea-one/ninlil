@@ -1,0 +1,80 @@
+h1 {
+  margin: var(--ninlil-space-5);
+}
+
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+// Widened from a fixed 700px to this app's own standard form-width step, the same single-section
+// create/edit form width `WebhookFormComponent`/`ForwarderFormComponent` use, per this sub-phase's
+// own form-width consistency pass.
+.profile-card {
+  max-width: var(--ninlil-form-max-width);
+  margin: 0 auto var(--ninlil-space-5);
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-4);
+  max-width: var(--ninlil-form-max-width-compact);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+}
+
+.save-button {
+  align-self: flex-start;
+}
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-5);
+  flex-wrap: wrap;
+}
+
+.avatar-image,
+.avatar-fallback {
+  width: 96px;
+  height: 96px;
+  min-width: 96px;
+  border-radius: 50%;
+}
+
+.avatar-image {
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cui-primary, #3b82f6);
+  color: var(--cui-primary-contrast, #fff);
+  font-size: 2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.avatar-hint {
+  flex: 1 1 240px;
+  margin: 0;
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}

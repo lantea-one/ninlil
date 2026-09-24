@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DHCP-&gt;DNS integration feature: registering a real
+            A/AAAA record for a DHCP client's own presented host name against the address it
+            currently leases, through the same Server.Authoritative IZoneUpdateService pipeline
+            every other DNS-content-changing feature in this project already goes through, and
+            removing that record again on release or expiry. Lives as its own project, rather
+            than inside Ninlil.Dhcp.Server.Core, so that project never needs a dependency on the
+            much larger Ninlil.Dns.Server.Authoritative -- the same "one project per cohesive
+            concern" layering Ninlil.Dns.Server.Acme's own Caa/ subfolder already establishes for
+            an analogous DNS-writing feature that also needs IZoneUpdateService.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Server.DnsIntegration</PackageId>
+  </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Authoritative" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+</Project>

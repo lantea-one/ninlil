@@ -1,0 +1,52 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header class="d-flex align-items-center justify-content-between">
+      <strong>DNS Cookies (RFC 7873)</strong>
+      <app-cluster-sync-info
+        [lastModifiedUtc]="lastModifiedUtc()"
+        [originatingNodeId]="originatingNodeId()"
+      />
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-2">
+          <input cFormCheckInput type="checkbox" id="cookie-enable" formControlName="enable" />
+          <label cFormCheckLabel for="cookie-enable">Enable DNS Cookies</label>
+        </c-form-check>
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="cookie-require" formControlName="require" />
+          <label cFormCheckLabel for="cookie-require"
+            >Require a valid cookie (reject with BADCOOKIE otherwise)</label
+          >
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="cookie-rotation">Secret rotation interval</label>
+          <input
+            cFormControl
+            id="cookie-rotation"
+            formControlName="secretRotationInterval"
+            placeholder="1.00:00:00"
+          />
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

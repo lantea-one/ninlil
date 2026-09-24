@@ -1,0 +1,54 @@
+// Rose palette -- WCAG-AA-checked (4.5:1 minimum for normal text) CoreUI custom-property
+// overrides. Contrast pairs verified via the standard relative-luminance/contrast-ratio formula
+// (WCAG 2 formula, not assumed): the light-mode accent (#be123c) against a white
+// (--cui-body-bg) background for link-text use, the dark-mode accent (#fb7185) against
+// CoreUI's own dark --cui-body-bg (#212631), and each accent's own paired --cui-*-contrast
+// (the text color placed on a solid accent background, e.g. a primary button) against that
+// accent -- every one of those pairs clears 4.5:1. Only the accent/link/focus-ring tokens are
+// overridden here; --cui-body-bg/--cui-body-color/--cui-border-color and the rest of CoreUI's
+// own neutral/greyscale and semantic (success/warning/danger/info) tokens are left at their
+// own light/dark defaults (already contrast-checked by CoreUI itself), since a "palette" in
+// this app's own theming model is an accent-color identity layered on CoreUI's existing
+// light/dark neutrals, not a wholesale re-theme of every token.
+[data-coreui-theme='light'][data-ninlil-palette='Rose'] {
+  --cui-primary: #be123c;
+  --cui-primary-rgb: 190, 18, 60;
+  --cui-primary-text-emphasis: #be123c;
+  --cui-primary-bg-subtle: #ffe4e6;
+  --cui-primary-border-subtle: #fda4af;
+  --cui-primary-contrast: #ffffff;
+  --cui-link-color: #be123c;
+  --cui-link-color-rgb: 190, 18, 60;
+  --cui-link-hover-color: #9f1239;
+  --cui-link-hover-color-rgb: 159, 18, 57;
+  --cui-focus-ring-color: rgba(190, 18, 60, 0.25);
+}
+
+[data-coreui-theme='dark'][data-ninlil-palette='Rose'] {
+  --cui-primary: #fb7185;
+  --cui-primary-rgb: 251, 113, 133;
+  --cui-primary-text-emphasis: #be123c;
+  --cui-primary-bg-subtle: #ffe4e6;
+  --cui-primary-border-subtle: #fda4af;
+  --cui-primary-contrast: #080a0c;
+  --cui-link-color: #fb7185;
+  --cui-link-color-rgb: 251, 113, 133;
+  --cui-link-hover-color: #fda4af;
+  --cui-link-hover-color-rgb: 253, 164, 175;
+  --cui-focus-ring-color: rgba(251, 113, 133, 0.25);
+}
+
+// Sidebar chrome -- see `_teal.scss`'s own comment for why this block targets `.sidebar`/
+// `.sidebar-nav` directly (not just `[data-ninlil-palette]`) and is scoped independent of
+// `[data-coreui-theme]`.
+[data-ninlil-palette='Rose'] .sidebar,
+[data-ninlil-palette='Rose'] .sidebar-nav {
+  --cui-sidebar-bg: #4c0519;
+  --cui-sidebar-brand-bg: #4c0519;
+  --cui-sidebar-nav-link-active-bg: #fb7185;
+  --cui-sidebar-nav-link-active-color: #080a0c;
+  --cui-sidebar-nav-link-active-icon-color: #080a0c;
+  --cui-sidebar-nav-link-hover-bg: rgba(251, 113, 133, 0.18);
+  --cui-sidebar-nav-link-hover-color: #fb7185;
+  --cui-sidebar-nav-link-hover-icon-color: #fb7185;
+}

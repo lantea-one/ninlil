@@ -1,0 +1,144 @@
+<div class="list-header">
+  <h1>Filter Lists</h1>
+  <a cButton color="primary" routerLink="/filter-lists/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New filter list
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (lists().length === 0) {
+  <app-empty-state
+    icon="cilFilter"
+    heading="No filter lists yet"
+    description="A filter list blocks or allows queries by domain, wildcard, or regex pattern. Create your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/filter-lists/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New filter list
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="lists()" class="filter-list-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let list">{{ list.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="kind">
+        <th cdk-header-cell *cdkHeaderCellDef>Kind</th>
+        <td cdk-cell *cdkCellDef="let list">{{ list.kind }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="action">
+        <th cdk-header-cell *cdkHeaderCellDef>Action</th>
+        <td cdk-cell *cdkCellDef="let list">
+          <c-badge [color]="actionBadgeColor(list.action)">{{ list.action }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="source">
+        <th cdk-header-cell *cdkHeaderCellDef>Source</th>
+        <td cdk-cell *cdkCellDef="let list">
+          {{ list.source }}
+          @if (list.source === 'Subscribed') {
+            <svg
+              cIcon
+              name="cilCloudDownload"
+              size="sm"
+              class="subscription-icon"
+              [cTooltip]="'Subscribed from ' + list.subscriptionUrl"
+            ></svg>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let list">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="list.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="list.isDisabled ? 'Enable this filter list' : 'Disable this filter list'"
+            (click)="toggleDisabled(list)"
+          >
+            {{ list.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="sync">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let list">
+          <app-cluster-sync-info
+            [lastModifiedUtc]="list.updatedAtUtc ?? list.createdAtUtc"
+            [originatingNodeId]="list.originatingNodeId"
+          />
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let list" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/filter-lists', list.id, 'entries']"
+            cTooltip="Manage entries"
+            aria-label="Manage entries"
+          >
+            <svg cIcon name="cilList" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/filter-lists', list.id, 'edit']"
+            cTooltip="Edit filter list"
+            aria-label="Edit filter list"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete filter list"
+            aria-label="Delete filter list"
+            (click)="deleteList(list)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

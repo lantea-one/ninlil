@@ -1,0 +1,46 @@
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert" class="page-alert">{{
+    errorMessage()
+  }}</c-alert>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <div class="preset-grid">
+    @for (preset of presets(); track preset.name) {
+      <c-card class="preset-card">
+        <c-card-header>
+          <strong>{{ preset.name }}</strong>
+        </c-card-header>
+        <c-card-body>
+          <p>{{ preset.description }}</p>
+          <p class="preset-meta">
+            {{ preset.configurationSettingCount }} configuration setting(s),
+            {{ preset.filterListSubscriptionCount }} filter-list subscription(s).
+          </p>
+        </c-card-body>
+        <c-card-footer class="d-flex justify-content-end">
+          <button
+            cButton
+            color="primary"
+            [disabled]="applyingName() !== null"
+            (click)="apply(preset)"
+          >
+            @if (applyingName() === preset.name) {
+              <c-spinner size="sm" />
+            } @else {
+              Apply
+            }
+          </button>
+        </c-card-footer>
+      </c-card>
+    }
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

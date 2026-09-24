@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's Router Advertisement transport: a raw ICMPv6 listener (RFC
+            4861 Sections 4.1/4.2/6.2) that binds a real SOCK_RAW/IPPROTO_ICMPV6 socket on every
+            usable network interface, joins the RFC 4861 Section 6.2.6 all-routers multicast
+            group to receive Router Solicitations, periodically sends an unsolicited Router
+            Advertisement per Section 6.2.4's own randomized-interval timing rule, replies to a
+            genuine solicitation after Section 6.2.6's own randomized response delay, and encodes/
+            decodes every message via Ninlil.Dhcp.Common. It knows nothing about what a Router
+            Advertisement should actually contain -- that belongs to whichever
+            IRaAdvertisementProvider dependency injection resolves.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Protocol.Ra</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->
+</Project>

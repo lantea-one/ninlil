@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library exports and imports every application-level entity this server persists,
+            plus the Data Protection key ring, the shared TLS certificate, and the runtime
+            configuration file, as one passphrase-encrypted archive. The database portion is a
+            repository-level export/import rather than an engine-specific file copy, so the same
+            archive format works identically whether the active storage engine is a relational
+            database or MongoDB.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.Backup</PackageId>
+  </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common.Serializer -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <PackageReference Include="Ninlil.Common.Serializer" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Serializer -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+</Project>

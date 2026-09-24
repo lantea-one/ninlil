@@ -1,0 +1,137 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/zones" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Zones
+    </a>
+    <h1>DNSSEC keys{{ zoneName() ? ' for ' + zoneName() : '' }}</h1>
+  </div>
+  <a cButton color="primary" [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Generate key
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (keys().length === 0) {
+  <app-empty-state
+    icon="cilLockLocked"
+    heading="No DNSSEC keys yet"
+    description="Generate a key-signing key and a zone-signing key to start signing this zone with DNSSEC."
+  >
+    <a cButton color="primary" [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      Generate key
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="keys()" class="key-table">
+      <ng-container cdkColumnDef="role">
+        <th cdk-header-cell *cdkHeaderCellDef>Role</th>
+        <td cdk-cell *cdkCellDef="let key">
+          <c-badge color="info">{{ key.role }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="algorithm">
+        <th cdk-header-cell *cdkHeaderCellDef>Algorithm</th>
+        <td cdk-cell *cdkCellDef="let key">{{ key.algorithm }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="keyTag">
+        <th cdk-header-cell *cdkHeaderCellDef>Key tag</th>
+        <td cdk-cell *cdkCellDef="let key">{{ key.keyTag }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="lifecycleState">
+        <th cdk-header-cell *cdkHeaderCellDef>Rollover state</th>
+        <td cdk-cell *cdkCellDef="let key">
+          <c-badge [color]="lifecycleStateBadgeColor(key.lifecycleState)">{{
+            key.lifecycleState
+          }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="retired">
+        <th cdk-header-cell *cdkHeaderCellDef>Retirement</th>
+        <td cdk-cell *cdkCellDef="let key">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="key.isRetired ? 'secondary' : 'success'"
+            [cTooltip]="key.isRetired ? 'Reactivate this key' : 'Retire this key'"
+            (click)="toggleRetired(key)"
+          >
+            {{ key.isRetired ? 'Retired' : 'Active' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let key" class="actions-cell">
+          @if (canStartRollover(key)) {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="warning"
+              cTooltip="Start a rollover"
+              aria-label="Start a rollover"
+              (click)="rollKey(key)"
+            >
+              <svg cIcon name="cilReload" size="sm"></svg>
+            </button>
+          }
+          @if (awaitingParentDsConfirmation(key)) {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="info"
+              cTooltip="Confirm parent DS updated"
+              aria-label="Confirm parent DS updated"
+              (click)="confirmParentDsUpdated(key)"
+            >
+              <svg cIcon name="cilCheckCircle" size="sm"></svg>
+            </button>
+          }
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete key"
+            aria-label="Delete key"
+            (click)="deleteKey(key)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

@@ -1,0 +1,56 @@
+<c-card class="form-card">
+  <c-card-header>
+    <strong>New API token</strong>
+  </c-card-header>
+
+  <c-card-body>
+    @if (errorMessage()) {
+      <p class="error-message">{{ errorMessage() }}</p>
+    }
+
+    <form cForm [formGroup]="form" class="token-form">
+      <div class="field full-width">
+        <label cLabel for="token-name">Name</label>
+        <input cFormControl id="token-name" formControlName="name" placeholder="CI pipeline" />
+        @if (form.controls.name.hasError('required')) {
+          <div class="field-error">A name is required.</div>
+        }
+      </div>
+
+      <c-form-check class="mb-3">
+        <input cFormCheckInput type="checkbox" id="token-one-time" formControlName="oneTime" />
+        <label cFormCheckLabel for="token-one-time">
+          One-time (consumed automatically after its first use)
+        </label>
+      </c-form-check>
+
+      <div class="field full-width">
+        <label cLabel for="token-expires">Expires (optional)</label>
+        <input
+          cFormControl
+          type="datetime-local"
+          id="token-expires"
+          formControlName="expiresAtUtc"
+        />
+      </div>
+      <p class="hint">Leave this blank for a token that does not expire on its own.</p>
+    </form>
+  </c-card-body>
+
+  <c-card-footer class="d-flex justify-content-end gap-2">
+    <a cButton color="secondary" variant="ghost" routerLink="/api-tokens">Cancel</a>
+    <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+      @if (submitting()) {
+        <c-spinner size="sm" />
+      } @else {
+        Create
+      }
+    </button>
+  </c-card-footer>
+</c-card>
+
+<app-reveal-secret-dialog
+  [visible]="revealDialogVisible()"
+  [data]="revealDialogData()"
+  (closed)="onSecretDialogClosed()"
+/>

@@ -1,0 +1,91 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit client group' : 'New client group' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="group-form">
+        <div class="field full-width">
+          <label cLabel for="client-group-name">Name</label>
+          <input cFormControl id="client-group-name" formControlName="name" placeholder="lan" />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-group-default"
+            formControlName="isDefault"
+          />
+          <label cFormCheckLabel for="client-group-default">Default fallback group</label>
+        </c-form-check>
+        @if (form.controls.isDefault.value) {
+          <p class="hint">
+            Only one client group may be the default at a time -- saving this will automatically
+            demote whichever other group currently holds that status.
+          </p>
+        }
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-group-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="client-group-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/client-groups">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  @if (isEditMode && groupId) {
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Instant pause</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-instant-pause [clientGroupId]="groupId" />
+      </c-card-body>
+    </c-card>
+
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Blocked Services</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-blocked-services [clientGroupId]="groupId" />
+      </c-card-body>
+    </c-card>
+
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Safe Search</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-safe-search [clientGroupId]="groupId" />
+      </c-card-body>
+    </c-card>
+  }
+}

@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's cluster membership foundation (Phase 9-6a): a peer-node
+            registry (ClusterOptions/ClusterNodeEntity), the dedicated TSIG-authenticated +
+            TLS-encrypted node-to-node channel two nodes use to join and probe each other, the
+            invite-code join handshake, and the background heartbeat engine that keeps each
+            node's own view of every peer's reachability current. Later 9-6 sub-phases (Catalog
+            Zones, operational config sync, identity federation) layer their own real
+            synchronization on top of the channel this project establishes; this project itself
+            propagates nothing beyond membership and health.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.Cluster</PackageId>
+  </PropertyGroup>
+
+  <!--
+      This is a plain class library, not an ASP.NET Core Web project, but it needs
+      Microsoft.AspNetCore.Authentication (ClusterTsigAuthenticationHandler extends
+      AuthenticationHandler<TOptions>) and Microsoft.Extensions.Hosting (the heartbeat
+      background service extends BackgroundService), both of which ship inside the ASP.NET
+      Core shared framework rather than as ordinary NuGet packages, the same FrameworkReference
+      Ninlil.Dns.Server.Tsig already takes for its own use of DataProtection.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Tsig" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+</Project>

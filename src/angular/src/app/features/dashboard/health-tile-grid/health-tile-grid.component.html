@@ -1,0 +1,45 @@
+<section class="health-section" aria-labelledby="health-section-title">
+  <h2 id="health-section-title">System Health</h2>
+
+  <div class="tile-grid">
+    <c-card class="tile overall-tile" [ngClass]="overallCssClass()">
+      <c-card-body class="d-flex align-items-center gap-3">
+        <span class="tile-icon-wrap" [ngClass]="'bg-' + overallBadgeColor() + '-subtle'">
+          <svg cIcon [name]="overallIcon()" size="xl" [class]="'text-' + overallBadgeColor()"></svg>
+        </span>
+        <div class="tile-body">
+          <div class="tile-title">Overall</div>
+          <div class="tile-status">
+            <c-badge [color]="overallBadgeColor()">{{ status()?.status ?? 'Unknown' }}</c-badge>
+          </div>
+        </div>
+      </c-card-body>
+    </c-card>
+
+    @for (tile of tiles(); track tile.name) {
+      <c-card class="tile" [ngClass]="tile.cssClass">
+        <c-card-body class="d-flex align-items-center gap-3">
+          <span class="tile-icon-wrap" [ngClass]="'bg-' + tile.badgeColor + '-subtle'">
+            <svg cIcon [name]="tile.icon" size="xl" [class]="'text-' + tile.badgeColor"></svg>
+          </span>
+          <div class="tile-body">
+            <div class="tile-title">{{ tile.name }}</div>
+            <div class="tile-status">
+              <c-badge [color]="tile.badgeColor">{{ tile.status }}</c-badge>
+            </div>
+            <div class="tile-description">{{ tile.description }}</div>
+            @if (tile.error) {
+              <div class="tile-error">{{ tile.error }}</div>
+            }
+          </div>
+        </c-card-body>
+      </c-card>
+    }
+  </div>
+
+  @if (!hasDetail()) {
+    <p class="detail-hint">
+      Sign in with the <code>status:read</code> permission to see the full per-component breakdown.
+    </p>
+  }
+</section>

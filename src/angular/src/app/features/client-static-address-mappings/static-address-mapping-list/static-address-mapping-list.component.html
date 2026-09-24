@@ -1,0 +1,114 @@
+<div class="list-header">
+  <h1>Static Address Mappings</h1>
+  <a cButton color="primary" routerLink="/client-static-address-mappings/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New mapping
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (mappings().length === 0) {
+  <app-empty-state
+    icon="cilAddressBook"
+    heading="No static address mappings yet"
+    description="A mapping manually pins one address or CIDR network to a persistent client identifier, for a genuinely static device on a segment this server's ARP table and DHCP engine can never see. Every per-client feature (filter lists, schedules, pause) picks up a pinned identifier for free, the same as any other known client."
+  >
+    <a cButton color="primary" routerLink="/client-static-address-mappings/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New mapping
+    </a>
+  </app-empty-state>
+} @else {
+  <p class="hint">
+    A manual pin is tried before this server's own automatic ARP/DHCP-lease resolvers, so it always
+    wins if an address happens to appear in more than one signal.
+  </p>
+
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="mappings()" class="mapping-table">
+      <ng-container cdkColumnDef="cidr">
+        <th cdk-header-cell *cdkHeaderCellDef>Network</th>
+        <td cdk-cell *cdkCellDef="let mapping">
+          <code>{{ mapping.cidr }}</code>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="clientIdentifier">
+        <th cdk-header-cell *cdkHeaderCellDef>Client identifier</th>
+        <td cdk-cell *cdkCellDef="let mapping">
+          <code>{{ mapping.clientIdentifier }}</code>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocolVersion">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let mapping">{{ mapping.protocolVersion }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let mapping">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="mapping.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="mapping.isDisabled ? 'Enable this mapping' : 'Disable this mapping'"
+            (click)="toggleDisabled(mapping)"
+          >
+            {{ mapping.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let mapping" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-static-address-mappings', mapping.id, 'edit']"
+            cTooltip="Edit mapping"
+            aria-label="Edit mapping"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete mapping"
+            aria-label="Delete mapping"
+            (click)="deleteMapping(mapping)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

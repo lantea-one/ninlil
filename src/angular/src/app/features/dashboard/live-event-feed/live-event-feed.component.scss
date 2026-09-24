@@ -1,0 +1,34 @@
+.feed-section {
+  // No max-width here -- this component now renders inside `DashboardComponent`'s own
+  // `.dashboard-feed` sidebar column, which already constrains the available width; capping it a
+  // second time here would just waste space inside that column instead of the page.
+  width: 100%;
+  position: sticky;
+  top: var(--ninlil-space-5);
+}
+
+.connection-badge {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--ninlil-font-size-xs);
+}
+
+.feed-note {
+  margin: 0 0 var(--ninlil-space-3);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+.feed-list {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.feed-time {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.feed-summary {
+  min-width: 0;
+  word-break: break-word;
+}

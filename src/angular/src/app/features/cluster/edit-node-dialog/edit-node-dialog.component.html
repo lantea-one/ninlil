@@ -1,0 +1,52 @@
+<c-modal [visible]="visible()" (visibleChange)="onModalVisibleChange($event)" alignment="center">
+  <c-modal-header>
+    <h5 cModalTitle>Edit {{ node()?.name }}</h5>
+  </c-modal-header>
+
+  <c-modal-body>
+    <form cForm [formGroup]="editForm">
+      <div class="mb-3">
+        <label cLabel for="edit-node-name">Name</label>
+        <input cFormControl id="edit-node-name" formControlName="name" required />
+      </div>
+      <div class="mb-3">
+        <label cLabel for="edit-node-comments">Notes</label>
+        <textarea
+          cFormControl
+          id="edit-node-comments"
+          formControlName="comments"
+          rows="3"
+        ></textarea>
+      </div>
+    </form>
+
+    @if (errorMessage()) {
+      <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+    }
+  </c-modal-body>
+
+  <c-modal-footer>
+    <button
+      cButton
+      color="secondary"
+      variant="ghost"
+      type="button"
+      (click)="visibleChange.emit(false)"
+    >
+      Cancel
+    </button>
+    <button
+      cButton
+      color="primary"
+      type="button"
+      [disabled]="submitting() || editForm.invalid"
+      (click)="submit()"
+    >
+      @if (submitting()) {
+        <c-spinner size="sm" />
+      } @else {
+        Save
+      }
+    </button>
+  </c-modal-footer>
+</c-modal>

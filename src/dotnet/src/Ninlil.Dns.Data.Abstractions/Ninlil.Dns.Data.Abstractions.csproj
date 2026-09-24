@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library describes, in storage-engine-agnostic terms, everything Ninlil needs
+            to persist -- users, sessions, zones, records, DHCP leases, logs, and metrics -- along
+            with the repository contracts used to read and write them. It contains no Entity
+            Framework Core, no MongoDB driver, and no SQL of any kind; those concerns belong to
+            the concrete storage projects that implement the interfaces defined here.
+        </Description>
+    <PackageId>Ninlil.Dns.Data.Abstractions</PackageId>
+  </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+</Project>

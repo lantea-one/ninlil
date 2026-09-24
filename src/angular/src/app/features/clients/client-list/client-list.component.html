@@ -1,0 +1,321 @@
+<div class="list-header">
+  <h1>Clients</h1>
+  <div class="header-actions">
+    <button
+      cButton
+      color="secondary"
+      variant="outline"
+      cTooltip="Refresh counts and presence"
+      aria-label="Refresh"
+      (click)="reload()"
+    >
+      <svg cIcon name="cilReload" size="sm"></svg>
+    </button>
+    <a cButton color="primary" routerLink="/clients/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New client
+    </a>
+  </div>
+</div>
+
+<app-client-summary-cards
+  class="summary-cards"
+  [summary]="summary()"
+  [activeFilter]="filter()"
+  (filterSelected)="selectFilter($event)"
+/>
+
+<div class="list-toolbar">
+  <label for="client-sort" class="toolbar-label">Sort by</label>
+  <select
+    cSelect
+    id="client-sort"
+    sizing="sm"
+    class="sort-select"
+    [value]="sort()"
+    (change)="changeSort($any($event.target).value)"
+  >
+    @for (option of sortOptions; track option.value) {
+      <option [value]="option.value" [selected]="option.value === sort()">
+        {{ option.label }}
+      </option>
+    }
+  </select>
+  @if (onlineWindowText()) {
+    <span class="toolbar-hint" data-testid="online-window-hint">
+      Online means seen within the last {{ onlineWindowText() }}.
+    </span>
+  }
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (rows().length === 0 && filter() === 'all') {
+  <app-empty-state
+    icon="cilContact"
+    heading="No known clients yet"
+    description="A known client is a device this server is tracking by its own persistent MAC address/DUID, either registered directly or auto-discovered the first time it was granted a DHCP lease. Register your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/clients/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New client
+    </a>
+  </app-empty-state>
+} @else if (rows().length === 0) {
+  <p class="no-matches" data-testid="no-matches">
+    No devices match this filter.
+    <button cButton size="sm" color="link" (click)="selectFilter('all')">Show all devices</button>
+  </p>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="rows()" class="client-table">
+      <ng-container cdkColumnDef="favorite">
+        <th cdk-header-cell *cdkHeaderCellDef class="favorite-cell">
+          <span class="visually-hidden">Favorite</span>
+        </th>
+        <td cdk-cell *cdkCellDef="let row" class="favorite-cell">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            class="favorite-toggle"
+            [class.is-favorite]="row.client.isFavorite"
+            [attr.aria-pressed]="!!row.client.isFavorite"
+            [attr.aria-label]="row.client.isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+            [cTooltip]="row.client.isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+            data-testid="favorite-toggle"
+            (click)="toggleFavorite(row)"
+          >
+            <svg cIcon name="cilStar" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="device">
+        <th cdk-header-cell *cdkHeaderCellDef>Device</th>
+        <td cdk-cell *cdkCellDef="let row">
+          <div class="device-cell">
+            <span
+              class="device-icon"
+              [class.is-online]="row.client.isOnline"
+              [cTooltip]="row.icon.label"
+            >
+              <svg cIcon [name]="row.icon.icon"></svg>
+            </span>
+            <div class="device-text">
+              <a
+                class="device-title"
+                [class.unnamed]="!row.hasDisplayName"
+                [routerLink]="['/clients', row.client.id, 'edit']"
+                data-testid="device-title"
+                >{{ row.title }}</a
+              >
+              <div class="device-meta">
+                @if (row.client.vendor) {
+                  <span data-testid="device-vendor">{{ row.client.vendor }}</span>
+                } @else if (row.client.isRandomizedMacAddress) {
+                  <span
+                    data-testid="device-vendor"
+                    cTooltip="This device uses a private (randomized) MAC address, which names no manufacturer."
+                    >Randomized MAC</span
+                  >
+                } @else {
+                  <span class="muted">Unknown vendor</span>
+                }
+                @if (row.client.origin === DnsClientOriginEnum.Dhcp) {
+                  <c-badge
+                    color="info"
+                    class="origin-badge"
+                    cTooltip="This server discovered this client on its own the first time it granted it a DHCP lease."
+                    >DHCP</c-badge
+                  >
+                }
+              </div>
+            </div>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="presence">
+        <th cdk-header-cell *cdkHeaderCellDef>Presence</th>
+        <td cdk-cell *cdkCellDef="let row">
+          @if (row.client.isOnline) {
+            <c-badge color="success" data-testid="presence-badge">Online</c-badge>
+          } @else {
+            <c-badge color="secondary" data-testid="presence-badge">Offline</c-badge>
+          }
+          <div class="presence-meta">
+            @if (row.lastSeenRelative) {
+              <span [cTooltip]="(row.client.lastSeenUtc | date: 'medium') ?? ''">
+                Seen {{ row.lastSeenRelative }}
+              </span>
+            } @else {
+              <span class="muted">Never seen</span>
+            }
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="addresses">
+        <th cdk-header-cell *cdkHeaderCellDef>Addresses</th>
+        <td cdk-cell *cdkCellDef="let row">
+          <ul class="address-list">
+            @for (address of row.addresses; track address.id) {
+              <li class="address-item" data-testid="address-item">
+                <c-badge
+                  class="protocol-badge"
+                  [color]="
+                    address.protocolVersion === InternetProtocolVersionEnum.Ipv6
+                      ? 'primary'
+                      : 'dark'
+                  "
+                  >{{
+                    address.protocolVersion === InternetProtocolVersionEnum.Ipv6 ? 'v6' : 'v4'
+                  }}</c-badge
+                >
+                <span class="address-ip">{{ address.address || '—' }}</span>
+                <!-- The identifier itself (a DUID for IPv6), never just the MAC it embeds, so a
+                     dual-stack device's two rows stay distinguishable; the MAC is in the tooltip. -->
+                <span
+                  class="address-identifier"
+                  data-testid="address-identifier"
+                  [cTooltip]="
+                    address.macAddress && address.macAddress !== address.clientIdentifier
+                      ? 'MAC ' + address.macAddress
+                      : ''
+                  "
+                  >{{ address.clientIdentifier }}</span
+                >
+              </li>
+            }
+          </ul>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="group">
+        <th cdk-header-cell *cdkHeaderCellDef>Group</th>
+        <td cdk-cell *cdkCellDef="let row">{{ row.groupName || '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let row">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="row.client.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="row.client.isDisabled ? 'Enable this client' : 'Disable this client'"
+            (click)="toggleDisabled(row)"
+          >
+            {{ row.client.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+          @if (row.client.isCurrentlyPaused) {
+            <c-badge
+              color="warning"
+              data-testid="paused-badge"
+              [cTooltip]="'Paused until ' + ((row.client.pausedUntilUtc | date: 'short') ?? '')"
+              >Paused</c-badge
+            >
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let row" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/clients', row.client.id, 'addresses']"
+            cTooltip="Manage addresses"
+            aria-label="Manage addresses"
+          >
+            <svg cIcon name="cilLan" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/clients', row.client.id, 'list-assignments']"
+            cTooltip="Manage filter list assignments"
+            aria-label="Manage filter list assignments"
+          >
+            <svg cIcon name="cilFilter" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/clients', row.client.id, 'schedules']"
+            cTooltip="Manage schedules"
+            aria-label="Manage schedules"
+          >
+            <svg cIcon name="cilMoon" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/clients', row.client.id, 'activity']"
+            cTooltip="View activity"
+            aria-label="View activity"
+          >
+            <svg cIcon name="cilHistory" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/clients', row.client.id, 'edit']"
+            cTooltip="Edit client"
+            aria-label="Edit client"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete client"
+            aria-label="Delete client"
+            (click)="deleteClient(row)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr
+        cdk-row
+        *cdkRowDef="let row; columns: displayedColumns"
+        [class.row-disabled]="row.client.isDisabled"
+      ></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

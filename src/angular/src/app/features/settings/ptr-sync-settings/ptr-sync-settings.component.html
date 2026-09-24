@@ -1,0 +1,94 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>PTR sync</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="ptr-sync-default-enabled"
+            formControlName="defaultEnabled"
+          />
+          <label cFormCheckLabel for="ptr-sync-default-enabled"
+            >Automatically mirror A/AAAA records into reverse zones by default</label
+          >
+        </c-form-check>
+        <div cFormText>
+          Applies to every zone whose own "Auto-manage PTR records" field (in the zone form) is left
+          unset. A zone with that field explicitly set always overrides this default. Turning this
+          on can create a brand-new reverse zone and write records into it -- a real, visible new
+          capability, off by default.
+        </div>
+
+        <div class="field-row mt-3">
+          <div class="field">
+            <label cLabel for="ptr-sync-default-ipv4-prefix"
+              >Default IPv4 reverse-zone prefix length</label
+            >
+            <input
+              cFormControl
+              type="number"
+              id="ptr-sync-default-ipv4-prefix"
+              formControlName="defaultIpv4ReverseZonePrefixBits"
+              min="24"
+              max="30"
+            />
+            @if (
+              form.controls.defaultIpv4ReverseZonePrefixBits.hasError('min') ||
+              form.controls.defaultIpv4ReverseZonePrefixBits.hasError('max')
+            ) {
+              <div class="field-error">Must be between 24 and 30 inclusive.</div>
+            }
+            <div cFormText>
+              24 is the conventional octet boundary; 25-30 groups at an RFC 2317 classless boundary
+              instead. Overridable per zone via the zone form's own "PTR IPv4 prefix length" field.
+            </div>
+          </div>
+          <div class="field">
+            <label cLabel for="ptr-sync-default-ipv6-prefix"
+              >Default IPv6 reverse-zone prefix length</label
+            >
+            <input
+              cFormControl
+              type="number"
+              id="ptr-sync-default-ipv6-prefix"
+              formControlName="defaultIpv6ReverseZonePrefixBits"
+              min="16"
+              max="124"
+              step="4"
+            />
+            @if (
+              form.controls.defaultIpv6ReverseZonePrefixBits.hasError('min') ||
+              form.controls.defaultIpv6ReverseZonePrefixBits.hasError('max')
+            ) {
+              <div class="field-error">Must be a multiple of 4 between 16 and 124 inclusive.</div>
+            }
+            <div cFormText>
+              Overridable per zone via the zone form's own "PTR IPv6 prefix length" field.
+            </div>
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

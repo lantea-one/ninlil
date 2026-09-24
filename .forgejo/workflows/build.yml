@@ -1,0 +1,32 @@
+name: 'Build'
+##
+## Every push to any branch other than a release branch builds, tests, and publishes a
+## pre-release -- binaries, a container image, and (from the same version) NuGet packages --
+## versioned v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>. Pre-releases expire after
+## 24 hours (cleanup.yml). Pull requests into develop or main run the tests only.
+##
+on:
+  push:
+    branches-ignore:
+      - 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9].*'
+  pull_request:
+    branches:
+      - 'develop'
+      - 'main'
+##
+## Builds of one branch queue behind each other rather than overlapping, because each takes the
+## next free increment for that branch and day.
+##
+concurrency:
+  group: >-
+    build-${{ forgejo.event_name }}-${{ forgejo.head_ref || forgejo.ref_name }}
+  cancel-in-progress: false
+jobs:
+  ##
+  pipeline:
+    name: 'Pipeline'
+    uses: './.forgejo/workflows/pipeline.yml'
+    secrets: inherit
+    with:
+      kind: >-
+        ${{ forgejo.event_name == 'pull_request' && 'verify' || 'prerelease' }}

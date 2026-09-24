@@ -1,0 +1,384 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit tag rule' : 'New tag rule' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="rule-form">
+        <div class="field full-width">
+          <label cLabel for="dhcp-tag-rule-name">Name</label>
+          <input
+            cFormControl
+            id="dhcp-tag-rule-name"
+            formControlName="name"
+            placeholder="pxe-clients"
+          />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-scope">Restrict to scope</label>
+            <select cSelect id="dhcp-tag-rule-scope" formControlName="scopeId">
+              <option value="">Any scope</option>
+              @for (scope of scopes(); track scope.id) {
+                <option [value]="scope.id">{{ scope.name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-priority">Priority</label>
+            <input
+              cFormControl
+              type="number"
+              id="dhcp-tag-rule-priority"
+              formControlName="priority"
+            />
+            <div cFormText>Rules are evaluated in ascending priority order.</div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-vci-match"
+              >Vendor Class (Identifier, or vendor-class-data text)</label
+            >
+            <input
+              cFormControl
+              id="dhcp-tag-rule-vci-match"
+              formControlName="vendorClassIdentifierMatch"
+              placeholder="PXEClient"
+            />
+            <div cFormText>
+              DHCPv4's Vendor Class Identifier, or matched against any of a DHCPv6 request's own
+              vendor-class-data instances.
+            </div>
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-vci-mode">Match mode</label>
+            <select
+              cSelect
+              id="dhcp-tag-rule-vci-mode"
+              formControlName="vendorClassIdentifierMatchMode"
+            >
+              <option value="Exact">Exact</option>
+              <option value="Prefix">Prefix</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-vc-enterprise"
+              >Vendor Class enterprise number (DHCPv6 only)</label
+            >
+            <input
+              cFormControl
+              type="number"
+              id="dhcp-tag-rule-vc-enterprise"
+              formControlName="vendorClassEnterpriseNumber"
+              placeholder="32473"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-uc-match">User Class</label>
+            <input cFormControl id="dhcp-tag-rule-uc-match" formControlName="userClassMatch" />
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-uc-mode">Match mode</label>
+            <select cSelect id="dhcp-tag-rule-uc-mode" formControlName="userClassMatchMode">
+              <option value="Exact">Exact</option>
+              <option value="Prefix">Prefix</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-circuit-id"
+              >Relay Agent Circuit ID (hex, DHCPv4 only)</label
+            >
+            <input
+              cFormControl
+              id="dhcp-tag-rule-circuit-id"
+              formControlName="relayAgentCircuitIdHex"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-remote-id">Relay/Remote ID (hex)</label>
+            <input
+              cFormControl
+              id="dhcp-tag-rule-remote-id"
+              formControlName="relayAgentRemoteIdHex"
+            />
+            <div cFormText>DHCPv4's Agent Remote ID sub-option, or DHCPv6's Remote-ID option.</div>
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-tag-rule-interface-id"
+              >Relay Interface ID (hex, DHCPv6 only)</label
+            >
+            <input
+              cFormControl
+              id="dhcp-tag-rule-interface-id"
+              formControlName="relayInterfaceIdHex"
+            />
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <div class="options-table-label">Contributed options</div>
+          <div cFormText class="options-hint">
+            The options this rule delivers to a matching client. Pick a well-known option from the
+            dropdown (DHCPv4 and DHCPv6 options both shown, since a rule can match either), or
+            choose "Custom / other option..." to set a raw option tag and hex value by hand.
+          </div>
+
+          <div formArrayName="options">
+            <!-- Tracked by the FormGroup instance itself, not $index -- see
+                 DhcpScopeFormComponent's own options table template for the real bug this avoids
+                 (confirmed live in a real browser: a native <select> can visually desync from its
+                 own bound FormControl's real value after a middle row is removed). -->
+            @for (row of options.controls; track row) {
+              <div [formGroupName]="$index" class="option-row">
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-tag-rule-option-catalog-' + $index">Option</label>
+                  <select
+                    cSelect
+                    [id]="'dhcp-tag-rule-option-catalog-' + $index"
+                    formControlName="catalogSelection"
+                    (change)="onOptionCatalogSelectionChange($index)"
+                  >
+                    <option value="custom">Custom / other option...</option>
+                    @for (candidate of combinedCatalog(); track candidate.selectionValue) {
+                      <option [value]="candidate.selectionValue">
+                        [{{ candidate.protocolVersion }}] {{ candidate.entry.name }} (option
+                        {{ candidate.entry.code }})
+                      </option>
+                    }
+                  </select>
+                </div>
+
+                @if (row.controls.catalogSelection.value === 'custom') {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-tag-rule-option-tag-' + $index"
+                      >Option tag</label
+                    >
+                    <input
+                      cFormControl
+                      type="number"
+                      [id]="'dhcp-tag-rule-option-tag-' + $index"
+                      formControlName="optionTag"
+                    />
+                  </div>
+                }
+
+                @if (optionRowViewState()[$index]?.isServerAddressEligible) {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-tag-rule-option-value-source-' + $index"
+                      >Value source</label
+                    >
+                    <select
+                      cSelect
+                      [id]="'dhcp-tag-rule-option-value-source-' + $index"
+                      formControlName="valueSource"
+                    >
+                      <option value="Custom">Custom value</option>
+                      <option value="ServerAddress">Use this server's own address</option>
+                    </select>
+                  </div>
+                }
+
+                @if (row.controls.valueSource.value !== 'ServerAddress') {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-tag-rule-option-value-' + $index">Value</label>
+                    @switch (optionRowViewState()[$index]?.valueType) {
+                      @case ('IPv4Address') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="192.168.1.1"
+                        />
+                      }
+                      @case ('IPv6Address') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="2001:db8::1"
+                        />
+                      }
+                      @case ('IPv4AddressList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="192.168.1.1"
+                        ></textarea>
+                        <div cFormText>One address per line, in order of preference.</div>
+                      }
+                      @case ('IPv6AddressList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="2001:db8::1"
+                        ></textarea>
+                        <div cFormText>One address per line, in order of preference.</div>
+                      }
+                      @case ('Boolean') {
+                        <select
+                          cSelect
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        >
+                          <option value="true">True</option>
+                          <option value="false">False</option>
+                        </select>
+                      }
+                      @case ('UInt8') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          max="255"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('UInt16') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          max="65535"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('UInt32') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('Duration') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        />
+                        <div cFormText>Seconds.</div>
+                      }
+                      @case ('String') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @default {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-tag-rule-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="Hex value"
+                        />
+                      }
+                    }
+                  </div>
+                } @else {
+                  <div class="field">
+                    <div cFormText>
+                      This server's own real address is substituted automatically when this option
+                      is delivered.
+                    </div>
+                  </div>
+                }
+
+                <div class="field-row option-row-footer">
+                  <button
+                    cButton
+                    size="sm"
+                    variant="ghost"
+                    color="danger"
+                    type="button"
+                    aria-label="Remove option"
+                    (click)="removeOptionRow($index)"
+                  >
+                    <svg cIcon name="cilTrash" size="sm"></svg>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+
+          <button
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addOptionRow()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add option
+          </button>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-tag-rule-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="dhcp-tag-rule-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-tag-rule-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="dhcp-tag-rule-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/dhcp-tag-rules">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

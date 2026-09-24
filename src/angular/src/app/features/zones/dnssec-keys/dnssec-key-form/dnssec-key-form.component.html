@@ -1,0 +1,128 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit DNSSEC key' : 'Generate DNSSEC key' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="key-form">
+        @if (isEditMode) {
+          <p class="hint">
+            Role: <strong>{{ existingRole() }}</strong
+            >, algorithm: <strong>{{ existingAlgorithm() }}</strong
+            >, key tag: <strong>{{ existingKeyTag() }}</strong
+            >. None of these can change once a key is generated -- roll to a new key instead.
+          </p>
+
+          <c-form-check class="mb-3">
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="dnssec-key-retired"
+              formControlName="isRetired"
+            />
+            <label cFormCheckLabel for="dnssec-key-retired">Retired</label>
+          </c-form-check>
+          <p class="hint">
+            Retiring a key removes it from the zone's DNSKEY set immediately and stops it from
+            signing anything, with no transition period -- Ninlil doesn't stagger this
+            automatically. Retire a key only after any resolver that might still hold a cached
+            signature or DS record referencing it has had time to move on (a KSK especially, since a
+            parent zone's DS record has to be updated first); retiring too early can make signed
+            answers fail validation for real clients until those caches expire.
+          </p>
+        } @else {
+          <p class="hint">
+            Generating a key here activates it immediately -- it starts signing (ZSK) or gets
+            published in the DNSKEY set (KSK) right away. Ninlil doesn't choreograph a safe rollover
+            for you: a proper rollover (RFC 6781) means publishing the new key alongside the old
+            one, waiting out any relevant TTL/caching window so validators pick it up, and only then
+            retiring the old key -- all of that timing is on you to manage by hand.
+          </p>
+
+          <section class="field-row">
+            <div class="field">
+              <label cLabel for="dnssec-key-role">Role</label>
+              <select cSelect id="dnssec-key-role" formControlName="role">
+                @for (role of roleOptions; track role) {
+                  <option [value]="role">{{ role }}</option>
+                }
+              </select>
+              <p class="hint">
+                A Key Signing Key (KSK) signs the zone's own DNSKEY set and is the key a parent
+                zone's DS record points to -- it anchors the chain of trust, so rolling it means
+                coordinating a new DS record with the parent. A Zone Signing Key (ZSK) signs the
+                zone's day-to-day records and isn't referenced from outside the zone, so it can be
+                rotated more cheaply. Most zones need one of each.
+              </p>
+            </div>
+
+            <div class="field">
+              <label cLabel for="dnssec-key-algorithm">Algorithm</label>
+              <select cSelect id="dnssec-key-algorithm" formControlName="algorithm">
+                @for (algorithm of algorithmOptions; track algorithm) {
+                  <option [value]="algorithm">{{ algorithm }}</option>
+                }
+              </select>
+              <p class="hint">
+                RSA (SHA-1/SHA-256/SHA-512 variants) is the most broadly compatible with older
+                validators but produces the largest signatures and keys. ECDSA P-256/P-384 and EdDSA
+                (Ed25519/Ed448) are modern, widely-supported choices with much smaller signatures
+                and faster signing -- ECDSA P-256 or Ed25519 is a reasonable default for a new zone.
+                MD5 and SHA-1-based algorithms are kept only for compatibility with existing
+                deployments and shouldn't be chosen for a new key.
+              </p>
+            </div>
+
+            @if (showKeySize()) {
+              <div class="field">
+                <label cLabel for="dnssec-key-size">Key size (bits)</label>
+                <input
+                  cFormControl
+                  id="dnssec-key-size"
+                  type="number"
+                  formControlName="keySizeBits"
+                />
+                <p class="hint">
+                  Only meaningful for RSA -- ECDSA and EdDSA keys have a size fixed by the curve
+                  itself, so this field disappears once one of those is selected. 2048 bits is a
+                  reasonable default for a KSK or ZSK; going smaller weakens the signature, going
+                  much larger mostly just adds overhead to every signed answer.
+                </p>
+              </div>
+            }
+          </section>
+        }
+
+        <div class="field full-width">
+          <label cLabel for="dnssec-key-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="dnssec-key-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" [routerLink]="['/zones', zoneId, 'dnssec-keys']"
+        >Cancel</a
+      >
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

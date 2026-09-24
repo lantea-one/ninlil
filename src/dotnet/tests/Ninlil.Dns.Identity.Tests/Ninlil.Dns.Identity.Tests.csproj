@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!--
+        Only Microsoft.AspNetCore.TestHost, not the heavier Microsoft.AspNetCore.Mvc.Testing
+        Web.Tests itself references. This project's own AdminLoginRateLimitingTests builds a
+        minimal WebApplication plus TestServer directly rather than a real WebApplicationFactory
+        around a full Program.cs entry point, so it needs only TestServer itself.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Presets\Ninlil.Dns.Server.Presets.csproj" />
+    <!--
+        Needed only by OidcUserProvisioningServiceTests, to round-trip a real UserEntity against a
+        real SQLite database rather than merely proving IOidcUserProvisioningService compiles
+        against IUserRepository's own generic shape, the same "a passing build is not evidence
+        anything works" standard every other repository-backed test in this solution already
+        follows.
+    -->
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+</Project>

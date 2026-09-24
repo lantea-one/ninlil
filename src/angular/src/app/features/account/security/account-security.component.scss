@@ -1,0 +1,55 @@
+h1 {
+  margin: var(--ninlil-space-5);
+}
+
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+// Widened from a fixed 700px to this app's own standard form-width step, matching
+// `AccountProfileComponent`'s own identical change, per this sub-phase's own form-width
+// consistency pass.
+.security-card {
+  max-width: var(--ninlil-form-max-width);
+  margin: 0 auto var(--ninlil-space-5);
+}
+
+.code-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ninlil-space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+}
+
+// The pending-setup step's own authenticator URI/shared key -- a real, deliberately sensitive
+// value shown in-page rather than inside the reveal-once dialog (it is re-derivable/re-visible on
+// demand until enrollment is confirmed, unlike a true one-time secret) -- gets the same
+// code-block treatment `RevealSecretDialogComponent`'s own `.secret-value` uses, so it reads as a
+// distinct, copyable value rather than plain paragraph text.
+.mono {
+  display: inline-block;
+  font-family: monospace;
+  font-size: var(--ninlil-font-size-sm);
+  word-break: break-all;
+  padding: var(--ninlil-space-1) var(--ninlil-space-2);
+  background: var(--cui-tertiary-bg);
+  border-radius: 0.25rem;
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+h3 {
+  margin: var(--ninlil-space-2) 0 0;
+  font-size: var(--ninlil-font-size-md);
+}

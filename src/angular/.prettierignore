@@ -1,0 +1,8 @@
+# Generated/fetched content is never hand-formatted -- see eslint.config.js's own matching
+# "ignores" list for the identical reasoning (regenerating always overwrites it anyway).
+dist/
+coverage/
+src/app/api-client/
+openapi/swagger.json
+.angular/
+package-lock.json

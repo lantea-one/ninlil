@@ -1,0 +1,73 @@
+// Page-level centering, the brand mark above the card, and the colored welcome backdrop aren't a
+// single Bootstrap/CoreUI utility class, so they stay here; every other visual concern on this
+// page (spacing, width, secondary text, small text) is handled by CoreUI's Bootstrap-5-based
+// utility classes directly in the template.
+//
+// The backdrop is a soft radial wash of the *active palette's* own accent
+// (`--cui-primary`/`--cui-primary-rgb`, resolved by `ThemeService` before this page ever renders
+// -- see `app.config.ts`'s own `provideAppInitializer` call) over the page's own tertiary
+// background -- the first thing a reviewer sees of this app's 5-palette theming system, without
+// waiting until a page inside the shell.
+.login-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ninlil-space-5);
+  min-height: 100vh;
+  padding: var(--ninlil-space-4);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(var(--cui-primary-rgb), 0.16), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(var(--cui-primary-rgb), 0.12), transparent 45%),
+    var(--cui-tertiary-bg, var(--cui-body-bg));
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  color: var(--cui-primary);
+}
+
+.login-brand-text {
+  font-size: var(--ninlil-font-size-xxl);
+  font-weight: 700;
+  color: var(--cui-body-color);
+  letter-spacing: 0.01em;
+}
+
+// Widened from a fixed 400px (the audit's own finding 5 -- the login card wasted the majority of
+// a wide viewport at a hard-coded narrow width) to the shared compact form-width token, the same
+// one a short single-purpose create form (e.g. New API Token) uses -- this is still a narrow,
+// single-column card at any viewport, just no longer needlessly tighter than every other short
+// form in the app.
+.login-card {
+  width: 100%;
+  max-width: var(--ninlil-form-max-width-compact);
+}
+
+// The small "or" divider between the local-account form and the optional SSO button below it --
+// only ever rendered when ssoEnabled() is true.
+.login-sso-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-3);
+  margin: var(--ninlil-space-3) 0;
+  color: var(--cui-secondary-color);
+  font-size: var(--ninlil-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--cui-border-color);
+  }
+}
+
+.remember-me-hint {
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}

@@ -1,0 +1,43 @@
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    // "strict" (strictNullChecks, strictFunctionTypes, strictPropertyInitialization, etc.) is
+    // set explicitly here, even though this specific Angular CLI version's own "ng new" scaffold
+    // no longer turns it on by default (it only enables a handful of individual flags below,
+    // confirmed by reading the freshly generated file directly rather than assumed) -- a
+    // deliberate choice for this brand-new TypeScript codebase, matching this project's own
+    // house style of strong static checking, and a real, reasoned *difference* from the backend's
+    // own repo-wide `<Nullable>disable</Nullable>` (see Directory.Build.props): that C# choice
+    // was specifically about avoiding a large migration across an already-large, pre-existing
+    // codebase, a constraint that simply does not apply here, where strict mode costs nothing to
+    // start with on day one. See this workspace's README.md for the
+    // rest of its conventions.
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "preserve"
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ]
+}

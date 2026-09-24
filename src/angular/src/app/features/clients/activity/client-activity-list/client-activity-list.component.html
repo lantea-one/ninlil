@@ -1,0 +1,78 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/clients" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Clients
+    </a>
+    <h1>{{ clientLabel() ?? 'Activity' }}</h1>
+  </div>
+  <button cButton color="secondary" variant="ghost" [disabled]="loading()" (click)="refresh()">
+    <svg cIcon name="cilReload" size="sm"></svg>
+    Refresh
+  </button>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (entries().length === 0) {
+  <app-empty-state
+    icon="cilHistory"
+    heading="No activity logged yet"
+    description="No query log entries have been attributed to this client yet. Entries appear here once this client makes a DNS query this server can resolve to its own identity."
+  />
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="entries()" class="activity-table">
+      <ng-container cdkColumnDef="occurredAtUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Occurred at</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.occurredAtUtc | date: 'medium' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="clientAddress">
+        <th cdk-header-cell *cdkHeaderCellDef>Source address</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.clientAddress ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocol">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.protocol }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="queriedName">
+        <th cdk-header-cell *cdkHeaderCellDef>Queried name</th>
+        <td cdk-cell *cdkCellDef="let entry">
+          <code>{{ entry.queriedName ?? '—' }}</code>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="queriedType">
+        <th cdk-header-cell *cdkHeaderCellDef>Type</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.queriedType ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="responseCode">
+        <th cdk-header-cell *cdkHeaderCellDef>Response</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.responseCode }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="answerCount">
+        <th cdk-header-cell *cdkHeaderCellDef>Answers</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.answerCount }}</td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}

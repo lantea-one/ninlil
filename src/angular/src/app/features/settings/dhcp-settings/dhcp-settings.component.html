@@ -1,0 +1,985 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  @if (loadErrorMessage()) {
+    <c-alert color="danger" [dismissible]="false" role="alert" class="form-alert">{{
+      loadErrorMessage()
+    }}</c-alert>
+  }
+
+  <!-- Core -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Core</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">Settings shared by every local DHCP protocol engine.</p>
+
+      @if (coreErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          coreErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="coreForm" class="settings-form">
+        <div class="field full-width">
+          <label cLabel for="dhcp-core-server-identifier">Server Identifier address</label>
+          <input
+            cFormControl
+            id="dhcp-core-server-identifier"
+            formControlName="serverIdentifierAddress"
+            placeholder="Auto-detected if left blank"
+          />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-core-offer-hold">Offer hold duration</label>
+            <input
+              cFormControl
+              id="dhcp-core-offer-hold"
+              formControlName="offerHoldDuration"
+              placeholder="00:02:00"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-core-declined-quarantine"
+              >Declined address quarantine duration</label
+            >
+            <input
+              cFormControl
+              id="dhcp-core-declined-quarantine"
+              formControlName="declinedAddressQuarantineDuration"
+              placeholder="00:15:00"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="coreForm.invalid || coreSubmitting()"
+        (click)="saveCore()"
+      >
+        @if (coreSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- Protocol -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DHCPv4 Protocol</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">The DHCPv4 UDP transport's own bind/port settings.</p>
+
+      @if (protocolErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          protocolErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="protocolForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-protocol-enable"
+            formControlName="enable"
+          />
+          <label cFormCheckLabel for="dhcp-protocol-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-protocol-server-port">Server port</label>
+            <input
+              cFormControl
+              id="dhcp-protocol-server-port"
+              type="number"
+              formControlName="serverPort"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-protocol-client-port">Client port</label>
+            <input
+              cFormControl
+              id="dhcp-protocol-client-port"
+              type="number"
+              formControlName="clientPort"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="protocolForm.invalid || protocolSubmitting()"
+        (click)="saveProtocol()"
+      >
+        @if (protocolSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DHCPv6 Protocol -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DHCPv6 Protocol</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">The DHCPv6 UDP transport's own bind/port settings.</p>
+
+      @if (dhcpv6ProtocolErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dhcpv6ProtocolErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dhcpv6ProtocolForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcpv6-protocol-enable"
+            formControlName="enable"
+          />
+          <label cFormCheckLabel for="dhcpv6-protocol-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcpv6-protocol-server-port">Server port</label>
+            <input
+              cFormControl
+              id="dhcpv6-protocol-server-port"
+              type="number"
+              formControlName="serverPort"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcpv6-protocol-client-port">Client port</label>
+            <input
+              cFormControl
+              id="dhcpv6-protocol-client-port"
+              type="number"
+              formControlName="clientPort"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dhcpv6ProtocolForm.invalid || dhcpv6ProtocolSubmitting()"
+        (click)="saveDhcpv6Protocol()"
+      >
+        @if (dhcpv6ProtocolSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- Relay -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DHCPv4 Relay</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        Whether this server acts as a DHCPv4 relay agent instead of answering requests itself from
+        local scope/lease state. Mutually exclusive with the local DHCP engine above -- enabling
+        this always needs a restart to actually take over answering DHCPv4 requests.
+      </p>
+
+      @if (relayErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          relayErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="relayForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input cFormCheckInput type="checkbox" id="dhcp-relay-enable" formControlName="enable" />
+          <label cFormCheckLabel for="dhcp-relay-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-relay-upstream-addresses">Upstream server addresses</label>
+          <textarea
+            cFormControl
+            id="dhcp-relay-upstream-addresses"
+            formControlName="upstreamServerAddresses"
+            rows="2"
+            placeholder="192.168.1.1"
+          ></textarea>
+          <div cFormText>One address per line.</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-relay-upstream-port">Upstream server port</label>
+            <input
+              cFormControl
+              id="dhcp-relay-upstream-port"
+              type="number"
+              formControlName="upstreamServerPort"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-relay-agent-address">Relay agent address</label>
+            <input
+              cFormControl
+              id="dhcp-relay-agent-address"
+              formControlName="relayAgentAddress"
+              placeholder="Auto-detected if left blank"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-relay-circuit-id">Relay Agent Circuit ID</label>
+            <input cFormControl id="dhcp-relay-circuit-id" formControlName="relayAgentCircuitId" />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-relay-remote-id">Relay Agent Remote ID</label>
+            <input cFormControl id="dhcp-relay-remote-id" formControlName="relayAgentRemoteId" />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="relayForm.invalid || relaySubmitting()"
+        (click)="saveRelay()"
+      >
+        @if (relaySubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DHCPv6 Relay -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DHCPv6 Relay</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        Whether this server acts as an RFC 8415 DHCPv6 relay agent instead of answering requests
+        itself from local scope/lease state. Mutually exclusive with the local DHCPv6 engine above
+        -- enabling this always needs a restart to actually take over answering DHCPv6 requests.
+      </p>
+
+      @if (dhcpv6RelayErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dhcpv6RelayErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dhcpv6RelayForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcpv6-relay-enable"
+            formControlName="enable"
+          />
+          <label cFormCheckLabel for="dhcpv6-relay-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="dhcpv6-relay-upstream-addresses">Upstream server addresses</label>
+          <textarea
+            cFormControl
+            id="dhcpv6-relay-upstream-addresses"
+            formControlName="upstreamServerAddresses"
+            rows="2"
+            placeholder="2001:db8::1"
+          ></textarea>
+          <div cFormText>One address per line.</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcpv6-relay-upstream-port">Upstream server port</label>
+            <input
+              cFormControl
+              id="dhcpv6-relay-upstream-port"
+              type="number"
+              formControlName="upstreamServerPort"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcpv6-relay-link-address">Relay link address</label>
+            <input
+              cFormControl
+              id="dhcpv6-relay-link-address"
+              formControlName="relayLinkAddress"
+              placeholder="Auto-detected if left blank"
+            />
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcpv6-relay-interface-id">Interface-ID</label>
+          <input cFormControl id="dhcpv6-relay-interface-id" formControlName="interfaceId" />
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dhcpv6RelayForm.invalid || dhcpv6RelaySubmitting()"
+        (click)="saveDhcpv6Relay()"
+      >
+        @if (dhcpv6RelaySubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- TFTP -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>TFTP Server</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        This server's own bundled, read-only RFC 1350 TFTP server -- serving a PXE client's own boot
+        file, most commonly. A Write Request is always rejected.
+      </p>
+
+      @if (tftpErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          tftpErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="tftpForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input cFormCheckInput type="checkbox" id="dhcp-tftp-enable" formControlName="enable" />
+          <label cFormCheckLabel for="dhcp-tftp-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-tftp-root-directory">Root directory</label>
+          <input
+            cFormControl
+            id="dhcp-tftp-root-directory"
+            formControlName="rootDirectory"
+            placeholder="/var/lib/ninlil/tftp"
+          />
+          <div cFormText>
+            A Read Request naming a path outside this directory is always rejected.
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-tftp-port">Port</label>
+            <input cFormControl id="dhcp-tftp-port" type="number" formControlName="port" />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-tftp-retransmit-timeout">Retransmit timeout (seconds)</label>
+            <input
+              cFormControl
+              id="dhcp-tftp-retransmit-timeout"
+              type="number"
+              step="0.1"
+              formControlName="retransmitTimeoutSeconds"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-tftp-max-retransmissions">Max retransmissions</label>
+            <input
+              cFormControl
+              id="dhcp-tftp-max-retransmissions"
+              type="number"
+              formControlName="maxRetransmissions"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="tftpForm.invalid || tftpSubmitting()"
+        (click)="saveTftp()"
+      >
+        @if (tftpSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- Router Advertisement Protocol -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Router Advertisement Protocol</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        How this server's own Router Advertisement listener binds and times its unsolicited
+        advertisements. An unwanted Router Advertisement genuinely reconfigures every other host's
+        own default route and address autoconfiguration on the same link -- leave disabled unless
+        this server should actually announce itself on this network.
+      </p>
+
+      @if (raProtocolErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          raProtocolErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="raProtocolForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-ra-protocol-enable"
+            formControlName="enable"
+          />
+          <label cFormCheckLabel for="dhcp-ra-protocol-enable">Enable</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-ra-protocol-min-interval">Min advertisement interval</label>
+            <input
+              cFormControl
+              id="dhcp-ra-protocol-min-interval"
+              formControlName="minRouterAdvertisementInterval"
+              placeholder="00:03:18"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-ra-protocol-max-interval">Max advertisement interval</label>
+            <input
+              cFormControl
+              id="dhcp-ra-protocol-max-interval"
+              formControlName="maxRouterAdvertisementInterval"
+              placeholder="00:10:00"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="raProtocolForm.invalid || raProtocolSubmitting()"
+        (click)="saveRaProtocol()"
+      >
+        @if (raProtocolSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- Router Advertisement Content -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Router Advertisement Content</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        What a Router Advertisement this server sends actually contains -- the M/O flags, timing
+        recommendations, Recursive DNS Server (RFC 8106) addresses, DNS Search List (RFC 8106)
+        domain suffixes, and advertised routes (RFC 4191). On-link/SLAAC prefixes are configured
+        separately and are not yet available here.
+      </p>
+
+      @if (raErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ raErrorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="raForm" class="settings-form">
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-ra-managed-address-configuration"
+            formControlName="managedAddressConfiguration"
+          />
+          <label cFormCheckLabel for="dhcp-ra-managed-address-configuration"
+            >Managed Address Configuration ("M" flag)</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-ra-other-configuration"
+            formControlName="otherConfiguration"
+          />
+          <label cFormCheckLabel for="dhcp-ra-other-configuration"
+            >Other Configuration ("O" flag)</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-ra-router-lifetime">Router lifetime</label>
+            <input
+              cFormControl
+              id="dhcp-ra-router-lifetime"
+              formControlName="routerLifetime"
+              placeholder="00:00:00"
+            />
+            <div cFormText>Zero means this server never offers itself as a default router.</div>
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-ra-current-hop-limit">Current hop limit</label>
+            <input
+              cFormControl
+              id="dhcp-ra-current-hop-limit"
+              type="number"
+              formControlName="currentHopLimit"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-ra-reachable-time">Reachable time</label>
+            <input
+              cFormControl
+              id="dhcp-ra-reachable-time"
+              formControlName="reachableTime"
+              placeholder="00:00:00"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-ra-retrans-timer">Retrans timer</label>
+            <input
+              cFormControl
+              id="dhcp-ra-retrans-timer"
+              formControlName="retransTimer"
+              placeholder="00:00:00"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-ra-link-mtu">Link MTU</label>
+            <input
+              cFormControl
+              id="dhcp-ra-link-mtu"
+              type="number"
+              formControlName="linkMtu"
+              placeholder="Not advertised if left blank"
+            />
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-ra-recursive-dns-servers">Recursive DNS Server addresses</label>
+          <textarea
+            cFormControl
+            id="dhcp-ra-recursive-dns-servers"
+            formControlName="recursiveDnsServers"
+            rows="2"
+            placeholder="2001:db8::1"
+          ></textarea>
+          <div cFormText>One IPv6 address per line. RFC 8106 Section 5.1.</div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="dhcp-ra-recursive-dns-server-lifetime"
+            >Recursive DNS Server lifetime</label
+          >
+          <input
+            cFormControl
+            id="dhcp-ra-recursive-dns-server-lifetime"
+            formControlName="recursiveDnsServerLifetime"
+            placeholder="00:30:00"
+          />
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-ra-dns-search-list-domains">DNS Search List domains</label>
+          <textarea
+            cFormControl
+            id="dhcp-ra-dns-search-list-domains"
+            formControlName="dnsSearchListDomains"
+            rows="2"
+            placeholder="homelab.internal"
+          ></textarea>
+          <div cFormText>One domain suffix per line. RFC 8106 Section 5.2.</div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="dhcp-ra-dns-search-list-lifetime">DNS Search List lifetime</label>
+          <input
+            cFormControl
+            id="dhcp-ra-dns-search-list-lifetime"
+            formControlName="dnsSearchListLifetime"
+            placeholder="00:30:00"
+          />
+        </div>
+
+        <div class="field full-width">
+          <div class="route-group-label">Advertised routes (RFC 4191)</div>
+          <div cFormText class="route-hint">
+            Specific routes this server advertises alongside itself -- a prefix length of 0
+            advertises only a route preference for the link's own default route, with no prefix of
+            its own.
+          </div>
+          <div formArrayName="routes">
+            @for (route of routes.controls; track $index) {
+              <div [formGroupName]="$index" class="route-row">
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-ra-route-prefix-' + $index">Prefix</label>
+                  <input
+                    cFormControl
+                    [id]="'dhcp-ra-route-prefix-' + $index"
+                    formControlName="prefix"
+                    placeholder="2001:db8:5::"
+                  />
+                </div>
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-ra-route-prefix-length-' + $index"
+                    >Prefix length</label
+                  >
+                  <input
+                    cFormControl
+                    type="number"
+                    [id]="'dhcp-ra-route-prefix-length-' + $index"
+                    formControlName="prefixLength"
+                  />
+                </div>
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-ra-route-preference-' + $index">Preference</label>
+                  <select
+                    cSelect
+                    [id]="'dhcp-ra-route-preference-' + $index"
+                    formControlName="preference"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-ra-route-lifetime-' + $index"
+                    >Route lifetime</label
+                  >
+                  <input
+                    cFormControl
+                    [id]="'dhcp-ra-route-lifetime-' + $index"
+                    formControlName="routeLifetime"
+                    placeholder="00:30:00"
+                  />
+                </div>
+                <button
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="danger"
+                  type="button"
+                  aria-label="Remove route"
+                  (click)="removeRoute($index)"
+                >
+                  <svg cIcon name="cilTrash" size="sm"></svg>
+                </button>
+              </div>
+            }
+          </div>
+          <button
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addRoute()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add route
+          </button>
+        </div>
+
+        <div class="field full-width">
+          <div class="interface-override-group-label">Per-interface overrides</div>
+          <div cFormText class="interface-override-hint">
+            Give one network interface its own distinct content, or exclude it from Router
+            Advertisement entirely -- every field left blank on a row inherits the global content
+            above for that one interface. With no overrides configured, every interface still
+            advertises the exact same content shown above.
+          </div>
+          <div formArrayName="interfaceOverrides">
+            @for (override of interfaceOverrides.controls; track $index) {
+              <div [formGroupName]="$index" class="interface-override-row">
+                <div class="interface-override-row-header">
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-ra-override-interface-name-' + $index"
+                      >Interface name</label
+                    >
+                    <input
+                      cFormControl
+                      [id]="'dhcp-ra-override-interface-name-' + $index"
+                      formControlName="interfaceName"
+                      placeholder="eth0"
+                    />
+                  </div>
+                  <c-form-check class="mb-2">
+                    <input
+                      cFormCheckInput
+                      type="checkbox"
+                      [id]="'dhcp-ra-override-exclude-' + $index"
+                      formControlName="exclude"
+                    />
+                    <label cFormCheckLabel [attr.for]="'dhcp-ra-override-exclude-' + $index"
+                      >Exclude this interface entirely</label
+                    >
+                  </c-form-check>
+                  <button
+                    cButton
+                    size="sm"
+                    variant="ghost"
+                    color="danger"
+                    type="button"
+                    aria-label="Remove interface override"
+                    (click)="removeInterfaceOverride($index)"
+                  >
+                    <svg cIcon name="cilTrash" size="sm"></svg>
+                  </button>
+                </div>
+
+                @if (!override.controls.exclude.value) {
+                  <div class="field-row">
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-mac-' + $index"
+                        >Managed Address Configuration</label
+                      >
+                      <select
+                        cSelect
+                        [id]="'dhcp-ra-override-mac-' + $index"
+                        formControlName="managedAddressConfiguration"
+                      >
+                        <option value="">Inherit global default</option>
+                        <option value="true">On</option>
+                        <option value="false">Off</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-oc-' + $index"
+                        >Other Configuration</label
+                      >
+                      <select
+                        cSelect
+                        [id]="'dhcp-ra-override-oc-' + $index"
+                        formControlName="otherConfiguration"
+                      >
+                        <option value="">Inherit global default</option>
+                        <option value="true">On</option>
+                        <option value="false">Off</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-router-lifetime-' + $index"
+                        >Router lifetime</label
+                      >
+                      <input
+                        cFormControl
+                        [id]="'dhcp-ra-override-router-lifetime-' + $index"
+                        formControlName="routerLifetime"
+                        placeholder="Inherit global default"
+                      />
+                    </div>
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-hop-limit-' + $index"
+                        >Current hop limit</label
+                      >
+                      <input
+                        cFormControl
+                        type="number"
+                        [id]="'dhcp-ra-override-hop-limit-' + $index"
+                        formControlName="currentHopLimit"
+                        placeholder="Inherit"
+                      />
+                    </div>
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-link-mtu-' + $index"
+                        >Link MTU</label
+                      >
+                      <input
+                        cFormControl
+                        type="number"
+                        [id]="'dhcp-ra-override-link-mtu-' + $index"
+                        formControlName="linkMtu"
+                        placeholder="Inherit"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-reachable-time-' + $index"
+                        >Reachable time</label
+                      >
+                      <input
+                        cFormControl
+                        [id]="'dhcp-ra-override-reachable-time-' + $index"
+                        formControlName="reachableTime"
+                        placeholder="Inherit global default"
+                      />
+                    </div>
+                    <div class="field">
+                      <label cLabel [attr.for]="'dhcp-ra-override-retrans-timer-' + $index"
+                        >Retrans timer</label
+                      >
+                      <input
+                        cFormControl
+                        [id]="'dhcp-ra-override-retrans-timer-' + $index"
+                        formControlName="retransTimer"
+                        placeholder="Inherit global default"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="field full-width">
+                    <label cLabel [attr.for]="'dhcp-ra-override-rdnss-' + $index"
+                      >Recursive DNS Server addresses</label
+                    >
+                    <textarea
+                      cFormControl
+                      [id]="'dhcp-ra-override-rdnss-' + $index"
+                      formControlName="recursiveDnsServers"
+                      rows="2"
+                      placeholder="Blank inherits the global list above"
+                    ></textarea>
+                  </div>
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-ra-override-rdnss-lifetime-' + $index"
+                      >Recursive DNS Server lifetime</label
+                    >
+                    <input
+                      cFormControl
+                      [id]="'dhcp-ra-override-rdnss-lifetime-' + $index"
+                      formControlName="recursiveDnsServerLifetime"
+                      placeholder="Inherit global default"
+                    />
+                  </div>
+
+                  <div class="field full-width">
+                    <label cLabel [attr.for]="'dhcp-ra-override-dnssl-' + $index"
+                      >DNS Search List domains</label
+                    >
+                    <textarea
+                      cFormControl
+                      [id]="'dhcp-ra-override-dnssl-' + $index"
+                      formControlName="dnsSearchListDomains"
+                      rows="2"
+                      placeholder="Blank inherits the global list above"
+                    ></textarea>
+                  </div>
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-ra-override-dnssl-lifetime-' + $index"
+                      >DNS Search List lifetime</label
+                    >
+                    <input
+                      cFormControl
+                      [id]="'dhcp-ra-override-dnssl-lifetime-' + $index"
+                      formControlName="dnsSearchListLifetime"
+                      placeholder="Inherit global default"
+                    />
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          <button
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addInterfaceOverride()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add interface override
+          </button>
+        </div>
+
+        <div cFormText class="restart-note">Every field here needs this server to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="raForm.invalid || raSubmitting()"
+        (click)="saveRa()"
+      >
+        @if (raSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

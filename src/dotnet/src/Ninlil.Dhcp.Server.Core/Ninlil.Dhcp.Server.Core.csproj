@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DHCPv4 and DHCPv6 core server engines: the real
+            IDhcpv4RequestHandler/IDhcpv6RequestHandler implementations backing
+            Ninlil.Dhcp.Protocol.Dhcpv4/.Dhcpv6's own transports. It owns every real decision the
+            wire protocol and storage layers do not -- the RFC 2131 Section 4.3 DORA
+            (Discover-Offer-Request-Ack) state machine plus DECLINE/RELEASE/INFORM handling for
+            DHCPv4, RFC 8415's own SOLICIT/REQUEST/RENEW/REBIND/RELEASE/DECLINE/CONFIRM/
+            INFORMATION-REQUEST handling (stateful address assignment and Prefix Delegation) for
+            DHCPv6, lease allocation from a scope's own address/prefix pool, static reservation
+            lookup, lease-time negotiation, and standard option delivery -- against the
+            storage-agnostic Ninlil.Dhcp.Data.Abstractions repositories.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Server.Core</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv4" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv6 -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv6" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv6 -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+</Project>

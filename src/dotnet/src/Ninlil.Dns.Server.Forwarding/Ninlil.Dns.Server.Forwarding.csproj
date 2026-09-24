@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's Phase 3i upstream-forwarder engine: definition-string
+            parsing (plain, DoT, DoH, DoQ, and sdns:// DNSCrypt stamps), one client per protocol,
+            active health-checking with round-robin failover, and the dispatcher-level
+            IDnsQueryResolver that sits between Server.Authoritative and Server.Recursive.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.Forwarding</PackageId>
+  </PropertyGroup>
+
+  <!--
+      QuicForwarderClient uses System.Net.Quic, whose own types carry [SupportedOSPlatform] for
+      linux/macos/windows. Declaring the same set here, matching
+      Ninlil.Dns.Protocol.DnsOverQuic's own csproj, is what actually resolves CA1416
+      correctly instead of suppressing it.
+    -->
+  <ItemGroup>
+    <SupportedPlatform Include="linux" />
+    <SupportedPlatform Include="macos" />
+    <SupportedPlatform Include="windows" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Dnssec" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Recursive -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Recursive" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Recursive -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.DnsCrypt -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.DnsCrypt" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.DnsCrypt -->
+</Project>

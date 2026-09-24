@@ -1,0 +1,136 @@
+using System.Buffers;
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using Ninlil.Dns.Common.Enum;
+
+// Define our namespace.
+namespace Ninlil.Dns.Server.Dnssec.Algorithms;
+
+/// <summary>
+///     This class implements every RSA-based DNSSEC algorithm this project supports --
+///     <see cref="DnssecAlgorithmEnum.RsaMd5" />, <see cref="DnssecAlgorithmEnum.RsaSha1" />,
+///     <see cref="DnssecAlgorithmEnum.RsaSha1Nsec3Sha1" />, <see cref="DnssecAlgorithmEnum.RsaSha256" />,
+///     and <see cref="DnssecAlgorithmEnum.RsaSha512" /> -- since all five differ only in which
+///     hash algorithm signs the data; the public key format (RFC 3110), private key handling, and
+///     PKCS#1 v1.5 signature padding are identical across every one of them.
+/// </summary>
+/// <param name="algorithmNumber">Which of the five RSA-family algorithm numbers this instance is.</param>
+/// <param name="hashAlgorithm">The hash algorithm this algorithm number signs with.</param>
+public class RsaSigningAlgorithm(
+    DnssecAlgorithmEnum algorithmNumber,
+    HashAlgorithmName hashAlgorithm
+) : IDnssecSigningAlgorithm
+{
+    /// <summary>
+    ///     This constant contains the RSA key size, in bits, generated when a caller does not
+    ///     request a specific size.
+    /// </summary>
+    private const int DefaultKeySizeBits = 2048;
+
+    /// <inheritdoc />
+    public DnssecAlgorithmEnum AlgorithmNumber { get; } = algorithmNumber;
+
+    /// <inheritdoc />
+    public DnssecKeyPair GenerateKeyPair(int keySizeBits = 0)
+    {
+        using RSA rsa = RSA.Create(keySizeBits > 0 ? keySizeBits : DefaultKeySizeBits);
+
+        return new DnssecKeyPair(
+            EncodePublicKey(rsa.ExportParameters(false)),
+            rsa.ExportPkcs8PrivateKey()
+        );
+    }
+
+    /// <inheritdoc />
+    public byte[] Sign(byte[] signingInput, byte[] privateKeyPkcs8)
+    {
+        using RSA rsa = RSA.Create();
+        rsa.ImportPkcs8PrivateKey(privateKeyPkcs8, out _);
+
+        return rsa.SignData(signingInput, hashAlgorithm, RSASignaturePadding.Pkcs1);
+    }
+
+    /// <inheritdoc />
+    public bool Verify(byte[] signingInput, byte[] signature, byte[] publicKeyWireFormat)
+    {
+        using RSA rsa = RSA.Create();
+        rsa.ImportParameters(DecodePublicKey(publicKeyWireFormat));
+
+        return rsa.VerifyData(signingInput, signature, hashAlgorithm, RSASignaturePadding.Pkcs1);
+    }
+
+    /// <summary>
+    ///     This method encodes an RSA public key per RFC 3110: an exponent length (one octet, or
+    ///     a zero octet followed by a two-octet length for an exponent longer than 255 octets),
+    ///     the exponent, then the modulus -- with leading zero octets on both stripped, since RFC
+    ///     3110 prohibits them.
+    /// </summary>
+    internal static byte[] EncodePublicKey(RSAParameters parameters)
+    {
+        byte[] exponent = StripLeadingZeros(parameters.Exponent);
+        byte[] modulus = StripLeadingZeros(parameters.Modulus);
+        ArrayBufferWriter<byte> buffer = new();
+
+        if (exponent.Length <= 255)
+        {
+            buffer.GetSpan(1)[0] = (byte)exponent.Length;
+            buffer.Advance(1);
+        }
+        else
+        {
+            Span<byte> extendedLength = buffer.GetSpan(3);
+            extendedLength[0] = 0;
+            BinaryPrimitives.WriteUInt16BigEndian(extendedLength[1..], (ushort)exponent.Length);
+            buffer.Advance(3);
+        }
+
+        exponent.CopyTo(buffer.GetSpan(exponent.Length));
+        buffer.Advance(exponent.Length);
+
+        modulus.CopyTo(buffer.GetSpan(modulus.Length));
+        buffer.Advance(modulus.Length);
+
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    ///     This method decodes an RSA public key per RFC 3110, the reverse of
+    ///     <see cref="EncodePublicKey" />.
+    /// </summary>
+    internal static RSAParameters DecodePublicKey(byte[] wireFormat)
+    {
+        int exponentLength;
+        int offset;
+
+        if (wireFormat[0] == 0)
+        {
+            exponentLength = BinaryPrimitives.ReadUInt16BigEndian(wireFormat.AsSpan(1, 2));
+            offset = 3;
+        }
+        else
+        {
+            exponentLength = wireFormat[0];
+            offset = 1;
+        }
+
+        byte[] exponent = wireFormat[offset..(offset + exponentLength)];
+        byte[] modulus = wireFormat[(offset + exponentLength)..];
+
+        return new RSAParameters { Exponent = exponent, Modulus = modulus };
+    }
+
+    /// <summary>
+    ///     This method strips leading zero octets from a big-endian integer, returning a defensive
+    ///     copy even when nothing needed stripping. A value of all zeros is left as a single zero
+    ///     octet rather than stripped down to nothing.
+    /// </summary>
+    private static byte[] StripLeadingZeros(byte[] value)
+    {
+        int start = 0;
+
+        while (start < value.Length - 1 && value[start] == 0)
+            start++;
+
+        return value[start..];
+    }
+}

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library implements Ninlil's persistence abstractions on top of MongoDB, as
+            an alternative to the relational engines served by
+            Ninlil.Dns.Data.EntityFrameworkCore. It is a complete, independent implementation
+            of the same repository contracts, rather than a wrapper around Entity Framework Core,
+            since MongoDB's document model and write semantics do not map cleanly onto EF Core's
+            change-tracking model.
+        </Description>
+    <PackageId>Ninlil.Dns.Data.MongoDb</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="3.11.1" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!--
+      NinlilDnsMongoContext exposes collections for DHCP's own scope/reservation/lease entities
+      alongside every DNS collection, as one single shared context; see NinlilDnsContext's own
+      doc comment (Ninlil.Dns.Data.EntityFrameworkCore) for why the relational side of this
+      project makes the identical choice. This reference exists purely for that context and for
+      MongoClassMapRegistrar's own class-map registration; it does not pull in
+      Ninlil.Dhcp.Data.MongoDb or any other DHCP-specific storage or engine code.
+  -->
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+</Project>

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library implements Ninlil.Dhcp.Data.Abstractions's repository contracts against
+            the single, shared Entity Framework Core model Ninlil.Dns.Data.EntityFrameworkCore
+            already establishes (NinlilDnsContext) -- a DHCP scope/reservation/lease is a mapped
+            entity type within that one shared model, not a second DbContext of its own, so a
+            single IUnitOfWork and a single relational-provider selection continue to serve the
+            whole application. See NinlilDnsContext's own doc comment for the full reasoning.
+            Callers must invoke ServiceCollectionEntityFrameworkCoreExtension
+            .AddNinlilDnsEntityFrameworkCore (Ninlil.Dns.Data.EntityFrameworkCore) before this
+            project's own AddNinlilDhcpEntityFrameworkCore, since the latter only adds the DHCP
+            repositories on top of a context the former already registered.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Data.EntityFrameworkCore</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.19" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+</Project>

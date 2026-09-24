@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library describes, in storage-engine-agnostic terms, everything Ninlil's DHCP
+            service needs to persist -- address scopes/pools, static reservations, and leases --
+            along with the repository contracts used to read and write them. It builds directly
+            on Ninlil.Dns.Data.Abstractions's own EntityBase/AuditableEntityBase/IRepository/
+            IUnitOfWork contracts rather than duplicating them, since DHCP and DNS share one
+            underlying storage engine and one persisted Entity Framework Core model in this
+            project (see NinlilDnsContext's own doc comment in
+            Ninlil.Dns.Data.EntityFrameworkCore for the full reasoning). It contains no Entity
+            Framework Core, no MongoDB driver, and no SQL of any kind; those concerns belong to
+            the concrete storage projects that implement the interfaces defined here.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Data.Abstractions</PackageId>
+  </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+</Project>

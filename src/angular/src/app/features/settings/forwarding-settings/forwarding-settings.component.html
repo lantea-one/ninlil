@@ -1,0 +1,71 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Forwarding</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="forwarding-enable" formControlName="enable" />
+          <label cFormCheckLabel for="forwarding-enable"
+            >Forward a query this server does not itself host to a configured forwarder</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="forwarding-failover-strategy">Failover strategy</label>
+            <select cSelect id="forwarding-failover-strategy" formControlName="failoverStrategy">
+              @for (option of failoverStrategyOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="forwarding-health-check-interval">Health-check interval</label>
+            <input
+              cFormControl
+              id="forwarding-health-check-interval"
+              formControlName="healthCheckInterval"
+              placeholder="00:00:30"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="forwarding-per-forwarder-timeout">Per-forwarder timeout</label>
+            <input
+              cFormControl
+              id="forwarding-per-forwarder-timeout"
+              formControlName="perForwarderTimeout"
+              placeholder="00:00:03"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="override-note">
+          The health-check interval only matters when "Failover strategy" is set to "Health-checked
+          round robin" -- "Try in order" tries every configured forwarder in its own configured
+          order, with no background probing.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

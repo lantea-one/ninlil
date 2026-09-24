@@ -1,0 +1,110 @@
+<div class="list-header">
+  <h1>Roles</h1>
+  <a cButton color="primary" routerLink="/roles/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New role
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (roles().length === 0) {
+  <app-empty-state
+    icon="cilShieldAlt"
+    heading="No roles yet"
+    description="Create one to group a reusable set of permissions."
+  >
+    <a cButton color="primary" routerLink="/roles/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New role
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="roles()" class="role-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let role">
+          {{ role.name }}
+          @if (role.clusterConflictNote) {
+            <svg
+              cIcon
+              name="cilWarning"
+              size="sm"
+              class="conflict-icon"
+              [cTooltip]="role.clusterConflictNote"
+            ></svg>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="description">
+        <th cdk-header-cell *cdkHeaderCellDef>Description</th>
+        <td cdk-cell *cdkCellDef="let role">{{ role.description }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="permissionCount">
+        <th cdk-header-cell *cdkHeaderCellDef>Permissions</th>
+        <td cdk-cell *cdkCellDef="let role">{{ role.permissions?.length ?? 0 }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="sync">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let role">
+          <app-cluster-sync-info
+            [lastModifiedUtc]="role.lastModifiedUtc"
+            [originatingNodeId]="role.originatingNodeId"
+          />
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let role" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/roles', role.id, 'edit']"
+            cTooltip="Edit role"
+            aria-label="Edit role"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete role"
+            aria-label="Delete role"
+            (click)="deleteRole(role)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

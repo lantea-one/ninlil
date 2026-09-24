@@ -1,0 +1,61 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNS64 (RFC 6147)</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="dns64-enable" formControlName="enable" />
+          <label cFormCheckLabel for="dns64-enable"
+            >Synthesize an AAAA answer from a name's real A record when it has no AAAA of its own
+            (RFC 6147)</label
+          >
+        </c-form-check>
+
+        <div cFormText class="synthesis-note">
+          Fabricates a record that was never actually published by the zone or upstream
+          authoritative server -- a real, capability-expanding change, which is why this feature
+          defaults off. A synthesized answer never carries the "authenticated data" flag, even when
+          the real A record it was derived from was itself DNSSEC-validated.
+        </div>
+
+        <div class="field">
+          <label cLabel for="dns64-prefix">NAT64 synthesis prefix</label>
+          <input
+            cFormControl
+            id="dns64-prefix"
+            formControlName="synthesisPrefix"
+            placeholder="64:ff9b::/96"
+          />
+        </div>
+
+        <div cFormText class="synthesis-note">
+          RFC 6052's own Well-Known Prefix (<code>64:ff9b::/96</code>) is the default, usable only
+          for a client that reaches the public Internet without any local NAT64 translation of the
+          prefix itself. An operator running their own NAT64 gateway should set this to that
+          gateway's own Network-Specific Prefix instead. Only <code>/32</code>, <code>/40</code>,
+          <code>/48</code>, <code>/56</code>, <code>/64</code>, and <code>/96</code> are legal
+          prefix lengths.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

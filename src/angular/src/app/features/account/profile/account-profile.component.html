@@ -1,0 +1,172 @@
+<h1>Profile</h1>
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  @if (errorMessage()) {
+    <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+  }
+
+  <c-card class="profile-card">
+    <c-card-header>
+      <strong>Avatar</strong>
+    </c-card-header>
+    <c-card-body>
+      <div class="avatar-row">
+        @if (avatarUrl() && !avatarFailed()) {
+          <img
+            class="avatar-image"
+            [src]="avatarUrl()"
+            (error)="onAvatarError()"
+            alt="Avatar for {{ profile()?.displayName || profile()?.userName }}"
+          />
+        } @else {
+          <div class="avatar-fallback" aria-hidden="true">{{ avatarInitials() }}</div>
+        }
+        <p class="hint avatar-hint">
+          Your avatar is looked up from
+          <a href="https://gravatar.com" target="_blank" rel="noopener">Gravatar</a>, keyed on an
+          MD5 hash of your account's own e-mail address ({{ profile()?.email }}) -- so if that
+          address is ever changed (today only possible for an administrator to do, from the Users
+          page), your avatar changes with it automatically, the next time this page loads. If no
+          Gravatar is registered for that address -- or this server has no path to the internet at
+          all -- your initials are shown instead. This lookup happens entirely in your own browser;
+          your e-mail address itself is never sent anywhere by this server to make it work, only its
+          hash, computed locally before ever leaving your browser.
+        </p>
+      </div>
+    </c-card-body>
+  </c-card>
+
+  <c-card class="profile-card">
+    <c-card-header>
+      <strong>Profile details</strong>
+    </c-card-header>
+    <c-card-body>
+      <form cForm [formGroup]="profileForm" class="profile-form">
+        <div class="field">
+          <label cLabel for="profile-username">Sign-in name</label>
+          <input cFormControl id="profile-username" [value]="profile()?.userName" disabled />
+        </div>
+        <div class="field">
+          <label cLabel for="profile-email">E-mail address</label>
+          <input cFormControl id="profile-email" [value]="profile()?.email" disabled />
+          <p class="hint">Changing your e-mail address is not available from this page yet.</p>
+        </div>
+        <div class="field">
+          <label cLabel for="profile-display-name">Display name</label>
+          <input
+            cFormControl
+            id="profile-display-name"
+            formControlName="displayName"
+            autocomplete="name"
+          />
+        </div>
+        <div class="field">
+          <label cLabel for="profile-phone-number">Phone number</label>
+          <input
+            cFormControl
+            id="profile-phone-number"
+            formControlName="phoneNumber"
+            autocomplete="tel"
+          />
+        </div>
+        <button
+          cButton
+          color="primary"
+          type="button"
+          class="save-button"
+          [disabled]="profileForm.invalid || saving()"
+          (click)="save()"
+        >
+          @if (saving()) {
+            <c-spinner size="sm" />
+          } @else {
+            Save
+          }
+        </button>
+      </form>
+    </c-card-body>
+  </c-card>
+
+  <c-card class="profile-card">
+    <c-card-header>
+      <strong>Change password</strong>
+    </c-card-header>
+    <c-card-body>
+      <form
+        cForm
+        [formGroup]="changePasswordForm"
+        class="profile-form"
+        (ngSubmit)="changePassword()"
+      >
+        <div class="field">
+          <label cLabel for="profile-current-password">Current password</label>
+          <input
+            cFormControl
+            id="profile-current-password"
+            type="password"
+            formControlName="currentPassword"
+            autocomplete="current-password"
+          />
+        </div>
+        <div class="field">
+          <label cLabel for="profile-new-password">New password</label>
+          <input
+            cFormControl
+            id="profile-new-password"
+            type="password"
+            formControlName="newPassword"
+            autocomplete="new-password"
+          />
+          @if (changePasswordForm.controls.newPassword.hasError('minlength')) {
+            <div class="field-error">
+              Must be at least {{ passwordMinLength }} characters. This server's own password policy
+              may also require a mix of character types -- if your new password doesn't meet it, the
+              specific reason is shown here after you submit.
+            </div>
+          }
+        </div>
+        <div class="field">
+          <label cLabel for="profile-confirm-new-password">Confirm new password</label>
+          <input
+            cFormControl
+            id="profile-confirm-new-password"
+            type="password"
+            formControlName="confirmNewPassword"
+            autocomplete="new-password"
+          />
+        </div>
+
+        @if (
+          changePasswordForm.errors?.['passwordsMismatch'] &&
+          changePasswordForm.controls.confirmNewPassword.touched
+        ) {
+          <c-alert color="danger" [dismissible]="false" role="alert">
+            The new password and confirmation do not match.
+          </c-alert>
+        }
+
+        @if (changePasswordErrorMessage()) {
+          <c-alert color="danger" [dismissible]="false" role="alert">{{
+            changePasswordErrorMessage()
+          }}</c-alert>
+        }
+
+        <button
+          cButton
+          color="primary"
+          type="submit"
+          class="save-button"
+          [disabled]="changePasswordForm.invalid || changingPassword()"
+        >
+          @if (changingPassword()) {
+            <c-spinner size="sm" />
+          } @else {
+            Change password
+          }
+        </button>
+      </form>
+    </c-card-body>
+  </c-card>
+}

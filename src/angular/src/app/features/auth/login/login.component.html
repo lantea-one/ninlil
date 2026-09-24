@@ -1,0 +1,196 @@
+<div class="login-page">
+  <div class="login-brand">
+    <svg cIcon name="cilLan" size="xxl" class="login-brand-icon"></svg>
+    <span class="login-brand-text">Ninlil</span>
+  </div>
+
+  <c-card class="login-card shadow-lg border-0">
+    <c-card-header class="d-flex align-items-center gap-2">
+      <svg cIcon name="cilLockLocked" size="lg"></svg>
+      <strong>Admin sign in</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (ssoError()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">
+          Single sign-on could not complete. Try again, or sign in with your username and password
+          below.
+        </c-alert>
+      }
+
+      <p class="text-body-secondary">
+        @if (step() === 'credentials') {
+          Sign in to continue
+        } @else {
+          Enter your verification code
+        }
+      </p>
+
+      @if (step() === 'credentials') {
+        <form cForm [formGroup]="credentialsForm" (ngSubmit)="submitCredentials()">
+          <div class="mb-3">
+            <label cLabel for="login-username">Username</label>
+            <input
+              cFormControl
+              id="login-username"
+              formControlName="userName"
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label cLabel for="login-password">Password</label>
+            <input
+              cFormControl
+              id="login-password"
+              type="password"
+              formControlName="password"
+              autocomplete="current-password"
+            />
+          </div>
+
+          <c-form-check class="mb-3">
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="login-remember-me"
+              formControlName="rememberMe"
+              data-testid="remember-me"
+            />
+            <label cFormCheckLabel for="login-remember-me">Remember me</label>
+            <div class="remember-me-hint">
+              Stay signed in on this browser even after it closes. Leave unchecked on a shared
+              computer.
+            </div>
+          </c-form-check>
+
+          @if (errorMessage()) {
+            <c-alert color="danger" [dismissible]="false" role="alert">{{
+              errorMessage()
+            }}</c-alert>
+          }
+
+          <button
+            cButton
+            color="primary"
+            type="submit"
+            class="w-100 mb-2"
+            [disabled]="credentialsForm.invalid || submitting()"
+          >
+            @if (submitting()) {
+              <c-spinner size="sm" />
+            } @else {
+              Sign in
+            }
+          </button>
+
+          <a cButton color="secondary" variant="ghost" class="w-100" routerLink="/forgot-password">
+            Forgot your password?
+          </a>
+
+          @if (ssoEnabled()) {
+            <div class="login-sso-divider">
+              <span>or</span>
+            </div>
+
+            <button
+              cButton
+              color="secondary"
+              type="button"
+              class="w-100"
+              (click)="startSsoSignIn()"
+            >
+              {{ ssoDisplayName() }}
+            </button>
+          }
+        </form>
+      } @else {
+        <form cForm [formGroup]="twoFactorForm" (ngSubmit)="submitTwoFactorCode()">
+          <c-form-check inline class="mb-3">
+            <input
+              cFormCheckInput
+              type="radio"
+              id="login-provider-authenticator"
+              formControlName="provider"
+              value="Authenticator"
+            />
+            <label cFormCheckLabel for="login-provider-authenticator">Authenticator app</label>
+          </c-form-check>
+          <c-form-check inline class="mb-3">
+            <input
+              cFormCheckInput
+              type="radio"
+              id="login-provider-email"
+              formControlName="provider"
+              value="Email"
+            />
+            <label cFormCheckLabel for="login-provider-email">Emailed code</label>
+          </c-form-check>
+          <c-form-check inline class="mb-3">
+            <input
+              cFormCheckInput
+              type="radio"
+              id="login-provider-recovery-code"
+              formControlName="provider"
+              value="RecoveryCode"
+            />
+            <label cFormCheckLabel for="login-provider-recovery-code">Recovery code</label>
+          </c-form-check>
+
+          <div class="mb-3">
+            <label cLabel for="login-code">
+              {{
+                twoFactorForm.controls.provider.value === 'RecoveryCode'
+                  ? 'Recovery code'
+                  : 'Verification code'
+              }}
+            </label>
+            <input
+              cFormControl
+              id="login-code"
+              formControlName="code"
+              autocomplete="one-time-code"
+            />
+          </div>
+
+          @if (twoFactorForm.controls.provider.value === 'RecoveryCode') {
+            <p class="text-body-secondary small">
+              Enter one of your unused recovery codes. It can only be used once.
+            </p>
+          }
+
+          @if (errorMessage()) {
+            <c-alert color="danger" [dismissible]="false" role="alert">{{
+              errorMessage()
+            }}</c-alert>
+          }
+
+          <button
+            cButton
+            color="primary"
+            type="submit"
+            class="w-100 mb-2"
+            [disabled]="twoFactorForm.invalid || submitting()"
+          >
+            @if (submitting()) {
+              <c-spinner size="sm" />
+            } @else {
+              Verify
+            }
+          </button>
+
+          <button
+            cButton
+            color="secondary"
+            variant="ghost"
+            type="button"
+            class="w-100"
+            (click)="cancelTwoFactor()"
+          >
+            Back
+          </button>
+        </form>
+      }
+    </c-card-body>
+  </c-card>
+</div>

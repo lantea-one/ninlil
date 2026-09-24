@@ -1,0 +1,57 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Appearance</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <p class="hint">
+        This is this host's own <strong>global default</strong> palette and light/dark/system mode
+        -- every signed-in user who has not chosen a personal override of their own (via the
+        appearance switcher in the header) sees this. It takes effect immediately for them, with no
+        restart, and does not change your own personal preference here.
+      </p>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="appearance-palette">Palette</label>
+            <div class="palette-picker">
+              <span class="palette-swatch" [style.background-color]="selectedSwatch()"></span>
+              <select cSelect id="appearance-palette" formControlName="palette">
+                @for (option of paletteOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label cLabel for="appearance-mode">Mode</label>
+            <select cSelect id="appearance-mode" formControlName="mode">
+              @for (option of modeOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save global default
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

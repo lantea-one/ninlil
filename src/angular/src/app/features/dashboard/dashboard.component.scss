@@ -1,0 +1,38 @@
+// A two-column, full-width layout rather than the previous single, centered 1200px column -- the
+// resolved dense/data-forward direction means this landing page's own real operational data
+// (health, quick stats, the live feed) should use the available viewport rather than leaving 40%+
+// of a wide screen empty. `.dashboard-main` (health/stats/checklist) and `.dashboard-feed` (the
+// live SignalR feed, acting as a sidebar) sit side by side above ~960px combined width and wrap to
+// a single stacked column below it, via a plain `flex-wrap` -- no `@media` query, matching every
+// other responsive layout in this app.
+.dashboard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ninlil-space-5);
+  padding: var(--ninlil-space-5);
+}
+
+.dashboard-main {
+  flex: 3 1 640px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.dashboard-feed {
+  flex: 1 1 320px;
+  min-width: 280px;
+}
+
+.dashboard-loading {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: var(--ninlil-space-6) 0;
+}
+
+.dashboard-error {
+  color: var(--cui-danger);
+}

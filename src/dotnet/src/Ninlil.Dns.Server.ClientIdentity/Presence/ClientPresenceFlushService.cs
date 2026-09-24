@@ -1,0 +1,222 @@
+using System.Net;
+using System.Net.Sockets;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Ninlil.Dhcp.Common.Identity;
+using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Data.Abstractions.Entity;
+using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Core.ClientIdentity;
+
+// Define our namespace.
+namespace Ninlil.Dns.Server.ClientIdentity.Presence;
+
+/// <summary>
+///     This background service periodically drains <see cref="ClientPresenceTracker" /> and
+///     persists every buffered sighting onto the known-client address it belongs to, advancing
+///     that address's own <see cref="DnsClientAddressEntity.LastSeenUtc" /> (and, when the
+///     sighting's address family matches, its <see cref="DnsClientAddressEntity.Address" />).
+///     <para>
+///         Each kind of sighting is matched differently. An identity sighting matches the address
+///         with the same identifier and protocol version. A hardware-address sighting matches every
+///         address whose identifier embeds that MAC -- a plain MAC for an IPv4 identity, or a
+///         DUID-LLT/DUID-LL for an IPv6 one (see <see cref="DhcpClientIdentifierLinkKeys" />) -- so
+///         an IPv6 neighbor-table entry still marks a device registered only by its IPv4 MAC. A
+///         source-address sighting is first resolved to an identity through
+///         <see cref="IClientIdentityResolver" />, once per distinct address per flush rather than
+///         once per query. Only already-known addresses are ever updated; a sighting of an unknown
+///         device is dropped, since presence tracking never registers devices itself.
+///     </para>
+///     <para>
+///         Matching loads every stored address once per flush and only when there is something to
+///         flush -- appropriate for this project's homelab scale of tens to hundreds of devices. A
+///         sighting never moves <see cref="DnsClientAddressEntity.LastSeenUtc" /> backwards, and never
+///         touches <see cref="AuditableEntityBase.UpdatedAtUtc" />, which records configuration
+///         edits rather than observations.
+///     </para>
+/// </summary>
+/// <param name="tracker">The buffer sightings are drained from.</param>
+/// <param name="scopeFactory">The factory each flush opens its own fresh scope from.</param>
+/// <param name="options">The live presence options (flush interval).</param>
+/// <param name="logger">The logger flush failures are recorded to.</param>
+public sealed class ClientPresenceFlushService(
+    ClientPresenceTracker tracker,
+    IServiceScopeFactory scopeFactory,
+    IOptionsMonitor<ClientPresenceOptions> options,
+    ILogger<ClientPresenceFlushService> logger
+) : BackgroundService
+{
+    /// <summary>
+    ///     This field lists every address family a hardware sighting can be keyed under.
+    /// </summary>
+    private static readonly AddressFamily[] SightingFamilies =
+    [
+        AddressFamily.InterNetwork,
+        AddressFamily.InterNetworkV6,
+        AddressFamily.Unspecified,
+    ];
+
+    /// <inheritdoc />
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(options.CurrentValue.FlushInterval, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            try
+            {
+                await FlushAsync(stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception, "Unhandled exception while persisting client presence.");
+            }
+        }
+
+        // Persist whatever arrived since the last flush before shutting down, on a fresh token
+        // since the stopping one is already cancelled.
+        try
+        {
+            await FlushAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not persist client presence during shutdown.");
+        }
+    }
+
+    /// <summary>
+    ///     This method drains every buffered sighting and persists it onto the matching known
+    ///     addresses.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The number of address rows whose presence was advanced.</returns>
+    public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
+    {
+        ClientPresenceSnapshot snapshot = tracker.Drain();
+        if (snapshot.IsEmpty)
+            return 0;
+
+        // A fresh scope per flush, so every read observes every write committed since the last
+        // one rather than a stale tracked instance from an earlier scope.
+        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+        IServiceProvider services = scope.ServiceProvider;
+
+        // Fold resolved source-address sightings into the identity sightings.
+        Dictionary<(InternetProtocolVersionEnum, string), Sighting> identities = new(
+            snapshot.Identities
+        );
+        IClientIdentityResolver resolver = services.GetService<IClientIdentityResolver>();
+        if (resolver is not null)
+        {
+            foreach ((IPAddress address, Sighting sighting) in snapshot.SourceAddresses)
+            {
+                ClientIdentityResolution resolution = await resolver.ResolveAsync(
+                    address,
+                    stoppingToken
+                );
+                if (resolution is null || string.IsNullOrWhiteSpace(resolution.ClientIdentifier))
+                    continue;
+
+                (InternetProtocolVersionEnum, string) key = (
+                    resolution.ProtocolVersion,
+                    resolution.ClientIdentifier.Trim().ToLowerInvariant()
+                );
+                if (
+                    !identities.TryGetValue(key, out Sighting existing)
+                    || sighting.SeenAtUtc > existing.SeenAtUtc
+                )
+                    identities[key] = sighting;
+            }
+        }
+
+        IDnsClientAddressRepository addressRepository =
+            services.GetRequiredService<IDnsClientAddressRepository>();
+        int advanced = 0;
+
+        foreach (
+            DnsClientAddressEntity row in await addressRepository.ListAsync(
+                stoppingToken: stoppingToken
+            )
+        )
+        {
+            // Gather every sighting that belongs to this address: its own identity, plus any
+            // hardware sighting (of either address family) of a MAC its identifier embeds.
+            List<Sighting> candidates = [];
+
+            if (
+                row.ClientIdentifier is not null
+                && identities.TryGetValue(
+                    (row.ProtocolVersion, row.ClientIdentifier.Trim().ToLowerInvariant()),
+                    out Sighting identitySighting
+                )
+            )
+                candidates.Add(identitySighting);
+
+            if (snapshot.HardwareAddresses.Count > 0)
+                foreach (string key in LinkKeysFor(row))
+                    if (key.StartsWith("mac:", StringComparison.Ordinal))
+                        foreach (AddressFamily family in SightingFamilies)
+                            if (
+                                snapshot.HardwareAddresses.TryGetValue(
+                                    (key[4..], family),
+                                    out Sighting hardware
+                                )
+                            )
+                                candidates.Add(hardware);
+
+            if (candidates.Count == 0)
+                continue;
+
+            // Presence advances to the newest sighting of any kind, and never moves backwards.
+            Sighting newest = candidates.MaxBy(candidate => candidate.SeenAtUtc);
+            if (row.LastSeenUtc is { } last && newest.SeenAtUtc <= last)
+                continue;
+
+            row.LastSeenUtc = newest.SeenAtUtc;
+
+            // The recorded address comes from the newest sighting of the row's own family only --
+            // an IPv6 sighting of a device's MAC must never overwrite its IPv4 identity's address.
+            Sighting sameFamily = candidates
+                .Where(candidate =>
+                    candidate.Address?.AddressFamily == FamilyOf(row.ProtocolVersion)
+                )
+                .MaxBy(candidate => candidate.SeenAtUtc);
+            if (sameFamily is not null)
+                row.Address = sameFamily.Address.ToString();
+
+            addressRepository.Update(row);
+            advanced++;
+        }
+
+        if (advanced > 0)
+            await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync(stoppingToken);
+
+        return advanced;
+    }
+
+    /// <summary>
+    ///     This method derives a stored address's own link keys by its protocol version.
+    /// </summary>
+    private static IReadOnlySet<string> LinkKeysFor(DnsClientAddressEntity row) =>
+        row.ProtocolVersion == InternetProtocolVersionEnum.IPv6
+            ? DhcpClientIdentifierLinkKeys.FromDhcpv6Identifier(row.ClientIdentifier)
+            : DhcpClientIdentifierLinkKeys.FromDhcpv4Identifier(row.ClientIdentifier);
+
+    /// <summary>
+    ///     This method maps a protocol version onto its socket address family.
+    /// </summary>
+    private static AddressFamily FamilyOf(InternetProtocolVersionEnum protocolVersion) =>
+        protocolVersion == InternetProtocolVersionEnum.IPv6
+            ? AddressFamily.InterNetworkV6
+            : AddressFamily.InterNetwork;
+}

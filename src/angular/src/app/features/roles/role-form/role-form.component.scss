@@ -1,0 +1,45 @@
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+// This form's own edit-mode content includes the shared `app-permission-picker` (its own dense,
+// flex-wrapping checkbox grid across every permission resource group), which genuinely benefits
+// from the widest form-width step rather than the compact/standard ones a simpler form uses.
+.form-card {
+  max-width: var(--ninlil-form-max-width-wide);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.role-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+}
+
+.full-width {
+  width: 100%;
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+h3 {
+  margin: var(--ninlil-space-2) 0 0;
+  font-size: var(--ninlil-font-size-md);
+}

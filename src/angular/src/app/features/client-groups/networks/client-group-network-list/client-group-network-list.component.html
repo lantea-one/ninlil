@@ -1,0 +1,91 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/client-groups" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Client Groups
+    </a>
+    <h1>{{ groupName() ?? 'Networks' }}</h1>
+  </div>
+  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'networks', 'new']">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Add network
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (networks().length === 0) {
+  <app-empty-state
+    icon="cilLan"
+    heading="No networks yet"
+    description="Add a CIDR range or ClientID to control which clients this group's filter list assignments apply to."
+  >
+    <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'networks', 'new']">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      Add network
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="networks()" class="network-table">
+      <ng-container cdkColumnDef="cidr">
+        <th cdk-header-cell *cdkHeaderCellDef>Matches by</th>
+        <td cdk-cell *cdkCellDef="let network">
+          @if (network.clientId) {
+            <span class="match-kind-badge">ClientID</span> {{ network.clientId }}
+          } @else {
+            <span class="match-kind-badge">CIDR</span> {{ network.cidr }}
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let network" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', groupId, 'networks', network.id, 'edit']"
+            cTooltip="Edit network"
+            aria-label="Edit network"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete network"
+            aria-label="Delete network"
+            (click)="deleteNetwork(network)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

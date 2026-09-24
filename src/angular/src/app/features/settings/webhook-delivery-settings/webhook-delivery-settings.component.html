@@ -1,0 +1,69 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Webhook delivery</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="webhookdelivery-initial-retry">Initial retry delay</label>
+            <input
+              cFormControl
+              id="webhookdelivery-initial-retry"
+              formControlName="initialRetryDelay"
+              placeholder="00:00:01"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="webhookdelivery-max-retry">Max retry delay</label>
+            <input
+              cFormControl
+              id="webhookdelivery-max-retry"
+              formControlName="maxRetryDelay"
+              placeholder="00:00:30"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="webhookdelivery-request-timeout">Request timeout</label>
+          <input
+            cFormControl
+            id="webhookdelivery-request-timeout"
+            formControlName="requestTimeout"
+            placeholder="00:00:10"
+          />
+          <div cFormText>
+            Applies to a new outbound HTTP handler the next time one is built for webhook deliveries
+            (roughly every two minutes) -- not instant like the two retry delays above, but no
+            restart is ever needed either.
+          </div>
+        </div>
+
+        <div cFormText>
+          A single subscription's own maximum attempt count is configured per subscription, not
+          here.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

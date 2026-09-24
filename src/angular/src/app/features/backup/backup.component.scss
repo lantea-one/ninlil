@@ -1,0 +1,41 @@
+.page-title {
+  margin: var(--ninlil-space-5) var(--ninlil-space-5) 0;
+}
+
+.form-card {
+  max-width: var(--ninlil-form-max-width);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+.hint {
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.restore-summary {
+  margin-top: var(--ninlil-space-4);
+}
+
+.unencrypted-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ninlil-space-2);
+}

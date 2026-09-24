@@ -1,0 +1,131 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/filter-lists" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Filter Lists
+    </a>
+    <h1>{{ listName() ?? 'Entries' }}</h1>
+  </div>
+  <a
+    cButton
+    color="primary"
+    [routerLink]="isReadOnly() ? null : ['/filter-lists', listId, 'entries', 'new']"
+    [class.disabled-link]="isReadOnly()"
+    [attr.tabindex]="isReadOnly() ? -1 : null"
+    [cTooltip]="isReadOnly() ? 'This list is subscribed -- entries cannot be added by hand.' : ''"
+  >
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Add entry
+  </a>
+</div>
+
+@if (isReadOnly()) {
+  <p class="readonly-banner">
+    This list is subscribed; its entries are periodically replaced wholesale from its own
+    subscription URL and cannot be edited manually. Change the list's own source to "Local" first if
+    manual entries are genuinely wanted.
+  </p>
+}
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (entries().length === 0) {
+  <app-empty-state
+    icon="cilList"
+    heading="No entries yet"
+    [description]="
+      isReadOnly()
+        ? 'This subscribed list has not yet fetched any entries.'
+        : 'Add a domain, wildcard, or regex entry to start matching queries against this list.'
+    "
+  >
+    @if (!isReadOnly()) {
+      <a cButton color="primary" [routerLink]="['/filter-lists', listId, 'entries', 'new']">
+        <svg cIcon name="cilPlus" size="sm"></svg>
+        Add entry
+      </a>
+    }
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="entries()" class="entry-table">
+      <ng-container cdkColumnDef="value">
+        <th cdk-header-cell *cdkHeaderCellDef>Value</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.value }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="kind">
+        <th cdk-header-cell *cdkHeaderCellDef>Kind</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.kind ?? 'Domain' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="comment">
+        <th cdk-header-cell *cdkHeaderCellDef>Comment</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.comment }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="sync">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let entry">
+          <app-cluster-sync-info
+            [lastModifiedUtc]="entry.updatedAtUtc ?? entry.createdAtUtc"
+            [originatingNodeId]="entry.originatingNodeId"
+          />
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let entry" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="
+              isReadOnly() ? null : ['/filter-lists', listId, 'entries', entry.id, 'edit']
+            "
+            [class.disabled-link]="isReadOnly()"
+            [attr.tabindex]="isReadOnly() ? -1 : null"
+            cTooltip="Edit entry"
+            aria-label="Edit entry"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            [disabled]="isReadOnly()"
+            cTooltip="Delete entry"
+            aria-label="Delete entry"
+            (click)="deleteEntry(entry)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

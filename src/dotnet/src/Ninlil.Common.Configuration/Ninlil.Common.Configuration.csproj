@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>frejagail</Authors>
+    <Company>Ninlil</Company>
+    <Description>
+            This library provides the NINLIL_-prefixed environment-variable configuration
+            mechanism shared by every Ninlil host: a PascalCase-to-underscore name generator, a
+            reflection-based Options-class-to-environment-variable mapping builder, and a custom
+            configuration provider that reads only NINLIL_-prefixed variables (ASP.NET Core's own
+            default double-underscore environment variable scheme is never consulted).
+        </Description>
+    <DocumentationFile>bin/$(Configuration)/$(TargetFramework)/$(AssemblyName).xml</DocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);1608;1701;1702;CS1591;NETSDK1194;NU1608;NU1701;NU1702;</NoWarn>
+    <Nullable>disable</Nullable>
+    <PackageId>Ninlil.Common.Configuration</PackageId>
+    <RuntimeIdentifiers>
+            linux-arm64;linux-x64;linux-musl-arm64;linux-musl-x64;osx-arm64;osx-x64;win-arm64;win-x64
+        </RuntimeIdentifiers>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+</Project>

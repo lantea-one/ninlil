@@ -1,0 +1,37 @@
+<div class="icon-grid" role="radiogroup" aria-label="Device icon">
+  <button
+    type="button"
+    class="icon-tile"
+    role="radio"
+    [class.selected]="value() === null"
+    [attr.aria-checked]="value() === null"
+    [disabled]="disabled()"
+    [title]="suggestion() ? 'Automatic (suggested: ' + suggestion()!.label + ')' : 'Automatic'"
+    (click)="select(null)"
+  >
+    <svg cIcon [name]="suggestion()?.icon ?? 'cilDevices'" size="xl" class="muted"></svg>
+    <span class="icon-label">
+      Automatic
+      @if (suggestion()) {
+        <small class="suggestion">{{ suggestion()!.label }}</small>
+      }
+    </span>
+  </button>
+
+  @for (option of catalog; track option.key) {
+    <button
+      type="button"
+      class="icon-tile"
+      role="radio"
+      [class.selected]="value() === option.key"
+      [attr.aria-checked]="value() === option.key"
+      [attr.data-icon-key]="option.key"
+      [disabled]="disabled()"
+      [title]="option.label"
+      (click)="select(option.key)"
+    >
+      <svg cIcon [name]="option.icon" size="xl"></svg>
+      <span class="icon-label">{{ option.label }}</span>
+    </button>
+  }
+</div>

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's Phase 3k ActiveMQ event-transport implementation: an
+            ActiveMq-backed IDnsServerEventBrokerTransport so Server.Core's own internal event
+            bus can fully swap from its default in-memory delivery to a shared, fanout-broadcast
+            ActiveMQ topic across multiple Ninlil instances, the same capability
+            Server.Events.RabbitMq already offers over RabbitMQ.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.Events.ActiveMq</PackageId>
+  </PropertyGroup>
+
+  <!--
+      Apache.NMS.ActiveMQ is the official .NET client for ActiveMQ "Classic," spoken over
+      OpenWire. Apache-2.0 licensed, MIT-compatible, the same judgment call this project already
+      made for RabbitMQ.Client/Certes/AWSSDK.Route53 over hand-rolling a protocol client from
+      scratch. Its own failover transport (the failover: URI scheme) provides automatic
+      reconnection with backoff natively, so this project does not need to hand-roll the same
+      reconnect loop Server.Events.RabbitMq's own transport does for RabbitMQ.Client, which has
+      no equivalent built in.
+    -->
+  <ItemGroup>
+    <PackageReference Include="Apache.NMS.ActiveMQ" Version="2.2.0" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+</Project>

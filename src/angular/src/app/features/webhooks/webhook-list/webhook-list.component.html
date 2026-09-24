@@ -1,0 +1,127 @@
+<div class="list-header">
+  <h1>Webhooks</h1>
+  <a cButton color="primary" routerLink="/webhooks/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New webhook
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (subscriptions().length === 0) {
+  <app-empty-state
+    icon="cilLink"
+    heading="No webhooks yet"
+    description="Create one to receive an outbound POST whenever a subscribed event occurs."
+  >
+    <a cButton color="primary" routerLink="/webhooks/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New webhook
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="subscriptions()" class="webhook-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let subscription">{{ subscription.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="targetUrl">
+        <th cdk-header-cell *cdkHeaderCellDef>Target URL</th>
+        <td cdk-cell *cdkCellDef="let subscription" class="target-url-cell">
+          {{ subscription.targetUrl }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="eventTypeNames">
+        <th cdk-header-cell *cdkHeaderCellDef>Events</th>
+        <td cdk-cell *cdkCellDef="let subscription">
+          {{ summarizeEventTypeNames(subscription.eventTypeNames) }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="authMode">
+        <th cdk-header-cell *cdkHeaderCellDef>Auth</th>
+        <td cdk-cell *cdkCellDef="let subscription">{{ subscription.authMode }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let subscription">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="subscription.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="
+              subscription.isDisabled ? 'Enable this subscription' : 'Disable this subscription'
+            "
+            (click)="toggleDisabled(subscription)"
+          >
+            {{ subscription.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let subscription" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/webhooks', subscription.id, 'deliveries']"
+            cTooltip="View delivery history"
+            aria-label="View delivery history"
+          >
+            <svg cIcon name="cilHistory" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/webhooks', subscription.id, 'edit']"
+            cTooltip="Edit subscription"
+            aria-label="Edit subscription"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete subscription"
+            aria-label="Delete subscription"
+            (click)="deleteSubscription(subscription)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

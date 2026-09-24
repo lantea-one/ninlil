@@ -1,0 +1,309 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Storage engine</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      @if (status(); as currentStatus) {
+        <p>
+          Currently active engine:
+          <c-badge color="info">{{ currentStatus.engine }}</c-badge>
+          @if (currentStatus.switchInProgress) {
+            <c-badge color="warning" class="ms-2">Switch in progress</c-badge>
+          }
+        </p>
+      }
+
+      @if (lastResult(); as result) {
+        <c-alert color="success" [dismissible]="false" role="alert">
+          Switched from {{ result.previousEngine }} to {{ result.newEngine }}, restoring
+          {{ result.totalEntitiesRestored }} rows across
+          {{ result.entityCounts ? (result.entityCounts | keyvalue).length : 0 }} entity types --
+          this process never restarted.
+        </c-alert>
+      }
+
+      <p class="text-body-secondary">
+        Switches this already-running server onto a different database engine, in place -- no
+        restart, no Docker, no systemd. This backs up the currently active engine, provisions and
+        migrates the target, flips this process onto it, and restores the backup into it. Only the
+        four relational engines below can be switched to or from live; MongoDB still requires
+        editing configuration and restarting.
+      </p>
+
+      <p class="hint">
+        Every zone, record, key, credential, user, role, API token, filter list, client group,
+        forwarder, webhook subscription, and DNS rewrite this server holds carries across -- this
+        reuses the exact same full backup/restore mechanism as the Backup &amp; Restore page, with
+        the same scope. The persistent query log, the zone-transfer journal, and server logs/metrics
+        are not included either way, for the same reason they're left out of a manual backup:
+        diagnostic history, not configuration this server needs in order to keep working.
+      </p>
+
+      <p class="hint">
+        The target is connected to and fully migrated <em>before</em> anything about this server's
+        live storage changes -- a wrong host name, an unreachable server, or a rejected username/
+        password is caught right there, and the switch stops with this server still serving every
+        request from its current engine, completely untouched. Only once the target has proven
+        reachable does the switch back up the current engine and start copying data into it; a
+        problem at that later stage reverts this process back onto the engine that was active before
+        you clicked Switch, whose own data was never touched either. While a switch is running,
+        every other administrative request (including this page's own other tabs) is briefly
+        rejected with a 503 rather than risking a confusing, half-restored answer -- real DNS query
+        resolution keeps running throughout, since it's served from this server's own in-memory zone
+        cache, not read fresh from the database on every query.
+      </p>
+
+      <p class="hint">
+        <strong>Warning:</strong> if the target database is reachable and already holds real data --
+        an existing production database mistaken for a scratch one, for example -- that data is
+        wiped and overwritten with this server's own restored data during this switch, exactly like
+        a manual restore on the Backup &amp; Restore page. Double-check the connection details below
+        actually point at a database you intend to overwrite.
+      </p>
+
+      <p class="hint">
+        <strong>Warning:</strong> this switch changes what this already-running process uses in
+        memory only -- it does not rewrite this server's own on-disk configuration to match. If this
+        process is ever restarted after switching (a container restart, a host reboot, a manual
+        stop/start), it comes back up on whichever engine its configuration file's own "Storage"
+        section still names, which -- unless you update that yourself afterward -- is the engine you
+        just switched away from, not this one. Treat a live switch as provisional until the
+        persisted configuration is updated to match; also worth knowing: the previous engine's own
+        data is left exactly as it was, untouched and still switchable back to at any time, but
+        frozen at the moment you switched away from it -- nothing written while running on the new
+        engine appears there automatically.
+      </p>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-row class="mb-3">
+          <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
+          <c-col sm="9">
+            <select cSelect id="storage-target-engine" formControlName="targetEngine">
+              @for (engine of status()?.liveSwitchSupportedEngines ?? []; track engine) {
+                <option [value]="engine">{{ engine }}</option>
+              }
+            </select>
+          </c-col>
+        </c-row>
+
+        @if (form.controls.targetEngine.value === 'Sqlite') {
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-sqlite-file-path">File path</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-sqlite-file-path"
+                formControlName="sqliteFilePath"
+                placeholder="/path/to/new.sqlite3"
+              />
+              <p class="hint">
+                A path that doesn't exist yet is created automatically, empty, ready to receive this
+                server's data -- an existing file at this path is treated as a real target and, per
+                the warning above, wiped and overwritten.
+              </p>
+            </c-col>
+          </c-row>
+        }
+
+        @if (form.controls.targetEngine.value === 'PostgreSql') {
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-host">Host</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-pg-host" formControlName="postgreSqlHost" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-port">Port</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-pg-port"
+                type="number"
+                formControlName="postgreSqlPort"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-database">Database name</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-pg-database"
+                formControlName="postgreSqlDatabaseName"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-user">Username</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-pg-user" formControlName="postgreSqlUserName" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-password">Password</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-pg-password"
+                type="password"
+                formControlName="postgreSqlPassword"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-pg-ssl-mode">SSL mode</label>
+            <c-col sm="9">
+              <select cSelect id="storage-pg-ssl-mode" formControlName="postgreSqlEncryptionMode">
+                @for (mode of encryptionModeOptions.postgreSql; track mode) {
+                  <option [value]="mode">{{ mode }}</option>
+                }
+              </select>
+            </c-col>
+          </c-row>
+        }
+
+        @if (form.controls.targetEngine.value === 'MySql') {
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-host">Host</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-mysql-host" formControlName="mySqlHost" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-port">Port</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-mysql-port"
+                type="number"
+                formControlName="mySqlPort"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-database">Database name</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-mysql-database" formControlName="mySqlDatabaseName" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-user">Username</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-mysql-user" formControlName="mySqlUserName" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-password">Password</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-mysql-password"
+                type="password"
+                formControlName="mySqlPassword"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mysql-ssl-mode">SSL mode</label>
+            <c-col sm="9">
+              <select cSelect id="storage-mysql-ssl-mode" formControlName="mySqlEncryptionMode">
+                @for (mode of encryptionModeOptions.mySql; track mode) {
+                  <option [value]="mode">{{ mode }}</option>
+                }
+              </select>
+            </c-col>
+          </c-row>
+        }
+
+        @if (form.controls.targetEngine.value === 'SqlServer') {
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-host">Host</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-mssql-host" formControlName="sqlServerHost" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-port">Port</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-mssql-port"
+                type="number"
+                formControlName="sqlServerPort"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-database">Database name</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-mssql-database"
+                formControlName="sqlServerDatabaseName"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-user">Username</label>
+            <c-col sm="9">
+              <input cFormControl id="storage-mssql-user" formControlName="sqlServerUserName" />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-password">Password</label>
+            <c-col sm="9">
+              <input
+                cFormControl
+                id="storage-mssql-password"
+                type="password"
+                formControlName="sqlServerPassword"
+              />
+            </c-col>
+          </c-row>
+          <c-row class="mb-3">
+            <label cCol="sm-3" cLabel for="storage-mssql-encrypt-mode">Encryption mode</label>
+            <c-col sm="9">
+              <select
+                cSelect
+                id="storage-mssql-encrypt-mode"
+                formControlName="sqlServerEncryptionMode"
+              >
+                @for (mode of encryptionModeOptions.sqlServer; track mode) {
+                  <option [value]="mode">{{ mode }}</option>
+                }
+              </select>
+            </c-col>
+          </c-row>
+        }
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      @if (!canManage()) {
+        <span class="text-body-secondary me-auto align-self-center"
+          >You do not have permission to switch the storage engine.</span
+        >
+      }
+      <button
+        cButton
+        color="primary"
+        [disabled]="form.invalid || switching() || !canManage()"
+        (click)="switchEngine()"
+      >
+        @if (switching()) {
+          <c-spinner size="sm" />
+        } @else {
+          Switch now
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

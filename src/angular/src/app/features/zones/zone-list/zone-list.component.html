@@ -1,0 +1,135 @@
+<div class="zone-list-header">
+  <h1>Zones</h1>
+  <a cButton color="primary" routerLink="/zones/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New zone
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (zones().length === 0) {
+  <app-empty-state
+    icon="cilStorage"
+    heading="No zones yet"
+    description="A zone holds the DNS records this server answers for. Create your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/zones/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New zone
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="zones()" class="zone-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let zone">{{ zone.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="type">
+        <th cdk-header-cell *cdkHeaderCellDef>Type</th>
+        <td cdk-cell *cdkCellDef="let zone">
+          <c-badge color="info">{{ zone.type }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="dnssec">
+        <th cdk-header-cell *cdkHeaderCellDef>DNSSEC</th>
+        <td cdk-cell *cdkCellDef="let zone">
+          <svg
+            cIcon
+            [name]="zone.isDnssecSigned ? 'cilLockLocked' : 'cilLockUnlocked'"
+            [cTooltip]="zone.isDnssecSigned ? 'Signed' : 'Not signed'"
+          ></svg>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let zone">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="zone.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="zone.isDisabled ? 'Enable this zone' : 'Disable this zone'"
+            (click)="toggleDisabled(zone)"
+          >
+            {{ zone.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let zone" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/zones', zone.id, 'records']"
+            cTooltip="Manage records"
+            aria-label="Manage records"
+          >
+            <svg cIcon name="cilStorage" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/zones', zone.id, 'dnssec-keys']"
+            cTooltip="Manage DNSSEC keys"
+            aria-label="Manage DNSSEC keys"
+          >
+            <svg cIcon name="cilLockLocked" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/zones', zone.id, 'edit']"
+            cTooltip="Edit zone"
+            aria-label="Edit zone"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete zone"
+            aria-label="Delete zone"
+            (click)="deleteZone(zone)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

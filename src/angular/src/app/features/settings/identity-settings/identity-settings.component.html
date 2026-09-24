@@ -1,0 +1,140 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Password &amp; lockout policy</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <h6 class="section-heading">Password complexity</h6>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="identity-required-length">Minimum length</label>
+            <input
+              cFormControl
+              id="identity-required-length"
+              type="number"
+              min="1"
+              formControlName="requiredLength"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="identity-required-unique-chars">Minimum unique characters</label>
+            <input
+              cFormControl
+              id="identity-required-unique-chars"
+              type="number"
+              min="1"
+              formControlName="requiredUniqueChars"
+            />
+          </div>
+        </div>
+
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-require-digit"
+            formControlName="requireDigit"
+          />
+          <label cFormCheckLabel for="identity-require-digit">Require a digit</label>
+        </c-form-check>
+
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-require-lowercase"
+            formControlName="requireLowercase"
+          />
+          <label cFormCheckLabel for="identity-require-lowercase">Require a lowercase letter</label>
+        </c-form-check>
+
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-require-uppercase"
+            formControlName="requireUppercase"
+          />
+          <label cFormCheckLabel for="identity-require-uppercase"
+            >Require an uppercase letter</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-require-non-alphanumeric"
+            formControlName="requireNonAlphanumeric"
+          />
+          <label cFormCheckLabel for="identity-require-non-alphanumeric"
+            >Require a non-alphanumeric character</label
+          >
+        </c-form-check>
+
+        <h6 class="section-heading">Account lockout</h6>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="identity-lockout-timespan">Lockout duration</label>
+            <input
+              cFormControl
+              id="identity-lockout-timespan"
+              formControlName="defaultLockoutTimeSpan"
+              placeholder="00:15:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="identity-max-failed-attempts">Failed attempts before lockout</label>
+            <input
+              cFormControl
+              id="identity-max-failed-attempts"
+              type="number"
+              min="1"
+              formControlName="maxFailedAccessAttempts"
+            />
+          </div>
+        </div>
+
+        <c-form-check class="mb-2">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="identity-allowed-for-new-users"
+            formControlName="allowedForNewUsers"
+          />
+          <label cFormCheckLabel for="identity-allowed-for-new-users"
+            >Apply lockout to brand-new accounts too</label
+          >
+        </c-form-check>
+
+        <div cFormText>
+          Every field takes effect on the very next sign-in, registration, or password-change
+          attempt -- not the request already in flight when this is saved -- with no restart
+          required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

@@ -1,0 +1,725 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="zone-form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit zone' : 'New zone' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="zone-form">
+        <!-- The core fields every zone type needs (name, type, disabled, comments) stay
+             always-visible above every collapsible section below -- these are the fields an
+             operator fills in first and most often revisits, so they are never one click away
+             from view the way a type-specific section legitimately can be. -->
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="zone-name">Zone name</label>
+            <input cFormControl id="zone-name" formControlName="name" placeholder="example.com" />
+            @if (form.controls.name.hasError('required')) {
+              <div class="field-error">A zone name is required.</div>
+            }
+          </div>
+
+          <div class="field">
+            <label cLabel for="zone-type">Type</label>
+            <select cSelect id="zone-type" formControlName="type">
+              @for (type of zoneTypeOptions; track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+          </div>
+        </section>
+        <p class="hint">
+          <strong>Primary</strong>: this server holds the zone's master, editable copy.
+          <strong>Secondary</strong>: a read-only copy kept in sync from a primary via zone
+          transfer. <strong>Stub</strong>: like Secondary, but only NS records transfer -- enough to
+          learn a delegation's own name servers. <strong>Forwarder</strong>: no local data at all;
+          every query under it is forwarded to the addresses configured below.
+          <strong>SecondaryForwarder</strong>: a Secondary copy of a Forwarder zone's own forwarding
+          configuration. <strong>Catalog</strong>: a machine-readable list of other zones this
+          server should provision automatically. <strong>SecondaryCatalog</strong>: a Secondary copy
+          of a Catalog zone. <strong>CloudPrimary</strong>: this server holds the master copy and
+          continuously pushes its changes out to a configured cloud DNS provider.
+          <strong>CloudSecondary</strong>: a read-only copy pulled in from a cloud DNS provider.
+        </p>
+
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="zone-disabled" formControlName="isDisabled" />
+          <label cFormCheckLabel for="zone-disabled">Disabled</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="zone-comments">Comments</label>
+          <textarea cFormControl id="zone-comments" formControlName="comments" rows="2"></textarea>
+        </div>
+
+        <!-- Every section below this point is real, type-conditional configuration -- each gets
+             its own collapsible header (open by default; see ZoneFormComponent.isSectionOpen's
+             own doc comment for why nothing starts hidden) rather than the plain <h3> breaks this
+             form used before, so a long, multi-section form reads as real, labeled, scannable
+             structure instead of one unbroken scroll. -->
+        @if (showTransferSection()) {
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('transfer')"
+              aria-controls="section-transfer-body"
+              (click)="toggleSection('transfer')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('transfer')"
+              ></svg>
+              <h3>Transfer source</h3>
+            </button>
+            @if (isSectionOpen('transfer')) {
+              <div class="form-section-body" id="section-transfer-body">
+                <div class="field full-width">
+                  <label cLabel for="zone-primary-addresses"
+                    >Primary server addresses (one per line)</label
+                  >
+                  <textarea
+                    cFormControl
+                    id="zone-primary-addresses"
+                    formControlName="primaryServerAddressesText"
+                    rows="2"
+                  ></textarea>
+                </div>
+                <div class="field">
+                  <label cLabel for="zone-transfer-transport">Transfer transport</label>
+                  <select cSelect id="zone-transfer-transport" formControlName="transferTransport">
+                    @for (transport of transferTransportOptions; track transport) {
+                      <option [value]="transport">{{ transport }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+            }
+          </section>
+        }
+
+        @if (showForwardingSection()) {
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('forwarding')"
+              aria-controls="section-forwarding-body"
+              (click)="toggleSection('forwarding')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('forwarding')"
+              ></svg>
+              <h3>Forwarding</h3>
+            </button>
+            @if (isSectionOpen('forwarding')) {
+              <div class="form-section-body" id="section-forwarding-body">
+                <div class="field full-width">
+                  <label cLabel for="zone-forwarder-addresses"
+                    >Forwarder addresses (one per line)</label
+                  >
+                  <textarea
+                    cFormControl
+                    id="zone-forwarder-addresses"
+                    formControlName="forwarderAddressesText"
+                    rows="2"
+                  ></textarea>
+                </div>
+              </div>
+            }
+          </section>
+        }
+
+        @if (showCloudSection()) {
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('cloud')"
+              aria-controls="section-cloud-body"
+              (click)="toggleSection('cloud')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('cloud')"
+              ></svg>
+              <h3>Cloud sync</h3>
+            </button>
+            @if (isSectionOpen('cloud')) {
+              <div class="form-section-body" id="section-cloud-body">
+                <section class="field-row">
+                  <div class="field">
+                    <label cLabel for="zone-cloud-credential-select"
+                      >Cloud provider credential</label
+                    >
+                    <select
+                      cSelect
+                      id="zone-cloud-credential-select"
+                      formControlName="cloudProviderCredentialSelection"
+                    >
+                      <option value="">None</option>
+                      @for (credential of cloudCredentials(); track credential.id) {
+                        <option [value]="credential.id">
+                          {{ credential.name }} ({{ credential.providerType }})
+                        </option>
+                      }
+                      <option [value]="customCloudCredentialOption">
+                        Enter a custom ID&hellip;
+                      </option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label cLabel for="zone-cloud-zone-id">Cloud provider's own zone ID</label>
+                    <input
+                      cFormControl
+                      id="zone-cloud-zone-id"
+                      formControlName="cloudProviderZoneId"
+                    />
+                  </div>
+                  <div class="field">
+                    <label cLabel for="zone-cloud-sync-interval">Sync interval (hh:mm:ss)</label>
+                    <input
+                      cFormControl
+                      id="zone-cloud-sync-interval"
+                      formControlName="cloudSyncIntervalText"
+                    />
+                    @if (form.controls.cloudSyncIntervalText.hasError('pattern')) {
+                      <div class="field-error">Use hh:mm:ss, e.g. 00:05:00.</div>
+                    }
+                  </div>
+                </section>
+                @if (showCustomCloudCredentialField()) {
+                  <div class="field">
+                    <label cLabel for="zone-cloud-credential-custom">Custom credential ID</label>
+                    <input
+                      cFormControl
+                      id="zone-cloud-credential-custom"
+                      formControlName="cloudProviderCredentialId"
+                      placeholder="credential-id"
+                    />
+                  </div>
+                  <p class="hint">
+                    This ID doesn't match any cloud provider credential currently visible to this
+                    session -- manage credential sets on the
+                    <a routerLink="/cloud-provider-credentials">Cloud Provider Credentials</a> page,
+                    or leave it as-is if the credential set exists but this session can't see it.
+                  </p>
+                } @else {
+                  <p class="hint">
+                    Sourced live from the
+                    <a routerLink="/cloud-provider-credentials">Cloud Provider Credentials</a> page.
+                    Pick "Enter a custom ID&hellip;" to reference a credential set not in this list.
+                  </p>
+                }
+              </div>
+            }
+          </section>
+        }
+
+        @if (showOriginationSections()) {
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('dnssec')"
+              aria-controls="section-dnssec-body"
+              (click)="toggleSection('dnssec')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('dnssec')"
+              ></svg>
+              <h3>DNSSEC signing</h3>
+            </button>
+            @if (isSectionOpen('dnssec')) {
+              <div class="form-section-body" id="section-dnssec-body">
+                <c-form-check class="mb-3">
+                  <input
+                    cFormCheckInput
+                    type="checkbox"
+                    id="zone-dnssec-signed"
+                    formControlName="isDnssecSigned"
+                  />
+                  <label cFormCheckLabel for="zone-dnssec-signed">Sign this zone with DNSSEC</label>
+                </c-form-check>
+                <p class="hint">
+                  Checking this alone doesn't sign anything -- Ninlil never generates keys on its
+                  own. After saving, open this zone's DNSSEC Keys page and generate at least one Key
+                  Signing Key and Zone Signing Key; until an active key exists, this zone keeps
+                  answering without RRSIGs even with signing enabled here.
+                </p>
+                @if (form.controls.isDnssecSigned.value) {
+                  <section class="field-row">
+                    <div class="field">
+                      <label cLabel for="zone-dnssec-algorithm">Algorithm</label>
+                      <select cSelect id="zone-dnssec-algorithm" formControlName="dnssecAlgorithm">
+                        @for (algorithm of dnssecAlgorithms; track algorithm) {
+                          <option [value]="algorithm">{{ algorithm }}</option>
+                        }
+                      </select>
+                      <p class="hint">
+                        This records the algorithm this zone's keys are meant to use -- the
+                        algorithm each key actually signs with is chosen individually when it's
+                        generated on the DNSSEC Keys page (see that page's own Algorithm hint for
+                        the full comparison of RSA/ECDSA/EdDSA choices). Keep this selection
+                        matching whatever you actually generate there.
+                      </p>
+                    </div>
+                    <div class="field">
+                      <label cLabel for="zone-denial-mode">Denial-of-existence mode</label>
+                      <select cSelect id="zone-denial-mode" formControlName="denialOfExistenceMode">
+                        @for (mode of denialOfExistenceModes; track mode) {
+                          <option [value]="mode">{{ mode }}</option>
+                        }
+                      </select>
+                      <p class="hint">
+                        NSEC proves a name doesn't exist by chaining every real owner name in the
+                        zone together in sorted order, each record pointing at the next. That's
+                        cheap, but it also means anyone can walk the chain record by record and read
+                        out the zone's entire contents, name by name, including ones nobody ever
+                        queried for -- "zone walking." NSEC3 proves the same non-existence without
+                        exposing real names: it hashes each owner name (salted, and re-hashed the
+                        number of times set below) before chaining those hashes instead, so walking
+                        the chain only yields hash values, not the names behind them, at the cost of
+                        the extra hashing work on every signing pass and every response. Choose
+                        NSEC3 whenever the zone holds names an operator would rather not have openly
+                        enumerable; plain NSEC is simpler and cheaper when the zone's contents
+                        aren't sensitive either way.
+                      </p>
+                    </div>
+                    <div class="field">
+                      <label cLabel for="zone-nsec3-iterations">NSEC3 iterations</label>
+                      <input
+                        cFormControl
+                        id="zone-nsec3-iterations"
+                        type="number"
+                        formControlName="nsec3Iterations"
+                      />
+                      <p class="hint">
+                        Only meaningful once NSEC3 is selected above. Each extra iteration re-hashes
+                        an owner name that many more times, adding real CPU cost to every signing
+                        pass this server does and to every validation a resolver performs against it
+                        -- for only a marginal increase in how expensive a dictionary/rainbow-table
+                        attack against the hashed names becomes. RFC 9276 now recommends 0
+                        iterations for exactly this reason: on modern hardware, the extra hashing no
+                        longer buys meaningful protection. There's no harm in setting this to 0 for
+                        a new zone.
+                      </p>
+                    </div>
+                    <div class="field">
+                      <label cLabel for="zone-nsec3-salt">NSEC3 salt (hex)</label>
+                      <input cFormControl id="zone-nsec3-salt" formControlName="nsec3SaltHex" />
+                    </div>
+                  </section>
+                }
+              </div>
+            }
+          </section>
+
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('dynamic-updates')"
+              aria-controls="section-dynamic-updates-body"
+              (click)="toggleSection('dynamic-updates')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('dynamic-updates')"
+              ></svg>
+              <h3>Dynamic updates &amp; transfers</h3>
+            </button>
+            @if (isSectionOpen('dynamic-updates')) {
+              <div class="form-section-body" id="section-dynamic-updates-body">
+                <c-form-check class="mb-3">
+                  <input
+                    cFormCheckInput
+                    type="checkbox"
+                    id="zone-dynamic-update"
+                    formControlName="dynamicUpdateEnabled"
+                  />
+                  <label cFormCheckLabel for="zone-dynamic-update"
+                    >Accept RFC 2136 dynamic updates</label
+                  >
+                </c-form-check>
+                <section class="field-row">
+                  <div class="field full-width">
+                    <label cLabel for="zone-notify-addresses"
+                      >Notify addresses (secondaries to notify, one per line)</label
+                    >
+                    <textarea
+                      cFormControl
+                      id="zone-notify-addresses"
+                      formControlName="notifyAddressesText"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                </section>
+              </div>
+            }
+          </section>
+
+          <section class="form-section">
+            <button
+              type="button"
+              class="form-section-header"
+              [attr.aria-expanded]="isSectionOpen('auto-records')"
+              aria-controls="section-auto-records-body"
+              (click)="toggleSection('auto-records')"
+            >
+              <svg
+                cIcon
+                name="cilChevronBottom"
+                size="sm"
+                class="form-section-chevron"
+                [class.collapsed]="!isSectionOpen('auto-records')"
+              ></svg>
+              <h3>Automatic record management</h3>
+            </button>
+            @if (isSectionOpen('auto-records')) {
+              <div class="form-section-body" id="section-auto-records-body">
+                <section class="field-row">
+                  <div class="field">
+                    <label cLabel for="zone-auto-caa">Auto-manage CAA records</label>
+                    <select cSelect id="zone-auto-caa" formControlName="autoManageCaaRecords">
+                      <option [ngValue]="null">Inherit server default</option>
+                      <option [ngValue]="true">Enabled</option>
+                      <option [ngValue]="false">Disabled</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label cLabel for="zone-caa-issuer">CAA issuer domain</label>
+                    <input
+                      cFormControl
+                      id="zone-caa-issuer"
+                      formControlName="caaIssuerDomain"
+                      placeholder="letsencrypt.org"
+                    />
+                  </div>
+                  <div class="field">
+                    <label cLabel for="zone-auto-ptr">Auto-manage PTR records</label>
+                    <select cSelect id="zone-auto-ptr" formControlName="autoManagePtrRecords">
+                      <option [ngValue]="null">Inherit server default</option>
+                      <option [ngValue]="true">Enabled</option>
+                      <option [ngValue]="false">Disabled</option>
+                    </select>
+                  </div>
+                </section>
+                <section class="field-row">
+                  <div class="field">
+                    <label cLabel for="zone-ptr-ipv4-prefix">PTR IPv4 prefix length</label>
+                    <input
+                      cFormControl
+                      type="number"
+                      id="zone-ptr-ipv4-prefix"
+                      formControlName="ptrIpv4PrefixLength"
+                      min="24"
+                      max="30"
+                      placeholder="Inherit server default (24)"
+                    />
+                    @if (
+                      form.controls.ptrIpv4PrefixLength.hasError('min') ||
+                      form.controls.ptrIpv4PrefixLength.hasError('max')
+                    ) {
+                      <div class="field-error">Must be between 24 and 30 inclusive.</div>
+                    }
+                    <div cFormText>
+                      24 is the conventional octet boundary; 25-30 delegates a classless block of
+                      this zone's own reverse zone via RFC 2317, with the octet-aligned
+                      <code>/24</code> parent zone gaining the CNAME delegation glue automatically.
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label cLabel for="zone-ptr-ipv6-prefix">PTR IPv6 prefix length</label>
+                    <input
+                      cFormControl
+                      type="number"
+                      id="zone-ptr-ipv6-prefix"
+                      formControlName="ptrIpv6PrefixLength"
+                      min="16"
+                      max="124"
+                      step="4"
+                      placeholder="Inherit server default (64)"
+                    />
+                    @if (
+                      form.controls.ptrIpv6PrefixLength.hasError('min') ||
+                      form.controls.ptrIpv6PrefixLength.hasError('max')
+                    ) {
+                      <div class="field-error">
+                        Must be a multiple of 4 between 16 and 124 inclusive.
+                      </div>
+                    }
+                  </div>
+                </section>
+                @if (showReconcileNowSection()) {
+                  <section class="field-row reconcile-now-row">
+                    <div class="field">
+                      <button
+                        type="button"
+                        cButton
+                        color="secondary"
+                        variant="outline"
+                        [disabled]="reconcileCaaPending()"
+                        (click)="reconcileCaaNow()"
+                      >
+                        @if (reconcileCaaPending()) {
+                          <c-spinner size="sm" />
+                        } @else {
+                          Reconcile CAA now
+                        }
+                      </button>
+                      @if (reconcileCaaResult()) {
+                        <div cFormText>{{ reconcileCaaResult() }}</div>
+                      }
+                    </div>
+                    <div class="field">
+                      <button
+                        type="button"
+                        cButton
+                        color="secondary"
+                        variant="outline"
+                        [disabled]="reconcilePtrPending()"
+                        (click)="reconcilePtrNow()"
+                      >
+                        @if (reconcilePtrPending()) {
+                          <c-spinner size="sm" />
+                        } @else {
+                          Reconcile PTR now
+                        }
+                      </button>
+                      @if (reconcilePtrResult()) {
+                        <div cFormText>{{ reconcilePtrResult() }}</div>
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
+            }
+          </section>
+        }
+
+        <section class="form-section">
+          <button
+            type="button"
+            class="form-section-header"
+            [attr.aria-expanded]="isSectionOpen('security')"
+            aria-controls="section-security-body"
+            (click)="toggleSection('security')"
+          >
+            <svg
+              cIcon
+              name="cilChevronBottom"
+              size="sm"
+              class="form-section-chevron"
+              [class.collapsed]="!isSectionOpen('security')"
+            ></svg>
+            <h3>Security</h3>
+          </button>
+          @if (isSectionOpen('security')) {
+            <div class="form-section-body" id="section-security-body">
+              <div class="field">
+                <label cLabel for="zone-tsig-key-select">TSIG key</label>
+                <select cSelect id="zone-tsig-key-select" formControlName="tsigKeySelection">
+                  <option value="">None</option>
+                  @for (key of tsigKeys(); track key.id) {
+                    <option [value]="key.name">{{ key.name }}</option>
+                  }
+                  <option [value]="customTsigKeyOption">Enter a custom name&hellip;</option>
+                </select>
+              </div>
+              @if (showCustomTsigKeyField()) {
+                <div class="field">
+                  <label cLabel for="zone-tsig-key-custom">Custom TSIG key name</label>
+                  <input
+                    cFormControl
+                    id="zone-tsig-key-custom"
+                    formControlName="tsigKeyName"
+                    placeholder="key-name"
+                  />
+                </div>
+                <p class="hint">
+                  This name doesn't match any TSIG key currently visible to this session -- manage
+                  keys on the <a routerLink="/tsig-keys">TSIG Keys</a> page, or leave it as-is if
+                  the key exists but this session can't see it.
+                </p>
+              } @else {
+                <p class="hint">
+                  Sourced live from the <a routerLink="/tsig-keys">TSIG Keys</a> page. Pick "Enter a
+                  custom name&hellip;" to reference a key not in this list.
+                </p>
+              }
+            </div>
+          }
+        </section>
+      </form>
+
+      @if (showCatalogMembershipSection()) {
+        <section class="form-section">
+          <button
+            type="button"
+            class="form-section-header"
+            [attr.aria-expanded]="isSectionOpen('catalog-membership')"
+            aria-controls="section-catalog-membership-body"
+            (click)="toggleSection('catalog-membership')"
+          >
+            <svg
+              cIcon
+              name="cilChevronBottom"
+              size="sm"
+              class="form-section-chevron"
+              [class.collapsed]="!isSectionOpen('catalog-membership')"
+            ></svg>
+            <h3>Catalog membership</h3>
+          </button>
+          @if (isSectionOpen('catalog-membership')) {
+            <div class="form-section-body" id="section-catalog-membership-body">
+              @if (catalogActionError()) {
+                <c-alert color="danger" [dismissible]="false" role="alert">{{
+                  catalogActionError()
+                }}</c-alert>
+              }
+              @if (memberOfCatalogZoneId()) {
+                <p>
+                  This zone is a member of catalog <strong>{{ memberOfCatalogZoneName() }}</strong
+                  >. Every peer node that transfers this catalog auto-provisions this zone as its
+                  own Secondary copy -- no per-peer NotifyAddresses/PrimaryServerAddresses to
+                  maintain by hand.
+                </p>
+                <button
+                  cButton
+                  type="button"
+                  color="danger"
+                  variant="outline"
+                  [disabled]="catalogActionPending()"
+                  (click)="leaveCatalog()"
+                >
+                  @if (catalogActionPending()) {
+                    <c-spinner size="sm" />
+                  } @else {
+                    Leave catalog
+                  }
+                </button>
+              } @else {
+                <section class="field-row">
+                  <div class="field">
+                    <label cLabel for="zone-catalog-select">Catalog zone</label>
+                    <select
+                      cSelect
+                      id="zone-catalog-select"
+                      [ngModel]="selectedCatalogZoneId()"
+                      [ngModelOptions]="{ standalone: true }"
+                      (ngModelChange)="selectedCatalogZoneId.set($event)"
+                    >
+                      <option value="">Select a catalog&hellip;</option>
+                      @for (catalog of catalogOptions(); track catalog.id) {
+                        <option [value]="catalog.id">{{ catalog.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="field join-catalog-action">
+                    <button
+                      cButton
+                      type="button"
+                      color="primary"
+                      [disabled]="!selectedCatalogZoneId() || catalogActionPending()"
+                      (click)="joinCatalog()"
+                    >
+                      @if (catalogActionPending()) {
+                        <c-spinner size="sm" />
+                      } @else {
+                        Join catalog
+                      }
+                    </button>
+                  </div>
+                </section>
+                @if (catalogOptions().length === 0) {
+                  <p class="hint">
+                    No Catalog zones exist yet -- create one (Type: Catalog) to make this zone's own
+                    propagation automatic.
+                  </p>
+                }
+              }
+            </div>
+          }
+        </section>
+      }
+
+      @if (showCatalogMembersListSection()) {
+        <section class="form-section">
+          <button
+            type="button"
+            class="form-section-header"
+            [attr.aria-expanded]="isSectionOpen('catalog-members')"
+            aria-controls="section-catalog-members-body"
+            (click)="toggleSection('catalog-members')"
+          >
+            <svg
+              cIcon
+              name="cilChevronBottom"
+              size="sm"
+              class="form-section-chevron"
+              [class.collapsed]="!isSectionOpen('catalog-members')"
+            ></svg>
+            <h3>Catalog members</h3>
+          </button>
+          @if (isSectionOpen('catalog-members')) {
+            <div class="form-section-body" id="section-catalog-members-body">
+              @if (catalogActionError()) {
+                <c-alert color="danger" [dismissible]="false" role="alert">{{
+                  catalogActionError()
+                }}</c-alert>
+              }
+              @if (catalogMembers().length === 0) {
+                <p class="hint">This catalog currently enumerates no member zones.</p>
+              } @else {
+                <ul class="catalog-member-list">
+                  @for (memberName of catalogMembers(); track memberName) {
+                    <li>{{ memberName }}</li>
+                  }
+                </ul>
+              }
+              <p class="hint">
+                A zone joins this catalog from its own Edit page ("Catalog membership" section) -- a
+                Primary/CloudPrimary zone this server itself originates.
+              </p>
+            </div>
+          }
+        </section>
+      }
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/zones">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

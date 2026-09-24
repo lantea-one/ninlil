@@ -1,0 +1,44 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>TSIG</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field">
+          <label cLabel for="tsig-fudge-seconds">Default fudge (seconds)</label>
+          <input
+            cFormControl
+            id="tsig-fudge-seconds"
+            type="number"
+            formControlName="defaultFudgeSeconds"
+          />
+          <div cFormText>
+            How many seconds of clock skew between signer and verifier are tolerated, written into
+            every message this server signs. RFC 8945 recommends 300 (5 minutes). To manage the
+            pre-shared keys themselves, see the TSIG Keys page.
+          </div>
+        </div>
+
+        <div cFormText>Takes effect on the very next message signed -- no restart required.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

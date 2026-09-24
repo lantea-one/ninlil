@@ -1,0 +1,11 @@
+// A small round color-swatch dot shown next to each palette option, using that palette's own
+// light-mode `--cui-primary` value (see `PALETTE_OPTIONS` in `../../core/theme/theme-palette.model.ts`)
+// so the swatch itself stays a recognizable brand color regardless of which mode is currently active.
+.theme-switcher-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 1px solid var(--cui-border-color);
+  flex: 0 0 auto;
+}

@@ -1,0 +1,64 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit role' : 'New role' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="role-form">
+        <div class="field full-width">
+          <label cLabel for="role-name">Role name</label>
+          <input cFormControl id="role-name" formControlName="name" placeholder="dns-operator" />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A role name is required.</div>
+          }
+        </div>
+        @if (isEditMode) {
+          <p class="hint">A role's own name cannot be changed once created.</p>
+        }
+
+        <div class="field full-width">
+          <label cLabel for="role-description">Description (optional)</label>
+          <textarea
+            cFormControl
+            id="role-description"
+            formControlName="description"
+            rows="2"
+            placeholder="Can manage zones and records, but nothing else."
+          ></textarea>
+        </div>
+      </form>
+
+      @if (isEditMode) {
+        <h3>Permissions</h3>
+        <p class="hint">
+          Every user who holds this role is granted every permission checked below, in addition to
+          any permission granted to them directly. Each change here applies immediately.
+        </p>
+        <app-permission-picker
+          [allPermissions]="allPermissions()"
+          [selectedPermissions]="grantedPermissions()"
+          [disabled]="togglingPermission() !== null"
+          (toggled)="onPermissionToggled($event)"
+        />
+      }
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/roles">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

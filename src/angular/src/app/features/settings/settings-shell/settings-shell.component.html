@@ -1,0 +1,35 @@
+<h1 class="settings-title">Presets &amp; Settings</h1>
+
+<div class="settings-shell">
+  <nav class="settings-nav" aria-label="Settings categories">
+    @for (group of visibleGroups(); track group.label) {
+      <details class="settings-nav-group" open>
+        <summary class="settings-nav-group-label">
+          <svg cIcon name="cilChevronBottom" size="sm" class="settings-nav-group-chevron"></svg>
+          {{ group.label }}
+        </summary>
+
+        <c-nav variant="pills" class="flex-column settings-nav-list">
+          @for (tab of group.tabs; track tab.path) {
+            <c-nav-item>
+              <a
+                cNavLink
+                [routerLink]="tab.path"
+                routerLinkActive
+                #rla="routerLinkActive"
+                [active]="rla.isActive"
+                [routerLinkActiveOptions]="{ exact: true }"
+              >
+                {{ tab.label }}
+              </a>
+            </c-nav-item>
+          }
+        </c-nav>
+      </details>
+    }
+  </nav>
+
+  <div class="settings-content">
+    <router-outlet></router-outlet>
+  </div>
+</div>

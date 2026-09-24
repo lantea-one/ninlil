@@ -1,0 +1,78 @@
+<Project>
+  <!--
+    This file centralizes the MSBuild settings shared by every project in the Ninlil
+    solution. MSBuild automatically imports a Directory.Build.props file from the root of
+    the repository before it evaluates an individual project file, so anything set here is
+    simply a default; a project is always free to override a value by setting its own
+    <PropertyGroup> further down in its own .csproj file.
+  -->
+
+  <PropertyGroup>
+    <!-- Ninlil targets a single, modern, actively-supported runtime. -->
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- Every project uses implicit global usings and is written without the nullable
+         reference-type annotations, matching the style already established by the
+         Ninlil.Common libraries. -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+
+    <!-- The version shared by every assembly and package. A local build is always 0.0.0-local;
+         the Forgejo pipeline computes the real date-based version for each build
+         (.forgejo/scripts/compute-version.sh) and passes it in as Version, AssemblyVersion,
+         FileVersion, and InformationalVersion properties on the command line, which override
+         everything here. Ninlil.Dns.Server.SelfUpdate reads the resulting assembly version back
+         at runtime to compare the running build against a release feed. -->
+    <Version>0.0.0-local</Version>
+    <!-- The pipeline's InformationalVersion already carries the commit hash in the exact
+         published form, so the SDK must not append a second "+<full-sha>" suffix to it. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <!-- Always compile against the newest C# language version the installed SDK understands. -->
+    <LangVersion>latest</LangVersion>
+
+    <!--
+      NoWarn reference:
+        1608, 1701, 1702  - historical multi-targeting warnings that do not apply to a
+                             single-TFM solution.
+        CS1591             - "missing XML comment" is suppressed only because this
+                             solution enforces documentation by policy and code review
+                             rather than by compiler error; every public member is still
+                             expected to carry a doc comment.
+        NETSDK1194         - duplicate RuntimeIdentifiers warning under RID-agnostic builds.
+        NU1608, NU1701,
+        NU1702             - advisory NuGet dependency-resolution notices.
+    -->
+    <NoWarn>$(NoWarn);1608;1701;1702;CS1591;NETSDK1194;NU1608;NU1701;NU1702;</NoWarn>
+
+    <!-- Publish an XML documentation file alongside every assembly so IDEs, OpenAPI
+         generators, and ReDoc can surface the doc comments written throughout this
+         solution. The SDK names it after the assembly (Ninlil.Web.xml, ...), which is what
+         Ninlil.Web's Swagger setup looks for; an explicit DocumentationFile path here would be
+         evaluated before AssemblyName exists and collapse every project's file into ".xml". -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Every runnable project in Ninlil publishes as a self-contained, single-file
+         binary, so every project restores packages for the full support matrix up front. -->
+    <RuntimeIdentifiers>linux-arm64;linux-x64;linux-musl-arm64;linux-musl-x64;osx-arm64;osx-x64;win-arm64;win-x64</RuntimeIdentifiers>
+
+    <!-- Shared authorship and licensing metadata surfaced in every NuGet package.
+         Ninlil is released in its entirety under the MIT license. -->
+    <Company>Ninlil</Company>
+    <Product>Ninlil</Product>
+    <Authors>Ninlil Contributors</Authors>
+    <Copyright>Copyright (c) Ninlil Contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://git.lantea.one/Lantea.One/ninlil</PackageProjectUrl>
+    <RepositoryUrl>https://git.lantea.one/Lantea.One/ninlil.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- Deterministic builds let anyone verify a published artifact against its source,
+         and CI builds are marked as such so source-linking embeds the right commit. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild
+      Condition="'$(FORGEJO_ACTIONS)' == 'true' Or '$(GITHUB_ACTIONS)' == 'true'"
+      >true</ContinuousIntegrationBuild
+    >
+  </PropertyGroup>
+</Project>

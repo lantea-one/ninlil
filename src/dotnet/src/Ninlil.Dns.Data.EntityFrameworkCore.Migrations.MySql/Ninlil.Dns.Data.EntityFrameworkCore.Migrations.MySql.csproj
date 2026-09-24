@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library contains nothing but MySQL/MariaDB's generated Entity Framework Core
+            migration history for NinlilDnsContext, kept in its own assembly for the same
+            reason as its SQLite counterpart; see
+            Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite's own description for the
+            full explanation.
+        </Description>
+    <PackageId>Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.19">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+</Project>

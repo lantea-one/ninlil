@@ -1,0 +1,116 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit schedule' : 'Add schedule' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="schedule-form">
+        <fieldset class="days-field">
+          <legend>Days</legend>
+          <div class="day-checkboxes">
+            @for (name of dayControlNames; track name) {
+              <c-form-check class="day-checkbox" inline>
+                <input
+                  cFormCheckInput
+                  type="checkbox"
+                  [id]="'client-group-schedule-day-' + name"
+                  [formControlName]="name"
+                />
+                <label cFormCheckLabel [for]="'client-group-schedule-day-' + name">{{
+                  dayLabels[name]
+                }}</label>
+              </c-form-check>
+            }
+          </div>
+        </fieldset>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="client-group-schedule-start-time">Start time</label>
+            <input
+              cFormControl
+              type="time"
+              id="client-group-schedule-start-time"
+              formControlName="startTime"
+            />
+            @if (form.controls.startTime.hasError('required')) {
+              <div class="field-error">A start time is required.</div>
+            }
+          </div>
+
+          <div class="field">
+            <label cLabel for="client-group-schedule-end-time">End time</label>
+            <input
+              cFormControl
+              type="time"
+              id="client-group-schedule-end-time"
+              formControlName="endTime"
+            />
+            @if (form.controls.endTime.hasError('required')) {
+              <div class="field-error">An end time is required.</div>
+            }
+          </div>
+        </div>
+
+        <div class="field-hint">
+          An end time earlier than the start time is a real, supported overnight window (e.g.
+          21:00&ndash;07:00 for a bedtime) &mdash; it isn't rejected as invalid.
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="client-group-schedule-time-zone">Time zone</label>
+          <select cSelect id="client-group-schedule-time-zone" formControlName="timeZoneId">
+            @for (zone of timeZoneOptions; track zone) {
+              <option [value]="zone">{{ zone }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="client-group-schedule-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="client-group-schedule-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-group-schedule-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="client-group-schedule-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/client-groups', groupId, 'schedules']"
+      >
+        Cancel
+      </a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

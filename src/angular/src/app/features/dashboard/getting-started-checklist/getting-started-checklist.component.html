@@ -1,0 +1,33 @@
+@if (visible()) {
+  <c-card class="getting-started-card" aria-labelledby="getting-started-title">
+    <c-card-header class="d-flex align-items-center justify-content-between">
+      <span id="getting-started-title">Getting Started</span>
+      <button
+        cButton
+        color="secondary"
+        variant="ghost"
+        size="sm"
+        type="button"
+        (click)="dismiss()"
+        aria-label="Dismiss the Getting Started checklist"
+      >
+        <svg cIcon name="cilX" size="sm"></svg>
+      </button>
+    </c-card-header>
+    <c-card-body>
+      <ul class="getting-started-list">
+        @for (item of items(); track item.id) {
+          <li class="getting-started-item" [class.complete]="item.complete">
+            <svg
+              class="getting-started-item-icon"
+              cIcon
+              [name]="item.complete ? 'cilCheckCircle' : 'cilCircle'"
+              size="sm"
+            ></svg>
+            <a [routerLink]="item.routerLink">{{ item.label }}</a>
+          </li>
+        }
+      </ul>
+    </c-card-body>
+  </c-card>
+}

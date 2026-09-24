@@ -1,0 +1,69 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Admin login rate limiting</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <p class="hint">
+        Protects the admin sign-in endpoints against brute-force credential guessing -- genuinely
+        distinct from the "Rate limiting" tab's own DNS-query limiter. Past the attempt threshold
+        below, further sign-in attempts from the same client are rejected outright until the window
+        rolls over.
+      </p>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="adminloginratelimit-enable"
+            formControlName="enable"
+          />
+          <label cFormCheckLabel for="adminloginratelimit-enable">
+            Reject sign-in attempts past the threshold below
+          </label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="adminloginratelimit-permit-limit">Attempt threshold</label>
+            <input
+              cFormControl
+              id="adminloginratelimit-permit-limit"
+              type="number"
+              min="1"
+              formControlName="permitLimit"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="adminloginratelimit-window">Lockout / window duration</label>
+            <input
+              cFormControl
+              id="adminloginratelimit-window"
+              formControlName="window"
+              placeholder="00:05:00"
+            />
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

@@ -1,0 +1,33 @@
+.quick-stats-section {
+  margin-bottom: var(--ninlil-space-5);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--ninlil-space-4);
+  margin-top: var(--ninlil-space-3);
+}
+
+.stat-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--cui-border-radius-lg);
+  background-color: rgba(var(--cui-primary-rgb), 0.12);
+  color: var(--cui-primary);
+}
+
+.stat-count {
+  font-size: var(--ninlil-font-size-xxl);
+  font-weight: 600;
+  line-height: var(--ninlil-line-height-tight);
+}
+
+.stat-label {
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}

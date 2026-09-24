@@ -1,0 +1,198 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit client' : 'New client' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="client-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="client-identifier">Client identifier</label>
+            <input
+              cFormControl
+              id="client-identifier"
+              formControlName="clientIdentifier"
+              placeholder="AA:BB:CC:DD:EE:FF"
+            />
+            @if (form.controls.clientIdentifier.hasError('required')) {
+              <div class="field-error">A client identifier is required.</div>
+            }
+            @if (isEditMode) {
+              <div cFormText>
+                A colon-separated MAC address (IPv4) or DHCP Unique Identifier (IPv6) -- permanent,
+                and never editable once a client is registered.
+              </div>
+            }
+          </div>
+
+          <div class="field">
+            <label cLabel for="client-protocol-version">Protocol</label>
+            <select cSelect id="client-protocol-version" formControlName="protocolVersion">
+              <option value="IPv4">IPv4</option>
+              <option value="IPv6">IPv6</option>
+            </select>
+            @if (isEditMode) {
+              <div cFormText>
+                Which of the two identifier spaces above belongs to -- also never editable once a
+                client is registered.
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (isEditMode) {
+          <p class="addresses-link" data-testid="addresses-link">
+            This device answers to {{ addressCount() }}
+            {{ addressCount() === 1 ? 'identifier' : 'identifiers' }}.
+            <a [routerLink]="['/clients', clientId, 'addresses']">Manage addresses</a>
+          </p>
+        }
+
+        <div class="field full-width">
+          <label cLabel for="client-display-name">Display name</label>
+          <input
+            cFormControl
+            id="client-display-name"
+            formControlName="displayName"
+            placeholder="Living Room TV"
+          />
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="client-group">Client group</label>
+          <select cSelect id="client-group" formControlName="clientGroupId">
+            <option value="">No explicit group override</option>
+            @for (group of clientGroups(); track group.id) {
+              <option [value]="group.id">{{ group.name }}</option>
+            }
+          </select>
+          <div cFormText>
+            Overrides whatever group this client's own source network would otherwise resolve to.
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="client-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="client-comments"
+            formControlName="comments"
+            rows="3"
+          ></textarea>
+        </div>
+
+        @if (isEditMode) {
+          <div class="field full-width">
+            <span cLabel>Vendor</span>
+            <div class="vendor-line" data-testid="client-vendor">
+              @if (vendor()) {
+                {{ vendor() }}
+              } @else if (isRandomizedMacAddress()) {
+                Randomized MAC address (private address; no vendor can be known)
+              } @else {
+                Unknown
+              }
+            </div>
+            <div cFormText>
+              Looked up from the IEEE MAC address registries each time this device is shown.
+            </div>
+          </div>
+        }
+
+        <div class="field full-width">
+          <span cLabel id="client-device-icon-label">Device icon</span>
+          <app-device-icon-picker
+            formControlName="deviceIconKey"
+            aria-labelledby="client-device-icon-label"
+            [suggestedKey]="suggestedDeviceIconKey()"
+          />
+          <div cFormText>
+            "Automatic" follows a suggestion from the device's hardware vendor, when there is one.
+          </div>
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-favorite"
+            formControlName="isFavorite"
+          />
+          <label cFormCheckLabel for="client-favorite">
+            <svg cIcon name="cilStar" size="sm"></svg>
+            Favorite
+          </label>
+        </c-form-check>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="client-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      @if (isEditMode && clientId) {
+        <a
+          cButton
+          color="secondary"
+          variant="ghost"
+          class="me-auto"
+          [routerLink]="['/clients', clientId, 'activity']"
+        >
+          <svg cIcon name="cilHistory" size="sm"></svg>
+          View activity
+        </a>
+      }
+      <a cButton color="secondary" variant="ghost" routerLink="/clients">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  @if (isEditMode && clientId) {
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Instant pause</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-instant-pause [clientId]="clientId" />
+      </c-card-body>
+    </c-card>
+
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Blocked Services</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-blocked-services [clientId]="clientId" />
+      </c-card-body>
+    </c-card>
+
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>Safe Search</strong>
+      </c-card-header>
+      <c-card-body>
+        <app-safe-search [clientId]="clientId" />
+      </c-card-body>
+    </c-card>
+  }
+}

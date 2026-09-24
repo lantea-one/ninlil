@@ -1,0 +1,87 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/webhooks" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Webhooks
+    </a>
+    <h1>Delivery history{{ subscription() ? ' — ' + subscription()!.name : '' }}</h1>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (attempts().length === 0) {
+  <app-empty-state
+    icon="cilHistory"
+    heading="No deliveries yet"
+    description="A delivery is recorded here as soon as this subscription's own first matching event is attempted."
+  />
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="attempts()" class="attempts-table">
+      <ng-container cdkColumnDef="eventTypeName">
+        <th cdk-header-cell *cdkHeaderCellDef>Event</th>
+        <td cdk-cell *cdkCellDef="let attempt">{{ attempt.eventTypeName }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let attempt">
+          <c-badge [color]="statusBadgeColor(attempt.status)">{{ attempt.status }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="attemptCount">
+        <th cdk-header-cell *cdkHeaderCellDef>Attempts</th>
+        <td cdk-cell *cdkCellDef="let attempt">
+          {{ attempt.attemptCount }} / {{ attempt.maxAttempts }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="lastAttemptedAtUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Last attempted</th>
+        <td cdk-cell *cdkCellDef="let attempt">
+          {{ attempt.lastAttemptedAtUtc ? (attempt.lastAttemptedAtUtc | date: 'medium') : '—' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="nextRetryDueUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Next retry due</th>
+        <td cdk-cell *cdkCellDef="let attempt">
+          {{ attempt.nextRetryDueUtc ? (attempt.nextRetryDueUtc | date: 'medium') : '—' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="lastHttpStatusCode">
+        <th cdk-header-cell *cdkHeaderCellDef>Last HTTP status</th>
+        <td cdk-cell *cdkCellDef="let attempt">{{ attempt.lastHttpStatusCode ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="lastErrorMessage">
+        <th cdk-header-cell *cdkHeaderCellDef>Last error</th>
+        <td
+          cdk-cell
+          *cdkCellDef="let attempt"
+          class="last-error-cell"
+          [cTooltip]="attempt.lastErrorMessage ?? ''"
+        >
+          {{ attempt.lastErrorMessage ?? '—' }}
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}

@@ -1,0 +1,76 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Zone signing</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="zonesigning-validity">Signature validity period</label>
+            <input
+              cFormControl
+              id="zonesigning-validity"
+              formControlName="signatureValidityPeriod"
+              placeholder="30.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="zonesigning-inception-offset">Inception offset</label>
+            <input
+              cFormControl
+              id="zonesigning-inception-offset"
+              formControlName="inceptionOffset"
+              placeholder="01:00:00"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="zonesigning-refresh-before">Refresh before expiration</label>
+            <input
+              cFormControl
+              id="zonesigning-refresh-before"
+              formControlName="refreshBeforeExpiration"
+              placeholder="5.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="zonesigning-poll-interval">Re-signing poll interval</label>
+            <input
+              cFormControl
+              id="zonesigning-poll-interval"
+              formControlName="pollInterval"
+              placeholder="06:00:00"
+            />
+          </div>
+        </div>
+
+        <div cFormText>
+          Every field takes effect on the very next sign or poll iteration, whichever comes first --
+          no restart required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

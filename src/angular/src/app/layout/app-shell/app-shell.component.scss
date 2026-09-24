@@ -1,0 +1,109 @@
+// This shell's root renders `<c-sidebar>` and its own content wrapper as siblings (required by
+// CoreUI's own CSS -- see `--cui-sidebar-occupy-start` below), so the host itself must not
+// introduce another layout box around them.
+:host {
+  display: contents;
+}
+
+// The sidebar's own dark, palette-colored background/nav-highlight tokens come from CoreUI's
+// `colorScheme="dark"` input plus this app's own `--cui-sidebar-*` overrides in
+// `styles/themes/_<palette>.scss` (deliberately independent of light/dark *content* mode, so the
+// sidebar's own colored-dark identity stays constant either way) -- nothing further is needed
+// here beyond the host element CoreUI's own component already renders as `.sidebar`.
+.shell-sidebar {
+  border-inline-end: 1px solid var(--cui-sidebar-border-color, transparent);
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--cui-sidebar-brand-color);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.shell-brand-icon {
+  flex: 0 0 auto;
+}
+
+.shell-brand-text {
+  font-weight: 600;
+  font-size: 1.15rem;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.shell-collapse-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--cui-sidebar-color);
+  padding: 0.65rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  border-radius: var(--cui-border-radius);
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--cui-sidebar-nav-link-hover-bg);
+    color: var(--cui-sidebar-nav-link-hover-color);
+  }
+}
+
+// The content wrapper is a sibling of `<c-sidebar>`, not a descendant -- CoreUI's own compiled
+// CSS uses a general sibling combinator (`.sidebar ... ~ *`) to publish the sidebar's current
+// occupied width as `--cui-sidebar-occupy-start` onto every sibling once the viewport is wide
+// enough for a fixed, non-overlaid sidebar (>=992px); this app is the one applying that variable
+// as an actual margin, since CoreUI's own stylesheet only ever sets the variable, never consumes
+// it (each consuming app's layout differs too much for the library to assume one). The transition
+// keeps the desktop icon-rail collapse/expand toggle (see `SidebarTogglerDirective` in the
+// template) smooth rather than an abrupt jump.
+.shell-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin-inline-start: var(--cui-sidebar-occupy-start, 0);
+  transition: margin-inline-start 0.15s ease-in-out;
+  background-color: var(--cui-tertiary-bg, var(--cui-body-bg));
+}
+
+.shell-header {
+  background-color: var(--cui-body-bg);
+}
+
+.shell-header-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+}
+
+.shell-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--cui-body-color);
+}
+
+.shell-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.shell-content {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+  width: 100%;
+}

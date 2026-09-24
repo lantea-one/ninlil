@@ -1,0 +1,21 @@
+<div class="summary-grid" role="group" aria-label="Filter devices">
+  @for (card of cards(); track card.filter) {
+    <button
+      type="button"
+      class="summary-card"
+      [class]="'accent-' + card.accent"
+      [class.active]="card.filter === activeFilter()"
+      [attr.aria-pressed]="card.filter === activeFilter()"
+      [attr.data-testid]="'summary-card-' + card.filter"
+      (click)="filterSelected.emit(card.filter)"
+    >
+      <span class="summary-icon">
+        <svg cIcon [name]="card.icon" size="lg"></svg>
+      </span>
+      <span class="summary-body">
+        <span class="summary-count">{{ card.count ?? '—' }}</span>
+        <span class="summary-label">{{ card.label }}</span>
+      </span>
+    </button>
+  }
+</div>

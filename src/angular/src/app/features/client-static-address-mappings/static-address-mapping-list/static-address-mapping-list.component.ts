@@ -1,0 +1,177 @@
+import { Component, inject, signal } from '@angular/core';
+import { CdkTableModule } from '@angular/cdk/table';
+import { RouterLink } from '@angular/router';
+import {
+  ButtonDirective,
+  SpinnerComponent,
+  TableDirective,
+  TooltipDirective,
+} from '@coreui/angular';
+import { IconDirective } from '@coreui/icons-angular';
+import { firstValueFrom } from 'rxjs';
+import {
+  DnsClientStaticAddressMappingDetail,
+  DnsClientStaticAddressMappingsService,
+} from '../../../api-client';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData,
+} from '../../../shared/confirm-dialog/confirm-dialog.component';
+import {
+  CoreuiPaginationComponent,
+  PageChangeEvent,
+} from '../../../shared/coreui-pagination/coreui-pagination.component';
+import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
+import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
+import { NotificationService } from '../../../shared/notification/notification.service';
+
+const DEFAULT_PAGE_SIZE = 25;
+
+/**
+ * This component lists every manual static address-to-client-identity mapping this server knows
+ * about (`DnsClientStaticAddressMappingEntity`, one row per network -- entirely flat, no owning
+ * parent), backed by `GET /api/client-static-address-mappings`'s own real `skip`/`take`
+ * pagination -- the direct structural sibling of `AccessControlRuleListComponent`, since both
+ * controllers share the identical flat, non-nested REST shape.
+ */
+@Component({
+  selector: 'app-static-address-mapping-list',
+  imports: [
+    RouterLink,
+    CdkTableModule,
+    ButtonDirective,
+    SpinnerComponent,
+    TableDirective,
+    TooltipDirective,
+    IconDirective,
+    CoreuiPaginationComponent,
+    ConfirmDialogComponent,
+    EmptyStateComponent,
+  ],
+  templateUrl: './static-address-mapping-list.component.html',
+  styleUrl: './static-address-mapping-list.component.scss',
+})
+export class StaticAddressMappingListComponent {
+  private readonly mappingsApi = inject(DnsClientStaticAddressMappingsService);
+  private readonly notification = inject(NotificationService);
+
+  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  readonly confirmDialogVisible = signal(false);
+
+  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
+
+  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  private confirmResolve: ((confirmed: boolean) => void) | null = null;
+
+  readonly displayedColumns = [
+    'cidr',
+    'clientIdentifier',
+    'protocolVersion',
+    'disabled',
+    'actions',
+  ];
+
+  readonly mappings = signal<DnsClientStaticAddressMappingDetail[]>([]);
+  readonly totalCount = signal(0);
+  readonly pageSize = signal(DEFAULT_PAGE_SIZE);
+  readonly pageIndex = signal(0);
+  readonly loading = signal(true);
+  readonly errorMessage = signal<string | null>(null);
+
+  constructor() {
+    void this.loadPage();
+  }
+
+  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  async onPageChange(event: PageChangeEvent): Promise<void> {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
+    await this.loadPage();
+  }
+
+  /** This method toggles a mapping's own `isDisabled` flag via a full `PUT` (this controller has no `PATCH`). */
+  async toggleDisabled(mapping: DnsClientStaticAddressMappingDetail): Promise<void> {
+    if (!mapping.id) return;
+
+    try {
+      await firstValueFrom(
+        this.mappingsApi.apiClientStaticAddressMappingsIdPut({
+          id: mapping.id,
+          dnsClientStaticAddressMappingWriteRequest: {
+            cidr: mapping.cidr,
+            clientIdentifier: mapping.clientIdentifier,
+            protocolVersion: mapping.protocolVersion,
+            isDisabled: !mapping.isDisabled,
+            comments: mapping.comments,
+          },
+        }),
+      );
+      await this.loadPage();
+      this.notification.success(mapping.isDisabled ? 'Mapping enabled.' : 'Mapping disabled.');
+    } catch (error) {
+      this.notification.error(extractErrorMessage(error, 'Could not update this mapping.'));
+    }
+  }
+
+  /** This method confirms, then deletes, a static address mapping. */
+  async deleteMapping(mapping: DnsClientStaticAddressMappingDetail): Promise<void> {
+    if (!mapping.id) return;
+
+    const confirmed = await this.confirm({
+      title: `Delete this mapping?`,
+      message: `This permanently removes the pin from ${mapping.cidr} to ${mapping.clientIdentifier}. Any per-client filtering, schedule, or pause configured for that identifier stops applying to this address immediately. This cannot be undone.`,
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await firstValueFrom(
+        this.mappingsApi.apiClientStaticAddressMappingsIdDelete({ id: mapping.id }),
+      );
+      this.notification.success('Mapping deleted.');
+      await this.loadPage();
+    } catch (error) {
+      this.notification.error(extractErrorMessage(error, 'Could not delete this mapping.'));
+    }
+  }
+
+  /**
+   * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
+   * operator confirms or dismisses it.
+   */
+  private confirm(data: ConfirmDialogData): Promise<boolean> {
+    this.confirmDialogData.set(data);
+    this.confirmDialogVisible.set(true);
+    return new Promise<boolean>((resolve) => {
+      this.confirmResolve = resolve;
+    });
+  }
+
+  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  onConfirmDialogResolved(confirmed: boolean): void {
+    this.confirmDialogVisible.set(false);
+    this.confirmResolve?.(confirmed);
+    this.confirmResolve = null;
+  }
+
+  private async loadPage(): Promise<void> {
+    this.loading.set(true);
+    this.errorMessage.set(null);
+
+    try {
+      const page = await firstValueFrom(
+        this.mappingsApi.apiClientStaticAddressMappingsGet({
+          skip: this.pageIndex() * this.pageSize(),
+          take: this.pageSize(),
+        }),
+      );
+      this.mappings.set(page.items ?? []);
+      this.totalCount.set(page.totalCount ?? 0);
+    } catch (error) {
+      this.errorMessage.set(extractErrorMessage(error, 'Could not load static address mappings.'));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+}

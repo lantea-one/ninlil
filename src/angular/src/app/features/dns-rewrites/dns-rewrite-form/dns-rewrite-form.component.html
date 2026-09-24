@@ -1,0 +1,87 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit rewrite' : 'New rewrite' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="rewrite-form">
+        <div class="field full-width">
+          <label cLabel for="rewrite-domain">Domain</label>
+          <input
+            cFormControl
+            id="rewrite-domain"
+            formControlName="domain"
+            placeholder="host.example.com"
+          />
+          @if (form.controls.domain.hasError('required')) {
+            <div class="field-error">A domain is required.</div>
+          }
+        </div>
+        <p class="hint">
+          An exact name matches only that name, not its subdomains. A <code>*.example.com</code>
+          wildcard matches any subdomain, but not the apex itself. If another rewrite's domain could
+          also match the same query, an exact name always wins over a wildcard; between two
+          equally-specific matches, whichever rewrite was created first is used.
+        </p>
+
+        <div class="field full-width">
+          <label cLabel for="rewrite-target">Target</label>
+          <input
+            cFormControl
+            id="rewrite-target"
+            formControlName="target"
+            placeholder="203.0.113.5, 2001:db8::1, or canonical.example.net"
+          />
+          @if (form.controls.target.hasError('required')) {
+            <div class="field-error">A target is required.</div>
+          }
+        </div>
+        <p class="hint">
+          A literal IPv4/IPv6 address answers with an A/AAAA record; any other domain name answers
+          with a CNAME record instead -- validated and classified by the real backend on save. A
+          CNAME target is not itself resolved any further within this same response; the querying
+          client (or this server's own next query, if it was itself asked recursively) follows it
+          separately, exactly as it would with any ordinary CNAME record.
+        </p>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="rewrite-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="rewrite-disabled">Disabled</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="rewrite-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="rewrite-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/dns-rewrites">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

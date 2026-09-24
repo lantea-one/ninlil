@@ -1,0 +1,158 @@
+<div class="list-header">
+  <h1>Users</h1>
+  <a cButton color="primary" routerLink="/users/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New user
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (users().length === 0) {
+  <app-empty-state
+    icon="cilUser"
+    heading="No user accounts yet"
+    description="Create one to give another administrator or service caller their own sign-in."
+  >
+    <a cButton color="primary" routerLink="/users/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New user
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="users()" class="user-table">
+      <ng-container cdkColumnDef="userName">
+        <th cdk-header-cell *cdkHeaderCellDef>User name</th>
+        <td cdk-cell *cdkCellDef="let user">
+          {{ user.userName }}
+          @if (user.clusterConflictNote) {
+            <svg
+              cIcon
+              name="cilWarning"
+              size="sm"
+              class="conflict-icon"
+              [cTooltip]="user.clusterConflictNote"
+            ></svg>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="email">
+        <th cdk-header-cell *cdkHeaderCellDef>Email</th>
+        <td cdk-cell *cdkCellDef="let user">{{ user.email }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="roles">
+        <th cdk-header-cell *cdkHeaderCellDef>Roles</th>
+        <td cdk-cell *cdkCellDef="let user" class="roles-cell">
+          @for (role of user.roles; track role) {
+            <c-badge color="info">{{ role }}</c-badge>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="twoFactor">
+        <th cdk-header-cell *cdkHeaderCellDef>2FA</th>
+        <td cdk-cell *cdkCellDef="let user">
+          <svg
+            cIcon
+            [name]="user.twoFactorEnabled ? 'cilLockLocked' : 'cilLockUnlocked'"
+            [cTooltip]="user.twoFactorEnabled ? 'Two-factor required' : 'Not required'"
+          ></svg>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let user">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="user.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="user.isDisabled ? 'Enable this account' : 'Disable this account'"
+            (click)="toggleDisabled(user)"
+          >
+            {{ user.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="sync">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let user">
+          <app-cluster-sync-info
+            [lastModifiedUtc]="user.lastModifiedUtc"
+            [originatingNodeId]="user.originatingNodeId"
+          />
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let user" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/users', user.id, 'edit']"
+            cTooltip="Edit user"
+            aria-label="Edit user"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            cTooltip="Reset password"
+            aria-label="Reset password"
+            (click)="resetPassword(user)"
+          >
+            <svg cIcon name="cilLockLocked" size="sm"></svg>
+          </button>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete user"
+            aria-label="Delete user"
+            (click)="deleteUser(user)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>
+
+<app-reset-password-dialog
+  [visible]="resetPasswordDialogVisible()"
+  [target]="resetPasswordDialogTarget()"
+  (visibleChange)="resetPasswordDialogVisible.set($event)"
+/>

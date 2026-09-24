@@ -1,0 +1,132 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>SMTP</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <p class="hint">
+        This is the one SMTP server this host sends e-mail through, for everything that needs to
+        reach a user's inbox: an e-mailed one-time code when someone signs in with e-mail-based
+        two-factor authentication, and a password-reset link -- both the fully self-service "Forgot
+        password" page and an administrator's own "e-mail a reset link" delivery option on a user's
+        account.
+      </p>
+
+      <p class="hint">
+        <strong>Warning:</strong> leaving this unconfigured (no SMTP host below) does not fail the
+        same way everywhere it's used. The self-service Forgot Password page never reveals whether
+        sending actually happened -- deliberately, so it can't be used to confirm which e-mail
+        addresses have an account -- so with no SMTP host configured it silently sends nothing at
+        all while still showing its own generic "if an account exists for that e-mail address, a
+        reset link has been sent" message; the only trace is a warning in this server's own logs. An
+        administrator's own "e-mail a reset link" reset mode and an e-mailed two-factor code, by
+        contrast, both fail with a real, visible error when SMTP isn't configured or the send itself
+        fails.
+      </p>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="smtp-host">SMTP host</label>
+            <input
+              cFormControl
+              id="smtp-host"
+              formControlName="smtpHost"
+              placeholder="smtp.example.com"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="smtp-port">Port</label>
+            <input
+              cFormControl
+              id="smtp-port"
+              type="number"
+              min="1"
+              max="65535"
+              formControlName="smtpPort"
+            />
+          </div>
+        </div>
+
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="smtp-use-tls" formControlName="useTls" />
+          <label cFormCheckLabel for="smtp-use-tls">Use TLS (STARTTLS)</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="smtp-username">Username</label>
+            <input
+              cFormControl
+              id="smtp-username"
+              formControlName="username"
+              placeholder="Leave blank for an anonymous connection"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="smtp-password">Password</label>
+            <input
+              cFormControl
+              id="smtp-password"
+              type="password"
+              formControlName="password"
+              placeholder="Leave blank to keep the current password"
+              autocomplete="new-password"
+            />
+            <p class="hint">
+              @if (passwordConfigured()) {
+                A password is currently on file. It is never shown here -- leave this blank to keep
+                it unchanged.
+              } @else {
+                No password is currently on file.
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="smtp-from-address">From address</label>
+            <input
+              cFormControl
+              id="smtp-from-address"
+              type="email"
+              formControlName="fromAddress"
+              placeholder="notifications@example.com"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="smtp-from-display-name">From display name</label>
+            <input cFormControl id="smtp-from-display-name" formControlName="fromDisplayName" />
+          </div>
+        </div>
+
+        <p class="hint">
+          Every field here takes effect immediately, with no restart required -- a fresh connection
+          is opened for every single e-mail sent, so the very next send after a save already uses
+          whatever was just entered.
+        </p>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

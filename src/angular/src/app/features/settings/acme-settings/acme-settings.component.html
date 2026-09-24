@@ -1,0 +1,253 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>ACME / Let's Encrypt</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="acme-enable" formControlName="enable" />
+          <label cFormCheckLabel for="acme-enable"
+            >Automatically issue and renew certificates for the domains below</label
+          >
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="acme-directory-uri">CA directory URL</label>
+          <input
+            cFormControl
+            id="acme-directory-uri"
+            formControlName="directoryUri"
+            placeholder="https://acme-v02.api.letsencrypt.org/directory"
+          />
+          <div cFormText>
+            Point this at Let's Encrypt's staging directory while experimenting -- its production
+            directory (the default above) enforces a real, rate-limited issuance quota.
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field full-width">
+            <label cLabel for="acme-domains">Domains (one per line)</label>
+            <textarea
+              cFormControl
+              id="acme-domains"
+              formControlName="domainsText"
+              rows="3"
+              placeholder="dns.example.com"
+            ></textarea>
+            <div cFormText>Each domain must be a name this server itself is authoritative for.</div>
+          </div>
+
+          <div class="field full-width">
+            <label cLabel for="acme-contact-emails">Contact emails (one per line)</label>
+            <textarea
+              cFormControl
+              id="acme-contact-emails"
+              formControlName="contactEmailsText"
+              rows="3"
+              placeholder="admin@example.com"
+            ></textarea>
+            <div cFormText>Used only for the CA's own expiry/incident notifications.</div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="acme-renew-before">Renew this long before expiry</label>
+            <input
+              cFormControl
+              id="acme-renew-before"
+              formControlName="renewBeforeExpiration"
+              placeholder="30.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="acme-poll-interval">Check interval</label>
+            <input
+              cFormControl
+              id="acme-poll-interval"
+              formControlName="pollInterval"
+              placeholder="12:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="acme-csr-organization">Certificate organization name</label>
+            <input cFormControl id="acme-csr-organization" formControlName="csrOrganization" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field full-width">
+            <label cLabel for="acme-account-state-path">Account state file path</label>
+            <input
+              cFormControl
+              id="acme-account-state-path"
+              formControlName="accountStateFilePath"
+            />
+            <div cFormText>
+              Read once, at this host's own startup -- changing this needs a restart before it
+              actually takes effect.
+            </div>
+          </div>
+
+          <div class="field full-width">
+            <label cLabel for="acme-certificate-directory-path">Certificate directory path</label>
+            <input
+              cFormControl
+              id="acme-certificate-directory-path"
+              formControlName="certificateDirectoryPath"
+            />
+          </div>
+        </div>
+
+        <hr />
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="acme-caa-default-enabled"
+            formControlName="caaDefaultEnabled"
+          />
+          <label cFormCheckLabel for="acme-caa-default-enabled"
+            >CAA auto-management default: enabled for a newly created zone</label
+          >
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="acme-caa-default-issuer">Default CAA issuer domain</label>
+          <input
+            cFormControl
+            id="acme-caa-default-issuer"
+            formControlName="caaDefaultIssuerDomain"
+            placeholder="letsencrypt.org"
+          />
+          <div cFormText>
+            A per-zone override already exists on that zone's own edit page -- this is only the
+            global default a newly created zone inherits.
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <c-card class="form-card certificates-card">
+    <c-card-header>
+      <strong>Certificates</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (certificatesErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          certificatesErrorMessage()
+        }}</c-alert>
+      }
+
+      @if (certificatesLoading()) {
+        <c-spinner class="loading-spinner" />
+      } @else if (certificates().length === 0) {
+        <app-empty-state
+          icon="cilShieldAlt"
+          heading="No domains configured yet"
+          description="Add one or more domains above and save to see its certificate status here."
+        />
+      } @else {
+        <table
+          cdk-table
+          cTable
+          hover
+          responsive
+          [dataSource]="certificates()"
+          class="certificate-table"
+        >
+          <ng-container cdkColumnDef="domain">
+            <th cdk-header-cell *cdkHeaderCellDef>Domain</th>
+            <td cdk-cell *cdkCellDef="let entry">{{ entry.domain }}</td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="status">
+            <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+            <td cdk-cell *cdkCellDef="let entry">
+              @if (!entry.hasCertificate && entry.lastFailureMessage) {
+                <c-badge color="danger">Failed</c-badge>
+              } @else if (!entry.hasCertificate) {
+                <c-badge color="secondary">Never issued</c-badge>
+              } @else if (entry.isDueForRenewal) {
+                <c-badge color="warning">Due for renewal</c-badge>
+              } @else {
+                <c-badge color="success">Active</c-badge>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="issued">
+            <th cdk-header-cell *cdkHeaderCellDef>Issued</th>
+            <td cdk-cell *cdkCellDef="let entry">{{ entry.issuedAtUtc ?? '—' }}</td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="expires">
+            <th cdk-header-cell *cdkHeaderCellDef>Expires</th>
+            <td cdk-cell *cdkCellDef="let entry">{{ entry.expiresAtUtc ?? '—' }}</td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="lastFailure">
+            <th cdk-header-cell *cdkHeaderCellDef>Last failure</th>
+            <td cdk-cell *cdkCellDef="let entry">{{ entry.lastFailureMessage ?? '—' }}</td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="actions">
+            <th cdk-header-cell *cdkHeaderCellDef></th>
+            <td cdk-cell *cdkCellDef="let entry" class="actions-cell">
+              <button
+                cButton
+                size="sm"
+                variant="ghost"
+                color="primary"
+                [disabled]="issuingDomain() !== null"
+                (click)="issueOrRenewNow(entry.domain)"
+              >
+                @if (issuingDomain() === entry.domain) {
+                  <c-spinner size="sm" />
+                } @else {
+                  Issue/renew now
+                }
+              </button>
+            </td>
+          </ng-container>
+
+          <tr
+            cdk-header-row
+            *cdkHeaderRowDef="['domain', 'status', 'issued', 'expires', 'lastFailure', 'actions']"
+          ></tr>
+          <tr
+            cdk-row
+            *cdkRowDef="
+              let row;
+              columns: ['domain', 'status', 'issued', 'expires', 'lastFailure', 'actions']
+            "
+          ></tr>
+        </table>
+      }
+    </c-card-body>
+  </c-card>
+}

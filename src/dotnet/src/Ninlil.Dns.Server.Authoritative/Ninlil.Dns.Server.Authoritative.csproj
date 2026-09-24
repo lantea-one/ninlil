@@ -1,0 +1,92 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's authoritative DNS engine: it answers queries for the
+            zones this server actually hosts, straight out of an in-memory cache kept in sync
+            with the database through Ninlil.Dns.Server.Core's event bus, rather than hitting
+            the database on every single query.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.Authoritative</PackageId>
+  </PropertyGroup>
+
+  <!--
+      QuicZoneTransferClient.cs uses System.Net.Quic's own types (QuicConnection/QuicStream),
+      which carry [SupportedOSPlatform] attributes for linux/macOS/windows, exactly the platforms
+      this project's own Directory.Build.props RuntimeIdentifiers already target. Declaring the
+      same set here (rather than suppressing CA1416 outright) tells the platform-compatibility
+      analyzer this project itself is scoped to those same platforms, matching
+      Ninlil.Dns.Protocol.DnsOverQuic's own identical declaration for the same reason.
+    -->
+  <ItemGroup>
+    <SupportedPlatform Include="linux" />
+    <SupportedPlatform Include="macos" />
+    <SupportedPlatform Include="windows" />
+  </ItemGroup>
+
+  <!--
+      CloudSync/CloudCredentialProtector.cs needs Microsoft.AspNetCore.DataProtection, and
+      CloudSync's provider clients need Microsoft.Extensions.Http's IHttpClientFactory, both
+      shipping inside the ASP.NET Core shared framework rather than as ordinary NuGet packages, the
+      same FrameworkReference Ninlil.Dns.Server.Tsig already uses for the identical reason.
+      This also covers Hosting/DependencyInjection/Options/Configuration.Abstractions, which is
+      why those are not separately listed as PackageReferences below (NuGet's own package-pruning
+      flags them as redundant once this FrameworkReference is present).
+    -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+      Route53DnsProvider.cs talks to Amazon Route 53 through the official AWS SDK rather than
+      hand-rolling AWS SigV4 request signing. Apache-2.0 licensed, not GPL, so it carries none
+      of the clean-room restrictions this project's own NOTICE.md imposes on Technitium/dnsmasq.
+    -->
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Route53" Version="4.0.100.11" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Tsig" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Dnssec" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+
+  <!-- ConditionalPackageProject:Ninlil.Common.Serializer -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <PackageReference Include="Ninlil.Common.Serializer" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Serializer -->
+</Project>

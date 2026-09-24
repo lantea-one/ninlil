@@ -1,0 +1,104 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit access-control rule' : 'New access-control rule' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="rule-form">
+        <div class="field full-width">
+          <label cLabel for="acl-rule-name">Name</label>
+          <input cFormControl id="acl-rule-name" formControlName="name" placeholder="Trusted LAN" />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="acl-rule-cidr">Network (CIDR)</label>
+          <input
+            cFormControl
+            id="acl-rule-cidr"
+            formControlName="cidr"
+            placeholder="192.168.1.0/24"
+          />
+          @if (form.controls.cidr.hasError('required')) {
+            <div class="field-error">A network is required.</div>
+          }
+          <p class="hint">
+            A bare address (for example <code>192.168.1.10</code>) is treated as a single-host
+            <code>/32</code> network.
+          </p>
+        </div>
+
+        <fieldset class="capabilities-field">
+          <legend>Grants</legend>
+          <p class="hint">
+            There is no separate "deny" rule -- every rule is purely a grant. If a client's address
+            falls inside more than one enabled rule's network, its capabilities are the
+            <strong>union</strong> of every matching rule's grants, not whichever rule is "most
+            specific" or was created first -- rule order and network overlap never matter to the
+            outcome. A capability granted by two overlapping rules is only actually withdrawn from
+            that client once <em>every</em> rule granting it there is disabled, narrowed, or
+            deleted; disabling just one still-overlapping rule leaves the capability in effect.
+          </p>
+
+          <c-form-check class="mb-1">
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="acl-rule-recursion"
+              formControlName="grantsRecursionAccess"
+            />
+            <label cFormCheckLabel for="acl-rule-recursion">Recursion access</label>
+          </c-form-check>
+          <p class="hint mb-2">
+            A matching client may use this server's recursive resolver even while it is globally
+            disabled.
+          </p>
+
+          <c-form-check class="mb-1">
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="acl-rule-ratelimit"
+              formControlName="grantsRateLimitBypass"
+            />
+            <label cFormCheckLabel for="acl-rule-ratelimit">Rate-limit bypass</label>
+          </c-form-check>
+          <p class="hint">A matching client's own queries are never subject to rate limiting.</p>
+        </fieldset>
+
+        <c-form-check class="mt-3 mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="acl-rule-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="acl-rule-disabled">Disabled</label>
+        </c-form-check>
+        @if (form.controls.isDisabled.value) {
+          <p class="hint">A disabled rule is kept on record but never consulted.</p>
+        }
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/access-control-rules">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

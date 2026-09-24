@@ -1,0 +1,186 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header class="d-flex align-items-center justify-content-between">
+      <strong>Event broker</strong>
+      <app-cluster-sync-info
+        [lastModifiedUtc]="lastModifiedUtc()"
+        [originatingNodeId]="originatingNodeId()"
+      />
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      @if (isConnected() !== null) {
+        <p
+          class="hint status-hint"
+          [class.text-success]="isConnected()"
+          [class.text-danger]="!isConnected()"
+        >
+          <svg cIcon [name]="isConnected() ? 'cilCheckCircle' : 'cilXCircle'" size="sm"></svg>
+          {{ isConnected() ? 'Currently connected.' : 'Currently not connected.' }}
+        </p>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field">
+          <label cLabel for="broker-transport">Transport</label>
+          <select cSelect id="broker-transport" formControlName="transport">
+            @for (transport of transportOptions; track transport) {
+              <option [value]="transport">{{ transport }}</option>
+            }
+          </select>
+        </div>
+
+        @if (form.controls.transport.value === 'RabbitMq') {
+          <p class="hint">
+            The stored password is never shown here. Leave it blank to keep the current password
+            unchanged -- only a non-blank value replaces it.
+          </p>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-rmq-host">Host name</label>
+              <input cFormControl id="broker-rmq-host" formControlName="rabbitMqHostName" />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-rmq-port">Port</label>
+              <input
+                cFormControl
+                id="broker-rmq-port"
+                type="number"
+                formControlName="rabbitMqPort"
+              />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-rmq-user">Username</label>
+              <input cFormControl id="broker-rmq-user" formControlName="rabbitMqUserName" />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-rmq-password">Password</label>
+              <input
+                cFormControl
+                id="broker-rmq-password"
+                type="password"
+                formControlName="rabbitMqPassword"
+              />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-rmq-vhost">Virtual host</label>
+              <input cFormControl id="broker-rmq-vhost" formControlName="rabbitMqVirtualHost" />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-rmq-exchange">Exchange name</label>
+              <input cFormControl id="broker-rmq-exchange" formControlName="rabbitMqExchangeName" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-rmq-reconnect-initial">Initial reconnect delay</label>
+              <input
+                cFormControl
+                id="broker-rmq-reconnect-initial"
+                formControlName="rabbitMqInitialReconnectDelay"
+                placeholder="00:00:05"
+              />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-rmq-reconnect-max">Max reconnect delay</label>
+              <input
+                cFormControl
+                id="broker-rmq-reconnect-max"
+                formControlName="rabbitMqMaxReconnectDelay"
+                placeholder="00:01:00"
+              />
+            </div>
+          </div>
+        }
+
+        @if (form.controls.transport.value === 'ActiveMq') {
+          <p class="hint">
+            The stored password is never shown here. Leave it blank to keep the current password
+            unchanged -- only a non-blank value replaces it.
+          </p>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-amq-host">Host name</label>
+              <input cFormControl id="broker-amq-host" formControlName="activeMqHostName" />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-amq-port">Port</label>
+              <input
+                cFormControl
+                id="broker-amq-port"
+                type="number"
+                formControlName="activeMqPort"
+              />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-amq-user">Username</label>
+              <input cFormControl id="broker-amq-user" formControlName="activeMqUserName" />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-amq-password">Password</label>
+              <input
+                cFormControl
+                id="broker-amq-password"
+                type="password"
+                formControlName="activeMqPassword"
+              />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-amq-topic">Topic name</label>
+              <input cFormControl id="broker-amq-topic" formControlName="activeMqTopicName" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="broker-amq-reconnect-initial">Initial reconnect delay</label>
+              <input
+                cFormControl
+                id="broker-amq-reconnect-initial"
+                formControlName="activeMqInitialReconnectDelay"
+                placeholder="00:00:05"
+              />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-amq-reconnect-max">Max reconnect delay</label>
+              <input
+                cFormControl
+                id="broker-amq-reconnect-max"
+                formControlName="activeMqMaxReconnectDelay"
+                placeholder="00:01:00"
+              />
+            </div>
+            <div class="field">
+              <label cLabel for="broker-amq-publish-timeout">Publish timeout</label>
+              <input
+                cFormControl
+                id="broker-amq-publish-timeout"
+                formControlName="activeMqPublishTimeout"
+                placeholder="00:00:30"
+              />
+            </div>
+          </div>
+        }
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

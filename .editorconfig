@@ -1,0 +1,72 @@
+# This file defines the coding conventions for the Ninlil solution. Whitespace and
+# wrapping are owned by CSharpier (run `dotnet csharpier format .`), so the rules below
+# focus on naming, language preferences, and analyzer severities instead of formatting.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Prefer file-scoped namespaces everywhere, matching the existing common libraries.
+csharp_style_namespace_declarations = file_scoped:error
+
+# Prefer "var" when the type is apparent, otherwise spell out the type so a reader
+# does not have to chase a method signature to know what they are looking at.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Expression-bodied members are welcome for simple, single-expression members.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+
+# Modern pattern matching and null-checks are preferred over the old idioms.
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:warning
+csharp_using_directive_placement = outside_namespace:error
+
+# Naming: interfaces begin with "I", type parameters begin with "T", everything else
+# public follows PascalCase, and private fields are camelCase without a leading underscore.
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_symbols.interfaces.applicable_accessibilities = *
+dotnet_naming_style.prefix_interface.required_prefix = I
+dotnet_naming_style.prefix_interface.capitalization = pascal_case
+dotnet_naming_rule.interfaces_start_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_start_with_i.style = prefix_interface
+dotnet_naming_rule.interfaces_start_with_i.severity = error
+
+dotnet_naming_symbols.public_members.applicable_kinds = property,method,event,field,class,struct,enum
+dotnet_naming_symbols.public_members.applicable_accessibilities = public,internal,protected,protected_internal
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+dotnet_naming_rule.public_members_are_pascal_case.symbols = public_members
+dotnet_naming_rule.public_members_are_pascal_case.style = pascal_case
+dotnet_naming_rule.public_members_are_pascal_case.severity = warning
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.camel_case.capitalization = camel_case
+dotnet_naming_rule.private_fields_are_camel_case.symbols = private_fields
+dotnet_naming_rule.private_fields_are_camel_case.style = camel_case
+dotnet_naming_rule.private_fields_are_camel_case.severity = warning
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.{ts,html,scss,css}]
+indent_style = space
+indent_size = 2
+
+[*.sql]
+indent_style = space
+indent_size = 4

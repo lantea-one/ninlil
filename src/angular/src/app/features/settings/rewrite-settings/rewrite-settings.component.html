@@ -1,0 +1,46 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNS Rewrites</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="rewrite-enable" formControlName="enable" />
+          <label cFormCheckLabel for="rewrite-enable">Consult DNS rewrites at query time</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="rewrite-ttl">Synthesized answer TTL (seconds)</label>
+            <input
+              cFormControl
+              id="rewrite-ttl"
+              type="number"
+              min="0"
+              max="4294967295"
+              formControlName="timeToLiveSeconds"
+            />
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

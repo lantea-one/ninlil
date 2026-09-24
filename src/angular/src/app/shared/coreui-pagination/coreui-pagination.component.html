@@ -1,0 +1,70 @@
+<div class="coreui-pagination">
+  <div class="coreui-pagination-summary">
+    @if (totalCount() === 0) {
+      No results
+    } @else {
+      {{ rangeStart() }}&ndash;{{ rangeEnd() }} of {{ totalCount() }}
+    }
+  </div>
+
+  <label class="coreui-pagination-size">
+    Rows per page
+    <!-- The selected option is marked on the option itself: a [value] binding on the select
+         runs before its @for options exist, so the browser would silently show the first one. -->
+    <select cSelect (change)="onPageSizeChange($event)">
+      @for (size of pageSizeOptions(); track size) {
+        <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+      }
+    </select>
+  </label>
+
+  <c-pagination aria-label="Pagination" size="sm">
+    <c-page-item [disabled]="!hasPrevious()">
+      <button
+        cPageLink
+        type="button"
+        [disabled]="!hasPrevious()"
+        aria-label="First page"
+        (click)="goToFirst()"
+      >
+        &laquo;
+      </button>
+    </c-page-item>
+    <c-page-item [disabled]="!hasPrevious()">
+      <button
+        cPageLink
+        type="button"
+        [disabled]="!hasPrevious()"
+        aria-label="Previous page"
+        (click)="goToPrevious()"
+      >
+        &lsaquo;
+      </button>
+    </c-page-item>
+    <c-page-item disabled class="coreui-pagination-current">
+      <span cPageLink aria-current="page">Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
+    </c-page-item>
+    <c-page-item [disabled]="!hasNext()">
+      <button
+        cPageLink
+        type="button"
+        [disabled]="!hasNext()"
+        aria-label="Next page"
+        (click)="goToNext()"
+      >
+        &rsaquo;
+      </button>
+    </c-page-item>
+    <c-page-item [disabled]="!hasNext()">
+      <button
+        cPageLink
+        type="button"
+        [disabled]="!hasNext()"
+        aria-label="Last page"
+        (click)="goToLast()"
+      >
+        &raquo;
+      </button>
+    </c-page-item>
+  </c-pagination>
+</div>

@@ -1,0 +1,111 @@
+# Maintainer: Freja Abigail <frejagail@gmail.com>
+#
+# Builds the newest Ninlil release from source: the most recent v<yyyy>.<mm>.<dd>.<increment>
+# release branch, compiled into the same self-contained single-file executable (admin console
+# included) the release binaries are. For the prebuilt binary instead, install the ninlil-bin
+# package every release carries.
+
+pkgname=ninlil
+pkgver=2026.09.24.1
+pkgrel=1
+pkgdesc='DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console'
+arch=('x86_64' 'aarch64')
+url='https://git.lantea.one/Lantea.One/ninlil'
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'icu' 'openssl')
+makedepends=('git' 'dotnet-sdk>=10' 'nodejs' 'npm' 'java-runtime')
+optdepends=('msquic: DNS-over-QUIC transport')
+provides=('ninlil')
+conflicts=('ninlil-bin')
+backup=('etc/ninlil/ninlil.env')
+# A .NET single-file executable carries its payload after the ELF image; stripping it corrupts it.
+options=('!strip' '!debug')
+source=("${pkgname}::git+${url}.git")
+sha256sums=('SKIP')
+
+# The newest release branch, by version order.
+_release_branch() {
+  git -C "${srcdir}/${pkgname}" for-each-ref --format='%(refname:lstrip=3)' 'refs/remotes/origin/v*' \
+    | grep -E '^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$' \
+    | sort -V \
+    | tail -n 1
+}
+
+prepare() {
+  local branch
+  branch="$(_release_branch)"
+  if [[ -z "${branch}" ]]; then
+    echo "No v<yyyy>.<mm>.<dd>.<increment> release branch was found." >&2
+    return 1
+  fi
+  git -C "${pkgname}" checkout --quiet --detach "origin/${branch}"
+}
+
+pkgver() {
+  local branch
+  branch="$(_release_branch)"
+  echo "${branch#v}"
+}
+
+build() {
+  cd "${pkgname}"
+
+  local branch sha year month day increment
+  branch="$(_release_branch)"
+  sha="$(git rev-parse --short=7 HEAD)"
+  IFS=. read -r year month day increment <<< "${branch#v}"
+
+  # Keep every download cache inside the build directory rather than the builder's home.
+  export NUGET_PACKAGES="${srcdir}/nuget"
+  export DOTNET_CLI_HOME="${srcdir}/dotnet-home"
+  export DOTNET_CLI_TELEMETRY_OPTOUT=1
+  export DOTNET_NOLOGO=1
+
+  # The admin console, built once and embedded in the executable.
+  (
+    cd src/angular
+    npm ci --cache "${srcdir}/npm-cache" --no-audit --no-fund
+    npm run build
+  )
+  rm -rf src/dotnet/src/Ninlil.Web/wwwroot
+  cp -r src/angular/dist/angular/browser src/dotnet/src/Ninlil.Web/wwwroot
+
+  local rid
+  case "${CARCH}" in
+    x86_64) rid='linux-x64' ;;
+    aarch64) rid='linux-arm64' ;;
+  esac
+
+  # The same publish, and the same version stamps, as a release build.
+  dotnet publish src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj \
+    --configuration Release \
+    --runtime "${rid}" \
+    --self-contained \
+    -p:PublishSingleFile=true \
+    -p:IncludeNativeLibrariesForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    -p:NinlilEmbedWebRoot=true \
+    -p:NinlilSkipAngularBuild=true \
+    -p:DebugType=none \
+    -p:ContinuousIntegrationBuild=true \
+    -p:Version="${year}.$((10#${month})).$((10#${day})).${increment}+${sha}" \
+    -p:AssemblyVersion="${year}.$((10#${month})).$((10#${day})).${increment}" \
+    -p:FileVersion="${year}.$((10#${month})).$((10#${day})).${increment}" \
+    -p:InformationalVersion="${branch}R${sha}" \
+    --output "${srcdir}/publish"
+}
+
+package() {
+  install -Dm755 "${srcdir}/publish/Ninlil.Web" "${pkgdir}/usr/lib/ninlil/ninlil"
+  # The server keeps its data directory next to the executable; point it at the state directory.
+  ln -s /var/lib/ninlil "${pkgdir}/usr/lib/ninlil/data"
+  # An empty web root: the admin console is served from inside the executable, but ASP.NET Core
+  # would otherwise try to create the web root it is given in the read-only /usr/lib.
+  install -dm755 "${pkgdir}/usr/lib/ninlil/wwwroot"
+
+  cd "${pkgname}/src/archlinux/common"
+  install -Dm644 ninlil.service "${pkgdir}/usr/lib/systemd/system/ninlil.service"
+  install -Dm644 ninlil.sysusers "${pkgdir}/usr/lib/sysusers.d/ninlil.conf"
+  install -Dm640 ninlil.env "${pkgdir}/etc/ninlil/ninlil.env"
+  install -Dm644 ../../../LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

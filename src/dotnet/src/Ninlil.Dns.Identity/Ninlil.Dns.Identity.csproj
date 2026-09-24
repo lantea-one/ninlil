@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's authentication and authorization layer: RFC-compliant
+            JWT issuance and validation, ASP.NET Core Identity adapted onto Ninlil's own
+            storage-agnostic repositories, TOTP and e-mail two-factor authentication, static and
+            one-time API tokens, and permission-based policy authorization.
+        </Description>
+    <PackageId>Ninlil.Dns.Identity</PackageId>
+  </PropertyGroup>
+
+  <!--
+      This is a plain class library, not an ASP.NET Core Web project, but it needs several types
+      (ASP.NET Core Identity itself, Authorization, DataProtection, Http abstractions) that ship
+      inside the ASP.NET Core shared framework rather than as ordinary NuGet packages.
+      FrameworkReference pulls those in, version-matched to the installed SDK, without the
+      version-pinning concerns a PackageReference would carry. As of net10.0, the shared
+      framework already includes Microsoft.Extensions.Identity.Core/.Stores, so no separate
+      PackageReference to either is needed alongside this.
+    -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <!--
+        Ships ASP.NET Core's own built-in OpenID Connect authentication handler
+        (Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectHandler), not a bespoke
+        OIDC implementation. Same versioning convention as the JwtBearer package immediately
+        above: pinned to the installed ASP.NET Core SDK version, not bundled in the shared
+        framework the way Identity.Core/.Stores already is.
+    -->
+    <PackageReference
+      Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"
+      Version="10.0.11"
+    />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageReference Include="IdentityModel" Version="7.0.0" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+</Project>

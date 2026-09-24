@@ -1,0 +1,157 @@
+<div class="query-log-header">
+  <h1>Query Log</h1>
+  @if (canClear) {
+    <button
+      cButton
+      color="danger"
+      variant="outline"
+      [disabled]="clearing()"
+      cTooltip="Permanently delete every logged query"
+      (click)="clearLog()"
+    >
+      <svg cIcon name="cilTrash" size="sm"></svg>
+      Clear log
+    </button>
+  }
+</div>
+
+<c-card class="filter-card">
+  <c-card-body>
+    <form cForm [formGroup]="filterForm" class="filter-form">
+      <div class="field">
+        <label cLabel for="query-log-client-address">Client address</label>
+        <input
+          cFormControl
+          id="query-log-client-address"
+          formControlName="clientAddress"
+          placeholder="192.0.2.10"
+        />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-domain">Domain contains</label>
+        <input
+          cFormControl
+          id="query-log-domain"
+          formControlName="domain"
+          placeholder="example.com"
+        />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-queried-type">Queried type</label>
+        <input
+          cFormControl
+          id="query-log-queried-type"
+          formControlName="queriedType"
+          placeholder="A"
+        />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-response-code">Response code</label>
+        <input
+          cFormControl
+          id="query-log-response-code"
+          formControlName="responseCode"
+          placeholder="NXDOMAIN"
+        />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-from">From</label>
+        <input cFormControl type="datetime-local" id="query-log-from" formControlName="fromUtc" />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-to">To</label>
+        <input cFormControl type="datetime-local" id="query-log-to" formControlName="toUtc" />
+      </div>
+    </form>
+
+    <div class="filter-actions">
+      <button cButton variant="ghost" color="secondary" (click)="resetFilters()">
+        Clear filters
+      </button>
+      <button cButton color="primary" (click)="search()">
+        <svg cIcon name="cilSearch" size="sm"></svg>
+        Search
+      </button>
+    </div>
+  </c-card-body>
+</c-card>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (entries().length === 0) {
+  <app-empty-state
+    icon="cilSearch"
+    heading="No matching queries"
+    description="No logged queries match the current filters. Try widening the date range or clearing a filter."
+  >
+    <button cButton variant="ghost" color="secondary" (click)="resetFilters()">
+      Clear filters
+    </button>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="entries()" class="query-log-table">
+      <ng-container cdkColumnDef="occurredAtUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Occurred at</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.occurredAtUtc | date: 'medium' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="clientAddress">
+        <th cdk-header-cell *cdkHeaderCellDef>Client</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.clientAddress ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocol">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.protocol }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="queriedName">
+        <th cdk-header-cell *cdkHeaderCellDef>Queried name</th>
+        <td cdk-cell *cdkCellDef="let entry">
+          <code>{{ entry.queriedName ?? '—' }}</code>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="queriedType">
+        <th cdk-header-cell *cdkHeaderCellDef>Type</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.queriedType ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="responseCode">
+        <th cdk-header-cell *cdkHeaderCellDef>Response</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.responseCode }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="answerCount">
+        <th cdk-header-cell *cdkHeaderCellDef>Answers</th>
+        <td cdk-cell *cdkCellDef="let entry">{{ entry.answerCount }}</td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

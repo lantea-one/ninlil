@@ -1,0 +1,182 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header class="d-flex align-items-center justify-content-between">
+      <strong>Rate limiting</strong>
+      <app-cluster-sync-info
+        [lastModifiedUtc]="lastModifiedUtc()"
+        [originatingNodeId]="originatingNodeId()"
+      />
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="ratelimit-enable" formControlName="enable" />
+          <label cFormCheckLabel for="ratelimit-enable">Enable per-client rate limiting</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="ratelimit-qps">Queries per second</label>
+            <input
+              cFormControl
+              id="ratelimit-qps"
+              type="number"
+              min="0"
+              formControlName="queriesPerSecond"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-burst">Burst size</label>
+            <input
+              cFormControl
+              id="ratelimit-burst"
+              type="number"
+              min="1"
+              formControlName="burstSize"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-max-clients">Max tracked clients</label>
+            <input
+              cFormControl
+              id="ratelimit-max-clients"
+              type="number"
+              min="1"
+              formControlName="maxTrackedClients"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="ratelimit-expiry">Tracked client expiry</label>
+            <input
+              cFormControl
+              id="ratelimit-expiry"
+              formControlName="trackedClientExpiry"
+              placeholder="00:05:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-cleanup">Cleanup interval</label>
+            <input
+              cFormControl
+              id="ratelimit-cleanup"
+              formControlName="cleanupInterval"
+              placeholder="00:01:00"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="override-note">
+          Subnet-bucketed limiting caps queries per CIDR block, alongside the per-client limit above
+          -- over-limit UDP traffic is answered truncated (forcing a TCP retry) for a configurable
+          share, and dropped outright the rest of the time.
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-prefix-v4">IPv4 subnet prefix length</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-prefix-v4"
+              type="number"
+              min="0"
+              max="32"
+              formControlName="subnetPrefixLengthIPv4"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-prefix-v6">IPv6 subnet prefix length</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-prefix-v6"
+              type="number"
+              min="0"
+              max="128"
+              formControlName="subnetPrefixLengthIPv6"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-window">Subnet sample window</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-window"
+              formControlName="subnetSampleWindow"
+              placeholder="00:00:10"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-udp-limit">Subnet UDP query limit</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-udp-limit"
+              type="number"
+              min="1"
+              formControlName="subnetUdpQueryLimit"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-tcp-limit">Subnet TCP query limit</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-tcp-limit"
+              type="number"
+              min="1"
+              formControlName="subnetTcpQueryLimit"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ratelimit-subnet-truncate-pct">Truncate share (%)</label>
+            <input
+              cFormControl
+              id="ratelimit-subnet-truncate-pct"
+              type="number"
+              min="0"
+              max="100"
+              formControlName="subnetTruncatePercentage"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="ratelimit-subnet-bypass">Bypass CIDRs (one per line)</label>
+          <textarea
+            cFormControl
+            id="ratelimit-subnet-bypass"
+            formControlName="subnetBypassCidrsText"
+            rows="3"
+            placeholder="10.0.0.0/8"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

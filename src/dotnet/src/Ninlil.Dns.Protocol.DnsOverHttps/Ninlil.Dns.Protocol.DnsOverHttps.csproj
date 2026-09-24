@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DNS-over-HTTPS (DoH, RFC 8484) transport: a DNS message
+            carried as the body of an ordinary HTTP request (GET, base64url-encoded in a query
+            string, or POST, as the raw wire-format body), self-hosting its own Kestrel server
+            since Phase 4's own REST API host does not exist yet.
+        </Description>
+    <PackageId>Ninlil.Dns.Protocol.DnsOverHttps</PackageId>
+  </PropertyGroup>
+
+  <!--
+      This is a plain class library, not an ASP.NET Core Web project, but it needs Kestrel and
+      minimal-API routing, which ship inside the ASP.NET Core shared framework rather than as an
+      ordinary NuGet package. FrameworkReference pulls it in, version-matched to the installed
+      SDK, the same way Ninlil.Dns.Identity/Server.Tsig/Server.Dnssec already do for their
+      own (unrelated) use of DataProtection.
+    -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+</Project>

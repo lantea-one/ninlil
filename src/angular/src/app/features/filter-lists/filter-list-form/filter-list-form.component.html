@@ -1,0 +1,209 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit filter list' : 'New filter list' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="filter-list-form">
+        <div class="field full-width">
+          <label cLabel for="filter-list-name">{{
+            isBulkSubscriptionMode() ? 'Name / name prefix' : 'Name'
+          }}</label>
+          <input
+            cFormControl
+            id="filter-list-name"
+            formControlName="name"
+            placeholder="threat-intel"
+          />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+          @if (isBulkSubscriptionMode()) {
+            <p class="hint">
+              Used verbatim when this save creates exactly one filter list; used as a numbered
+              prefix ("{{ form.controls.name.value || 'Filter list' }} 1", "{{
+                form.controls.name.value || 'Filter list'
+              }}
+              2", ...) for any URL below that isn't a recognized known block list, when this save
+              creates more than one.
+            </p>
+          }
+        </div>
+
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="filter-list-kind">Kind</label>
+            <select cSelect id="filter-list-kind" formControlName="kind">
+              @for (kind of kindOptions; track kind) {
+                <option [value]="kind">{{ kind }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="filter-list-action">Action</label>
+            <select cSelect id="filter-list-action" formControlName="action">
+              @for (action of actionOptions; track action) {
+                <option [value]="action">{{ action }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="filter-list-source">Source</label>
+            <select cSelect id="filter-list-source" formControlName="source">
+              @for (source of sourceOptions; track source) {
+                <option [value]="source">{{ source }}</option>
+              }
+            </select>
+          </div>
+        </section>
+
+        @if (showSubscriptionSection()) {
+          @if (isBulkSubscriptionMode()) {
+            <div class="field full-width">
+              <label cLabel for="filter-list-known-blocklist"
+                >Add a well-known public block list</label
+              >
+              <select
+                cSelect
+                id="filter-list-known-blocklist"
+                #knownBlocklistSelect
+                (change)="onPickKnownBlocklist(knownBlocklistSelect.value, knownBlocklistSelect)"
+              >
+                <option value="" selected>-- choose a block list to append it below --</option>
+                @for (option of knownBlocklistOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+
+            <section class="field-row append-row">
+              <div class="field full-width">
+                <label cLabel for="filter-list-manual-entry"
+                  >Or type a custom subscription URL</label
+                >
+                <input
+                  cFormControl
+                  id="filter-list-manual-entry"
+                  #manualEntryInput
+                  placeholder="https://example.com/blocklist.txt"
+                  (keydown.enter)="$event.preventDefault(); addManualEntry(manualEntryInput)"
+                />
+              </div>
+              <button
+                cButton
+                type="button"
+                color="secondary"
+                variant="outline"
+                class="append-button"
+                (click)="addManualEntry(manualEntryInput)"
+              >
+                Add line
+              </button>
+            </section>
+
+            <section class="field-row">
+              <div class="field full-width">
+                <label cLabel for="filter-list-subscription-url"
+                  >Subscription URLs (one per line)</label
+                >
+                <textarea
+                  cFormControl
+                  id="filter-list-subscription-url"
+                  formControlName="subscriptionUrl"
+                  rows="4"
+                  placeholder="https://example.com/blocklist.txt"
+                ></textarea>
+              </div>
+              <div class="field">
+                <label cLabel for="filter-list-refresh-interval">Refresh interval (hh:mm:ss)</label>
+                <input
+                  cFormControl
+                  id="filter-list-refresh-interval"
+                  formControlName="refreshIntervalText"
+                  placeholder="01:00:00"
+                />
+                @if (form.controls.refreshIntervalText.hasError('pattern')) {
+                  <div class="field-error">Use hh:mm:ss, e.g. 01:00:00.</div>
+                }
+              </div>
+            </section>
+            <p class="hint">
+              Each non-blank line above becomes its own filter list, sharing this form's Kind/
+              Action/refresh interval/comments. This list's own entries are fetched and
+              wholesale-replaced on the refresh schedule above -- they cannot be edited by hand
+              while a list stays subscribed.
+            </p>
+          } @else {
+            <section class="field-row">
+              <div class="field full-width">
+                <label cLabel for="filter-list-subscription-url">Subscription URL</label>
+                <input
+                  cFormControl
+                  id="filter-list-subscription-url"
+                  formControlName="subscriptionUrl"
+                  placeholder="https://example.com/blocklist.txt"
+                />
+              </div>
+              <div class="field">
+                <label cLabel for="filter-list-refresh-interval">Refresh interval (hh:mm:ss)</label>
+                <input
+                  cFormControl
+                  id="filter-list-refresh-interval"
+                  formControlName="refreshIntervalText"
+                  placeholder="01:00:00"
+                />
+                @if (form.controls.refreshIntervalText.hasError('pattern')) {
+                  <div class="field-error">Use hh:mm:ss, e.g. 01:00:00.</div>
+                }
+              </div>
+            </section>
+            <p class="hint">
+              This list's own entries are fetched and wholesale-replaced on this schedule -- they
+              cannot be edited by hand while this list stays subscribed.
+            </p>
+          }
+        }
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="filter-list-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="filter-list-disabled">Disabled</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="filter-list-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="filter-list-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/filter-lists">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

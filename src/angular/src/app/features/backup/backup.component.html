@@ -1,0 +1,167 @@
+<h1 class="page-title">Backup &amp; Restore</h1>
+
+<c-card class="form-card">
+  <c-card-header>
+    <strong>Create a backup</strong>
+  </c-card-header>
+  <c-card-body>
+    <p>
+      Downloads an archive of every zone, record, key, credential, user, role, and every other
+      configuration or identity entity this server persists, plus the Data Protection key ring, the
+      shared TLS certificate, and the runtime configuration file. Set a passphrase to encrypt it --
+      this server never stores it anywhere, so losing it means losing the ability to ever decrypt
+      this archive again, and keeping it somewhere safe is entirely your own responsibility. A
+      passphrase is optional, but leaving it blank is ill-advised: see the warning below.
+    </p>
+    <p class="hint">
+      Deliberately excluded: the persistent query log, the zone-transfer journal, and server
+      logs/metrics. All three are diagnostic history, not configuration -- nothing needed for this
+      server to work again after a restore -- and can grow far larger than everything else in this
+      archive combined.
+    </p>
+
+    <form cForm [formGroup]="createForm" (ngSubmit)="createBackup()" class="settings-form">
+      <div class="field">
+        <label cLabel for="backup-create-passphrase">Passphrase (optional)</label>
+        <input
+          cFormControl
+          id="backup-create-passphrase"
+          type="password"
+          formControlName="passphrase"
+          autocomplete="new-password"
+        />
+        @if (createForm.controls.passphrase.hasError('minlength')) {
+          <div class="field-error">
+            If set, the passphrase must be at least {{ minimumPassphraseLength }} characters long.
+          </div>
+        }
+      </div>
+
+      <div class="field">
+        <label cLabel for="backup-create-confirm-passphrase">Confirm passphrase</label>
+        <input
+          cFormControl
+          id="backup-create-confirm-passphrase"
+          type="password"
+          formControlName="confirmPassphrase"
+          autocomplete="new-password"
+        />
+      </div>
+
+      @if (passphraseOmitted()) {
+        <c-alert color="warning" [dismissible]="false" role="alert" class="unencrypted-warning">
+          <svg cIcon name="cilWarning" size="sm"></svg>
+          <span>
+            <strong>No passphrase set -- this backup will NOT be encrypted.</strong>
+            Anyone who obtains this archive file can read every zone, record, credential, key, and
+            Data Protection key it contains in plain text. Only skip encryption if you fully trust
+            everywhere this file will ever be stored.
+          </span>
+        </c-alert>
+      }
+
+      @if (createErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          createErrorMessage()
+        }}</c-alert>
+      }
+
+      <div>
+        <button cButton color="primary" type="submit" [disabled]="creatingBackup()">
+          @if (creatingBackup()) {
+            <c-spinner size="sm" />
+            Creating backup...
+          } @else {
+            <svg cIcon name="cilCloudDownload" size="sm"></svg>
+            Download backup
+          }
+        </button>
+      </div>
+    </form>
+  </c-card-body>
+</c-card>
+
+@if (canRestore) {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Restore from a backup</strong>
+    </c-card-header>
+    <c-card-body>
+      <c-alert color="danger" [dismissible]="false" role="alert">
+        Restoring wipes and replaces every entity a backup covers -- zones, records, keys,
+        credentials, users, roles, and the rest -- with the contents of the archive you select. This
+        cannot be undone. The query log, zone-transfer journal, and server logs/metrics are never
+        touched either way, since a backup never captures them in the first place.
+      </c-alert>
+
+      <form
+        cForm
+        (ngSubmit)="confirmAndRestoreBackup()"
+        [formGroup]="restoreForm"
+        class="settings-form"
+      >
+        <div class="field">
+          <label cLabel for="backup-restore-file">Backup archive</label>
+          <input
+            cFormControl
+            id="backup-restore-file"
+            type="file"
+            accept=".ltbk"
+            (change)="onArchiveFileSelected($event)"
+          />
+        </div>
+
+        <div class="field">
+          <label cLabel for="backup-restore-passphrase"
+            >Passphrase (leave blank if none was set)</label
+          >
+          <input
+            cFormControl
+            id="backup-restore-passphrase"
+            type="password"
+            formControlName="passphrase"
+            autocomplete="off"
+          />
+        </div>
+
+        @if (restoreErrorMessage()) {
+          <c-alert color="danger" [dismissible]="false" role="alert">{{
+            restoreErrorMessage()
+          }}</c-alert>
+        }
+
+        <div>
+          <button cButton color="danger" type="submit" [disabled]="restoringBackup()">
+            @if (restoringBackup()) {
+              <c-spinner size="sm" />
+              Restoring...
+            } @else {
+              <svg cIcon name="cilCloudUpload" size="sm"></svg>
+              Restore
+            }
+          </button>
+        </div>
+      </form>
+
+      @if (lastRestoreSummary(); as summary) {
+        <div class="restore-summary">
+          <p>
+            <strong>{{ summary.note }}</strong>
+          </p>
+          <p>Restored {{ summary.totalEntitiesImported }} total rows:</p>
+          <ul cListGroup>
+            @for (entry of restoredEntityCounts(); track entry[0]) {
+              <li cListGroupItem>{{ entry[0] }}: {{ entry[1] }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </c-card-body>
+  </c-card>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

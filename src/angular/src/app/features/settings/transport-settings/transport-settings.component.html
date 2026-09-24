@@ -1,0 +1,560 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  @if (loadErrorMessage()) {
+    <c-alert color="danger" [dismissible]="false" role="alert" class="form-alert">{{
+      loadErrorMessage()
+    }}</c-alert>
+  }
+
+  <!-- Plain DNS -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Plain DNS</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        Always on -- this project's baseline "this is a DNS server at all" transport, not a
+        capability-expanding toggle, so there is no enable switch here.
+      </p>
+
+      @if (plainErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          plainErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="plainForm" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="plain-port">Port</label>
+            <input cFormControl id="plain-port" type="number" formControlName="port" />
+          </div>
+          <div class="field">
+            <label cLabel for="plain-idle-timeout">TCP idle timeout</label>
+            <input
+              cFormControl
+              id="plain-idle-timeout"
+              formControlName="tcpIdleTimeout"
+              placeholder="00:00:30"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="plain-max-connections">Max concurrent TCP connections</label>
+            <input
+              cFormControl
+              id="plain-max-connections"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentTcpConnections"
+            />
+          </div>
+        </div>
+        <div cFormText class="restart-note">Every field here needs this transport to restart.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="plainForm.invalid || plainSubmitting()"
+        (click)="savePlain()"
+      >
+        @if (plainSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DNS-over-TLS -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNS-over-TLS</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (dnsOverTlsErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dnsOverTlsErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dnsOverTlsForm" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="dot-enable" formControlName="enable" />
+          <label cFormCheckLabel for="dot-enable"
+            >Enable -- takes effect immediately, no restart</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dot-port">Port</label>
+            <input cFormControl id="dot-port" type="number" formControlName="port" />
+          </div>
+          <div class="field">
+            <label cLabel for="dot-idle-timeout">Idle timeout</label>
+            <input
+              cFormControl
+              id="dot-idle-timeout"
+              formControlName="idleTimeout"
+              placeholder="00:00:30"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dot-max-connections">Max concurrent connections</label>
+            <input
+              cFormControl
+              id="dot-max-connections"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentConnections"
+            />
+          </div>
+        </div>
+
+        <h6 class="section-heading">Certificate</h6>
+
+        <div class="field">
+          <label cLabel for="dot-pfx-path"
+            >PFX path (blank generates and manages a self-signed certificate)</label
+          >
+          <input cFormControl id="dot-pfx-path" formControlName="pfxPath" />
+        </div>
+
+        <div class="field">
+          <label cLabel for="dot-pfx-password">PFX password</label>
+          <input
+            cFormControl
+            id="dot-pfx-password"
+            type="password"
+            formControlName="pfxPassword"
+            placeholder="Leave blank to keep the current one unchanged"
+          />
+          <div cFormText>
+            {{
+              dnsOverTlsPfxPasswordConfigured()
+                ? 'A password is currently configured.'
+                : 'No password is currently configured.'
+            }}
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="dot-sans">Self-signed subject alternative names (one per line)</label>
+          <textarea
+            cFormControl
+            id="dot-sans"
+            formControlName="selfSignedSubjectAlternativeNames"
+            rows="2"
+            placeholder="localhost"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label cLabel for="dot-cert-poll-interval">Certificate reload poll interval</label>
+          <input
+            cFormControl
+            id="dot-cert-poll-interval"
+            formControlName="certificateReloadPollInterval"
+            placeholder="00:05:00"
+          />
+        </div>
+
+        <div class="field">
+          <div class="group-label">
+            Allowed TLS protocols (none selected lets the runtime negotiate its own default)
+          </div>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="dot-tls12"
+              formControlName="allowedProtocolTls12"
+            />
+            <label cFormCheckLabel for="dot-tls12">TLS 1.2</label>
+          </c-form-check>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="dot-tls13"
+              formControlName="allowedProtocolTls13"
+            />
+            <label cFormCheckLabel for="dot-tls13">TLS 1.3</label>
+          </c-form-check>
+        </div>
+
+        <div cFormText class="restart-note">
+          Every field besides "Enable" needs this transport to restart.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dnsOverTlsForm.invalid || dnsOverTlsSubmitting()"
+        (click)="saveDnsOverTls()"
+      >
+        @if (dnsOverTlsSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DNS-over-HTTPS -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNS-over-HTTPS</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p class="hint">
+        Rides this host's own shared HTTPS listener -- its own port and certificate are not
+        configurable separately here.
+      </p>
+
+      @if (dnsOverHttpsErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dnsOverHttpsErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dnsOverHttpsForm" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="doh-enable" formControlName="enable" />
+          <label cFormCheckLabel for="doh-enable"
+            >Enable -- takes effect immediately, no restart</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="doh-path">Path</label>
+            <input cFormControl id="doh-path" formControlName="path" placeholder="/dns-query" />
+          </div>
+          <div class="field">
+            <label cLabel for="doh-max-message-size">Max message size (bytes)</label>
+            <input
+              cFormControl
+              id="doh-max-message-size"
+              type="number"
+              min="1"
+              formControlName="maxMessageSizeBytes"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="restart-note">
+          "Enable" is genuinely live. "Path"/"Max message size" need a full process restart, not
+          merely this transport -- both are fixed into this host's own route mapping the moment it
+          starts.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dnsOverHttpsForm.invalid || dnsOverHttpsSubmitting()"
+        (click)="saveDnsOverHttps()"
+      >
+        @if (dnsOverHttpsSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DNS-over-QUIC -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNS-over-QUIC</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (dnsOverQuicErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dnsOverQuicErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dnsOverQuicForm" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="doq-enable" formControlName="enable" />
+          <label cFormCheckLabel for="doq-enable"
+            >Enable -- takes effect immediately, no restart</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="doq-port">Port</label>
+            <input cFormControl id="doq-port" type="number" formControlName="port" />
+          </div>
+          <div class="field">
+            <label cLabel for="doq-idle-timeout">Idle timeout</label>
+            <input
+              cFormControl
+              id="doq-idle-timeout"
+              formControlName="idleTimeout"
+              placeholder="00:00:30"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="doq-max-streams">Max concurrent bidirectional streams</label>
+            <input
+              cFormControl
+              id="doq-max-streams"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentBidirectionalStreams"
+            />
+          </div>
+        </div>
+
+        <h6 class="section-heading">Certificate</h6>
+
+        <div class="field">
+          <label cLabel for="doq-pfx-path"
+            >PFX path (blank generates and manages a self-signed certificate)</label
+          >
+          <input cFormControl id="doq-pfx-path" formControlName="pfxPath" />
+        </div>
+
+        <div class="field">
+          <label cLabel for="doq-pfx-password">PFX password</label>
+          <input
+            cFormControl
+            id="doq-pfx-password"
+            type="password"
+            formControlName="pfxPassword"
+            placeholder="Leave blank to keep the current one unchanged"
+          />
+          <div cFormText>
+            {{
+              dnsOverQuicPfxPasswordConfigured()
+                ? 'A password is currently configured.'
+                : 'No password is currently configured.'
+            }}
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="doq-sans">Self-signed subject alternative names (one per line)</label>
+          <textarea
+            cFormControl
+            id="doq-sans"
+            formControlName="selfSignedSubjectAlternativeNames"
+            rows="2"
+            placeholder="localhost"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label cLabel for="doq-cert-poll-interval">Certificate reload poll interval</label>
+          <input
+            cFormControl
+            id="doq-cert-poll-interval"
+            formControlName="certificateReloadPollInterval"
+            placeholder="00:05:00"
+          />
+        </div>
+
+        <div class="field">
+          <div class="group-label">
+            Allowed TLS protocols (none selected lets the runtime negotiate its own default)
+          </div>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="doq-tls12"
+              formControlName="allowedProtocolTls12"
+            />
+            <label cFormCheckLabel for="doq-tls12">TLS 1.2</label>
+          </c-form-check>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="doq-tls13"
+              formControlName="allowedProtocolTls13"
+            />
+            <label cFormCheckLabel for="doq-tls13">TLS 1.3</label>
+          </c-form-check>
+        </div>
+
+        <div cFormText class="restart-note">
+          Every field besides "Enable" needs this transport to restart.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dnsOverQuicForm.invalid || dnsOverQuicSubmitting()"
+        (click)="saveDnsOverQuic()"
+      >
+        @if (dnsOverQuicSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <!-- DNSCrypt -->
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNSCrypt</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (dnsCryptErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          dnsCryptErrorMessage()
+        }}</c-alert>
+      }
+
+      <form cForm [formGroup]="dnsCryptForm" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="dnscrypt-enable" formControlName="enable" />
+          <label cFormCheckLabel for="dnscrypt-enable"
+            >Enable -- takes effect immediately, no restart</label
+          >
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="dnscrypt-provider-name"
+            >Provider name (a zone you control -- required before this transport will actually
+            start)</label
+          >
+          <input
+            cFormControl
+            id="dnscrypt-provider-name"
+            formControlName="providerName"
+            placeholder="resolver.example."
+          />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dnscrypt-port">Port</label>
+            <input cFormControl id="dnscrypt-port" type="number" formControlName="port" />
+          </div>
+          <div class="field">
+            <label cLabel for="dnscrypt-idle-timeout">TCP idle timeout</label>
+            <input
+              cFormControl
+              id="dnscrypt-idle-timeout"
+              formControlName="tcpIdleTimeout"
+              placeholder="00:00:30"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dnscrypt-max-connections">Max concurrent TCP connections</label>
+            <input
+              cFormControl
+              id="dnscrypt-max-connections"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentTcpConnections"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="group-label">Enabled ciphers</div>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="dnscrypt-xchacha"
+              formControlName="esVersionXChaCha20Poly1305"
+            />
+            <label cFormCheckLabel for="dnscrypt-xchacha">XChaCha20-Poly1305</label>
+          </c-form-check>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="dnscrypt-xsalsa"
+              formControlName="esVersionXSalsa20Poly1305"
+            />
+            <label cFormCheckLabel for="dnscrypt-xsalsa">XSalsa20-Poly1305</label>
+          </c-form-check>
+        </div>
+
+        <h6 class="section-heading">Certificate rotation policy</h6>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dnscrypt-rotation-interval">Rotation check interval</label>
+            <input
+              cFormControl
+              id="dnscrypt-rotation-interval"
+              formControlName="certificateRotationInterval"
+              placeholder="1.00:00:00"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dnscrypt-validity-duration">Certificate validity duration</label>
+            <input
+              cFormControl
+              id="dnscrypt-validity-duration"
+              formControlName="certificateValidityDuration"
+              placeholder="2.00:00:00"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dnscrypt-clock-skew">Clock skew tolerance</label>
+            <input
+              cFormControl
+              id="dnscrypt-clock-skew"
+              formControlName="certificateClockSkewTolerance"
+              placeholder="00:05:00"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="restart-note">
+          "Enable" is genuinely live -- toggling it also starts/stops the certificate rotation
+          background loop, since a listener with no valid certificate could accept a connection but
+          never actually answer one. Every other field needs this transport to restart.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button
+        cButton
+        color="primary"
+        [disabled]="dnsCryptForm.invalid || dnsCryptSubmitting()"
+        (click)="saveDnsCrypt()"
+      >
+        @if (dnsCryptSubmitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

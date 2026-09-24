@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DHCPv4 and DHCPv6 relay agents: alternative
+            IDhcpv4RequestHandler/IDhcpv6RequestHandler implementations this server can be
+            configured to run instead of (never alongside, on the same listening instance)
+            Ninlil.Dhcp.Server.Core's own local lease-allocation engines. The DHCPv4 relay agent
+            (RFC 3046) forwards a client's request to one or more configured upstream DHCPv4
+            servers -- incrementing "hops", setting its own "giaddr" if not already set, and
+            optionally adding its own Relay Agent Information (Circuit ID/Remote ID) -- and relays
+            whatever reply comes back down to the original client. The DHCPv6 relay agent (RFC
+            8415, scoped to a single relay hop) wraps a client's message in a RELAY-FORW envelope,
+            forwards it to one or more configured upstream DHCPv6 servers, and unwraps whatever
+            RELAY-REPL comes back to relay the inner reply down to the original client.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Server.Relay</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv4" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv6 -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv6\Ninlil.Dhcp.Protocol.Dhcpv6.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv6" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv6 -->
+</Project>

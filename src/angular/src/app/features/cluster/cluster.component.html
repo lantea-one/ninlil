@@ -1,0 +1,233 @@
+<div class="list-header">
+  <h1>Cluster</h1>
+</div>
+
+<div class="action-cards">
+  <c-card class="action-card">
+    <c-card-header><strong>Invite a peer</strong></c-card-header>
+    <c-card-body>
+      <p>
+        Generates a one-time invite code to hand to another node's own operator. Requires clustering
+        enabled and an advertised host set on the
+        <a routerLink="/settings/cluster">Cluster settings page</a> first.
+      </p>
+      <button cButton color="primary" [disabled]="inviting()" (click)="createInvite()">
+        @if (inviting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Create invite
+        }
+      </button>
+    </c-card-body>
+  </c-card>
+
+  <c-card class="action-card">
+    <c-card-header><strong>Join a cluster</strong></c-card-header>
+    <c-card-body>
+      <form cForm [formGroup]="joinForm" class="join-form">
+        <div class="field">
+          <label cLabel for="cluster-invite-code">Invite code</label>
+          <textarea
+            cFormControl
+            id="cluster-invite-code"
+            formControlName="inviteCode"
+            rows="3"
+            placeholder="ninlil-cluster-invite-1...."
+          ></textarea>
+        </div>
+        <div class="field">
+          <label cLabel for="cluster-join-display-name">Display name (optional)</label>
+          <input cFormControl id="cluster-join-display-name" formControlName="displayName" />
+        </div>
+        <button cButton color="primary" [disabled]="joinForm.invalid || joining()" (click)="join()">
+          @if (joining()) {
+            <c-spinner size="sm" />
+          } @else {
+            Join
+          }
+        </button>
+      </form>
+    </c-card-body>
+  </c-card>
+</div>
+
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (nodes().length === 0) {
+  <app-empty-state
+    icon="cilCloud"
+    heading="No peers yet"
+    description="Invite another node's operator, or join another node's own cluster using the forms above, to start propagating zones and configuration between them."
+  />
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="nodes()" class="node-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let node">{{ node.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="host">
+        <th cdk-header-cell *cdkHeaderCellDef>Address</th>
+        <td cdk-cell *cdkCellDef="let node">{{ node.host }}:{{ node.port }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let node">
+          <span
+            class="status-badge"
+            [class.status-healthy]="node.status === statuses.Healthy"
+            [class.status-unreachable]="node.status === statuses.Unreachable"
+            [class.status-joining]="node.status === statuses.Joining"
+          >
+            {{ node.status }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="lastHeartbeat">
+        <th cdk-header-cell *cdkHeaderCellDef>Last heartbeat</th>
+        <td cdk-cell *cdkCellDef="let node">
+          {{ node.lastHeartbeatAtUtc ? (node.lastHeartbeatAtUtc | date: 'medium') : 'Never' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="missedHeartbeats">
+        <th cdk-header-cell *cdkHeaderCellDef>Missed heartbeats</th>
+        <td cdk-cell *cdkCellDef="let node">{{ node.missedHeartbeatCount ?? 0 }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let node" class="actions-cell">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            cTooltip="Edit peer"
+            aria-label="Edit peer"
+            (click)="editNode(node)"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </button>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Remove peer"
+            aria-label="Remove peer"
+            (click)="removeNode(node)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<div class="stats-card-wrapper">
+  <c-card class="stats-card">
+    <c-card-header class="stats-card-header">
+      <strong>Query stats across the cluster</strong>
+      <button
+        cButton
+        size="sm"
+        variant="ghost"
+        color="secondary"
+        [disabled]="statsLoading()"
+        (click)="loadStats()"
+      >
+        @if (statsLoading()) {
+          <c-spinner size="sm" />
+        } @else {
+          <svg cIcon name="cilReload" size="sm"></svg>
+          Refresh
+        }
+      </button>
+    </c-card-header>
+    <c-card-body>
+      @if (statsErrorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{
+          statsErrorMessage()
+        }}</c-alert>
+      }
+
+      @if (!statsLoading() && statsRows().length > 0) {
+        <table cTable hover responsive class="stats-table">
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Status</th>
+              <th>Queries (1h)</th>
+              <th>Queries (24h)</th>
+              <th>Retained</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of statsRows(); track row.clusterNodeRegistryId ?? 'self') {
+              <tr>
+                <td>
+                  {{ row.nodeName }}
+                  @if (row.isSelf) {
+                    <span class="self-badge">this node</span>
+                  }
+                </td>
+                <td>
+                  @if (row.reachable) {
+                    <span class="status-badge status-healthy">Reachable</span>
+                  } @else {
+                    <span class="status-badge status-unreachable">Unreachable</span>
+                  }
+                </td>
+                <td>{{ row.reachable ? row.queriesLastHour : '—' }}</td>
+                <td>{{ row.reachable ? row.queriesLast24Hours : '—' }}</td>
+                <td>{{ row.reachable ? row.totalRetainedQueries : '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else if (statsLoading()) {
+        <c-spinner class="loading-spinner" />
+      } @else if (!statsErrorMessage()) {
+        <p class="stats-empty">No query-stats rows available.</p>
+      }
+    </c-card-body>
+  </c-card>
+</div>
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>
+
+<app-reveal-secret-dialog
+  [visible]="revealDialogVisible()"
+  [data]="revealDialogData()"
+  (closed)="onRevealDialogClosed()"
+/>
+
+<app-edit-node-dialog
+  [visible]="editDialogVisible()"
+  [node]="editTarget()"
+  (visibleChange)="editDialogVisible.set($event)"
+  (saved)="onEditSaved()"
+/>

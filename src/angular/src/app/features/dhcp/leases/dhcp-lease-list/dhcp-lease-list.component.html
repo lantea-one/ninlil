@@ -1,0 +1,119 @@
+<div class="lease-header">
+  <h1>DHCP Leases</h1>
+  <button cButton variant="outline" color="secondary" (click)="refresh()">
+    <svg cIcon name="cilReload" size="sm"></svg>
+    Refresh
+  </button>
+</div>
+
+<c-card class="filter-card">
+  <c-card-body>
+    <form cForm [formGroup]="filterForm" class="filter-form">
+      <div class="field">
+        <label cLabel for="dhcp-lease-scope-filter">Scope</label>
+        <select cSelect id="dhcp-lease-scope-filter" formControlName="scopeId" (change)="search()">
+          <option value="">All scopes</option>
+          @for (scope of scopes(); track scope.id) {
+            <option [value]="scope.id">{{ scope.name }}</option>
+          }
+        </select>
+      </div>
+    </form>
+  </c-card-body>
+</c-card>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (leases().length === 0) {
+  <app-empty-state
+    icon="cilClock"
+    heading="No leases recorded yet"
+    description="A lease appears here once a real client actually requests an address from this server. Nothing to see yet -- check back once a client on your network renews or requests a new lease."
+  />
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="leases()" class="lease-table">
+      <ng-container cdkColumnDef="scopeName">
+        <th cdk-header-cell *cdkHeaderCellDef>Scope</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.scopeName }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocolVersion">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.protocolVersion }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="clientIdentifier">
+        <th cdk-header-cell *cdkHeaderCellDef>Client identifier</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.clientIdentifier }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="ipAddress">
+        <th cdk-header-cell *cdkHeaderCellDef>Address</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.ipAddress }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="prefixLength">
+        <th cdk-header-cell *cdkHeaderCellDef>Prefix length</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.prefixLength ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="hostName">
+        <th cdk-header-cell *cdkHeaderCellDef>Host name</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.hostName || '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="state">
+        <th cdk-header-cell *cdkHeaderCellDef>State</th>
+        <td cdk-cell *cdkCellDef="let lease">{{ lease.state }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="leaseExpiresAtUtc">
+        <th cdk-header-cell *cdkHeaderCellDef>Expires</th>
+        <td cdk-cell *cdkCellDef="let lease">
+          {{ lease.leaseExpiresAtUtc ? (lease.leaseExpiresAtUtc | date: 'medium') : '—' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let lease" class="actions-cell">
+          @if (canManage) {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="danger"
+              [disabled]="lease.state === leaseStates.Released || releasingLeaseId() === lease.id"
+              cTooltip="Force-release this lease"
+              [attr.aria-label]="'Release lease for ' + lease.clientIdentifier"
+              (click)="release(lease)"
+            >
+              <svg cIcon name="cilXCircle" size="sm"></svg>
+            </button>
+          }
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

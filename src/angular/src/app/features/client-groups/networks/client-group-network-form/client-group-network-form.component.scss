@@ -1,0 +1,36 @@
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+.form-card {
+  max-width: var(--ninlil-form-max-width-compact);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.network-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+}
+
+.full-width {
+  width: 100%;
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+.field-hint {
+  color: var(--cui-secondary-color, #8a93a2);
+  font-size: var(--ninlil-font-size-xs);
+}

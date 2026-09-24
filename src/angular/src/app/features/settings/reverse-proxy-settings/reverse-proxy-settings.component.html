@@ -1,0 +1,157 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <form cForm [formGroup]="form" class="settings-form">
+    @if (errorMessage()) {
+      <c-alert color="danger" [dismissible]="false" role="alert" class="form-alert">{{
+        errorMessage()
+      }}</c-alert>
+    }
+
+    <c-card class="form-card">
+      <c-card-header class="d-flex align-items-center justify-content-between">
+        <strong>Reverse proxy</strong>
+        <app-cluster-sync-info
+          [lastModifiedUtc]="lastModifiedUtc()"
+          [originatingNodeId]="originatingNodeId()"
+        />
+      </c-card-header>
+
+      <c-card-body>
+        <p class="hint">
+          Off by default. Enabling this trusts <code>X-Forwarded-For</code>/<code
+            >X-Forwarded-Proto</code
+          >
+          headers sent by whichever addresses/networks are listed below -- an operator running a
+          real reverse proxy (Nginx, Caddy, HAProxy) in front of this host.
+        </p>
+
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="proxy-enable" formControlName="enable" />
+          <label cFormCheckLabel for="proxy-enable">Trust forwarded headers</label>
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="proxy-known-addresses">Known proxy addresses (one per line)</label>
+          <textarea
+            cFormControl
+            id="proxy-known-addresses"
+            formControlName="knownProxiesText"
+            rows="3"
+            placeholder="203.0.113.10"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label cLabel for="proxy-known-networks">Known proxy networks, CIDR (one per line)</label>
+          <textarea
+            cFormControl
+            id="proxy-known-networks"
+            formControlName="knownNetworksText"
+            rows="3"
+            placeholder="10.0.0.0/24"
+          ></textarea>
+        </div>
+
+        <p
+          class="hint status-hint"
+          [class.text-success]="sharedSecretConfigured()"
+          [class.text-warning]="!sharedSecretConfigured()"
+        >
+          <svg
+            cIcon
+            [name]="sharedSecretConfigured() ? 'cilCheckCircle' : 'cilWarning'"
+            size="sm"
+          ></svg>
+          {{
+            sharedSecretConfigured()
+              ? 'A shared secret is currently configured.'
+              : 'No shared secret is currently configured -- the address/network allowlist alone is the trust boundary.'
+          }}
+        </p>
+        <p class="hint">
+          Optional, real defense-in-depth on top of the allowlist above. The stored secret is never
+          shown here. Leave it blank to keep the current value unchanged (or leave it unconfigured
+          entirely) -- only a non-blank value replaces it.
+        </p>
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="proxy-secret-header">Shared secret header name</label>
+            <input
+              cFormControl
+              id="proxy-secret-header"
+              formControlName="sharedSecretHeaderName"
+              placeholder="X-Ninlil-Proxy-Secret"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="proxy-secret">Shared secret</label>
+            <input cFormControl id="proxy-secret" type="password" formControlName="sharedSecret" />
+          </div>
+        </div>
+      </c-card-body>
+    </c-card>
+
+    <c-card class="form-card">
+      <c-card-header>
+        <strong>DNS-over-TLS PROXY protocol</strong>
+      </c-card-header>
+
+      <c-card-body>
+        <p class="hint">
+          Off by default. Enabling this trusts a HAProxy-style PROXY protocol header (v1 text or v2
+          binary) sent, ahead of the TLS handshake, by whichever addresses/networks are listed below
+          -- a TCP-level proxy (HAProxy, nginx's <code>stream</code> module, Caddy's
+          <code>layer4</code> app) in front of this server's own DNS-over-TLS listener. This is an
+          entirely separate allowlist from the one above -- there is no shared secret here at all,
+          since the PROXY protocol's own fixed header framing has no place to carry one; the
+          address/network allowlist alone is this section's own entire trust boundary.
+        </p>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="proxy-dot-enable"
+            formControlName="dnsOverTlsEnable"
+          />
+          <label cFormCheckLabel for="proxy-dot-enable">Trust a PROXY protocol header</label>
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="proxy-dot-known-addresses">Known proxy addresses (one per line)</label>
+          <textarea
+            cFormControl
+            id="proxy-dot-known-addresses"
+            formControlName="dnsOverTlsKnownProxiesText"
+            rows="3"
+            placeholder="203.0.113.10"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label cLabel for="proxy-dot-known-networks"
+            >Known proxy networks, CIDR (one per line)</label
+          >
+          <textarea
+            cFormControl
+            id="proxy-dot-known-networks"
+            formControlName="dnsOverTlsKnownNetworksText"
+            rows="3"
+            placeholder="10.0.0.0/24"
+          ></textarea>
+        </div>
+      </c-card-body>
+
+      <c-card-footer class="d-flex justify-content-end">
+        <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+          @if (submitting()) {
+            <c-spinner size="sm" />
+          } @else {
+            Save
+          }
+        </button>
+      </c-card-footer>
+    </c-card>
+  </form>
+}

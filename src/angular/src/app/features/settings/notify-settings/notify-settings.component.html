@@ -1,0 +1,75 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>NOTIFY</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="notify-max-attempts">Max attempts</label>
+            <input
+              cFormControl
+              id="notify-max-attempts"
+              type="number"
+              formControlName="maxAttempts"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="notify-secondary-port">Secondary port</label>
+            <input
+              cFormControl
+              id="notify-secondary-port"
+              type="number"
+              formControlName="secondaryPort"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="notify-response-timeout">Response timeout</label>
+            <input
+              cFormControl
+              id="notify-response-timeout"
+              formControlName="responseTimeout"
+              placeholder="00:00:03"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="notify-retry-delay">Retry delay</label>
+            <input
+              cFormControl
+              id="notify-retry-delay"
+              formControlName="retryDelay"
+              placeholder="00:00:03"
+            />
+          </div>
+        </div>
+
+        <div cFormText>
+          Every field takes effect on the very next NOTIFY attempt -- no restart required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

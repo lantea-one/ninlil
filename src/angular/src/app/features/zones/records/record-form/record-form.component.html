@@ -1,0 +1,121 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="record-form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit record' : 'Add record' }}</strong>
+      @if (zoneName()) {
+        <span class="zone-name"> in {{ zoneName() }}</span>
+      }
+    </c-card-header>
+
+    <c-card-body>
+      @if (isFirstRecordInZone()) {
+        <c-alert color="info" [dismissible]="false" role="status">
+          This zone has no records yet. Its very first record must be its own SOA record, so the
+          type below is locked to <strong>SOA</strong>.
+        </c-alert>
+      }
+
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="common-fields">
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="record-name">Owner name</label>
+            <input cFormControl id="record-name" formControlName="name" placeholder="www" />
+            @if (form.controls.name.hasError('required')) {
+              <div class="field-error">A name is required.</div>
+            }
+          </div>
+
+          <div class="field">
+            <label cLabel for="record-type">Type</label>
+            <select cSelect id="record-type" formControlName="type">
+              @for (type of supportedTypes; track type) {
+                <option [value]="type">{{ type }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="record-ttl">TTL (seconds)</label>
+            <input cFormControl id="record-ttl" type="number" formControlName="timeToLiveSeconds" />
+            @if (form.controls.timeToLiveSeconds.invalid) {
+              <div class="field-error">A non-negative TTL is required.</div>
+            }
+          </div>
+        </section>
+      </form>
+
+      <h3>Record data</h3>
+
+      @if (isTypeUnsupported()) {
+        <c-alert color="warning" [dismissible]="false" role="alert">
+          This UI does not have a data-entry form for <strong>{{ selectedType() }}</strong>
+          records. Choose a different type, or edit this record's data directly through the REST
+          API.
+        </c-alert>
+      } @else {
+        <ng-container
+          #dataFormOutlet="ngComponentOutlet"
+          [ngComponentOutlet]="dataFormComponentType()"
+          [ngComponentOutletInputs]="{ initialData: initialRecordData() }"
+        ></ng-container>
+      }
+
+      <form cForm [formGroup]="form" class="secondary-fields">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="record-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="record-disabled">Disabled (kept, but never answered)</label>
+        </c-form-check>
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="record-exclude-from-sync"
+            formControlName="excludeFromSync"
+          />
+          <label cFormCheckLabel for="record-exclude-from-sync"
+            >Exclude from sync (local-only)</label
+          >
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="record-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="record-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" [routerLink]="['/zones', zoneId, 'records']"
+        >Cancel</a
+      >
+      <button
+        cButton
+        color="primary"
+        [disabled]="form.invalid || isTypeUnsupported() || !isDataFormValid() || submitting()"
+        (click)="save()"
+      >
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

@@ -1,0 +1,93 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Filtering</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="filtering-enable" formControlName="enable" />
+          <label cFormCheckLabel for="filtering-enable"
+            >Consult block/allow lists at query time</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="filtering-block-response-mode">Block response mode</label>
+            <select cSelect id="filtering-block-response-mode" formControlName="blockResponseMode">
+              @for (option of blockResponseModeOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="field">
+            <label cLabel for="filtering-precedence">List precedence</label>
+            <select cSelect id="filtering-precedence" formControlName="precedence">
+              @for (option of precedenceOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="filtering-sinkhole-v4">Sinkhole address (IPv4)</label>
+            <input
+              cFormControl
+              id="filtering-sinkhole-v4"
+              formControlName="sinkholeAddressV4"
+              placeholder="0.0.0.0"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="filtering-sinkhole-v6">Sinkhole address (IPv6)</label>
+            <input
+              cFormControl
+              id="filtering-sinkhole-v6"
+              formControlName="sinkholeAddressV6"
+              placeholder="::"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="filtering-sinkhole-ttl">Sinkhole answer TTL (seconds)</label>
+            <input
+              cFormControl
+              id="filtering-sinkhole-ttl"
+              type="number"
+              min="0"
+              max="4294967295"
+              formControlName="sinkholeTimeToLiveSeconds"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="override-note">
+          The sinkhole address/TTL fields only matter when "Block response mode" is set to "Sinkhole
+          address" -- a query blocked under NXDOMAIN mode ignores them entirely.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

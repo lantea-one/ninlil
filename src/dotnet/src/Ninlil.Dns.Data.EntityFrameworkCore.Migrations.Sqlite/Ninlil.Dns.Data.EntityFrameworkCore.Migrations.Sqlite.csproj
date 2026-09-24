@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library contains nothing but SQLite's generated Entity Framework Core migration
+            history for NinlilDnsContext. It exists as its own assembly, separate from the
+            other three relational providers' migration histories, because Entity Framework
+            Core's migration discovery is scoped to an entire assembly rather than to an
+            individual provider: if every provider's migrations lived in one assembly alongside
+            the shared NinlilDnsContext, applying migrations against any one provider would
+            also see (and try to reconcile against) every other provider's history. Keeping each
+            provider's history in its own assembly, selected explicitly via
+            DbContextOptionsBuilder.UseMigrationsAssembly, is Entity Framework Core's own
+            documented pattern for supporting more than one provider from a single model.
+        </Description>
+    <PackageId>Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.19" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.19">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+</Project>

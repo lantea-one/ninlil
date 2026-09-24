@@ -1,0 +1,29 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddDnsClientOrigin : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AddColumn<string>(
+                name: "Origin",
+                table: "NinlilDnsClients",
+                type: "TEXT",
+                maxLength: 16,
+                nullable: false,
+                defaultValue: "Manual"
+            );
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(name: "Origin", table: "NinlilDnsClients");
+        }
+    }
+}

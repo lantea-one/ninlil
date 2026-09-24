@@ -1,0 +1,25 @@
+<div class="dashboard">
+  @if (loading()) {
+    <div class="dashboard-loading">
+      <c-spinner color="primary" />
+    </div>
+  } @else {
+    <div class="dashboard-main">
+      @if (loadError()) {
+        <p class="dashboard-error">{{ loadError() }}</p>
+      } @else {
+        <app-self-update-notice></app-self-update-notice>
+        <app-getting-started-checklist [items]="checklistItems()"></app-getting-started-checklist>
+        <app-health-tile-grid [status]="status()"></app-health-tile-grid>
+        <app-quick-stats [stats]="quickStats()"></app-quick-stats>
+      }
+    </div>
+
+    <div class="dashboard-feed">
+      <app-live-event-feed
+        [feed]="feed()"
+        [connectionState]="connectionState()"
+      ></app-live-event-feed>
+    </div>
+  }
+</div>

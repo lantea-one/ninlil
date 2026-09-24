@@ -1,0 +1,29 @@
+<div class="sso-callback-page">
+  <div class="sso-callback-brand">
+    <svg cIcon name="cilLan" size="xxl" class="sso-callback-brand-icon"></svg>
+    <span class="sso-callback-brand-text">Ninlil</span>
+  </div>
+
+  <c-card class="sso-callback-card shadow-lg border-0">
+    <c-card-header class="d-flex align-items-center gap-2">
+      <svg cIcon name="cilLockLocked" size="lg"></svg>
+      <strong>Signing you in</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (failed()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">
+          This sign-in link is missing or malformed. Start over from the login page.
+        </c-alert>
+        <a cButton color="secondary" variant="ghost" class="w-100" routerLink="/login">
+          Back to sign in
+        </a>
+      } @else {
+        <div class="sso-callback-progress">
+          <c-spinner size="sm" />
+          <span>Finishing your single sign-on...</span>
+        </div>
+      }
+    </c-card-body>
+  </c-card>
+</div>

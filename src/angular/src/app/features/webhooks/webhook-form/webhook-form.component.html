@@ -1,0 +1,192 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit webhook subscription' : 'New webhook subscription' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="webhook-form">
+        <div class="field full-width">
+          <label cLabel for="webhook-name">Name</label>
+          <input
+            cFormControl
+            id="webhook-name"
+            formControlName="name"
+            placeholder="alert-zone-changes"
+          />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="webhook-target-url">Target URL</label>
+          <input
+            cFormControl
+            id="webhook-target-url"
+            formControlName="targetUrl"
+            placeholder="https://example.com/webhooks/ninlil"
+          />
+          @if (form.controls.targetUrl.hasError('required')) {
+            <div class="field-error">A target URL is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="webhook-event-types">Event types</label>
+          <select
+            cSelect
+            id="webhook-event-types"
+            formControlName="eventTypeNames"
+            multiple
+            [size]="eventTypeOptions.length"
+          >
+            @for (eventType of eventTypeOptions; track eventType) {
+              <option [value]="eventType">{{ eventType }}</option>
+            }
+          </select>
+          <p class="hint">Ctrl/Cmd-click (or Shift-click for a range) to select more than one.</p>
+          @if (form.controls.eventTypeNames.hasError('required')) {
+            <div class="field-error">Select at least one event type.</div>
+          }
+        </div>
+
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="webhook-max-attempts">Max delivery attempts</label>
+            <input
+              cFormControl
+              type="number"
+              min="1"
+              id="webhook-max-attempts"
+              formControlName="maxDeliveryAttempts"
+            />
+          </div>
+        </section>
+
+        <h3>Authentication</h3>
+
+        @if (isEditMode && !credentialsEditable()) {
+          <p class="hint">
+            The stored auth credential(s) are never shown here. Saving now updates only the fields
+            above/below, leaving the current auth mode and credentials untouched.
+          </p>
+          <button
+            cButton
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="startRotatingCredentials()"
+          >
+            Rotate auth credentials
+          </button>
+        } @else {
+          @if (isEditMode) {
+            <p class="hint">
+              Choose the auth mode and, if not "None", enter every credential field below -- these
+              replace the stored auth credentials entirely once saved.
+            </p>
+          }
+          <div class="field">
+            <label cLabel for="webhook-auth-mode">Auth mode</label>
+            <select cSelect id="webhook-auth-mode" formControlName="authMode">
+              @for (mode of authModeOptions; track mode) {
+                <option [value]="mode">{{ mode }}</option>
+              }
+            </select>
+          </div>
+
+          @if (credentialFields().length > 0) {
+            <section class="field-row">
+              @for (field of credentialFields(); track field.key) {
+                <div class="field">
+                  <label cLabel [for]="'webhook-credential-' + field.key">{{ field.label }}</label>
+                  <input
+                    cFormControl
+                    [id]="'webhook-credential-' + field.key"
+                    [formControlName]="toControlName(field.key)"
+                  />
+                </div>
+              }
+            </section>
+          }
+        }
+
+        <h3>HMAC payload signing</h3>
+
+        @if (isEditMode) {
+          <p class="hint">
+            {{
+              hasHmacSigningSecret()
+                ? 'This subscription has an HMAC signing secret configured. It cannot be changed here -- delete and recreate the subscription to rotate or disable it.'
+                : 'This subscription has no HMAC signing secret configured. One can only be added at creation time -- delete and recreate the subscription to enable signing.'
+            }}
+          </p>
+        } @else {
+          <c-form-check class="mb-3">
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="webhook-enable-hmac"
+              formControlName="enableHmacSigning"
+            />
+            <label cFormCheckLabel for="webhook-enable-hmac">
+              Sign outbound payloads with HMAC-SHA256
+            </label>
+          </c-form-check>
+          @if (form.controls.enableHmacSigning.value) {
+            <div class="field full-width">
+              <label cLabel for="webhook-hmac-secret"
+                >Signing secret (leave blank to generate one)</label
+              >
+              <input cFormControl id="webhook-hmac-secret" formControlName="hmacSigningSecret" />
+            </div>
+          }
+        }
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="webhook-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="webhook-disabled">Disabled</label>
+        </c-form-check>
+
+        <div class="field full-width">
+          <label cLabel for="webhook-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="webhook-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/webhooks">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}
+
+<app-reveal-secret-dialog
+  [visible]="revealDialogVisible()"
+  [data]="revealDialogData()"
+  (closed)="onSecretDialogClosed()"
+/>

@@ -1,0 +1,58 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Secondary zone refresh</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="secondaryrefresh-poll-interval">Poll interval</label>
+            <input
+              cFormControl
+              id="secondaryrefresh-poll-interval"
+              formControlName="pollInterval"
+              placeholder="00:00:15"
+            />
+            <div cFormText>How often the background loop wakes up to check due zones.</div>
+          </div>
+
+          <div class="field">
+            <label cLabel for="secondaryrefresh-retry-interval">Default retry interval</label>
+            <input
+              cFormControl
+              id="secondaryrefresh-retry-interval"
+              formControlName="defaultRetryInterval"
+              placeholder="00:00:30"
+            />
+            <div cFormText>
+              How long to wait before retrying a zone with no local SOA yet, or an unreachable
+              primary.
+            </div>
+          </div>
+        </div>
+
+        <div cFormText>
+          Every field takes effect on the very next loop iteration -- no restart required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

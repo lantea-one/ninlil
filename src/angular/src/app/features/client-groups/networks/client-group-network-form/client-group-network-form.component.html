@@ -1,0 +1,77 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit network' : 'Add network' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="network-form">
+        <div class="field full-width">
+          <label cLabel for="client-group-network-match-kind">Match by</label>
+          <select cSelect id="client-group-network-match-kind" formControlName="matchKind">
+            <option value="cidr">CIDR / IP address</option>
+            <option value="clientId">DNS-over-HTTPS ClientID</option>
+          </select>
+        </div>
+
+        @if (showCidrField()) {
+          <div class="field full-width">
+            <label cLabel for="client-group-network-cidr">CIDR</label>
+            <input
+              cFormControl
+              id="client-group-network-cidr"
+              formControlName="cidr"
+              placeholder="192.168.1.0/24"
+            />
+            @if (form.controls.cidr.hasError('required')) {
+              <div class="field-error">A CIDR network or address is required.</div>
+            }
+          </div>
+        }
+
+        @if (showClientIdField()) {
+          <div class="field full-width">
+            <label cLabel for="client-group-network-client-id">ClientID</label>
+            <input
+              cFormControl
+              id="client-group-network-client-id"
+              formControlName="clientId"
+              placeholder="laptop-1"
+            />
+            @if (form.controls.clientId.hasError('required')) {
+              <div class="field-error">A ClientID is required.</div>
+            }
+            <div class="field-hint">
+              Matches a DNS-over-HTTPS client that queried through
+              <code>/dns-query/&#123;clientid&#125;</code> with this exact ClientID.
+            </div>
+          </div>
+        }
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/client-groups', groupId, 'networks']"
+      >
+        Cancel
+      </a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

@@ -1,0 +1,10 @@
+<div class="empty-state">
+  <svg cIcon [name]="icon()" size="xxl" class="empty-state-icon" aria-hidden="true"></svg>
+  <h2 class="empty-state-heading">{{ heading() }}</h2>
+  @if (description()) {
+    <p class="empty-state-description">{{ description() }}</p>
+  }
+  <div class="empty-state-action">
+    <ng-content></ng-content>
+  </div>
+</div>

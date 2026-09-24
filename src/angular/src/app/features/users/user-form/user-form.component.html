@@ -1,0 +1,114 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit user' : 'New user' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="user-form">
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="user-username">User name</label>
+            <input
+              cFormControl
+              id="user-username"
+              formControlName="userName"
+              placeholder="jsmith"
+            />
+            @if (form.controls.userName.hasError('required')) {
+              <div class="field-error">A user name is required.</div>
+            }
+          </div>
+
+          @if (!isEditMode) {
+            <div class="field">
+              <label cLabel for="user-password">Password</label>
+              <input cFormControl type="password" id="user-password" formControlName="password" />
+              @if (form.controls.password.hasError('required')) {
+                <div class="field-error">A password is required.</div>
+              }
+            </div>
+          }
+        </section>
+        @if (isEditMode) {
+          <p class="hint">
+            A user name cannot be changed once created, and a password change is not made through
+            this form.
+          </p>
+        }
+
+        <section class="field-row">
+          <div class="field">
+            <label cLabel for="user-display-name">Display name</label>
+            <input cFormControl id="user-display-name" formControlName="displayName" />
+          </div>
+
+          <div class="field">
+            <label cLabel for="user-email">Email</label>
+            <input cFormControl type="email" id="user-email" formControlName="email" />
+            @if (form.controls.email.hasError('email')) {
+              <div class="field-error">Enter a valid e-mail address.</div>
+            }
+          </div>
+        </section>
+
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="user-disabled" formControlName="isDisabled" />
+          <label cFormCheckLabel for="user-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+
+      @if (isEditMode) {
+        <h3>Roles</h3>
+        <p class="hint">
+          Each role checked below is granted to this account, in addition to the role's own
+          permissions. Each change here applies immediately.
+        </p>
+        <div class="role-checkboxes">
+          @for (role of allRoles(); track role.id) {
+            <c-form-check>
+              <input
+                cFormCheckInput
+                type="checkbox"
+                [id]="roleCheckboxId(role.name ?? '')"
+                [checked]="isRoleChecked(role.name ?? '')"
+                [disabled]="togglingRoleName() !== null"
+                (change)="onRoleToggled(role.name ?? '', $event)"
+              />
+              <label cFormCheckLabel [for]="roleCheckboxId(role.name ?? '')">{{ role.name }}</label>
+            </c-form-check>
+          }
+        </div>
+
+        <h3>Direct permissions</h3>
+        <p class="hint">
+          These permissions are granted to this account directly, independent of any role it holds.
+          Each change here applies immediately.
+        </p>
+        <app-permission-picker
+          [allPermissions]="allPermissions()"
+          [selectedPermissions]="grantedPermissions()"
+          [disabled]="togglingPermission() !== null"
+          (toggled)="onPermissionToggled($event)"
+        />
+      }
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/users">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

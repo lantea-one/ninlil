@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library holds two real implementations of Ninlil.Dns.Server.Core's
+            Data.Abstractions-free IClientIdentityResolver contract. ArpNeighborTableClientIdentityResolver
+            resolves a DNS query's source IPv4 address to a hardware (MAC) address by reading this
+            host's own real, kernel-exposed ARP cache (Linux's /proc/net/arp, RFC 826), regardless
+            of which DHCP server -- this project's own, or an entirely external router/modem --
+            actually issued that client's lease, kept warm on a short polling interval, mirroring
+            Ninlil.Dns.Server.AccessControl.DnsAccessControlRuleCache's own "load once, keep an
+            in-memory snapshot" shape. StaticAddressMappingClientIdentityResolver resolves against
+            every operator-authored DnsClientStaticAddressMappingEntity row instead -- a manual,
+            always-available pin from a source address/CIDR network to a client identifier, for a
+            device this server's ARP table and DHCP engine can never see at all. Also holds passive
+            client presence tracking, and MAC vendor lookup against the IEEE MA-L/MA-M/MA-S
+            registries: a compact snapshot embedded in this assembly (Vendor/Resources) answers
+            lookups offline from first boot, and MacVendorRefreshService keeps it current from the
+            IEEE's own published files.
+        </Description>
+    <PackageId>Ninlil.Dns.Server.ClientIdentity</PackageId>
+    <!-- Required by the [LibraryImport] source generator behind the netlink neighbor-table reader. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
+  </ItemGroup>
+
+  <!-- The IEEE registry snapshot MacVendorLookupService loads at startup; see MacVendorSnapshotCodec for how to regenerate it. -->
+  <ItemGroup>
+    <EmbeddedResource
+      Include="Vendor\Resources\mac-vendors.snapshot.br"
+      LogicalName="Ninlil.Dns.Server.ClientIdentity.Vendor.Resources.mac-vendors.snapshot.br"
+    />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Common\Ninlil.Dhcp.Common.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Common -->
+</Project>

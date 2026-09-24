@@ -1,0 +1,148 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>MAC vendor data</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <div cFormText class="settings-note mb-3">
+        A client's hardware vendor is looked up from the IEEE MAC address block registries (MA-L,
+        MA-M, and MA-S, longest match wins) every time it is shown. A copy of the registries is
+        built in, so lookups work offline; automatic refresh keeps it current.
+      </div>
+
+      @if (status(); as current) {
+        <dl class="status-grid" data-testid="mac-vendor-status">
+          <dt>Data source</dt>
+          <dd>
+            {{ current.dataSource === 'Embedded' ? 'Built-in snapshot' : 'Downloaded from IEEE' }}
+          </dd>
+
+          <dt>Data generated</dt>
+          <dd>{{ current.generatedAtUtc | date: 'medium' }}</dd>
+
+          <dt>Prefixes loaded</dt>
+          <dd>
+            {{ current.totalEntryCount | number }}
+            <span class="breakdown">
+              (MA-L {{ current.maLEntryCount | number }}, MA-M {{ current.maMEntryCount | number }},
+              MA-S {{ current.maSEntryCount | number }})
+            </span>
+          </dd>
+
+          <dt>Last refresh</dt>
+          <dd>
+            @if (current.lastRefreshAttemptUtc) {
+              {{ current.lastRefreshAttemptUtc | date: 'medium' }}
+              <c-badge [color]="resultColor()" data-testid="mac-vendor-last-result">{{
+                current.lastRefreshResult
+              }}</c-badge>
+              @if (current.lastRefreshError) {
+                <div class="refresh-error">{{ current.lastRefreshError }}</div>
+              }
+            } @else {
+              Never
+            }
+          </dd>
+
+          <dt>Next automatic refresh</dt>
+          <dd>
+            @if (current.nextRefreshDueUtc) {
+              {{ current.nextRefreshDueUtc | date: 'medium' }}
+            } @else {
+              Automatic refresh is off
+            }
+          </dd>
+
+          @if (dataFilePath()) {
+            <dt>Stored at</dt>
+            <dd>
+              <code>{{ dataFilePath() }}</code>
+            </dd>
+          }
+        </dl>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="mac-vendor-enable-refresh"
+            formControlName="enableAutomaticRefresh"
+          />
+          <label cFormCheckLabel for="mac-vendor-enable-refresh"
+            >Refresh automatically from the IEEE registries</label
+          >
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="mac-vendor-refresh-interval">Check for updates every</label>
+          <input
+            cFormControl
+            id="mac-vendor-refresh-interval"
+            formControlName="refreshInterval"
+            placeholder="14.00:00:00"
+          />
+          <div cFormText>
+            <code>d.hh:mm:ss</code> form, at least one day. Each check is a conditional download
+            that transfers nothing when the registries are unchanged.
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="mac-vendor-mal-url">MA-L registry URL</label>
+          <input cFormControl id="mac-vendor-mal-url" formControlName="maLRegistryUrl" />
+        </div>
+
+        <div class="field">
+          <label cLabel for="mac-vendor-mam-url">MA-M registry URL</label>
+          <input cFormControl id="mac-vendor-mam-url" formControlName="maMRegistryUrl" />
+        </div>
+
+        <div class="field">
+          <label cLabel for="mac-vendor-mas-url">MA-S registry URL</label>
+          <input cFormControl id="mac-vendor-mas-url" formControlName="maSRegistryUrl" />
+        </div>
+
+        <div cFormText class="settings-note">
+          A download that fails, or that doesn't look like a complete IEEE registry, never replaces
+          the data already loaded.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      @if (canRefresh) {
+        <button
+          cButton
+          color="secondary"
+          variant="ghost"
+          class="me-auto"
+          data-testid="mac-vendor-refresh"
+          [disabled]="refreshing()"
+          (click)="refreshNow()"
+        >
+          @if (refreshing()) {
+            <c-spinner size="sm" />
+          } @else {
+            Refresh now
+          }
+        </button>
+      }
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

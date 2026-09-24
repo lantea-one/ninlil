@@ -1,0 +1,35 @@
+# systemd unit for Ninlil. Installed by install.sh alongside this file; see that script for the
+# directory layout this unit expects.
+[Unit]
+Description=Ninlil DNS, DHCP and Router Advertisement server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ninlil-dns
+Group=ninlil-dns
+WorkingDirectory=/opt/ninlil-dns
+# The data directory doubles as the content root, so the appsettings.json the admin console's
+# settings pages write to lands in the one writable directory, next to the database and keys.
+# The web root is named explicitly so a published directory's wwwroot/ is still served; a
+# single-file binary gets an empty wwwroot/ from install.sh and serves its built-in copy of the
+# admin console instead.
+ExecStart=/opt/ninlil-dns/Ninlil.Web --contentRoot=/opt/ninlil-dns/data --webroot=/opt/ninlil-dns/wwwroot
+EnvironmentFile=-/etc/ninlil-dns/ninlil-dns.env
+# A single-file binary extracts its bundled native libraries on first start; keep them inside
+# the writable data directory rather than the service account's (protected) home.
+Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/opt/ninlil-dns/data/.bundle
+Restart=on-failure
+RestartSec=5
+# Ports 53/67/80/443 without running as root, and raw sockets for DHCP and Router Advertisement.
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/ninlil-dns/data /var/log/ninlil-dns
+
+[Install]
+WantedBy=multi-user.target

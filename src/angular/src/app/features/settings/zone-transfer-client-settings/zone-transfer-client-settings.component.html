@@ -1,0 +1,73 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Zone transfer (pulling)</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="zonetransferclient-primary-port">Primary port</label>
+            <input
+              cFormControl
+              id="zonetransferclient-primary-port"
+              type="number"
+              formControlName="primaryPort"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="zonetransferclient-connect-timeout">Connect timeout</label>
+            <input
+              cFormControl
+              id="zonetransferclient-connect-timeout"
+              formControlName="connectTimeout"
+              placeholder="00:00:05"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="zonetransferclient-read-timeout">Read timeout</label>
+            <input
+              cFormControl
+              id="zonetransferclient-read-timeout"
+              formControlName="readTimeout"
+              placeholder="00:00:10"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="zonetransferclient-soa-timeout">SOA query timeout</label>
+            <input
+              cFormControl
+              id="zonetransferclient-soa-timeout"
+              formControlName="soaQueryTimeout"
+              placeholder="00:00:03"
+            />
+          </div>
+        </div>
+
+        <div cFormText>Every field takes effect on the very next pull -- no restart required.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

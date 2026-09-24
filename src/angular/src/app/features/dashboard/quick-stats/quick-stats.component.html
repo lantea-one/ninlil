@@ -1,0 +1,19 @@
+<section class="quick-stats-section" aria-labelledby="quick-stats-section-title">
+  <h2 id="quick-stats-section-title">At a Glance</h2>
+
+  <div class="stat-grid">
+    @for (stat of stats(); track stat.label) {
+      <c-card class="stat-tile">
+        <c-card-body class="d-flex align-items-center gap-3">
+          <span class="stat-icon-wrap">
+            <svg cIcon [name]="stat.icon" size="lg"></svg>
+          </span>
+          <div class="stat-body">
+            <div class="stat-count">{{ stat.count ?? '—' }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
+          </div>
+        </c-card-body>
+      </c-card>
+    }
+  </div>
+</section>

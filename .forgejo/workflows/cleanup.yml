@@ -1,0 +1,40 @@
+name: 'Expire Pre-Releases'
+##
+## Removes every pre-release build -- release, git tag, container image tag, and NuGet package
+## version -- once it is 24 hours old. Releases themselves are never touched. See
+## .forgejo/scripts/cleanup.sh for the exact rules.
+##
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      ##
+      dry-run:
+        default: false
+        description: 'List what would be removed without removing anything.'
+        required: false
+        type: boolean
+concurrency:
+  group: 'expire-pre-releases'
+  cancel-in-progress: false
+jobs:
+  ##
+  cleanup:
+    name: 'Expire Pre-Releases'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Remove Pre-Releases Older Than 24 Hours'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          DRY_RUN: '${{ inputs.dry-run || false }}'
+        run: |-
+          ./.forgejo/scripts/cleanup.sh
+        shell: 'bash'

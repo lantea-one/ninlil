@@ -1,0 +1,95 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Query processing pipeline</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="pipeline-worker-count">Worker count</label>
+            <input
+              cFormControl
+              id="pipeline-worker-count"
+              type="number"
+              formControlName="workerCount"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="pipeline-channel-capacity">Queue capacity</label>
+            <input
+              cFormControl
+              id="pipeline-channel-capacity"
+              type="number"
+              formControlName="channelCapacity"
+            />
+          </div>
+        </div>
+
+        <div cFormText>
+          Worker count and queue capacity size a fixed pool built once when this pipeline's own
+          service starts -- a change to either needs that one service restarted specifically (from
+          the Services page), not a full process restart.
+        </div>
+
+        <hr />
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="pipeline-max-udp-payload">Max UDP payload (bytes)</label>
+            <input
+              cFormControl
+              id="pipeline-max-udp-payload"
+              type="number"
+              formControlName="maxUdpPayloadSizeOctets"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="pipeline-amplification-factor">Max amplification factor</label>
+            <input
+              cFormControl
+              id="pipeline-amplification-factor"
+              type="number"
+              step="0.1"
+              formControlName="maxUdpAmplificationFactor"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="pipeline-amplification-floor">Amplification floor (bytes)</label>
+            <input
+              cFormControl
+              id="pipeline-amplification-floor"
+              type="number"
+              formControlName="minUdpAmplificationFloorSizeOctets"
+            />
+          </div>
+        </div>
+
+        <div cFormText>
+          These three UDP safety fields take effect on the very next query -- no restart of any kind
+          required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

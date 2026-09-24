@@ -1,0 +1,141 @@
+<div class="list-header">
+  <h1>DHCP Scopes</h1>
+  <a cButton color="primary" routerLink="/dhcp-scopes/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New scope
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (scopes().length === 0) {
+  <app-empty-state
+    icon="cilDevices"
+    heading="No DHCP scopes yet"
+    description="A scope is an address pool -- a range of addresses this server hands out as leases, along with the gateway/DNS options that go with them. Create your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/dhcp-scopes/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New scope
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="scopes()" class="scope-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let scope">{{ scope.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocolVersion">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let scope">{{ scope.protocolVersion }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="kind">
+        <th cdk-header-cell *cdkHeaderCellDef>Kind</th>
+        <td cdk-cell *cdkCellDef="let scope">
+          <c-badge color="info">{{ scope.kind }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="range">
+        <th cdk-header-cell *cdkHeaderCellDef>Range</th>
+        <td cdk-cell *cdkCellDef="let scope">
+          {{ scope.rangeStartAddress }} &ndash; {{ scope.rangeEndAddress }} /
+          {{ scope.subnetPrefixLength }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="utilization">
+        <th cdk-header-cell *cdkHeaderCellDef>Utilization</th>
+        <td cdk-cell *cdkCellDef="let scope">
+          @if (statisticsByScopeId().has(scope.id)) {
+            <c-badge [color]="utilizationColor(statisticsByScopeId().get(scope.id)!)">
+              {{ utilizationText(statisticsByScopeId().get(scope.id)!) }}
+            </c-badge>
+          } @else if (statisticsLoading()) {
+            <span class="utilization-pending">&hellip;</span>
+          } @else {
+            <span class="utilization-pending">&mdash;</span>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let scope">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="scope.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="scope.isDisabled ? 'Enable this scope' : 'Disable this scope'"
+            (click)="toggleDisabled(scope)"
+          >
+            {{ scope.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let scope" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/dhcp-scopes', scope.id, 'reservations']"
+            cTooltip="Manage reservations"
+            aria-label="Manage reservations"
+          >
+            <svg cIcon name="cilAddressBook" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/dhcp-scopes', scope.id, 'edit']"
+            cTooltip="Edit scope (custom options are managed inline on this page)"
+            aria-label="Edit scope"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete scope"
+            aria-label="Delete scope"
+            (click)="deleteScope(scope)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

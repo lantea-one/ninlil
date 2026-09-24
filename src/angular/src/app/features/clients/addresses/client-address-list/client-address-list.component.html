@@ -1,0 +1,155 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/clients" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Clients
+    </a>
+    <h1>{{ clientLabel() ?? 'Device' }} — addresses</h1>
+  </div>
+</div>
+
+<p class="page-intro">
+  Every identifier this device answers to. A dual-stack device usually has two: the MAC address its
+  IPv4 traffic and DHCPv4 leases are recognized by, and the DUID its DHCPv6 leases carry. Add an
+  identifier here to link another identity to this same device.
+</p>
+
+@if (canWrite) {
+  <form cForm class="add-form" [formGroup]="form" (ngSubmit)="addAddress()">
+    <div class="add-field identifier-field">
+      <label cLabel for="address-identifier">Identifier</label>
+      <input
+        cFormControl
+        id="address-identifier"
+        formControlName="clientIdentifier"
+        placeholder="aa:bb:cc:dd:ee:ff or a DUID"
+        autocomplete="off"
+        [valid]="
+          form.controls.clientIdentifier.touched && form.controls.clientIdentifier.invalid
+            ? false
+            : undefined
+        "
+      />
+      <div cFormText>
+        A colon-separated MAC address for IPv4, or a DUID (hex, colon-separated) for IPv6.
+      </div>
+    </div>
+    <div class="add-field">
+      <label cLabel for="address-protocol">Protocol</label>
+      <select cSelect id="address-protocol" formControlName="protocolVersion">
+        <option [value]="InternetProtocolVersionEnum.Ipv4">IPv4 (MAC address)</option>
+        <option [value]="InternetProtocolVersionEnum.Ipv6">IPv6 (DUID)</option>
+      </select>
+    </div>
+    <div class="add-field add-action">
+      <button cButton color="primary" type="submit" [disabled]="saving()">
+        <svg cIcon name="cilPlus" size="sm"></svg>
+        Add identifier
+      </button>
+    </div>
+  </form>
+}
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="addresses()" class="address-table">
+      <ng-container cdkColumnDef="protocol">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let address">
+          <c-badge
+            [color]="
+              address.protocolVersion === InternetProtocolVersionEnum.Ipv6 ? 'primary' : 'dark'
+            "
+            >{{ address.protocolVersion }}</c-badge
+          >
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="identifier">
+        <th cdk-header-cell *cdkHeaderCellDef>Identifier</th>
+        <td cdk-cell *cdkCellDef="let address">
+          <span class="mono" data-testid="address-identifier">{{ address.clientIdentifier }}</span>
+          @if (address.macAddress && address.macAddress !== address.clientIdentifier) {
+            <div class="meta">
+              MAC <span class="mono">{{ address.macAddress }}</span>
+            </div>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="address">
+        <th cdk-header-cell *cdkHeaderCellDef>Last IP address</th>
+        <td cdk-cell *cdkCellDef="let address">
+          <span class="mono">{{ address.address || '—' }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="vendor">
+        <th cdk-header-cell *cdkHeaderCellDef>Vendor</th>
+        <td cdk-cell *cdkCellDef="let address">
+          @if (address.vendor) {
+            {{ address.vendor }}
+          } @else if (address.isRandomizedMacAddress) {
+            <span class="meta">Randomized MAC</span>
+          } @else {
+            <span class="meta">—</span>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="seen">
+        <th cdk-header-cell *cdkHeaderCellDef>Seen</th>
+        <td cdk-cell *cdkCellDef="let address">
+          @if (relative(address.lastSeenUtc); as lastSeen) {
+            <span [cTooltip]="(address.lastSeenUtc | date: 'medium') ?? ''"
+              >Last {{ lastSeen }}</span
+            >
+          } @else {
+            <span class="meta">Never seen</span>
+          }
+          <div class="meta">First {{ address.firstSeenUtc | date: 'mediumDate' }}</div>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let address" class="actions-cell">
+          @if (canWrite) {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="danger"
+              [cTooltip]="
+                addresses().length === 1
+                  ? 'A device must keep at least one identifier'
+                  : 'Remove identifier'
+              "
+              aria-label="Remove identifier"
+              [disabled]="addresses().length === 1"
+              data-testid="remove-address"
+              (click)="removeAddress(address)"
+            >
+              <svg cIcon name="cilTrash" size="sm"></svg>
+            </button>
+          }
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let address; columns: displayedColumns"></tr>
+    </table>
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

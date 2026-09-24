@@ -1,0 +1,128 @@
+<div class="list-header">
+  <h1>Forwarders</h1>
+  <a cButton color="primary" routerLink="/forwarders/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New forwarder
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (forwarders().length === 0) {
+  <app-empty-state
+    icon="cilShareAll"
+    heading="No forwarders yet"
+    description="Create one to send queries for names this server doesn't host to an upstream resolver."
+  >
+    <a cButton color="primary" routerLink="/forwarders/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New forwarder
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="forwarders()" class="forwarder-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let forwarder">{{ forwarder.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="definitionString">
+        <th cdk-header-cell *cdkHeaderCellDef>Definition</th>
+        <td cdk-cell *cdkCellDef="let forwarder">
+          <code>{{ forwarder.definitionString }}</code>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="protocol">
+        <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
+        <td cdk-cell *cdkCellDef="let forwarder">
+          @if (forwarder.protocol) {
+            <c-badge color="info">{{ forwarder.protocol }}</c-badge>
+          } @else {
+            <span
+              class="unparseable"
+              cTooltip="This forwarder's own definition string could not be parsed."
+            >
+              unknown
+            </span>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let forwarder">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="forwarder.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="forwarder.isDisabled ? 'Enable this forwarder' : 'Disable this forwarder'"
+            (click)="toggleDisabled(forwarder)"
+          >
+            {{ forwarder.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="sync">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let forwarder">
+          <app-cluster-sync-info
+            [lastModifiedUtc]="forwarder.updatedAtUtc ?? forwarder.createdAtUtc"
+            [originatingNodeId]="forwarder.originatingNodeId"
+          />
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let forwarder" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/forwarders', forwarder.id, 'edit']"
+            cTooltip="Edit forwarder"
+            aria-label="Edit forwarder"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete forwarder"
+            aria-label="Delete forwarder"
+            (click)="deleteForwarder(forwarder)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

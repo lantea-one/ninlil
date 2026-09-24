@@ -1,0 +1,108 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (isPrefixDelegationScope()) {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Reservations aren't available on a Prefix Delegation scope</strong>
+    </c-card-header>
+    <c-card-body>
+      <p>
+        RFC 8415 defines no fixed-reservation shape for a delegated prefix, so a Prefix Delegation
+        scope can never hold one.
+      </p>
+    </c-card-body>
+    <c-card-footer class="d-flex justify-content-end">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/dhcp-scopes', scopeId, 'reservations']"
+      >
+        Back to reservations
+      </a>
+    </c-card-footer>
+  </c-card>
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit reservation' : 'Add reservation' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="reservation-form">
+        <div class="field full-width">
+          <label cLabel for="dhcp-reservation-client-identifier">Client identifier</label>
+          <input
+            cFormControl
+            id="dhcp-reservation-client-identifier"
+            formControlName="clientIdentifier"
+            placeholder="aa:bb:cc:dd:ee:ff"
+          />
+          @if (form.controls.clientIdentifier.hasError('required')) {
+            <div class="field-error">A client identifier is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-reservation-ip-address">Fixed address</label>
+          <input
+            cFormControl
+            id="dhcp-reservation-ip-address"
+            formControlName="ipAddress"
+            placeholder="192.168.1.50"
+          />
+          @if (form.controls.ipAddress.hasError('required')) {
+            <div class="field-error">A fixed address is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-reservation-host-name">Host name</label>
+          <input cFormControl id="dhcp-reservation-host-name" formControlName="hostName" />
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-reservation-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="dhcp-reservation-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-reservation-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="dhcp-reservation-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/dhcp-scopes', scopeId, 'reservations']"
+      >
+        Cancel
+      </a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

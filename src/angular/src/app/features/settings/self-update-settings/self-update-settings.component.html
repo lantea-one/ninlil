@@ -1,0 +1,122 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="status-card mb-3">
+    <c-card-header>
+      <strong>Update status</strong>
+    </c-card-header>
+
+    <c-card-body>
+      <p>
+        Running version: <code>{{ currentVersion() ?? 'unknown' }}</code>
+        @if (updateAvailable()) {
+          <c-badge color="warning" class="ms-2">Update available</c-badge>
+        } @else if (latestKnownVersion()) {
+          <c-badge color="success" class="ms-2">Up to date</c-badge>
+        }
+      </p>
+
+      @if (latestKnownVersion()) {
+        <p>
+          Latest known version: <code>{{ latestKnownVersion() }}</code>
+        </p>
+      }
+
+      @if (updateInstructions()) {
+        <div cFormText class="update-instructions">{{ updateInstructions() }}</div>
+      }
+
+      @if (lastCheckedAtUtc()) {
+        <p class="last-checked">Last checked: {{ lastCheckedAtUtc() }}</p>
+      }
+
+      @if (lastCheckError()) {
+        <c-alert color="warning" [dismissible]="false" role="alert"
+          >Most recent check failed: {{ lastCheckError() }}</c-alert
+        >
+      }
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="secondary" [disabled]="checking()" (click)="checkNow()">
+        @if (checking()) {
+          <c-spinner size="sm" />
+        } @else {
+          Check now
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Self-update checker</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="self-update-enable-check"
+            formControlName="enableAutomaticCheck"
+          />
+          <label cFormCheckLabel for="self-update-enable-check"
+            >Periodically check for a newer release</label
+          >
+        </c-form-check>
+
+        <div cFormText class="settings-note">
+          Check-only, always -- this server never applies an update on its own. Applying one is
+          always a distinct, manual action; see "Check now" above.
+        </div>
+
+        <div class="field">
+          <label cLabel for="self-update-feed-url">Release feed URL</label>
+          <input
+            cFormControl
+            id="self-update-feed-url"
+            formControlName="releaseFeedUrl"
+            placeholder="https://example.com/ninlil/releases.json"
+          />
+        </div>
+
+        <div cFormText class="settings-note">
+          Empty by default -- this project has no fixed release-hosting location yet. Point this at
+          a plain JSON document ({{ '{' }}"version","releaseUrl","publishedAtUtc","notes"{{ '}' }})
+          an operator controls once one exists.
+        </div>
+
+        <div class="field">
+          <label cLabel for="self-update-check-interval">Check interval</label>
+          <input
+            cFormControl
+            id="self-update-check-interval"
+            formControlName="checkInterval"
+            placeholder="1.00:00:00"
+          />
+        </div>
+
+        <div cFormText class="settings-note">
+          A duration in <code>d.hh:mm:ss</code> form -- the default, <code>1.00:00:00</code>, checks
+          once a day.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

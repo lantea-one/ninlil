@@ -1,0 +1,98 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{
+        isEditMode ? 'Edit static address mapping' : 'New static address mapping'
+      }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="mapping-form">
+        <div class="field full-width">
+          <label cLabel for="static-mapping-cidr">Address or network</label>
+          <input
+            cFormControl
+            id="static-mapping-cidr"
+            formControlName="cidr"
+            placeholder="10.99.0.42 or 10.99.0.0/24"
+          />
+          @if (form.controls.cidr.hasError('required')) {
+            <div class="field-error">An address or network is required.</div>
+          }
+          <p class="hint">
+            A bare address matches only that one address; a <code>/</code>-qualified CIDR network
+            matches every address it contains.
+          </p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="static-mapping-identifier">Client identifier</label>
+            <input
+              cFormControl
+              id="static-mapping-identifier"
+              formControlName="clientIdentifier"
+              placeholder="aa:bb:cc:dd:ee:ff"
+            />
+            @if (form.controls.clientIdentifier.hasError('required')) {
+              <div class="field-error">A client identifier is required.</div>
+            }
+            <p class="hint">A MAC address for IPv4, or a DHCP Unique Identifier (DUID) for IPv6.</p>
+          </div>
+
+          <div class="field">
+            <label cLabel for="static-mapping-protocol">Protocol</label>
+            <select cSelect id="static-mapping-protocol" formControlName="protocolVersion">
+              <option value="IPv4">IPv4</option>
+              <option value="IPv6">IPv6</option>
+            </select>
+            <p class="hint">Must agree with the address or network's own real address family.</p>
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="static-mapping-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="static-mapping-comments"
+            formControlName="comments"
+            rows="2"
+            placeholder="Guest VLAN printer, static address, no DHCP relay configured there."
+          ></textarea>
+        </div>
+
+        <c-form-check class="mt-1 mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="static-mapping-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="static-mapping-disabled">Disabled</label>
+        </c-form-check>
+        @if (form.controls.isDisabled.value) {
+          <p class="hint">A disabled mapping is kept on record but never consulted.</p>
+        }
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/client-static-address-mappings"
+        >Cancel</a
+      >
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

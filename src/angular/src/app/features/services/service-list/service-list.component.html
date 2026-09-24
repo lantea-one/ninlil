@@ -1,0 +1,117 @@
+<div class="list-header">
+  <h1>Services</h1>
+</div>
+
+<c-alert color="warning" [dismissible]="false" role="alert" class="risk-banner">
+  <svg cIcon name="cilWarning" size="sm"></svg>
+  This page controls this server's own real transport listeners and background maintenance loops,
+  right now, in this running process. Stopping the wrong transport immediately cuts off real client
+  DNS resolution; stopping the wrong background loop can leave DNSSEC signatures to silently expire,
+  a secondary zone to drift stale, or a filter list to stop refreshing. Every action below asks for
+  confirmation first.
+</c-alert>
+
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="service-card">
+    <c-card-header>Transport services</c-card-header>
+    <c-card-body>
+      @if (transportServices().length === 0) {
+        <p class="empty-state">No transport services are registered.</p>
+      } @else {
+        <ng-container
+          *ngTemplateOutlet="serviceTable; context: { $implicit: transportServices() }"
+        ></ng-container>
+      }
+    </c-card-body>
+  </c-card>
+
+  <c-card class="service-card">
+    <c-card-header>Background services</c-card-header>
+    <c-card-body>
+      @if (backgroundServices().length === 0) {
+        <p class="empty-state">No background services are registered.</p>
+      } @else {
+        <ng-container
+          *ngTemplateOutlet="serviceTable; context: { $implicit: backgroundServices() }"
+        ></ng-container>
+      }
+    </c-card-body>
+  </c-card>
+}
+
+<ng-template #serviceTable let-services>
+  <table cdk-table cTable hover responsive [dataSource]="services" class="service-table">
+    <ng-container cdkColumnDef="name">
+      <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+      <td cdk-cell *cdkCellDef="let service">{{ service.name }}</td>
+    </ng-container>
+
+    <ng-container cdkColumnDef="status">
+      <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+      <td cdk-cell *cdkCellDef="let service">
+        <c-badge [color]="statusBadgeColor(service.isRunning)">
+          {{ statusLabel(service.isRunning) }}
+        </c-badge>
+      </td>
+    </ng-container>
+
+    <ng-container cdkColumnDef="actions">
+      <th cdk-header-cell *cdkHeaderCellDef></th>
+      <td cdk-cell *cdkCellDef="let service" class="actions-cell">
+        @if (canManage) {
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="success"
+            [disabled]="service.isRunning || actingOn() === service.name"
+            cTooltip="Start this service"
+            aria-label="Start this service"
+            (click)="invoke('start', service)"
+          >
+            <svg cIcon name="cilMediaPlay" size="sm"></svg>
+          </button>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            [disabled]="!service.isRunning || actingOn() === service.name"
+            cTooltip="Stop this service"
+            aria-label="Stop this service"
+            (click)="invoke('stop', service)"
+          >
+            <svg cIcon name="cilMediaStop" size="sm"></svg>
+          </button>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [disabled]="actingOn() === service.name"
+            cTooltip="Restart this service"
+            aria-label="Restart this service"
+            (click)="invoke('restart', service)"
+          >
+            <svg cIcon name="cilReload" size="sm"></svg>
+          </button>
+        }
+      </td>
+    </ng-container>
+
+    <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+    <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+  </table>
+</ng-template>
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

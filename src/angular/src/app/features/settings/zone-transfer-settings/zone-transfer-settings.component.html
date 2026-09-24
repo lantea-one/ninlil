@@ -1,0 +1,43 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Zone transfer (serving)</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field">
+          <label cLabel for="zonetransfer-records-per-message">Records per message</label>
+          <input
+            cFormControl
+            id="zonetransfer-records-per-message"
+            type="number"
+            formControlName="recordsPerMessage"
+          />
+          <div cFormText>
+            How many resource records a single AXFR/IXFR response message this server serves out may
+            carry before starting a new one.
+          </div>
+        </div>
+
+        <div cFormText>Takes effect on the very next transfer served -- no restart required.</div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

@@ -1,0 +1,30 @@
+.coreui-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ninlil-space-4);
+  padding: var(--ninlil-space-3) var(--ninlil-space-4);
+}
+
+.coreui-pagination-summary {
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+  margin-inline-end: auto;
+}
+
+.coreui-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+
+  select {
+    width: auto;
+  }
+}
+
+.coreui-pagination-current span {
+  pointer-events: none;
+}

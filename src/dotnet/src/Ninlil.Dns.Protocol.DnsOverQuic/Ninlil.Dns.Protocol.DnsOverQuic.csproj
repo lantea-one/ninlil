@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DNS-over-QUIC (DoQ, RFC 9250) transport: a 2-octet
+            length-prefixed DNS message per QUIC stream, one stream per query, carried over a
+            QUIC connection (TLS 1.3 built in, no separate handshake round trip the way
+            DNS-over-TLS needs).
+        </Description>
+    <PackageId>Ninlil.Dns.Protocol.DnsOverQuic</PackageId>
+  </PropertyGroup>
+
+  <!--
+      System.Net.Quic's own types (QuicListener/QuicConnection/QuicStream) carry
+      [SupportedOSPlatform] attributes for linux/macOS/windows, exactly the platforms this
+      project's own Directory.Build.props RuntimeIdentifiers already target. Declaring the same
+      set here (rather than suppressing CA1416 outright) tells the platform-compatibility
+      analyzer this project itself is scoped to those same platforms, which is what actually
+      resolves the warning correctly instead of hiding it.
+    -->
+  <ItemGroup>
+    <SupportedPlatform Include="linux" />
+    <SupportedPlatform Include="macos" />
+    <SupportedPlatform Include="windows" />
+  </ItemGroup>
+
+  <!--
+      System.Net.Quic ships inside the shared framework (Microsoft.NETCore.App) itself, not as
+      a NuGet package: confirmed by successfully building and running against it with no
+      PackageReference or FrameworkReference at all. No special reference is needed here beyond
+      the ordinary net10.0 TargetFramework every project already has.
+    -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Authoritative" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+</Project>

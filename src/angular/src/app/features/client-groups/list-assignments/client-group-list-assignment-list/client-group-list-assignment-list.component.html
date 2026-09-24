@@ -1,0 +1,78 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/client-groups" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Client Groups
+    </a>
+    <h1>{{ groupName() ?? 'Filter list assignments' }}</h1>
+  </div>
+  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'list-assignments', 'new']">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Assign filter list
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (rows().length === 0) {
+  <app-empty-state
+    icon="cilFilter"
+    heading="No filter lists assigned"
+    description="Assign a filter list to this group to control which block/allow lists apply to its matching clients."
+  >
+    <a
+      cButton
+      color="primary"
+      [routerLink]="['/client-groups', groupId, 'list-assignments', 'new']"
+    >
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      Assign filter list
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="rows()" class="assignment-table">
+      <ng-container cdkColumnDef="listName">
+        <th cdk-header-cell *cdkHeaderCellDef>Filter list</th>
+        <td cdk-cell *cdkCellDef="let row">{{ row.listName }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let row" class="actions-cell">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Remove assignment"
+            aria-label="Remove assignment"
+            (click)="deleteAssignment(row)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

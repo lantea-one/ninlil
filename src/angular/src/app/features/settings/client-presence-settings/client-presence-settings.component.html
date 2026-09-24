@@ -1,0 +1,92 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Client presence</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <div cFormText class="settings-note mb-3">
+        Presence is passive: a known client counts as seen whenever it renews a DHCP lease, sends
+        this server a DNS query, or the kernel confirms it reachable on the local network. Nothing
+        is ever scanned.
+      </div>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field">
+          <label cLabel for="client-presence-online-window">Online window</label>
+          <input
+            cFormControl
+            id="client-presence-online-window"
+            formControlName="onlineWindow"
+            placeholder="00:10:00"
+          />
+        </div>
+
+        <div cFormText class="settings-note">
+          A client seen within this long counts as online. Applied at read time, so a change takes
+          effect for every client immediately.
+        </div>
+
+        <div class="field">
+          <label cLabel for="client-presence-flush-interval">Save sightings every</label>
+          <input
+            cFormControl
+            id="client-presence-flush-interval"
+            formControlName="flushInterval"
+            placeholder="00:00:30"
+          />
+        </div>
+
+        <div cFormText class="settings-note">
+          Sightings are buffered in memory and written in bulk -- this is the longest a new sighting
+          can take to show up.
+        </div>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="client-presence-neighbor-signal"
+            formControlName="enableNeighborTableSignal"
+          />
+          <label cFormCheckLabel for="client-presence-neighbor-signal"
+            >Use the kernel neighbor table (ARP/NDP) as a presence signal</label
+          >
+        </c-form-check>
+
+        <div class="field">
+          <label cLabel for="client-presence-neighbor-interval"
+            >Neighbor table sampling interval</label
+          >
+          <input
+            cFormControl
+            id="client-presence-neighbor-interval"
+            formControlName="neighborTablePollInterval"
+            placeholder="00:00:15"
+          />
+        </div>
+
+        <div cFormText class="settings-note">
+          Durations use <code>hh:mm:ss</code> (or <code>d.hh:mm:ss</code>) form. Only entries the
+          kernel currently confirms reachable count, so keep this well under half a minute.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

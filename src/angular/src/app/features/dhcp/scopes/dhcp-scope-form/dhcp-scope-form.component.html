@@ -1,0 +1,440 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit scope' : 'New scope' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="scope-form">
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-name">Name</label>
+          <input cFormControl id="dhcp-scope-name" formControlName="name" placeholder="lan" />
+          @if (form.controls.name.hasError('required')) {
+            <div class="field-error">A name is required.</div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-protocol-version">Protocol</label>
+          <select cSelect id="dhcp-scope-protocol-version" formControlName="protocolVersion">
+            <option value="IPv4">IPv4</option>
+            <option value="IPv6">IPv6</option>
+          </select>
+        </div>
+
+        @if (showKindField()) {
+          <div class="field-row">
+            <div class="field">
+              <label cLabel for="dhcp-scope-kind">Kind</label>
+              <select cSelect id="dhcp-scope-kind" formControlName="kind">
+                <option value="AddressAssignment">Address assignment (IA_NA)</option>
+                <option value="PrefixDelegation">Prefix delegation (IA_PD)</option>
+              </select>
+              <div cFormText>
+                RFC 8415 Prefix Delegation hands out delegable prefix blocks (typically to a
+                downstream router) instead of ordinary addresses.
+              </div>
+            </div>
+
+            @if (showDelegatedPrefixLengthField()) {
+              <div class="field">
+                <label cLabel for="dhcp-scope-delegated-prefix-length"
+                  >Delegated prefix length</label
+                >
+                <input
+                  cFormControl
+                  type="number"
+                  id="dhcp-scope-delegated-prefix-length"
+                  formControlName="delegatedPrefixLength"
+                />
+                @if (form.controls.delegatedPrefixLength.hasError('required')) {
+                  <div class="field-error">A delegated prefix length is required.</div>
+                }
+                @if (
+                  form.controls.delegatedPrefixLength.hasError('min') ||
+                  form.controls.delegatedPrefixLength.hasError('max')
+                ) {
+                  <div class="field-error">Must be between 1 and 128 bits.</div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-scope-range-start">Range start</label>
+            <input
+              cFormControl
+              id="dhcp-scope-range-start"
+              formControlName="rangeStartAddress"
+              placeholder="192.168.1.100"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-scope-range-end">Range end</label>
+            <input
+              cFormControl
+              id="dhcp-scope-range-end"
+              formControlName="rangeEndAddress"
+              placeholder="192.168.1.200"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-scope-prefix-length">Subnet prefix length</label>
+            <input
+              cFormControl
+              type="number"
+              id="dhcp-scope-prefix-length"
+              formControlName="subnetPrefixLength"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-scope-default-lease">Default lease duration</label>
+            <input
+              cFormControl
+              id="dhcp-scope-default-lease"
+              formControlName="defaultLeaseDuration"
+              placeholder="1.00:00:00"
+            />
+            <div cFormText>A .NET TimeSpan string, e.g. <code>1.00:00:00</code> for one day.</div>
+          </div>
+
+          <div class="field">
+            <label cLabel for="dhcp-scope-max-lease">Max lease duration</label>
+            <input
+              cFormControl
+              id="dhcp-scope-max-lease"
+              formControlName="maxLeaseDuration"
+              placeholder="1.00:00:00"
+            />
+          </div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-gateways">Gateway addresses</label>
+          <textarea
+            cFormControl
+            id="dhcp-scope-gateways"
+            formControlName="gatewayAddresses"
+            rows="2"
+            placeholder="192.168.1.1"
+          ></textarea>
+          <div cFormText>One address per line, in order of preference.</div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-dns-servers">DNS server addresses</label>
+          <textarea
+            cFormControl
+            id="dhcp-scope-dns-servers"
+            formControlName="dnsServerAddresses"
+            rows="2"
+            placeholder="192.168.1.1"
+          ></textarea>
+          <div cFormText>One address per line, in order of preference.</div>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-dns-zone">DNS zone (DHCP-&gt;DNS integration)</label>
+          <select cSelect id="dhcp-scope-dns-zone" formControlName="dnsZoneId">
+            <option value="">Disabled -- no auto-registration</option>
+            @for (zone of eligibleZones(); track zone.id) {
+              <option [value]="zone.id">{{ zone.name }}</option>
+            }
+          </select>
+          <div cFormText>
+            When set, a lease granted from this scope auto-registers its own presented host name as
+            an A/AAAA record in this zone, removed again on release or expiry.
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="dhcp-scope-boot-file-name">PXE boot file name</label>
+            <input
+              cFormControl
+              id="dhcp-scope-boot-file-name"
+              formControlName="bootFileName"
+              placeholder="pxelinux.0"
+            />
+          </div>
+          <div class="field">
+            <label cLabel for="dhcp-scope-next-server-address">Next server (TFTP) address</label>
+            <input
+              cFormControl
+              id="dhcp-scope-next-server-address"
+              formControlName="nextServerAddress"
+              placeholder="Falls back to the Server Identifier if left blank"
+            />
+          </div>
+        </div>
+        <div cFormText>
+          When a boot file name is set, a lease granted from this scope carries it, along with the
+          next-server address, so a PXE client knows where to fetch it from.
+        </div>
+
+        <div class="field full-width">
+          <div class="options-table-label">Custom DHCP options</div>
+          <div cFormText class="options-hint">
+            Options beyond the gateway/DNS-server fields above. Pick a well-known option from the
+            dropdown, or choose "Custom / other option..." to set a raw option tag and hex value by
+            hand.
+          </div>
+
+          <div formArrayName="options">
+            <!-- Tracked by the FormGroup instance itself, not $index: removing a row from the
+                 middle otherwise leaves a later row's native <select> visually showing the
+                 removed row's own prior selection, since Angular reuses the DOM node at that
+                 index position and its value accessor doesn't force-resync a native <select>'s
+                 own selectedIndex purely because the bound FormGroup instance changed underneath
+                 it -- confirmed live in a real browser before landing this fix. -->
+            @for (row of options.controls; track row) {
+              <div [formGroupName]="$index" class="option-row">
+                <div class="field">
+                  <label cLabel [attr.for]="'dhcp-scope-option-catalog-' + $index">Option</label>
+                  <select
+                    cSelect
+                    [id]="'dhcp-scope-option-catalog-' + $index"
+                    formControlName="catalogSelection"
+                    (change)="onOptionCatalogSelectionChange($index)"
+                  >
+                    <option value="custom">Custom / other option...</option>
+                    @for (entry of optionCatalog(); track entry.code) {
+                      <option [value]="entry.code">
+                        {{ entry.name }} (option {{ entry.code }})
+                      </option>
+                    }
+                  </select>
+                </div>
+
+                @if (row.controls.catalogSelection.value === 'custom') {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-scope-option-tag-' + $index">Option tag</label>
+                    <input
+                      cFormControl
+                      type="number"
+                      [id]="'dhcp-scope-option-tag-' + $index"
+                      formControlName="optionTag"
+                    />
+                  </div>
+                }
+
+                @if (optionRowViewState()[$index]?.isServerAddressEligible) {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-scope-option-value-source-' + $index"
+                      >Value source</label
+                    >
+                    <select
+                      cSelect
+                      [id]="'dhcp-scope-option-value-source-' + $index"
+                      formControlName="valueSource"
+                    >
+                      <option value="Custom">Custom value</option>
+                      <option value="ServerAddress">Use this server's own address</option>
+                    </select>
+                  </div>
+                }
+
+                @if (row.controls.valueSource.value !== 'ServerAddress') {
+                  <div class="field">
+                    <label cLabel [attr.for]="'dhcp-scope-option-value-' + $index">Value</label>
+                    @switch (optionRowViewState()[$index]?.valueType) {
+                      @case ('IPv4Address') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="192.168.1.1"
+                        />
+                      }
+                      @case ('IPv6Address') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="2001:db8::1"
+                        />
+                      }
+                      @case ('IPv4AddressList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="192.168.1.1"
+                        ></textarea>
+                        <div cFormText>One address per line, in order of preference.</div>
+                      }
+                      @case ('IPv6AddressList') {
+                        <textarea
+                          cFormControl
+                          rows="2"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="2001:db8::1"
+                        ></textarea>
+                        <div cFormText>One address per line, in order of preference.</div>
+                      }
+                      @case ('Boolean') {
+                        <select
+                          cSelect
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        >
+                          <option value="true">True</option>
+                          <option value="false">False</option>
+                        </select>
+                      }
+                      @case ('UInt8') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          max="255"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('UInt16') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          max="65535"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('UInt32') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @case ('Duration') {
+                        <input
+                          cFormControl
+                          type="number"
+                          min="0"
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        />
+                        <div cFormText>Seconds.</div>
+                      }
+                      @case ('String') {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                        />
+                      }
+                      @default {
+                        <input
+                          cFormControl
+                          [id]="'dhcp-scope-option-value-' + $index"
+                          formControlName="value"
+                          placeholder="Hex value"
+                        />
+                      }
+                    }
+                  </div>
+                } @else {
+                  <div class="field">
+                    <div cFormText>
+                      This server's own real address is substituted automatically when this option
+                      is delivered.
+                    </div>
+                  </div>
+                }
+
+                <div class="field-row option-row-footer">
+                  <c-form-check>
+                    <input
+                      cFormCheckInput
+                      type="checkbox"
+                      [id]="'dhcp-scope-option-disabled-' + $index"
+                      formControlName="isDisabled"
+                    />
+                    <label cFormCheckLabel [attr.for]="'dhcp-scope-option-disabled-' + $index"
+                      >Disabled</label
+                    >
+                  </c-form-check>
+
+                  <button
+                    cButton
+                    size="sm"
+                    variant="ghost"
+                    color="danger"
+                    type="button"
+                    aria-label="Remove option"
+                    (click)="removeOptionRow($index)"
+                  >
+                    <svg cIcon name="cilTrash" size="sm"></svg>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+
+          <button
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addOptionRow()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add option
+          </button>
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="dhcp-scope-comments">Comments</label>
+          <textarea
+            cFormControl
+            id="dhcp-scope-comments"
+            formControlName="comments"
+            rows="2"
+          ></textarea>
+        </div>
+
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="dhcp-scope-disabled"
+            formControlName="isDisabled"
+          />
+          <label cFormCheckLabel for="dhcp-scope-disabled">Disabled</label>
+        </c-form-check>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a cButton color="secondary" variant="ghost" routerLink="/dhcp-scopes">Cancel</a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

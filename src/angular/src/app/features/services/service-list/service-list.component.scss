@@ -1,0 +1,40 @@
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-3);
+  margin: var(--ninlil-space-5) var(--ninlil-space-5) var(--ninlil-space-2);
+}
+
+.risk-banner {
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ninlil-space-2);
+}
+
+.service-card {
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-5);
+}
+
+.service-table {
+  width: 100%;
+  margin-bottom: 0;
+  font-size: var(--ninlil-font-size-sm);
+}
+
+.actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+.empty-state {
+  color: var(--cui-secondary-color);
+  margin: 0;
+}

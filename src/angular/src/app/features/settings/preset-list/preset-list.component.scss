@@ -1,0 +1,24 @@
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-4);
+  padding: var(--ninlil-space-4) var(--ninlil-space-5);
+}
+
+.preset-card {
+  width: 280px;
+}
+
+.preset-meta {
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+}
+
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-7) auto;
+}
+
+.page-alert {
+  margin: var(--ninlil-space-4) var(--ninlil-space-5) 0;
+}

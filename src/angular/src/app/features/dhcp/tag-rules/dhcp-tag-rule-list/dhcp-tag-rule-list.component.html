@@ -1,0 +1,114 @@
+<div class="list-header">
+  <h1>DHCP Tag Rules</h1>
+  <a cButton color="primary" routerLink="/dhcp-tag-rules/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New rule
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (rules().length === 0) {
+  <app-empty-state
+    icon="cilTags"
+    heading="No tag rules yet"
+    description="A tag rule delivers extra DHCP options only to clients matching a Vendor Class Identifier, User Class, or relay agent identifier -- for example, PXE-specific options for netbooting clients. Create your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/dhcp-tag-rules/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New rule
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="rules()" class="rule-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let rule">{{ rule.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="scope">
+        <th cdk-header-cell *cdkHeaderCellDef>Scope</th>
+        <td cdk-cell *cdkCellDef="let rule">
+          @if (rule.scopeId) {
+            {{ scopeLabel(rule) }}
+          } @else {
+            <c-badge color="secondary">Any scope</c-badge>
+          }
+        </td>
+        <!-- scopeLabel() already returns "Any scope" for a null scopeId; the badge above is used
+             instead of that plain text specifically to make the common "applies everywhere" case
+             visually distinct from a real, named scope at a glance. -->
+      </ng-container>
+
+      <ng-container cdkColumnDef="priority">
+        <th cdk-header-cell *cdkHeaderCellDef>Priority</th>
+        <td cdk-cell *cdkCellDef="let rule">{{ rule.priority }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let rule">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="rule.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="rule.isDisabled ? 'Enable this rule' : 'Disable this rule'"
+            (click)="toggleDisabled(rule)"
+          >
+            {{ rule.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let rule" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/dhcp-tag-rules', rule.id, 'edit']"
+            cTooltip="Edit rule (options are managed inline on this page)"
+            aria-label="Edit rule"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete rule"
+            aria-label="Delete rule"
+            (click)="deleteRule(rule)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

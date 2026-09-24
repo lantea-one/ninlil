@@ -1,0 +1,123 @@
+<c-sidebar
+  colorScheme="dark"
+  position="fixed"
+  [visible]="true"
+  [narrow]="sidebarNarrow()"
+  [unfoldable]="sidebarNarrow()"
+  class="shell-sidebar"
+>
+  <c-sidebar-header class="border-bottom">
+    <c-sidebar-brand routerLink="/dashboard" class="shell-brand">
+      <svg cIcon name="cilLan" size="xl" class="shell-brand-icon"></svg>
+      <span class="shell-brand-text sidebar-brand-full">Ninlil</span>
+    </c-sidebar-brand>
+  </c-sidebar-header>
+
+  <ul class="sidebar-nav" role="navigation" aria-label="Primary">
+    @for (item of visibleNavItems(); track item.path) {
+      <li class="nav-item">
+        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
+          <svg cIcon [name]="item.icon" class="nav-icon"></svg>
+          {{ item.label }}
+        </a>
+      </li>
+    }
+  </ul>
+
+  <c-sidebar-footer class="border-top d-none d-md-flex">
+    <button
+      class="shell-collapse-toggle"
+      type="button"
+      [attr.aria-label]="sidebarNarrow() ? 'Expand sidebar' : 'Collapse sidebar'"
+      (click)="toggleSidebarNarrow()"
+    >
+      <svg cIcon name="cilMenu" size="lg"></svg>
+    </button>
+  </c-sidebar-footer>
+</c-sidebar>
+
+<div class="shell-wrapper">
+  <c-header position="sticky" class="shell-header border-bottom">
+    <c-container [fluid]="true" class="shell-header-container">
+      <button
+        cHeaderToggler
+        class="d-lg-none me-2"
+        type="button"
+        aria-label="Toggle sidebar"
+        (click)="toggleMobileSidebar()"
+      ></button>
+
+      <span class="shell-title d-none d-md-inline">Ninlil Admin</span>
+
+      <ul class="shell-header-nav ms-auto">
+        <li>
+          <a
+            cButton
+            color="secondary"
+            variant="ghost"
+            href="/documentation"
+            target="_blank"
+            rel="noopener"
+            class="shell-header-action"
+          >
+            <svg cIcon name="cilBook" size="lg"></svg>
+            <span class="d-none d-lg-inline">Documentation</span>
+          </a>
+        </li>
+        <li>
+          <app-theme-switcher />
+        </li>
+        <li>
+          <c-dropdown alignment="end" variant="dropdown">
+            <button
+              cButton
+              cDropdownToggle
+              color="secondary"
+              variant="ghost"
+              [caret]="false"
+              type="button"
+              class="shell-header-action"
+              aria-label="Account menu"
+            >
+              <svg cIcon name="cilUser" size="lg"></svg>
+              <span class="d-none d-lg-inline">{{ userName() }}</span>
+            </button>
+            <div cDropdownMenu>
+              <h6 cDropdownHeader>{{ userName() }}</h6>
+              <div cDropdownDivider></div>
+              <a
+                cDropdownItem
+                routerLink="/account/profile"
+                class="d-flex align-items-center gap-2"
+              >
+                <svg cIcon name="cilContact" size="sm"></svg>
+                <span>Profile</span>
+              </a>
+              <a
+                cDropdownItem
+                routerLink="/account/security"
+                class="d-flex align-items-center gap-2"
+              >
+                <svg cIcon name="cilShieldAlt" size="sm"></svg>
+                <span>Security</span>
+              </a>
+              <button
+                cDropdownItem
+                type="button"
+                class="d-flex align-items-center gap-2"
+                (click)="logout()"
+              >
+                <svg cIcon name="cilAccountLogout" size="sm"></svg>
+                <span>Log out</span>
+              </button>
+            </div>
+          </c-dropdown>
+        </li>
+      </ul>
+    </c-container>
+  </c-header>
+
+  <main class="shell-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

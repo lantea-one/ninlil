@@ -1,0 +1,108 @@
+// This app's own foundational spacing/typography/density token layer -- the third layer of the
+// theming system, sitting alongside CoreUI's own compiled CSS (colors/components/layout
+// mechanics) and this app's 5-palette accent-color catalog (`styles/themes/`). Neither of those
+// two layers governs spacing, type scale, or component density at all -- this partial is where
+// that convention actually lives, in service of this project's resolved aesthetic direction:
+// dense, data-forward (the Grafana/Datadog/pfSense school -- tight spacing, information-dense
+// tables/cards, prioritizing real operational data fitting on screen over generous whitespace,
+// deliberately not the spacious Linear/Notion alternative).
+//
+// Two kinds of rule live here, both following the same "override CoreUI's own custom properties
+// where one already exists, add a new `--ninlil-*` one where it doesn't" pattern the palette
+// partials already established for color:
+//
+//   1. New `--ninlil-*` custom properties (spacing scale, type scale, content-width convention)
+//      that don't correspond to any single CoreUI property -- these exist for this app's own
+//      component-level SCSS (this sub-phase's own app-shell included, and every later Phase 12
+//      sub-phase's feature-page work) to reference directly, e.g. `gap: var(--ninlil-space-3)`,
+//      rather than every file inventing its own spacing/type numbers ad hoc.
+//   2. Direct overrides of CoreUI's own existing density-relevant custom properties (card
+//      padding, list-group item padding, nav-link padding) plus one plain CSS rule for `.table`
+//      cell padding (CoreUI hardcodes that value rather than exposing it as a custom property --
+//      see the rule below), so every already-existing CoreUI component becomes denser
+//      project-wide immediately, without every feature page needing to remember to opt in.
+//
+// Deliberately left untouched: button and form-control padding (`--cui-btn-padding-*`,
+// form-control sizing). Those affect real interactive touch-target size, which this phase's own
+// resolved scope also bundles in real accessibility polish (contrast, focus states, ARIA) --
+// shrinking click targets in the name of density would cut directly against that goal, so
+// interactive-control sizing is left at CoreUI's own already-reasonable defaults; only
+// non-interactive chrome (cards, lists, tables, nav padding, base type scale) is tightened here.
+:root {
+  // Spacing scale -- an 8-step progression from 0 to 3rem, each step named by its rem value's
+  // ordinal position rather than a semantic name (`sm`/`md`/`lg`), since a numeric scale is what
+  // lets a later sub-phase pick "one step tighter" or "one step looser" than a neighboring
+  // element without renaming anything. Every feature-page sub-phase (12b-12f) should reach for
+  // one of these instead of an ad hoc padding/margin/gap value.
+  --ninlil-space-0: 0;
+  --ninlil-space-1: 0.25rem; // 4px  -- the tightest real gap (icon-to-label, inline badge padding)
+  --ninlil-space-2: 0.5rem; // 8px  -- dense table/list cell padding, compact control gaps
+  --ninlil-space-3: 0.75rem; // 12px -- default inter-control gap, compact card padding
+  --ninlil-space-4: 1rem; // 16px -- default card padding, section gap
+  --ninlil-space-5: 1.5rem; // 24px -- section-to-section gap, page-level padding
+  --ninlil-space-6: 2rem; // 32px -- large section break
+  --ninlil-space-7: 3rem; // 48px -- rare, page-top/bottom breathing room only
+
+  // Typography scale -- a dense base size (14px, below Bootstrap/CoreUI's own 16px default)
+  // consistent with the Grafana/Datadog/pfSense reference points the resolved aesthetic
+  // direction names; every step above it is still deliberately tight relative to a typical
+  // spacious admin UI's own scale. `--cui-body-font-size`/`--cui-body-line-height` below are
+  // repointed at this scale's own base/base-line-height so the change actually takes effect on
+  // every already-existing page, not just new markup that references these tokens directly.
+  --ninlil-font-size-xs: 0.75rem; // 12px -- metadata, timestamps, helper text
+  --ninlil-font-size-sm: 0.8125rem; // 13px -- table/list body text, secondary labels
+  --ninlil-font-size-base: 0.875rem; // 14px -- this app's own body-text default
+  --ninlil-font-size-md: 0.9375rem; // 15px -- emphasized body text, form labels
+  --ninlil-font-size-lg: 1.0625rem; // 17px -- card/section titles
+  --ninlil-font-size-xl: 1.25rem; // 20px -- page titles
+  --ninlil-font-size-xxl: 1.5rem; // 24px -- rare, top-level dashboard headings only
+  --ninlil-line-height-tight: 1.25; // dense table rows, multi-line badges
+  --ninlil-line-height-base: 1.4; // this app's own body-text default (vs. Bootstrap's 1.5)
+  --ninlil-line-height-relaxed: 1.55; // long-form body copy (help text, empty-state messaging)
+
+  // Table/row density convention -- `--ninlil-table-cell-padding-*` is consumed by the `.table`
+  // override rule just below (CoreUI itself hardcodes this value rather than exposing a custom
+  // property for it); `--ninlil-row-height-*` is a convention for any future non-`<table>`
+  // "list of rows" component (a card-based list, a virtualized grid) a later sub-phase builds, so
+  // it can match real `<table>` density without re-deriving the numbers.
+  --ninlil-table-cell-padding-y: 0.375rem; // 6px  (CoreUI's own untouched default is 0.5rem/8px)
+  --ninlil-table-cell-padding-x: 0.625rem; // 10px (CoreUI's own untouched default is 0.5rem/8px)
+  --ninlil-row-height-compact: 2.25rem; // 36px -- a dense data row
+  --ninlil-row-height-comfortable: 2.75rem; // 44px -- a row that itself contains interactive controls
+
+  // Content-width convention -- named breakpoints a form/card, not the page shell itself,
+  // renders at. The resolved dense/data-forward direction means the *page* content area (tables,
+  // dashboards) should use the full available width; these three tokens instead give a
+  // consistent, deliberate cap to the narrower, single-purpose surfaces (a create/edit form, a
+  // login card) that a later sub-phase (12c/12f, per the audit's own "forms waste width" finding)
+  // applies directly, rather than each page picking its own arbitrary max-width.
+  --ninlil-form-max-width-compact: 40rem; // 640px  -- a short form (New API Token, Login)
+  --ninlil-form-max-width: 56rem; // 896px  -- a typical single-section create/edit form
+  --ninlil-form-max-width-wide: 76rem; // 1216px -- a long, multi-section form (New Zone)
+
+  // CoreUI density overrides -- repoint the CoreUI custom properties that already exist for
+  // exactly this purpose at this app's own tighter scale, so the density change actually reaches
+  // every page built on CoreUI's stock components immediately, not just markup a later sub-phase
+  // rewrites to reference the new tokens directly.
+  --cui-body-font-size: var(--ninlil-font-size-base);
+  --cui-body-line-height: var(--ninlil-line-height-base);
+  --cui-card-spacer-y: var(--ninlil-space-4);
+  --cui-card-spacer-x: var(--ninlil-space-4);
+  --cui-card-cap-padding-y: var(--ninlil-space-2);
+  --cui-card-cap-padding-x: var(--ninlil-space-4);
+  --cui-list-group-item-padding-y: var(--ninlil-space-2);
+  --cui-list-group-item-padding-x: var(--ninlil-space-4);
+  --cui-nav-link-padding-y: var(--ninlil-space-2);
+  --cui-nav-link-padding-x: var(--ninlil-space-3);
+}
+
+// `.table`'s own per-cell padding is one of the few density-relevant values CoreUI hardcodes
+// directly in its compiled CSS (`.table > :not(caption) > * > *`) rather than exposing as a
+// custom property -- CoreUI only ships a denser alternative as the separate `.table-sm` variant
+// class, which would require every feature template to remember to add it. Applying this app's
+// own dense row padding as the real default for every `.table` project-wide, rather than an
+// opt-in variant, is what actually delivers the resolved dense/data-forward direction on the
+// list-heavy pages (Zones, Users, Query Log, ...) later Phase 12 sub-phases polish in detail.
+.table > :not(caption) > * > * {
+  padding: var(--ninlil-table-cell-padding-y) var(--ninlil-table-cell-padding-x);
+}

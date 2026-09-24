@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library implements Ninlil's persistence abstractions on top of Entity
+            Framework Core, with support for SQLite (the zero-configuration default), PostgreSQL,
+            MySQL/MariaDB, and Microsoft SQL Server. A single provider-agnostic model is shared
+            across all four; only the provider selected at startup differs.
+        </Description>
+    <PackageId>Ninlil.Dns.Data.EntityFrameworkCore</PackageId>
+  </PropertyGroup>
+
+  <!--
+      Package version note: Ninlil targets net10.0 and would otherwise track the matching
+      Microsoft.EntityFrameworkCore.* 10.x line, but Pomelo.EntityFrameworkCore.MySql, the
+      de-facto standard MySQL/MariaDB provider for EF Core, has not yet published a release
+      built against EF Core 10 as of this writing. Every EF Core package below is therefore
+      pinned to the latest 9.x release so that the MySQL, PostgreSQL, SQL Server, and SQLite
+      providers all resolve against a single, mutually-compatible EF Core version. EF Core 9
+      runs perfectly well on the net10.0 runtime; only the package's own build target lags
+      behind. This pin should be revisited once Pomelo ships an EF Core 10 build.
+    -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.19" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.19" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.19" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.19">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!--
+      NinlilDnsContext maps DHCP's own scope/reservation/lease entities alongside every DNS
+      entity, as one single shared Entity Framework Core model; see NinlilDnsContext's own
+      doc comment for why. This reference exists purely so NinlilDnsContext can declare
+      DbSet properties for those entities and their entity-type configurations can bind
+      against them; it does not pull in Ninlil.Dhcp.Data.EntityFrameworkCore or any other
+      DHCP-specific storage or engine code.
+  -->
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+</Project>

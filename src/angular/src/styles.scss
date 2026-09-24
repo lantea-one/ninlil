@@ -1,0 +1,38 @@
+/* You can add global styles to this file, and also import other style files. */
+
+// CoreUI for Angular's compiled CSS (Bootstrap 5 reboot/grid + every CoreUI component's styling,
+// including the `[data-coreui-theme="light"|"dark"]` custom-property tokens `ColorModeService`
+// toggles) is loaded as a plain global stylesheet ahead of this file, via `angular.json`'s
+// `styles` array (`node_modules/@coreui/coreui/dist/css/coreui.css`) rather than a Sass
+// `@use`/`@import` here -- see `app.config.ts`'s own doc comment for the full CoreUI bootstrap
+// pattern this establishes for later Phase 5k sub-phases to reuse.
+
+// This app's own foundational spacing/typography/density token layer -- see
+// `styles/_tokens.scss`'s own doc comment for the full convention (spacing scale, type scale,
+// table/row density, content-width convention) and why it exists as a third layer alongside
+// CoreUI's own compiled CSS and this app's palette catalog below. `@use`-ed first, ahead of the
+// palette catalog, purely by convention (the two are independent -- tokens only ever override
+// spacing/typography-adjacent CoreUI custom properties, palettes only ever override color-
+// adjacent ones, so load order between them has no visible effect).
+@use 'styles/tokens';
+
+// This app's own 5-palette x light/dark theming catalog -- `styles/themes/_index.scss` and its
+// five sibling `_<palette>.scss` partials, each overriding the CoreUI custom properties
+// (`--cui-primary` and its derived link/focus-ring/subtle-badge tokens) that give a palette its
+// visual identity, scoped under a `[data-coreui-theme][data-ninlil-palette]` attribute pair
+// `ThemeService` (`src/app/core/theme/theme.service.ts`) sets on `<html>`. `@use`-ing that
+// module here (with no namespace referenced -- it is pulled in purely for the CSS rules its
+// partials emit as a side effect of being used) puts every palette's rules into this compiled
+// stylesheet. This catalog, together with CoreUI's own compiled CSS (loaded globally ahead of
+// this file -- see `app.config.ts`'s own doc comment) and the token layer above, is this app's
+// entire theming system; no other framework's own theming API is layered on top of it.
+@use 'styles/themes';
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+}

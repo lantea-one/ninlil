@@ -1,0 +1,82 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Client Subnet (ECS)</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="ecs-enable" formControlName="enable" />
+          <label cFormCheckLabel for="ecs-enable"
+            >Attach an EDNS Client Subnet option to outbound queries (RFC 7871)</label
+          >
+        </c-form-check>
+
+        <div cFormText class="override-note">
+          Discloses a coarse piece of the querying client's own network location to upstream
+          authoritative servers, most commonly a CDN, so it can tailor its answer -- a real privacy
+          cost, which is why this feature defaults off.
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="ecs-prefix-v4">IPv4 disclosure prefix length</label>
+            <input
+              cFormControl
+              id="ecs-prefix-v4"
+              type="number"
+              min="0"
+              max="32"
+              formControlName="sourcePrefixLengthIPv4"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="ecs-prefix-v6">IPv6 disclosure prefix length</label>
+            <input
+              cFormControl
+              id="ecs-prefix-v6"
+              type="number"
+              min="0"
+              max="128"
+              formControlName="sourcePrefixLengthIPv6"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="ecs-override-address">Override address (optional)</label>
+          <input
+            cFormControl
+            id="ecs-override-address"
+            formControlName="overrideAddress"
+            placeholder="Leave blank to disclose each real querying client's own address"
+          />
+        </div>
+
+        <div cFormText class="override-note">
+          When set, every outbound ECS option discloses this fixed address instead of an individual
+          downstream client's real one -- a single, coarse location (this server's own egress
+          network, for example) rather than ever exposing per-client subnets upstream.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

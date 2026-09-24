@@ -1,0 +1,47 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNSSEC algorithm policy</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <div cFormText class="mb-3">
+        Restricts which algorithms a brand-new DNSSEC signing key may use. Nothing checked means no
+        restriction at all -- every algorithm this server supports may be used. This restricts only
+        the generation of new signing keys, never the validation of an already-signed, externally
+        hosted zone's own algorithm choice.
+      </div>
+
+      <div class="algorithm-grid">
+        @for (algorithm of algorithmOptions; track algorithm) {
+          <c-form-check>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              [id]="'dnssec-policy-' + algorithm"
+              [checked]="isSelected(algorithm)"
+              (change)="toggle(algorithm)"
+            />
+            <label cFormCheckLabel [for]="'dnssec-policy-' + algorithm">{{ algorithm }}</label>
+          </c-form-check>
+        }
+      </div>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

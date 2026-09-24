@@ -1,0 +1,172 @@
+<h1>Account security</h1>
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  @if (errorMessage()) {
+    <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+  }
+
+  <c-card class="security-card">
+    <c-card-header>
+      <strong>Authenticator app</strong>
+    </c-card-header>
+    <c-card-body>
+      @if (status()?.isEnabled) {
+        <p>
+          <svg cIcon name="cilShieldAlt" size="sm"></svg>
+          Two-factor sign-in is currently required for this account.
+        </p>
+
+        <h3>Disable two-factor authentication</h3>
+        <p class="hint">Enter a current authenticator code to confirm disabling it.</p>
+        <form cForm [formGroup]="disableForm" class="code-form">
+          <div class="field">
+            <label cLabel for="account-disable-code">Code</label>
+            <input
+              cFormControl
+              id="account-disable-code"
+              formControlName="code"
+              autocomplete="one-time-code"
+            />
+          </div>
+          <button
+            cButton
+            color="danger"
+            [disabled]="disableForm.invalid || disabling()"
+            (click)="disable()"
+          >
+            Disable
+          </button>
+        </form>
+      } @else if (pendingSetup()) {
+        <p class="hint">
+          Scan this URI with your authenticator app, or enter the shared key manually, then enter a
+          generated code below to confirm.
+        </p>
+        <p class="mono">{{ pendingSetup()?.authenticatorUri }}</p>
+        <p>
+          Shared key: <span class="mono">{{ pendingSetup()?.sharedKey }}</span>
+        </p>
+
+        <form cForm [formGroup]="enableForm" class="code-form">
+          <div class="field">
+            <label cLabel for="account-enable-code">Code</label>
+            <input
+              cFormControl
+              id="account-enable-code"
+              formControlName="code"
+              autocomplete="one-time-code"
+            />
+          </div>
+          <button
+            cButton
+            color="primary"
+            [disabled]="enableForm.invalid || confirming()"
+            (click)="confirmAuthenticatorSetup()"
+          >
+            Confirm &amp; enable
+          </button>
+        </form>
+      } @else {
+        <p>
+          @if (status()?.hasAuthenticator) {
+            An authenticator was previously set up for this account, but two-factor sign-in is not
+            currently required.
+          } @else {
+            No authenticator has been set up for this account yet.
+          }
+        </p>
+        <button
+          cButton
+          color="primary"
+          [disabled]="settingUp()"
+          (click)="startAuthenticatorSetup()"
+        >
+          @if (settingUp()) {
+            <c-spinner size="sm" />
+          } @else {
+            {{ status()?.hasAuthenticator ? 'Re-set up authenticator' : 'Set up authenticator' }}
+          }
+        </button>
+      }
+    </c-card-body>
+  </c-card>
+
+  <c-card class="security-card">
+    <c-card-header>
+      <strong>Recovery codes</strong>
+    </c-card-header>
+    <c-card-body>
+      @if (status()?.isEnabled) {
+        <p class="hint">
+          Single-use fallback codes for signing in when your authenticator app and e-mail are both
+          unavailable. Generating a new batch immediately invalidates every code from any previous
+          batch.
+        </p>
+        <p>
+          <svg cIcon name="cilLockLocked" size="sm"></svg>
+          {{ status()?.recoveryCodesRemaining ?? 0 }} unused
+          {{ status()?.recoveryCodesRemaining === 1 ? 'code' : 'codes' }} remaining.
+        </p>
+        <button
+          cButton
+          color="secondary"
+          variant="outline"
+          [disabled]="generatingRecoveryCodes()"
+          (click)="generateRecoveryCodes()"
+        >
+          @if (generatingRecoveryCodes()) {
+            <c-spinner size="sm" />
+          } @else {
+            {{
+              (status()?.recoveryCodesRemaining ?? 0) > 0
+                ? 'Generate new recovery codes'
+                : 'Generate recovery codes'
+            }}
+          }
+        </button>
+      } @else {
+        <p class="hint">
+          Enable two-factor authentication above before generating recovery codes -- they exist
+          purely as a fallback for a second factor this account does not otherwise require.
+        </p>
+      }
+    </c-card-body>
+  </c-card>
+
+  <c-card class="security-card">
+    <c-card-header>
+      <strong>E-mailed verification code</strong>
+    </c-card-header>
+    <c-card-body>
+      @if (status()?.canReceiveEmailCode) {
+        <p class="hint">
+          Send a one-time verification code to your account's own confirmed e-mail address, for use
+          as a second factor when an authenticator app is not available. Delivery depends on this
+          server having SMTP configured -- if nothing arrives, ask an administrator to check
+          Settings &rarr; SMTP.
+        </p>
+        <button
+          cButton
+          color="secondary"
+          variant="outline"
+          [disabled]="sendingEmailCode()"
+          (click)="sendEmailCode()"
+        >
+          Send code to my e-mail
+        </button>
+      } @else {
+        <p class="hint">
+          This account has no confirmed e-mail address, so an e-mailed code cannot be sent.
+        </p>
+      }
+    </c-card-body>
+  </c-card>
+}
+
+<app-reveal-secret-dialog
+  [visible]="revealDialogVisible()"
+  [data]="revealDialogData()"
+  (closed)="onSecretDialogClosed()"
+/>

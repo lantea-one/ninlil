@@ -1,0 +1,53 @@
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert" class="page-alert">{{
+    errorMessage()
+  }}</c-alert>
+}
+
+<p class="catalog-intro">
+  Forces each engine's own official, publicly documented DNS-based safe-search mechanism
+  network-wide. Enabling any entry here turns on this server's global DNS rewrites toggle if it
+  wasn't already -- a single switch shared with every other rewrite this server holds.
+</p>
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <div class="engine-grid">
+    @for (engine of engines(); track engine.key) {
+      <c-card class="engine-card">
+        <c-card-header class="d-flex justify-content-between align-items-center">
+          <strong>{{ engine.displayName }}</strong>
+          @if (engine.isEnabled) {
+            <c-badge color="success">Enabled</c-badge>
+          } @else {
+            <c-badge color="secondary">Disabled</c-badge>
+          }
+        </c-card-header>
+        <c-card-body>
+          <p>{{ engine.description }}</p>
+          <p class="engine-meta">
+            {{ engine.hostnameCount }} hostname(s) rewritten &middot;
+            <a [href]="engine.sourceDocumentationUrl" target="_blank" rel="noopener">source</a>
+          </p>
+        </c-card-body>
+        <c-card-footer class="d-flex justify-content-end">
+          <button
+            cButton
+            [color]="engine.isEnabled ? 'secondary' : 'success'"
+            [disabled]="togglingKey() !== null"
+            (click)="toggle(engine)"
+          >
+            @if (togglingKey() === engine.key) {
+              <c-spinner size="sm" />
+            } @else if (engine.isEnabled) {
+              Disable
+            } @else {
+              Enable
+            }
+          </button>
+        </c-card-footer>
+      </c-card>
+    }
+  </div>
+}

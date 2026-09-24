@@ -1,0 +1,613 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Description>
+            This project is Ninlil's REST API host: Kestrel, OpenAPI/Swagger/ReDoc, the full
+            Identity/Auth REST surface (login, refresh, 2FA, API tokens, user/role management), a
+            SignalR hub bridging Server.Core's own internal event bus to authenticated real-time
+            clients, and (since Phase 4d) the single combined host for the actual DNS engine
+            itself: every resolver, every transport, and every already-built feature
+            (filtering, rate limiting, TSIG, DNSSEC, ACME, cloud zone sync).
+        </Description>
+    <PackageId>Ninlil.Web</PackageId>
+    <UserSecretsId>ninlil-dns-web</UserSecretsId>
+  </PropertyGroup>
+
+  <!--
+      Swashbuckle.AspNetCore generates the OpenAPI document from this project's own controllers
+      and XML doc comments, and serves Swagger UI. MIT licensed, mature, and integrates with the
+      XML documentation file every project in this solution already generates
+      (Directory.Build.props's own GenerateDocumentationFile).
+
+      Swashbuckle.AspNetCore.Filters (a separate, third-party MIT-licensed package by a different
+      author, not part of the core Swashbuckle project) adds the actual request/response EXAMPLE
+      mechanism the core package has no equivalent of at all, namely IExamplesProvider{T} and
+      IMultipleExamplesProvider{T}, plus the SwaggerRequestExample/SwaggerResponseExample action
+      attributes this project's own new Examples/ folder implements. Its own minimum declared
+      dependency is Swashbuckle.AspNetCore.SwaggerGen 10.0.0, comfortably satisfied by the
+      10.2.3 already referenced above.
+    -->
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="10.0.1" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Common.Configuration -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Configuration\Ninlil.Common.Configuration.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Configuration\Ninlil.Common.Configuration.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Configuration\Ninlil.Common.Configuration.csproj')">
+    <PackageReference Include="Ninlil.Common.Configuration" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Configuration -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
+    <PackageReference Include="Ninlil.Dns.Common" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Common -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore -->
+
+  <!--
+      The host itself needs every relational provider's own migrations assembly physically
+      present in its own output directory. Entity Framework Core resolves
+      options.MigrationsAssembly("...") by assembly name at runtime, and this is the one project
+      in the whole solution that actually applies migrations, for whichever provider an operator
+      selects via Storage:Engine.
+    -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.csproj')">
+    <PackageReference
+      Include="Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql"
+      Version="*"
+    />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer\Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.csproj')">
+    <PackageReference
+      Include="Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer"
+      Version="*"
+    />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.EntityFrameworkCore.Migrations -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.MongoDb -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.MongoDb" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.MongoDb -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.EntityFrameworkCore -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.EntityFrameworkCore\Ninlil.Dhcp.Data.EntityFrameworkCore.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.EntityFrameworkCore\Ninlil.Dhcp.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.EntityFrameworkCore\Ninlil.Dhcp.Data.EntityFrameworkCore.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.EntityFrameworkCore" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.EntityFrameworkCore -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.MongoDb -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.MongoDb\Ninlil.Dhcp.Data.MongoDb.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.MongoDb\Ninlil.Dhcp.Data.MongoDb.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.MongoDb\Ninlil.Dhcp.Data.MongoDb.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.MongoDb" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.MongoDb -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.Core\Ninlil.Dhcp.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.Relay -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.Relay\Ninlil.Dhcp.Server.Relay.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.Relay\Ninlil.Dhcp.Server.Relay.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.Relay\Ninlil.Dhcp.Server.Relay.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.Relay" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.Relay -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.DnsIntegration -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.DnsIntegration\Ninlil.Dhcp.Server.DnsIntegration.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.DnsIntegration\Ninlil.Dhcp.Server.DnsIntegration.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.DnsIntegration\Ninlil.Dhcp.Server.DnsIntegration.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.DnsIntegration" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.DnsIntegration -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.Tftp -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.Tftp\Ninlil.Dhcp.Server.Tftp.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.Tftp\Ninlil.Dhcp.Server.Tftp.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.Tftp\Ninlil.Dhcp.Server.Tftp.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.Tftp" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.Tftp -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Dhcpv4\Ninlil.Dhcp.Protocol.Dhcpv4.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Dhcpv4" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Dhcpv4 -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Server.Ra -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Server.Ra\Ninlil.Dhcp.Server.Ra.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Server.Ra\Ninlil.Dhcp.Server.Ra.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Server.Ra\Ninlil.Dhcp.Server.Ra.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Server.Ra" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Server.Ra -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Identity -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Identity\Ninlil.Dns.Identity.csproj')">
+    <PackageReference Include="Ninlil.Dns.Identity" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Identity -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Core -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Core" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Core -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Tsig\Ninlil.Dns.Server.Tsig.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Tsig" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Tsig -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Webhooks -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Webhooks\Ninlil.Dns.Server.Webhooks.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Webhooks\Ninlil.Dns.Server.Webhooks.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Webhooks\Ninlil.Dns.Server.Webhooks.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Webhooks" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Webhooks -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Rewrites -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Rewrites\Ninlil.Dns.Server.Rewrites.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Rewrites\Ninlil.Dns.Server.Rewrites.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Rewrites\Ninlil.Dns.Server.Rewrites.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Rewrites" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Rewrites -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.QueryLog -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.QueryLog\Ninlil.Dns.Server.QueryLog.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.QueryLog\Ninlil.Dns.Server.QueryLog.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.QueryLog\Ninlil.Dns.Server.QueryLog.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.QueryLog" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.QueryLog -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Backup -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Backup\Ninlil.Dns.Server.Backup.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Backup\Ninlil.Dns.Server.Backup.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Backup\Ninlil.Dns.Server.Backup.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Backup" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Backup -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.SelfUpdate -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.SelfUpdate\Ninlil.Dns.Server.SelfUpdate.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.SelfUpdate\Ninlil.Dns.Server.SelfUpdate.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.SelfUpdate\Ninlil.Dns.Server.SelfUpdate.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.SelfUpdate" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.SelfUpdate -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Cluster -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Cluster" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Cluster -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.ClusterSync -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.ClusterSync\Ninlil.Dns.Server.ClusterSync.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.ClusterSync\Ninlil.Dns.Server.ClusterSync.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.ClusterSync\Ninlil.Dns.Server.ClusterSync.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.ClusterSync" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.ClusterSync -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Dnssec\Ninlil.Dns.Server.Dnssec.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Dnssec" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Dnssec -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Authoritative\Ninlil.Dns.Server.Authoritative.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Authoritative" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Authoritative -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Acme -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Acme\Ninlil.Dns.Server.Acme.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Acme\Ninlil.Dns.Server.Acme.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Acme\Ninlil.Dns.Server.Acme.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Acme" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Acme -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Forwarding -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Forwarding\Ninlil.Dns.Server.Forwarding.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Forwarding\Ninlil.Dns.Server.Forwarding.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Forwarding\Ninlil.Dns.Server.Forwarding.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Forwarding" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Forwarding -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Recursive -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Recursive\Ninlil.Dns.Server.Recursive.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Recursive" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Recursive -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Filtering -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Filtering\Ninlil.Dns.Server.Filtering.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Filtering\Ninlil.Dns.Server.Filtering.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Filtering\Ninlil.Dns.Server.Filtering.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Filtering" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Filtering -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.ClientSchedule -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.ClientSchedule\Ninlil.Dns.Server.ClientSchedule.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.ClientSchedule" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.ClientSchedule -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.AccessControl -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.AccessControl\Ninlil.Dns.Server.AccessControl.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.AccessControl\Ninlil.Dns.Server.AccessControl.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.AccessControl\Ninlil.Dns.Server.AccessControl.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.AccessControl" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.AccessControl -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.ClientIdentity -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.ClientIdentity\Ninlil.Dns.Server.ClientIdentity.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.ClientIdentity\Ninlil.Dns.Server.ClientIdentity.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.ClientIdentity\Ninlil.Dns.Server.ClientIdentity.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.ClientIdentity" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.ClientIdentity -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.RateLimiting -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.RateLimiting\Ninlil.Dns.Server.RateLimiting.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.RateLimiting\Ninlil.Dns.Server.RateLimiting.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.RateLimiting\Ninlil.Dns.Server.RateLimiting.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.RateLimiting" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.RateLimiting -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Presets -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Presets\Ninlil.Dns.Server.Presets.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Presets\Ninlil.Dns.Server.Presets.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Presets\Ninlil.Dns.Server.Presets.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Presets" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Presets -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Events.RabbitMq -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Events.RabbitMq\Ninlil.Dns.Server.Events.RabbitMq.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Events.RabbitMq\Ninlil.Dns.Server.Events.RabbitMq.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Events.RabbitMq\Ninlil.Dns.Server.Events.RabbitMq.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Events.RabbitMq" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Events.RabbitMq -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.Events.ActiveMq -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.Events.ActiveMq\Ninlil.Dns.Server.Events.ActiveMq.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.Events.ActiveMq\Ninlil.Dns.Server.Events.ActiveMq.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.Events.ActiveMq\Ninlil.Dns.Server.Events.ActiveMq.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.Events.ActiveMq" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.Events.ActiveMq -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Server.DnsCrypt -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Server.DnsCrypt\Ninlil.Dns.Server.DnsCrypt.csproj')">
+    <PackageReference Include="Ninlil.Dns.Server.DnsCrypt" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Server.DnsCrypt -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Protocol.Plain -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj')">
+    <PackageReference Include="Ninlil.Dns.Protocol.Plain" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.Plain -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverTls -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Protocol.DnsOverTls\Ninlil.Dns.Protocol.DnsOverTls.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Protocol.DnsOverTls\Ninlil.Dns.Protocol.DnsOverTls.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Protocol.DnsOverTls\Ninlil.Dns.Protocol.DnsOverTls.csproj')">
+    <PackageReference Include="Ninlil.Dns.Protocol.DnsOverTls" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverTls -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverHttps -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Protocol.DnsOverHttps\Ninlil.Dns.Protocol.DnsOverHttps.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Protocol.DnsOverHttps\Ninlil.Dns.Protocol.DnsOverHttps.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Protocol.DnsOverHttps\Ninlil.Dns.Protocol.DnsOverHttps.csproj')">
+    <PackageReference Include="Ninlil.Dns.Protocol.DnsOverHttps" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverHttps -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverQuic -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Protocol.DnsOverQuic\Ninlil.Dns.Protocol.DnsOverQuic.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Protocol.DnsOverQuic\Ninlil.Dns.Protocol.DnsOverQuic.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Protocol.DnsOverQuic\Ninlil.Dns.Protocol.DnsOverQuic.csproj')">
+    <PackageReference Include="Ninlil.Dns.Protocol.DnsOverQuic" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.DnsOverQuic -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Protocol.DnsCrypt -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Protocol.DnsCrypt\Ninlil.Dns.Protocol.DnsCrypt.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Protocol.DnsCrypt\Ninlil.Dns.Protocol.DnsCrypt.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Protocol.DnsCrypt\Ninlil.Dns.Protocol.DnsCrypt.csproj')">
+    <PackageReference Include="Ninlil.Dns.Protocol.DnsCrypt" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Protocol.DnsCrypt -->
+
+  <!--
+      These properties/items back NinlilBuildAngularAdminSpa's own Inputs/Outputs below, and
+      must live here, at the top level of the project (evaluated once, statically, before any
+      target ever runs), not inside that target's own body. A first, working version of this
+      defined NinlilAngularSourceFiles dynamically inside the target instead, and a real test
+      build found the target's own Inputs/Outputs attributes had already been resolved against
+      that item list back when the *project itself* was first evaluated, before the target that
+      would have populated it ever ran, permanently seeing zero items no matter what the target
+      body later added to that same item name. Target Inputs/Outputs are always resolved
+      statically like this; only a project-level ItemGroup such as this one is visible to them.
+    -->
+  <PropertyGroup>
+    <!-- Resolved to a clean, absolute, ".."-free path via GetFullPath, since an unresolved
+         "../../../angular/" relative segment combined with a "**" recursive wildcard below was
+         separately found, by that same real test build, to silently enumerate zero files
+         instead of throwing or warning either. -->
+    <NinlilAngularWorkspaceDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../angular/'))</NinlilAngularWorkspaceDir>
+    <NinlilAngularBuildOutputDir>$(NinlilAngularWorkspaceDir)dist/angular/browser/</NinlilAngularBuildOutputDir>
+    <NinlilWebWwwrootDir>$(MSBuildThisFileDirectory)wwwroot/</NinlilWebWwwrootDir>
+  </PropertyGroup>
+  <!--
+      NinlilSkipAngularBuild=true skips the NinlilBuildAngularAdminSpa target below entirely.
+      The CI pipeline and the container image build the Angular workspace once, in their own
+      step, and copy its output into wwwroot/ before invoking dotnet, so the target has nothing
+      left to do there.
+
+      NinlilEmbedWebRoot=true compiles every file under wwwroot/ into this assembly as an
+      embedded resource, together with the manifest ManifestEmbeddedFileProvider reads. The
+      release binaries use this: a single-file executable carries the admin console inside
+      itself instead of needing a wwwroot/ directory beside it, and Program.cs falls back to the
+      embedded copy whenever no physical wwwroot/index.html exists. wwwroot/ must already be
+      populated when the project is evaluated, which is always true once the Angular output has
+      been copied in ahead of the dotnet invocation.
+    -->
+  <PropertyGroup Condition="'$(NinlilEmbedWebRoot)' == 'true'">
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.11" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(NinlilEmbedWebRoot)' == 'true'">
+    <EmbeddedResource Include="wwwroot/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <NinlilAngularSourceFiles Include="$(NinlilAngularWorkspaceDir)src/**/*.*;$(NinlilAngularWorkspaceDir)angular.json;$(NinlilAngularWorkspaceDir)package.json;$(NinlilAngularWorkspaceDir)package-lock.json;$(NinlilAngularWorkspaceDir)openapi/swagger.json;$(NinlilAngularWorkspaceDir)tsconfig*.json" />
+  </ItemGroup>
+
+  <!--
+      This target builds Ninlil's Angular admin SPA (src/angular/, Phase 5) and copies its
+      production build output into this project's own wwwroot/ directory, so a plain
+      `dotnet build`/`dotnet publish` of this one project alone is enough to produce a working
+      combined host, no separate "remember to run npm run build first" step an operator or CI
+      job could forget. This is the same "single combined host, dotnet run and it just works"
+      philosophy Phase 4d already established for the DNS engine itself, applied here to the
+      admin SPA's own build step instead of a second runtime process.
+
+      Runs BeforeTargets="Build" (and "Publish", so a plain `dotnet publish` alone, without a
+      prior `dotnet build` in the same invocation, still produces a populated wwwroot/ too),
+      not AfterTargets, because the SDK's own implicit `wwwroot/**` Content-item glob
+      (Microsoft.NET.Sdk.Web's default item behavior) is evaluated once, statically, before any
+      target ever runs, an AfterTargets="Build" hook would populate wwwroot/ too late for that
+      same build's own Content-item list to ever notice. The explicit `<Content Include=...>`
+      re-declaration inside this target's own body (below) exists specifically to patch that one
+      gap for a *first* build, where wwwroot/ does not yet exist at evaluation time; every later
+      build already has wwwroot/'s own prior output on disk before evaluation even starts, so the
+      SDK's own implicit glob already picks it up correctly on its own from that point on.
+
+      Kept fast on a routine, nothing-changed rebuild via this Target element's own native
+      Inputs/Outputs incremental-build support (MSBuild's standard mechanism for this, not a
+      hand-rolled timestamp comparison): NinlilAngularSourceFiles above is this target's
+      Inputs; wwwroot/index.html is its Outputs sentinel. `npm install && npm run build` only
+      actually runs when at least one input is newer than that sentinel (or the sentinel does
+      not exist yet at all); MSBuild logs "skipping target ... because all output files are
+      up-to-date" and does nothing further on every other rebuild. A missing npm also means the
+      sentinel is never created, so this target (cheaply: just the version-check below) keeps
+      retrying, and re-warning, on every single build until npm becomes available, rather than
+      warning once and then silently staying skipped forever after.
+
+      Gracefully degrades, rather than failing the whole dotnet build, when npm is not found on
+      PATH at all: a contributor without Node.js installed, and this solution's own existing
+      backend-only CI job (which has no Node step, and is not gaining one this pass, Phase 5's
+      own CI-wiring decision was explicitly deferred to a later pass), must both still be able to
+      build this project successfully. The trivial npm version-check invocation below's own exit
+      code is what decides this, not a missing-executable exception a plain <Exec> would
+      otherwise throw, since the shell <Exec> itself launches ("/bin/sh -c ..." on Linux/macOS,
+      "cmd.exe /c ..." on Windows) already returns a well-defined, ordinary nonzero exit code
+      (127, or 9009 respectively) when the command it was asked to run cannot be found at all,
+      with IgnoreExitCode="true" simply letting this target read that code back instead of
+      treating it as a hard failure. A missing npm only ever produces an MSBuild *warning* and an
+      empty/stale wwwroot/ (this host still builds and runs, the SPA itself just is not served
+      until npm becomes available and this project is rebuilt); it is deliberately NOT the same
+      graceful handling extended to a real Angular build failure (a TypeScript error, a failing
+      lint step if one is ever wired into `npm run build`): once npm is confirmed present,
+      `npm install`/`npm run build`'s own exit code is allowed to fail the dotnet build normally,
+      the same way a real compile error in any other project in this solution would.
+    -->
+  <Target
+    Name="NinlilBuildAngularAdminSpa"
+    BeforeTargets="Build;Publish"
+    Condition="'$(NinlilSkipAngularBuild)' != 'true'"
+    Inputs="@(NinlilAngularSourceFiles)"
+    Outputs="$(NinlilWebWwwrootDir)index.html"
+  >
+    <!-- Probe for npm on PATH ourselves, see this target's own doc comment above for why its
+         exit code, not an exception, is what this graceful-skip decision is based on. -->
+    <Exec
+      Command="npm --version"
+      IgnoreExitCode="true"
+      StandardOutputImportance="Low"
+      StandardErrorImportance="Low"
+    >
+      <Output TaskParameter="ExitCode" PropertyName="NinlilNpmProbeExitCode" />
+    </Exec>
+
+    <Warning
+      Condition="'$(NinlilNpmProbeExitCode)' != '0'"
+      Text="npm was not found on PATH, skipping the Angular admin SPA build (src/angular/). Ninlil.Web will still build and run, but wwwroot/ will be missing or stale and the admin SPA will not be served until npm is available and this project is rebuilt. Install Node.js/npm to build the admin SPA."
+    />
+
+    <Exec
+      Condition="'$(NinlilNpmProbeExitCode)' == '0'"
+      Command="npm install"
+      WorkingDirectory="$(NinlilAngularWorkspaceDir)"
+    />
+    <Exec
+      Condition="'$(NinlilNpmProbeExitCode)' == '0'"
+      Command="npm run build"
+      WorkingDirectory="$(NinlilAngularWorkspaceDir)"
+    />
+
+    <!-- A fresh copy every time, rather than an additive one, so a renamed/removed hashed bundle
+         file from a prior build (Angular's own production build names every JS/CSS bundle after
+         a content hash) never lingers in wwwroot/ forever. -->
+    <RemoveDir
+      Condition="'$(NinlilNpmProbeExitCode)' == '0' And Exists('$(NinlilWebWwwrootDir)')"
+      Directories="$(NinlilWebWwwrootDir)"
+    />
+    <MakeDir Condition="'$(NinlilNpmProbeExitCode)' == '0'" Directories="$(NinlilWebWwwrootDir)" />
+
+    <ItemGroup Condition="'$(NinlilNpmProbeExitCode)' == '0'">
+      <NinlilAngularBuildOutputFiles Include="$(NinlilAngularBuildOutputDir)**/*.*" />
+    </ItemGroup>
+    <Copy
+      Condition="'$(NinlilNpmProbeExitCode)' == '0'"
+      SourceFiles="@(NinlilAngularBuildOutputFiles)"
+      DestinationFolder="$(NinlilWebWwwrootDir)%(RecursiveDir)"
+    />
+
+    <!-- Explicitly re-declares the just-copied files as Content items for *this* build, see
+         this file's own doc comment above for exactly why this is needed only the first time
+         wwwroot/ is populated, not on every later build. -->
+    <ItemGroup Condition="'$(NinlilNpmProbeExitCode)' == '0'">
+      <Content
+        Include="$(NinlilWebWwwrootDir)**"
+        CopyToPublishDirectory="PreserveNewest"
+        CopyToOutputDirectory="PreserveNewest"
+      />
+    </ItemGroup>
+  </Target>
+</Project>

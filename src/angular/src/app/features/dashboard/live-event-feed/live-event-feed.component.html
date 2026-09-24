@@ -1,0 +1,32 @@
+<c-card class="feed-section" aria-labelledby="feed-section-title">
+  <c-card-header class="feed-header d-flex align-items-center justify-content-between">
+    <h2 id="feed-section-title" class="mb-0">Live Activity</h2>
+    <c-badge
+      [color]="connectionBadgeColor()"
+      [ngClass]="'connection-badge connection-' + connectionState()"
+    >
+      {{ connectionState() }}
+    </c-badge>
+  </c-card-header>
+
+  <c-card-body>
+    <p class="feed-note text-body-secondary small">
+      Live activity only -- this feed resets on reload. There is no server-side event history.
+    </p>
+
+    @if (feed().length === 0) {
+      <p class="feed-empty text-body-secondary">No events observed yet in this session.</p>
+    } @else {
+      <div cListGroup class="feed-list">
+        @for (entry of feed(); track entry.id) {
+          <div cListGroupItem class="d-flex align-items-baseline gap-3">
+            <span class="feed-time text-body-secondary">{{
+              entry.occurredAtUtc | date: 'HH:mm:ss'
+            }}</span>
+            <span class="feed-summary">{{ entry.summary }}</span>
+          </div>
+        }
+      </div>
+    }
+  </c-card-body>
+</c-card>

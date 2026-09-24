@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library implements Ninlil.Dhcp.Data.Abstractions's repository contracts against
+            MongoDB, reusing Ninlil.Dns.Data.MongoDb's own generic MongoRepositoryBase/
+            MongoChangeTracker/MongoUnitOfWork infrastructure and its single NinlilDnsMongoContext
+            rather than standing up a second MongoDB context of its own -- the same "one shared
+            model, DHCP repositories registered separately" shape
+            Ninlil.Dhcp.Data.EntityFrameworkCore establishes for the relational providers. Callers
+            must invoke ServiceCollectionMongoDbExtension.AddNinlilDnsMongoDb
+            (Ninlil.Dns.Data.MongoDb) before this project's own AddNinlilDhcpMongoDb, since the
+            latter only adds the DHCP repositories on top of a client/context that method already
+            registered.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Data.MongoDb</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="3.11.1" />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Data.Abstractions" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Data.Abstractions -->
+
+  <!-- ConditionalPackageProject:Ninlil.Dns.Data.MongoDb -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj')">
+    <ProjectReference Include="..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dns.Data.MongoDb\Ninlil.Dns.Data.MongoDb.csproj')">
+    <PackageReference Include="Ninlil.Dns.Data.MongoDb" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dns.Data.MongoDb -->
+</Project>

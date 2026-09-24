@@ -1,0 +1,18 @@
+// This partial aggregates every palette's own CoreUI custom-property override block (one
+// `[data-coreui-theme][data-ninlil-palette]` pair per palette, in `./_teal.scss` and its four
+// siblings) into a single Sass module. `styles.scss` pulls this whole catalog in with one
+// `@use 'styles/themes' as themes;` -- Sass resolves that to this directory's own `_index.scss`
+// automatically, and `@use`-ing a partial that itself contains plain top-level CSS rules (as
+// every palette file here does) emits those rules into the compiled stylesheet exactly once,
+// the same way Bootstrap's own Sass source is structured.
+//
+// `ThemeService` (`src/app/core/theme/theme.service.ts`) is the one thing that ever sets the
+// `data-coreui-theme`/`data-ninlil-palette` attribute pair this file's selectors match --
+// see that service's own doc comment for the full mechanism (including why
+// `[data-coreui-theme]` alone, CoreUI's own attribute, is not enough on its own: this catalog
+// also needs to know *which* palette is active, hence the second, this-app-specific attribute).
+@use 'teal';
+@use 'indigo';
+@use 'amber';
+@use 'rose';
+@use 'emerald';

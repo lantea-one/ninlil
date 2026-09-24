@@ -1,0 +1,721 @@
+using System.Buffers.Binary;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
+using Ninlil.Dns.Protocol.DnsOverTls.Tests.Fakes;
+using Ninlil.Dns.Server.Authoritative.Transfer;
+using Ninlil.Dns.Server.Core.Certificates;
+using Ninlil.Dns.Server.Core.Events;
+using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.Resolution;
+
+// Define our namespace.
+namespace Ninlil.Dns.Protocol.DnsOverTls.Tests;
+
+/// <summary>
+///     This class exercises RFC 7858's DNS-over-TLS transport end-to-end over a real TCP socket
+///     and a real TLS handshake against the self-signed certificate <see cref="DnsOverTlsListener" />
+///     generates on its own -- promoted from this project's original 3e scratch smoke test into a
+///     permanent suite, per this project's own "hybrid testing" convention: a resolver behind the
+///     transport is deliberately a minimal, always-answering fake here, since resolution
+///     correctness itself is already covered by <c>Ninlil.Dns.Server.Authoritative.Tests</c>
+///     and <c>Ninlil.Dns.Server.Dnssec.Tests</c> -- what this class actually verifies is that
+///     the transport framing, TLS handshake, and pipeline wiring are correct.
+/// </summary>
+public sealed class DnsOverTlsListenerTests : IAsyncLifetime
+{
+    private const int TestPort = 18853;
+    private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.123");
+
+    private DnsQueryProcessingPipeline _pipeline;
+    private DnsOverTlsListener _listener;
+
+    /// <inheritdoc />
+    public async Task InitializeAsync()
+    {
+        DnsQueryDispatcher dispatcher = new(
+            [new AlwaysAnswerAResolver(ExpectedAnswer)],
+            new NoOpEventPublisher()
+        );
+
+        _pipeline = new DnsQueryProcessingPipeline(
+            dispatcher,
+            new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
+                new DnsQueryProcessingPipelineOptions()
+            ),
+            NullLogger<DnsQueryProcessingPipeline>.Instance
+        );
+        await _pipeline.StartAsync(CancellationToken.None);
+
+        DnsOverTlsOptions options = new()
+        {
+            Enable = true,
+            Port = TestPort,
+            IdleTimeout = TimeSpan.FromMilliseconds(400),
+        };
+
+        _listener = new DnsOverTlsListener(
+            _pipeline,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverTlsOptions>(options),
+            NullLogger<DnsOverTlsListener>.Instance
+        );
+        await _listener.StartAsync(CancellationToken.None);
+
+        // Give the listener's own ExecuteAsync a moment to actually bind before any test
+        // connects -- BackgroundService schedules ExecuteAsync's body as a continuation rather
+        // than running it fully synchronously before StartAsync returns.
+        await Task.Delay(200);
+    }
+
+    /// <inheritdoc />
+    public async Task DisposeAsync()
+    {
+        await _listener.StopAsync(CancellationToken.None);
+        await _pipeline.StopAsync(CancellationToken.None);
+        await _pipeline.DisposeAsync();
+    }
+
+    private static async Task<SslStream> ConnectAsync()
+    {
+        TcpClient client = new();
+        await client.ConnectAsync(IPAddress.Loopback, TestPort);
+
+        SslStream sslStream = new(
+            client.GetStream(),
+            leaveInnerStreamOpen: false,
+            (_, _, _, _) => true
+        );
+        await sslStream.AuthenticateAsClientAsync("localhost");
+        return sslStream;
+    }
+
+    private static async Task WriteQueryAsync(Stream stream, DnsMessage query)
+    {
+        byte[] messageBytes = DnsMessageWriter.Write(query);
+        byte[] lengthPrefix = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)messageBytes.Length);
+
+        await stream.WriteAsync(lengthPrefix);
+        await stream.WriteAsync(messageBytes);
+    }
+
+    private static async Task<DnsMessage> ReadResponseAsync(Stream stream)
+    {
+        byte[] lengthPrefix = new byte[2];
+        await ReadExactAsync(stream, lengthPrefix);
+
+        byte[] messageBytes = new byte[BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix)];
+        await ReadExactAsync(stream, messageBytes);
+
+        return DnsMessageReader.Read(messageBytes, out _);
+    }
+
+    /// <summary>
+    ///     This method builds a real <see cref="IServiceScopeFactory" /> resolving
+    ///     <see cref="IZoneTransferService" /> to a <see cref="FakeZoneTransferService" /> --
+    ///     <see cref="DnsOverTlsListener" />'s own AXFR/IXFR branch needs a real scope factory,
+    ///     but this test project has no reason to stand up the real
+    ///     <c>Ninlil.Dns.Server.Authoritative</c> DI graph (a real zone cache, TSIG, and storage)
+    ///     just to prove the transport/framing side of zone transfer works.
+    /// </summary>
+    private static IServiceScopeFactory BuildScopeFactory() =>
+        new ServiceCollection()
+            .AddScoped<IZoneTransferService, FakeZoneTransferService>()
+            .BuildServiceProvider()
+            .GetRequiredService<IServiceScopeFactory>();
+
+    [Fact]
+    public async Task AnAxfrQuery_IsAnsweredAsARealMultiMessageSequenceOverTheSameTlsConnection()
+    {
+        using SslStream stream = await ConnectAsync();
+
+        DnsMessage query = new()
+        {
+            Id = 555,
+            Opcode = DnsOpcodeEnum.Query,
+            Questions =
+            {
+                new DnsQuestion(
+                    DnsName.Parse("axfr-over-tls.example."),
+                    DnsResourceRecordTypeEnum.Axfr,
+                    DnsClassEnum.Internet
+                ),
+            },
+        };
+        await WriteQueryAsync(stream, query);
+
+        // FakeZoneTransferService (registered via BuildScopeFactory) yields two messages for any
+        // AXFR query -- both must arrive on this same TLS-wrapped connection, in order, proving
+        // this is a real TLS handshake carrying a real multi-message transfer response, not just
+        // an ordinary single-answer query/response round trip.
+        DnsMessage first = await ReadResponseAsync(stream);
+        DnsMessage second = await ReadResponseAsync(stream);
+
+        Assert.Equal((ushort)1, first.Id);
+        Assert.Equal((ushort)2, second.Id);
+    }
+
+    private static async Task ReadExactAsync(Stream stream, byte[] buffer)
+    {
+        int totalRead = 0;
+
+        while (totalRead < buffer.Length)
+        {
+            int read = await stream.ReadAsync(buffer.AsMemory(totalRead));
+
+            if (read == 0)
+                throw new IOException("The connection closed before the expected bytes arrived.");
+
+            totalRead += read;
+        }
+    }
+
+    private static DnsMessage BuildQuery(ushort id, string name) =>
+        new()
+        {
+            Id = id,
+            Opcode = DnsOpcodeEnum.Query,
+            RecursionDesired = true,
+            Questions =
+            {
+                new DnsQuestion(
+                    DnsName.Parse(name),
+                    DnsResourceRecordTypeEnum.A,
+                    DnsClassEnum.Internet
+                ),
+            },
+        };
+
+    [Fact]
+    public async Task ARealTlsHandshakeAndQueryResponseRoundTripsCorrectly()
+    {
+        using SslStream stream = await ConnectAsync();
+
+        await WriteQueryAsync(stream, BuildQuery(1, "dot-test.example."));
+        DnsMessage response = await ReadResponseAsync(stream);
+
+        Assert.Equal(1, response.Id);
+        Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+        Assert.Single(response.Answers);
+        Assert.Equal(ExpectedAnswer, new IPAddress(response.Answers[0].Data));
+    }
+
+    [Fact]
+    public async Task TwoPipelinedQueriesOnOneConnectionAreBothAnsweredCorrectly()
+    {
+        using SslStream stream = await ConnectAsync();
+
+        await WriteQueryAsync(stream, BuildQuery(10, "first.example."));
+        await WriteQueryAsync(stream, BuildQuery(11, "second.example."));
+
+        DnsMessage firstResponse = await ReadResponseAsync(stream);
+        DnsMessage secondResponse = await ReadResponseAsync(stream);
+
+        // RFC 7766 §6.2.1 pipelining is answered by a shared worker pool -- either query may
+        // finish first, so only the *set* of IDs answered is guaranteed, not their order.
+        Assert.Equal(
+            new HashSet<ushort> { 10, 11 },
+            new HashSet<ushort> { firstResponse.Id, secondResponse.Id }
+        );
+    }
+
+    [Fact]
+    public async Task TheServerPresentsTheSelfSignedCertificateItGeneratedItself()
+    {
+        using TcpClient client = new();
+        await client.ConnectAsync(IPAddress.Loopback, TestPort);
+
+        X509Certificate2 remoteCertificate = null;
+        using SslStream sslStream = new(
+            client.GetStream(),
+            leaveInnerStreamOpen: false,
+            (_, certificate, _, _) =>
+            {
+                remoteCertificate = certificate is null ? null : new X509Certificate2(certificate);
+                return true;
+            }
+        );
+
+        await sslStream.AuthenticateAsClientAsync("localhost");
+
+        Assert.NotNull(remoteCertificate);
+        Assert.Contains("localhost", remoteCertificate.SubjectName.Name);
+    }
+
+    [Fact]
+    public async Task RestrictingAllowedProtocolsToTls12AndTls13StillHandshakesSuccessfully()
+    {
+        const int restrictedPort = TestPort + 1;
+
+        DnsQueryDispatcher dispatcher = new(
+            [new AlwaysAnswerAResolver(ExpectedAnswer)],
+            new NoOpEventPublisher()
+        );
+        DnsQueryProcessingPipeline pipeline = new(
+            dispatcher,
+            new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
+                new DnsQueryProcessingPipelineOptions()
+            ),
+            NullLogger<DnsQueryProcessingPipeline>.Instance
+        );
+        await pipeline.StartAsync(CancellationToken.None);
+
+        DnsOverTlsListener listener = new(
+            pipeline,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverTlsOptions>(
+                new DnsOverTlsOptions
+                {
+                    Enable = true,
+                    Port = restrictedPort,
+                    IdleTimeout = TimeSpan.FromMilliseconds(400),
+                    Certificate = new TlsCertificateOptions
+                    {
+                        AllowedProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    },
+                }
+            ),
+            NullLogger<DnsOverTlsListener>.Instance
+        );
+
+        try
+        {
+            await listener.StartAsync(CancellationToken.None);
+            await Task.Delay(200);
+
+            using TcpClient client = new();
+            await client.ConnectAsync(IPAddress.Loopback, restrictedPort);
+            using SslStream stream = new(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                (_, _, _, _) => true
+            );
+            await stream.AuthenticateAsClientAsync("localhost");
+
+            await WriteQueryAsync(stream, BuildQuery(1, "dot-restricted-protocols.example."));
+            DnsMessage response = await ReadResponseAsync(stream);
+
+            Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+            Assert.True(stream.SslProtocol is SslProtocols.Tls12 or SslProtocols.Tls13);
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+            await pipeline.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AMalformedMessageIsDiscardedButTheConnectionAndFramingSurvive()
+    {
+        using SslStream stream = await ConnectAsync();
+
+        // A length prefix of 3, followed by 3 garbage bytes -- too short to be a valid 12-byte
+        // header, so DnsMessageReader.Read throws FormatException and the pipeline silently
+        // discards it (RFC 1035 gives no reliable identifier to answer a malformed message
+        // with). Framing itself stays in sync since exactly 3 bytes were consumed either way.
+        byte[] malformedLengthPrefix = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(malformedLengthPrefix, 3);
+        await stream.WriteAsync(malformedLengthPrefix);
+        await stream.WriteAsync(new byte[] { 0xFF, 0xFF, 0xFF });
+
+        await WriteQueryAsync(stream, BuildQuery(99, "after-malformed.example."));
+        DnsMessage response = await ReadResponseAsync(stream);
+
+        Assert.Equal(99, response.Id);
+        Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+    }
+
+    private static readonly byte[] ProxyProtocolV2Signature =
+    [
+        0x0D,
+        0x0A,
+        0x0D,
+        0x0A,
+        0x00,
+        0x0D,
+        0x0A,
+        0x51,
+        0x55,
+        0x49,
+        0x54,
+        0x0A,
+    ];
+
+    /// <summary>
+    ///     This method builds a real, well-formed PROXY protocol v2 binary "PROXY"/TCP-over-IPv4
+    ///     header claiming <paramref name="claimedSource" /> as the connection's own real client
+    ///     address.
+    /// </summary>
+    private static byte[] BuildV2ProxyHeader(IPAddress claimedSource)
+    {
+        using MemoryStream buffer = new();
+        buffer.Write(ProxyProtocolV2Signature);
+        buffer.WriteByte(0x21); // version 2, command PROXY.
+        buffer.WriteByte(0x11); // TCP over IPv4.
+
+        byte[] length = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(length, 12);
+        buffer.Write(length);
+
+        buffer.Write(claimedSource.GetAddressBytes());
+        buffer.Write(IPAddress.Parse("192.0.2.1").GetAddressBytes());
+
+        byte[] srcPort = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(srcPort, 56324);
+        buffer.Write(srcPort);
+
+        byte[] dstPort = new byte[2];
+        BinaryPrimitives.WriteUInt16BigEndian(dstPort, 853);
+        buffer.Write(dstPort);
+
+        return buffer.ToArray();
+    }
+
+    /// <summary>
+    ///     This method starts a dedicated pipeline/listener pair, isolated from
+    ///     <see cref="InitializeAsync" />'s own shared instance, configured with
+    ///     <see cref="ProxyProtocolOptions" /> -- every PROXY protocol test needs its own listener
+    ///     since the trusted-source allowlist itself is what each test varies.
+    /// </summary>
+    private static async Task<(
+        DnsQueryProcessingPipeline Pipeline,
+        DnsOverTlsListener Listener,
+        RemoteAddressCapturingResolver Resolver
+    )> StartProxyProtocolListenerAsync(int port, ProxyProtocolOptions proxyProtocolOptions)
+    {
+        RemoteAddressCapturingResolver resolver = new(ExpectedAnswer);
+        DnsQueryDispatcher dispatcher = new([resolver], new NoOpEventPublisher());
+        DnsQueryProcessingPipeline pipeline = new(
+            dispatcher,
+            new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
+                new DnsQueryProcessingPipelineOptions()
+            ),
+            NullLogger<DnsQueryProcessingPipeline>.Instance
+        );
+        await pipeline.StartAsync(CancellationToken.None);
+
+        DnsOverTlsListener listener = new(
+            pipeline,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverTlsOptions>(
+                new DnsOverTlsOptions
+                {
+                    Enable = true,
+                    Port = port,
+                    IdleTimeout = TimeSpan.FromMilliseconds(400),
+                    ProxyProtocol = proxyProtocolOptions,
+                }
+            ),
+            NullLogger<DnsOverTlsListener>.Instance
+        );
+        await listener.StartAsync(CancellationToken.None);
+        await Task.Delay(200);
+
+        return (pipeline, listener, resolver);
+    }
+
+    private static async Task StopAsync(
+        DnsQueryProcessingPipeline pipeline,
+        DnsOverTlsListener listener
+    )
+    {
+        await listener.StopAsync(CancellationToken.None);
+        await pipeline.StopAsync(CancellationToken.None);
+        await pipeline.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AConnectionFromAKnownProxySource_WithAValidV1Header_UsesTheClaimedClientAddress()
+    {
+        const int port = TestPort + 2;
+        IPAddress claimedAddress = IPAddress.Parse("203.0.113.9");
+
+        (
+            DnsQueryProcessingPipeline pipeline,
+            DnsOverTlsListener listener,
+            RemoteAddressCapturingResolver resolver
+        ) = await StartProxyProtocolListenerAsync(
+            port,
+            new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
+        );
+
+        try
+        {
+            using TcpClient client = new();
+            await client.ConnectAsync(IPAddress.Loopback, port);
+            NetworkStream rawStream = client.GetStream();
+
+            await rawStream.WriteAsync(
+                Encoding.ASCII.GetBytes($"PROXY TCP4 {claimedAddress} 192.0.2.1 56324 853\r\n")
+            );
+
+            using SslStream sslStream = new(
+                rawStream,
+                leaveInnerStreamOpen: false,
+                (_, _, _, _) => true
+            );
+            await sslStream.AuthenticateAsClientAsync("localhost");
+
+            await WriteQueryAsync(sslStream, BuildQuery(1, "proxy-v1.example."));
+            DnsMessage response = await ReadResponseAsync(sslStream);
+
+            Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+            Assert.Equal(claimedAddress, resolver.LastRemoteAddress);
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    [Fact]
+    public async Task AConnectionFromAKnownProxySource_WithAValidV2Header_UsesTheClaimedClientAddress()
+    {
+        const int port = TestPort + 3;
+        IPAddress claimedAddress = IPAddress.Parse("203.0.113.42");
+
+        (
+            DnsQueryProcessingPipeline pipeline,
+            DnsOverTlsListener listener,
+            RemoteAddressCapturingResolver resolver
+        ) = await StartProxyProtocolListenerAsync(
+            port,
+            new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
+        );
+
+        try
+        {
+            using TcpClient client = new();
+            await client.ConnectAsync(IPAddress.Loopback, port);
+            NetworkStream rawStream = client.GetStream();
+
+            await rawStream.WriteAsync(BuildV2ProxyHeader(claimedAddress));
+
+            using SslStream sslStream = new(
+                rawStream,
+                leaveInnerStreamOpen: false,
+                (_, _, _, _) => true
+            );
+            await sslStream.AuthenticateAsClientAsync("localhost");
+
+            await WriteQueryAsync(sslStream, BuildQuery(2, "proxy-v2.example."));
+            DnsMessage response = await ReadResponseAsync(sslStream);
+
+            Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+            Assert.Equal(claimedAddress, resolver.LastRemoteAddress);
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    [Fact]
+    public async Task AConnectionFromAnUnknownSource_SendingAForgedProxyHeader_IsNeverInspectedForOne()
+    {
+        const int port = TestPort + 4;
+
+        // The PROXY protocol feature is enabled, but only for a source that is not loopback --
+        // a spoofed header from an untrusted connection must never even be read as one.
+        (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
+            await StartProxyProtocolListenerAsync(
+                port,
+                new ProxyProtocolOptions { Enable = true, KnownProxies = ["203.0.113.99"] }
+            );
+
+        try
+        {
+            using TcpClient client = new();
+            await client.ConnectAsync(IPAddress.Loopback, port);
+            NetworkStream rawStream = client.GetStream();
+
+            // A forged v1 header from a source this listener does not trust -- since the peer
+            // itself is untrusted, these bytes are never consumed as a PROXY protocol header at
+            // all, and are instead fed straight into the TLS handshake as (garbage) ClientHello
+            // bytes, which must fail.
+            await rawStream.WriteAsync(
+                Encoding.ASCII.GetBytes("PROXY TCP4 203.0.113.1 203.0.113.2 1 2\r\n")
+            );
+
+            using SslStream sslStream = new(
+                rawStream,
+                leaveInnerStreamOpen: false,
+                (_, _, _, _) => true
+            );
+            await Assert.ThrowsAnyAsync<Exception>(() =>
+                sslStream.AuthenticateAsClientAsync("localhost")
+            );
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    [Fact]
+    public async Task AConnectionFromAKnownProxySource_WithAMalformedHeader_IsRejected()
+    {
+        const int port = TestPort + 5;
+
+        (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
+            await StartProxyProtocolListenerAsync(
+                port,
+                new ProxyProtocolOptions { Enable = true, KnownProxies = ["127.0.0.1"] }
+            );
+
+        try
+        {
+            using TcpClient client = new();
+            await client.ConnectAsync(IPAddress.Loopback, port);
+            NetworkStream rawStream = client.GetStream();
+
+            // A trusted source, but a garbage, non-PROXY-protocol line -- the specification's own
+            // "abort the connection" guidance applies, so the server closes the socket before the
+            // TLS handshake ever begins.
+            await rawStream.WriteAsync(Encoding.ASCII.GetBytes("THIS IS NOT A PROXY HEADER\r\n"));
+
+            using SslStream sslStream = new(
+                rawStream,
+                leaveInnerStreamOpen: false,
+                (_, _, _, _) => true
+            );
+            await Assert.ThrowsAnyAsync<Exception>(() =>
+                sslStream.AuthenticateAsClientAsync("localhost")
+            );
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    /// <summary>
+    ///     This resolver always claims every query and answers it with one fixed A record,
+    ///     regardless of the question asked -- deliberately simplified, since resolution
+    ///     correctness is not what this test class is verifying.
+    /// </summary>
+    private sealed class AlwaysAnswerAResolver(IPAddress answer) : IDnsQueryResolver
+    {
+        public ValueTask<DnsQueryResolution> TryResolveAsync(
+            DnsQueryContext context,
+            CancellationToken stoppingToken = default
+        )
+        {
+            DnsMessage response = new()
+            {
+                Id = context.Request.Id,
+                IsResponse = true,
+                Opcode = context.Request.Opcode,
+                IsAuthoritativeAnswer = true,
+                RecursionDesired = context.Request.RecursionDesired,
+                ResponseCode = DnsResponseCodeEnum.NoError,
+                Questions = { context.Request.Questions[0] },
+            };
+
+            response.Answers.Add(
+                new DnsResourceRecord(
+                    context.Request.Questions[0].Name,
+                    DnsResourceRecordTypeEnum.A,
+                    DnsClassEnum.Internet,
+                    60,
+                    answer.GetAddressBytes()
+                )
+            );
+
+            return ValueTask.FromResult(DnsQueryResolution.Handled(response));
+        }
+    }
+
+    /// <summary>
+    ///     This resolver behaves exactly like <see cref="AlwaysAnswerAResolver" />, but also
+    ///     records the address every query actually arrived with, via
+    ///     <see cref="DnsQueryContext.RemoteAddress" /> -- what a PROXY protocol test needs to
+    ///     confirm the claimed client address genuinely reached the resolver, not merely that the
+    ///     TLS handshake/query framing itself still worked.
+    /// </summary>
+    private sealed class RemoteAddressCapturingResolver(IPAddress answer) : IDnsQueryResolver
+    {
+        /// <summary>
+        ///     This property contains the most recent query's own <see cref="DnsQueryContext.RemoteAddress" />.
+        /// </summary>
+        public IPAddress LastRemoteAddress { get; private set; }
+
+        public ValueTask<DnsQueryResolution> TryResolveAsync(
+            DnsQueryContext context,
+            CancellationToken stoppingToken = default
+        )
+        {
+            LastRemoteAddress = context.RemoteAddress;
+
+            DnsMessage response = new()
+            {
+                Id = context.Request.Id,
+                IsResponse = true,
+                Opcode = context.Request.Opcode,
+                IsAuthoritativeAnswer = true,
+                RecursionDesired = context.Request.RecursionDesired,
+                ResponseCode = DnsResponseCodeEnum.NoError,
+                Questions = { context.Request.Questions[0] },
+            };
+
+            response.Answers.Add(
+                new DnsResourceRecord(
+                    context.Request.Questions[0].Name,
+                    DnsResourceRecordTypeEnum.A,
+                    DnsClassEnum.Internet,
+                    60,
+                    answer.GetAddressBytes()
+                )
+            );
+
+            return ValueTask.FromResult(DnsQueryResolution.Handled(response));
+        }
+    }
+
+    /// <summary>
+    ///     This publisher discards every event -- the internal event bus itself is already
+    ///     covered by <c>Ninlil.Dns.Common.Tests</c>' own 3a coverage.
+    /// </summary>
+    private sealed class NoOpEventPublisher : IDnsServerEventPublisher
+    {
+        public void Publish(IDnsServerEvent domainEvent) { }
+    }
+
+    /// <summary>
+    ///     This class stands in for a real <see cref="IZoneTransferService" />, yielding two
+    ///     fixed messages for any AXFR/IXFR query -- enough to prove
+    ///     <see cref="DnsOverTlsListener" />'s own multi-message zone-transfer branch actually
+    ///     streams every message back over the same TLS connection, in order, without needing a
+    ///     real zone cache or TSIG service.
+    /// </summary>
+    private sealed class FakeZoneTransferService : IZoneTransferService
+    {
+        public async IAsyncEnumerable<DnsMessage> CreateAxfrResponseAsync(
+            DnsQueryContext context,
+            [System.Runtime.CompilerServices.EnumeratorCancellation]
+                CancellationToken stoppingToken = default
+        )
+        {
+            yield return new DnsMessage { Id = 1, IsResponse = true };
+            await Task.Yield();
+            yield return new DnsMessage { Id = 2, IsResponse = true };
+        }
+
+        public IAsyncEnumerable<DnsMessage> CreateIxfrResponseAsync(
+            DnsQueryContext context,
+            CancellationToken stoppingToken = default
+        ) => CreateAxfrResponseAsync(context, stoppingToken);
+    }
+}

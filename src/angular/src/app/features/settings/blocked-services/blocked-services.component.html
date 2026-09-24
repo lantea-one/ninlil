@@ -1,0 +1,52 @@
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert" class="page-alert">{{
+    errorMessage()
+  }}</c-alert>
+}
+
+<p class="catalog-intro">
+  One-click blocking for a small, honestly-sourced set of named consumer services. Each toggle
+  creates or removes an ordinary, subscribed filter list -- see
+  <a href="https://github.com/blocklistproject/Lists" target="_blank" rel="noopener"
+    >The Block List Project</a
+  >
+  for the real domain data behind every entry below.
+</p>
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <div class="service-grid">
+    @for (service of services(); track service.key) {
+      <c-card class="service-card">
+        <c-card-header class="d-flex justify-content-between align-items-center">
+          <strong>{{ service.displayName }}</strong>
+          @if (service.isEnabled) {
+            <c-badge color="danger">Blocked</c-badge>
+          } @else {
+            <c-badge color="secondary">Not blocked</c-badge>
+          }
+        </c-card-header>
+        <c-card-body>
+          <p>{{ service.description }}</p>
+        </c-card-body>
+        <c-card-footer class="d-flex justify-content-end">
+          <button
+            cButton
+            [color]="service.isEnabled ? 'secondary' : 'danger'"
+            [disabled]="togglingKey() !== null"
+            (click)="toggle(service)"
+          >
+            @if (togglingKey() === service.key) {
+              <c-spinner size="sm" />
+            } @else if (service.isEnabled) {
+              Unblock
+            } @else {
+              Block
+            }
+          </button>
+        </c-card-footer>
+      </c-card>
+    }
+  </div>
+}

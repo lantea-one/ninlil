@@ -1,0 +1,214 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Ninlil.Web.Models;
+
+// Define our namespace.
+namespace Ninlil.Web.Tests;
+
+/// <summary>
+///     This class covers the DNSSEC key CRUD REST endpoints end-to-end, against a real,
+///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
+///     -- generating a real keypair for a zone, confirming the private key material is never
+///     returned by any response, editing a key's own mutable state (retirement, comments) via both
+///     PUT and PATCH, and deleting. Also confirms deleting a zone cleans up its own DNSSEC keys
+///     (see <c>ZonesController.Delete</c>).
+/// </summary>
+[Collection(WebTestCollection.Name)]
+public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
+{
+    private async Task<HttpClient> CreateAuthenticatedClientAsync()
+    {
+        HttpClient client = factory.CreateClient();
+
+        HttpResponseMessage loginResponse = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest(
+                NinlilDnsWebApplicationFactory.AdminUserName,
+                NinlilDnsWebApplicationFactory.AdminPassword
+            )
+        );
+        loginResponse.EnsureSuccessStatusCode();
+
+        LoginResponse login = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            login.AccessToken
+        );
+
+        return client;
+    }
+
+    private static HttpRequestMessage PatchRequest(string url, object body) =>
+        new(HttpMethod.Patch, url)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(body),
+                Encoding.UTF8,
+                "application/json"
+            ),
+        };
+
+    private async Task<(HttpClient Client, ZoneDetail Zone)> CreateZoneAsync()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string zoneName = $"dnssec-crud-{Guid.NewGuid():N}.example.com";
+
+        HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
+            "/api/zones",
+            new { name = zoneName, type = "Primary" }
+        );
+        Assert.Equal(HttpStatusCode.Created, createZoneResponse.StatusCode);
+        ZoneDetail zone = await createZoneResponse.Content.ReadFromJsonAsync<ZoneDetail>();
+
+        return (client, zone);
+    }
+
+    [Fact]
+    public async Task DnssecKeyLifecycle_GenerateEditAndDelete_WorksEndToEnd()
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        // Generate a brand-new key. Its own private key material must never appear anywhere.
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new
+            {
+                role = "ZSK",
+                algorithm = "RSASHA256",
+                keySizeBits = 2048,
+                comments = "created by test",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        string createBody = await createResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("private", createBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pkcs8", createBody, StringComparison.OrdinalIgnoreCase);
+
+        DnssecKeyDetail created =
+            JsonSerializer.Deserialize<DnssecKeyDetail>(
+                createBody,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            ) ?? throw new InvalidOperationException("Expected a DNSSEC key detail response.");
+        Assert.Equal(zone.Id, created.ZoneId);
+        Assert.False(created.IsRetired);
+        Assert.False(string.IsNullOrWhiteSpace(created.PublicKeyWireFormat));
+        Assert.True(created.KeyTag > 0);
+
+        // Listing must show the key, and must not leak its private key either.
+        HttpResponseMessage listResponse = await client.GetAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys"
+        );
+        listResponse.EnsureSuccessStatusCode();
+        string listBody = await listResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("private", listBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pkcs8", listBody, StringComparison.OrdinalIgnoreCase);
+
+        // PUT fully replaces the key's own mutable state.
+        HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}",
+            new { isRetired = true, comments = "replaced via PUT" }
+        );
+        Assert.Equal(HttpStatusCode.NoContent, replaceResponse.StatusCode);
+
+        HttpResponseMessage afterReplaceResponse = await client.GetAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
+        );
+        DnssecKeyDetail replaced =
+            await afterReplaceResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+        Assert.Equal(created.Id, replaced.Id);
+        Assert.True(replaced.IsRetired);
+        Assert.Equal("replaced via PUT", replaced.Comments);
+        // Role/algorithm/key material are permanent -- untouched by a PUT that only ever exposes
+        // the mutable fields.
+        Assert.Equal(created.Algorithm, replaced.Algorithm);
+        Assert.Equal(created.PublicKeyWireFormat, replaced.PublicKeyWireFormat);
+
+        // PATCH via JSON Merge Patch only touches the field it names.
+        HttpResponseMessage patchResponse = await client.SendAsync(
+            PatchRequest(
+                $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}",
+                new { isRetired = false }
+            )
+        );
+        Assert.Equal(HttpStatusCode.NoContent, patchResponse.StatusCode);
+
+        HttpResponseMessage afterPatchResponse = await client.GetAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
+        );
+        DnssecKeyDetail patched =
+            await afterPatchResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+        Assert.False(patched.IsRetired);
+        // The field the patch never mentioned must survive untouched.
+        Assert.Equal("replaced via PUT", patched.Comments);
+
+        // Deleting works and is reflected immediately.
+        HttpResponseMessage deleteResponse = await client.DeleteAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
+        );
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        HttpResponseMessage afterDeleteResponse = await client.GetAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
+        );
+        Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteZone_WithDnssecKeys_RemovesThemToo()
+    {
+        (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys",
+            new
+            {
+                role = "KSK",
+                algorithm = "RSASHA256",
+                keySizeBits = 2048,
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        DnssecKeyDetail created = await createResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
+
+        HttpResponseMessage deleteZoneResponse = await client.DeleteAsync($"/api/zones/{zone.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteZoneResponse.StatusCode);
+
+        HttpResponseMessage afterDeleteResponse = await client.GetAsync(
+            $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
+        );
+        Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateDnssecKey_ForANonExistentZone_ReturnsNotFound()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"/api/zones/{Guid.NewGuid()}/dnssec-keys",
+            new
+            {
+                role = "ZSK",
+                algorithm = "RSASHA256",
+                keySizeBits = 2048,
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DnssecKeyEndpoints_WithoutAToken_ReturnUnauthorized()
+    {
+        HttpClient client = factory.CreateClient();
+
+        HttpResponseMessage response = await client.GetAsync(
+            $"/api/zones/{Guid.NewGuid()}/dnssec-keys"
+        );
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+}

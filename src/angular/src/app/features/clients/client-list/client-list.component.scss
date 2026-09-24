@@ -1,0 +1,214 @@
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-3);
+  margin: var(--ninlil-space-5) var(--ninlil-space-5) var(--ninlil-space-3);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--ninlil-space-2);
+}
+
+.summary-cards {
+  display: block;
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-4);
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-2) var(--ninlil-space-3);
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-3);
+}
+
+.toolbar-label {
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+}
+
+.sort-select {
+  width: auto;
+  min-width: 11rem;
+}
+
+.toolbar-hint {
+  margin-left: auto;
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.table-card {
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-5);
+  background: var(--cui-card-bg, transparent);
+  border: 1px solid var(--cui-card-border-color, var(--cui-border-color));
+  border-radius: var(--cui-card-border-radius, 0.375rem);
+  overflow: auto;
+}
+
+.client-table {
+  width: 100%;
+  margin-bottom: 0;
+  font-size: var(--ninlil-font-size-sm);
+
+  td {
+    vertical-align: middle;
+  }
+}
+
+.row-disabled td {
+  opacity: 0.6;
+}
+
+.favorite-cell {
+  width: 1%;
+  padding-right: 0;
+}
+
+// The outline star is tinted, rather than filled, to show a favorite.
+.favorite-toggle {
+  color: var(--cui-tertiary-color);
+
+  &.is-favorite {
+    color: var(--cui-warning);
+  }
+}
+
+.device-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-3);
+  min-width: 14rem;
+}
+
+.device-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--cui-border-radius-lg);
+  background-color: var(--cui-tertiary-bg);
+  color: var(--cui-secondary-color);
+
+  // A small status dot on the icon itself, so presence reads at a glance down the column.
+  &::after {
+    content: '';
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 0.65rem;
+    height: 0.65rem;
+    border: 2px solid var(--cui-card-bg, var(--cui-body-bg));
+    border-radius: 50%;
+    background-color: var(--cui-secondary-color);
+  }
+
+  &.is-online {
+    background-color: rgba(var(--cui-success-rgb), 0.12);
+    color: var(--cui-success);
+
+    &::after {
+      background-color: var(--cui-success);
+    }
+  }
+}
+
+.device-text {
+  min-width: 0;
+}
+
+.device-title {
+  font-weight: 600;
+  color: var(--cui-body-color);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  // A device shown by its address or identifier, for want of a name.
+  &.unnamed {
+    font-family: var(--cui-font-monospace);
+    font-weight: 500;
+  }
+}
+
+.device-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.presence-meta {
+  margin-top: var(--ninlil-space-1);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--cui-tertiary-color);
+}
+
+.address-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// A long identifier (a DUID) wraps under its IP address rather than widening the whole table.
+.address-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--ninlil-space-2);
+  max-width: 22rem;
+
+  & + & {
+    margin-top: var(--ninlil-space-1);
+  }
+}
+
+.protocol-badge {
+  min-width: 1.75rem;
+}
+
+.address-ip {
+  font-family: var(--cui-font-monospace);
+  white-space: nowrap;
+}
+
+.address-identifier {
+  font-family: var(--cui-font-monospace);
+  overflow-wrap: anywhere;
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.no-matches {
+  margin: var(--ninlil-space-5);
+  color: var(--cui-secondary-color);
+}
+
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+.error-message {
+  margin: 0 var(--ninlil-space-5) var(--ninlil-space-2);
+  color: var(--cui-danger, #e55353);
+}

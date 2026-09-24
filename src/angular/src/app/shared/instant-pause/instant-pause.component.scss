@@ -1,0 +1,25 @@
+.pause-status {
+  margin-bottom: var(--ninlil-space-3);
+}
+
+.quick-durations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-2);
+  margin-bottom: var(--ninlil-space-4);
+}
+
+.custom-duration {
+  margin-bottom: var(--ninlil-space-4);
+  max-width: var(--ninlil-form-max-width-sm, 320px);
+}
+
+.custom-duration-row {
+  display: flex;
+  gap: var(--ninlil-space-2);
+  align-items: flex-start;
+}
+
+.custom-duration-row input {
+  flex: 1;
+}

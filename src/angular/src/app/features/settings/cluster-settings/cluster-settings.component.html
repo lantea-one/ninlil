@@ -1,0 +1,130 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Cluster</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      @if (nodeId()) {
+        <div cFormText class="node-id-note">
+          This node's own cluster identity: <code>{{ nodeId() }}</code>
+        </div>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="cluster-enable" formControlName="enable" />
+          <label cFormCheckLabel for="cluster-enable"
+            >Enable clustering -- join this node with others into an active-active pool</label
+          >
+        </c-form-check>
+
+        <div cFormText class="synthesis-note">
+          Opens a new, distinct authenticated node-to-node channel. A single-node deployment (most
+          homelab installs) has no reason to turn this on at all.
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-advertised-host">Advertised host</label>
+          <input
+            cFormControl
+            id="cluster-advertised-host"
+            formControlName="advertisedHost"
+            placeholder="10.0.1.10"
+          />
+        </div>
+
+        <div cFormText class="synthesis-note">
+          The hostname or IP address a peer should use to reach this node's own cluster channel.
+          Required before either inviting or joining a peer -- there is no safe way to guess which
+          of a host's own network interfaces a peer on a different network segment should dial.
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-advertised-port">Advertised port</label>
+          <input
+            cFormControl
+            type="number"
+            id="cluster-advertised-port"
+            formControlName="advertisedPort"
+          />
+        </div>
+
+        <div cFormText class="synthesis-note">
+          Leave at <code>0</code> to use this host's own shared HTTPS port -- almost every real
+          deployment never needs to change this.
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-heartbeat-interval">Heartbeat interval</label>
+          <input
+            cFormControl
+            id="cluster-heartbeat-interval"
+            formControlName="heartbeatInterval"
+            placeholder="00:00:30"
+          />
+        </div>
+
+        <div cFormText class="synthesis-note">
+          How often each known peer is probed, as <code>hh:mm:ss</code>. Takes effect only after a
+          restart.
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-heartbeat-timeout">Heartbeat timeout</label>
+          <input
+            cFormControl
+            id="cluster-heartbeat-timeout"
+            formControlName="heartbeatTimeout"
+            placeholder="00:00:10"
+          />
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-missed-threshold"
+            >Missed heartbeats before "unreachable"</label
+          >
+          <input
+            cFormControl
+            type="number"
+            id="cluster-missed-threshold"
+            formControlName="missedHeartbeatThreshold"
+          />
+        </div>
+
+        <div class="field">
+          <label cLabel for="cluster-address-reconcile-interval"
+            >Catalog address reconcile interval</label
+          >
+          <input
+            cFormControl
+            id="cluster-address-reconcile-interval"
+            formControlName="addressReconcileInterval"
+            placeholder="00:01:00"
+          />
+        </div>
+
+        <div cFormText class="synthesis-note">
+          How often a catalog-managed zone's own NOTIFY/primary address lists are reconciled against
+          this node's own live cluster membership. Takes effect only after a restart.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

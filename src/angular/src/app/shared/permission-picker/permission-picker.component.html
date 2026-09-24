@@ -1,0 +1,20 @@
+@for (group of groups(); track group.resource) {
+  <fieldset class="permission-group">
+    <legend class="permission-group-title">{{ group.resource }}</legend>
+    <div class="permission-group-checkboxes">
+      @for (permission of group.permissions; track permission) {
+        <c-form-check>
+          <input
+            cFormCheckInput
+            type="checkbox"
+            [id]="checkboxId(permission)"
+            [checked]="isChecked(permission)"
+            [disabled]="disabled()"
+            (change)="onChange(permission, $event)"
+          />
+          <label cFormCheckLabel [for]="checkboxId(permission)">{{ permission }}</label>
+        </c-form-check>
+      }
+    </div>
+  </fieldset>
+}

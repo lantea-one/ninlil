@@ -1,0 +1,55 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Assign filter list</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      @if (availableLists().length === 0) {
+        <p class="empty-state">
+          Every filter list is already assigned to this group, or none exist yet.
+        </p>
+      } @else {
+        <form cForm [formGroup]="form" class="assignment-form">
+          <div class="field full-width">
+            <label cLabel for="assignment-list-id">Filter list</label>
+            <select cSelect id="assignment-list-id" formControlName="listId">
+              @for (list of availableLists(); track list.id) {
+                <option [value]="list.id">{{ list.name }}</option>
+              }
+            </select>
+          </div>
+        </form>
+      }
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/client-groups', groupId, 'list-assignments']"
+      >
+        Cancel
+      </a>
+      <button
+        cButton
+        color="primary"
+        [disabled]="form.invalid || submitting() || availableLists().length === 0"
+        (click)="save()"
+      >
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Assign
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

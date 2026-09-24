@@ -1,0 +1,241 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Recursive resolver</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-enable"
+            formControlName="enableRecursion"
+          />
+          <label cFormCheckLabel for="recursive-enable"
+            >Recurse for a query this server does not itself host</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-dnssec"
+            formControlName="enableDnssecValidation"
+          />
+          <label cFormCheckLabel for="recursive-dnssec"
+            >Validate every recursively-resolved answer against the DNSSEC chain of trust</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-qname-minimization"
+            formControlName="enableQnameMinimization"
+          />
+          <label cFormCheckLabel for="recursive-qname-minimization"
+            >Minimize what each query reveals to intermediate name servers (RFC 9156)</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-trust-anchor-update"
+            formControlName="enableAutomaticTrustAnchorUpdate"
+          />
+          <label cFormCheckLabel for="recursive-trust-anchor-update"
+            >Keep root trust anchors current automatically (RFC 5011)</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="recursive-upstream-timeout">Upstream query timeout</label>
+            <input
+              cFormControl
+              id="recursive-upstream-timeout"
+              formControlName="upstreamQueryTimeout"
+              placeholder="00:00:03"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-overall-timeout">Overall query timeout</label>
+            <input
+              cFormControl
+              id="recursive-overall-timeout"
+              formControlName="overallQueryTimeout"
+              placeholder="00:00:15"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="recursive-max-referral-depth">Max referral depth</label>
+            <input
+              cFormControl
+              id="recursive-max-referral-depth"
+              type="number"
+              min="1"
+              formControlName="maxReferralDepth"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-max-cname-depth">Max CNAME chain length</label>
+            <input
+              cFormControl
+              id="recursive-max-cname-depth"
+              type="number"
+              min="1"
+              formControlName="maxCnameChainLength"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-max-upstream-queries">Max upstream queries</label>
+            <input
+              cFormControl
+              id="recursive-max-upstream-queries"
+              type="number"
+              min="1"
+              formControlName="maxUpstreamQueries"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-max-cache-entries">Max cache entries</label>
+            <input
+              cFormControl
+              id="recursive-max-cache-entries"
+              type="number"
+              min="1"
+              formControlName="maxCacheEntries"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="recursive-trust-anchor-refresh">Trust anchor refresh interval</label>
+            <input
+              cFormControl
+              id="recursive-trust-anchor-refresh"
+              formControlName="trustAnchorRefreshInterval"
+              placeholder="15.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-trust-anchor-hold-down">Trust anchor add hold-down</label>
+            <input
+              cFormControl
+              id="recursive-trust-anchor-hold-down"
+              formControlName="trustAnchorHoldDownDuration"
+              placeholder="30.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-trust-anchor-remove-hold-down"
+              >Trust anchor remove hold-down</label
+            >
+            <input
+              cFormControl
+              id="recursive-trust-anchor-remove-hold-down"
+              formControlName="trustAnchorRemoveHoldDownDuration"
+              placeholder="30.00:00:00"
+            />
+          </div>
+        </div>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-serve-stale"
+            formControlName="enableServeStale"
+          />
+          <label cFormCheckLabel for="recursive-serve-stale"
+            >Serve a stale cache entry when a fresh answer can't be obtained (RFC 8767)</label
+          >
+        </c-form-check>
+
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="recursive-prefetch"
+            formControlName="enablePrefetch"
+          />
+          <label cFormCheckLabel for="recursive-prefetch"
+            >Proactively refresh a popular cache entry before it expires</label
+          >
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="recursive-max-stale-age">Max stale-serve age</label>
+            <input
+              cFormControl
+              id="recursive-max-stale-age"
+              formControlName="maxStaleServeAge"
+              placeholder="1.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-prefetch-window">Prefetch window</label>
+            <input
+              cFormControl
+              id="recursive-prefetch-window"
+              formControlName="prefetchWindow"
+              placeholder="00:00:10"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="recursive-prefetch-recent-access"
+              >Prefetch recent-access window</label
+            >
+            <input
+              cFormControl
+              id="recursive-prefetch-recent-access"
+              formControlName="prefetchRecentAccessWindow"
+              placeholder="00:05:00"
+            />
+          </div>
+        </div>
+
+        <div cFormText class="override-note">
+          A root-hints or trust-anchor override for recursing against something other than the real
+          internet root is not editable here -- it takes effect only once, at this host's own
+          startup, so it stays a direct configuration-file edit for now.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

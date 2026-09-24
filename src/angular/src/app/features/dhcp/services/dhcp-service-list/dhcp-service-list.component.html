@@ -1,0 +1,96 @@
+<div class="list-header">
+  <h1>DHCP Services</h1>
+</div>
+
+<c-alert color="warning" [dismissible]="false" role="alert" class="risk-banner">
+  <svg cIcon name="cilWarning" size="sm"></svg>
+  This page controls this server's own real DHCPv4, DHCPv6, Router Advertisement, and TFTP
+  listeners, right now, in this running process -- independently of each one's own configured
+  "enable at boot" setting. Stopping DHCPv4 or DHCPv6 immediately cuts off real client lease traffic
+  over that protocol; stopping Router Advertisement immediately stops SLAAC-configuring IPv6 hosts
+  on the link; stopping TFTP immediately aborts any PXE boot transfer in progress. Every action
+  below asks for confirmation first.
+</c-alert>
+
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="service-card">
+    <c-card-header>DHCP-family services</c-card-header>
+    <c-card-body>
+      @if (services().length === 0) {
+        <p class="empty-state">No DHCP-family services are registered.</p>
+      } @else {
+        <table cdk-table cTable hover responsive [dataSource]="services()" class="service-table">
+          <ng-container cdkColumnDef="name">
+            <th cdk-header-cell *cdkHeaderCellDef>Service</th>
+            <td cdk-cell *cdkCellDef="let service">{{ kindLabel(service.kind) }}</td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="enabled">
+            <th cdk-header-cell *cdkHeaderCellDef>Enabled at boot</th>
+            <td cdk-cell *cdkCellDef="let service">
+              <c-badge [color]="enabledBadgeColor(service.enabled)">
+                {{ enabledLabel(service.enabled) }}
+              </c-badge>
+            </td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="running">
+            <th cdk-header-cell *cdkHeaderCellDef>Live status</th>
+            <td cdk-cell *cdkCellDef="let service">
+              <c-badge [color]="runningBadgeColor(service.isRunning)">
+                {{ runningLabel(service.isRunning) }}
+              </c-badge>
+            </td>
+          </ng-container>
+
+          <ng-container cdkColumnDef="actions">
+            <th cdk-header-cell *cdkHeaderCellDef></th>
+            <td cdk-cell *cdkCellDef="let service" class="actions-cell">
+              @if (canManage) {
+                <button
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="success"
+                  [disabled]="service.isRunning || actingOn() === service.kind"
+                  cTooltip="Start this service"
+                  [attr.aria-label]="'Start ' + kindLabel(service.kind)"
+                  (click)="invoke('start', service)"
+                >
+                  <svg cIcon name="cilMediaPlay" size="sm"></svg>
+                </button>
+                <button
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="danger"
+                  [disabled]="!service.isRunning || actingOn() === service.kind"
+                  cTooltip="Stop this service"
+                  [attr.aria-label]="'Stop ' + kindLabel(service.kind)"
+                  (click)="invoke('stop', service)"
+                >
+                  <svg cIcon name="cilMediaStop" size="sm"></svg>
+                </button>
+              }
+            </td>
+          </ng-container>
+
+          <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+          <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      }
+    </c-card-body>
+  </c-card>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

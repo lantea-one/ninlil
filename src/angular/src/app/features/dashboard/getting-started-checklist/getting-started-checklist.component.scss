@@ -1,0 +1,32 @@
+.getting-started-card {
+  margin-bottom: var(--ninlil-space-5);
+}
+
+.getting-started-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.getting-started-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+}
+
+.getting-started-item-icon {
+  flex: 0 0 auto;
+  color: var(--cui-secondary-color);
+}
+
+.getting-started-item.complete .getting-started-item-icon {
+  color: var(--cui-success);
+}
+
+.getting-started-item.complete a {
+  color: var(--cui-secondary-color);
+  text-decoration: line-through;
+}

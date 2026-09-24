@@ -1,0 +1,140 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Web listener</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <c-alert color="warning" [dismissible]="false" role="alert" class="restart-warning">
+        <strong>A manual restart is required for every change here to take effect.</strong> This
+        host's own HTTP/HTTPS listener is bound once, at process startup -- a bad port or
+        certificate value could leave every admin session (including this one) unable to reconnect
+        until the mistake is corrected and the process restarted again.
+      </c-alert>
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="weblisten-http-port">HTTP port</label>
+            <input
+              cFormControl
+              id="weblisten-http-port"
+              type="number"
+              min="1"
+              max="65535"
+              formControlName="httpPort"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="weblisten-https-port">HTTPS port</label>
+            <input
+              cFormControl
+              id="weblisten-https-port"
+              type="number"
+              min="1"
+              max="65535"
+              formControlName="httpsPort"
+            />
+          </div>
+        </div>
+
+        <h6 class="section-heading">Certificate</h6>
+
+        <div class="field">
+          <label cLabel for="weblisten-pfx-path"
+            >PFX path (blank generates and manages a self-signed certificate)</label
+          >
+          <input cFormControl id="weblisten-pfx-path" formControlName="pfxPath" />
+        </div>
+
+        <div class="field">
+          <label cLabel for="weblisten-pfx-password">PFX password</label>
+          <input
+            cFormControl
+            id="weblisten-pfx-password"
+            type="password"
+            formControlName="pfxPassword"
+            placeholder="Leave blank to keep the current one unchanged"
+          />
+          <div cFormText>
+            {{
+              pfxPasswordConfigured()
+                ? 'A password is currently configured.'
+                : 'No password is currently configured.'
+            }}
+          </div>
+        </div>
+
+        <div class="field">
+          <label cLabel for="weblisten-sans"
+            >Self-signed subject alternative names (one per line)</label
+          >
+          <textarea
+            cFormControl
+            id="weblisten-sans"
+            formControlName="selfSignedSubjectAlternativeNames"
+            rows="2"
+            placeholder="localhost"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label cLabel for="weblisten-cert-poll-interval">Certificate reload poll interval</label>
+          <input
+            cFormControl
+            id="weblisten-cert-poll-interval"
+            formControlName="certificateReloadPollInterval"
+            placeholder="00:05:00"
+          />
+        </div>
+
+        <div class="field">
+          <div class="group-label">
+            Allowed TLS protocols (none selected lets the runtime negotiate its own default)
+          </div>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="weblisten-tls12"
+              formControlName="allowedProtocolTls12"
+            />
+            <label cFormCheckLabel for="weblisten-tls12">TLS 1.2</label>
+          </c-form-check>
+          <c-form-check inline>
+            <input
+              cFormCheckInput
+              type="checkbox"
+              id="weblisten-tls13"
+              formControlName="allowedProtocolTls13"
+            />
+            <label cFormCheckLabel for="weblisten-tls13">TLS 1.3</label>
+          </c-form-check>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

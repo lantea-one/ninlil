@@ -1,0 +1,77 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Query logging</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input cFormCheckInput type="checkbox" id="querylog-enable" formControlName="enable" />
+          <label cFormCheckLabel for="querylog-enable">Log every answered query</label>
+        </c-form-check>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="querylog-retention">Retention period</label>
+            <input
+              cFormControl
+              id="querylog-retention"
+              formControlName="retentionPeriod"
+              placeholder="30.00:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="querylog-cleanup">Cleanup interval</label>
+            <input
+              cFormControl
+              id="querylog-cleanup"
+              formControlName="cleanupInterval"
+              placeholder="01:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="querylog-max-entries">Max retained entries</label>
+            <input
+              cFormControl
+              id="querylog-max-entries"
+              type="number"
+              min="0"
+              formControlName="maxRetainedEntries"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field privacy-level-field">
+            <label cLabel for="querylog-privacy-level">Privacy level</label>
+            <select cSelect id="querylog-privacy-level" formControlName="privacyLevel">
+              @for (option of privacyLevelOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+            <p class="hint privacy-level-hint">{{ selectedPrivacyLevelDescription() }}</p>
+          </div>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

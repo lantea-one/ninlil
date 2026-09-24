@@ -1,0 +1,71 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>DNSSEC key rollover</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="rollover-propagation-delay">Propagation delay</label>
+            <input
+              cFormControl
+              id="rollover-propagation-delay"
+              formControlName="propagationDelay"
+              placeholder="01:00:00"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="rollover-poll-interval">Poll interval</label>
+            <input
+              cFormControl
+              id="rollover-poll-interval"
+              formControlName="pollInterval"
+              placeholder="00:15:00"
+            />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label cLabel for="rollover-external-parent-ds-ttl">External parent DS TTL</label>
+            <input
+              cFormControl
+              id="rollover-external-parent-ds-ttl"
+              formControlName="externalParentDsTtl"
+              placeholder="1.00:00:00"
+            />
+            <div cFormText>
+              The assumed Time To Live of a real external registrar's own DS record -- match this to
+              your registrar's actual value for a KSK rollover's final withdrawal wait to be
+              correct. Irrelevant for a parent zone this same server also hosts.
+            </div>
+          </div>
+        </div>
+
+        <div cFormText>
+          Every field takes effect on the very next rollover check or poll wait, whichever comes
+          first -- no restart required.
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

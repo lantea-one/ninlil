@@ -1,0 +1,49 @@
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+.form-card {
+  max-width: var(--ninlil-form-max-width);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.client-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-3);
+}
+
+.full-width {
+  width: 100%;
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+.vendor-line {
+  font-size: var(--ninlil-font-size-sm);
+}
+
+.addresses-link {
+  margin: calc(-1 * var(--ninlil-space-2)) 0 var(--ninlil-space-3);
+  font-size: var(--ninlil-font-size-sm);
+  color: var(--cui-secondary-color);
+}

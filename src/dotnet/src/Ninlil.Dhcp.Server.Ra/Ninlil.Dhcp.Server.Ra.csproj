@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's Router Advertisement content engine: the real
+            IRaAdvertisementProvider implementation Ninlil.Dhcp.Protocol.Ra's own raw ICMPv6
+            transport asks for a Router Advertisement to send, whether periodically unsolicited
+            (RFC 4861 Section 6.2.4) or in immediate response to a Router Solicitation (RFC 4861
+            Section 6.2.6). Unlike the DHCPv4/DHCPv6 engines, Router Advertisement content is the
+            same for every client on the link -- there is no per-client lease state at all here,
+            only RaOptions's own configured M/O flags, timers, advertised prefixes (each with its
+            own on-link/autonomous SLAAC flags and lifetimes), and optional MTU/RDNSS values.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Server.Ra</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.11"
+    />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageReference
+      Include="Microsoft.Extensions.DependencyInjection.Abstractions"
+      Version="10.0.11"
+    />
+  </ItemGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Dhcp.Protocol.Ra -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj')">
+    <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj')">
+    <PackageReference Include="Ninlil.Dhcp.Protocol.Ra" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Ra -->
+</Project>

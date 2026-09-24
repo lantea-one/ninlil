@@ -1,0 +1,56 @@
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+// This form's own edit-mode content includes both a role-checkbox grid and the shared
+// `app-permission-picker` (its own dense, flex-wrapping checkbox grid across every permission
+// resource group) -- both genuinely benefit from the widest form-width step, the same one
+// `RoleFormComponent` uses for the same reason.
+.form-card {
+  max-width: var(--ninlil-form-max-width-wide);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+  min-width: 220px;
+}
+
+.role-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-1) var(--ninlil-space-5);
+  margin-bottom: var(--ninlil-space-3);
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+h3 {
+  margin: var(--ninlil-space-2) 0 0;
+  font-size: var(--ninlil-font-size-md);
+}

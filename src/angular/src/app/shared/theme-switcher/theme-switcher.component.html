@@ -1,0 +1,53 @@
+<c-dropdown [alignment]="alignment()" variant="dropdown">
+  <button
+    cButton
+    cDropdownToggle
+    color="secondary"
+    variant="ghost"
+    [caret]="false"
+    type="button"
+    aria-label="Change appearance"
+  >
+    <svg cIcon [name]="triggerIcon()" size="lg"></svg>
+  </button>
+
+  <div cDropdownMenu>
+    <h6 cDropdownHeader>Palette</h6>
+    @for (option of paletteOptions; track option.value) {
+      <button
+        cDropdownItem
+        type="button"
+        class="d-flex align-items-center gap-2"
+        [active]="option.value === activePalette()"
+        [disabled]="pending()"
+        (click)="selectPalette(option.value)"
+      >
+        <span class="theme-switcher-swatch" [style.background-color]="option.swatch"></span>
+        <span class="flex-grow-1">{{ option.label }}</span>
+        @if (option.value === activePalette()) {
+          <svg cIcon name="cilCheck" size="sm"></svg>
+        }
+      </button>
+    }
+
+    <div cDropdownDivider></div>
+
+    <h6 cDropdownHeader>Mode</h6>
+    @for (option of modeOptions; track option.value) {
+      <button
+        cDropdownItem
+        type="button"
+        class="d-flex align-items-center gap-2"
+        [active]="option.value === activeMode()"
+        [disabled]="pending()"
+        (click)="selectMode(option.value)"
+      >
+        <svg cIcon [name]="option.icon" size="sm"></svg>
+        <span class="flex-grow-1">{{ option.label }}</span>
+        @if (option.value === activeMode()) {
+          <svg cIcon name="cilCheck" size="sm"></svg>
+        }
+      </button>
+    }
+  </div>
+</c-dropdown>

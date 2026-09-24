@@ -1,0 +1,52 @@
+.loading-spinner {
+  display: block;
+  margin: var(--ninlil-space-6) auto;
+}
+
+// A moderately long, multi-section form (Authentication, HMAC payload signing -- the same
+// `<h3>`-delimited shape `ZoneFormComponent` established) fits the standard form-width step
+// rather than the compact one a short single-purpose form (New API Token) uses.
+.form-card {
+  max-width: var(--ninlil-form-max-width);
+  margin: var(--ninlil-space-5) auto;
+}
+
+.webhook-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-2);
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ninlil-space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ninlil-space-1);
+  margin-bottom: var(--ninlil-space-3);
+  min-width: 220px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.hint {
+  margin: 0 0 var(--ninlil-space-2);
+  font-size: var(--ninlil-font-size-xs);
+  color: var(--cui-secondary-color);
+}
+
+.field-error {
+  color: var(--cui-danger, #e55353);
+  font-size: var(--ninlil-font-size-xs);
+}
+
+h3 {
+  margin: var(--ninlil-space-2) 0 0;
+  font-size: var(--ninlil-font-size-md);
+}

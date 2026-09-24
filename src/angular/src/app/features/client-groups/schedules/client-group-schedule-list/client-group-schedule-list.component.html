@@ -1,0 +1,104 @@
+<div class="list-header">
+  <div>
+    <a routerLink="/client-groups" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Client Groups
+    </a>
+    <h1>{{ groupName() ?? 'Schedules' }}</h1>
+  </div>
+  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'schedules', 'new']">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Add schedule
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (schedules().length === 0) {
+  <app-empty-state
+    icon="cilMoon"
+    heading="No schedules yet"
+    description="A schedule blocks all DNS resolution for every client in this group during its own active window -- add one to set up a bedtime or quiet-hours policy for the whole group."
+  >
+    <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'schedules', 'new']">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      Add schedule
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="schedules()" class="schedule-table">
+      <ng-container cdkColumnDef="days">
+        <th cdk-header-cell *cdkHeaderCellDef>Days</th>
+        <td cdk-cell *cdkCellDef="let schedule">{{ schedule.daysOfWeek }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="window">
+        <th cdk-header-cell *cdkHeaderCellDef>Window</th>
+        <td cdk-cell *cdkCellDef="let schedule">
+          {{ schedule.startTime }}&ndash;{{ schedule.endTime }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="timeZone">
+        <th cdk-header-cell *cdkHeaderCellDef>Time zone</th>
+        <td cdk-cell *cdkCellDef="let schedule">{{ schedule.timeZoneId }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="status">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let schedule">
+          {{ schedule.isDisabled ? 'Disabled' : 'Enabled' }}
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let schedule" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', groupId, 'schedules', schedule.id, 'edit']"
+            cTooltip="Edit schedule"
+            aria-label="Edit schedule"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete schedule"
+            aria-label="Delete schedule"
+            (click)="deleteSchedule(schedule)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

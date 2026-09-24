@@ -1,0 +1,288 @@
+name: 'Ninlil Pipeline'
+##
+## The build, test, and publish pipeline shared by every entry point: branch builds
+## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
+##
+## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
+## needs only Docker (with buildx and the containerd image store), git, curl, and jq -- never a
+## matching .NET, Node.js, or Java installation. Each stage cross-compiles on the runner's own
+## architecture, so any 'archlinux' runner can build every platform, including both images.
+##
+on:
+  workflow_call:
+    inputs:
+      ##
+      kind:
+        description: >-
+          'prerelease' for a branch build, 'release' for a release branch build, or 'verify' to
+          run only the tests (pull requests).
+        required: true
+        type: string
+env:
+  REGISTRY: 'git.lantea.one'
+  IMAGE: 'git.lantea.one/lantea.one/ninlil'
+  PLATFORMS: 'linux/amd64,linux/arm64'
+jobs:
+  ##
+  version:
+    name: 'Compute Version'
+    if: >-
+      inputs.kind != 'verify'
+    runs-on: 'archlinux'
+    outputs:
+      version: '${{ steps.version.outputs.version }}'
+      assembly-version: '${{ steps.version.outputs.assembly-version }}'
+      package-version: '${{ steps.version.outputs.package-version }}'
+      image-version: '${{ steps.version.outputs.image-version }}'
+      prerelease: '${{ steps.version.outputs.prerelease }}'
+      short-sha: '${{ steps.version.outputs.short-sha }}'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          fetch-depth: 0
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Require Release Commits to Come From main'
+        if: >-
+          inputs.kind == 'release'
+        run: |-
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${{ forgejo.sha }}" origin/main; then
+            echo "::error::Release branch ${{ forgejo.ref_name }} points at ${{ forgejo.sha }}, which is not on main. Releases can only be cut from main."
+            exit 1
+          fi
+        shell: 'bash'
+      ##
+      - name: 'Compute Version'
+        id: 'version'
+        env:
+          BUILD_KIND: '${{ inputs.kind }}'
+          REF_NAME: '${{ forgejo.ref_name }}'
+          COMMIT_SHA: '${{ forgejo.sha }}'
+        run: |-
+          ./.forgejo/scripts/compute-version.sh
+        shell: 'bash'
+  ##
+  test-dotnet:
+    name: 'Test .NET'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Format Check and Build'
+        run: |-
+          docker buildx build --progress=plain --target test-dotnet --load \
+            --tag "ninlil-test:${{ forgejo.run_id }}" .
+        shell: 'bash'
+      ##
+      - name: 'Run Every Test Project'
+        run: |-
+          # Some tests start their own database containers through the Docker socket; host
+          # networking lets them reach those containers' published ports on localhost.
+          docker run --rm --network host \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            "ninlil-test:${{ forgejo.run_id }}"
+        shell: 'bash'
+      ##
+      - name: 'Remove the Test Image'
+        if: >-
+          always()
+        run: |-
+          docker image rm --force "ninlil-test:${{ forgejo.run_id }}" || true
+        shell: 'bash'
+  ##
+  test-admin-console:
+    name: 'Test Admin Console'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Lint, Format Check, and Test'
+        run: |-
+          docker buildx build --progress=plain --target test-admin-console .
+        shell: 'bash'
+  ##
+  binaries:
+    name: 'Build Binaries'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'test-dotnet'
+      - 'test-admin-console'
+    runs-on: 'archlinux'
+    env:
+      NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Build Linux and macOS Binaries'
+        run: |-
+          rm -rf dist
+          docker buildx build --progress=plain \
+            --target binaries \
+            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
+            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
+            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
+            --output type=local,dest=dist \
+            .
+        shell: 'bash'
+      ##
+      - name: 'Build the ninlil-bin Arch Linux Packages'
+        env:
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+        run: |-
+          ./.forgejo/scripts/arch-packages.sh dist
+          (cd dist && sha256sum ninlil-* > SHA256SUMS && cat SHA256SUMS)
+        shell: 'bash'
+      ##
+      - name: 'Stage Draft Release'
+        env:
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+          RELEASE_PRERELEASE: '${{ needs.version.outputs.prerelease }}'
+          IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
+          PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
+          COMMIT_SHA: '${{ forgejo.sha }}'
+          REF_NAME: '${{ forgejo.ref_name }}'
+        run: |-
+          ./.forgejo/scripts/release.sh stage dist
+        shell: 'bash'
+  ##
+  image:
+    name: 'Build and Push Image'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'test-dotnet'
+      - 'test-admin-console'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Build and Push linux/amd64 and linux/arm64'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
+          IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
+          PRERELEASE: '${{ needs.version.outputs.prerelease }}'
+        run: |-
+          # Registry credentials live in a throwaway configuration directory for this job only,
+          # never in the runner user's own ~/.docker, which every other job on this host shares.
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "${DOCKER_CONFIG}"' EXIT
+          printf '%s' "${NINLIL_CI_TOKEN}" \
+            | docker login "${REGISTRY}" --username "${NINLIL_CI_USER}" --password-stdin
+
+          # A pre-release is tagged with its own unique version only, so it can expire on its
+          # own; a release is also tagged latest.
+          tags=(--tag "${IMAGE}:${IMAGE_VERSION}")
+          if [[ "${PRERELEASE}" == 'false' ]]; then
+            tags+=(--tag "${IMAGE}:latest")
+          fi
+
+          docker buildx build --progress=plain \
+            --platform "${PLATFORMS}" \
+            --target runtime \
+            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
+            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
+            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
+            --build-arg "NINLIL_REVISION=${{ forgejo.sha }}" \
+            "${tags[@]}" \
+            --provenance=false \
+            --push \
+            .
+        shell: 'bash'
+  ##
+  packages:
+    name: 'Build and Push NuGet Packages'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'test-dotnet'
+      - 'test-admin-console'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Pack Every Library Project'
+        run: |-
+          rm -rf packages
+          docker buildx build --progress=plain \
+            --target packages \
+            --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
+            --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
+            --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
+            --output type=local,dest=packages \
+            .
+        shell: 'bash'
+      ##
+      - name: 'Push to the Forgejo NuGet Registry'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
+        run: |-
+          feed="${{ forgejo.server_url }}/api/packages/${{ forgejo.repository_owner }}/nuget/"
+          for package in packages/*.nupkg; do
+            echo "Pushing $(basename "${package}")"
+            curl --fail-with-body --silent --show-error \
+              --user "${NINLIL_CI_USER}:${NINLIL_CI_TOKEN}" \
+              --upload-file "${package}" \
+              "${feed}"
+          done
+        shell: 'bash'
+  ##
+  publish:
+    name: 'Publish Release'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'binaries'
+      - 'image'
+      - 'packages'
+    runs-on: 'archlinux'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Publish the Staged Release'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+        run: |-
+          ./.forgejo/scripts/release.sh publish
+        shell: 'bash'

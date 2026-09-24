@@ -1,0 +1,148 @@
+<div class="list-header">
+  <h1>Client Groups</h1>
+  <a cButton color="primary" routerLink="/client-groups/new">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    New client group
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (groups().length === 0) {
+  <app-empty-state
+    icon="cilGroup"
+    heading="No client groups yet"
+    description="A client group matches queries by source network and controls which filter lists apply to them. Create your first one to get started."
+  >
+    <a cButton color="primary" routerLink="/client-groups/new">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      New client group
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="groups()" class="group-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let group">{{ group.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="default">
+        <th cdk-header-cell *cdkHeaderCellDef>Default</th>
+        <td cdk-cell *cdkCellDef="let group">
+          @if (group.isDefault) {
+            <c-badge color="success">Default</c-badge>
+          } @else {
+            <button
+              cButton
+              size="sm"
+              variant="ghost"
+              color="secondary"
+              cTooltip="Make this the default client group"
+              (click)="makeDefault(group)"
+            >
+              Make default
+            </button>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let group">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="group.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="group.isDisabled ? 'Enable this client group' : 'Disable this client group'"
+            (click)="toggleDisabled(group)"
+          >
+            {{ group.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let group" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', group.id, 'networks']"
+            cTooltip="Manage networks"
+            aria-label="Manage networks"
+          >
+            <svg cIcon name="cilLan" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', group.id, 'list-assignments']"
+            cTooltip="Manage filter list assignments"
+            aria-label="Manage filter list assignments"
+          >
+            <svg cIcon name="cilFilter" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', group.id, 'schedules']"
+            cTooltip="Manage schedules"
+            aria-label="Manage schedules"
+          >
+            <svg cIcon name="cilMoon" size="sm"></svg>
+          </a>
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/client-groups', group.id, 'edit']"
+            cTooltip="Edit client group"
+            aria-label="Edit client group"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            cTooltip="Delete client group"
+            aria-label="Delete client group"
+            (click)="deleteGroup(group)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

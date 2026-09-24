@@ -1,0 +1,76 @@
+@if (errorMessage()) {
+  <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+}
+
+@if (loading()) {
+  <c-spinner size="sm" />
+} @else {
+  <div class="pause-status">
+    @if (isCurrentlyPaused()) {
+      <c-badge color="danger">Paused until {{ pausedUntilUtc() | date: 'medium' }}</c-badge>
+    } @else {
+      <c-badge color="secondary">Not paused</c-badge>
+    }
+  </div>
+
+  <div class="quick-durations">
+    <button
+      cButton
+      color="danger"
+      variant="outline"
+      [disabled]="submitting()"
+      (click)="pauseFor(15)"
+    >
+      15 min
+    </button>
+    <button
+      cButton
+      color="danger"
+      variant="outline"
+      [disabled]="submitting()"
+      (click)="pauseFor(60)"
+    >
+      1 hour
+    </button>
+    <button
+      cButton
+      color="danger"
+      variant="outline"
+      [disabled]="submitting()"
+      (click)="pauseUntilTomorrowMorning()"
+    >
+      Until tomorrow morning
+    </button>
+  </div>
+
+  <div class="custom-duration">
+    <label cLabel for="instant-pause-custom-minutes">Custom duration (minutes)</label>
+    <div class="custom-duration-row">
+      <input
+        cFormControl
+        type="number"
+        min="1"
+        id="instant-pause-custom-minutes"
+        [formControl]="customMinutesControl"
+      />
+      <button
+        cButton
+        color="danger"
+        [disabled]="submitting() || customMinutesControl.invalid"
+        (click)="pauseCustomDuration()"
+      >
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Pause
+        }
+      </button>
+    </div>
+  </div>
+
+  @if (isCurrentlyPaused()) {
+    <button cButton color="secondary" [disabled]="submitting()" (click)="resume()">
+      Resume now
+    </button>
+  }
+}

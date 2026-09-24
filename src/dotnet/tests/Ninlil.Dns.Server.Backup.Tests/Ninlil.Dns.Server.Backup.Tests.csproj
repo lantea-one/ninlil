@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    This test project seeds a real, Data Protection encrypted secret to verify a restored
+    archive's own ciphertext stays decryptable, so it needs the real
+    Microsoft.AspNetCore.DataProtection implementation, which ships inside the ASP.NET Core
+    shared framework rather than as an ordinary NuGet package, the same FrameworkReference every
+    other project in this solution that touches Data Protection directly already uses.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.Abstractions\Ninlil.Dns.Data.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Core\Ninlil.Dns.Server.Core.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Backup\Ninlil.Dns.Server.Backup.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.Abstractions\Ninlil.Dhcp.Data.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dhcp.Data.EntityFrameworkCore\Ninlil.Dhcp.Data.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+</Project>

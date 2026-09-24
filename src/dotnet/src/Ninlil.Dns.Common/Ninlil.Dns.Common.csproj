@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library provides the shared DNS contracts -- enumerations, value objects, and
+            constants -- that every other Ninlil DNS project builds on. Nothing in here talks
+            to a network socket or a database; it only describes the shapes and vocabulary that
+            the DNS, DHCPv4, and DHCPv6 protocols use, so that the rest of the solution has a
+            single, shared source of truth for them.
+        </Description>
+    <PackageId>Ninlil.Dns.Common</PackageId>
+  </PropertyGroup>
+
+  <!-- ConditionalPackageProject:Ninlil.Common.Extension -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Extension\Ninlil.Common.Extension.csproj')">
+    <PackageReference Include="Ninlil.Common.Extension" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Extension -->
+
+  <!-- ConditionalPackageProject:Ninlil.Common.Serializer -->
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <ProjectReference Include="..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Common.Serializer\Ninlil.Common.Serializer.csproj')">
+    <PackageReference Include="Ninlil.Common.Serializer" Version="*" />
+  </ItemGroup>
+  <!-- EndConditionalPackageProject:Ninlil.Common.Serializer -->
+</Project>

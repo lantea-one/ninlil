@@ -1,0 +1,118 @@
+<div class="record-list-header">
+  <div>
+    <a routerLink="/zones" class="back-link">
+      <svg cIcon name="cilArrowLeft" size="sm"></svg>
+      Zones
+    </a>
+    <h1>{{ zoneName() ?? 'Records' }}</h1>
+  </div>
+  <a cButton color="primary" [routerLink]="['/zones', zoneId, 'records', 'new']">
+    <svg cIcon name="cilPlus" size="sm"></svg>
+    Add record
+  </a>
+</div>
+
+@if (errorMessage()) {
+  <p class="error-message">{{ errorMessage() }}</p>
+}
+
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (records().length === 0) {
+  <app-empty-state
+    icon="cilList"
+    heading="No records yet"
+    description="This zone has no records yet -- the first one you add must be its own SOA record."
+  >
+    <a cButton color="primary" [routerLink]="['/zones', zoneId, 'records', 'new']">
+      <svg cIcon name="cilPlus" size="sm"></svg>
+      Add record
+    </a>
+  </app-empty-state>
+} @else {
+  <div class="table-card">
+    <table cdk-table cTable hover responsive [dataSource]="records()" class="record-table">
+      <ng-container cdkColumnDef="name">
+        <th cdk-header-cell *cdkHeaderCellDef>Name</th>
+        <td cdk-cell *cdkCellDef="let record">{{ record.name }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="type">
+        <th cdk-header-cell *cdkHeaderCellDef>Type</th>
+        <td cdk-cell *cdkCellDef="let record">
+          <c-badge color="info">{{ record.type }}</c-badge>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="ttl">
+        <th cdk-header-cell *cdkHeaderCellDef>TTL</th>
+        <td cdk-cell *cdkCellDef="let record">{{ record.timeToLiveSeconds }}s</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="disabled">
+        <th cdk-header-cell *cdkHeaderCellDef>Status</th>
+        <td cdk-cell *cdkCellDef="let record">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            [color]="record.isDisabled ? 'secondary' : 'success'"
+            [cTooltip]="record.isDisabled ? 'Enable this record' : 'Disable this record'"
+            (click)="toggleDisabled(record)"
+          >
+            {{ record.isDisabled ? 'Disabled' : 'Enabled' }}
+          </button>
+        </td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="actions">
+        <th cdk-header-cell *cdkHeaderCellDef></th>
+        <td cdk-cell *cdkCellDef="let record" class="actions-cell">
+          <a
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [routerLink]="['/zones', zoneId, 'records', record.id, 'edit']"
+            cTooltip="Edit record"
+            aria-label="Edit record"
+          >
+            <svg cIcon name="cilPencil" size="sm"></svg>
+          </a>
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="danger"
+            [disabled]="record.type === soaType"
+            [cTooltip]="
+              record.type === soaType
+                ? 'Delete the zone itself to remove its SOA record'
+                : 'Delete record'
+            "
+            aria-label="Delete record"
+            (click)="deleteRecord(record)"
+          >
+            <svg cIcon name="cilTrash" size="sm"></svg>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-row *cdkRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+
+    <app-coreui-pagination
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [totalCount]="totalCount()"
+      (pageChange)="onPageChange($event)"
+    />
+  </div>
+}
+
+<app-confirm-dialog
+  [visible]="confirmDialogVisible()"
+  [data]="confirmDialogData()"
+  (resolved)="onConfirmDialogResolved($event)"
+/>

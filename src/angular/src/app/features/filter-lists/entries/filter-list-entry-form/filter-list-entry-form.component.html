@@ -1,0 +1,138 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else if (isReadOnly()) {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ listName() }} is subscribed</strong>
+    </c-card-header>
+    <c-card-body>
+      <p>
+        This list's own entries are fetched and wholesale-replaced from its own subscription URL on
+        a schedule -- they cannot be added or edited by hand while it stays subscribed. Change the
+        list's own source to "Local" on its edit page first if manual entries are genuinely wanted.
+      </p>
+    </c-card-body>
+    <c-card-footer class="d-flex justify-content-end">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/filter-lists', listId, 'entries']"
+      >
+        Back to entries
+      </a>
+    </c-card-footer>
+  </c-card>
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>{{ isEditMode ? 'Edit entry' : 'Add entry' }}</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="entry-form">
+        @if (isDomainKindList()) {
+          <div class="field">
+            <label cLabel for="filter-list-entry-kind">Kind</label>
+            <select cSelect id="filter-list-entry-kind" formControlName="kind">
+              @for (kind of kindOptions; track kind) {
+                <option [value]="kind">{{ kind }}</option>
+              }
+            </select>
+          </div>
+          <p class="hint">
+            <strong>Domain</strong> matches the entry's exact name and every subdomain below it --
+            an entry of <code>ads.example.com</code> also covers
+            <code>tracker.ads.example.com</code>, with no wildcard syntax needed for that.
+            <strong>Wildcard</strong> is a shell-style glob (<code>*</code> for any run of
+            characters, <code>?</code> for exactly one) anchored to the whole queried name, so
+            <code>*.ads.example.com</code> matches subdomains but not
+            <code>ads.example.com</code> itself. <strong>Regex</strong> is a raw .NET regular
+            expression matched anywhere in the queried name, not automatically anchored -- add your
+            own <code>^</code>/<code>$</code>
+            if the whole name must match. A Wildcard/Regex pattern is compiled and checked here, and
+            again by the server, before it can be saved, so a malformed one is rejected immediately
+            rather than silently matching nothing later; a pattern that ever times out compiling or
+            matching (250ms limit, guarding against a runaway pattern) is likewise treated as no
+            match at query time, never as an error.
+          </p>
+        } @else {
+          <p class="hint">
+            This list matches by IP address or CIDR network, not domain name -- enter a single
+            address (e.g. <code>203.0.113.5</code>) or a network in CIDR form (e.g.
+            <code>203.0.113.0/24</code>).
+          </p>
+        }
+
+        <div class="field full-width">
+          <label cLabel for="filter-list-entry-value">Value</label>
+          <input
+            cFormControl
+            id="filter-list-entry-value"
+            formControlName="value"
+            [placeholder]="valuePlaceholder()"
+          />
+          @if (form.controls.value.hasError('required')) {
+            <div class="field-error">A value is required.</div>
+          } @else if (form.controls.value.hasError('invalidPattern')) {
+            <div class="field-error">This is not a valid {{ patternKindLabel() }} pattern.</div>
+          }
+          @if (isPatternKind() && !form.controls.value.hasError('invalidPattern')) {
+            <p class="hint">
+              @if (patternKindLabel() === 'wildcard') {
+                Shell-style glob: <code>*</code> matches any run of characters,
+                <code>?</code> matches one.
+              } @else {
+                A .NET regular expression, matched against the queried name anywhere (not
+                automatically anchored).
+              }
+            </p>
+          }
+          @if (previewResult(); as preview) {
+            <div class="preview-panel">
+              @if (!preview.isValid) {
+                <p class="preview-error">{{ preview.error }}</p>
+              } @else {
+                <p class="preview-label">Preview against a sample domain set:</p>
+                <div class="preview-matches">
+                  @for (match of preview.matches; track match.domain) {
+                    <c-badge [color]="match.isMatch ? 'danger' : 'secondary'">{{
+                      match.domain
+                    }}</c-badge>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="field full-width">
+          <label cLabel for="filter-list-entry-comment">Comment</label>
+          <input cFormControl id="filter-list-entry-comment" formControlName="comment" />
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end gap-2">
+      <a
+        cButton
+        color="secondary"
+        variant="ghost"
+        [routerLink]="['/filter-lists', listId, 'entries']"
+      >
+        Cancel
+      </a>
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}

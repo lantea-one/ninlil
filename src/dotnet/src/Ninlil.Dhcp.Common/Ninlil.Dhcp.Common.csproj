@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>
+            This library is Ninlil's DHCPv4 wire-format layer: the RFC 2131 Section 2
+            fixed-format message header and the RFC 2132 tag/length/value options area, modeled
+            as a clean, storage- and transport-agnostic Dhcpv4Message any DHCPv4 transport or
+            server engine can build on. Nothing in here talks to a network socket or a database;
+            it only knows how to turn a Dhcpv4Message into raw bytes and back again. It needs
+            nothing beyond the base class library, the same "framework-free" posture
+            Ninlil.Dns.Common already established for the DNS wire-format layer.
+        </Description>
+    <PackageId>Ninlil.Dhcp.Common</PackageId>
+  </PropertyGroup>
+</Project>

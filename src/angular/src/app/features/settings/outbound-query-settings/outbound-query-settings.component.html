@@ -1,0 +1,69 @@
+@if (loading()) {
+  <c-spinner class="loading-spinner" />
+} @else {
+  <c-card class="form-card">
+    <c-card-header>
+      <strong>Outbound Query Hardening</strong>
+    </c-card-header>
+
+    <c-card-body>
+      @if (errorMessage()) {
+        <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+      }
+
+      <form cForm [formGroup]="form" class="settings-form">
+        <c-form-check class="mb-3">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="outbound-query-pool-enable"
+            formControlName="enableSourcePortPool"
+          />
+          <label cFormCheckLabel for="outbound-query-pool-enable"
+            >Randomize the source port of this server's own outbound queries</label
+          >
+        </c-form-check>
+
+        <div cFormText class="override-note">
+          A pooled, unpredictable source port hardens this server's own recursive/forwarded queries
+          against off-path response spoofing -- a pure hardening improvement with no new attack
+          surface, on by default.
+        </div>
+
+        <div class="field">
+          <label cLabel for="outbound-query-pool-size">Pool size per address family</label>
+          <input
+            cFormControl
+            id="outbound-query-pool-size"
+            type="number"
+            min="1"
+            formControlName="poolSizePerAddressFamily"
+          />
+        </div>
+
+        <div class="field">
+          <label cLabel for="outbound-query-excluded-ports"
+            >Excluded source ports (one per line)</label
+          >
+          <textarea
+            cFormControl
+            id="outbound-query-excluded-ports"
+            formControlName="excludedSourcePortsText"
+            rows="3"
+            placeholder="51820"
+          ></textarea>
+        </div>
+      </form>
+    </c-card-body>
+
+    <c-card-footer class="d-flex justify-content-end">
+      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+        @if (submitting()) {
+          <c-spinner size="sm" />
+        } @else {
+          Save
+        }
+      </button>
+    </c-card-footer>
+  </c-card>
+}
