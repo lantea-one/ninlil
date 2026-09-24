@@ -6,6 +6,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -593,6 +594,137 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             );
             await Assert.ThrowsAnyAsync<Exception>(() =>
                 sslStream.AuthenticateAsClientAsync("localhost")
+            );
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    /// <summary>
+    ///     This method starts a dedicated pipeline/listener pair bound to the given listen
+    ///     addresses on a free port, isolated from <see cref="InitializeAsync" />'s shared one.
+    /// </summary>
+    private static async Task<(
+        DnsQueryProcessingPipeline Pipeline,
+        DnsOverTlsListener Listener,
+        int Port
+    )> StartListenAddressListenerAsync(string listenAddresses, ILogger<DnsOverTlsListener> logger)
+    {
+        int port = LocalAddresses.GetFreePort();
+        DnsQueryProcessingPipeline pipeline = new(
+            new DnsQueryDispatcher(
+                [new AlwaysAnswerAResolver(ExpectedAnswer)],
+                new NoOpEventPublisher()
+            ),
+            new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
+                new DnsQueryProcessingPipelineOptions()
+            ),
+            NullLogger<DnsQueryProcessingPipeline>.Instance
+        );
+        await pipeline.StartAsync(CancellationToken.None);
+
+        DnsOverTlsListener listener = new(
+            pipeline,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverTlsOptions>(
+                new DnsOverTlsOptions
+                {
+                    Enable = true,
+                    Port = port,
+                    ListenAddresses = listenAddresses,
+                }
+            ),
+            logger
+        );
+        await listener.StartAsync(CancellationToken.None);
+        await Task.Delay(200);
+
+        return (pipeline, listener, port);
+    }
+
+    /// <summary>
+    ///     This method runs one full TLS query against an address, returning <see langword="null" />
+    ///     when the connection is refused.
+    /// </summary>
+    private static async Task<DnsMessage> TryQueryAsync(IPAddress address, int port)
+    {
+        using TcpClient client = new(address.AddressFamily);
+
+        try
+        {
+            await client.ConnectAsync(address, port);
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+
+        using SslStream sslStream = new(
+            client.GetStream(),
+            leaveInnerStreamOpen: false,
+            (_, _, _, _) => true
+        );
+        await sslStream.AuthenticateAsClientAsync("localhost");
+        await WriteQueryAsync(sslStream, BuildQuery(99, "listen.example."));
+        return await ReadResponseAsync(sslStream);
+    }
+
+    [Fact]
+    public async Task ListenAddresses_LoopbackOnly_AnswersThereButNotOnAnotherLocalAddress()
+    {
+        IPAddress other = LocalAddresses.OtherLoopback();
+
+        if (other is null)
+            return;
+
+        (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                "127.0.0.1",
+                NullLogger<DnsOverTlsListener>.Instance
+            );
+
+        try
+        {
+            DnsMessage response = await TryQueryAsync(IPAddress.Loopback, port);
+            Assert.NotNull(response);
+            Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+
+            Assert.Null(await TryQueryAsync(other, port));
+        }
+        finally
+        {
+            await StopAsync(pipeline, listener);
+        }
+    }
+
+    [Fact]
+    public async Task ListenAddresses_ABadAddress_IsLoggedAndReportedWhileTheOthersAnswer()
+    {
+        IPAddress other = LocalAddresses.OtherLoopback();
+
+        if (other is null)
+            return;
+
+        CapturingLogger<DnsOverTlsListener> logger = new();
+        (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
+                logger
+            );
+
+        try
+        {
+            Assert.True(listener.IsListening);
+            Assert.NotNull(await TryQueryAsync(IPAddress.Loopback, port));
+            Assert.NotNull(await TryQueryAsync(other, port));
+
+            string failed = Assert.Single(listener.FailedListenAddresses);
+            Assert.StartsWith("192.0.2.1 (", failed);
+            Assert.Contains(
+                logger.Errors,
+                message => message.Contains("DNS-over-TLS") && message.Contains("192.0.2.1")
             );
         }
         finally

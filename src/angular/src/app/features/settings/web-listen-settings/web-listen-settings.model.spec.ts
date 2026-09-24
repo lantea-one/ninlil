@@ -1,4 +1,9 @@
-import { buildPfxPasswordPatchField, joinLines, splitLines } from './web-listen-settings.model';
+import {
+  buildPfxPasswordPatchField,
+  joinLines,
+  splitLines,
+  splitListenAddresses,
+} from './web-listen-settings.model';
 
 describe('web-listen-settings.model', () => {
   it('splitLines trims and drops empty entries', () => {
@@ -25,5 +30,13 @@ describe('web-listen-settings.model', () => {
     expect(buildPfxPasswordPatchField('a-real-password')).toEqual({
       pfxPassword: 'a-real-password',
     });
+  });
+  it('splitListenAddresses accepts new lines, commas and spaces, and empty means every address', () => {
+    expect(splitListenAddresses('192.168.1.10, ::1\n127.0.0.1')).toEqual([
+      '192.168.1.10',
+      '::1',
+      '127.0.0.1',
+    ]);
+    expect(splitListenAddresses('')).toEqual([]);
   });
 });

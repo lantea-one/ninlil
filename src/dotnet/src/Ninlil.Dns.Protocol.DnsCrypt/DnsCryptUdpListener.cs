@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.DnsCrypt;
 
 // Define our namespace.
@@ -22,7 +23,7 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
 /// <param name="store">The store this resolver's own tracked certificates are read from.</param>
 /// <param name="options">
-///     This transport's own listen port and provider name -- read via
+///     This transport's own listen addresses, port and provider name -- read via
 ///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
 ///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
@@ -44,11 +45,11 @@ public sealed class DnsCryptUdpListener(
     private const int MaximumDatagramSize = 65527;
 
     /// <summary>
-    ///     This property contains the listening socket, once <see cref="ExecuteAsync" /> has
-    ///     bound one -- kept here so <see cref="StopAsync" /> can close it, unblocking the
-    ///     receive loop's own pending receive call during shutdown.
+    ///     This property contains the bound sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
+    ///     close them, unblocking each receive loop's pending receive call during shutdown.
     /// </summary>
-    private Socket _socket;
+    private ListenSocketSet _sockets = ListenSocketSet.Empty;
 
     /// <summary>
     ///     This property reports whether this listener's own socket is currently bound and
@@ -57,6 +58,12 @@ public sealed class DnsCryptUdpListener(
     ///     that it was registered/configured.
     /// </summary>
     public bool IsListening { get; private set; }
+
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _sockets.FailedAddresses;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -80,12 +87,43 @@ public sealed class DnsCryptUdpListener(
                 options.CurrentValue.ProviderName
             );
 
-        _socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        _socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        _socket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.CurrentValue.Port));
+        _sockets = ListenSocketSet.Bind(
+            "DNSCrypt (UDP)",
+            options.CurrentValue.ListenAddresses,
+            options.CurrentValue.Port,
+            ProtocolType.Udp,
+            logger
+        );
+
+        if (_sockets.Sockets.Count == 0)
+            return;
+
         IsListening = true;
 
+        await Task.WhenAll(
+            _sockets.Sockets.Select(socket =>
+                ReceiveLoopAsync(socket, providerCertificateName, stoppingToken)
+            )
+        );
+    }
+
+    /// <summary>
+    ///     This method receives packets on one socket until shutdown. Each listen address gets its
+    ///     own loop, and every response leaves through the socket its query arrived on.
+    /// </summary>
+    private async Task ReceiveLoopAsync(
+        Socket socket,
+        DnsName providerCertificateName,
+        CancellationToken stoppingToken
+    )
+    {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
+        EndPoint anySender = new IPEndPoint(
+            socket.AddressFamily == AddressFamily.InterNetworkV6
+                ? IPAddress.IPv6Any
+                : IPAddress.Any,
+            0
+        );
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -93,11 +131,7 @@ public sealed class DnsCryptUdpListener(
 
             try
             {
-                result = await _socket.ReceiveFromAsync(
-                    receiveBuffer,
-                    new IPEndPoint(IPAddress.IPv6Any, 0),
-                    stoppingToken
-                );
+                result = await socket.ReceiveFromAsync(receiveBuffer, anySender, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -128,7 +162,7 @@ public sealed class DnsCryptUdpListener(
                 store,
                 logger,
                 (responseBytes, sendToken) =>
-                    SendResponseAsync(responseBytes, senderEndpoint, sendToken),
+                    SendResponseAsync(socket, responseBytes, senderEndpoint, sendToken),
                 stoppingToken
             );
         }
@@ -139,6 +173,7 @@ public sealed class DnsCryptUdpListener(
     ///     arrived from.
     /// </summary>
     private async ValueTask SendResponseAsync(
+        Socket socket,
         ReadOnlyMemory<byte> responseBytes,
         IPEndPoint senderEndpoint,
         CancellationToken stoppingToken
@@ -146,7 +181,7 @@ public sealed class DnsCryptUdpListener(
     {
         try
         {
-            await _socket.SendToAsync(responseBytes, senderEndpoint, stoppingToken);
+            await socket.SendToAsync(responseBytes, senderEndpoint, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -162,7 +197,7 @@ public sealed class DnsCryptUdpListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
-        _socket?.Close();
+        _sockets.Close();
         await base.StopAsync(cancellationToken);
     }
 }

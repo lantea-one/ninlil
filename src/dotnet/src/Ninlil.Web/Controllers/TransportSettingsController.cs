@@ -10,6 +10,7 @@ using Ninlil.Dns.Protocol.DnsOverTls;
 using Ninlil.Dns.Protocol.Plain;
 using Ninlil.Dns.Server.Core.Certificates;
 using Ninlil.Dns.Server.Core.Services;
+using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.DnsCrypt;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Examples.Settings;
@@ -162,6 +163,16 @@ public class TransportSettingsController(
                 )
             );
 
+        // Every Plain DNS field is restart-required, so the "touched a restart-required field"
+        // flag the helper sets has nothing to decide here.
+        bool touchedRestartRequiringField = false;
+        AddListenAddressesSetting(
+            patch,
+            PlainProtocolOptions.SectionName,
+            settings,
+            ref touchedRestartRequiringField
+        );
+
         if (
             TryGetDuration(
                 patch,
@@ -258,6 +269,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
+
+        AddListenAddressesSetting(
+            patch,
+            DnsOverTlsOptions.SectionName,
+            settings,
+            ref touchedRestartRequiringField
+        );
 
         if (
             TryGetDuration(
@@ -473,6 +491,13 @@ public class TransportSettingsController(
             touchedRestartRequiringField = true;
         }
 
+        AddListenAddressesSetting(
+            patch,
+            DnsOverQuicOptions.SectionName,
+            settings,
+            ref touchedRestartRequiringField
+        );
+
         if (
             TryGetDuration(
                 patch,
@@ -594,6 +619,13 @@ public class TransportSettingsController(
             );
             touchedRestartRequiringField = true;
         }
+
+        AddListenAddressesSetting(
+            patch,
+            DnsCryptOptions.SectionName,
+            settings,
+            ref touchedRestartRequiringField
+        );
 
         if (patch.TryGetMergePatchField("providerName", out JsonElement providerName))
         {
@@ -861,6 +893,61 @@ public class TransportSettingsController(
         };
 
     /// <summary>
+    ///     This method reads an optional <c>listenAddresses</c> merge-patch field -- a JSON array of
+    ///     IP address literals, empty meaning "every address" -- validates it, and adds the setting
+    ///     to write. Stored as one comma-separated string (see
+    ///     <see cref="ListenAddressList" /> for why), so the transport's <c>NINLIL_</c>
+    ///     environment variable can hold the same value. A malformed address, or one already
+    ///     covered by a wildcard in the same list, is a 400 naming the entry, rather than a value
+    ///     written to disk that the listener would then have to skip at startup.
+    /// </summary>
+    private static void AddListenAddressesSetting(
+        JsonElement patch,
+        string sectionName,
+        List<PresetConfigurationSetting> settings,
+        ref bool touchedRestartRequiringField
+    )
+    {
+        if (!patch.TryGetMergePatchField("listenAddresses", out JsonElement element))
+            return;
+
+        if (
+            element.ValueKind != JsonValueKind.Array
+            || element.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String)
+        )
+            throw new ValidationException(
+                "'listenAddresses' must be a JSON array of IP address strings (for example "
+                    + "[\"192.168.1.1\", \"::1\"]), or an empty array to listen on every address."
+            );
+
+        if (
+            !ListenAddressList.TryValidate(
+                element.EnumerateArray().Select(item => item.GetString()),
+                out List<System.Net.IPAddress> addresses,
+                out string error
+            )
+        )
+            throw new ValidationException($"'listenAddresses': {error}");
+
+        settings.Add(
+            new PresetConfigurationSetting(
+                sectionName,
+                nameof(PlainProtocolOptions.ListenAddresses),
+                ListenAddressList.Join(addresses)
+            )
+        );
+        touchedRestartRequiringField = true;
+    }
+
+    /// <summary>
+    ///     This method turns a configured <c>ListenAddresses</c> string into the array the REST
+    ///     API reports, entry by entry as written -- including any entry the listener had to skip,
+    ///     so an operator can see and fix it.
+    /// </summary>
+    private static List<string> ToListenAddressList(string configured) =>
+        [.. ListenAddressList.Split(configured)];
+
+    /// <summary>
     ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
     ///     string, distinguishing "absent" from "present but unparseable" for the caller -- the
     ///     same helper <see cref="RecursiveSettingsController" /> already establishes.
@@ -1055,13 +1142,19 @@ public class TransportSettingsController(
 
     /// <summary>This method builds <see cref="PlainTransportSettingsDetail" /> from a live snapshot.</summary>
     private static PlainTransportSettingsDetail ToDetail(PlainProtocolOptions options) =>
-        new(options.Port, options.TcpIdleTimeout, options.MaxConcurrentTcpConnections);
+        new(
+            options.Port,
+            ToListenAddressList(options.ListenAddresses),
+            options.TcpIdleTimeout,
+            options.MaxConcurrentTcpConnections
+        );
 
     /// <summary>This method builds <see cref="DnsOverTlsSettingsDetail" /> from a live snapshot.</summary>
     private static DnsOverTlsSettingsDetail ToDetail(DnsOverTlsOptions options) =>
         new(
             options.Enable,
             options.Port,
+            ToListenAddressList(options.ListenAddresses),
             options.IdleTimeout,
             options.MaxConcurrentConnections,
             ToCertificateDetail(options.Certificate)
@@ -1076,6 +1169,7 @@ public class TransportSettingsController(
         new(
             options.Enable,
             options.Port,
+            ToListenAddressList(options.ListenAddresses),
             options.IdleTimeout,
             options.MaxConcurrentBidirectionalStreams,
             ToCertificateDetail(options.Certificate)
@@ -1086,6 +1180,7 @@ public class TransportSettingsController(
         new(
             options.Enable,
             options.Port,
+            ToListenAddressList(options.ListenAddresses),
             options.ProviderName,
             options.TcpIdleTimeout,
             options.MaxConcurrentTcpConnections,

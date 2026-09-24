@@ -433,4 +433,110 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             );
         }
     }
+
+    [Theory]
+    [InlineData("plain", "Plain")]
+    [InlineData("dns-over-tls", "DnsOverTls")]
+    [InlineData("dns-over-quic", "DnsOverQuic")]
+    [InlineData("dnscrypt", "DnsCrypt")]
+    public async Task PatchListenAddresses_WritesTheNormalizedCommaSeparatedList(
+        string transportPath,
+        string sectionName
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        string url = $"/api/transport-settings/{transportPath}";
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest(
+                    url,
+                    new { listenAddresses = new[] { " 127.0.0.1", "::1", "127.0.0.1" } }
+                )
+            );
+            response.EnsureSuccessStatusCode();
+
+            // Trimmed and de-duplicated, stored as the one string an environment variable can
+            // also hold.
+            Assert.Equal("127.0.0.1, ::1", ReadListenAddresses(sectionName));
+        }
+        finally
+        {
+            // This host is shared with every other test class; put the default back.
+            (
+                await client.SendAsync(
+                    PatchRequest(url, new { listenAddresses = Array.Empty<string>() })
+                )
+            ).EnsureSuccessStatusCode();
+        }
+
+        Assert.Equal("", ReadListenAddresses(sectionName));
+    }
+
+    [Theory]
+    [InlineData("not-an-address", "is not a valid IP address")]
+    [InlineData("127.1", "is not a valid IP address")]
+    [InlineData("[::1]:53", "is not a valid IP address")]
+    [InlineData("010.0.0.1", "is not a valid IP address")]
+    public async Task PatchListenAddresses_WithAMalformedAddress_ReturnsBadRequestNamingIt(
+        string entry,
+        string expectedMessage
+    )
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/transport-settings/dns-over-tls",
+                new { listenAddresses = new[] { "127.0.0.1", entry } }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains(expectedMessage, body);
+        Assert.Contains(entry, body);
+    }
+
+    [Fact]
+    public async Task PatchListenAddresses_WithAnAddressAWildcardAlreadyCovers_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest(
+                "/api/transport-settings/plain",
+                new { listenAddresses = new[] { "0.0.0.0", "192.168.1.1" } }
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("already covered by", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task PatchListenAddresses_ThatIsNotAnArrayOfStrings_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/transport-settings/plain", new { listenAddresses = "127.0.0.1" })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("must be a JSON array", await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    ///     This method reads one transport's stored <c>ListenAddresses</c> from this host's
+    ///     configuration file, or an empty string when it isn't set.
+    /// </summary>
+    private string ReadListenAddresses(string sectionName)
+    {
+        JsonObject root = (JsonObject)
+            JsonNode.Parse(File.ReadAllText(factory.RuntimeConfigurationFilePath));
+        return root["DnsServer"]?["Protocol"]?[sectionName]?["ListenAddresses"]?.GetValue<string>()
+            ?? string.Empty;
+    }
 }

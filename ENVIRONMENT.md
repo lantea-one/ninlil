@@ -31,9 +31,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **289 individual settings** across 57 bound configuration classes, plus **2 standalone**
+Total: **294 individual settings** across 57 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **298 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **303 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -141,10 +141,12 @@ default.
 | Variable | Controls | Default |
 |---|---|---|
 | `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT` | The plain UDP/TCP DNS port (RFC 1035). | `53` |
+| `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_MAX_CONCURRENT_TCP_CONNECTIONS` | Max simultaneous plain-DNS TCP connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_TCP_IDLE_TIMEOUT` | Idle timeout before an inactive plain-DNS TCP connection is closed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_ENABLE` | Whether DNS-over-TLS (RFC 7858) is enabled. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PORT` | The DoT listen port. | `853` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_MAX_CONCURRENT_CONNECTIONS` | Max simultaneous DoT connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_IDLE_TIMEOUT` | Idle timeout before an inactive DoT connection is closed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a custom PFX certificate for DoT (leave unset to use the shared auto-generated/ACME certificate). | *(empty)* |
@@ -164,6 +166,7 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE` | Whether DNS-over-QUIC (RFC 9250) is enabled. Needs `libmsquic` — included in the Docker image; install it yourself on a bare-metal host. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT` | The DoQ listen port. | `853` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_IDLE_TIMEOUT` | QUIC connection idle timeout. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_BIDIRECTIONAL_STREAMS` | Max concurrent bidirectional QUIC streams per connection. | `100` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoQ. | *(empty)* |
@@ -173,6 +176,7 @@ default.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_ENABLE` | Whether DNSCrypt v2 is enabled. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PORT` | The DNSCrypt UDP/TCP port. | `5353` |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_PROVIDER_NAME` | The DNSCrypt provider name clients use to build an `sdns://` stamp against this server. | *(empty — must be set to actually use DNSCrypt)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_MAX_CONCURRENT_TCP_CONNECTIONS` | Max simultaneous DNSCrypt TCP connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_CRYPT_TCP_IDLE_TIMEOUT` | Idle timeout before an inactive DNSCrypt TCP connection is closed. | `00:00:30` |
@@ -463,6 +467,7 @@ appearance/branding.
 |---|---|---|
 | `NINLIL_DNS_SERVER_WEB_HTTP_PORT` | The HTTP port serving the REST API/admin console (also redirects to HTTPS). | `80` |
 | `NINLIL_DNS_SERVER_WEB_HTTPS_PORT` | The HTTPS port serving the REST API, SignalR hub, admin console, and DNS-over-HTTPS. | `443` |
+| `NINLIL_DNS_SERVER_WEB_LISTEN_ADDRESSES` | Comma-separated IP addresses the HTTP and HTTPS ports listen on, and so the admin console, REST API and DNS-over-HTTPS (for example `192.168.1.10`); empty listens on every address. An address this host doesn't have is skipped; if none can be used, the listener falls back to loopback so the console can't be locked out. Applies on restart. | *(empty — every address)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for the web listener. | *(empty)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_PFX_PASSWORD` | Password for the custom PFX file above. | *(empty)* |
 | `NINLIL_DNS_SERVER_WEB_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted — the same file every TLS-based DNS transport shares by default. | `data/protocol-tls-certificate.pfx` |

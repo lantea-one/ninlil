@@ -19,6 +19,7 @@ public class WebListenSettingsDetailExample : IExamplesProvider<WebListenSetting
         new(
             80,
             443,
+            [],
             new TlsCertificateSettingsDetail("", false, ["localhost"], TimeSpan.FromMinutes(5), [])
         );
 }

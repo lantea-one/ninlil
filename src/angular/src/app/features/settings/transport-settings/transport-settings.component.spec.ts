@@ -40,7 +40,12 @@ describe('TransportSettingsComponent', () => {
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
 
     apiSpy.apiTransportSettingsPlainGet.and.returnValue(
-      of({ port: 53, tcpIdleTimeout: '00:00:30', maxConcurrentTcpConnections: 512 }),
+      of({
+        port: 53,
+        listenAddresses: ['127.0.0.1', '::1'],
+        tcpIdleTimeout: '00:00:30',
+        maxConcurrentTcpConnections: 512,
+      }),
     );
     apiSpy.apiTransportSettingsDnsOverTlsGet.and.returnValue(
       of({
@@ -222,5 +227,33 @@ describe('TransportSettingsComponent', () => {
     await fixture.componentInstance.saveDnsCrypt();
 
     expect(fixture.componentInstance.dnsCryptErrorMessage()).toBe('bad provider name');
+  });
+  it("loads each transport's listen addresses one per line, and sends them back as an array", async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsPlainPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+    const component = fixture.componentInstance;
+
+    expect(component.plainForm.controls.listenAddresses.value).toBe('127.0.0.1\n::1');
+
+    component.plainForm.patchValue({ listenAddresses: '192.168.1.1, ::1\n\n' });
+    await component.savePlain();
+
+    expect(apiSpy.apiTransportSettingsPlainPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ listenAddresses: ['192.168.1.1', '::1'] }),
+    });
+  });
+
+  it('sends an empty list, meaning every address, when the field is cleared', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverTlsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+
+    fixture.componentInstance.dnsOverTlsForm.patchValue({ listenAddresses: '   ' });
+    await fixture.componentInstance.saveDnsOverTls();
+
+    expect(apiSpy.apiTransportSettingsDnsOverTlsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ listenAddresses: [] }),
+    });
   });
 });

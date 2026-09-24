@@ -64,6 +64,7 @@
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Dnssec.Tests\Ninlil.Dns.Server.Dnssec.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Tsig.Tests\Ninlil.Dns.Server.Tsig.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Server.Recursive.Tests\Ninlil.Dns.Server.Recursive.Tests.csproj" />
+    <Project Path="src\dotnet\tests\Ninlil.Dns.Protocol.Plain.Tests\Ninlil.Dns.Protocol.Plain.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Protocol.DnsOverTls.Tests\Ninlil.Dns.Protocol.DnsOverTls.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Protocol.DnsOverHttps.Tests\Ninlil.Dns.Protocol.DnsOverHttps.Tests.csproj" />
     <Project Path="src\dotnet\tests\Ninlil.Dns.Protocol.DnsOverQuic.Tests\Ninlil.Dns.Protocol.DnsOverQuic.Tests.csproj" />

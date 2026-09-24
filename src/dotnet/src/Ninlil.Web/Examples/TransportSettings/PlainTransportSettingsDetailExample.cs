@@ -13,5 +13,10 @@ public class PlainTransportSettingsDetailExample : IExamplesProvider<PlainTransp
 {
     /// <summary>This method returns this class's own compiled-in defaults.</summary>
     public PlainTransportSettingsDetail GetExamples() =>
-        new(Port: 53, TcpIdleTimeout: TimeSpan.FromSeconds(30), MaxConcurrentTcpConnections: 512);
+        new(
+            Port: 53,
+            ListenAddresses: [],
+            TcpIdleTimeout: TimeSpan.FromSeconds(30),
+            MaxConcurrentTcpConnections: 512
+        );
 }

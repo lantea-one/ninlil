@@ -24,7 +24,12 @@ import {
 } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import { buildPfxPasswordPatchField, joinLines, splitLines } from './web-listen-settings.model';
+import {
+  buildPfxPasswordPatchField,
+  joinLines,
+  splitLines,
+  splitListenAddresses,
+} from './web-listen-settings.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
@@ -84,6 +89,7 @@ export class WebListenSettingsComponent implements OnInit {
   readonly form = this.formBuilder.group({
     httpPort: [80, [Validators.required, Validators.min(1), Validators.max(65535)]],
     httpsPort: [443, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    listenAddresses: [''],
     pfxPath: [''],
     pfxPassword: [''],
     selfSignedSubjectAlternativeNames: ['localhost'],
@@ -119,6 +125,7 @@ export class WebListenSettingsComponent implements OnInit {
           body: {
             httpPort: value.httpPort,
             httpsPort: value.httpsPort,
+            listenAddresses: splitListenAddresses(value.listenAddresses),
             certificate: {
               pfxPath: value.pfxPath,
               ...buildPfxPasswordPatchField(value.pfxPassword),
@@ -168,6 +175,7 @@ export class WebListenSettingsComponent implements OnInit {
       this.form.patchValue({
         httpPort: settings.httpPort ?? 80,
         httpsPort: settings.httpsPort ?? 443,
+        listenAddresses: joinLines(settings.listenAddresses),
         pfxPath: settings.certificate?.pfxPath ?? '',
         pfxPassword: '',
         selfSignedSubjectAlternativeNames: joinLines(

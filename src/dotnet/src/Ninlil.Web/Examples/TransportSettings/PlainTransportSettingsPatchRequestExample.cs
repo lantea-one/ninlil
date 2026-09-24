@@ -11,12 +11,17 @@ namespace Ninlil.Web.Examples.TransportSettings;
 /// </summary>
 public class PlainTransportSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
-    /// <summary>This method returns a realistic idle-timeout tuning patch.</summary>
+    /// <summary>
+    ///     This method returns a realistic patch: keeping plain DNS on the LAN and loopback
+    ///     addresses only (for example to leave 127.0.0.53 to systemd-resolved), plus an
+    ///     idle-timeout tweak.
+    /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument
             .Parse(
                 """
                 {
+                  "listenAddresses": ["192.168.1.1", "127.0.0.1", "::1"],
                   "tcpIdleTimeout": "00:01:00"
                 }
                 """

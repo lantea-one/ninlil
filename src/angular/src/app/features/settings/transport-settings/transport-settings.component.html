@@ -51,6 +51,20 @@
             />
           </div>
         </div>
+        <div class="field">
+          <label cLabel for="plain-listen-addresses">Listen addresses</label>
+          <textarea
+            cFormControl
+            id="plain-listen-addresses"
+            rows="2"
+            formControlName="listenAddresses"
+            placeholder="Every address"
+          ></textarea>
+          <div cFormText>
+            One IP address per line, such as 192.168.1.1 or ::1. Leave it empty to listen on every
+            address.
+          </div>
+        </div>
         <div cFormText class="restart-note">Every field here needs this transport to restart.</div>
       </form>
     </c-card-body>
@@ -115,6 +129,20 @@
               min="1"
               formControlName="maxConcurrentConnections"
             />
+          </div>
+        </div>
+        <div class="field">
+          <label cLabel for="dot-listen-addresses">Listen addresses</label>
+          <textarea
+            cFormControl
+            id="dot-listen-addresses"
+            rows="2"
+            formControlName="listenAddresses"
+            placeholder="Every address"
+          ></textarea>
+          <div cFormText>
+            One IP address per line, such as 192.168.1.1 or ::1. Leave it empty to listen on every
+            address.
           </div>
         </div>
 
@@ -325,6 +353,20 @@
             />
           </div>
         </div>
+        <div class="field">
+          <label cLabel for="doq-listen-addresses">Listen addresses</label>
+          <textarea
+            cFormControl
+            id="doq-listen-addresses"
+            rows="2"
+            formControlName="listenAddresses"
+            placeholder="Every address"
+          ></textarea>
+          <div cFormText>
+            One IP address per line, such as 192.168.1.1 or ::1. Leave it empty to listen on every
+            address.
+          </div>
+        </div>
 
         <h6 class="section-heading">Certificate</h6>
 
@@ -477,6 +519,20 @@
               min="1"
               formControlName="maxConcurrentTcpConnections"
             />
+          </div>
+        </div>
+        <div class="field">
+          <label cLabel for="dnscrypt-listen-addresses">Listen addresses</label>
+          <textarea
+            cFormControl
+            id="dnscrypt-listen-addresses"
+            rows="2"
+            formControlName="listenAddresses"
+            placeholder="Every address"
+          ></textarea>
+          <div cFormText>
+            One IP address per line, such as 192.168.1.1 or ::1. Leave it empty to listen on every
+            address.
           </div>
         </div>
 

@@ -15,6 +15,7 @@ using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Certificates;
 using Ninlil.Dns.Server.Core.Pipeline;
 using Ninlil.Dns.Server.Core.Resolution;
+using Ninlil.Dns.Server.Core.Transport;
 
 // Define our namespace.
 namespace Ninlil.Dns.Protocol.DnsOverTls;
@@ -34,7 +35,7 @@ namespace Ninlil.Dns.Protocol.DnsOverTls;
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
 /// <param name="options">
-///     This transport's own listen port, connection limits, and certificate -- read via
+///     This transport's own listen addresses, port, connection limits, and certificate -- read via
 ///     <see cref="IOptionsMonitor{TOptions}" /> rather than a fixed <see cref="IOptions{TOptions}" />
 ///     snapshot specifically so a REST-driven <c>enable</c> toggle (mid-process, no restart) is
 ///     genuinely observed the next time <see cref="ExecuteAsync" /> itself runs: a caller that
@@ -53,12 +54,12 @@ public sealed class DnsOverTlsListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening socket, once <see cref="ExecuteAsync" /> has
-    ///     bound one -- kept here so <see cref="StopAsync" /> can close it, which is what
-    ///     actually unblocks the accept loop's own pending
+    ///     This property contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
+    ///     close them, which is what actually unblocks each accept loop's pending
     ///     <see cref="Socket.AcceptAsync(CancellationToken)" /> call during shutdown.
     /// </summary>
-    private Socket _listenSocket;
+    private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
 
     /// <summary>
     ///     This property bounds how many connections may be accepted concurrently, per
@@ -80,6 +81,12 @@ public sealed class DnsOverTlsListener(
     ///     that it was registered/configured.
     /// </summary>
     public bool IsListening { get; private set; }
+
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
 
     /// <summary>
     ///     This property contains how long <see cref="HandleConnectionAsync" /> waits for a
@@ -131,23 +138,37 @@ public sealed class DnsOverTlsListener(
             out _knownProxyProtocolNetworks
         );
 
-        _listenSocket = new Socket(
-            AddressFamily.InterNetworkV6,
-            SocketType.Stream,
-            ProtocolType.Tcp
+        _listenSockets = ListenSocketSet.Bind(
+            "DNS-over-TLS",
+            options.CurrentValue.ListenAddresses,
+            options.CurrentValue.Port,
+            ProtocolType.Tcp,
+            logger
         );
-        _listenSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        _listenSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.CurrentValue.Port));
-        _listenSocket.Listen();
+
+        if (_listenSockets.Sockets.Count == 0)
+            return;
+
         IsListening = true;
 
+        await Task.WhenAll(
+            _listenSockets.Sockets.Select(socket => AcceptLoopAsync(socket, stoppingToken))
+        );
+    }
+
+    /// <summary>
+    ///     This method accepts connections on one listening socket until shutdown; each listen
+    ///     address gets its own loop, all sharing one connection limit.
+    /// </summary>
+    private async Task AcceptLoopAsync(Socket listenSocket, CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             Socket connection;
 
             try
             {
-                connection = await _listenSocket.AcceptAsync(stoppingToken);
+                connection = await listenSocket.AcceptAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -546,7 +567,7 @@ public sealed class DnsOverTlsListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
-        _listenSocket?.Close();
+        _listenSockets.Close();
         await base.StopAsync(cancellationToken);
 
         // ExecuteAsync creates a brand-new ReloadableTlsCertificateProvider (and the polling

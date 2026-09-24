@@ -31,7 +31,9 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
   is also hosted locally). RFC 5011 automated root trust-anchor rollover on the recursive side.
 - **Every major DNS transport**: plain UDP/TCP (on by default — this is a DNS server, after all),
   DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, and DNSCrypt v2. Every transport beyond plain DNS is
-  off by default; see [Enabling additional transports](#enabling-additional-transports).
+  off by default; see [Enabling additional transports](#enabling-additional-transports). Each one,
+  and the web listener, can be limited to chosen IP addresses, to keep it off a WAN interface or
+  share a host with another DNS service.
 - **General upstream forwarding** with health-checked failover, independent of the recursive
   resolver, supporting the full `sdns://` DNSCrypt stamp grammar, and a TTL-honouring answer cache
   (RFC 2308 negative caching, serve-stale) that operators can inspect and flush from the console.
@@ -217,6 +219,9 @@ console, or `/documentation` for a browsable REST API reference.
 | `67`/`68` UDP (`DhcpServer:Protocol:Dhcpv4:*Port`) | DHCPv4 | Off by default |
 | `547`/`546` UDP (`DhcpServer:Protocol:Dhcpv6:*Port`) | DHCPv6 | Off by default |
 | `69` UDP (`DhcpServer:Tftp:Port`) | TFTP (PXE boot delivery) | Off by default |
+
+The web and DNS listeners bind every address unless their `ListenAddresses` setting (for example
+`DnsServer:Protocol:Plain:ListenAddresses`) names specific ones; see ENVIRONMENT.md.
 
 Ports 53/67/69/80/443 are privileged on Linux/macOS. Either run with elevated privileges (or grant
 the process `CAP_NET_BIND_SERVICE` on Linux), or override the ports in configuration to something

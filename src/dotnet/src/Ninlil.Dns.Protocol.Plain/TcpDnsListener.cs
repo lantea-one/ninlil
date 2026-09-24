@@ -10,6 +10,7 @@ using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Pipeline;
 using Ninlil.Dns.Server.Core.Resolution;
+using Ninlil.Dns.Server.Core.Transport;
 
 // Define our namespace.
 namespace Ninlil.Dns.Protocol.Plain;
@@ -25,59 +26,92 @@ namespace Ninlil.Dns.Protocol.Plain;
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
-/// <param name="options">This transport's own listen port and connection limits.</param>
+/// <param name="options">
+///     This transport's listen addresses, port and connection limits -- read through
+///     <see cref="IOptionsMonitor{TOptions}" /> once each time <see cref="ExecuteAsync" /> starts,
+///     so restarting just this listener (<c>POST /api/services/plain-tcp/restart</c>) picks up a
+///     change without restarting the whole process.
+/// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
 public sealed class TcpDnsListener(
     DnsQueryProcessingPipeline pipeline,
     IServiceScopeFactory scopeFactory,
-    IOptions<PlainProtocolOptions> options,
+    IOptionsMonitor<PlainProtocolOptions> options,
     ILogger<TcpDnsListener> logger
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening socket, once <see cref="ExecuteAsync" /> has
-    ///     bound one -- kept here so <see cref="StopAsync" /> can close it, which is what
-    ///     actually unblocks the accept loop's own pending
+    ///     This property contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
+    ///     close them, which is what actually unblocks each accept loop's pending
     ///     <see cref="Socket.AcceptAsync(CancellationToken)" /> call during shutdown.
     /// </summary>
-    private Socket _listenSocket;
+    private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
+
+    /// <summary>
+    ///     This property contains the settings snapshot taken when <see cref="ExecuteAsync" />
+    ///     last started, so every connection uses the same idle timeout until the next restart.
+    /// </summary>
+    private PlainProtocolOptions _settings;
 
     /// <summary>
     ///     This property bounds how many connections may be accepted concurrently, per
-    ///     <see cref="PlainProtocolOptions.MaxConcurrentTcpConnections" />.
+    ///     <see cref="PlainProtocolOptions.MaxConcurrentTcpConnections" /> -- shared by every
+    ///     listen address, so the limit is per transport, not per address.
     /// </summary>
     private SemaphoreSlim _connectionLimiter;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
+    ///     This property reports whether at least one of this listener's sockets is bound and
     ///     accepting connections -- read by the <c>/status</c> health-check endpoint, which needs
     ///     a real "am I bound and running" signal from every transport rather than just the fact
     ///     that it was registered/configured.
     /// </summary>
     public bool IsListening { get; private set; }
 
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _connectionLimiter = new SemaphoreSlim(options.Value.MaxConcurrentTcpConnections);
+        _settings = options.CurrentValue;
+        _connectionLimiter = new SemaphoreSlim(_settings.MaxConcurrentTcpConnections);
 
-        _listenSocket = new Socket(
-            AddressFamily.InterNetworkV6,
-            SocketType.Stream,
-            ProtocolType.Tcp
+        _listenSockets = ListenSocketSet.Bind(
+            "Plain DNS (TCP)",
+            _settings.ListenAddresses,
+            _settings.Port,
+            ProtocolType.Tcp,
+            logger
         );
-        _listenSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        _listenSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.Value.Port));
-        _listenSocket.Listen();
+
+        if (_listenSockets.Sockets.Count == 0)
+            return;
+
         IsListening = true;
 
+        await Task.WhenAll(
+            _listenSockets.Sockets.Select(socket => AcceptLoopAsync(socket, stoppingToken))
+        );
+    }
+
+    /// <summary>
+    ///     This method accepts connections on one listening socket until shutdown; each listen
+    ///     address gets its own loop.
+    /// </summary>
+    private async Task AcceptLoopAsync(Socket listenSocket, CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             Socket connection;
 
             try
             {
-                connection = await _listenSocket.AcceptAsync(stoppingToken);
+                connection = await listenSocket.AcceptAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -153,7 +187,7 @@ public sealed class TcpDnsListener(
 
             while (true)
             {
-                idleCts.CancelAfter(options.Value.TcpIdleTimeout);
+                idleCts.CancelAfter(_settings.TcpIdleTimeout);
 
                 byte[] lengthPrefix = new byte[2];
 
@@ -380,7 +414,7 @@ public sealed class TcpDnsListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
-        _listenSocket?.Close();
+        _listenSockets.Close();
         await base.StopAsync(cancellationToken);
     }
 }

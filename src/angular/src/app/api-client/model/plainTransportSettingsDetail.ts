@@ -18,6 +18,10 @@ export interface PlainTransportSettingsDetail {
      */
     port?: number;
     /**
+     * The local IP addresses both the UDP and TCP listeners binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     */
+    listenAddresses?: Array<string> | null;
+    /**
      * How long a TCP connection may sit completely idle before this server closes it.
      */
     tcpIdleTimeout?: string;

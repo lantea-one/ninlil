@@ -23,6 +23,10 @@ export interface DnsOverQuicSettingsDetail {
      */
     port?: number;
     /**
+     * The local IP addresses this transport binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port. QUIC answers only on these addresses, but its library still reserves the UDP port on every address, and `::` also answers IPv4 -- see `DnsOverQuicOptions.ListenAddresses`.
+     */
+    listenAddresses?: Array<string> | null;
+    /**
      * How long a QUIC connection may sit completely idle before this server closes it. Restart-required.
      */
     idleTimeout?: string;

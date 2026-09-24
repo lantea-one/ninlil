@@ -20,6 +20,7 @@ public class DnsOverQuicSettingsDetailExample : IExamplesProvider<DnsOverQuicSet
         new(
             Enable: true,
             Port: 853,
+            ListenAddresses: [],
             IdleTimeout: TimeSpan.FromSeconds(30),
             MaxConcurrentBidirectionalStreams: 100,
             Certificate: new TlsCertificateSettingsDetail(

@@ -27,3 +27,16 @@ export function joinLines(values: readonly string[] | null | undefined): string 
 export function buildPfxPasswordPatchField(pfxPassword: string): { pfxPassword?: string } {
   return pfxPassword.trim().length > 0 ? { pfxPassword } : {};
 }
+
+/**
+ * This function reads the listen-address field into the array the API takes. Addresses may be
+ * separated by new lines, commas or spaces, since all three are natural to type or paste; an
+ * empty field is an empty array, meaning every address. The server validates each address and
+ * names any it rejects.
+ */
+export function splitListenAddresses(text: string): string[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((address) => address.trim())
+    .filter((address) => address.length > 0);
+}

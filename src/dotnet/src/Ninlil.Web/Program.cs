@@ -269,20 +269,32 @@ builder.Services.AddSingleton(webListenOptions.Certificate);
 // class is; see that controller's own doc comment for the full reasoning.
 builder.Services.AddSingleton(webListenOptions);
 
+// Every address by default (one dual-stack wildcard per port); otherwise one socket per
+// configured address and port. WebListenAddressResolver skips an address this host doesn't have
+// (Kestrel would otherwise fail the whole startup on it) and falls back to loopback if none work.
+IReadOnlyList<IPAddress> webListenAddresses =
+    WebListenAddressResolver.Resolve(
+        webListenOptions,
+        LoggerFactory.Create(logging => logging.AddConsole()).CreateLogger("Ninlil.Web.Kestrel")
+    ) ?? [IPAddress.IPv6Any];
+
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
-    kestrel.Listen(IPAddress.IPv6Any, webListenOptions.HttpPort);
-    kestrel.Listen(
-        IPAddress.IPv6Any,
-        webListenOptions.HttpsPort,
-        listenOptions =>
-            listenOptions.UseHttps(httpsOptions =>
-            {
-                httpsOptions.ServerCertificateSelector = (_, _) =>
-                    kestrelCertificateProvider.Current;
-                httpsOptions.SslProtocols = webListenOptions.Certificate.AllowedProtocols;
-            })
-    );
+    foreach (IPAddress address in webListenAddresses)
+    {
+        kestrel.Listen(address, webListenOptions.HttpPort);
+        kestrel.Listen(
+            address,
+            webListenOptions.HttpsPort,
+            listenOptions =>
+                listenOptions.UseHttps(httpsOptions =>
+                {
+                    httpsOptions.ServerCertificateSelector = (_, _) =>
+                        kestrelCertificateProvider.Current;
+                    httpsOptions.SslProtocols = webListenOptions.Certificate.AllowedProtocols;
+                })
+        );
+    }
 });
 
 // Reverse-proxy trust for this same shared Kestrel listener -- off by default (invariant #6, a

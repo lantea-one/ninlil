@@ -52,10 +52,15 @@ public record TlsCertificateSettingsDetail(
 ///     capability-expanding toggle, and starts unconditionally.
 /// </summary>
 /// <param name="Port">The port both the UDP and TCP listeners bind to.</param>
+/// <param name="ListenAddresses">
+///     The local IP addresses both the UDP and TCP listeners binds to, one socket per address. An empty list means every
+///     address (one dual-stack socket), the default. Restart-required, like the port.
+/// </param>
 /// <param name="TcpIdleTimeout">How long a TCP connection may sit completely idle before this server closes it.</param>
 /// <param name="MaxConcurrentTcpConnections">How many TCP connections this server accepts at once.</param>
 public record PlainTransportSettingsDetail(
     int Port,
+    List<string> ListenAddresses,
     TimeSpan TcpIdleTimeout,
     int MaxConcurrentTcpConnections
 );
@@ -74,12 +79,17 @@ public record PlainTransportSettingsDetail(
 ///     <see cref="Services.IManagedServiceRegistry" />, with no restart.
 /// </param>
 /// <param name="Port">The port this transport binds to. Restart-required -- rebinding a socket to a new port needs this specific listener to restart.</param>
+/// <param name="ListenAddresses">
+///     The local IP addresses this transport binds to, one socket per address. An empty list means every
+///     address (one dual-stack socket), the default. Restart-required, like the port.
+/// </param>
 /// <param name="IdleTimeout">How long a TLS connection may sit completely idle before this server closes it. Restart-required -- read once when a connection is accepted, under this listener's own currently-bound socket.</param>
 /// <param name="MaxConcurrentConnections">How many TLS connections this server accepts at once. Restart-required, for the same reason as <see cref="IdleTimeout" />.</param>
 /// <param name="Certificate">This transport's own server certificate configuration. Restart-required.</param>
 public record DnsOverTlsSettingsDetail(
     bool Enable,
     int Port,
+    List<string> ListenAddresses,
     TimeSpan IdleTimeout,
     int MaxConcurrentConnections,
     TlsCertificateSettingsDetail Certificate
@@ -93,7 +103,9 @@ public record DnsOverTlsSettingsDetail(
 ///     instance -- both fields are specific to <c>DnsOverHttpsHostedService</c>'s own separate,
 ///     self-hosted Kestrel instance, which this composition root never starts, and would be
 ///     silently ignored (misleadingly, if exposed here as if they mattered) if written through this
-///     controller. This host's own shared HTTP(S) port and certificate decide both instead.
+///     controller. This host's own shared HTTP(S) port and certificate decide both instead -- and
+///     for the same reason there is no <c>ListenAddresses</c> here: DNS-over-HTTPS is answered on
+///     whatever addresses the web listener (<c>DnsServer:Web</c>) binds.
 /// </summary>
 /// <param name="Enable">
 ///     Whether a DNS-over-HTTPS request reaching the already-mapped route is answered. <b>Genuinely
@@ -124,12 +136,19 @@ public record DnsOverHttpsSettingsDetail(bool Enable, string Path, int MaxMessag
 ///     <see cref="Services.IManagedServiceRegistry" />, with no restart.
 /// </param>
 /// <param name="Port">The port this transport binds to. Restart-required.</param>
+/// <param name="ListenAddresses">
+///     The local IP addresses this transport binds to, one socket per address. An empty list means every
+///     address (one dual-stack socket), the default. Restart-required, like the port. QUIC answers only on these
+///     addresses, but its library still reserves the UDP port on every address, and <c>::</c> also
+///     answers IPv4 -- see <c>DnsOverQuicOptions.ListenAddresses</c>.
+/// </param>
 /// <param name="IdleTimeout">How long a QUIC connection may sit completely idle before this server closes it. Restart-required.</param>
 /// <param name="MaxConcurrentBidirectionalStreams">How many bidirectional streams a single QUIC connection may have open at once. Restart-required.</param>
 /// <param name="Certificate">This transport's own server certificate configuration. Restart-required.</param>
 public record DnsOverQuicSettingsDetail(
     bool Enable,
     int Port,
+    List<string> ListenAddresses,
     TimeSpan IdleTimeout,
     int MaxConcurrentBidirectionalStreams,
     TlsCertificateSettingsDetail Certificate
@@ -147,6 +166,10 @@ public record DnsOverQuicSettingsDetail(
 ///     <see cref="Services.IManagedServiceRegistry" />, with no restart.
 /// </param>
 /// <param name="Port">The port this transport binds to, for both UDP and TCP. Restart-required.</param>
+/// <param name="ListenAddresses">
+///     The local IP addresses this transport, for both UDP and TCP, binds to, one socket per address. An empty list means every
+///     address (one dual-stack socket), the default. Restart-required, like the port.
+/// </param>
 /// <param name="ProviderName">The zone this resolver advertises its DNSCrypt certificate discovery TXT record under. Restart-required -- read once, at this transport's own startup.</param>
 /// <param name="TcpIdleTimeout">How long a TCP connection may sit completely idle before this server closes it. Restart-required.</param>
 /// <param name="MaxConcurrentTcpConnections">How many TCP connections this server accepts at once. Restart-required.</param>
@@ -163,6 +186,7 @@ public record DnsOverQuicSettingsDetail(
 public record DnsCryptSettingsDetail(
     bool Enable,
     int Port,
+    List<string> ListenAddresses,
     string ProviderName,
     TimeSpan TcpIdleTimeout,
     int MaxConcurrentTcpConnections,

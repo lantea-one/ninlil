@@ -27,6 +27,7 @@ describe('WebListenSettingsComponent', () => {
       of({
         httpPort: 80,
         httpsPort: 443,
+        listenAddresses: ['192.168.1.10'],
         certificate: {
           pfxPath: '',
           pfxPasswordConfigured: false,
@@ -86,7 +87,12 @@ describe('WebListenSettingsComponent', () => {
       );
     });
 
-    fixture.componentInstance.form.patchValue({ httpPort: 8080, allowedProtocolTls12: true });
+    expect(fixture.componentInstance.form.controls.listenAddresses.value).toBe('192.168.1.10');
+    fixture.componentInstance.form.patchValue({
+      httpPort: 8080,
+      allowedProtocolTls12: true,
+      listenAddresses: '192.168.1.10\n127.0.0.1',
+    });
     const savePromise = fixture.componentInstance.save();
     fixture.componentInstance.onConfirmDialogResolved(true);
     await savePromise;
@@ -94,6 +100,7 @@ describe('WebListenSettingsComponent', () => {
     expect(apiSpy.apiWebListenSettingsPatch).toHaveBeenCalledWith({
       body: jasmine.objectContaining({
         httpPort: 8080,
+        listenAddresses: ['192.168.1.10', '127.0.0.1'],
         certificate: jasmine.objectContaining({
           allowedProtocols: ['Tls12'],
         }),

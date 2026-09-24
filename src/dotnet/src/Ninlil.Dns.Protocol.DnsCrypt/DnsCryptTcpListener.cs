@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.DnsCrypt;
 
 // Define our namespace.
@@ -22,7 +23,7 @@ namespace Ninlil.Dns.Protocol.DnsCrypt;
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
 /// <param name="store">The store this resolver's own tracked certificates are read from.</param>
 /// <param name="options">
-///     This transport's own listen port, provider name, and connection limits -- read via
+///     This transport's own listen addresses, port, provider name, and connection limits -- read via
 ///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
 ///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
@@ -37,11 +38,11 @@ public sealed class DnsCryptTcpListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening socket, once <see cref="ExecuteAsync" /> has
-    ///     bound one -- kept here so <see cref="StopAsync" /> can close it, unblocking the
-    ///     accept loop's own pending accept call during shutdown.
+    ///     This property contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
+    ///     close them, unblocking each accept loop's pending accept call during shutdown.
     /// </summary>
-    private Socket _listenSocket;
+    private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
 
     /// <summary>
     ///     This property bounds how many connections may be accepted concurrently.
@@ -55,6 +56,12 @@ public sealed class DnsCryptTcpListener(
     ///     that it was registered/configured.
     /// </summary>
     public bool IsListening { get; private set; }
+
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -80,23 +87,43 @@ public sealed class DnsCryptTcpListener(
 
         _connectionLimiter = new SemaphoreSlim(options.CurrentValue.MaxConcurrentTcpConnections);
 
-        _listenSocket = new Socket(
-            AddressFamily.InterNetworkV6,
-            SocketType.Stream,
-            ProtocolType.Tcp
+        _listenSockets = ListenSocketSet.Bind(
+            "DNSCrypt (TCP)",
+            options.CurrentValue.ListenAddresses,
+            options.CurrentValue.Port,
+            ProtocolType.Tcp,
+            logger
         );
-        _listenSocket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        _listenSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.CurrentValue.Port));
-        _listenSocket.Listen();
+
+        if (_listenSockets.Sockets.Count == 0)
+            return;
+
         IsListening = true;
 
+        await Task.WhenAll(
+            _listenSockets.Sockets.Select(socket =>
+                AcceptLoopAsync(socket, providerCertificateName, stoppingToken)
+            )
+        );
+    }
+
+    /// <summary>
+    ///     This method accepts connections on one listening socket until shutdown; each listen
+    ///     address gets its own loop, all sharing one connection limit.
+    /// </summary>
+    private async Task AcceptLoopAsync(
+        Socket listenSocket,
+        DnsName providerCertificateName,
+        CancellationToken stoppingToken
+    )
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             Socket connection;
 
             try
             {
-                connection = await _listenSocket.AcceptAsync(stoppingToken);
+                connection = await listenSocket.AcceptAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -251,7 +278,7 @@ public sealed class DnsCryptTcpListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
-        _listenSocket?.Close();
+        _listenSockets.Close();
         await base.StopAsync(cancellationToken);
     }
 }

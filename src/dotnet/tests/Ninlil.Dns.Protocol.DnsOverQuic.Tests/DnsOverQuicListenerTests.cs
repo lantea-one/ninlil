@@ -5,6 +5,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -221,6 +222,161 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             [10, 11, 12],
             responses.Select(response => (int)response.Id).OrderBy(id => id)
         );
+    }
+
+    [Fact]
+    public async Task ListenAddresses_LoopbackOnly_AnswersThereButNotOnAnotherLocalAddress()
+    {
+        IPAddress other = LocalAddresses.OtherLoopback();
+
+        if (!IsQuicAvailable() || other is null)
+            return;
+
+        (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                "127.0.0.1",
+                NullLogger<DnsOverQuicListener>.Instance
+            );
+
+        try
+        {
+            DnsMessage response = await TryQueryAsync(IPAddress.Loopback, port);
+            Assert.NotNull(response);
+            Assert.Equal(DnsResponseCodeEnum.NoError, response.ResponseCode);
+
+            Assert.Null(await TryQueryAsync(other, port));
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task ListenAddresses_ABadAddress_IsLoggedAndReportedWhileTheOthersAnswer()
+    {
+        IPAddress other = LocalAddresses.OtherLoopback();
+
+        if (!IsQuicAvailable() || other is null)
+            return;
+
+        CapturingLogger<DnsOverQuicListener> logger = new();
+        (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener, int port) =
+            await StartListenAddressListenerAsync(
+                $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
+                logger
+            );
+
+        try
+        {
+            Assert.True(listener.IsListening);
+            Assert.NotNull(await TryQueryAsync(IPAddress.Loopback, port));
+            Assert.NotNull(await TryQueryAsync(other, port));
+
+            string failed = Assert.Single(listener.FailedListenAddresses);
+            Assert.StartsWith("192.0.2.1 (", failed);
+            Assert.Contains(
+                logger.Errors,
+                message => message.Contains("DNS-over-QUIC") && message.Contains("192.0.2.1")
+            );
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    ///     This method starts a dedicated pipeline/listener pair bound to the given listen
+    ///     addresses on a free port, separate from <see cref="InitializeAsync" />'s shared one
+    ///     (which keeps the default of every address).
+    /// </summary>
+    private async Task<(
+        DnsQueryProcessingPipeline Pipeline,
+        DnsOverQuicListener Listener,
+        int Port
+    )> StartListenAddressListenerAsync(string listenAddresses, ILogger<DnsOverQuicListener> logger)
+    {
+        int port = LocalAddresses.GetFreePort();
+        DnsQueryProcessingPipeline pipeline = new(
+            new EchoingDispatcher(),
+            new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
+                new DnsQueryProcessingPipelineOptions()
+            ),
+            NullLogger<DnsQueryProcessingPipeline>.Instance
+        );
+        await pipeline.StartAsync(CancellationToken.None);
+
+        DnsOverQuicListener listener = new(
+            pipeline,
+            BuildScopeFactory(),
+            new StaticOptionsMonitor<DnsOverQuicOptions>(
+                new DnsOverQuicOptions
+                {
+                    Enable = true,
+                    Port = port,
+                    ListenAddresses = listenAddresses,
+                    // Reuses the shared self-signed certificate file, so each listener doesn't
+                    // generate its own.
+                    Certificate = _options.Certificate,
+                }
+            ),
+            logger
+        );
+        await listener.StartAsync(CancellationToken.None);
+        await Task.Delay(TimeSpan.FromMilliseconds(250));
+
+        return (pipeline, listener, port);
+    }
+
+    /// <summary>
+    ///     This method runs one full DoQ query against an address, returning
+    ///     <see langword="null" /> when nothing answers there. QUIC runs over UDP, so an address
+    ///     with no listener is never "refused" the way TCP would be. Depending on the platform the
+    ///     attempt either times out (given two seconds) or, because MsQuic shares one underlying
+    ///     socket per port, reaches it and has its handshake rejected with an ALPN error. Either
+    ///     way nothing is served there, which is what counts.
+    /// </summary>
+    private static async Task<DnsMessage> TryQueryAsync(IPAddress address, int port)
+    {
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(2));
+
+        try
+        {
+            await using QuicConnection connection = await QuicConnection.ConnectAsync(
+                new QuicClientConnectionOptions
+                {
+                    RemoteEndPoint = new IPEndPoint(address, port),
+                    ClientAuthenticationOptions = new SslClientAuthenticationOptions
+                    {
+                        ApplicationProtocols = [DoqProtocol],
+                        TargetHost = "localhost",
+                        RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                    },
+                    DefaultCloseErrorCode = 0,
+                    DefaultStreamErrorCode = 0,
+                },
+                timeout.Token
+            );
+            await using QuicStream stream = await connection.OpenOutboundStreamAsync(
+                QuicStreamType.Bidirectional,
+                timeout.Token
+            );
+            await SendAsync(stream, BuildQuery(99, "listen.example.com"));
+            return await ReceiveAsync(stream).WaitAsync(timeout.Token);
+        }
+        catch (Exception exception)
+            when (exception
+                    is QuicException
+                        or OperationCanceledException
+                        or SocketException
+                        or System.Security.Authentication.AuthenticationException
+            )
+        {
+            return null;
+        }
     }
 
     /// <summary>

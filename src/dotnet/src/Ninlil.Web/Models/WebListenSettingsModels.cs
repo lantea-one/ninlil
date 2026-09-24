@@ -10,6 +10,10 @@ namespace Ninlil.Web.Models;
 /// </summary>
 /// <param name="HttpPort">The plain HTTP port this host binds to.</param>
 /// <param name="HttpsPort">The HTTPS port this host binds to.</param>
+/// <param name="ListenAddresses">
+///     The IP addresses both ports bind, exactly as configured; empty means every address. Like
+///     every field here, a change applies on restart.
+/// </param>
 /// <param name="Certificate">
 ///     This host's own server certificate configuration, in the exact same shape
 ///     <c>TransportSettingsController</c> already exposes for DNS-over-TLS/DNS-over-QUIC (both of
@@ -19,5 +23,6 @@ namespace Ninlil.Web.Models;
 public record WebListenSettingsDetail(
     int HttpPort,
     int HttpsPort,
+    IReadOnlyList<string> ListenAddresses,
     TlsCertificateSettingsDetail Certificate
 );

@@ -20,6 +20,7 @@ public class DnsCryptSettingsDetailExample : IExamplesProvider<DnsCryptSettingsD
         new(
             Enable: true,
             Port: 5353,
+            ListenAddresses: [],
             ProviderName: "2.dnscrypt-cert.resolver.example.",
             TcpIdleTimeout: TimeSpan.FromSeconds(30),
             MaxConcurrentTcpConnections: 512,

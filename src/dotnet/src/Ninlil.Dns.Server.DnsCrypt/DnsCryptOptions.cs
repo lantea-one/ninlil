@@ -29,6 +29,16 @@ public class DnsCryptOptions
     public int Port { get; set; } = 5353;
 
     /// <summary>
+    ///     This property contains the local addresses this transport, for both UDP and TCP, binds to, comma-separated -- for
+    ///     example <c>"192.168.1.1, fd00::1"</c>, or <c>"127.0.0.1"</c> to keep DNSCrypt off every
+    ///     network interface. <c>0.0.0.0</c> and <c>::</c> mean every IPv4 or every IPv6 address.
+    ///     Empty (the default) listens on every address of both families through one dual-stack
+    ///     socket. See <c>Ninlil.Dns.Server.Core.Transport.ListenAddressList</c> for why this is one
+    ///     comma-separated string per transport and why only IP literals are accepted.
+    /// </summary>
+    public string ListenAddresses { get; set; } = string.Empty;
+
+    /// <summary>
     ///     This property contains the zone this resolver advertises its DNSCrypt certificate
     ///     discovery TXT record under -- clients query
     ///     <c>2.dnscrypt-cert.&lt;ProviderName&gt;</c> (protocol major version <c>2</c>, fixed)

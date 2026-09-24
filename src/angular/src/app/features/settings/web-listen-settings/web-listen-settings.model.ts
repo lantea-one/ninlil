@@ -26,3 +26,15 @@ export function joinLines(values: readonly string[] | null | undefined): string 
 export function buildPfxPasswordPatchField(pfxPassword: string): { pfxPassword?: string } {
   return pfxPassword.trim().length > 0 ? { pfxPassword } : {};
 }
+
+/**
+ * This function reads the listen-address field into the array the API takes -- the same rules
+ * as `TransportSettingsComponent`'s own `splitListenAddresses`: new lines, commas or spaces
+ * between addresses, and an empty field (every address) as an empty array.
+ */
+export function splitListenAddresses(text: string): string[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((address) => address.trim())
+    .filter((address) => address.length > 0);
+}

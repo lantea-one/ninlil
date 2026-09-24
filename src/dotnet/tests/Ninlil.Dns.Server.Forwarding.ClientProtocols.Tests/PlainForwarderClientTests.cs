@@ -53,7 +53,7 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
 
         _udpListener = new UdpDnsListener(
             _pipeline,
-            Options.Create(options),
+            new StaticOptionsMonitor<PlainProtocolOptions>(options),
             NullLogger<UdpDnsListener>.Instance
         );
         await _udpListener.StartAsync(CancellationToken.None);
@@ -63,7 +63,7 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
         _tcpListener = new TcpDnsListener(
             _pipeline,
             emptyProvider.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
+            new StaticOptionsMonitor<PlainProtocolOptions>(options),
             NullLogger<TcpDnsListener>.Instance
         );
         await _tcpListener.StartAsync(CancellationToken.None);

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Net.Quic;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,7 @@ using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Certificates;
 using Ninlil.Dns.Server.Core.Pipeline;
 using Ninlil.Dns.Server.Core.Resolution;
+using Ninlil.Dns.Server.Core.Transport;
 
 // Define our namespace.
 namespace Ninlil.Dns.Protocol.DnsOverQuic;
@@ -40,7 +42,7 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic;
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
 /// <param name="options">
-///     This transport's own listen port, stream limits, and certificate -- read via
+///     This transport's own listen addresses, port, stream limits, and certificate -- read via
 ///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
 ///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
@@ -77,6 +79,22 @@ public sealed class DnsOverQuicListener(
     /// </summary>
     public bool IsListening { get; private set; }
 
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _failedListenAddresses;
+
+    /// <summary>
+    ///     This constant contains the name this transport uses in log messages.
+    /// </summary>
+    private const string TransportName = "DNS-over-QUIC";
+
+    /// <summary>
+    ///     This field backs <see cref="FailedListenAddresses" />, replaced on every start.
+    /// </summary>
+    private IReadOnlyList<string> _failedListenAddresses = [];
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -102,9 +120,117 @@ public sealed class DnsOverQuicListener(
             options.CurrentValue.Certificate.CertificateReloadPollInterval
         );
 
-        QuicListenerOptions listenerOptions = new()
+        DnsOverQuicOptions current = options.CurrentValue;
+        bool explicitAddresses = ListenAddressList.Split(current.ListenAddresses).Count > 0;
+
+        IReadOnlyList<IPEndPoint> endpoints = ListenSocketSet.ResolveEndpoints(
+            TransportName,
+            current.ListenAddresses,
+            current.Port,
+            logger,
+            out List<string> failedAddresses
+        );
+        List<QuicListener> listeners = [];
+
+        try
         {
-            ListenEndPoint = new IPEndPoint(IPAddress.IPv6Any, options.CurrentValue.Port),
+            foreach (IPEndPoint endpoint in endpoints)
+            {
+                QuicListener listener = await TryListenAsync(
+                    endpoint,
+                    explicitAddresses,
+                    failedAddresses,
+                    stoppingToken
+                );
+
+                if (listener is not null)
+                    listeners.Add(listener);
+            }
+
+            _failedListenAddresses = failedAddresses;
+
+            if (explicitAddresses)
+                ListenSocketSet.ReportNothingBound(TransportName, listeners.Count, logger);
+
+            if (listeners.Count == 0)
+                return;
+
+            IsListening = true;
+
+            await Task.WhenAll(
+                listeners.Select(listener => AcceptLoopAsync(listener, stoppingToken))
+            );
+        }
+        finally
+        {
+            IsListening = false;
+
+            foreach (QuicListener listener in listeners)
+                await listener.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    ///     This method starts a QUIC listener on one endpoint. With no listen addresses configured
+    ///     (<paramref name="explicitAddress" /> false) a failure throws, exactly as before listen
+    ///     addresses existed. For a configured address, a failure is logged, recorded in
+    ///     <paramref name="failedAddresses" />, and <see langword="null" /> is returned so the
+    ///     other addresses keep serving. An address this host doesn't have is refused up front:
+    ///     MsQuic binds a wildcard socket underneath and filters by address itself, so it would
+    ///     otherwise "listen" there successfully and never answer anything.
+    /// </summary>
+    private async Task<QuicListener> TryListenAsync(
+        IPEndPoint endpoint,
+        bool explicitAddress,
+        List<string> failedAddresses,
+        CancellationToken stoppingToken
+    )
+    {
+        QuicListenerOptions listenerOptions = BuildListenerOptions(endpoint);
+
+        if (!explicitAddress)
+            return await QuicListener.ListenAsync(listenerOptions, stoppingToken);
+
+        if (!ListenSocketSet.IsAssignedToThisHost(endpoint.Address))
+        {
+            failedAddresses.Add($"{endpoint.Address} (not assigned to any network interface)");
+            logger.LogError(
+                "{Transport} could not listen on {Address} port {Port}: the address is not assigned to any network interface on this host. Its other listen addresses keep serving.",
+                TransportName,
+                endpoint.Address,
+                endpoint.Port
+            );
+            return null;
+        }
+
+        try
+        {
+            return await QuicListener.ListenAsync(listenerOptions, stoppingToken);
+        }
+        catch (Exception exception)
+            when (exception is QuicException or SocketException or ArgumentException)
+        {
+            failedAddresses.Add($"{endpoint.Address} ({exception.Message})");
+            logger.LogError(
+                exception,
+                "{Transport} could not listen on {Address} port {Port}: {Reason}. Its other listen addresses keep serving.",
+                TransportName,
+                endpoint.Address,
+                endpoint.Port,
+                exception.Message
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     This method builds the QUIC listener settings for one endpoint -- identical for every
+    ///     listen address apart from the endpoint itself.
+    /// </summary>
+    private QuicListenerOptions BuildListenerOptions(IPEndPoint endpoint) =>
+        new()
+        {
+            ListenEndPoint = endpoint,
             ApplicationProtocols = [DoqApplicationProtocol],
             ConnectionOptionsCallback = (_, _, _) =>
                 ValueTask.FromResult(
@@ -131,33 +257,26 @@ public sealed class DnsOverQuicListener(
                 ),
         };
 
-        await using QuicListener listener = await QuicListener.ListenAsync(
-            listenerOptions,
-            stoppingToken
-        );
-        IsListening = true;
-
-        try
+    /// <summary>
+    ///     This method accepts connections on one QUIC listener until shutdown; each listen
+    ///     address gets its own loop.
+    /// </summary>
+    private async Task AcceptLoopAsync(QuicListener listener, CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            QuicConnection connection;
+
+            try
             {
-                QuicConnection connection;
-
-                try
-                {
-                    connection = await listener.AcceptConnectionAsync(stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-
-                _ = HandleConnectionAsync(connection, stoppingToken);
+                connection = await listener.AcceptConnectionAsync(stoppingToken);
             }
-        }
-        finally
-        {
-            IsListening = false;
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            _ = HandleConnectionAsync(connection, stoppingToken);
         }
     }
 

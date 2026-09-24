@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.Transport;
 
 // Define our namespace.
 namespace Ninlil.Dns.Protocol.Plain;
@@ -16,11 +17,16 @@ namespace Ninlil.Dns.Protocol.Plain;
 ///     §4.2.1 truncation are all the shared pipeline's own responsibility, not duplicated here.
 /// </summary>
 /// <param name="pipeline">The pipeline every received datagram is enqueued onto.</param>
-/// <param name="options">This transport's own listen address and port.</param>
-/// <param name="logger">The logger this listener records unexpected socket failures to.</param>
+/// <param name="options">
+///     This transport's listen addresses and port -- read through
+///     <see cref="IOptionsMonitor{TOptions}" /> each time <see cref="ExecuteAsync" /> starts, so
+///     restarting just this listener (<c>POST /api/services/plain-udp/restart</c>) picks up a
+///     changed port or address list without restarting the whole process.
+/// </param>
+/// <param name="logger">The logger this listener records bind problems and unexpected socket failures to.</param>
 public sealed class UdpDnsListener(
     DnsQueryProcessingPipeline pipeline,
-    IOptions<PlainProtocolOptions> options,
+    IOptionsMonitor<PlainProtocolOptions> options,
     ILogger<UdpDnsListener> logger
 ) : BackgroundService
 {
@@ -34,33 +40,72 @@ public sealed class UdpDnsListener(
     private const int MaximumDatagramSize = 65527;
 
     /// <summary>
-    ///     This property contains the listening socket, once <see cref="ExecuteAsync" /> has
-    ///     bound one -- kept here so <see cref="StopAsync" /> can close it, which is what
-    ///     actually unblocks the receive loop's own <see cref="Socket.ReceiveFromAsync(Memory{byte},SocketFlags,EndPoint,CancellationToken)" />
+    ///     This property contains the bound sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
+    ///     close them, which is what actually unblocks each receive loop's pending
+    ///     <see cref="Socket.ReceiveFromAsync(Memory{byte},SocketFlags,EndPoint,CancellationToken)" />
     ///     call during shutdown.
     /// </summary>
-    private Socket _socket;
+    private ListenSocketSet _sockets = ListenSocketSet.Empty;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
+    ///     This property reports whether at least one of this listener's sockets is bound and
     ///     accepting datagrams -- read by the <c>/status</c> health-check endpoint, which needs a
     ///     real "am I bound and running" signal from every transport rather than just the fact
     ///     that it was registered/configured.
     /// </summary>
     public bool IsListening { get; private set; }
 
+    /// <summary>
+    ///     This property lists every configured listen address this listener is not serving, each
+    ///     as "address (reason)" -- read by the <c>/status</c> health check so a partly-bound
+    ///     listener shows up as degraded instead of looking healthy.
+    /// </summary>
+    public IReadOnlyList<string> FailedListenAddresses => _sockets.FailedAddresses;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // A dual-stack socket, bound to the IPv6 wildcard address with IPv6Only disabled, accepts
-        // both IPv6 and (via the OS's own IPv4-mapped-address translation) IPv4 clients through
-        // one socket, rather than needing two separate listeners for the two address families.
-        _socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        _socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        _socket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.Value.Port));
+        PlainProtocolOptions current = options.CurrentValue;
+
+        // With no listen addresses configured this is one dual-stack socket -- bound to the IPv6
+        // wildcard with IPv6Only off, so it accepts IPv6 and (via the OS's IPv4-mapped-address
+        // translation) IPv4 clients alike. Otherwise it's one socket per address; see
+        // ListenSocketSet for how a failing address is handled.
+        _sockets = ListenSocketSet.Bind(
+            "Plain DNS (UDP)",
+            current.ListenAddresses,
+            current.Port,
+            ProtocolType.Udp,
+            logger
+        );
+
+        if (_sockets.Sockets.Count == 0)
+            return;
+
         IsListening = true;
 
+        await Task.WhenAll(
+            _sockets.Sockets.Select(socket => ReceiveLoopAsync(socket, stoppingToken))
+        );
+    }
+
+    /// <summary>
+    ///     This method receives datagrams on one socket until shutdown. Each socket gets its own
+    ///     loop, and every response goes back out through the socket its query arrived on, so the
+    ///     client sees the reply come from the address it asked.
+    /// </summary>
+    private async Task ReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
+    {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
+
+        // The "any sender" placeholder ReceiveFromAsync needs has to match the socket's family.
+        EndPoint anySender = new IPEndPoint(
+            socket.AddressFamily == AddressFamily.InterNetworkV6
+                ? IPAddress.IPv6Any
+                : IPAddress.Any,
+            0
+        );
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -68,11 +113,7 @@ public sealed class UdpDnsListener(
 
             try
             {
-                result = await _socket.ReceiveFromAsync(
-                    receiveBuffer,
-                    new IPEndPoint(IPAddress.IPv6Any, 0),
-                    stoppingToken
-                );
+                result = await socket.ReceiveFromAsync(receiveBuffer, anySender, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -110,7 +151,7 @@ public sealed class UdpDnsListener(
                     DnsTransportProtocolEnum.Udp,
                     senderEndpoint.Address,
                     (responseBytes, sendToken) =>
-                        SendResponseAsync(responseBytes, senderEndpoint, sendToken)
+                        SendResponseAsync(socket, responseBytes, senderEndpoint, sendToken)
                 ),
                 stoppingToken
             );
@@ -122,6 +163,7 @@ public sealed class UdpDnsListener(
     ///     arrived from.
     /// </summary>
     private async ValueTask SendResponseAsync(
+        Socket socket,
         ReadOnlyMemory<byte> responseBytes,
         IPEndPoint senderEndpoint,
         CancellationToken stoppingToken
@@ -129,7 +171,7 @@ public sealed class UdpDnsListener(
     {
         try
         {
-            await _socket.SendToAsync(responseBytes, senderEndpoint, stoppingToken);
+            await socket.SendToAsync(responseBytes, senderEndpoint, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -147,7 +189,7 @@ public sealed class UdpDnsListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
-        _socket?.Close();
+        _sockets.Close();
         await base.StopAsync(cancellationToken);
     }
 }

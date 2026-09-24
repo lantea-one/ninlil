@@ -22,6 +22,10 @@ export interface DnsCryptSettingsDetail {
      */
     port?: number;
     /**
+     * The local IP addresses this transport, for both UDP and TCP, binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     */
+    listenAddresses?: Array<string> | null;
+    /**
      * The zone this resolver advertises its DNSCrypt certificate discovery TXT record under. Restart-required -- read once, at this transport\'s own startup.
      */
     providerName?: string | null;

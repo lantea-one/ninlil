@@ -20,6 +20,7 @@ public class DnsOverTlsSettingsDetailExample : IExamplesProvider<DnsOverTlsSetti
         new(
             Enable: true,
             Port: 853,
+            ListenAddresses: [],
             IdleTimeout: TimeSpan.FromSeconds(30),
             MaxConcurrentConnections: 512,
             Certificate: new TlsCertificateSettingsDetail(

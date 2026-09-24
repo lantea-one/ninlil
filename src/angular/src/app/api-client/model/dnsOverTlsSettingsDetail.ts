@@ -23,6 +23,10 @@ export interface DnsOverTlsSettingsDetail {
      */
     port?: number;
     /**
+     * The local IP addresses this transport binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     */
+    listenAddresses?: Array<string> | null;
+    /**
      * How long a TLS connection may sit completely idle before this server closes it. Restart-required -- read once when a connection is accepted, under this listener\'s own currently-bound socket.
      */
     idleTimeout?: string;

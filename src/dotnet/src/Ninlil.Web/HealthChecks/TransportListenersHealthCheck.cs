@@ -28,6 +28,14 @@ namespace Ninlil.Web.HealthChecks;
 ///         simply <see cref="DnsOverHttpsOptions.Enable" /> itself: as long as this very endpoint
 ///         answered the request that reached this check, Kestrel is already listening.
 ///     </para>
+///     <para>
+///         A listener with configured listen addresses can be partly bound: some addresses
+///         serving, one failing (not assigned to this host, taken by another program). Each
+///         listener lists those in <c>FailedListenAddresses</c>; this check reports them as
+///         <see cref="HealthStatus.Degraded" /> -- the transport still answers, so it isn't
+///         unhealthy, but an operator needs to see that part of what they configured isn't being
+///         served. A transport that bound nothing at all is still unhealthy.
+///     </para>
 /// </summary>
 /// <param name="hostedServices">Every registered <see cref="IHostedService" /> -- each real listener is resolved from here by type.</param>
 /// <param name="dnsOverTlsOptions">Whether DNS-over-TLS is enabled.</param>
@@ -51,23 +59,47 @@ public sealed class TransportListenersHealthCheck(
         IReadOnlyList<IHostedService> services = [.. hostedServices];
         List<string> notListening = [];
         List<string> listening = [];
+        List<string> partlyBound = [];
 
-        void Evaluate(string name, bool enabled, bool isListening)
+        void Evaluate(
+            string name,
+            bool enabled,
+            bool isListening,
+            IReadOnlyList<string> failedListenAddresses = null
+        )
         {
             if (!enabled)
                 return;
 
-            if (isListening)
-                listening.Add(name);
-            else
+            if (!isListening)
+            {
                 notListening.Add(name);
+                return;
+            }
+
+            listening.Add(name);
+
+            if (failedListenAddresses is { Count: > 0 })
+                partlyBound.Add(
+                    $"{name} is not serving {string.Join(", ", failedListenAddresses)}"
+                );
         }
 
         // Plain DNS has no Enable flag of its own -- it always starts, per invariant #6.
         UdpDnsListener udpListener = services.OfType<UdpDnsListener>().FirstOrDefault();
         TcpDnsListener tcpListener = services.OfType<TcpDnsListener>().FirstOrDefault();
-        Evaluate("Plain/UDP", enabled: true, udpListener?.IsListening ?? false);
-        Evaluate("Plain/TCP", enabled: true, tcpListener?.IsListening ?? false);
+        Evaluate(
+            "Plain/UDP",
+            enabled: true,
+            udpListener?.IsListening ?? false,
+            udpListener?.FailedListenAddresses
+        );
+        Evaluate(
+            "Plain/TCP",
+            enabled: true,
+            tcpListener?.IsListening ?? false,
+            tcpListener?.FailedListenAddresses
+        );
 
         DnsOverTlsListener dnsOverTlsListener = services
             .OfType<DnsOverTlsListener>()
@@ -75,7 +107,8 @@ public sealed class TransportListenersHealthCheck(
         Evaluate(
             "DNS-over-TLS",
             dnsOverTlsOptions.Value.Enable,
-            dnsOverTlsListener?.IsListening ?? false
+            dnsOverTlsListener?.IsListening ?? false,
+            dnsOverTlsListener?.FailedListenAddresses
         );
 
         DnsOverQuicListener dnsOverQuicListener = services
@@ -84,7 +117,8 @@ public sealed class TransportListenersHealthCheck(
         Evaluate(
             "DNS-over-QUIC",
             dnsOverQuicOptions.Value.Enable,
-            dnsOverQuicListener?.IsListening ?? false
+            dnsOverQuicListener?.IsListening ?? false,
+            dnsOverQuicListener?.FailedListenAddresses
         );
 
         DnsCryptUdpListener dnsCryptUdpListener = services
@@ -96,12 +130,14 @@ public sealed class TransportListenersHealthCheck(
         Evaluate(
             "DNSCrypt/UDP",
             dnsCryptOptions.Value.Enable,
-            dnsCryptUdpListener?.IsListening ?? false
+            dnsCryptUdpListener?.IsListening ?? false,
+            dnsCryptUdpListener?.FailedListenAddresses
         );
         Evaluate(
             "DNSCrypt/TCP",
             dnsCryptOptions.Value.Enable,
-            dnsCryptTcpListener?.IsListening ?? false
+            dnsCryptTcpListener?.IsListening ?? false,
+            dnsCryptTcpListener?.FailedListenAddresses
         );
 
         // DNS-over-HTTPS is mapped onto this same host's own shared Kestrel instance rather than
@@ -116,6 +152,13 @@ public sealed class TransportListenersHealthCheck(
                     $"{notListening.Count} enabled transport(s) are not listening: "
                         + string.Join(", ", notListening)
                         + $". Listening: {(listening.Count > 0 ? string.Join(", ", listening) : "none")}."
+                )
+            );
+
+        if (partlyBound.Count > 0)
+            return Task.FromResult(
+                HealthCheckResult.Degraded(
+                    $"Every enabled transport is listening, but some configured listen addresses are not being served: {string.Join("; ", partlyBound)}."
                 )
             );
 

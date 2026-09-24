@@ -32587,6 +32587,7 @@
                 },
                 "example": {
                   "port": 53,
+                  "listenAddresses": [ ],
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512
                 }
@@ -32597,6 +32598,7 @@
                 },
                 "example": {
                   "port": 53,
+                  "listenAddresses": [ ],
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512
                 }
@@ -32607,6 +32609,7 @@
                 },
                 "example": {
                   "port": 53,
+                  "listenAddresses": [ ],
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512
                 }
@@ -32625,18 +32628,33 @@
             "application/json": {
               "schema": { },
               "example": {
+                "listenAddresses": [
+                  "192.168.1.1",
+                  "127.0.0.1",
+                  "::1"
+                ],
                 "tcpIdleTimeout": "00:01:00"
               }
             },
             "text/json": {
               "schema": { },
               "example": {
+                "listenAddresses": [
+                  "192.168.1.1",
+                  "127.0.0.1",
+                  "::1"
+                ],
                 "tcpIdleTimeout": "00:01:00"
               }
             },
             "application/*+json": {
               "schema": { },
               "example": {
+                "listenAddresses": [
+                  "192.168.1.1",
+                  "127.0.0.1",
+                  "::1"
+                ],
                 "tcpIdleTimeout": "00:01:00"
               }
             }
@@ -32692,6 +32710,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentConnections": 512,
                   "certificate": {
@@ -32712,6 +32731,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentConnections": 512,
                   "certificate": {
@@ -32732,6 +32752,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentConnections": 512,
                   "certificate": {
@@ -32930,6 +32951,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
                   "certificate": {
@@ -32950,6 +32972,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
                   "certificate": {
@@ -32970,6 +32993,7 @@
                 "example": {
                   "enable": true,
                   "port": 853,
+                  "listenAddresses": [ ],
                   "idleTimeout": "00:00:30",
                   "maxConcurrentBidirectionalStreams": 100,
                   "certificate": {
@@ -33064,6 +33088,7 @@
                 "example": {
                   "enable": true,
                   "port": 5353,
+                  "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512,
@@ -33083,6 +33108,7 @@
                 "example": {
                   "enable": true,
                   "port": 5353,
+                  "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512,
@@ -33102,6 +33128,7 @@
                 "example": {
                   "enable": true,
                   "port": 5353,
+                  "listenAddresses": [ ],
                   "providerName": "2.dnscrypt-cert.resolver.example.",
                   "tcpIdleTimeout": "00:00:30",
                   "maxConcurrentTcpConnections": 512,
@@ -35722,6 +35749,7 @@
                 "example": {
                   "httpPort": 80,
                   "httpsPort": 443,
+                  "listenAddresses": [ ],
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -35740,6 +35768,7 @@
                 "example": {
                   "httpPort": 80,
                   "httpsPort": 443,
+                  "listenAddresses": [ ],
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -35758,6 +35787,7 @@
                 "example": {
                   "httpPort": 80,
                   "httpsPort": 443,
+                  "listenAddresses": [ ],
                   "certificate": {
                     "pfxPath": "",
                     "pfxPasswordConfigured": false,
@@ -41280,6 +41310,14 @@
             "description": "The port this transport binds to, for both UDP and TCP. Restart-required.",
             "format": "int32"
           },
+          "listenAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The local IP addresses this transport, for both UDP and TCP, binds to, one socket per address. An empty list means every\naddress (one dual-stack socket), the default. Restart-required, like the port.",
+            "nullable": true
+          },
           "providerName": {
             "type": "string",
             "description": "The zone this resolver advertises its DNSCrypt certificate discovery TXT record under. Restart-required -- read once, at this transport's own startup.",
@@ -41385,7 +41423,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST representation of DNS-over-HTTPS's own `DnsOverHttpsOptions`,\nas actually consulted by this combined host: `Port` and `Certificate` are\ndeliberately excluded, because M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)\nmaps RFC 8484's GET/POST forms directly onto this host's own already-running shared Kestrel\ninstance -- both fields are specific to `DnsOverHttpsHostedService`'s own separate,\nself-hosted Kestrel instance, which this composition root never starts, and would be\nsilently ignored (misleadingly, if exposed here as if they mattered) if written through this\ncontroller. This host's own shared HTTP(S) port and certificate decide both instead."
+        "description": "This record is the REST representation of DNS-over-HTTPS's own `DnsOverHttpsOptions`,\nas actually consulted by this combined host: `Port` and `Certificate` are\ndeliberately excluded, because M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)\nmaps RFC 8484's GET/POST forms directly onto this host's own already-running shared Kestrel\ninstance -- both fields are specific to `DnsOverHttpsHostedService`'s own separate,\nself-hosted Kestrel instance, which this composition root never starts, and would be\nsilently ignored (misleadingly, if exposed here as if they mattered) if written through this\ncontroller. This host's own shared HTTP(S) port and certificate decide both instead -- and\nfor the same reason there is no `ListenAddresses` here: DNS-over-HTTPS is answered on\nwhatever addresses the web listener (`DnsServer:Web`) binds."
       },
       "DnsOverQuicSettingsDetail": {
         "type": "object",
@@ -41398,6 +41436,14 @@
             "type": "integer",
             "description": "The port this transport binds to. Restart-required.",
             "format": "int32"
+          },
+          "listenAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The local IP addresses this transport binds to, one socket per address. An empty list means every\naddress (one dual-stack socket), the default. Restart-required, like the port. QUIC answers only on these\naddresses, but its library still reserves the UDP port on every address, and `::` also\nanswers IPv4 -- see `DnsOverQuicOptions.ListenAddresses`.",
+            "nullable": true
           },
           "idleTimeout": {
             "type": "string",
@@ -41454,6 +41500,14 @@
             "type": "integer",
             "description": "The port this transport binds to. Restart-required -- rebinding a socket to a new port needs this specific listener to restart.",
             "format": "int32"
+          },
+          "listenAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The local IP addresses this transport binds to, one socket per address. An empty list means every\naddress (one dual-stack socket), the default. Restart-required, like the port.",
+            "nullable": true
           },
           "idleTimeout": {
             "type": "string",
@@ -42958,6 +43012,14 @@
             "type": "integer",
             "description": "The port both the UDP and TCP listeners bind to.",
             "format": "int32"
+          },
+          "listenAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The local IP addresses both the UDP and TCP listeners binds to, one socket per address. An empty list means every\naddress (one dual-stack socket), the default. Restart-required, like the port.",
+            "nullable": true
           },
           "tcpIdleTimeout": {
             "type": "string",
@@ -44514,6 +44576,14 @@
             "type": "integer",
             "description": "The HTTPS port this host binds to.",
             "format": "int32"
+          },
+          "listenAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The IP addresses both ports bind, exactly as configured; empty means every address. Like\nevery field here, a change applies on restart.",
+            "nullable": true
           },
           "certificate": {
             "$ref": "#/components/schemas/TlsCertificateSettingsDetail"

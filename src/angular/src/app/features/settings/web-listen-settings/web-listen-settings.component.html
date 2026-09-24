@@ -44,6 +44,21 @@
             />
           </div>
         </div>
+        <div class="field">
+          <label cLabel for="web-listen-addresses">Listen addresses</label>
+          <textarea
+            cFormControl
+            id="web-listen-addresses"
+            rows="2"
+            formControlName="listenAddresses"
+            placeholder="Every address"
+          ></textarea>
+          <div cFormText>
+            One IP address per line, such as 192.168.1.10 or ::1; both ports listen on each. Leave
+            it empty to listen on every address. If none of them can be used at startup, the console
+            falls back to this machine's own loopback address, so you can't lock yourself out.
+          </div>
+        </div>
 
         <h6 class="section-heading">Certificate</h6>
 

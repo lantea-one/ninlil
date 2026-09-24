@@ -20,7 +20,12 @@ import { firstValueFrom } from 'rxjs';
 import { TransportSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import { buildPfxPasswordPatchField, joinLines, splitLines } from './transport-settings.model';
+import {
+  buildPfxPasswordPatchField,
+  joinLines,
+  splitLines,
+  splitListenAddresses,
+} from './transport-settings.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
@@ -95,6 +100,7 @@ export class TransportSettingsComponent implements OnInit {
 
   readonly plainForm = this.formBuilder.group({
     port: [53, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    listenAddresses: [''],
     tcpIdleTimeout: ['00:00:30', [Validators.required]],
     maxConcurrentTcpConnections: [512, [Validators.required, Validators.min(1)]],
   });
@@ -102,6 +108,7 @@ export class TransportSettingsComponent implements OnInit {
   readonly dnsOverTlsForm = this.formBuilder.group({
     enable: [false],
     port: [853, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    listenAddresses: [''],
     idleTimeout: ['00:00:30', [Validators.required]],
     maxConcurrentConnections: [512, [Validators.required, Validators.min(1)]],
     pfxPath: [''],
@@ -121,6 +128,7 @@ export class TransportSettingsComponent implements OnInit {
   readonly dnsOverQuicForm = this.formBuilder.group({
     enable: [false],
     port: [853, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    listenAddresses: [''],
     idleTimeout: ['00:00:30', [Validators.required]],
     maxConcurrentBidirectionalStreams: [100, [Validators.required, Validators.min(1)]],
     pfxPath: [''],
@@ -134,6 +142,7 @@ export class TransportSettingsComponent implements OnInit {
   readonly dnsCryptForm = this.formBuilder.group({
     enable: [false],
     port: [5353, [Validators.required, Validators.min(1), Validators.max(65535)]],
+    listenAddresses: [''],
     providerName: [''],
     tcpIdleTimeout: ['00:00:30', [Validators.required]],
     maxConcurrentTcpConnections: [512, [Validators.required, Validators.min(1)]],
@@ -157,7 +166,12 @@ export class TransportSettingsComponent implements OnInit {
 
     try {
       const result = await firstValueFrom(
-        this.transportApi.apiTransportSettingsPlainPatch({ body: this.plainForm.getRawValue() }),
+        this.transportApi.apiTransportSettingsPlainPatch({
+          body: {
+            ...this.plainForm.getRawValue(),
+            listenAddresses: splitListenAddresses(this.plainForm.getRawValue().listenAddresses),
+          },
+        }),
       );
       this.notification.success(result.note ?? 'Plain DNS settings saved.');
     } catch (error) {
@@ -182,6 +196,7 @@ export class TransportSettingsComponent implements OnInit {
           body: {
             enable: value.enable,
             port: value.port,
+            listenAddresses: splitListenAddresses(value.listenAddresses),
             idleTimeout: value.idleTimeout,
             maxConcurrentConnections: value.maxConcurrentConnections,
             certificate: {
@@ -248,6 +263,7 @@ export class TransportSettingsComponent implements OnInit {
           body: {
             enable: value.enable,
             port: value.port,
+            listenAddresses: splitListenAddresses(value.listenAddresses),
             idleTimeout: value.idleTimeout,
             maxConcurrentBidirectionalStreams: value.maxConcurrentBidirectionalStreams,
             certificate: {
@@ -291,6 +307,7 @@ export class TransportSettingsComponent implements OnInit {
           body: {
             enable: value.enable,
             port: value.port,
+            listenAddresses: splitListenAddresses(value.listenAddresses),
             providerName: value.providerName,
             tcpIdleTimeout: value.tcpIdleTimeout,
             maxConcurrentTcpConnections: value.maxConcurrentTcpConnections,
@@ -329,6 +346,7 @@ export class TransportSettingsComponent implements OnInit {
 
       this.plainForm.patchValue({
         port: plain.port ?? 53,
+        listenAddresses: joinLines(plain.listenAddresses),
         tcpIdleTimeout: plain.tcpIdleTimeout ?? '00:00:30',
         maxConcurrentTcpConnections: plain.maxConcurrentTcpConnections ?? 512,
       });
@@ -339,6 +357,7 @@ export class TransportSettingsComponent implements OnInit {
       this.dnsOverTlsForm.patchValue({
         enable: dnsOverTls.enable ?? false,
         port: dnsOverTls.port ?? 853,
+        listenAddresses: joinLines(dnsOverTls.listenAddresses),
         idleTimeout: dnsOverTls.idleTimeout ?? '00:00:30',
         maxConcurrentConnections: dnsOverTls.maxConcurrentConnections ?? 512,
         pfxPath: dnsOverTls.certificate?.pfxPath ?? '',
@@ -363,6 +382,7 @@ export class TransportSettingsComponent implements OnInit {
       this.dnsOverQuicForm.patchValue({
         enable: dnsOverQuic.enable ?? false,
         port: dnsOverQuic.port ?? 853,
+        listenAddresses: joinLines(dnsOverQuic.listenAddresses),
         idleTimeout: dnsOverQuic.idleTimeout ?? '00:00:30',
         maxConcurrentBidirectionalStreams: dnsOverQuic.maxConcurrentBidirectionalStreams ?? 100,
         pfxPath: dnsOverQuic.certificate?.pfxPath ?? '',
@@ -378,6 +398,7 @@ export class TransportSettingsComponent implements OnInit {
       this.dnsCryptForm.patchValue({
         enable: dnsCrypt.enable ?? false,
         port: dnsCrypt.port ?? 5353,
+        listenAddresses: joinLines(dnsCrypt.listenAddresses),
         providerName: dnsCrypt.providerName ?? '',
         tcpIdleTimeout: dnsCrypt.tcpIdleTimeout ?? '00:00:30',
         maxConcurrentTcpConnections: dnsCrypt.maxConcurrentTcpConnections ?? 512,

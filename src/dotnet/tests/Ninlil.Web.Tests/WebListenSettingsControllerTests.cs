@@ -75,6 +75,9 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         Assert.InRange(detail.HttpsPort, 1, 65535);
         Assert.NotEqual(detail.HttpPort, detail.HttpsPort);
 
+        // Every address, unless configured otherwise.
+        Assert.Empty(detail.ListenAddresses);
+
         // TlsCertificateOptions' own compiled-in defaults.
         Assert.Equal("", detail.Certificate.PfxPath);
         Assert.False(detail.Certificate.PfxPasswordConfigured);
@@ -212,5 +215,55 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         HttpResponseMessage response = await client.GetAsync("/api/web-listen-settings");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Patch_WithListenAddresses_WritesThemAndRejectsAMalformedOne()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            (
+                await client.SendAsync(
+                    PatchRequest(
+                        "/api/web-listen-settings",
+                        new { listenAddresses = new[] { "192.168.1.10", "127.0.0.1" } }
+                    )
+                )
+            ).EnsureSuccessStatusCode();
+            Assert.Equal("192.168.1.10, 127.0.0.1", ReadWebListenAddresses());
+
+            HttpResponseMessage invalid = await client.SendAsync(
+                PatchRequest("/api/web-listen-settings", new { listenAddresses = new[] { "eth0" } })
+            );
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            Assert.Contains("eth0", await invalid.Content.ReadAsStringAsync());
+            Assert.Equal("192.168.1.10, 127.0.0.1", ReadWebListenAddresses());
+        }
+        finally
+        {
+            // Only the configuration file changes (the listener applies it on restart), but the
+            // file is shared with every other test class, so put the default back.
+            (
+                await client.SendAsync(
+                    PatchRequest(
+                        "/api/web-listen-settings",
+                        new { listenAddresses = Array.Empty<string>() }
+                    )
+                )
+            ).EnsureSuccessStatusCode();
+        }
+    }
+
+    /// <summary>
+    ///     This method reads the web listener's stored <c>ListenAddresses</c> from this host's
+    ///     configuration file, or an empty string when it isn't set.
+    /// </summary>
+    private string ReadWebListenAddresses()
+    {
+        JsonObject root = (JsonObject)
+            JsonNode.Parse(File.ReadAllText(factory.RuntimeConfigurationFilePath));
+        return root["DnsServer"]?["Web"]?["ListenAddresses"]?.GetValue<string>() ?? string.Empty;
     }
 }

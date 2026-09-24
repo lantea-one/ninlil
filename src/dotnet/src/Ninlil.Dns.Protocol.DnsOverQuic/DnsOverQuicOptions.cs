@@ -32,6 +32,24 @@ public class DnsOverQuicOptions
     public int Port { get; set; } = 853;
 
     /// <summary>
+    ///     This property contains the local addresses this transport binds to, comma-separated -- for
+    ///     example <c>"192.168.1.1, fd00::1"</c>, or <c>"127.0.0.1"</c> to keep DNS-over-QUIC off every
+    ///     network interface. <c>0.0.0.0</c> and <c>::</c> mean every IPv4 or every IPv6 address.
+    ///     Empty (the default) listens on every address of both families through one dual-stack
+    ///     socket. See <c>Ninlil.Dns.Server.Core.Transport.ListenAddressList</c> for why this is one
+    ///     comma-separated string per transport and why only IP literals are accepted.
+    ///     <para>
+    ///         QUIC differs from the socket-based transports in two ways, both down to the QUIC
+    ///         library (MsQuic) owning its own sockets: <c>::</c> also answers IPv4 clients, and the
+    ///         UDP port is still reserved on every address even when only some are listed -- the
+    ///         library binds a wildcard socket and filters by address itself. Listing addresses
+    ///         keeps DNS-over-QUIC from answering on the others, but another program can't use
+    ///         the same UDP port on an unlisted address.
+    ///     </para>
+    /// </summary>
+    public string ListenAddresses { get; set; } = string.Empty;
+
+    /// <summary>
     ///     This property contains how long a QUIC connection may sit completely idle before this
     ///     server closes it.
     /// </summary>

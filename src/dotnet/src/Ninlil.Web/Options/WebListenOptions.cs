@@ -30,6 +30,15 @@ public sealed class WebListenOptions
     public int HttpsPort { get; set; } = 443;
 
     /// <summary>
+    ///     This property contains the IP addresses the web listener binds, comma-separated (for
+    ///     example <c>"192.168.1.10, 127.0.0.1"</c>), for both <see cref="HttpPort" /> and
+    ///     <see cref="HttpsPort" />. Empty, the default, binds every address. Use it to keep the
+    ///     admin console off a WAN interface. See <c>WebListenAddressResolver</c> for how
+    ///     unusable addresses are handled; like every setting here, it applies on restart.
+    /// </summary>
+    public string ListenAddresses { get; set; } = string.Empty;
+
+    /// <summary>
     ///     This property contains this host's own server certificate configuration -- shared by
     ///     every TLS-based listener in this process (this HTTPS endpoint, DNS-over-TLS,
     ///     DNS-over-QUIC) when each is pointed at the same <see cref="TlsCertificateOptions.PfxPath" />

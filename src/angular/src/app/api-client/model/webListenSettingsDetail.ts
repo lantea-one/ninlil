@@ -22,6 +22,10 @@ export interface WebListenSettingsDetail {
      * The HTTPS port this host binds to.
      */
     httpsPort?: number;
+    /**
+     * The IP addresses both ports bind, exactly as configured; empty means every address. Like every field here, a change applies on restart.
+     */
+    listenAddresses?: Array<string> | null;
     certificate?: TlsCertificateSettingsDetail;
 }
 

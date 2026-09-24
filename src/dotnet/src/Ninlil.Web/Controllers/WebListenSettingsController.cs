@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Dns.Server.Core.Certificates;
+using Ninlil.Dns.Server.Core.Transport;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Examples.Settings;
 using Ninlil.Web.Examples.WebListenSettings;
@@ -69,6 +70,7 @@ public class WebListenSettingsController(
             new WebListenSettingsDetail(
                 webListenOptions.HttpPort,
                 webListenOptions.HttpsPort,
+                [.. ListenAddressList.Split(webListenOptions.ListenAddresses)],
                 ToCertificateDetail(webListenOptions.Certificate)
             )
         );
@@ -119,6 +121,15 @@ public class WebListenSettingsController(
             );
         }
 
+        if (patch.TryGetMergePatchField("listenAddresses", out JsonElement listenAddresses))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    WebListenOptions.SectionName,
+                    nameof(WebListenOptions.ListenAddresses),
+                    ValidateListenAddresses(listenAddresses)
+                )
+            );
+
         if (patch.TryGetMergePatchField("certificate", out JsonElement certificateElement))
             AddCertificateSettings(certificateElement, settings);
 
@@ -133,6 +144,37 @@ public class WebListenSettingsController(
         return Ok(
             new RuntimeSettingsWriteResult(RuntimeSettingsWriteResult.WebListenRestartRequiredNote)
         );
+    }
+
+    /// <summary>
+    ///     This method validates a <c>listenAddresses</c> merge-patch field -- a JSON array of IP
+    ///     address literals, empty meaning every address -- and returns the comma-separated form
+    ///     the configuration file stores, the same rules the DNS transports' own
+    ///     <c>listenAddresses</c> follow (see <see cref="ListenAddressList" />). A malformed entry
+    ///     is a 400 naming it, rather than an address saved to the file that the listener would
+    ///     have to skip at the next start.
+    /// </summary>
+    private static string ValidateListenAddresses(JsonElement element)
+    {
+        if (
+            element.ValueKind != JsonValueKind.Array
+            || element.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String)
+        )
+            throw new ValidationException(
+                "'listenAddresses' must be a JSON array of IP address strings (for example "
+                    + "[\"192.168.1.10\", \"127.0.0.1\"]), or an empty array to listen on every address."
+            );
+
+        if (
+            !ListenAddressList.TryValidate(
+                element.EnumerateArray().Select(item => item.GetString()),
+                out List<System.Net.IPAddress> addresses,
+                out string error
+            )
+        )
+            throw new ValidationException($"'listenAddresses': {error}");
+
+        return ListenAddressList.Join(addresses);
     }
 
     /// <summary>
