@@ -1,5 +1,11 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormControl,
+  FormGroup,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import {
   AlertComponent,
   ButtonDirective,
@@ -13,14 +19,50 @@ import {
   FormControlDirective,
   FormDirective,
   FormLabelDirective,
+  FormSelectDirective,
   FormTextDirective,
   SpinnerComponent,
 } from '@coreui/angular';
+import { IconDirective } from '@coreui/icons-angular';
 import { firstValueFrom } from 'rxjs';
-import { RecursiveSettingsService } from '../../../api-client';
+import {
+  DnssecAlgorithmEnum,
+  RecursiveRootHintServerDetail,
+  RecursiveSettingsService,
+  RecursiveTrustAnchorDetail,
+} from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+
+/** One root hint server row: a name server's name and its addresses, comma-separated. */
+type RootHintServerFormGroup = FormGroup<{
+  name: FormControl<string>;
+  addresses: FormControl<string>;
+}>;
+
+/** One trust anchor row, the DS-style fields `TrustAnchorOption` binds. */
+type TrustAnchorFormGroup = FormGroup<{
+  keyTag: FormControl<number>;
+  algorithm: FormControl<DnssecAlgorithmEnum>;
+  digestType: FormControl<number>;
+  digestHex: FormControl<string>;
+}>;
+
+/**
+ * The algorithms offered for a trust anchor. The older ones with hyphenated names (DSA-NSEC3-SHA1
+ * and the like) are left out: no root has used them, and the backend's parser only accepts names
+ * without hyphens.
+ */
+const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
+  DnssecAlgorithmEnum.Rsasha1,
+  DnssecAlgorithmEnum.Rsasha256,
+  DnssecAlgorithmEnum.Rsasha512,
+  DnssecAlgorithmEnum.Ecdsap256Sha256,
+  DnssecAlgorithmEnum.Ecdsap384Sha384,
+  DnssecAlgorithmEnum.Ed25519,
+  DnssecAlgorithmEnum.Ed448,
+];
 
 /**
  * This component reads and writes this host's own `RecursiveServerOptions` (recursion on/off,
@@ -35,12 +77,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
  * query already in flight. The backend's own PATCH response note (surfaced directly in the
  * success notification, never suppressed) says so explicitly, and calls out the two fields that
  * are the deliberate exception: the root-hints/trust-anchor override lists, each read once at
- * startup or first seed by design. This form deliberately does not expose those two advanced,
- * private-root-only override lists at all -- editing an array of name-server/trust-anchor objects
- * has no natural fit in this project's established flat-settings-form shape, and the feature they
- * serve (recursing against something other than the real internet root) is rare enough that a
- * direct configuration-file edit remains the appropriate path, exactly as before this page
- * existed. Every other field the backend accepts is covered here.
+ * startup or first seed by design. Those two lists are edited as repeatable rows at the bottom of
+ * the form, and are only sent when they actually changed, so saving an unrelated field never
+ * triggers the backend's restart-required note.
  */
 @Component({
   selector: 'app-recursive-settings',
@@ -59,7 +98,9 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
     FormControlDirective,
     FormDirective,
     FormLabelDirective,
+    FormSelectDirective,
     FormTextDirective,
+    IconDirective,
     SpinnerComponent,
   ],
   templateUrl: './recursive-settings.component.html',
@@ -93,7 +134,41 @@ export class RecursiveSettingsComponent implements OnInit {
     enablePrefetch: [true],
     prefetchWindow: ['00:00:10', [Validators.required]],
     prefetchRecentAccessWindow: ['00:05:00', [Validators.required]],
+    rootHintServers: this.formBuilder.array<RootHintServerFormGroup>([]),
+    trustAnchors: this.formBuilder.array<TrustAnchorFormGroup>([]),
   });
+
+  /** The algorithms a trust anchor row offers -- every algorithm still in real-world use. */
+  readonly trustAnchorAlgorithms = TRUST_ANCHOR_ALGORITHMS;
+
+  /** The two override lists exactly as last loaded, to tell whether a save needs to send them. */
+  private loadedOverrides = { rootHints: '[]', trustAnchors: '[]' };
+
+  /** Every root hint server row. */
+  get rootHintServers() {
+    return this.form.controls.rootHintServers;
+  }
+
+  /** Every trust anchor row. */
+  get trustAnchors() {
+    return this.form.controls.trustAnchors;
+  }
+
+  addRootHintServer(): void {
+    this.rootHintServers.push(this.buildRootHintServerGroup(null));
+  }
+
+  removeRootHintServer(index: number): void {
+    this.rootHintServers.removeAt(index);
+  }
+
+  addTrustAnchor(): void {
+    this.trustAnchors.push(this.buildTrustAnchorGroup(null));
+  }
+
+  removeTrustAnchor(index: number): void {
+    this.trustAnchors.removeAt(index);
+  }
 
   ngOnInit(): void {
     void this.loadSettings();
@@ -106,12 +181,26 @@ export class RecursiveSettingsComponent implements OnInit {
     this.submitting.set(true);
     this.errorMessage.set(null);
 
-    const value = this.form.getRawValue();
+    const { rootHintServers, trustAnchors, ...value } = this.form.getRawValue();
+    const body: Record<string, unknown> = { ...value };
+
+    // The override lists are read only at startup, so sending them unchanged would make the
+    // backend report that a restart is needed when nothing that needs one was touched.
+    const rootHints = toRootHintServers(rootHintServers);
+    if (JSON.stringify(rootHints) !== this.loadedOverrides.rootHints) {
+      body['rootHintServersOverride'] = rootHints;
+    }
+    const anchors = toTrustAnchors(trustAnchors);
+    if (JSON.stringify(anchors) !== this.loadedOverrides.trustAnchors) {
+      body['trustAnchorsOverride'] = anchors;
+    }
 
     try {
-      const result = await firstValueFrom(
-        this.recursiveApi.apiRecursiveSettingsPatch({ body: value }),
-      );
+      const result = await firstValueFrom(this.recursiveApi.apiRecursiveSettingsPatch({ body }));
+      this.loadedOverrides = {
+        rootHints: JSON.stringify(rootHints),
+        trustAnchors: JSON.stringify(anchors),
+      };
       this.notification.success(result.note ?? 'Recursive resolver settings saved.');
     } catch (error) {
       this.errorMessage.set(
@@ -149,6 +238,19 @@ export class RecursiveSettingsComponent implements OnInit {
         prefetchWindow: settings.prefetchWindow ?? '00:00:10',
         prefetchRecentAccessWindow: settings.prefetchRecentAccessWindow ?? '00:05:00',
       });
+
+      this.rootHintServers.clear();
+      for (const server of settings.rootHintServersOverride ?? []) {
+        this.rootHintServers.push(this.buildRootHintServerGroup(server));
+      }
+      this.trustAnchors.clear();
+      for (const anchor of settings.trustAnchorsOverride ?? []) {
+        this.trustAnchors.push(this.buildTrustAnchorGroup(anchor));
+      }
+      this.loadedOverrides = {
+        rootHints: JSON.stringify(toRootHintServers(this.rootHintServers.getRawValue())),
+        trustAnchors: JSON.stringify(toTrustAnchors(this.trustAnchors.getRawValue())),
+      };
     } catch (error) {
       this.errorMessage.set(
         extractErrorMessage(error, 'Could not load recursive resolver settings.'),
@@ -157,4 +259,53 @@ export class RecursiveSettingsComponent implements OnInit {
       this.loading.set(false);
     }
   }
+
+  private buildRootHintServerGroup(
+    server: RecursiveRootHintServerDetail | null,
+  ): RootHintServerFormGroup {
+    return this.formBuilder.group({
+      name: [server?.name ?? '', [Validators.required]],
+      addresses: [(server?.addresses ?? []).join(', '), [Validators.required]],
+    });
+  }
+
+  private buildTrustAnchorGroup(anchor: RecursiveTrustAnchorDetail | null): TrustAnchorFormGroup {
+    return this.formBuilder.group({
+      keyTag: [
+        anchor?.keyTag ?? 0,
+        [Validators.required, Validators.min(0), Validators.max(65535)],
+      ],
+      algorithm: [anchor?.algorithm ?? DnssecAlgorithmEnum.Rsasha256],
+      digestType: [anchor?.digestType ?? 2],
+      digestHex: [
+        anchor?.digestHex ?? '',
+        [Validators.required, Validators.pattern(/^[0-9A-Fa-f\s]+$/)],
+      ],
+    });
+  }
+}
+
+/** This function turns the root hint rows into the request shape, splitting each address list. */
+export function toRootHintServers(
+  rows: { name: string; addresses: string }[],
+): RecursiveRootHintServerDetail[] {
+  return rows.map((row) => ({
+    name: row.name.trim(),
+    addresses: row.addresses
+      .split(/[\s,]+/)
+      .map((address) => address.trim())
+      .filter((address) => address.length > 0),
+  }));
+}
+
+/** This function turns the trust anchor rows into the request shape, normalizing the digest. */
+export function toTrustAnchors(
+  rows: { keyTag: number; algorithm: DnssecAlgorithmEnum; digestType: number; digestHex: string }[],
+): RecursiveTrustAnchorDetail[] {
+  return rows.map((row) => ({
+    keyTag: Number(row.keyTag),
+    algorithm: row.algorithm,
+    digestType: Number(row.digestType),
+    digestHex: row.digestHex.replace(/\s+/g, '').toUpperCase(),
+  }));
 }

@@ -88,6 +88,19 @@
       <ng-container cdkColumnDef="actions">
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let key" class="actions-cell">
+          <button
+            cButton
+            size="sm"
+            variant="ghost"
+            color="secondary"
+            [cTooltip]="key.role === 'KSK' ? 'DS and DNSKEY records' : 'DNSKEY record'"
+            [attr.aria-label]="
+              key.role === 'KSK' ? 'Show DS and DNSKEY records' : 'Show DNSKEY record'
+            "
+            (click)="showRecords(key)"
+          >
+            <svg cIcon name="cilListRich" size="sm"></svg>
+          </button>
           @if (canStartRollover(key)) {
             <button
               *appIfPermission="'zones:write'"
@@ -143,6 +156,20 @@
     />
   </div>
 }
+
+<app-dnssec-key-rollover-dialog
+  [visible]="rolloverDialogVisible()"
+  (visibleChange)="rolloverDialogVisible.set($event)"
+  [zoneId]="zoneId"
+  [key]="rolloverKey()"
+  (rolled)="onRolled($event)"
+/>
+
+<app-dnssec-key-records-dialog
+  [visible]="recordsDialogVisible()"
+  (visibleChange)="recordsDialogVisible.set($event)"
+  [key]="recordsKey()"
+/>
 
 <app-confirm-dialog
   [visible]="confirmDialogVisible()"

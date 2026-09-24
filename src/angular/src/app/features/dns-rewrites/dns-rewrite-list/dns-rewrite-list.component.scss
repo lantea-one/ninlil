@@ -26,6 +26,15 @@
   font-style: italic;
 }
 
+.scope-badge {
+  margin-right: var(--ninlil-space-1);
+}
+
+.scope-global,
+.managed-note {
+  color: var(--cui-secondary-color);
+}
+
 .actions-cell {
   text-align: right;
   white-space: nowrap;

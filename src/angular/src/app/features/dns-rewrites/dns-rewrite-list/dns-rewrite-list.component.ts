@@ -10,7 +10,12 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { firstValueFrom } from 'rxjs';
-import { DnsRewriteDetail, DnsRewritesService } from '../../../api-client';
+import {
+  ClientGroupsService,
+  ClientsService,
+  DnsRewriteDetail,
+  DnsRewritesService,
+} from '../../../api-client';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData,
@@ -37,6 +42,11 @@ const DEFAULT_PAGE_SIZE = 25;
  * is computed server-side from the stored `target` (an IP address classifies as `A`/`Aaaa`,
  * anything else as `Cname`), not something this UI derives itself, the same convention
  * `ForwarderDetail.Protocol` already establishes.
+ *
+ * <p>The list also holds the rewrites Safe Search creates for a single client or client group
+ * (`clientId`/`clientGroupId`). Those are labelled with the client or group they apply to, and
+ * can't be edited, toggled or deleted here: they belong to that client's or group's Safe Search
+ * setting, and changing one row by hand would leave Safe Search half applied.</p>
  */
 @Component({
   selector: 'app-dns-rewrite-list',
@@ -61,6 +71,8 @@ const DEFAULT_PAGE_SIZE = 25;
 })
 export class DnsRewriteListComponent {
   private readonly rewritesApi = inject(DnsRewritesService);
+  private readonly clientsApi = inject(ClientsService);
+  private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly notification = inject(NotificationService);
 
   /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
@@ -72,7 +84,18 @@ export class DnsRewriteListComponent {
   /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  readonly displayedColumns = ['domain', 'target', 'targetKind', 'disabled', 'sync', 'actions'];
+  readonly displayedColumns = [
+    'domain',
+    'target',
+    'targetKind',
+    'scope',
+    'disabled',
+    'sync',
+    'actions',
+  ];
+
+  /** Display names of the clients and groups the current page's scoped rewrites apply to, by id. */
+  readonly scopeNames = signal<ReadonlyMap<string, string>>(new Map());
 
   readonly rewrites = signal<DnsRewriteDetail[]>([]);
   readonly totalCount = signal(0);
@@ -164,10 +187,40 @@ export class DnsRewriteListComponent {
       );
       this.rewrites.set(page.items ?? []);
       this.totalCount.set(page.totalCount ?? 0);
+      void this.loadScopeNames(page.items ?? []);
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load DNS rewrites.'));
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * This method looks up the names of the clients and groups this page's scoped rewrites apply
+   * to. A lookup that fails (most likely a missing `clients:read` or `clientgroups:read`) just
+   * leaves that row labelled "a client" or "a group".
+   */
+  private async loadScopeNames(rewrites: DnsRewriteDetail[]): Promise<void> {
+    const clientIds = new Set(rewrites.map((r) => r.clientId).filter((id): id is string => !!id));
+    const groupIds = new Set(
+      rewrites.map((r) => r.clientGroupId).filter((id): id is string => !!id),
+    );
+
+    const lookups = [
+      ...[...clientIds].map(async (id) => {
+        const client = await firstValueFrom(this.clientsApi.apiClientsIdGet({ id }));
+        return [id, client.displayName || client.addresses?.[0]?.clientIdentifier || ''] as const;
+      }),
+      ...[...groupIds].map(async (id) => {
+        const group = await firstValueFrom(this.clientGroupsApi.apiClientGroupsIdGet({ id }));
+        return [id, group.name ?? ''] as const;
+      }),
+    ];
+
+    const names = new Map<string, string>();
+    for (const result of await Promise.allSettled(lookups)) {
+      if (result.status === 'fulfilled' && result.value[1]) names.set(...result.value);
+    }
+    this.scopeNames.set(names);
   }
 }

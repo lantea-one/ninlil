@@ -1,4 +1,8 @@
-import { EMPTY_QUERY_LOG_FILTERS, buildQueryLogSearchParams } from './query-log.model';
+import {
+  EMPTY_QUERY_LOG_FILTERS,
+  buildQueryLogSearchParams,
+  clientIdentifierKind,
+} from './query-log.model';
 
 describe('buildQueryLogSearchParams', () => {
   it('omits every blank filter field, keeping only skip and take', () => {
@@ -49,5 +53,27 @@ describe('buildQueryLogSearchParams', () => {
     );
 
     expect(params.clientAddress).toBeUndefined();
+  });
+
+  it('includes the client identity filters when set', () => {
+    const params = buildQueryLogSearchParams(
+      {
+        ...EMPTY_QUERY_LOG_FILTERS,
+        clientIdentifier: ' 00:01:00:01:2c:aa ',
+        clientProtocolVersion: 'IPv6',
+      },
+      0,
+      25,
+    );
+
+    expect(params.clientIdentifier).toBe('00:01:00:01:2c:aa');
+    expect(params.clientProtocolVersion).toBe('IPv6');
+  });
+});
+
+describe('clientIdentifierKind', () => {
+  it('calls a DHCPv4 identity a MAC and a DHCPv6 one a DUID', () => {
+    expect(clientIdentifierKind({ clientProtocolVersion: 'IPv4' })).toBe('MAC');
+    expect(clientIdentifierKind({ clientProtocolVersion: 'IPv6' })).toBe('DUID');
   });
 });

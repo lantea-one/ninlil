@@ -10,12 +10,7 @@ import {
 } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 import { firstValueFrom } from 'rxjs';
-import {
-  DnssecKeyDetail,
-  DnssecKeyRoleEnum,
-  DnssecKeysService,
-  ZonesService,
-} from '../../../../api-client';
+import { DnssecKeyDetail, DnssecKeysService, ZonesService } from '../../../../api-client';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData,
@@ -34,6 +29,8 @@ import {
 } from '../dnssec-key.model';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
+import { DnssecKeyRecordsDialogComponent } from '../dnssec-key-records-dialog/dnssec-key-records-dialog.component';
+import { DnssecKeyRolloverDialogComponent } from '../dnssec-key-rollover-dialog/dnssec-key-rollover-dialog.component';
 
 /** How many keys one page of this list shows -- matches the backend's own `PaginationQuery` default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -51,9 +48,11 @@ const DEFAULT_PAGE_SIZE = 25;
  * "Retire"/"Reactivate" toggle (a single-field `isRetired` merge patch, the same shape
  * `ZoneListComponent`'s own `isDisabled` toggle already established), a "Start rollover" action
  * (available only on the zone's own currently-active key of a role -- see
- * {@link canStartRollover}), a "Confirm parent DS updated" action (available only on a
- * Key-Signing Key mid-rollover still awaiting that confirmation -- see
- * {@link awaitingParentDsConfirmation}), and delete.
+ * {@link canStartRollover} -- and opening {@link DnssecKeyRolloverDialogComponent}, where the
+ * operator can also pick a new algorithm), a "Confirm parent DS updated" action (available only on
+ * a Key-Signing Key mid-rollover still awaiting that confirmation -- see
+ * {@link awaitingParentDsConfirmation}), a records action showing the DNSKEY and DS data to give
+ * the parent zone ({@link DnssecKeyRecordsDialogComponent}), and delete.
  */
 @Component({
   selector: 'app-dnssec-key-list',
@@ -70,6 +69,8 @@ const DEFAULT_PAGE_SIZE = 25;
     IconDirective,
     CoreuiPaginationComponent,
     ConfirmDialogComponent,
+    DnssecKeyRecordsDialogComponent,
+    DnssecKeyRolloverDialogComponent,
     EmptyStateComponent,
   ],
   templateUrl: './dnssec-key-list.component.html',
@@ -89,6 +90,14 @@ export class DnssecKeyListComponent {
 
   /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
+
+  /** The key {@link DnssecKeyRolloverDialogComponent} is open for, if any. */
+  readonly rolloverKey = signal<DnssecKeyDetail | null>(null);
+  readonly rolloverDialogVisible = signal(false);
+
+  /** The key {@link DnssecKeyRecordsDialogComponent} is open for, if any. */
+  readonly recordsKey = signal<DnssecKeyDetail | null>(null);
+  readonly recordsDialogVisible = signal(false);
 
   readonly zoneId = this.route.snapshot.paramMap.get('zoneId') ?? '';
 
@@ -150,42 +159,29 @@ export class DnssecKeyListComponent {
   }
 
   /**
-   * This method confirms, then starts, a real, automated RFC 6781 key rollover for a key that is
-   * currently its zone's own canonical, active key of its role (see {@link canStartRollover}) --
-   * the incoming key's own scheme (Pre-Publish or Double-Signature) is chosen by the backend
-   * entirely from `key.role`, never requested here.
+   * This method opens {@link DnssecKeyRolloverDialogComponent} for a key that is currently its
+   * zone's own canonical, active key of its role (see {@link canStartRollover}). The dialog
+   * confirms, lets the operator choose a new algorithm, and starts the rollover itself.
    */
-  async rollKey(key: DnssecKeyDetail): Promise<void> {
+  rollKey(key: DnssecKeyDetail): void {
     if (!key.id) return;
 
-    const scheme = key.role === DnssecKeyRoleEnum.Ksk ? 'Double-Signature' : 'Pre-Publish';
-    const confirmed = await this.confirm({
-      title: `Start a rollover for this ${key.role} key?`,
-      message:
-        `This generates a brand-new ${key.role}, replacing this key via an automated RFC 6781 ` +
-        `${scheme} rollover. The existing key keeps working until its replacement is safely ` +
-        'promoted, but a started rollover cannot be undone.',
-      confirmLabel: 'Start rollover',
-    });
+    this.rolloverKey.set(key);
+    this.rolloverDialogVisible.set(true);
+  }
 
-    if (!confirmed) return;
+  /** This method runs once a rollover has started, reloading the page to show the incoming key. */
+  async onRolled(replacement: DnssecKeyDetail): Promise<void> {
+    this.notification.success(
+      `Rollover started -- key tag ${replacement.keyTag ?? '?'} is the incoming replacement.`,
+    );
+    await this.loadPage();
+  }
 
-    try {
-      const replacement = await firstValueFrom(
-        this.dnssecKeysApi.apiZonesZoneIdDnssecKeysIdRollPost({
-          zoneId: this.zoneId,
-          id: key.id,
-        }),
-      );
-      this.notification.success(
-        `Rollover started -- key tag ${replacement.keyTag ?? '?'} is the incoming replacement.`,
-      );
-      await this.loadPage();
-    } catch (error) {
-      this.notification.error(
-        extractErrorMessage(error, 'Could not start a rollover for this key.'),
-      );
-    }
+  /** This method opens {@link DnssecKeyRecordsDialogComponent} for one key. */
+  showRecords(key: DnssecKeyDetail): void {
+    this.recordsKey.set(key);
+    this.recordsDialogVisible.set(true);
   }
 
   /**
@@ -199,9 +195,9 @@ export class DnssecKeyListComponent {
     const confirmed = await this.confirm({
       title: 'Confirm the parent DS record has been updated?',
       message:
-        "Only confirm this once the new DS record is actually live at this zone's real, " +
-        "externally-hosted parent -- confirming starts the outgoing key's own final, safe " +
-        'removal countdown.',
+        "Only confirm this once the new DS record (shown in the new key's records) is actually " +
+        "live at this zone's real, externally-hosted parent -- confirming starts the outgoing " +
+        "key's own final, safe removal countdown.",
       confirmLabel: 'Confirm DS updated',
     });
 

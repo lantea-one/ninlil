@@ -58,6 +58,33 @@
         </td>
       </ng-container>
 
+      <ng-container cdkColumnDef="scope">
+        <th cdk-header-cell *cdkHeaderCellDef>Applies to</th>
+        <td cdk-cell *cdkCellDef="let rewrite">
+          @if (rewrite.clientId) {
+            <c-badge color="info" class="scope-badge">Client</c-badge>
+            @if ('clients:write' | hasPermission) {
+              <a [routerLink]="['/clients', rewrite.clientId, 'edit']">{{
+                scopeNames().get(rewrite.clientId) ?? 'a client'
+              }}</a>
+            } @else {
+              {{ scopeNames().get(rewrite.clientId) ?? 'a client' }}
+            }
+          } @else if (rewrite.clientGroupId) {
+            <c-badge color="info" class="scope-badge">Group</c-badge>
+            @if ('clientgroups:write' | hasPermission) {
+              <a [routerLink]="['/client-groups', rewrite.clientGroupId, 'edit']">{{
+                scopeNames().get(rewrite.clientGroupId) ?? 'a group'
+              }}</a>
+            } @else {
+              {{ scopeNames().get(rewrite.clientGroupId) ?? 'a group' }}
+            }
+          } @else {
+            <span class="scope-global">All clients</span>
+          }
+        </td>
+      </ng-container>
+
       <ng-container cdkColumnDef="disabled">
         <th cdk-header-cell *cdkHeaderCellDef>Status</th>
         <td cdk-cell *cdkCellDef="let rewrite">
@@ -67,7 +94,9 @@
             variant="ghost"
             [color]="rewrite.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="rewrite.isDisabled ? 'Enable this rewrite' : 'Disable this rewrite'"
-            [disabled]="!('dnsrewrites:write' | hasPermission)"
+            [disabled]="
+              !('dnsrewrites:write' | hasPermission) || rewrite.clientId || rewrite.clientGroupId
+            "
             (click)="toggleDisabled(rewrite)"
           >
             {{ rewrite.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -88,30 +117,42 @@
       <ng-container cdkColumnDef="actions">
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let rewrite" class="actions-cell">
-          <a
-            *appIfPermission="'dnsrewrites:write'"
-            cButton
-            size="sm"
-            variant="ghost"
-            color="secondary"
-            [routerLink]="['/dns-rewrites', rewrite.id, 'edit']"
-            cTooltip="Edit rewrite"
-            aria-label="Edit rewrite"
-          >
-            <svg cIcon name="cilPencil" size="sm"></svg>
-          </a>
-          <button
-            *appIfPermission="'dnsrewrites:write'"
-            cButton
-            size="sm"
-            variant="ghost"
-            color="danger"
-            cTooltip="Delete rewrite"
-            aria-label="Delete rewrite"
-            (click)="deleteRewrite(rewrite)"
-          >
-            <svg cIcon name="cilTrash" size="sm"></svg>
-          </button>
+          @if (rewrite.clientId || rewrite.clientGroupId) {
+            <span
+              class="managed-note"
+              [cTooltip]="
+                'Created by Safe Search for this ' +
+                (rewrite.clientId ? 'client' : 'group') +
+                '. Change it through that Safe Search setting.'
+              "
+              >Safe Search</span
+            >
+          } @else {
+            <a
+              *appIfPermission="'dnsrewrites:write'"
+              cButton
+              size="sm"
+              variant="ghost"
+              color="secondary"
+              [routerLink]="['/dns-rewrites', rewrite.id, 'edit']"
+              cTooltip="Edit rewrite"
+              aria-label="Edit rewrite"
+            >
+              <svg cIcon name="cilPencil" size="sm"></svg>
+            </a>
+            <button
+              *appIfPermission="'dnsrewrites:write'"
+              cButton
+              size="sm"
+              variant="ghost"
+              color="danger"
+              cTooltip="Delete rewrite"
+              aria-label="Delete rewrite"
+              (click)="deleteRewrite(rewrite)"
+            >
+              <svg cIcon name="cilTrash" size="sm"></svg>
+            </button>
+          }
         </td>
       </ng-container>
 

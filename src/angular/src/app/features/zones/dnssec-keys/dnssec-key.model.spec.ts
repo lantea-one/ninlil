@@ -7,6 +7,7 @@ import {
 import {
   awaitingParentDsConfirmation,
   canStartRollover,
+  dnssecAlgorithmNumber,
   isRsaAlgorithm,
   lifecycleStateBadgeColor,
 } from './dnssec-key.model';
@@ -120,5 +121,12 @@ describe('dnssec-key.model', () => {
         }),
       ),
     ).toBeFalse();
+  });
+
+  it('dnssecAlgorithmNumber() gives the IANA number a DS record carries', () => {
+    expect(dnssecAlgorithmNumber(DnssecAlgorithmEnum.Rsasha256)).toBe(8);
+    expect(dnssecAlgorithmNumber(DnssecAlgorithmEnum.Ecdsap256Sha256)).toBe(13);
+    expect(dnssecAlgorithmNumber(DnssecAlgorithmEnum.Ed448)).toBe(16);
+    expect(dnssecAlgorithmNumber(undefined)).toBeNull();
   });
 });

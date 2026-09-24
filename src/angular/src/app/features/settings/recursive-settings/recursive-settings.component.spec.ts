@@ -3,7 +3,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { RecursiveSettingsService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import { RecursiveSettingsComponent } from './recursive-settings.component';
+import {
+  RecursiveSettingsComponent,
+  toRootHintServers,
+  toTrustAnchors,
+} from './recursive-settings.component';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -16,7 +20,10 @@ describe('RecursiveSettingsComponent', () => {
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent(configureApi?: () => void) {
+  async function createComponent(
+    configureApi?: () => void,
+    overrides: Record<string, unknown> = {},
+  ) {
     apiSpy = jasmine.createSpyObj('RecursiveSettingsService', [
       'apiRecursiveSettingsGet',
       'apiRecursiveSettingsPatch',
@@ -45,6 +52,7 @@ describe('RecursiveSettingsComponent', () => {
         enablePrefetch: true,
         prefetchWindow: '00:00:10',
         prefetchRecentAccessWindow: '00:05:00',
+        ...overrides,
       }),
     );
     configureApi?.();
@@ -105,5 +113,76 @@ describe('RecursiveSettingsComponent', () => {
     await fixture.componentInstance.save();
 
     expect(fixture.componentInstance.errorMessage()).toBe('bad value');
+  });
+
+  it('loads the root hint and trust anchor overrides as editable rows', async () => {
+    const fixture = await createComponent(undefined, {
+      rootHintServersOverride: [{ name: 'a.root.test.', addresses: ['192.0.2.1', '2001:db8::1'] }],
+      trustAnchorsOverride: [
+        { keyTag: 20326, algorithm: 'RSASHA256', digestType: 2, digestHex: 'E06D44B8' },
+      ],
+    });
+    const component = fixture.componentInstance;
+
+    expect(component.rootHintServers.length).toBe(1);
+    expect(component.rootHintServers.at(0).controls.addresses.value).toBe('192.0.2.1, 2001:db8::1');
+    expect(component.trustAnchors.at(0).controls.keyTag.value).toBe(20326);
+    expect(fixture.nativeElement.textContent).toContain('Trust anchors override');
+    expect(fixture.nativeElement.textContent).not.toContain('configuration-file edit');
+  });
+
+  it('save() leaves unchanged override lists out, so no restart is reported', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+
+    await fixture.componentInstance.save();
+
+    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
+    expect('rootHintServersOverride' in body).toBeFalse();
+    expect('trustAnchorsOverride' in body).toBeFalse();
+    expect('rootHintServers' in body).toBeFalse();
+  });
+
+  it('save() sends a changed override list', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Restart required.' }));
+    });
+    const component = fixture.componentInstance;
+
+    component.addRootHintServer();
+    component.rootHintServers.at(0).setValue({ name: 'a.root.test.', addresses: '192.0.2.1' });
+    await component.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({
+        rootHintServersOverride: [{ name: 'a.root.test.', addresses: ['192.0.2.1'] }],
+      }),
+    });
+    const body = apiSpy.apiRecursiveSettingsPatch.calls.mostRecent().args[0].body;
+    expect('trustAnchorsOverride' in body).toBeFalse();
+  });
+
+  it('removing the last row sends an empty list, restoring the built-in root', async () => {
+    const fixture = await createComponent(
+      () => apiSpy.apiRecursiveSettingsPatch.and.returnValue(of({ note: 'Saved.' })),
+      { rootHintServersOverride: [{ name: 'a.root.test.', addresses: ['192.0.2.1'] }] },
+    );
+
+    fixture.componentInstance.removeRootHintServer(0);
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiRecursiveSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ rootHintServersOverride: [] }),
+    });
+  });
+
+  it('toRootHintServers() and toTrustAnchors() normalize row input', () => {
+    expect(toRootHintServers([{ name: ' ns. ', addresses: '192.0.2.1,  2001:db8::1\n' }])).toEqual([
+      { name: 'ns.', addresses: ['192.0.2.1', '2001:db8::1'] },
+    ]);
+    expect(
+      toTrustAnchors([{ keyTag: 1, algorithm: 'ED25519', digestType: 2, digestHex: 'ab cd\nef' }]),
+    ).toEqual([{ keyTag: 1, algorithm: 'ED25519', digestType: 2, digestHex: 'ABCDEF' }]);
   });
 });

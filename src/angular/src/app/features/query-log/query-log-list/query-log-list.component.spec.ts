@@ -157,4 +157,54 @@ describe('QueryLogListComponent', () => {
     expect(notificationSpy.error).toHaveBeenCalledWith('forbidden');
     expect(fixture.componentInstance.clearing()).toBeFalse();
   });
+
+  it('labels a row with the MAC or DUID its client was resolved to', async () => {
+    const fixture = await createComponent(() =>
+      apiSpy.apiQueryLogGet.and.returnValue(
+        of({
+          items: [
+            {
+              ...SAMPLE_ENTRY,
+              clientIdentifier: 'aa:bb:cc:dd:ee:ff',
+              clientProtocolVersion: 'IPv4',
+            },
+            {
+              ...SAMPLE_ENTRY,
+              id: 'e2',
+              clientIdentifier: '00:01:00:01:2c:aa',
+              clientProtocolVersion: 'IPv6',
+            },
+          ],
+          skip: 0,
+          take: 25,
+          totalCount: 2,
+        }),
+      ),
+    );
+
+    const cells: HTMLElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('td.cdk-column-clientIdentifier'),
+    );
+    expect(cells[0].textContent).toContain('MAC');
+    expect(cells[0].textContent).toContain('aa:bb:cc:dd:ee:ff');
+    expect(cells[1].textContent).toContain('DUID');
+  });
+
+  it('clicking a client ID filters the log to that client', async () => {
+    const fixture = await createComponent();
+    apiSpy.apiQueryLogGet.calls.reset();
+
+    await fixture.componentInstance.filterByClientIdentifier({
+      ...SAMPLE_ENTRY,
+      clientIdentifier: 'aa:bb:cc:dd:ee:ff',
+      clientProtocolVersion: 'IPv4',
+    } as never);
+
+    expect(apiSpy.apiQueryLogGet).toHaveBeenCalledWith({
+      skip: 0,
+      take: 25,
+      clientIdentifier: 'aa:bb:cc:dd:ee:ff',
+      clientProtocolVersion: 'IPv4',
+    });
+  });
 });

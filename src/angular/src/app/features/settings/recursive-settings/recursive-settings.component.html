@@ -220,10 +220,153 @@
           </div>
         </div>
 
-        <div cFormText class="override-note">
-          A root-hints or trust-anchor override for recursing against something other than the real
-          internet root is not editable here -- it takes effect only once, at this host's own
-          startup, so it stays a direct configuration-file edit for now.
+        <div class="override-group">
+          <div class="override-group-label">Root hints override</div>
+          <div cFormText class="override-hint">
+            The name servers recursion starts from, for resolving against a private root instead of
+            the real internet one. Leave empty to use the built-in root servers. Read at startup, so
+            a change needs a restart.
+          </div>
+          <div formArrayName="rootHintServers">
+            @for (server of rootHintServers.controls; track $index) {
+              <div [formGroupName]="$index" class="override-row">
+                <div class="field">
+                  <label cLabel [attr.for]="'recursive-root-hint-name-' + $index">Name</label>
+                  <input
+                    cFormControl
+                    [id]="'recursive-root-hint-name-' + $index"
+                    formControlName="name"
+                    placeholder="a.root.example."
+                  />
+                </div>
+                <div class="field wide">
+                  <label cLabel [attr.for]="'recursive-root-hint-addresses-' + $index"
+                    >Addresses</label
+                  >
+                  <input
+                    cFormControl
+                    [id]="'recursive-root-hint-addresses-' + $index"
+                    formControlName="addresses"
+                    placeholder="192.0.2.53, 2001:db8::53"
+                  />
+                </div>
+                <button
+                  *appIfPermission="'recursivesettings:write'"
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="danger"
+                  type="button"
+                  aria-label="Remove root hint server"
+                  (click)="removeRootHintServer($index)"
+                >
+                  <svg cIcon name="cilTrash" size="sm"></svg>
+                </button>
+              </div>
+            }
+          </div>
+          <button
+            *appIfPermission="'recursivesettings:write'"
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addRootHintServer()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add root server
+          </button>
+        </div>
+
+        <div class="override-group">
+          <div class="override-group-label">Trust anchors override</div>
+          <div cFormText class="override-hint">
+            The DS records DNSSEC validation trusts at the root, for a private root. Leave empty to
+            use the IANA root trust anchors. Used only to seed the trust anchor store the first time
+            it starts (or if its state file is missing); automatic RFC 5011 updates take over after
+            that.
+          </div>
+          <div formArrayName="trustAnchors">
+            @for (anchor of trustAnchors.controls; track $index) {
+              <div [formGroupName]="$index" class="override-row">
+                <div class="field narrow">
+                  <label cLabel [attr.for]="'recursive-trust-anchor-key-tag-' + $index"
+                    >Key tag</label
+                  >
+                  <input
+                    cFormControl
+                    type="number"
+                    [id]="'recursive-trust-anchor-key-tag-' + $index"
+                    formControlName="keyTag"
+                  />
+                </div>
+                <div class="field">
+                  <label cLabel [attr.for]="'recursive-trust-anchor-algorithm-' + $index"
+                    >Algorithm</label
+                  >
+                  <select
+                    cSelect
+                    [id]="'recursive-trust-anchor-algorithm-' + $index"
+                    formControlName="algorithm"
+                  >
+                    @for (algorithm of trustAnchorAlgorithms; track algorithm) {
+                      <option [value]="algorithm">{{ algorithm }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field">
+                  <label cLabel [attr.for]="'recursive-trust-anchor-digest-type-' + $index"
+                    >Digest type</label
+                  >
+                  <select
+                    cSelect
+                    [id]="'recursive-trust-anchor-digest-type-' + $index"
+                    formControlName="digestType"
+                  >
+                    <option [ngValue]="1">SHA-1</option>
+                    <option [ngValue]="2">SHA-256</option>
+                    <option [ngValue]="4">SHA-384</option>
+                  </select>
+                </div>
+                <div class="field wide">
+                  <label cLabel [attr.for]="'recursive-trust-anchor-digest-' + $index"
+                    >Digest (hex)</label
+                  >
+                  <input
+                    cFormControl
+                    [id]="'recursive-trust-anchor-digest-' + $index"
+                    formControlName="digestHex"
+                    placeholder="E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D"
+                  />
+                </div>
+                <button
+                  *appIfPermission="'recursivesettings:write'"
+                  cButton
+                  size="sm"
+                  variant="ghost"
+                  color="danger"
+                  type="button"
+                  aria-label="Remove trust anchor"
+                  (click)="removeTrustAnchor($index)"
+                >
+                  <svg cIcon name="cilTrash" size="sm"></svg>
+                </button>
+              </div>
+            }
+          </div>
+          <button
+            *appIfPermission="'recursivesettings:write'"
+            cButton
+            size="sm"
+            variant="outline"
+            color="secondary"
+            type="button"
+            (click)="addTrustAnchor()"
+          >
+            <svg cIcon name="cilPlus" size="sm"></svg>
+            Add trust anchor
+          </button>
         </div>
       </form>
     </c-card-body>

@@ -164,49 +164,39 @@ describe('DnssecKeyListComponent', () => {
     expect(notificationSpy.error).toHaveBeenCalledWith('in use');
   });
 
-  it('rollKey() does nothing when the confirmation dialog is dismissed', async () => {
+  it('rollKey() opens the rollover dialog for that key instead of calling the API itself', async () => {
     const fixture = await createComponent();
 
-    const rollPromise = fixture.componentInstance.rollKey(fixture.componentInstance.keys()[0]);
-    fixture.componentInstance.onConfirmDialogResolved(false);
-    await rollPromise;
+    fixture.componentInstance.rollKey(fixture.componentInstance.keys()[0]);
+    fixture.detectChanges();
 
+    expect(fixture.componentInstance.rolloverDialogVisible()).toBeTrue();
+    expect(fixture.componentInstance.rolloverKey()?.id).toBe('key-1');
     expect(dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysIdRollPost).not.toHaveBeenCalled();
   });
 
-  it('rollKey() starts a rollover and reloads the page once the confirmation dialog is accepted', async () => {
+  it('onRolled() announces the incoming key and reloads the page', async () => {
     const fixture = await createComponent();
-    dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysIdRollPost.and.returnValue(
-      of({ id: 'key-2', keyTag: 54321 }),
-    );
 
-    const rollPromise = fixture.componentInstance.rollKey(fixture.componentInstance.keys()[0]);
-    fixture.componentInstance.onConfirmDialogResolved(true);
-    await rollPromise;
+    await fixture.componentInstance.onRolled({ id: 'key-2', keyTag: 54321 });
 
-    expect(dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysIdRollPost).toHaveBeenCalledWith({
-      zoneId: 'zone-1',
-      id: 'key-1',
-    });
-    expect(notificationSpy.success).toHaveBeenCalled();
+    expect(notificationSpy.success).toHaveBeenCalledWith(jasmine.stringContaining('54321'));
     // Reloading the page is what re-fetches the incoming key's own row, so the rollover's
     // real effect (a brand-new sibling key in a Published/DoubleSignature state) shows up.
     expect(dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysGet).toHaveBeenCalledTimes(2);
   });
 
-  it('shows an error notification when starting a rollover fails', async () => {
+  it('the records action opens the records dialog for that key', async () => {
     const fixture = await createComponent();
-    dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysIdRollPost.and.returnValue(
-      throwError(
-        () => new HttpErrorResponse({ status: 409, error: 'rollover already in progress' }),
-      ),
+
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[aria-label="Show DS and DNSKEY records"]',
     );
+    button.click();
+    fixture.detectChanges();
 
-    const rollPromise = fixture.componentInstance.rollKey(fixture.componentInstance.keys()[0]);
-    fixture.componentInstance.onConfirmDialogResolved(true);
-    await rollPromise;
-
-    expect(notificationSpy.error).toHaveBeenCalledWith('rollover already in progress');
+    expect(fixture.componentInstance.recordsDialogVisible()).toBeTrue();
+    expect(fixture.componentInstance.recordsKey()?.id).toBe('key-1');
   });
 
   it('the "start rollover" action only appears for a key that is currently Active', async () => {

@@ -27,6 +27,37 @@
   gap: var(--ninlil-space-4);
 }
 
-.override-note {
-  margin-top: var(--ninlil-space-2);
+.override-group {
+  margin-top: var(--ninlil-space-3);
+}
+
+.override-group-label {
+  font-weight: 600;
+  margin-bottom: var(--ninlil-space-1);
+}
+
+.override-hint {
+  margin-bottom: var(--ninlil-space-2);
+}
+
+.override-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ninlil-space-2);
+  margin-bottom: var(--ninlil-space-3);
+
+  .field {
+    flex: 1 1 8rem;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+
+  .field.narrow {
+    flex: 0 1 6rem;
+  }
+
+  .field.wide {
+    flex: 2 1 14rem;
+  }
 }

@@ -23,6 +23,30 @@ export function isRsaAlgorithm(algorithm: DnssecAlgorithmEnum): boolean {
   );
 }
 
+/**
+ * This constant maps each algorithm to its IANA number (the "DNS Security Algorithm Numbers"
+ * registry) -- the number a DS or DNSKEY record carries, and what a registrar's form asks for.
+ */
+const DNSSEC_ALGORITHM_NUMBERS: Record<DnssecAlgorithmEnum, number> = {
+  [DnssecAlgorithmEnum.Rsamd5]: 1,
+  [DnssecAlgorithmEnum.Dsa]: 3,
+  [DnssecAlgorithmEnum.Rsasha1]: 5,
+  [DnssecAlgorithmEnum.DsaNsec3Sha1]: 6,
+  [DnssecAlgorithmEnum.Rsasha1Nsec3Sha1]: 7,
+  [DnssecAlgorithmEnum.Rsasha256]: 8,
+  [DnssecAlgorithmEnum.Rsasha512]: 10,
+  [DnssecAlgorithmEnum.EccGost]: 12,
+  [DnssecAlgorithmEnum.Ecdsap256Sha256]: 13,
+  [DnssecAlgorithmEnum.Ecdsap384Sha384]: 14,
+  [DnssecAlgorithmEnum.Ed25519]: 15,
+  [DnssecAlgorithmEnum.Ed448]: 16,
+};
+
+/** This function returns an algorithm's IANA number, or `null` when there is no algorithm. */
+export function dnssecAlgorithmNumber(algorithm: DnssecAlgorithmEnum | undefined): number | null {
+  return algorithm ? DNSSEC_ALGORITHM_NUMBERS[algorithm] : null;
+}
+
 /** This constant contains a sensible default RSA key size for a freshly generated key, matching this project's own preset conventions. */
 export const DEFAULT_RSA_KEY_SIZE_BITS = 2048;
 

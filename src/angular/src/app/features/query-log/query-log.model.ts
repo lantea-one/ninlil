@@ -1,4 +1,8 @@
-import { ApiQueryLogGetRequestParams } from '../../api-client';
+import {
+  ApiQueryLogGetRequestParams,
+  DnsQueryLogEntryDetail,
+  InternetProtocolVersionEnum,
+} from '../../api-client';
 
 /**
  * This interface describes the shape of {@link QueryLogListComponent}'s own filter form value --
@@ -16,6 +20,10 @@ export interface QueryLogFilterFormValue {
   responseCode: string;
   fromUtc: string;
   toUtc: string;
+  /** A MAC address or DUID, matched exactly against the client identity the entry was resolved to. */
+  clientIdentifier: string;
+  /** `''` for either kind, or `IPv4`/`IPv6` to match only MAC-address or only DUID identities. */
+  clientProtocolVersion: '' | InternetProtocolVersionEnum;
 }
 
 /**
@@ -49,6 +57,11 @@ export function buildQueryLogSearchParams(
   const responseCode = filters.responseCode.trim();
   if (responseCode.length > 0) params.responseCode = responseCode;
 
+  const clientIdentifier = filters.clientIdentifier.trim();
+  if (clientIdentifier.length > 0) params.clientIdentifier = clientIdentifier;
+
+  if (filters.clientProtocolVersion) params.clientProtocolVersion = filters.clientProtocolVersion;
+
   if (filters.fromUtc.length > 0) params.fromUtc = new Date(filters.fromUtc).toISOString();
   if (filters.toUtc.length > 0) params.toUtc = new Date(filters.toUtc).toISOString();
 
@@ -63,4 +76,14 @@ export const EMPTY_QUERY_LOG_FILTERS: QueryLogFilterFormValue = {
   responseCode: '',
   fromUtc: '',
   toUtc: '',
+  clientIdentifier: '',
+  clientProtocolVersion: '',
 };
+
+/**
+ * This function names the kind of client identity an entry was resolved to: DHCPv4 identifies a
+ * client by its MAC address, DHCPv6 by its DUID.
+ */
+export function clientIdentifierKind(entry: DnsQueryLogEntryDetail): 'MAC' | 'DUID' {
+  return entry.clientProtocolVersion === InternetProtocolVersionEnum.Ipv6 ? 'DUID' : 'MAC';
+}

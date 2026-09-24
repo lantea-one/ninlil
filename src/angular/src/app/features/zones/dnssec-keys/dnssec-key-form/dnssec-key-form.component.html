@@ -31,19 +31,19 @@
           </c-form-check>
           <p class="hint">
             Retiring a key removes it from the zone's DNSKEY set immediately and stops it from
-            signing anything, with no transition period -- Ninlil doesn't stagger this
-            automatically. Retire a key only after any resolver that might still hold a cached
-            signature or DS record referencing it has had time to move on (a KSK especially, since a
-            parent zone's DS record has to be updated first); retiring too early can make signed
-            answers fail validation for real clients until those caches expire.
+            signing anything, with no transition period (a rollover started from the key list is the
+            staged alternative). Retire a key by hand only after any resolver that might still hold
+            a cached signature or DS record referencing it has had time to move on (a KSK
+            especially, since a parent zone's DS record has to be updated first); retiring too early
+            can make signed answers fail validation for real clients until those caches expire.
           </p>
         } @else {
           <p class="hint">
             Generating a key here activates it immediately -- it starts signing (ZSK) or gets
-            published in the DNSKEY set (KSK) right away. Ninlil doesn't choreograph a safe rollover
-            for you: a proper rollover (RFC 6781) means publishing the new key alongside the old
-            one, waiting out any relevant TTL/caching window so validators pick it up, and only then
-            retiring the old key -- all of that timing is on you to manage by hand.
+            published in the DNSKEY set (KSK) right away. To replace a key that is already in use,
+            use "Start rollover" on the key list instead: Ninlil then publishes the new key
+            alongside the old one, waits out the caching windows, and retires the old key on an RFC
+            6781 schedule.
           </p>
 
           <section class="field-row">

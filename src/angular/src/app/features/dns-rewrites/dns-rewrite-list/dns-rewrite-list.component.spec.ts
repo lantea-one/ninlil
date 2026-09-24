@@ -2,7 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
-import { DnsRewritesService, DnsRewriteTargetKindEnum } from '../../../api-client';
+import {
+  ClientGroupsService,
+  ClientsService,
+  DnsRewritesService,
+  DnsRewriteTargetKindEnum,
+} from '../../../api-client';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { DnsRewriteListComponent } from './dns-rewrite-list.component';
 
@@ -17,8 +23,31 @@ describe('DnsRewriteListComponent', () => {
     apiDnsRewritesIdDelete: jasmine.Spy;
   };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
+  let clientsApiSpy: { apiClientsIdGet: jasmine.Spy };
+  let clientGroupsApiSpy: { apiClientGroupsIdGet: jasmine.Spy };
 
-  async function createComponent() {
+  const GLOBAL_REWRITE = {
+    id: 'rewrite-1',
+    domain: 'host.example.com',
+    target: '203.0.113.5',
+    targetKind: DnsRewriteTargetKindEnum.A,
+    isDisabled: false,
+  };
+
+  function scopeLookupProviders() {
+    clientsApiSpy = jasmine.createSpyObj('ClientsService', ['apiClientsIdGet']);
+    clientGroupsApiSpy = jasmine.createSpyObj('ClientGroupsService', ['apiClientGroupsIdGet']);
+    clientsApiSpy.apiClientsIdGet.and.returnValue(
+      of({ id: 'client-1', displayName: 'Kids tablet' }),
+    );
+    clientGroupsApiSpy.apiClientGroupsIdGet.and.returnValue(of({ id: 'group-1', name: 'Kids' }));
+    return [
+      { provide: ClientsService, useValue: clientsApiSpy },
+      { provide: ClientGroupsService, useValue: clientGroupsApiSpy },
+    ];
+  }
+
+  async function createComponent(items: unknown[] = [GLOBAL_REWRITE]) {
     rewritesApiSpy = jasmine.createSpyObj('DnsRewritesService', [
       'apiDnsRewritesGet',
       'apiDnsRewritesIdPatch',
@@ -27,20 +56,7 @@ describe('DnsRewriteListComponent', () => {
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
 
     rewritesApiSpy.apiDnsRewritesGet.and.returnValue(
-      of({
-        items: [
-          {
-            id: 'rewrite-1',
-            domain: 'host.example.com',
-            target: '203.0.113.5',
-            targetKind: DnsRewriteTargetKindEnum.A,
-            isDisabled: false,
-          },
-        ],
-        skip: 0,
-        take: 25,
-        totalCount: 1,
-      }),
+      of({ items, skip: 0, take: 25, totalCount: items.length }),
     );
 
     await TestBed.configureTestingModule({
@@ -49,9 +65,12 @@ describe('DnsRewriteListComponent', () => {
         provideRouter([]),
         { provide: DnsRewritesService, useValue: rewritesApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        ...scopeLookupProviders(),
       ],
     }).compileComponents();
 
+    // An administrator's view: every permission held.
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.returnValue(true);
     const fixture = TestBed.createComponent(DnsRewriteListComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -138,6 +157,7 @@ describe('DnsRewriteListComponent', () => {
         provideRouter([]),
         { provide: DnsRewritesService, useValue: rewritesApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
+        ...scopeLookupProviders(),
       ],
     }).compileComponents();
 
@@ -147,5 +167,61 @@ describe('DnsRewriteListComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.errorMessage()).toBe('boom');
+  });
+
+  it('labels a global rewrite as applying to all clients', async () => {
+    const fixture = await createComponent();
+
+    const cell: HTMLElement = fixture.nativeElement.querySelector('td.cdk-column-scope');
+    expect(cell.textContent).toContain('All clients');
+    expect(fixture.nativeElement.querySelector('[aria-label="Edit rewrite"]')).not.toBeNull();
+  });
+
+  it('labels Safe Search rewrites with the client or group they apply to, by name', async () => {
+    const fixture = await createComponent([
+      { ...GLOBAL_REWRITE, id: 'rewrite-2', clientId: 'client-1' },
+      { ...GLOBAL_REWRITE, id: 'rewrite-3', clientGroupId: 'group-1' },
+    ]);
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const cells: HTMLElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('td.cdk-column-scope'),
+    );
+    expect(cells[0].textContent).toContain('Client');
+    expect(cells[0].textContent).toContain('Kids tablet');
+    expect(cells[1].textContent).toContain('Group');
+    expect(cells[1].textContent).toContain('Kids');
+    expect(clientsApiSpy.apiClientsIdGet).toHaveBeenCalledWith({ id: 'client-1' });
+  });
+
+  it('offers no edit, delete or toggle on a Safe Search rewrite', async () => {
+    const fixture = await createComponent([
+      { ...GLOBAL_REWRITE, id: 'rewrite-2', clientId: 'client-1' },
+    ]);
+
+    expect(fixture.nativeElement.querySelector('[aria-label="Edit rewrite"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[aria-label="Delete rewrite"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Safe Search');
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector(
+      'td.cdk-column-disabled button',
+    );
+    expect(toggle.disabled).toBeTrue();
+  });
+
+  it('falls back to a generic label when the client cannot be looked up', async () => {
+    const fixture = await createComponent([
+      { ...GLOBAL_REWRITE, id: 'rewrite-2', clientId: 'client-1' },
+    ]);
+    // Replaces the lookup after the fact, then reloads, so the second lookup is the one refused.
+    clientsApiSpy.apiClientsIdGet.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403 })),
+    );
+    await fixture.componentInstance.onPageChange({ pageIndex: 0, pageSize: 25 });
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const cell: HTMLElement = fixture.nativeElement.querySelector('td.cdk-column-scope');
+    expect(cell.textContent).toContain('a client');
   });
 });

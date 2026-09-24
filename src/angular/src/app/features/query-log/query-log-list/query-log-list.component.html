@@ -29,6 +29,29 @@
       </div>
 
       <div class="field">
+        <label cLabel for="query-log-client-identifier">Client MAC or DUID</label>
+        <input
+          cFormControl
+          id="query-log-client-identifier"
+          formControlName="clientIdentifier"
+          placeholder="aa:bb:cc:dd:ee:ff"
+        />
+      </div>
+
+      <div class="field">
+        <label cLabel for="query-log-client-protocol-version">Identified by</label>
+        <select
+          cSelect
+          id="query-log-client-protocol-version"
+          formControlName="clientProtocolVersion"
+        >
+          <option value="">MAC or DUID</option>
+          <option value="IPv4">MAC (DHCPv4)</option>
+          <option value="IPv6">DUID (DHCPv6)</option>
+        </select>
+      </div>
+
+      <div class="field">
         <label cLabel for="query-log-domain">Domain contains</label>
         <input
           cFormControl
@@ -108,6 +131,27 @@
       <ng-container cdkColumnDef="clientAddress">
         <th cdk-header-cell *cdkHeaderCellDef>Client</th>
         <td cdk-cell *cdkCellDef="let entry">{{ entry.clientAddress ?? '—' }}</td>
+      </ng-container>
+
+      <ng-container cdkColumnDef="clientIdentifier">
+        <th cdk-header-cell *cdkHeaderCellDef>Client ID</th>
+        <td cdk-cell *cdkCellDef="let entry">
+          @if (entry.clientIdentifier) {
+            <button
+              cButton
+              size="sm"
+              color="link"
+              class="client-id-button"
+              cTooltip="Show only this client's queries"
+              (click)="filterByClientIdentifier(entry)"
+            >
+              <span class="client-id-kind">{{ clientIdentifierKind(entry) }}</span>
+              <code>{{ entry.clientIdentifier }}</code>
+            </button>
+          } @else {
+            —
+          }
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="protocol">

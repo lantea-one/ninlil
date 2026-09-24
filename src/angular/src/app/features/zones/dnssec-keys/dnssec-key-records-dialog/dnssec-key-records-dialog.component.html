@@ -1,0 +1,64 @@
+<c-modal
+  [visible]="visible()"
+  (visibleChange)="visibleChange.emit($event)"
+  alignment="center"
+  size="lg"
+>
+  <c-modal-header>
+    <h5 cModalTitle>{{ key()?.role }} key tag {{ key()?.keyTag }}</h5>
+  </c-modal-header>
+
+  <c-modal-body>
+    <dl class="key-dates">
+      <dt>Published</dt>
+      <dd>{{ key()?.publishedAtUtc | date: 'medium' }}</dd>
+      <dt>Stopped signing</dt>
+      <dd>{{ key()?.retiredAtUtc ? (key()?.retiredAtUtc | date: 'medium') : '—' }}</dd>
+    </dl>
+
+    @if (isKsk()) {
+      <p class="hint">
+        Give the parent zone one of these: most registrars take the DS record (whole, or as the four
+        parts below); some take the DNSKEY record instead.
+      </p>
+
+      @for (field of parentFields(); track field.label) {
+        <ng-container *ngTemplateOutlet="recordRow; context: { $implicit: field }" />
+      }
+    } @else {
+      <p class="hint">
+        A zone-signing key is never referenced from the parent zone; only the key-signing key's DS
+        record goes there.
+      </p>
+    }
+
+    <ng-container *ngTemplateOutlet="recordRow; context: { $implicit: dnsKeyField() }" />
+  </c-modal-body>
+
+  <c-modal-footer>
+    <button cButton color="secondary" type="button" (click)="close()">Close</button>
+  </c-modal-footer>
+</c-modal>
+
+<ng-template #recordRow let-field>
+  <div class="record-row">
+    <span class="record-label">{{ field.label }}</span>
+    <span class="record-value">
+      <code>{{ field.value }}</code>
+      @if (field.note) {
+        <span class="record-note">{{ field.note }}</span>
+      }
+    </span>
+    <button
+      cButton
+      size="sm"
+      variant="ghost"
+      type="button"
+      [cTooltip]="copiedLabel() === field.label ? 'Copied!' : 'Copy to clipboard'"
+      [attr.aria-label]="'Copy ' + field.label + ' to clipboard'"
+      (click)="copy(field)"
+    >
+      <svg cIcon [name]="copiedLabel() === field.label ? 'cilCheck' : 'cilCopy'" size="sm"></svg>
+    </button>
+  </div>
+</ng-template>

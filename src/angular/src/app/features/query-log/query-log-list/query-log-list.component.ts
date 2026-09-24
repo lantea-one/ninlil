@@ -8,6 +8,7 @@ import {
   FormControlDirective,
   FormDirective,
   FormLabelDirective,
+  FormSelectDirective,
   SpinnerComponent,
   TableDirective,
   TooltipDirective,
@@ -28,7 +29,11 @@ import {
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import { EMPTY_QUERY_LOG_FILTERS, buildQueryLogSearchParams } from '../query-log.model';
+import {
+  EMPTY_QUERY_LOG_FILTERS,
+  buildQueryLogSearchParams,
+  clientIdentifierKind,
+} from '../query-log.model';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -66,6 +71,7 @@ const DEFAULT_PAGE_SIZE = 25;
     FormControlDirective,
     FormDirective,
     FormLabelDirective,
+    FormSelectDirective,
     SpinnerComponent,
     TableDirective,
     TooltipDirective,
@@ -95,6 +101,7 @@ export class QueryLogListComponent {
   readonly displayedColumns = [
     'occurredAtUtc',
     'clientAddress',
+    'clientIdentifier',
     'protocol',
     'queriedName',
     'queriedType',
@@ -123,6 +130,20 @@ export class QueryLogListComponent {
   async search(): Promise<void> {
     this.pageIndex.set(0);
     await this.loadPage();
+  }
+
+  /** Re-exported for the template, which cannot import a plain module function directly. */
+  readonly clientIdentifierKind = clientIdentifierKind;
+
+  /** This method narrows the log to one row's client identity, the way the per-client page does. */
+  async filterByClientIdentifier(entry: DnsQueryLogEntryDetail): Promise<void> {
+    if (!entry.clientIdentifier) return;
+
+    this.filterForm.patchValue({
+      clientIdentifier: entry.clientIdentifier,
+      clientProtocolVersion: entry.clientProtocolVersion ?? '',
+    });
+    await this.search();
   }
 
   /** This method clears every filter field, then re-searches. */

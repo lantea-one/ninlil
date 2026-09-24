@@ -1,0 +1,54 @@
+.key-dates {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ninlil-space-1) var(--ninlil-space-3);
+  margin-bottom: var(--ninlil-space-3);
+
+  dt {
+    font-weight: normal;
+    color: var(--cui-secondary-color);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.hint {
+  color: var(--cui-secondary-color);
+  margin-bottom: var(--ninlil-space-3);
+}
+
+// The same labeled value-plus-copy-button row the reveal-secret dialog uses, wrapping the value
+// under its label on a narrow screen rather than squeezing a long base64 key into a thin column.
+.record-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ninlil-space-2);
+  margin: var(--ninlil-space-2) 0;
+}
+
+.record-label {
+  min-width: 8rem;
+  flex: 0 0 auto;
+  color: var(--cui-secondary-color);
+}
+
+.record-value {
+  flex: 1 1 12rem;
+  padding: var(--ninlil-space-1) var(--ninlil-space-2);
+  background: var(--cui-tertiary-bg);
+  border-radius: 0.25rem;
+  overflow-wrap: anywhere;
+  font-size: var(--ninlil-font-size-sm);
+
+  code {
+    color: inherit;
+  }
+}
+
+.record-note {
+  margin-left: var(--ninlil-space-2);
+  color: var(--cui-secondary-color);
+}

@@ -1,0 +1,69 @@
+<c-modal [visible]="visible()" (visibleChange)="onModalVisibleChange($event)" alignment="center">
+  <c-modal-header>
+    <h5 cModalTitle>Start a rollover for this {{ key()?.role }} key?</h5>
+  </c-modal-header>
+
+  <c-modal-body>
+    <p>
+      This generates a new {{ key()?.role }} and replaces key tag {{ key()?.keyTag }} through an
+      automated RFC 6781 {{ scheme() }} rollover. The existing key keeps working until its
+      replacement is safely promoted, but a started rollover cannot be undone.
+    </p>
+    @if (isKsk()) {
+      <p>
+        Once the new key is published, give the parent zone its DS record (shown under the new key's
+        records on the key list), then confirm the parent DS update there.
+      </p>
+    }
+
+    <form cForm [formGroup]="form">
+      <div class="mb-3">
+        <label cLabel for="dnssec-rollover-algorithm">Algorithm for the new key</label>
+        <select cSelect id="dnssec-rollover-algorithm" formControlName="algorithm">
+          <option value="">Same as now ({{ key()?.algorithm }})</option>
+          @for (algorithm of algorithmOptions; track algorithm) {
+            @if (algorithm !== key()?.algorithm) {
+              <option [value]="algorithm">{{ algorithm }}</option>
+            }
+          }
+        </select>
+        <div cFormText>Choosing a different algorithm also performs an algorithm rollover.</div>
+      </div>
+
+      @if (showKeySize()) {
+        <div class="mb-3">
+          <label cLabel for="dnssec-rollover-key-size">Key size (bits)</label>
+          <input
+            cFormControl
+            type="number"
+            id="dnssec-rollover-key-size"
+            formControlName="keySizeBits"
+          />
+        </div>
+      }
+    </form>
+
+    @if (errorMessage()) {
+      <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
+    }
+  </c-modal-body>
+
+  <c-modal-footer>
+    <button
+      cButton
+      color="secondary"
+      variant="ghost"
+      type="button"
+      (click)="visibleChange.emit(false)"
+    >
+      Cancel
+    </button>
+    <button cButton color="warning" type="button" [disabled]="submitting()" (click)="submit()">
+      @if (submitting()) {
+        <c-spinner size="sm" />
+      } @else {
+        Start rollover
+      }
+    </button>
+  </c-modal-footer>
+</c-modal>
