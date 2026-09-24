@@ -196,11 +196,19 @@ FROM source AS publish-binaries
 # directory on first start), and the admin console (NinlilEmbedWebRoot) inside one file. macOS
 # binaries are ad-hoc code signed by the SDK itself, which Apple Silicon requires before it will
 # run them at all.
+#
+# NINLIL_BINARIES selects which of them to build (the pipeline builds each in its own job).
+ARG NINLIL_BINARIES="linux-amd64 linux-arm64 macos-amd64 macos-arm64"
 RUN set -eu; \
     mkdir -p /binaries; \
-    for target in linux-amd64:linux-x64 linux-arm64:linux-arm64 macos-amd64:osx-x64 macos-arm64:osx-arm64; do \
-        name="${target%%:*}"; \
-        rid="${target#*:}"; \
+    for name in ${NINLIL_BINARIES}; do \
+        case "${name}" in \
+            linux-amd64) rid='linux-x64' ;; \
+            linux-arm64) rid='linux-arm64' ;; \
+            macos-amd64) rid='osx-x64' ;; \
+            macos-arm64) rid='osx-arm64' ;; \
+            *) echo "Unknown binary: ${name}" >&2; exit 1 ;; \
+        esac; \
         dotnet publish src/dotnet/src/Ninlil.Web/Ninlil.Web.csproj \
             --configuration Release \
             --runtime "${rid}" \
@@ -233,12 +241,22 @@ FROM source AS publish-packages
 # reference between two of them becomes a NuGet dependency on the same version, so a set of
 # packages from one build always depends on exactly that build's other packages. Debug symbols
 # are embedded in each assembly so a consumer can step into the code with no symbol server.
+#
+# NINLIL_PACKAGES selects which projects to pack, as shell patterns matched against the project
+# directory names (the pipeline packs one family of projects per job).
+ARG NINLIL_PACKAGES="Ninlil.*"
 RUN set -eu; \
     dotnet new sln --name packages --format slnx --output /packing; \
     for project in src/dotnet/src/*/*.csproj; do \
-        case "${project}" in \
-            */Ninlil.Web.csproj) continue ;; \
-        esac; \
+        directory="$(basename "$(dirname "${project}")")"; \
+        [ "${directory}" = 'Ninlil.Web' ] && continue; \
+        selected=''; \
+        set -f; \
+        for pattern in ${NINLIL_PACKAGES}; do \
+            case "${directory}" in ${pattern}) selected='yes' ;; esac; \
+        done; \
+        set +f; \
+        [ -n "${selected}" ] || continue; \
         dotnet sln /packing/packages.slnx add "${project}"; \
     done; \
     dotnet pack /packing/packages.slnx \

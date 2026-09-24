@@ -13,7 +13,8 @@
 # Usage: arch-packages.sh <binaries-directory>
 #
 # Environment:
-#   RELEASE_TAG  the release's tag (the computed version)
+#   RELEASE_TAG   the release's tag (the computed version)
+#   ARCH_VERSION  the package's pkgver (compute-version.sh's arch-version)
 
 set -euo pipefail
 
@@ -28,19 +29,8 @@ trap 'rm -rf "${work}"' EXIT
 package="${work}/ninlil-bin"
 mkdir -p "${package}"
 
-# pkgver allows neither "-" nor "+"; a release is its plain date version (2026.09.24.1), a branch
-# build appends its branch and commit as further dotted segments.
-if [[ "${RELEASE_TAG}" =~ ^v([0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+)R(.+)$ ]]; then
-    pkgver="${BASH_REMATCH[1]}"
-    rest="${BASH_REMATCH[2]}"
-    if [[ "${rest}" == *'+'* ]]; then
-        branch="${rest%%+*}"
-        pkgver="${pkgver}.${branch//-/_}.${rest##*+}"
-    fi
-else
-    echo "Unexpected release tag '${RELEASE_TAG}'." >&2
-    exit 1
-fi
+# The pkgver, computed alongside every other form of the version (compute-version.sh).
+pkgver="${ARCH_VERSION:?ARCH_VERSION is required}"
 
 sha() { sha256sum "$1" | cut -d ' ' -f 1; }
 

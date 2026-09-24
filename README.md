@@ -525,13 +525,15 @@ The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on 
 |---|---|---|
 | `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version, .NET tests, admin console tests, binaries and Arch packages, image, NuGet packages, publish |
+| `pipeline.yml` | Called by both of the above | The shared jobs: version; .NET and admin console tests; then, in parallel, one job per binary, the Arch Linux packages, the multi-architecture image, and one job per NuGet package family; and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 
 A build publishes nothing until every test has passed, and its release stays an invisible draft
-until both the binaries and the multi-architecture image have been uploaded. The pipeline needs a
-`NINLIL_CI_TOKEN` secret (a Forgejo access token with repository and package write access) and a
-`NINLIL_CI_USER` variable (that token's user name) on the repository.
+until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
+package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
+with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
+on the repository. Builds use `8.8.8.8` and `1.1.1.1` for DNS inside their build containers; set a
+`NINLIL_BUILD_DNS` variable (comma-separated) to use other servers.
 
 ## Contributing: adding a feature
 

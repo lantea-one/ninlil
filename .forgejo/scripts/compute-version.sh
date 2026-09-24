@@ -20,6 +20,9 @@
 #                     no leading "v", needs "-" to mark a pre-release, and drops leading zeros
 #   image-version     <yyyy>.<mm>.<dd>.<increment>[-<branch>-<short-sha>]  Docker tags allow
 #                     neither "+" nor "/"
+#   arch-version      the Arch Linux pkgver, which allows neither "-" nor "+": a release is its
+#                     plain date version (2026.09.24.1), a branch build appends its branch and
+#                     commit as further segments (2026.09.24.3.develop.a1b2c3d)
 #   prerelease        true for branch builds, false for release builds
 #
 # Branch names are reduced to lower-case letters, digits, and hyphens ("feature/DoT-tuning"
@@ -70,6 +73,7 @@ case "${BUILD_KIND}" in
         version="v${year}.${month}.${day}.${increment}R${short_sha}"
         package_suffix=""
         image_suffix=""
+        arch_suffix=""
         prerelease="false"
 
         # A release version is published once. Refuse to build it again from another commit,
@@ -111,6 +115,7 @@ case "${BUILD_KIND}" in
         version="v${year}.${month}.${day}.${increment}R${branch}+${short_sha}"
         package_suffix="-${branch}"
         image_suffix="-${branch}-${short_sha}"
+        arch_suffix=".${branch//-/_}.${short_sha}"
         prerelease="true"
         ;;
 
@@ -131,5 +136,6 @@ emit version "${version}"
 emit assembly-version "${numeric}"
 emit package-version "${numeric}${package_suffix}+${short_sha}"
 emit image-version "${year}.${month}.${day}.${increment}${image_suffix}"
+emit arch-version "${year}.${month}.${day}.${increment}${arch_suffix}"
 emit prerelease "${prerelease}"
 emit short-sha "${short_sha}"

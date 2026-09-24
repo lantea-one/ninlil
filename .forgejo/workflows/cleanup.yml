@@ -34,6 +34,7 @@ jobs:
       - name: 'Remove Pre-Releases Older Than 24 Hours'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
           DRY_RUN: '${{ inputs.dry-run || false }}'
         run: |-
           ./.forgejo/scripts/cleanup.sh

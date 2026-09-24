@@ -3,13 +3,24 @@ name: 'Ninlil Pipeline'
 ## The build, test, and publish pipeline shared by every entry point: branch builds
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
-## Every build uses the runner's own network (--network host), so build steps resolve names
-## through the runner's own resolver; they only make outbound connections and never bind a port.
-##
 ## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
-## needs only Docker (with buildx and the containerd image store), git, curl, and jq -- never a
-## matching .NET, Node.js, or Java installation. Each stage cross-compiles on the runner's own
-## architecture, so any 'archlinux' runner can build every platform, including both images.
+## needs only Docker (with buildx), git, curl, and jq -- never a matching .NET, Node.js, or Java
+## installation. Every stage cross-compiles on the runner's own architecture, so any 'archlinux'
+## runner can build every platform, including both container image architectures.
+##
+## Builds run on a BuildKit builder with explicit DNS servers (.forgejo/scripts/setup-builder.sh,
+## overridable with the NINLIL_BUILD_DNS variable), because some runners resolve through a local
+## DNS server that build steps cannot reach.
+##
+## Job graph:
+##
+##   version ─┬─ test-dotnet ────────┬─ draft ── binaries (×4) ── arch-packages ─┬─ publish
+##            └─ test-admin-console ─┼─ image ───────────────────────────────────┤
+##                                   └─ packages (×4) ───────────────────────────┘
+##
+## The draft release doubles as the hand-off between jobs: each binary job attaches its
+## executable to it, the Arch Linux job builds its packages from the two Linux executables it
+## downloads back from it, and publish turns the draft into the visible release.
 ##
 on:
   workflow_call:
@@ -37,6 +48,7 @@ jobs:
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
       package-version: '${{ steps.version.outputs.package-version }}'
       image-version: '${{ steps.version.outputs.image-version }}'
+      arch-version: '${{ steps.version.outputs.arch-version }}'
       prerelease: '${{ steps.version.outputs.prerelease }}'
       short-sha: '${{ steps.version.outputs.short-sha }}'
     steps:
@@ -80,9 +92,16 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
+      - name: 'Select the Build Environment'
+        env:
+          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
+        run: |-
+          ./.forgejo/scripts/setup-builder.sh
+        shell: 'bash'
+      ##
       - name: 'Format Check and Build'
         run: |-
-          docker buildx build --progress=plain --network host --target test-dotnet --load \
+          docker buildx build --progress=plain --target test-dotnet --load \
             --tag "ninlil-test:${{ forgejo.run_id }}" .
         shell: 'bash'
       ##
@@ -119,13 +138,20 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
+      - name: 'Select the Build Environment'
+        env:
+          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
+        run: |-
+          ./.forgejo/scripts/setup-builder.sh
+        shell: 'bash'
+      ##
       - name: 'Lint, Format Check, and Test'
         run: |-
-          docker buildx build --progress=plain --network host --target test-admin-console .
+          docker buildx build --progress=plain --target test-admin-console .
         shell: 'bash'
   ##
-  binaries:
-    name: 'Build Binaries'
+  draft:
+    name: 'Stage Draft Release'
     if: >-
       inputs.kind != 'verify'
     needs:
@@ -133,8 +159,6 @@ jobs:
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'archlinux'
-    env:
-      NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -143,11 +167,55 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Build Linux and macOS Binaries'
+      - name: 'Create the Draft Release'
+        env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+          RELEASE_TAG: '${{ needs.version.outputs.version }}'
+          RELEASE_PRERELEASE: '${{ needs.version.outputs.prerelease }}'
+          IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
+          ARCH_VERSION: '${{ needs.version.outputs.arch-version }}'
+          COMMIT_SHA: '${{ forgejo.sha }}'
+          REF_NAME: '${{ forgejo.ref_name }}'
+        run: |-
+          ./.forgejo/scripts/release.sh stage
+        shell: 'bash'
+  ##
+  binaries:
+    name: 'Build Binary (${{ matrix.binary }})'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'draft'
+    runs-on: 'archlinux'
+    strategy:
+      matrix:
+        binary:
+          - 'linux-amd64'
+          - 'linux-arm64'
+          - 'macos-amd64'
+          - 'macos-arm64'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Select the Build Environment'
+        env:
+          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
+        run: |-
+          ./.forgejo/scripts/setup-builder.sh
+        shell: 'bash'
+      ##
+      - name: 'Build ninlil-${{ matrix.binary }}'
         run: |-
           rm -rf dist
-          docker buildx build --progress=plain --network host \
+          docker buildx build --progress=plain \
             --target binaries \
+            --build-arg "NINLIL_BINARIES=${{ matrix.binary }}" \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
             --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
             --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
@@ -155,24 +223,49 @@ jobs:
             .
         shell: 'bash'
       ##
-      - name: 'Build the ninlil-bin Arch Linux Packages'
+      - name: 'Attach to the Draft Release'
         env:
+          NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           RELEASE_TAG: '${{ needs.version.outputs.version }}'
         run: |-
-          ./.forgejo/scripts/arch-packages.sh dist
-          (cd dist && sha256sum ninlil-* > SHA256SUMS && cat SHA256SUMS)
+          ./.forgejo/scripts/release.sh upload "dist/ninlil-${{ matrix.binary }}"
+        shell: 'bash'
+  ##
+  arch-packages:
+    name: 'Build Arch Linux Packages'
+    if: >-
+      inputs.kind != 'verify'
+    needs:
+      - 'version'
+      - 'binaries'
+    runs-on: 'archlinux'
+    env:
+      NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
+      RELEASE_TAG: '${{ needs.version.outputs.version }}'
+      ARCH_VERSION: '${{ needs.version.outputs.arch-version }}'
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@v7'
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Fetch the Linux Binaries From the Draft Release'
+        run: |-
+          rm -rf dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-amd64 dist
+          ./.forgejo/scripts/release.sh download ninlil-linux-arm64 dist
         shell: 'bash'
       ##
-      - name: 'Stage Draft Release'
-        env:
-          RELEASE_TAG: '${{ needs.version.outputs.version }}'
-          RELEASE_PRERELEASE: '${{ needs.version.outputs.prerelease }}'
-          IMAGE_VERSION: '${{ needs.version.outputs.image-version }}'
-          PACKAGE_VERSION: '${{ needs.version.outputs.package-version }}'
-          COMMIT_SHA: '${{ forgejo.sha }}'
-          REF_NAME: '${{ forgejo.ref_name }}'
+      - name: 'Build ninlil-bin for x86_64 and aarch64'
         run: |-
-          ./.forgejo/scripts/release.sh stage dist
+          ./.forgejo/scripts/arch-packages.sh dist
+        shell: 'bash'
+      ##
+      - name: 'Attach to the Draft Release'
+        run: |-
+          ./.forgejo/scripts/release.sh upload dist/ninlil-bin-*.pkg.tar.zst
         shell: 'bash'
   ##
   image:
@@ -192,6 +285,13 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
+      - name: 'Select the Build Environment'
+        env:
+          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
+        run: |-
+          ./.forgejo/scripts/setup-builder.sh
+        shell: 'bash'
+      ##
       - name: 'Build and Push linux/amd64 and linux/arm64'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
@@ -201,6 +301,7 @@ jobs:
         run: |-
           # Registry credentials live in a throwaway configuration directory for this job only,
           # never in the runner user's own ~/.docker, which every other job on this host shares.
+          # (The builder itself is still found through BUILDX_CONFIG.)
           export DOCKER_CONFIG="$(mktemp -d)"
           trap 'rm -rf "${DOCKER_CONFIG}"' EXIT
           printf '%s' "${NINLIL_CI_TOKEN}" \
@@ -213,7 +314,7 @@ jobs:
             tags+=(--tag "${IMAGE}:latest")
           fi
 
-          docker buildx build --progress=plain --network host \
+          docker buildx build --progress=plain \
             --platform "${PLATFORMS}" \
             --target runtime \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
@@ -227,7 +328,7 @@ jobs:
         shell: 'bash'
   ##
   packages:
-    name: 'Build and Push NuGet Packages'
+    name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
     if: >-
       inputs.kind != 'verify'
     needs:
@@ -235,6 +336,17 @@ jobs:
       - 'test-dotnet'
       - 'test-admin-console'
     runs-on: 'archlinux'
+    strategy:
+      matrix:
+        include:
+          - family: 'common'
+            projects: 'Ninlil.Common.*'
+          - family: 'dns-core'
+            projects: 'Ninlil.Dns.Common Ninlil.Dns.Data.* Ninlil.Dns.Identity'
+          - family: 'dns-server'
+            projects: 'Ninlil.Dns.Protocol.* Ninlil.Dns.Server.*'
+          - family: 'dhcp'
+            projects: 'Ninlil.Dhcp.*'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -243,11 +355,19 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Pack Every Library Project'
+      - name: 'Select the Build Environment'
+        env:
+          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
+        run: |-
+          ./.forgejo/scripts/setup-builder.sh
+        shell: 'bash'
+      ##
+      - name: 'Pack ${{ matrix.projects }}'
         run: |-
           rm -rf packages
-          docker buildx build --progress=plain --network host \
+          docker buildx build --progress=plain \
             --target packages \
+            --build-arg "NINLIL_PACKAGES=${{ matrix.projects }}" \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
             --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
             --build-arg "NINLIL_ASSEMBLY_VERSION=${{ needs.version.outputs.assembly-version }}" \
@@ -260,13 +380,23 @@ jobs:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           NINLIL_CI_USER: '${{ vars.NINLIL_CI_USER }}'
         run: |-
-          feed="${{ forgejo.server_url }}/api/packages/${{ forgejo.repository_owner }}/nuget/"
+          # The feed's PackagePublish endpoint (see its index.json); a trailing slash is a 404.
+          feed="${{ forgejo.server_url }}/api/packages/${{ forgejo.repository_owner }}/nuget"
+          response="$(mktemp)"
           for package in packages/*.nupkg; do
-            echo "Pushing $(basename "${package}")"
-            curl --fail-with-body --silent --show-error \
+            status="$(curl --silent --show-error --output "${response}" --write-out '%{http_code}' \
               --user "${NINLIL_CI_USER}:${NINLIL_CI_TOKEN}" \
               --upload-file "${package}" \
-              "${feed}"
+              "${feed}")"
+            case "${status}" in
+              201) echo "Pushed $(basename "${package}")" ;;
+              # Already published by an earlier attempt of this same run.
+              409) echo "Already published: $(basename "${package}")" ;;
+              *)
+                echo "::error::Pushing $(basename "${package}") failed with HTTP ${status}: $(cat "${response}")"
+                exit 1
+                ;;
+            esac
           done
         shell: 'bash'
   ##
@@ -277,6 +407,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
+      - 'arch-packages'
       - 'image'
       - 'packages'
     runs-on: 'archlinux'
@@ -288,7 +419,7 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Publish the Staged Release'
+      - name: 'Publish the Draft Release'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
           RELEASE_TAG: '${{ needs.version.outputs.version }}'

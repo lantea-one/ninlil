@@ -4,7 +4,9 @@
 # Removed once older than MAX_AGE_HOURS:
 #   releases        every pre-release, together with its git tag, and every draft (a draft is a
 #                   release whose pipeline never finished)
-#   container image every version tagged <yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>
+#   container image every version tagged <yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>, and
+#                   every untagged per-architecture manifest (a "sha256:..." version) that no
+#                   remaining tag's manifest index still references
 #   NuGet packages  every version with a pre-release label (<yyyy>.<m>.<d>.<increment>-<branch>)
 #
 # Never removed: full releases, their tags, their container tags (the release version and
@@ -13,6 +15,7 @@
 #
 # Environment:
 #   NINLIL_CI_TOKEN  a Forgejo access token with repository and package write access
+#   NINLIL_CI_USER   that token's user name (for the container registry)
 #   MAX_AGE_HOURS    optional, default 24
 #   DRY_RUN          optional; "true" lists what would be removed without removing it
 
@@ -98,6 +101,7 @@ for release in "${releases[@]}"; do
 done
 
 # Packages: the container image's pre-release tags and NuGet pre-release versions.
+expired_tags=()
 mapfile -t versions < <(paginate "/packages/${owner}" \
     | jq -c '{type, name, version, created_at}')
 for entry in "${versions[@]}"; do
@@ -109,6 +113,7 @@ for entry in "${versions[@]}"; do
     case "${type}" in
         container)
             [[ "${name}" == 'ninlil' && "${version}" =~ ${image_pattern} ]] || continue
+            expired_tags+=("${version}")
             ;;
         nuget)
             [[ "${name}" == Ninlil.* && "${version}" =~ ${package_pattern} ]] || continue
@@ -120,4 +125,40 @@ for entry in "${versions[@]}"; do
 
     remove "${type} ${name} ${version}" \
         forgejo DELETE "/packages/${owner}/${type}/$(encode "${name}")/$(encode "${version}")"
+done
+
+# Untagged per-architecture manifests. A multi-architecture push stores each platform's manifest
+# as its own "sha256:..." version, referenced from the tag's manifest index; deleting the tag
+# leaves them behind. One is removed only once it is older than the cutoff and no remaining tag
+# -- a release, latest, or a pre-release still inside its 24 hours -- references it.
+: "${NINLIL_CI_USER:?NINLIL_CI_USER is required}"
+registry="${server#https://}"
+image_path="${owner,,}/ninlil"
+registry_token="$(curl --fail --silent --show-error --user "${NINLIL_CI_USER}:${NINLIL_CI_TOKEN}" \
+    "${server}/v2/token?service=container_registry&scope=repository:${image_path}:pull" | jq -r '.token')"
+
+referenced="$(mktemp)"
+trap 'rm -f "${referenced}"' EXIT
+mapfile -t digests < <(printf '%s\n' "${versions[@]}" \
+    | jq -r 'select(.type == "container" and .name == "ninlil" and (.version | startswith("sha256:"))) | [.version, .created_at] | @tsv')
+for entry in "${versions[@]}"; do
+    type="$(jq -r '.type' <<< "${entry}")"
+    name="$(jq -r '.name' <<< "${entry}")"
+    version="$(jq -r '.version' <<< "${entry}")"
+    [[ "${type}" == 'container' && "${name}" == 'ninlil' && "${version}" != sha256:* ]] || continue
+    # A tag removed above no longer protects anything.
+    [[ " ${expired_tags[*]:-} " == *" ${version} "* && "${dry_run}" != 'true' ]] && continue
+    curl --fail --silent --show-error \
+        --header "Authorization: Bearer ${registry_token}" \
+        --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+        "https://${registry}/v2/${image_path}/manifests/${version}" \
+        | jq -r '.manifests[]?.digest' >> "${referenced}"
+done
+
+for digest_entry in "${digests[@]}"; do
+    digest="$(cut -f 1 <<< "${digest_entry}")"
+    expired "$(cut -f 2 <<< "${digest_entry}")" || continue
+    grep -qxF "${digest}" "${referenced}" && continue
+    remove "container ninlil ${digest}" \
+        forgejo DELETE "/packages/${owner}/container/ninlil/$(encode "${digest}")"
 done
