@@ -450,11 +450,15 @@ installed:
 docker buildx build --target test-admin-console .          # lint, format check, Karma suite
 docker build --target test-dotnet -t ninlil-test .          # format check and Release build
 docker run --rm --network host \
+  --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
   -v /var/run/docker.sock:/var/run/docker.sock ninlil-test  # every xUnit project
 ```
 
-(The test container needs the Docker socket because a few tests start their own database
-containers through Testcontainers.)
+The test container needs the Docker socket because a few tests start their own database
+containers through Testcontainers. Run it as an unprivileged user, as above: on the host network,
+an unprivileged process cannot bind a port below 1024 or open a raw socket, so no DNS, DHCP, or
+Router Advertisement test can collide with a real service on the machine or answer a real client
+on its network (those tests skip themselves when they cannot bind).
 
 ## Releases and versioning
 

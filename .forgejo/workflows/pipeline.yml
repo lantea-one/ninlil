@@ -3,6 +3,9 @@ name: 'Ninlil Pipeline'
 ## The build, test, and publish pipeline shared by every entry point: branch builds
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
+## Every build uses the runner's own network (--network host), so build steps resolve names
+## through the runner's own resolver; they only make outbound connections and never bind a port.
+##
 ## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
 ## needs only Docker (with buildx and the containerd image store), git, curl, and jq -- never a
 ## matching .NET, Node.js, or Java installation. Each stage cross-compiles on the runner's own
@@ -79,15 +82,21 @@ jobs:
       ##
       - name: 'Format Check and Build'
         run: |-
-          docker buildx build --progress=plain --target test-dotnet --load \
+          docker buildx build --progress=plain --network host --target test-dotnet --load \
             --tag "ninlil-test:${{ forgejo.run_id }}" .
         shell: 'bash'
       ##
       - name: 'Run Every Test Project'
         run: |-
           # Some tests start their own database containers through the Docker socket; host
-          # networking lets them reach those containers' published ports on localhost.
+          # networking lets them reach those containers' published ports on localhost and
+          # resolve names the way the runner does. They run as the runner's own unprivileged
+          # user (plus the Docker socket's group): on the host network that user cannot bind a
+          # port below 1024 or open a raw socket, so no test can collide with, or answer for,
+          # the DNS, DHCP, or web services already running on the runner.
           docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
+            --group-add "$(stat -c %g /var/run/docker.sock)" \
             --volume /var/run/docker.sock:/var/run/docker.sock \
             "ninlil-test:${{ forgejo.run_id }}"
         shell: 'bash'
@@ -112,7 +121,7 @@ jobs:
       ##
       - name: 'Lint, Format Check, and Test'
         run: |-
-          docker buildx build --progress=plain --target test-admin-console .
+          docker buildx build --progress=plain --network host --target test-admin-console .
         shell: 'bash'
   ##
   binaries:
@@ -137,7 +146,7 @@ jobs:
       - name: 'Build Linux and macOS Binaries'
         run: |-
           rm -rf dist
-          docker buildx build --progress=plain \
+          docker buildx build --progress=plain --network host \
             --target binaries \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
             --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \
@@ -204,7 +213,7 @@ jobs:
             tags+=(--tag "${IMAGE}:latest")
           fi
 
-          docker buildx build --progress=plain \
+          docker buildx build --progress=plain --network host \
             --platform "${PLATFORMS}" \
             --target runtime \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
@@ -237,7 +246,7 @@ jobs:
       - name: 'Pack Every Library Project'
         run: |-
           rm -rf packages
-          docker buildx build --progress=plain \
+          docker buildx build --progress=plain --network host \
             --target packages \
             --build-arg "NINLIL_VERSION=${{ needs.version.outputs.version }}" \
             --build-arg "NINLIL_PACKAGE_VERSION=${{ needs.version.outputs.package-version }}" \

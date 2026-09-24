@@ -18,9 +18,14 @@
 #             Formatting and the full Release build of the solution, as an image whose default
 #             command runs every xUnit test project. The tests run in a container rather than
 #             during the build because some of them start their own database containers
-#             (Testcontainers), which needs the Docker socket:
+#             (Testcontainers), which needs the Docker socket. Run them as an unprivileged user:
+#             on the host network that user cannot bind a port below 1024 or open a raw socket,
+#             so no DNS, DHCP, or Router Advertisement test can ever reach a real service or
+#             client on the machine's network (those tests skip themselves when they cannot bind):
 #               docker build --target test-dotnet -t ninlil-test .
-#               docker run --rm --network host -v /var/run/docker.sock:/var/run/docker.sock ninlil-test
+#               docker run --rm --network host --user "$(id -u):$(id -g)" \
+#                 --group-add "$(stat -c %g /var/run/docker.sock)" \
+#                 -v /var/run/docker.sock:/var/run/docker.sock ninlil-test
 #
 # Every build stage runs on the build machine's own architecture ($BUILDPLATFORM) and
 # cross-compiles for the target, so a multi-platform build (linux/amd64 + linux/arm64) needs no
@@ -124,6 +129,10 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
+# The package cache lives inside the image (not under /root), so the unprivileged user the tests
+# run as can read it.
+ENV NUGET_PACKAGES=/nuget
+
 COPY .config/ ./.config/
 RUN dotnet tool restore
 
@@ -133,8 +142,16 @@ COPY src/dotnet/ ./src/dotnet/
 # assets), exactly as a published host does.
 COPY --from=admin-console /workspace/src/angular/dist/angular/browser/ ./src/dotnet/src/Ninlil.Web/wwwroot/
 
+# The tests run as an unprivileged user (see test-dotnet in the header above), who needs to write
+# test results and temporary files next to the build output.
 RUN dotnet csharpier check . \
-    && dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true
+    && dotnet build Ninlil.slnx --configuration Release -p:NinlilSkipAngularBuild=true \
+    && chmod -R a+rwX /workspace /nuget
+
+ENV HOME=/tmp \
+    DOTNET_CLI_HOME=/tmp \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
 
 CMD ["dotnet", "test", "Ninlil.slnx", "--no-build", "--configuration", "Release"]
 
