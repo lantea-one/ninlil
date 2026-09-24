@@ -519,7 +519,7 @@ pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; de
 ### The pipeline
 
 The workflows live in [`.forgejo/workflows/`](./.forgejo/workflows/) and run on the project's own
-`archlinux` Forgejo runners:
+`ninlil-builder` Forgejo runners:
 
 | Workflow | Runs on | Does |
 |---|---|---|
@@ -532,9 +532,7 @@ A build publishes nothing until every test has passed, and its release stays an 
 until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
-on the repository. Builds and the test container resolve names through `8.8.8.8` and `1.1.1.1`
-(the pipeline runs its own BuildKit daemon container with `--dns`); set a `NINLIL_BUILD_DNS`
-variable to use other nameservers.
+on the repository.
 
 ## Contributing: adding a feature
 

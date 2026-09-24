@@ -22,7 +22,7 @@ jobs:
   ##
   cleanup:
     name: 'Expire Pre-Releases'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'

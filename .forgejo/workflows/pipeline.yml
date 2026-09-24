@@ -5,13 +5,8 @@ name: 'Ninlil Pipeline'
 ##
 ## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
 ## needs only Docker (with buildx), git, curl, and jq -- never a matching .NET, Node.js, or Java
-## installation. Every stage cross-compiles on the runner's own architecture, so any 'archlinux'
-## runner can build every platform, including both container image architectures.
-##
-## Builds run on the pipeline's own BuildKit daemon, a container on Docker's bridge network started
-## with explicit --dns servers (.forgejo/scripts/setup-builder.sh; default 8.8.8.8 and 1.1.1.1,
-## overridable with the NINLIL_BUILD_DNS variable), because the Docker daemon's default container
-## DNS cannot resolve names on some runners. The test container gets the same servers.
+## installation. Every stage cross-compiles on the runner's own architecture, so any
+## 'ninlil-builder' runner can build every platform, including both container image architectures.
 ##
 ## Job graph:
 ##
@@ -43,7 +38,7 @@ jobs:
     name: 'Compute Version'
     if: >-
       inputs.kind != 'verify'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     outputs:
       version: '${{ steps.version.outputs.version }}'
       assembly-version: '${{ steps.version.outputs.assembly-version }}'
@@ -84,7 +79,7 @@ jobs:
   ##
   test-dotnet:
     name: 'Test .NET'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -92,13 +87,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Format Check and Build'
         run: |-
@@ -114,9 +102,7 @@ jobs:
           # containers' published ports through the host gateway. They run as the runner's own
           # unprivileged user, plus the Docker socket's group.
           run_tests() {
-            # shellcheck disable=SC2086 # NINLIL_DNS_ARGS is a list of --dns arguments.
             docker run --rm \
-              ${NINLIL_DNS_ARGS} \
               --add-host host.docker.internal:host-gateway \
               --env TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
               --user "$(id -u):$(id -g)" \
@@ -143,7 +129,7 @@ jobs:
   ##
   test-admin-console:
     name: 'Test Admin Console'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -151,13 +137,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Lint, Format Check, and Test'
         run: |-
@@ -172,7 +151,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -201,7 +180,7 @@ jobs:
     needs:
       - 'version'
       - 'draft'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     strategy:
       matrix:
         binary:
@@ -216,13 +195,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Build ninlil-${{ matrix.binary }}'
         run: |-
@@ -252,7 +224,7 @@ jobs:
     needs:
       - 'version'
       - 'binaries'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     env:
       NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
       RELEASE_TAG: '${{ needs.version.outputs.version }}'
@@ -290,7 +262,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'
@@ -298,13 +270,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Build and Push linux/amd64 and linux/arm64'
         env:
@@ -348,7 +313,7 @@ jobs:
       - 'version'
       - 'test-dotnet'
       - 'test-admin-console'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     strategy:
       matrix:
         include:
@@ -367,13 +332,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Pack ${{ matrix.projects }}'
         run: |-
@@ -423,7 +381,7 @@ jobs:
       - 'arch-packages'
       - 'image'
       - 'packages'
-    runs-on: 'archlinux'
+    runs-on: 'ninlil-builder'
     steps:
       ##
       - name: 'Checkout Sources'
