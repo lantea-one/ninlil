@@ -3,9 +3,9 @@
 # Builds the newest Ninlil release from source: the most recent v<yyyy>.<mm>.<dd>.<increment>
 # release branch, compiled into the same self-contained single-file executable (admin console
 # included) the release binaries are. For the prebuilt binary instead, install the ninlil
-# package every release carries.
+# package every release carries; for the latest develop commit, ninlil-git-next.
 
-pkgname=ninlil-git
+pkgname=ninlil-git-stable
 pkgver=2026.09.24.1
 pkgrel=1
 pkgdesc='DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console'

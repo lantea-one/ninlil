@@ -1,6 +1,6 @@
 # Arch Linux packages
 
-Two packages install Ninlil the same way — the server at `/usr/lib/ninlil/ninlil`, a
+Three packages install Ninlil the same way — the server at `/usr/lib/ninlil/ninlil`, a
 `ninlil.service` systemd unit running it as the unprivileged `ninlil` user, all state in
 `/var/lib/ninlil`, and its environment file at `/etc/ninlil/ninlil.env` — and differ only in where
 the executable comes from:
@@ -8,10 +8,12 @@ the executable comes from:
 | Package | Directory | The executable |
 | --- | --- | --- |
 | `ninlil` | [`ninlil/`](./ninlil/) | The release binary (`ninlil-linux-amd64` / `ninlil-linux-arm64`), attached to every release as a ready-built package |
-| `ninlil-git` | [`ninlil-git/`](./ninlil-git/) | Built from source: the newest `v<yyyy>.<mm>.<dd>.<increment>` release branch (AUR) |
+| `ninlil-git-stable` | [`ninlil-git-stable/`](./ninlil-git-stable/) | Built from source: the newest `v<yyyy>.<mm>.<dd>.<increment>` release branch (AUR) |
+| `ninlil-git-next` | [`ninlil-git-next/`](./ninlil-git-next/) | Built from source: the latest `develop` commit (AUR) |
 
-`ninlil-git` provides and conflicts with `ninlil`. [`common/`](./common/) holds the systemd unit, the
-`sysusers.d` entry, and the default environment file both of them install.
+Both AUR packages provide and conflict with `ninlil`, so only one of the three is ever installed.
+[`common/`](./common/) holds the systemd unit, the `sysusers.d` entry, and the default environment
+file they all install.
 
 ## `ninlil`
 
@@ -28,15 +30,22 @@ Arch Linux container from the binaries that same pipeline run produced. A releas
 plain date version (`2026.09.24.1`); a branch build appends the branch and commit
 (`2026.09.24.3.develop.a1b2c3d`).
 
-## `ninlil-git`
+## `ninlil-git-stable` and `ninlil-git-next`
 
-`ninlil-git/PKGBUILD` is the AUR package, used as-is. It clones the repository, checks out the newest release branch,
-builds the admin console and the self-contained single-file executable exactly as a release
-build does, and takes its `pkgver` from that branch's name, so rebuilding it picks up a new
-release without any edit. It needs `dotnet-sdk`, `nodejs`, `npm`, and a Java runtime to build.
-After changing it, regenerate its `.SRCINFO` with `makepkg --printsrcinfo > .SRCINFO`.
+The two AUR packages, each PKGBUILD used as-is. Both clone the repository and build the admin
+console and the self-contained single-file executable exactly as the pipeline does, and both
+compute their `pkgver` at build time, so rebuilding picks up new commits without any edit:
 
-## After installing either one
+- `ninlil-git-stable` checks out the newest release branch and takes its `pkgver` from the
+  branch's name (`2026.09.24.1`), the same as that release's own `ninlil` package.
+- `ninlil-git-next` builds `develop`'s latest commit, versioned as the pipeline versions a
+  `develop` build: the commit's UTC date, its position among that day's commits, and its hash
+  (`2026.09.24.3.develop.a1b2c3d`).
+
+They need `dotnet-sdk`, `nodejs`, `npm`, and a Java runtime to build. After changing either one,
+regenerate its `.SRCINFO` with `makepkg --printsrcinfo > .SRCINFO`.
+
+## After installing any of them
 
 ```bash
 sudoedit /etc/ninlil/ninlil.env   # optional: storage engine, bootstrap password, ports

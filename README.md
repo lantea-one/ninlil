@@ -139,9 +139,10 @@ sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/
 sudo systemctl enable --now ninlil
 ```
 
-[`src/archlinux/`](./src/archlinux/) also has `ninlil-git`, the AUR PKGBUILD that builds the newest
-release branch from source. Both install a `ninlil` systemd service running as an unprivileged user with
-its state in `/var/lib/ninlil`.
+[`src/archlinux/`](./src/archlinux/) also has the AUR PKGBUILDs that build from source:
+`ninlil-git-stable` (the newest release branch) and `ninlil-git-next` (the latest `develop`
+commit). All three install a `ninlil` systemd service running as an unprivileged user with its
+state in `/var/lib/ninlil`.
 
 ### Run the container image
 
@@ -704,7 +705,7 @@ Dockerfile              Every build output: the container image, the binaries, a
 docker/                 Build-time helper scripts for the container image
 docker-compose.yml      Example deployment: Ninlil + PostgreSQL, with a host-networking DHCP/RA variant
 .forgejo/               CI/CD workflows and the scripts they run (versioning, releases, cleanup)
-src/archlinux/          The ninlil (release binary) and ninlil-git (from source) Arch Linux packages
+src/archlinux/          The ninlil, ninlil-git-stable, and ninlil-git-next Arch Linux packages
 src/script/             Operational scripts: database helpers and a systemd unit
 src/terraform/          Reusable Terraform modules for packaging and publishing
 ```
