@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
+using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
@@ -174,9 +175,7 @@ public sealed class DnsFilterEngine(
             IReadOnlyList<DnsFilterListEntryEntity> entries =
                 await entryRepository.ListByListIdAsync(list.Id, stoppingToken);
 
-            bool matches = entries.Any(entry => MatchesDomain(queriedPresentation, entry));
-
-            if (!matches)
+            if (!ListCoversDomain(queriedPresentation, entries))
                 continue;
 
             if (list.Action == DnsFilterListActionEnum.Block)
@@ -187,6 +186,22 @@ public sealed class DnsFilterEngine(
 
         return Resolve(blockMatch, allowMatch, "a domain filter list");
     }
+
+    /// <summary>
+    ///     This method checks whether one list covers a name: some ordinary entry matches it and
+    ///     none of the same list's exception entries (<see cref="DnsFilterListEntryEntity.IsException" />,
+    ///     an adblock-syntax <c>@@</c> rule) does. An exception only ever cancels its own list's
+    ///     match -- it is the list author saying "my broader rule was not meant to cover this
+    ///     name" -- so it is applied here, before precedence, rather than treated like a match
+    ///     against an operator's allow list, which would let one subscribed list silently
+    ///     unblock names another list blocks.
+    /// </summary>
+    private bool ListCoversDomain(
+        string queriedPresentation,
+        IReadOnlyList<DnsFilterListEntryEntity> entries
+    ) =>
+        entries.Any(entry => !entry.IsException && MatchesDomain(queriedPresentation, entry))
+        && !entries.Any(entry => entry.IsException && MatchesDomain(queriedPresentation, entry));
 
     /// <summary>
     ///     This method resolves a block/allow match pair into a final decision, honoring
@@ -218,6 +233,17 @@ public sealed class DnsFilterEngine(
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
 
+        DnsFilterDecision cnameDecision = await EvaluateCnameTargetsAsync(
+            scope,
+            response,
+            remoteAddress,
+            clientId,
+            stoppingToken
+        );
+
+        if (cnameDecision.IsDenied)
+            return cnameDecision;
+
         IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
             scope,
             remoteAddress,
@@ -247,6 +273,147 @@ public sealed class DnsFilterEngine(
         }
 
         return DnsFilterDecision.Allowed;
+    }
+
+    /// <summary>
+    ///     This method blocks CNAME cloaking: a tracker hidden behind a first-party name
+    ///     (<c>metrics.shop.example</c> CNAME <c>shop.tracker.example</c>) is only visible in the
+    ///     answer, never in the question, so the domain check before dispatch cannot see it.
+    ///     Every CNAME target in the answer -- anywhere in a multi-step chain -- is checked
+    ///     against the client's own domain lists exactly as if it had been queried directly: the
+    ///     same client/group scoping, the same list exceptions, and the same allow-list
+    ///     precedence, so an allowed target is let through.
+    ///     <para>
+    ///         When the name actually queried is itself on one of the client's allow lists, the
+    ///         chain is not checked at all: the operator explicitly allowed that name, and
+    ///         blocking it for where it happens to point would override that choice with no way
+    ///         to undo it short of also allowing the target.
+    ///     </para>
+    ///     <para>
+    ///         Checking the targets is enough to cover the whole chain, since each later record
+    ///         in a chain is owned by the previous record's target. A DNAME answer carries a
+    ///         synthesized CNAME (RFC 6672 §3.4), so it is covered too.
+    ///     </para>
+    /// </summary>
+    private async Task<DnsFilterDecision> EvaluateCnameTargetsAsync(
+        AsyncServiceScope scope,
+        DnsMessage response,
+        IPAddress remoteAddress,
+        string clientId,
+        CancellationToken stoppingToken
+    )
+    {
+        if (!options.CurrentValue.BlockCnameCloaking)
+            return DnsFilterDecision.Allowed;
+
+        List<string> targets = [];
+
+        foreach (DnsResourceRecord answer in response.Answers)
+        {
+            if (answer.Type != DnsResourceRecordTypeEnum.Cname)
+                continue;
+
+            string target = TryReadCnameTarget(answer);
+
+            if (target is not null && !targets.Contains(target))
+                targets.Add(target);
+        }
+
+        // Most answers carry no CNAME at all, and those should cost nothing extra.
+        if (targets.Count == 0)
+            return DnsFilterDecision.Allowed;
+
+        IReadOnlyList<DnsFilterListEntity> lists = await ResolveApplicableListsAsync(
+            scope,
+            remoteAddress,
+            clientId,
+            DnsFilterListKindEnum.Domain,
+            stoppingToken
+        );
+
+        if (lists.Count == 0)
+            return DnsFilterDecision.Allowed;
+
+        IDnsFilterListEntryRepository entryRepository =
+            scope.ServiceProvider.GetRequiredService<IDnsFilterListEntryRepository>();
+        List<(DnsFilterListEntity List, IReadOnlyList<DnsFilterListEntryEntity> Entries)> loaded =
+        [];
+
+        // Load each list's entries once for the whole chain, not once per target.
+        foreach (DnsFilterListEntity list in lists)
+            loaded.Add((list, await entryRepository.ListByListIdAsync(list.Id, stoppingToken)));
+
+        if (response.Questions.Count > 0)
+        {
+            string queried = NormalizeDomain(response.Questions[0].Name.ToString());
+
+            bool queriedNameAllowed = loaded.Any(item =>
+                item.List.Action == DnsFilterListActionEnum.Allow
+                && ListCoversDomain(queried, item.Entries)
+            );
+
+            if (queriedNameAllowed)
+                return DnsFilterDecision.Allowed;
+        }
+
+        foreach (string target in targets)
+        {
+            bool blockMatch = false;
+            bool allowMatch = false;
+
+            foreach (
+                (
+                    DnsFilterListEntity list,
+                    IReadOnlyList<DnsFilterListEntryEntity> entries
+                ) in loaded
+            )
+            {
+                if (!ListCoversDomain(target, entries))
+                    continue;
+
+                if (list.Action == DnsFilterListActionEnum.Block)
+                    blockMatch = true;
+                else
+                    allowMatch = true;
+            }
+
+            DnsFilterDecision decision = Resolve(
+                blockMatch,
+                allowMatch,
+                $"a domain filter list (via CNAME target {target})"
+            );
+
+            if (decision.IsDenied)
+                return decision;
+        }
+
+        return DnsFilterDecision.Allowed;
+    }
+
+    /// <summary>
+    ///     This method reads a CNAME record's target as a normalized name, or
+    ///     <see langword="null" /> when its data is malformed -- a bad record in someone else's
+    ///     answer must never make filtering throw (architectural invariant #3).
+    /// </summary>
+    private static string TryReadCnameTarget(DnsResourceRecord record)
+    {
+        try
+        {
+            CnameRecordData data = (CnameRecordData)
+                DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.Cname, record.Data);
+
+            return NormalizeDomain(data.Target.ToString());
+        }
+        catch (Exception exception)
+            when (exception
+                    is FormatException
+                        or ArgumentException
+                        or IndexOutOfRangeException
+                        or NotSupportedException
+            )
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />

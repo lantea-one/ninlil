@@ -18,8 +18,9 @@ public enum DnsFilterListSourceEnum
     Local = 0,
 
     /// <summary>
-    ///     Entries are periodically fetched from an external URL (hosts-file-format blocklists,
-    ///     e.g. StevenBlack/hagezi-style) and replaced wholesale on each refresh -- an operator
+    ///     Entries are periodically fetched from an external URL (hosts-file, bare-domain or
+    ///     adblock-syntax lists, e.g. StevenBlack, HaGeZi or the AdGuard DNS filter) and replaced
+    ///     wholesale on each refresh -- an operator
     ///     does not directly edit this list's own entries.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Subscribed")]

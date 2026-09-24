@@ -61,5 +61,21 @@ public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterList
                     DateTimeOffset.Parse("2026-07-01T08:12:00+00:00")
                 ),
             },
+            new()
+            {
+                Name = "Subscribed-list exception",
+                Summary =
+                    "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name "
+                    + "(and its subdomains) through despite the same list's broader rule.",
+                Value = new FilterListEntryDetail(
+                    Guid.Parse("4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04"),
+                    Guid.Parse("3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111"),
+                    "cdn.ads.example.net",
+                    null,
+                    DnsFilterEntryKindEnum.Domain,
+                    DateTimeOffset.Parse("2026-07-01T08:13:00+00:00"),
+                    IsException: true
+                ),
+            },
         ];
 }

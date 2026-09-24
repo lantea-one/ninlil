@@ -39,10 +39,10 @@ namespace Ninlil.Web.Controllers;
 ///     </para>
 ///     <para>
 ///         A subscribed list's own entries are always
-///         <see cref="Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain" /> -- confirmed
-///         by reading <c>DnsFilterListExternalRefreshService.ParseHostsFileFormat</c> directly, a
-///         hosts-file-format subscription has no way to express a regex/wildcard entry kind at
-///         all, so this controller's own <c>Kind</c> field is only ever meaningful for a
+///         <see cref="Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain" /> --
+///         <see cref="DnsFilterListParser" /> skips adblock wildcard/regex rules rather than
+///         translating them, so a subscription never produces a regex/wildcard entry kind at
+///         all, and this controller's own <c>Kind</c> field is only ever meaningful for a
 ///         <see cref="DnsFilterListSourceEnum.Local" /> list's own manually-entered rows anyway.
 ///         <see cref="Create" />/
 ///         <see cref="Replace" /> both reject a malformed regex/wildcard pattern with
@@ -327,6 +327,7 @@ public class FilterListEntriesController(
             entry.Kind,
             entry.CreatedAtUtc,
             entry.UpdatedAtUtc,
-            entry.OriginatingNodeId
+            entry.OriginatingNodeId,
+            entry.IsException
         );
 }

@@ -535,7 +535,9 @@ public sealed class DnsQueryProcessingPipeline(
         // Technitium's "response IP blocking": an otherwise-allowed answer whose own A/AAAA
         // content names a blocked address is denied too, exactly like a domain-list match --
         // checked only once a real answer exists, never for a response the domain check above
-        // already replaced.
+        // already replaced. The same check blocks CNAME cloaking (an answer whose CNAME chain
+        // leads to a blocked domain). It runs here, on whatever the dispatcher returned, so
+        // authoritative, forwarded, recursive and cached answers are all covered by one check.
         if (filterEngine is not null && !alreadyDenied)
         {
             DnsFilterDecision responseDecision = await filterEngine.EvaluateResponseAsync(

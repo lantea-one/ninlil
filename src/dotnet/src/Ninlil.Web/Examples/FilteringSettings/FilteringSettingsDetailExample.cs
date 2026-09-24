@@ -15,7 +15,7 @@ public class FilteringSettingsDetailExample : IExamplesProvider<FilteringSetting
     /// <summary>
     ///     This method returns a realistic, deliberately-opted-in configuration: filtering on,
     ///     the classic Pi-hole-style NXDOMAIN block response, and this class's own compiled-in
-    ///     default sinkhole addresses and precedence.
+    ///     default sinkhole addresses, precedence and CNAME-cloaking protection.
     /// </summary>
     public FilteringSettingsDetail GetExamples() =>
         new(
@@ -24,6 +24,7 @@ public class FilteringSettingsDetailExample : IExamplesProvider<FilteringSetting
             SinkholeAddressV4: "0.0.0.0",
             SinkholeAddressV6: "::",
             SinkholeTimeToLiveSeconds: 60,
-            Precedence: DnsFilterListPrecedenceEnum.AllowWins
+            Precedence: DnsFilterListPrecedenceEnum.AllowWins,
+            BlockCnameCloaking: true
         );
 }

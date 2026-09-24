@@ -91,7 +91,10 @@ public record FilterListEntryWriteRequest(
 
 /// <summary>
 ///     This class carries a single filter list entry's own fields, for list, single-item, and
-///     creation responses.
+///     creation responses. <c>IsException</c> marks an exception (an adblock-syntax <c>@@</c>
+///     rule from a subscribed list) that lets a name through even though another entry in the
+///     same list covers it; only a subscribed list's refresh ever sets it, so it is not part of
+///     <see cref="FilterListEntryWriteRequest" />.
 /// </summary>
 public record FilterListEntryDetail(
     Guid Id,
@@ -101,5 +104,6 @@ public record FilterListEntryDetail(
     DnsFilterEntryKindEnum Kind,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? UpdatedAtUtc = null,
-    Guid? OriginatingNodeId = null
+    Guid? OriginatingNodeId = null,
+    bool IsException = false
 );

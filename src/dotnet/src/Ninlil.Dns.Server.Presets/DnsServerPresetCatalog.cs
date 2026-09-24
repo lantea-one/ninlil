@@ -105,9 +105,8 @@ public static class DnsServerPresetCatalog
     ///     <see cref="Baseline" />'s own settings, plus block/allow-list filtering turned on
     ///     with a security-only threat blocklist attached to the default client group -- source:
     ///     HaGeZi's "TIF" (Threat Intelligence Feeds) medium tier, in its "Wildcard Domains"
-    ///     (bare-domain-per-line) format, which parses correctly through
-    ///     <c>DnsFilterListExternalRefreshService.ParseHostsFileFormat</c>'s own last-token
-    ///     extraction even though it carries no <c>0.0.0.0</c> address prefix at all. Deliberately
+    ///     (bare-domain-per-line) format, which <c>DnsFilterListParser</c> reads as bare domains
+    ///     even though it carries no <c>0.0.0.0</c> address prefix at all. Deliberately
     ///     blocks nothing else (no ads, no content) -- the same scope discipline Quad9 itself
     ///     holds to.
     /// </summary>

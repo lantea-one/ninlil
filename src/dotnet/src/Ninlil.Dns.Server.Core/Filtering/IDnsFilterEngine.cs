@@ -72,6 +72,9 @@ public interface IDnsFilterEngine
     ///     response is encoded and sent -- a denied response is replaced per the configured
     ///     <see cref="Common.Enum.DnsFilterBlockResponseModeEnum" /> exactly as a domain-list
     ///     match would be, since by this point the distinction no longer matters to the client.
+    ///     When CNAME-cloaking protection is on, every CNAME target in the Answer section is
+    ///     also checked against the client's own domain lists, so a permitted name that merely
+    ///     aliases a blocked one is blocked too.
     /// </summary>
     /// <param name="response">The response about to be sent.</param>
     /// <param name="remoteAddress">The querying client's own source address, for client-group resolution.</param>

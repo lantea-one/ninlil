@@ -12,7 +12,8 @@ namespace Ninlil.Dns.Server.Filtering;
 /// <summary>
 ///     This class keeps every <see cref="DnsFilterListSourceEnum.Subscribed" /> list's own
 ///     entries current by periodically refetching its <see cref="DnsFilterListEntity.SubscriptionUrl" />
-///     -- the hosts-file-format refresh analogue of <c>CloudDnsZoneSyncService</c>'s own
+///     -- parsed by <see cref="DnsFilterListParser" /> (hosts-file, bare-domain and adblock
+///     syntax alike) -- the refresh analogue of <c>CloudDnsZoneSyncService</c>'s own
 ///     REST-polling refresh loop, per-item due-checked against that list's own
 ///     <see cref="DnsFilterListEntity.RefreshInterval" /> rather than one fixed interval for
 ///     every list.
@@ -138,7 +139,11 @@ public sealed class DnsFilterListExternalRefreshService(
             nameof(DnsFilterListExternalRefreshService)
         );
         string content = await client.GetStringAsync(list.SubscriptionUrl, stoppingToken);
-        List<string> values = ParseHostsFileFormat(content);
+        DnsFilterListParseResult parsed = DnsFilterListParser.Parse(
+            content,
+            list.Kind,
+            list.Action
+        );
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDnsFilterListEntryRepository entryRepository =
@@ -147,7 +152,7 @@ public sealed class DnsFilterListExternalRefreshService(
             scope.ServiceProvider.GetRequiredService<IDnsFilterListRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        await entryRepository.ReplaceEntriesAsync(list.Id, values, stoppingToken);
+        await entryRepository.ReplaceEntriesAsync(list.Id, parsed.Entries, stoppingToken);
 
         DnsFilterListEntity tracked = await listRepository.GetByIdAsync(list.Id, stoppingToken);
 
@@ -159,44 +164,16 @@ public sealed class DnsFilterListExternalRefreshService(
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
+        // The skipped count is worth surfacing: a list whose rules are mostly cosmetic or
+        // browser-only (an EasyList meant for a browser extension, say) otherwise looks like it
+        // refreshed fine while blocking far less than its line count suggests.
         logger.LogInformation(
-            "Refreshed block/allow list '{ListName}' ({Count} entries) from '{Url}'.",
+            "Refreshed block/allow list '{ListName}' ({Count} entries, {ExceptionCount} of them exceptions; {SkippedCount} unsupported rules skipped) from '{Url}'.",
             list.Name,
-            values.Count,
+            parsed.Entries.Count,
+            parsed.ExceptionCount,
+            parsed.SkippedRuleCount,
             list.SubscriptionUrl
         );
-    }
-
-    /// <summary>
-    ///     This method parses a hosts-file-format blocklist -- lines of <c>0.0.0.0 domain</c>,
-    ///     <c>127.0.0.1 domain</c>, or a bare <c>domain</c>, skipping blank lines and
-    ///     <c>#</c>-prefixed comments -- into a plain set of domain names.
-    /// </summary>
-    private static List<string> ParseHostsFileFormat(string content)
-    {
-        HashSet<string> values = [];
-
-        foreach (string rawLine in content.Split('\n'))
-        {
-            string line = rawLine.Trim();
-
-            if (line.Length == 0 || line.StartsWith('#'))
-                continue;
-
-            string[] parts = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
-
-            if (parts.Length == 0)
-                continue;
-
-            // A hosts-file line is "<address> <domain>"; a bare-domain-per-line list is just
-            // "<domain>" with no address at all. Either way, the domain itself is always the
-            // last whitespace-separated token.
-            string domain = parts[^1].TrimEnd('.').ToLowerInvariant();
-
-            if (domain.Length > 0)
-                values.Add(domain);
-        }
-
-        return [.. values];
     }
 }

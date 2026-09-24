@@ -51,4 +51,14 @@ public sealed class DnsFilterOptions
     /// </summary>
     public DnsFilterListPrecedenceEnum Precedence { get; set; } =
         DnsFilterListPrecedenceEnum.AllowWins;
+
+    /// <summary>
+    ///     This property controls whether an answer is also blocked when one of the CNAME
+    ///     targets in it matches the querying client's own domain block lists -- defeating
+    ///     "CNAME cloaking", where a tracker is served from a first-party name that merely
+    ///     aliases the tracker's own domain. On by default: a list that blocks a domain is
+    ///     meant to block it however it is reached, and the check only runs for answers that
+    ///     actually contain a CNAME.
+    /// </summary>
+    public bool BlockCnameCloaking { get; set; } = true;
 }

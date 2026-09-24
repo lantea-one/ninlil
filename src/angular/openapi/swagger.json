@@ -16172,7 +16172,8 @@
                   "sinkholeAddressV4": "0.0.0.0",
                   "sinkholeAddressV6": "::",
                   "sinkholeTimeToLiveSeconds": 60,
-                  "precedence": "AllowWins"
+                  "precedence": "AllowWins",
+                  "blockCnameCloaking": true
                 }
               },
               "application/json": {
@@ -16185,7 +16186,8 @@
                   "sinkholeAddressV4": "0.0.0.0",
                   "sinkholeAddressV6": "::",
                   "sinkholeTimeToLiveSeconds": 60,
-                  "precedence": "AllowWins"
+                  "precedence": "AllowWins",
+                  "blockCnameCloaking": true
                 }
               },
               "text/json": {
@@ -16198,7 +16200,8 @@
                   "sinkholeAddressV4": "0.0.0.0",
                   "sinkholeAddressV6": "::",
                   "sinkholeTimeToLiveSeconds": 60,
-                  "precedence": "AllowWins"
+                  "precedence": "AllowWins",
+                  "blockCnameCloaking": true
                 }
               }
             }
@@ -16318,7 +16321,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f02",
@@ -16328,7 +16332,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a03",
@@ -16338,7 +16343,8 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   ],
                   "skip": 0,
@@ -16360,7 +16366,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f02",
@@ -16370,7 +16377,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a03",
@@ -16380,7 +16388,8 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   ],
                   "skip": 0,
@@ -16402,7 +16411,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f02",
@@ -16412,7 +16422,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     },
                     {
                       "id": "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a03",
@@ -16422,7 +16433,8 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   ],
                   "skip": 0,
@@ -16566,7 +16578,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16579,7 +16592,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16592,7 +16606,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -16612,7 +16641,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16625,7 +16655,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16638,7 +16669,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -16658,7 +16704,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16671,7 +16718,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16684,7 +16732,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -16739,7 +16802,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16752,7 +16816,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16765,7 +16830,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -16785,7 +16865,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16798,7 +16879,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16811,7 +16893,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -16831,7 +16928,8 @@
                       "kind": "Domain",
                       "createdAtUtc": "2026-07-01T08:10:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Wildcard glob": {
@@ -16844,7 +16942,8 @@
                       "kind": "Wildcard",
                       "createdAtUtc": "2026-07-01T08:11:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
                     }
                   },
                   "Regular expression": {
@@ -16857,7 +16956,22 @@
                       "kind": "Regex",
                       "createdAtUtc": "2026-07-01T08:12:00+00:00",
                       "updatedAtUtc": null,
-                      "originatingNodeId": null
+                      "originatingNodeId": null,
+                      "isException": false
+                    }
+                  },
+                  "Subscribed-list exception": {
+                    "summary": "An adblock '@@||cdn.ads.example.net^' line from a subscribed list: lets this name (and its subdomains) through despite the same list's broader rule.",
+                    "value": {
+                      "id": "4f5a6b7c-8d9e-4f0a-1b2c-3d4e5f6a7b04",
+                      "listId": "3f2504e0-4f89-4f6a-b8c1-f1a5e3a1b111",
+                      "value": "cdn.ads.example.net",
+                      "comment": null,
+                      "kind": "Domain",
+                      "createdAtUtc": "2026-07-01T08:13:00+00:00",
+                      "updatedAtUtc": null,
+                      "originatingNodeId": null,
+                      "isException": true
                     }
                   }
                 }
@@ -41867,10 +41981,13 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "isException": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a single filter list entry's own fields, for list, single-item, and\ncreation responses."
+        "description": "This class carries a single filter list entry's own fields, for list, single-item, and\ncreation responses. `IsException` marks an exception (an adblock-syntax `@@`\nrule from a subscribed list) that lets a name through even though another entry in the\nsame list covers it; only a subscribed list's refresh ever sets it, so it is not part of\nNinlil.Web.Models.FilterListEntryWriteRequest."
       },
       "FilterListEntryDetailPagedResult": {
         "type": "object",
@@ -42047,6 +42164,9 @@
           },
           "precedence": {
             "$ref": "#/components/schemas/DnsFilterListPrecedenceEnum"
+          },
+          "blockCnameCloaking": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,

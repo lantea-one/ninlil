@@ -117,6 +117,9 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal("ads.example.com", entry.Value);
         Assert.NotNull(entry.OriginatingNodeId);
 
+        // Only a subscribed list's refresh ever produces an exception entry.
+        Assert.False(entry.IsException);
+
         // Listing entries reflects it, with pagination fields present.
         HttpResponseMessage entryListResponse = await client.GetAsync(
             $"/api/filter-lists/{created.Id}/entries"

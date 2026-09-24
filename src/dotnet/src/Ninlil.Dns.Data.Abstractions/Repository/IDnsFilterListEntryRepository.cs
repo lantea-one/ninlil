@@ -70,11 +70,11 @@ public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryE
     ///     <see cref="IUnitOfWork.SaveChangesAsync" /> then persists.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
-    /// <param name="values">The complete new set of entry values.</param>
+    /// <param name="entries">The complete new set of entries, each a value plus its exception flag.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task ReplaceEntriesAsync(
         Guid listId,
-        IReadOnlyList<string> values,
+        IReadOnlyList<DnsFilterListReplacementEntry> entries,
         CancellationToken stoppingToken = default
     );
 }

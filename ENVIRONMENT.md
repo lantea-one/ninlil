@@ -31,9 +31,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **288 individual settings** across 57 bound configuration classes, plus **2 standalone**
+Total: **289 individual settings** across 57 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **297 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **298 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -333,6 +333,7 @@ query log.
 | `NINLIL_DNS_SERVER_FILTERING_SINKHOLE_ADDRESS_V4` | The IPv4 address returned for a blocked A query when sinkhole mode is active. | `0.0.0.0` |
 | `NINLIL_DNS_SERVER_FILTERING_SINKHOLE_ADDRESS_V6` | The IPv6 address returned for a blocked AAAA query when sinkhole mode is active. | `::` |
 | `NINLIL_DNS_SERVER_FILTERING_SINKHOLE_TIME_TO_LIVE_SECONDS` | The TTL attached to a sinkhole response. | `60` |
+| `NINLIL_DNS_SERVER_FILTERING_BLOCK_CNAME_CLOAKING` | Whether an answer is also blocked when a CNAME target in it matches the client's domain block lists (catches trackers hidden behind a site's own subdomain). A name on an allow list is never blocked for where it points. | `true` |
 | `NINLIL_DNS_SERVER_REWRITES_ENABLE` | Whether DNS rewrites (domain-to-address/CNAME overrides) are applied. | `false` |
 | `NINLIL_DNS_SERVER_REWRITES_TIME_TO_LIVE_SECONDS` | The TTL attached to a rewritten answer. | `300` |
 | `NINLIL_DNS_SERVER_RATE_LIMITING_ENABLE` | Whether per-client-IP query rate limiting is enforced. | `false` |

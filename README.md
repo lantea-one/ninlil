@@ -41,7 +41,8 @@ table, and [`LICENSE`](./LICENSE) for the MIT license text.
 - **Cloud DNS zone sync**: Cloudflare, AWS Route 53, and DigitalOcean, kept in sync alongside
   classic AXFR/IXFR zones, covering A/AAAA/CNAME/MX/NS/TXT/SRV/CAA records.
 - **Filtering and parental controls**: block/allow-list filtering with subscribed external
-  blocklists, a curated "blocked services" catalog, Safe Search enforcement, per-client and
+  blocklists (hosts-file, plain-domain or adblock `||domain^`/`@@` syntax), CNAME-cloaking
+  protection, a curated "blocked services" catalog, Safe Search enforcement, per-client and
   per-client-group policy, time-of-day schedules, and a one-click time-boxed pause — all resolved
   against a persistent per-device client identity (via DHCP lease data, live ARP/neighbor-table
   observation, or an operator-defined static IP/CIDR pin, in that order of preference).

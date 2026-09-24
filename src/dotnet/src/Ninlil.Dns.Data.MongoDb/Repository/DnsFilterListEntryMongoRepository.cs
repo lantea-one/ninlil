@@ -51,7 +51,7 @@ public class DnsFilterListEntryMongoRepository(
     /// <inheritdoc />
     public Task ReplaceEntriesAsync(
         Guid listId,
-        IReadOnlyList<string> values,
+        IReadOnlyList<DnsFilterListReplacementEntry> replacements,
         CancellationToken stoppingToken = default
     )
     {
@@ -64,7 +64,7 @@ public class DnsFilterListEntryMongoRepository(
             await Collection.DeleteManyAsync(entry => entry.ListId == listId, token);
 
             // There is nothing further to insert if the refreshed list came back empty.
-            if (values.Count == 0)
+            if (replacements.Count == 0)
                 return;
 
             // Stamp every freshly added entry with the same creation timestamp, since they are
@@ -72,12 +72,13 @@ public class DnsFilterListEntryMongoRepository(
             DateTimeOffset now = DateTimeOffset.UtcNow;
             List<DnsFilterListEntryEntity> entries =
             [
-                .. values.Select(value => new DnsFilterListEntryEntity
+                .. replacements.Select(replacement => new DnsFilterListEntryEntity
                 {
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = now,
                     ListId = listId,
-                    Value = value,
+                    Value = replacement.Value,
+                    IsException = replacement.IsException,
                 }),
             ];
 

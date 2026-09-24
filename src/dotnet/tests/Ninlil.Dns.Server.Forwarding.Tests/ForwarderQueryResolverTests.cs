@@ -36,7 +36,7 @@ namespace Ninlil.Dns.Server.Forwarding.Tests;
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
 [SupportedOSPlatform("windows")]
-public sealed class ForwarderQueryResolverTests : IDisposable
+public sealed partial class ForwarderQueryResolverTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ServiceProvider _provider;
@@ -51,6 +51,17 @@ public sealed class ForwarderQueryResolverTests : IDisposable
         services.AddScoped<IZoneRepository, ZoneRepository>();
         services.AddScoped<IDnsForwarderRepository, DnsForwarderRepository>();
         services.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
+
+        // The filtering repositories are only used by the CNAME-cloaking tests, which run a
+        // forwarded answer through the real filter engine.
+        services.AddScoped<IDnsFilterListRepository, DnsFilterListRepository>();
+        services.AddScoped<IDnsFilterListEntryRepository, DnsFilterListEntryRepository>();
+        services.AddScoped<IDnsClientGroupRepository, DnsClientGroupRepository>();
+        services.AddScoped<IDnsClientGroupNetworkRepository, DnsClientGroupNetworkRepository>();
+        services.AddScoped<
+            IDnsClientGroupListAssignmentRepository,
+            DnsClientGroupListAssignmentRepository
+        >();
         _provider = services.BuildServiceProvider();
 
         using IServiceScope scope = _provider.CreateScope();

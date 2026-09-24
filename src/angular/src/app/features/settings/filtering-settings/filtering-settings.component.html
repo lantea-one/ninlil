@@ -19,6 +19,22 @@
           >
         </c-form-check>
 
+        <c-form-check class="mb-1">
+          <input
+            cFormCheckInput
+            type="checkbox"
+            id="filtering-block-cname-cloaking"
+            formControlName="blockCnameCloaking"
+          />
+          <label cFormCheckLabel for="filtering-block-cname-cloaking"
+            >Block answers whose CNAME chain leads to a blocked domain</label
+          >
+        </c-form-check>
+        <div cFormText class="mb-3">
+          Catches trackers hidden behind a site's own subdomain (CNAME cloaking). A name you have
+          explicitly allowed is never blocked for where it points.
+        </div>
+
         <div class="field-row">
           <div class="field">
             <label cLabel for="filtering-block-response-mode">Block response mode</label>

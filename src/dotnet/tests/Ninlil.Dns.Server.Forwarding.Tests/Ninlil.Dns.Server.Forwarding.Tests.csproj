@@ -29,5 +29,6 @@
     <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.DnsCrypt\Ninlil.Dns.Protocol.DnsCrypt.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Protocol.Plain\Ninlil.Dns.Protocol.Plain.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Forwarding\Ninlil.Dns.Server.Forwarding.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Filtering\Ninlil.Dns.Server.Filtering.csproj" />
   </ItemGroup>
 </Project>

@@ -1022,6 +1022,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<bool>("IsException")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)

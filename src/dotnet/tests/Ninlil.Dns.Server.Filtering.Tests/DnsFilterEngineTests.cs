@@ -11,7 +11,7 @@ using Ninlil.Dns.Server.Filtering.Tests.Fakes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
-public class DnsFilterEngineTests
+public partial class DnsFilterEngineTests
 {
     private sealed class Fixture
     {

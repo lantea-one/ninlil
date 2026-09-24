@@ -70,6 +70,40 @@ public class FilteringSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         Assert.Equal("0.0.0.0", detail.SinkholeAddressV4);
         Assert.Equal("::", detail.SinkholeAddressV6);
         Assert.Equal(60u, detail.SinkholeTimeToLiveSeconds);
+
+        // CNAME-cloaking protection is the exception: on by default, since it only ever
+        // applies once filtering itself has been turned on -- see
+        // DnsFilterOptions.BlockCnameCloaking's own doc comment.
+        Assert.True(detail.BlockCnameCloaking);
+    }
+
+    [Fact]
+    public async Task Patch_BlockCnameCloaking_IsWrittenToTheConfigurationFile()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest("/api/filtering-settings", new { blockCnameCloaking = false })
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
+
+            JsonObject root = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+            Assert.False(root["DnsServer"]["Filtering"]["BlockCnameCloaking"].GetValue<bool>());
+        }
+        finally
+        {
+            // Restore the default for every other test sharing this factory's configuration file.
+            await client.SendAsync(
+                PatchRequest("/api/filtering-settings", new { blockCnameCloaking = true })
+            );
+        }
     }
 
     [Fact]

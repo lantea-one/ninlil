@@ -105,17 +105,18 @@ public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRe
 
     public Task ReplaceEntriesAsync(
         Guid listId,
-        IReadOnlyList<string> values,
+        IReadOnlyList<DnsFilterListReplacementEntry> entries,
         CancellationToken stoppingToken = default
     )
     {
         Items.RemoveAll(item => item.ListId == listId);
         Items.AddRange(
-            values.Select(value => new DnsFilterListEntryEntity
+            entries.Select(entry => new DnsFilterListEntryEntity
             {
                 Id = Guid.NewGuid(),
                 ListId = listId,
-                Value = value,
+                Value = entry.Value,
+                IsException = entry.IsException,
             })
         );
         return Task.CompletedTask;
@@ -425,4 +426,10 @@ public sealed class InMemoryDnsClientListAssignmentRepository : IDnsClientListAs
         Guid clientId,
         CancellationToken stoppingToken = default
     ) => Task.FromResult(Items.Count(item => item.ClientId == clientId));
+}
+
+public sealed class NoOpUnitOfWork : IUnitOfWork
+{
+    public Task<int> SaveChangesAsync(CancellationToken stoppingToken = default) =>
+        Task.FromResult(0);
 }

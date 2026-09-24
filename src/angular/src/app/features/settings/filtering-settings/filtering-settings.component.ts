@@ -104,6 +104,9 @@ export class FilteringSettingsComponent implements OnInit {
       [Validators.required, Validators.min(0), Validators.max(4294967295)],
     ],
     precedence: [DnsFilterListPrecedenceEnum.AllowWins as DnsFilterListPrecedenceEnum],
+    // On by default on the backend too (DnsFilterOptions.BlockCnameCloaking): a list that blocks
+    // a domain should block it even when it is reached through another name's CNAME.
+    blockCnameCloaking: [true],
   });
 
   ngOnInit(): void {
@@ -144,6 +147,7 @@ export class FilteringSettingsComponent implements OnInit {
         sinkholeAddressV6: settings.sinkholeAddressV6 ?? '::',
         sinkholeTimeToLiveSeconds: settings.sinkholeTimeToLiveSeconds ?? 60,
         precedence: settings.precedence ?? DnsFilterListPrecedenceEnum.AllowWins,
+        blockCnameCloaking: settings.blockCnameCloaking ?? true,
       });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not load filtering settings.'));

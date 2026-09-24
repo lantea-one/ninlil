@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CdkTableModule } from '@angular/cdk/table';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
+  BadgeComponent,
   ButtonDirective,
   SpinnerComponent,
   TableDirective,
@@ -49,6 +50,7 @@ const DEFAULT_PAGE_SIZE = 25;
     IfPermissionDirective,
     RouterLink,
     CdkTableModule,
+    BadgeComponent,
     ButtonDirective,
     SpinnerComponent,
     TableDirective,

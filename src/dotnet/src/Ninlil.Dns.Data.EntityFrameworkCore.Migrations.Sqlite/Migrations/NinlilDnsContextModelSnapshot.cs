@@ -1017,6 +1017,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsException")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)

@@ -11,7 +11,7 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries a single filter list entry\'s own fields, for list, single-item, and creation responses.
+ * This class carries a single filter list entry\'s own fields, for list, single-item, and creation responses. `IsException` marks an exception (an adblock-syntax `@@` rule from a subscribed list) that lets a name through even though another entry in the same list covers it; only a subscribed list\'s refresh ever sets it, so it is not part of Ninlil.Web.Models.FilterListEntryWriteRequest.
  */
 export interface FilterListEntryDetail { 
     id?: string;
@@ -22,6 +22,7 @@ export interface FilterListEntryDetail {
     createdAtUtc?: string;
     updatedAtUtc?: string | null;
     originatingNodeId?: string | null;
+    isException?: boolean;
 }
 export namespace FilterListEntryDetail {
 }

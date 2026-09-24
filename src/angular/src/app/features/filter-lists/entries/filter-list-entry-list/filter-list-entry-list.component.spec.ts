@@ -21,7 +21,10 @@ describe('FilterListEntryListComponent', () => {
   let filterListsApiSpy: { apiFilterListsIdGet: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  async function createComponent(source: DnsFilterListSourceEnum) {
+  async function createComponent(
+    source: DnsFilterListSourceEnum,
+    items: object[] = [{ id: 'entry-1', listId: 'list-1', value: 'bad.example', comment: null }],
+  ) {
     entriesApiSpy = jasmine.createSpyObj('FilterListEntriesService', [
       'apiFilterListsListIdEntriesGet',
       'apiFilterListsListIdEntriesIdDelete',
@@ -34,7 +37,7 @@ describe('FilterListEntryListComponent', () => {
     );
     entriesApiSpy.apiFilterListsListIdEntriesGet.and.returnValue(
       of({
-        items: [{ id: 'entry-1', listId: 'list-1', value: 'bad.example', comment: null }],
+        items,
         skip: 0,
         take: 25,
         totalCount: 1,
@@ -110,5 +113,18 @@ describe('FilterListEntryListComponent', () => {
       id: 'entry-1',
     });
     expect(notificationSpy.success).toHaveBeenCalled();
+  });
+
+  it('marks an exception entry from a subscribed adblock list', async () => {
+    const fixture = await createComponent(DnsFilterListSourceEnum.Subscribed, [
+      { id: 'entry-1', listId: 'list-1', value: 'ads.example', isException: false },
+      { id: 'entry-2', listId: 'list-1', value: 'cdn.ads.example', isException: true },
+    ]);
+
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('tr[cdk-row]'));
+
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).not.toContain('Exception');
+    expect(rows[1].textContent).toContain('Exception');
   });
 });

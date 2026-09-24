@@ -21,6 +21,7 @@ export interface FilteringSettingsDetail {
     sinkholeAddressV6?: string | null;
     sinkholeTimeToLiveSeconds?: number;
     precedence?: DnsFilterListPrecedenceEnum;
+    blockCnameCloaking?: boolean;
 }
 export namespace FilteringSettingsDetail {
 }

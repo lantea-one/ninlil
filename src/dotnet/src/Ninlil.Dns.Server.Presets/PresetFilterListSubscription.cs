@@ -7,7 +7,7 @@ namespace Ninlil.Dns.Server.Presets;
 ///     This record describes a single subscribed block/allow list a preset attaches to the
 ///     default client group -- <see cref="PresetFilterListApplier" />'s own unit of work,
 ///     matching the exact shape <c>DnsFilterListEntity</c> and
-///     <c>DnsFilterListExternalRefreshService</c>'s own hosts-file-format refresh mechanism
+///     <c>DnsFilterListExternalRefreshService</c>'s own subscribed-list refresh mechanism
 ///     already expect.
 /// </summary>
 /// <param name="Name">
@@ -17,7 +17,7 @@ namespace Ninlil.Dns.Server.Presets;
 /// </param>
 /// <param name="Kind">The kind of list this is -- every preset-owned list is a domain block list.</param>
 /// <param name="Action">Whether this list's own entries are blocked or allowed.</param>
-/// <param name="SubscriptionUrl">The hosts-file-format URL this list's entries are fetched from.</param>
+/// <param name="SubscriptionUrl">The URL this list's entries are fetched from (hosts-file, bare-domain or adblock syntax).</param>
 /// <param name="RefreshInterval">How often the subscribed URL should be refetched.</param>
 public sealed record PresetFilterListSubscription(
     string Name,

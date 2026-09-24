@@ -66,7 +66,19 @@
 
       <ng-container cdkColumnDef="kind">
         <th cdk-header-cell *cdkHeaderCellDef>Kind</th>
-        <td cdk-cell *cdkCellDef="let entry">{{ entry.kind ?? 'Domain' }}</td>
+        <td cdk-cell *cdkCellDef="let entry">
+          {{ entry.kind ?? 'Domain' }}
+          @if (entry.isException) {
+            <!-- An adblock "@@" rule from the subscribed list: it lets this name through
+                 even though a broader entry in the same list covers it. -->
+            <c-badge
+              color="success"
+              class="ms-1"
+              cTooltip="An exception: this name and its subdomains are let through despite a broader entry in this list."
+              >Exception</c-badge
+            >
+          }
+        </td>
       </ng-container>
 
       <ng-container cdkColumnDef="comment">

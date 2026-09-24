@@ -1022,6 +1022,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsException")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)

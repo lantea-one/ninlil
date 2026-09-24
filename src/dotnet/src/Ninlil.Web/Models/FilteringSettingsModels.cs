@@ -14,5 +14,6 @@ public record FilteringSettingsDetail(
     string SinkholeAddressV4,
     string SinkholeAddressV6,
     uint SinkholeTimeToLiveSeconds,
-    DnsFilterListPrecedenceEnum Precedence
+    DnsFilterListPrecedenceEnum Precedence,
+    bool BlockCnameCloaking
 );

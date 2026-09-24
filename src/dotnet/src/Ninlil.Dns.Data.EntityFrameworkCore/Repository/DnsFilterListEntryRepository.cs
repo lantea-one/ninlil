@@ -42,7 +42,7 @@ public class DnsFilterListEntryRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task ReplaceEntriesAsync(
         Guid listId,
-        IReadOnlyList<string> values,
+        IReadOnlyList<DnsFilterListReplacementEntry> entries,
         CancellationToken stoppingToken = default
     )
     {
@@ -56,14 +56,15 @@ public class DnsFilterListEntryRepository(NinlilDnsContext context)
         // conceptually part of one refresh operation.
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        foreach (string value in values)
+        foreach (DnsFilterListReplacementEntry entry in entries)
             await Set.AddAsync(
                 new DnsFilterListEntryEntity
                 {
                     Id = Guid.NewGuid(),
                     CreatedAtUtc = now,
                     ListId = listId,
-                    Value = value,
+                    Value = entry.Value,
+                    IsException = entry.IsException,
                 },
                 stoppingToken
             );

@@ -200,6 +200,15 @@ public class FilteringSettingsController(
             );
         }
 
+        if (patch.TryGetMergePatchField("blockCnameCloaking", out JsonElement blockCnameCloaking))
+            settings.Add(
+                new PresetConfigurationSetting(
+                    DnsFilterOptions.SectionName,
+                    nameof(DnsFilterOptions.BlockCnameCloaking),
+                    blockCnameCloaking.GetBoolean()
+                )
+            );
+
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
@@ -222,6 +231,7 @@ public class FilteringSettingsController(
             options.SinkholeAddressV4,
             options.SinkholeAddressV6,
             options.SinkholeTimeToLiveSeconds,
-            options.Precedence
+            options.Precedence,
+            options.BlockCnameCloaking
         );
 }

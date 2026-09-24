@@ -31,6 +31,7 @@ describe('FilteringSettingsComponent', () => {
         sinkholeAddressV6: '::',
         sinkholeTimeToLiveSeconds: 60,
         precedence: 'AllowWins',
+        blockCnameCloaking: true,
       }),
     );
     configureApi?.();
@@ -77,6 +78,36 @@ describe('FilteringSettingsComponent', () => {
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('takes effect immediately'),
     );
+  });
+
+  it('loads and saves the CNAME-cloaking toggle', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiFilteringSettingsGet.and.returnValue(
+        of({ enable: true, precedence: 'AllowWins', blockCnameCloaking: false }),
+      );
+      apiSpy.apiFilteringSettingsPatch.and.returnValue(of({ note: 'Saved.' }));
+    });
+
+    expect(fixture.componentInstance.form.controls.blockCnameCloaking.value).toBeFalse();
+
+    const checkbox: HTMLInputElement = fixture.nativeElement.querySelector(
+      '#filtering-block-cname-cloaking',
+    );
+    checkbox.click();
+    fixture.detectChanges();
+    await fixture.componentInstance.save();
+
+    expect(apiSpy.apiFilteringSettingsPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ blockCnameCloaking: true }),
+    });
+  });
+
+  it('defaults the CNAME-cloaking toggle to on when the server omits it', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiFilteringSettingsGet.and.returnValue(of({ enable: false }));
+    });
+
+    expect(fixture.componentInstance.form.controls.blockCnameCloaking.value).toBeTrue();
   });
 
   it('rejects an out-of-range sinkhole TTL', async () => {
