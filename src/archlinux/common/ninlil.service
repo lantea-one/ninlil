@@ -1,4 +1,4 @@
-# systemd unit for the Arch Linux packages (ninlil and ninlil-bin).
+# systemd unit for the Arch Linux packages (ninlil and ninlil-git).
 [Unit]
 Description=Ninlil DNS, DHCP and Router Advertisement server
 Documentation=https://git.lantea.one/Lantea.One/ninlil

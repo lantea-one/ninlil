@@ -132,15 +132,15 @@ from Homebrew.
 
 ### Arch Linux
 
-Every release carries installable `ninlil-bin` packages for `x86_64` and `aarch64`:
+Every release carries installable `ninlil` packages for `x86_64` and `aarch64`:
 
 ```bash
-sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-bin-<pkgver>-1-x86_64.pkg.tar.zst
+sudo pacman -U https://git.lantea.one/Lantea.One/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
 sudo systemctl enable --now ninlil
 ```
 
-[`src/archlinux/`](./src/archlinux/) also has `ninlil`, a PKGBUILD that builds the newest release
-branch from source. Both install a `ninlil` systemd service running as an unprivileged user with
+[`src/archlinux/`](./src/archlinux/) also has `ninlil-git`, the AUR PKGBUILD that builds the newest
+release branch from source. Both install a `ninlil` systemd service running as an unprivileged user with
 its state in `/var/lib/ninlil`.
 
 ### Run the container image
@@ -704,7 +704,7 @@ Dockerfile              Every build output: the container image, the binaries, a
 docker/                 Build-time helper scripts for the container image
 docker-compose.yml      Example deployment: Ninlil + PostgreSQL, with a host-networking DHCP/RA variant
 .forgejo/               CI/CD workflows and the scripts they run (versioning, releases, cleanup)
-src/archlinux/          The ninlil-bin and ninlil (from source) Arch Linux packages
+src/archlinux/          The ninlil (release binary) and ninlil-git (from source) Arch Linux packages
 src/script/             Operational scripts: database helpers and a systemd unit
 src/terraform/          Reusable Terraform modules for packaging and publishing
 ```

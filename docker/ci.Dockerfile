@@ -8,7 +8,7 @@
 #   dotnet  The .NET SDK, plus libmsquic for the DNS-over-QUIC tests.
 #   node    Node.js 24 with a Java runtime (`npm run build` regenerates the typed API client with
 #           openapi-generator-cli, a Java tool) and Chromium for the Karma suite.
-#   arch    makepkg, for the ninlil-bin packages. Arch Linux publishes amd64 images only, so
+#   arch    makepkg, for the ninlil packages. Arch Linux publishes amd64 images only, so
 #           in-container.sh runs this one as linux/amd64 everywhere.
 
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-noble

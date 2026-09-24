@@ -115,14 +115,14 @@ Verify a download with \`sha256sum --check --ignore-missing SHA256SUMS\`.
 
 ### Arch Linux
 
-\`ninlil-bin\` packages for this build, installable directly:
+\`ninlil\` packages for this build, installable directly:
 
 \`\`\`sh
-sudo pacman -U ${downloads}/ninlil-bin-${ARCH_VERSION}-1-x86_64.pkg.tar.zst
+sudo pacman -U ${downloads}/ninlil-${ARCH_VERSION}-1-x86_64.pkg.tar.zst
 sudo systemctl enable --now ninlil
 \`\`\`
 
-(\`ninlil-bin-${ARCH_VERSION}-1-aarch64.pkg.tar.zst\` for ARM64.)
+(\`ninlil-${ARCH_VERSION}-1-aarch64.pkg.tar.zst\` for ARM64.)
 
 ### Container image
 

@@ -2,10 +2,10 @@
 #
 # Builds the newest Ninlil release from source: the most recent v<yyyy>.<mm>.<dd>.<increment>
 # release branch, compiled into the same self-contained single-file executable (admin console
-# included) the release binaries are. For the prebuilt binary instead, install the ninlil-bin
+# included) the release binaries are. For the prebuilt binary instead, install the ninlil
 # package every release carries.
 
-pkgname=ninlil
+pkgname=ninlil-git
 pkgver=2026.09.24.1
 pkgrel=1
 pkgdesc='DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console'
@@ -16,7 +16,7 @@ depends=('glibc' 'gcc-libs' 'icu' 'openssl')
 makedepends=('git' 'dotnet-sdk>=10' 'nodejs' 'npm' 'java-runtime')
 optdepends=('msquic: DNS-over-QUIC transport')
 provides=('ninlil')
-conflicts=('ninlil-bin')
+conflicts=('ninlil')
 backup=('etc/ninlil/ninlil.env')
 # A .NET single-file executable carries its payload after the ELF image; stripping it corrupts it.
 options=('!strip' '!debug')

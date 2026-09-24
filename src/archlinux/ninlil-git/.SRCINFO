@@ -1,4 +1,4 @@
-pkgbase = ninlil
+pkgbase = ninlil-git
 	pkgdesc = DNS, DHCPv4/DHCPv6 and Router Advertisement server with a REST API and web admin console
 	pkgver = 2026.09.24.1
 	pkgrel = 1
@@ -17,11 +17,11 @@ pkgbase = ninlil
 	depends = openssl
 	optdepends = msquic: DNS-over-QUIC transport
 	provides = ninlil
-	conflicts = ninlil-bin
+	conflicts = ninlil
 	options = !strip
 	options = !debug
 	backup = etc/ninlil/ninlil.env
-	source = ninlil::git+https://git.lantea.one/Lantea.One/ninlil.git
+	source = ninlil-git::git+https://git.lantea.one/Lantea.One/ninlil.git
 	sha256sums = SKIP
 
-pkgname = ninlil
+pkgname = ninlil-git

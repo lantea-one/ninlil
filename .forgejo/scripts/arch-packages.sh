@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Builds the ninlil-bin Arch Linux packages for one build, for x86_64 and aarch64, and writes
-# them into <binaries-directory> next to the binaries, so the pipeline attaches them to the
-# release: ninlil-bin-<pkgver>-1-<arch>.pkg.tar.zst, installable directly with `pacman -U <url>`.
+# Builds the ninlil Arch Linux packages for one build, for x86_64 and aarch64, and writes them
+# into <binaries-directory> next to the binaries, so the pipeline attaches them to the release:
+# ninlil-<pkgver>-1-<arch>.pkg.tar.zst, installable directly with `pacman -U <url>`.
 #
-# The PKGBUILD is generated from src/archlinux/ninlil-bin/PKGBUILD.in with this build's version,
-# download URLs, and SHA256 sums filled in -- the same PKGBUILD an AUR ninlil-bin package would
-# carry. The packages are built from the binaries this pipeline run just produced (the release
+# The PKGBUILD is generated from src/archlinux/ninlil/PKGBUILD.in with this build's version,
+# download URLs, and SHA256 sums filled in. The packages are built from the binaries this pipeline run just produced (the release
 # they would download from is published only after this step), and the checksums are still
 # verified against them. The package only copies files, so both architectures are built here,
 # with makepkg; the pipeline runs this in the arch toolchain container (in-container.sh arch ...).
@@ -22,11 +21,11 @@ set -euo pipefail
 binaries="$1"
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-template="${repository_root}/src/archlinux/ninlil-bin/PKGBUILD.in"
+template="${repository_root}/src/archlinux/ninlil/PKGBUILD.in"
 common="${repository_root}/src/archlinux/common"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
-package="${work}/ninlil-bin"
+package="${work}/ninlil"
 mkdir -p "${package}"
 
 # The pkgver, computed alongside every other form of the version (compute-version.sh).
@@ -75,5 +74,5 @@ mkdir -p "${output}"
     done
 )
 
-cp "${output}"/ninlil-bin-*.pkg.tar.zst "${binaries}/"
-ls -l "${binaries}"/ninlil-bin-*.pkg.tar.zst
+cp "${output}"/ninlil-*.pkg.tar.zst "${binaries}/"
+ls -l "${binaries}"/ninlil-*.pkg.tar.zst

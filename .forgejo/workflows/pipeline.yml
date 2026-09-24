@@ -272,14 +272,14 @@ jobs:
           ./.forgejo/scripts/release.sh download ninlil-linux-arm64 dist
         shell: 'bash'
       ##
-      - name: 'Build ninlil-bin for x86_64 and aarch64'
+      - name: 'Build the ninlil Packages for x86_64 and aarch64'
         run: |-
           ./.forgejo/scripts/in-container.sh arch ./.forgejo/scripts/arch-packages.sh dist
         shell: 'bash'
       ##
       - name: 'Attach to the Draft Release'
         run: |-
-          ./.forgejo/scripts/release.sh upload dist/ninlil-bin-*.pkg.tar.zst
+          ./.forgejo/scripts/release.sh upload dist/ninlil-*.pkg.tar.zst
         shell: 'bash'
   ##
   image:
