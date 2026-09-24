@@ -6,7 +6,9 @@
 # that user, and with HOME in the container's own /tmp. The container is on Docker's own network,
 # so a test listener can never collide with a service the host runs. The only other thing shared
 # with the host is a package cache (NuGet and npm) under ~/.cache/ninlil-ci, which saves every job
-# downloading the same packages again.
+# downloading the same packages again. NuGet's lock files are shared with it: they are what keeps
+# two jobs on one host from extracting the same package into that cache at once, and would
+# otherwise sit in each container's own /tmp, where no other container sees them.
 #
 # Usage: in-container.sh [--docker] <dotnet|node|arch> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start their
@@ -29,7 +31,7 @@ shift
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 image="ninlil-ci-${toolchain}"
 cache="${XDG_CACHE_HOME:-${HOME}/.cache}/ninlil-ci"
-mkdir -p "${cache}/nuget" "${cache}/npm"
+mkdir -p "${cache}/nuget" "${cache}/nuget-scratch" "${cache}/npm"
 
 platform=()
 if [[ "${toolchain}" == 'arch' ]]; then
@@ -54,10 +56,12 @@ arguments=(
     --volume "${repository_root}:/src"
     --workdir /src
     --volume "${cache}/nuget:/cache/nuget"
+    --volume "${cache}/nuget-scratch:/cache/nuget-scratch"
     --volume "${cache}/npm:/cache/npm"
     --env HOME=/tmp
     --env DOTNET_CLI_HOME=/tmp
     --env NUGET_PACKAGES=/cache/nuget
+    --env NUGET_SCRATCH=/cache/nuget-scratch
     --env npm_config_cache=/cache/npm
     --env DOTNET_CLI_TELEMETRY_OPTOUT=1
     --env DOTNET_NOLOGO=1
