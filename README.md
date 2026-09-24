@@ -449,16 +449,16 @@ installed:
 ```bash
 docker buildx build --target test-admin-console .          # lint, format check, Karma suite
 docker build --target test-dotnet -t ninlil-test .          # format check and Release build
-docker run --rm --network host \
+docker run --rm --add-host host.docker.internal:host-gateway \
+  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
   --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
   -v /var/run/docker.sock:/var/run/docker.sock ninlil-test  # every xUnit project
 ```
 
 The test container needs the Docker socket because a few tests start their own database
-containers through Testcontainers. Run it as an unprivileged user, as above: on the host network,
-an unprivileged process cannot bind a port below 1024 or open a raw socket, so no DNS, DHCP, or
-Router Advertisement test can collide with a real service on the machine or answer a real client
-on its network (those tests skip themselves when they cannot bind).
+containers through Testcontainers, which it reaches through the host gateway. It runs in its own
+network namespace, so no DNS, DHCP, or Router Advertisement test can collide with a real service
+on the machine or answer a real client on its network.
 
 ## Releases and versioning
 
@@ -532,9 +532,7 @@ A build publishes nothing until every test has passed, and its release stays an 
 until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
-on the repository. Builds run on a BuildKit builder on each runner's own host network, so build
-steps resolve names exactly as the runner does; set a `NINLIL_BUILD_DNS` variable
-(comma-separated nameservers) to give them different servers.
+on the repository.
 
 ## Contributing: adding a feature
 

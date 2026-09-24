@@ -18,13 +18,12 @@
 #             Formatting and the full Release build of the solution, as an image whose default
 #             command runs every xUnit test project. The tests run in a container rather than
 #             during the build because some of them start their own database containers
-#             (Testcontainers), which needs the Docker socket. Run them as an unprivileged user:
-#             on the host network that user cannot bind a port below 1024 or open a raw socket,
-#             so no DNS, DHCP, or Router Advertisement test can ever reach a real service or
-#             client on the machine's network (those tests skip themselves when they cannot bind):
+#             (Testcontainers), which needs the Docker socket, and reach those containers'
+#             published ports through the host gateway. Run them as an unprivileged user:
 #               docker build --target test-dotnet -t ninlil-test .
-#               docker run --rm --network host --user "$(id -u):$(id -g)" \
-#                 --group-add "$(stat -c %g /var/run/docker.sock)" \
+#               docker run --rm --add-host host.docker.internal:host-gateway \
+#                 -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+#                 --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
 #                 -v /var/run/docker.sock:/var/run/docker.sock ninlil-test
 #
 # Every build stage runs on the build machine's own architecture ($BUILDPLATFORM) and

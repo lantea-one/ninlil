@@ -4,13 +4,9 @@ name: 'Ninlil Pipeline'
 ## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
 ##
 ## Every compile and test runs inside Docker from the repository's own Dockerfile, so a runner
-## needs only Docker (with buildx), git, curl, and jq -- never a matching .NET, Node.js, or Java
+## needs only Docker (with buildx and the containerd image store), git, curl, and jq -- never a matching .NET, Node.js, or Java
 ## installation. Every stage cross-compiles on the runner's own architecture, so any 'archlinux'
 ## runner can build every platform, including both container image architectures.
-##
-## Builds run on a BuildKit builder on the runner's own host network
-## (.forgejo/scripts/setup-builder.sh), because a container on Docker's bridge network cannot
-## resolve names on some runners. NINLIL_BUILD_DNS overrides the nameservers build steps use.
 ##
 ## Job graph:
 ##
@@ -92,13 +88,6 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
-      ##
       - name: 'Format Check and Build'
         run: |-
           docker buildx build --progress=plain --target test-dotnet --load \
@@ -107,17 +96,28 @@ jobs:
       ##
       - name: 'Run Every Test Project'
         run: |-
-          # Some tests start their own database containers through the Docker socket; host
-          # networking lets them reach those containers' published ports on localhost and
-          # resolve names the way the runner does. They run as the runner's own unprivileged
-          # user (plus the Docker socket's group): on the host network that user cannot bind a
-          # port below 1024 or open a raw socket, so no test can collide with, or answer for,
-          # the DNS, DHCP, or web services already running on the runner.
-          docker run --rm --network host \
-            --user "$(id -u):$(id -g)" \
-            --group-add "$(stat -c %g /var/run/docker.sock)" \
-            --volume /var/run/docker.sock:/var/run/docker.sock \
-            "ninlil-test:${{ forgejo.run_id }}"
+          # The tests run in their own network namespace, so nothing they bind can collide with,
+          # or answer for, the DNS, DHCP, or web services already running on the runner. Some of
+          # them start their own database containers through the Docker socket and reach those
+          # containers' published ports through the host gateway. They run as the runner's own
+          # unprivileged user, plus the Docker socket's group.
+          run_tests() {
+            docker run --rm \
+              --add-host host.docker.internal:host-gateway \
+              --env TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+              --user "$(id -u):$(id -g)" \
+              --group-add "$(stat -c %g /var/run/docker.sock)" \
+              --volume /var/run/docker.sock:/var/run/docker.sock \
+              "ninlil-test:${{ forgejo.run_id }}" \
+              dotnet test Ninlil.slnx --no-build --configuration Release "$@"
+          }
+
+          # The live DNSSEC key-rollover test compresses a real rollover into two-second TTLs, so
+          # it is sensitive to CPU contention while the other test projects run in parallel. It
+          # runs on its own, after everything else, rather than being skipped.
+          timing_sensitive='DnssecKeyRolloverZskPrePublishLiveTests'
+          run_tests --filter "FullyQualifiedName!~${timing_sensitive}"
+          run_tests --filter "FullyQualifiedName~${timing_sensitive}"
         shell: 'bash'
       ##
       - name: 'Remove the Test Image'
@@ -137,13 +137,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Lint, Format Check, and Test'
         run: |-
@@ -202,13 +195,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Build ninlil-${{ matrix.binary }}'
         run: |-
@@ -285,13 +271,6 @@ jobs:
           clean: true
           ref: '${{ forgejo.sha }}'
       ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
-      ##
       - name: 'Build and Push linux/amd64 and linux/arm64'
         env:
           NINLIL_CI_TOKEN: '${{ secrets.NINLIL_CI_TOKEN }}'
@@ -301,7 +280,6 @@ jobs:
         run: |-
           # Registry credentials live in a throwaway configuration directory for this job only,
           # never in the runner user's own ~/.docker, which every other job on this host shares.
-          # (The builder itself is still found through BUILDX_CONFIG.)
           export DOCKER_CONFIG="$(mktemp -d)"
           trap 'rm -rf "${DOCKER_CONFIG}"' EXIT
           printf '%s' "${NINLIL_CI_TOKEN}" \
@@ -354,13 +332,6 @@ jobs:
         with:
           clean: true
           ref: '${{ forgejo.sha }}'
-      ##
-      - name: 'Select the Build Environment'
-        env:
-          NINLIL_BUILD_DNS: '${{ vars.NINLIL_BUILD_DNS }}'
-        run: |-
-          ./.forgejo/scripts/setup-builder.sh
-        shell: 'bash'
       ##
       - name: 'Pack ${{ matrix.projects }}'
         run: |-

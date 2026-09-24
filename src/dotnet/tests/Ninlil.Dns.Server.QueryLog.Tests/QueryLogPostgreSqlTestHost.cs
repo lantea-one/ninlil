@@ -22,9 +22,11 @@ namespace Ninlil.Dns.Server.QueryLog.Tests;
 /// </summary>
 public sealed class QueryLogPostgreSqlTestHost : IAsyncDisposable
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(
-        "postgres:16-alpine"
-    ).Build();
+    // Published on a random free host port, never 5432 itself: the machine running the tests may
+    // well have its own PostgreSQL server listening there.
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
+        .WithPortBinding(PostgreSqlBuilder.PostgreSqlPort, assignRandomHostPort: true)
+        .Build();
 
     /// <summary>
     ///     This property contains the real dependency injection container this test's own
