@@ -104,10 +104,14 @@ public class RecursiveOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_MakesTheSameResolverInstanceAttemptRecursionWithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-recursive-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory of this test's own, rather than the shared temp directory itself: the file
+        // watcher behind reloadOnChange sees every change in the directory it watches, and on a
+        // busy machine unrelated churn there can overflow its queue, which makes it report a
+        // change to every watched file at once.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-recursive-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -164,9 +168,6 @@ public class RecursiveOptionsHotReloadTests
             DnsQueryResolution before = await resolver.TryResolveAsync(BuildContext());
             Assert.False(before.IsHandled);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             // The exact same write mechanism RecursiveSettingsController.Patch itself calls.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
@@ -180,13 +181,11 @@ public class RecursiveOptionsHotReloadTests
             );
 
             // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
-            );
-            Assert.Same(reloaded.Task, completed);
+            // few hundred milliseconds -- this waits (up to ten seconds) for the written value to
+            // actually arrive, rather than for the first change notification: a spurious
+            // notification can trigger an earlier reload that still reads the old file.
+            for (int attempt = 0; attempt < 200 && !monitor.CurrentValue.EnableRecursion; attempt++)
+                await Task.Delay(50);
             Assert.True(monitor.CurrentValue.EnableRecursion);
 
             // The identical resolver instance, constructed before the write, now genuinely
@@ -202,7 +201,7 @@ public class RecursiveOptionsHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {

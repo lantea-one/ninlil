@@ -23,10 +23,14 @@ public class QueryLoggingOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_IsVisibleOnIOptionsMonitorWithNoRestart()
     {
-        string path = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-dns-querylogging-hot-reload-{Guid.NewGuid():N}.json"
-        );
+        // A directory of this test's own, rather than the shared temp directory itself: the file
+        // watcher behind reloadOnChange sees every change in the directory it watches, and on a
+        // busy machine unrelated churn there can overflow its queue, which makes it report a
+        // change to every watched file at once.
+        string directory = Directory
+            .CreateTempSubdirectory("ninlil-dns-querylogging-hot-reload-")
+            .FullName;
+        string path = Path.Combine(directory, "appsettings.json");
 
         try
         {
@@ -52,9 +56,6 @@ public class QueryLoggingOptionsHotReloadTests
             // before this privacy scale even existed.
             Assert.Equal(QueryLogPrivacyLevelEnum.Full, monitor.CurrentValue.PrivacyLevel);
 
-            TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
-
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new PresetConfigurationSetting(
@@ -67,14 +68,16 @@ public class QueryLoggingOptionsHotReloadTests
             );
 
             // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay, which would either be flaky (too
-            // short) or slow every test run down for no reason (too long).
-            Task completed = await Task.WhenAny(
-                reloaded.Task,
-                Task.Delay(TimeSpan.FromSeconds(10))
-            );
-            Assert.Same(reloaded.Task, completed);
+            // few hundred milliseconds -- this waits (up to ten seconds) for the written value to
+            // actually arrive, rather than for the first change notification or a fixed delay: a
+            // spurious notification can trigger an earlier reload that still reads the old file.
+            for (
+                int attempt = 0;
+                attempt < 200
+                    && monitor.CurrentValue.PrivacyLevel != QueryLogPrivacyLevelEnum.FullyAnonymous;
+                attempt++
+            )
+                await Task.Delay(50);
 
             Assert.Equal(
                 QueryLogPrivacyLevelEnum.FullyAnonymous,
@@ -85,7 +88,7 @@ public class QueryLoggingOptionsHotReloadTests
         {
             try
             {
-                File.Delete(path);
+                Directory.Delete(directory, recursive: true);
             }
             catch (IOException)
             {

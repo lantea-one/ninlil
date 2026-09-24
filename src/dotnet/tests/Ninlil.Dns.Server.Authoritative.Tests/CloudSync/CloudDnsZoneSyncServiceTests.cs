@@ -359,7 +359,7 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
         await unitOfWork.SaveChangesAsync();
     }
 
-    private async Task RunOneSyncPassAsync()
+    private async Task RunOneSyncPassAsync(Func<bool> completed = null)
     {
         CloudDnsZoneSyncService syncService =
             _host.Services.GetRequiredService<CloudDnsZoneSyncService>();
@@ -375,8 +375,15 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
             await Task.Delay(50);
 
         // Give the pull-direction ApplyChangesAsync + its DnsZoneChangedEvent + the cache reload
-        // it triggers a moment to actually land, on top of the create-request signal above.
-        await Task.Delay(500);
+        // it triggers a moment to actually land, on top of the create-request signal above. A
+        // caller that knows what "landed" looks like waits for exactly that instead (bounded),
+        // since stopping the service any earlier would cancel a pass still in progress on a busy
+        // machine.
+        if (completed is null)
+            await Task.Delay(500);
+        else
+            for (int attempt = 0; attempt < 300 && !completed(); attempt++)
+                await Task.Delay(50);
 
         await syncService.StopAsync(CancellationToken.None);
     }
@@ -468,22 +475,14 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
     [Fact]
     public async Task ACloudSecondaryZoneRemainsQueryableThroughTheCacheAfterASyncDrivenChange()
     {
-        await RunOneSyncPassAsync();
-
         // The cache reloads the zone in the background, off the DnsZoneChangedEvent the sync
-        // publishes; on a busy machine that can land after RunOneSyncPassAsync returns, so wait
-        // for the record to appear (bounded) rather than assuming it already has.
+        // publishes, so the pass keeps running until the record shows up there (bounded).
         DnsName remoteOnly = DnsName.Parse("remote-only.pull.example.com");
+        await RunOneSyncPassAsync(() =>
+            _cache.FindZone(remoteOnly)?.NameExists(remoteOnly) ?? false
+        );
+
         CachedZone pullZone = _cache.FindZone(remoteOnly);
-        for (
-            int attempt = 0;
-            attempt < 200 && !(pullZone?.NameExists(remoteOnly) ?? false);
-            attempt++
-        )
-        {
-            await Task.Delay(50);
-            pullZone = _cache.FindZone(remoteOnly);
-        }
 
         Assert.Equal(_pullZoneId, pullZone.Zone.Id);
         Assert.True(
