@@ -49,6 +49,9 @@ import {
   formatRelativeTime,
   startOfLocalDayIso,
 } from '../shared/relative-time.util';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /** How many known clients one page of this list shows -- matches every other list page's own precedent. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -92,6 +95,8 @@ interface ClientRow {
 @Component({
   selector: 'app-client-list',
   imports: [
+    IfPermissionDirective,
+    HasPermissionPipe,
     RouterLink,
     DatePipe,
     CdkTableModule,
@@ -113,6 +118,7 @@ interface ClientRow {
 export class ClientListComponent {
   private readonly clientsApi = inject(ClientsService);
   private readonly clientGroupsApi = inject(ClientGroupsService);
+  private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -135,15 +141,21 @@ export class ClientListComponent {
   /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  readonly displayedColumns = [
+  /**
+   * Whether client group names couldn't be loaded (usually no `clientgroups:read`). The Group
+   * column is left out then, rather than showing every grouped client as "(unknown group)".
+   */
+  readonly groupsUnavailable = signal(false);
+
+  readonly displayedColumns = computed(() => [
     'favorite',
     'device',
     'presence',
     'addresses',
-    'group',
+    ...(this.groupsUnavailable() ? [] : ['group']),
     'status',
     'actions',
-  ];
+  ]);
 
   readonly rows = signal<ClientRow[]>([]);
   readonly totalCount = signal(0);
@@ -338,6 +350,24 @@ export class ClientListComponent {
     }
   }
 
+  /**
+   * This method fetches every client group, only to name each client's group, or returns `null`
+   * when this session can't read client groups (skipping a request the API would refuse) or the
+   * request fails -- the client list itself never depends on it.
+   */
+  private async loadGroups(): Promise<ClientGroupDetail[] | null> {
+    if (!this.authService.hasPermission('clientgroups:read')) return null;
+
+    try {
+      const allGroups = await firstValueFrom(
+        this.clientGroupsApi.apiClientGroupsGet({ skip: 0, take: 500 }),
+      );
+      return allGroups.items ?? [];
+    } catch {
+      return null;
+    }
+  }
+
   private async loadPage(): Promise<void> {
     this.loading.set(true);
     this.errorMessage.set(null);
@@ -345,11 +375,12 @@ export class ClientListComponent {
     try {
       const [page, allGroups] = await Promise.all([
         firstValueFrom(this.clientsApi.apiClientsGet(this.buildListRequest())),
-        firstValueFrom(this.clientGroupsApi.apiClientGroupsGet({ skip: 0, take: 500 })),
+        this.loadGroups(),
       ]);
 
+      this.groupsUnavailable.set(allGroups === null);
       const groupNamesById = new Map(
-        (allGroups.items ?? []).map((group: ClientGroupDetail) => [
+        (allGroups ?? []).map((group: ClientGroupDetail) => [
           group.id,
           group.name ?? group.id ?? '',
         ]),
@@ -368,9 +399,10 @@ export class ClientListComponent {
 
           return {
             client,
-            groupName: client.clientGroupId
-              ? (groupNamesById.get(client.clientGroupId) ?? '(unknown group)')
-              : null,
+            groupName:
+              client.clientGroupId && allGroups !== null
+                ? (groupNamesById.get(client.clientGroupId) ?? '(unknown group)')
+                : null,
             icon: resolveDisplayedDeviceIcon(client.deviceIconKey, client.suggestedDeviceIconKey),
             // An unnamed device is shown by its most recent IP address, else its first identifier.
             title:

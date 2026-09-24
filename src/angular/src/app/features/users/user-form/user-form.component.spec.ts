@@ -5,12 +5,18 @@ import { of, throwError } from 'rxjs';
 import { PermissionsService, RolesService, UsersService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { UserFormComponent } from './user-form.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('UserFormComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   let usersApiSpy: {
     apiUsersIdGet: jasmine.Spy;
     apiUsersPost: jasmine.Spy;
@@ -67,6 +73,9 @@ describe('UserFormComponent', () => {
 
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(UserFormComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -103,6 +112,33 @@ describe('UserFormComponent', () => {
     expect(fixture.componentInstance.form.controls.email.value).toBe('jsmith@example.com');
     expect(fixture.componentInstance.assignedRoleNames()).toEqual(['dns-operator']);
     expect(fixture.componentInstance.grantedPermissions()).toEqual(['zones:read']);
+  });
+
+  it('edit mode without roles:read: skips the role list, still loads the permission picker, and says why', async () => {
+    deniedPermissions = ['roles:read'];
+    const fixture = await createComponent('user-1', () => {
+      usersApiSpy.apiUsersIdGet.and.returnValue(
+        of({
+          id: 'user-1',
+          userName: 'jsmith',
+          email: 'jsmith@example.com',
+          displayName: 'J Smith',
+          isDisabled: false,
+          twoFactorEnabled: false,
+          roles: ['dns-operator'],
+          directPermissions: [],
+        }),
+      );
+    });
+
+    expect(rolesApiSpy.apiRolesGet).not.toHaveBeenCalled();
+    expect(notificationSpy.error).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.rolesUnavailable()).toBeTrue();
+    expect(fixture.componentInstance.allPermissions()).toEqual(['zones:read', 'zones:write']);
+    const note: HTMLElement | null = fixture.nativeElement.querySelector(
+      '[data-testid="roles-unavailable"]',
+    );
+    expect(note?.textContent).toContain('dns-operator');
   });
 
   it('save() in create mode POSTs the new account, then navigates to the list', async () => {

@@ -24,6 +24,7 @@ import {
   PermissionPickerComponent,
   PermissionToggleEvent,
 } from '../../../shared/permission-picker/permission-picker.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * This constant bounds the single page this component requests from `GET /api/roles`, for the
@@ -71,6 +72,7 @@ const MAX_ROLES_PER_PAGE = 500;
 })
 export class UserFormComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly usersApi = inject(UsersService);
   private readonly rolesApi = inject(RolesService);
@@ -88,6 +90,12 @@ export class UserFormComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   readonly allRoles = signal<RoleSummary[]>([]);
+
+  /**
+   * Whether {@link allRoles} couldn't be loaded (usually no `roles:read`). The role checkboxes
+   * are replaced by the account's current role names and a note saying why they can't be changed.
+   */
+  readonly rolesUnavailable = signal(false);
   readonly assignedRoleNames = signal<string[]>([]);
   readonly togglingRoleName = signal<string | null>(null);
 
@@ -261,18 +269,38 @@ export class UserFormComponent implements OnInit {
     }
   }
 
+  /**
+   * This method loads the role and permission lists the two pickers offer, each on its own: the
+   * role list needs `roles:read`, which a user administrator may lack, and without it only the
+   * role picker is replaced by a note (see {@link rolesUnavailable}) -- the permission picker and
+   * the rest of the form stay usable.
+   */
   private async loadRolesAndPermissions(): Promise<void> {
+    await Promise.all([this.loadRoles(), this.loadPermissions()]);
+  }
+
+  private async loadRoles(): Promise<void> {
+    if (!this.authService.hasPermission('roles:read')) {
+      this.rolesUnavailable.set(true);
+      return;
+    }
+
     try {
-      const [rolesPage, permissions] = await Promise.all([
-        firstValueFrom(this.rolesApi.apiRolesGet({ take: MAX_ROLES_PER_PAGE })),
-        firstValueFrom(this.permissionsApi.apiPermissionsGet()),
-      ]);
-      this.allRoles.set(rolesPage.items ?? []);
-      this.allPermissions.set(permissions);
-    } catch (error) {
-      this.notification.error(
-        extractErrorMessage(error, 'Could not load the role/permission lists.'),
+      const rolesPage = await firstValueFrom(
+        this.rolesApi.apiRolesGet({ take: MAX_ROLES_PER_PAGE }),
       );
+      this.allRoles.set(rolesPage.items ?? []);
+    } catch (error) {
+      this.rolesUnavailable.set(true);
+      this.notification.error(extractErrorMessage(error, 'Could not load the role list.'));
+    }
+  }
+
+  private async loadPermissions(): Promise<void> {
+    try {
+      this.allPermissions.set(await firstValueFrom(this.permissionsApi.apiPermissionsGet()));
+    } catch (error) {
+      this.notification.error(extractErrorMessage(error, 'Could not load the permission list.'));
     }
   }
 }

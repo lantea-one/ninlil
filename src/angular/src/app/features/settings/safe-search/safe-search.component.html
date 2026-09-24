@@ -31,7 +31,7 @@
             <a [href]="engine.sourceDocumentationUrl" target="_blank" rel="noopener">source</a>
           </p>
         </c-card-body>
-        <c-card-footer class="d-flex justify-content-end">
+        <c-card-footer *appIfPermission="'dnsrewrites:write'" class="d-flex justify-content-end">
           <button
             cButton
             [color]="engine.isEnabled ? 'secondary' : 'success'"

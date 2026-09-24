@@ -20,7 +20,7 @@
             {{ preset.filterListSubscriptionCount }} filter-list subscription(s).
           </p>
         </c-card-body>
-        <c-card-footer class="d-flex justify-content-end">
+        <c-card-footer *appIfPermission="'presets:write'" class="d-flex justify-content-end">
           <button
             cButton
             color="primary"

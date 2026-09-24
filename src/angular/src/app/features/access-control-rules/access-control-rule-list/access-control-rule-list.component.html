@@ -1,6 +1,11 @@
 <div class="list-header">
   <h1>Access Control Rules</h1>
-  <a cButton color="primary" routerLink="/access-control-rules/new">
+  <a
+    *appIfPermission="'accesscontrol:write'"
+    cButton
+    color="primary"
+    routerLink="/access-control-rules/new"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     New rule
   </a>
@@ -18,7 +23,12 @@
     heading="No access-control rules yet"
     description="Every client is subject to the global recursion/rate-limiting defaults until you create one. A rule grants extra capabilities to matching networks -- it never denies."
   >
-    <a cButton color="primary" routerLink="/access-control-rules/new">
+    <a
+      *appIfPermission="'accesscontrol:write'"
+      cButton
+      color="primary"
+      routerLink="/access-control-rules/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New rule
     </a>
@@ -67,6 +77,7 @@
             variant="ghost"
             [color]="rule.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="rule.isDisabled ? 'Enable this rule' : 'Disable this rule'"
+            [disabled]="!('accesscontrol:write' | hasPermission)"
             (click)="toggleDisabled(rule)"
           >
             {{ rule.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -88,6 +99,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let rule" class="actions-cell">
           <a
+            *appIfPermission="'accesscontrol:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -99,6 +111,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'accesscontrol:write'"
             cButton
             size="sm"
             variant="ghost"

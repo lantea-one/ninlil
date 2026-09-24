@@ -6,7 +6,12 @@
     </a>
     <h1>{{ groupName() ?? 'Networks' }}</h1>
   </div>
-  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'networks', 'new']">
+  <a
+    *appIfPermission="'clientgroups:write'"
+    cButton
+    color="primary"
+    [routerLink]="['/client-groups', groupId, 'networks', 'new']"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     Add network
   </a>
@@ -24,7 +29,12 @@
     heading="No networks yet"
     description="Add a CIDR range or ClientID to control which clients this group's filter list assignments apply to."
   >
-    <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'networks', 'new']">
+    <a
+      *appIfPermission="'clientgroups:write'"
+      cButton
+      color="primary"
+      [routerLink]="['/client-groups', groupId, 'networks', 'new']"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       Add network
     </a>
@@ -47,6 +57,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let network" class="actions-cell">
           <a
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -58,6 +69,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"

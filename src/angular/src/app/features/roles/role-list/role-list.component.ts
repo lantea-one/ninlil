@@ -22,6 +22,7 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /** How many roles one page of this list shows -- matches `ZoneListComponent`'s own default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -35,6 +36,7 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-role-list',
   imports: [
+    IfPermissionDirective,
     RouterLink,
     CdkTableModule,
     ButtonDirective,

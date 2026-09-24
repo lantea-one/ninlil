@@ -27,6 +27,7 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { ClusterSyncInfoComponent } from '../../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { isSubscribedList } from '../../filter-list.model';
+import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 
 /** How many entries one page of this list shows -- matches every other list page's own precedent. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -45,6 +46,7 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-filter-list-entry-list',
   imports: [
+    IfPermissionDirective,
     RouterLink,
     CdkTableModule,
     ButtonDirective,

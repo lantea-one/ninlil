@@ -13,6 +13,7 @@ import {
   ClientGroupListAssignmentDetail,
   ClientGroupListAssignmentsService,
   ClientGroupsService,
+  FilterListDetail,
   FilterListsService,
 } from '../../../../api-client';
 import {
@@ -26,6 +27,8 @@ import {
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 /** How many assignments one page of this list shows -- matches every other list page's own precedent. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -52,6 +55,7 @@ interface AssignmentRow {
 @Component({
   selector: 'app-client-group-list-assignment-list',
   imports: [
+    IfPermissionDirective,
     RouterLink,
     CdkTableModule,
     ButtonDirective,
@@ -71,6 +75,7 @@ export class ClientGroupListAssignmentListComponent {
   private readonly listAssignmentsApi = inject(ClientGroupListAssignmentsService);
   private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly filterListsApi = inject(FilterListsService);
+  private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
 
   /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending assignment removal. */
@@ -87,6 +92,9 @@ export class ClientGroupListAssignmentListComponent {
   readonly displayedColumns = ['listName', 'actions'];
 
   readonly groupName = signal<string | null>(null);
+  /** Whether filter list names couldn't be loaded (usually no `filterlists:read`). */
+  readonly listNamesUnavailable = signal(false);
+
   readonly rows = signal<AssignmentRow[]>([]);
   readonly totalCount = signal(0);
   readonly pageSize = signal(DEFAULT_PAGE_SIZE);
@@ -165,6 +173,24 @@ export class ClientGroupListAssignmentListComponent {
     }
   }
 
+  /**
+   * This method fetches every filter list, only to name each assignment's list, or returns
+   * `null` when this session can't read filter lists (skipping a request the API would refuse) or
+   * the request fails -- the assignments themselves never depend on it.
+   */
+  private async loadFilterLists(): Promise<FilterListDetail[] | null> {
+    if (!this.authService.hasPermission('filterlists:read')) return null;
+
+    try {
+      const allLists = await firstValueFrom(
+        this.filterListsApi.apiFilterListsGet({ skip: 0, take: 500 }),
+      );
+      return allLists.items ?? [];
+    } catch {
+      return null;
+    }
+  }
+
   private async loadPage(): Promise<void> {
     this.loading.set(true);
     this.errorMessage.set(null);
@@ -178,17 +204,22 @@ export class ClientGroupListAssignmentListComponent {
             take: this.pageSize(),
           }),
         ),
-        firstValueFrom(this.filterListsApi.apiFilterListsGet({ skip: 0, take: 500 })),
+        this.loadFilterLists(),
       ]);
 
+      this.listNamesUnavailable.set(allLists === null);
       const listNamesById = new Map(
-        (allLists.items ?? []).map((list) => [list.id, list.name ?? list.id ?? '']),
+        (allLists ?? []).map((list) => [list.id, list.name ?? list.id ?? '']),
       );
 
       this.rows.set(
         (page.items ?? []).map((assignment) => ({
           assignment,
-          listName: listNamesById.get(assignment.listId ?? '') ?? '(unknown list)',
+          // Without the filter lists' names, the list's ID is the best this page can show.
+          listName:
+            allLists === null
+              ? (assignment.listId ?? '')
+              : (listNamesById.get(assignment.listId ?? '') ?? '(unknown list)'),
         })),
       );
       this.totalCount.set(page.totalCount ?? 0);

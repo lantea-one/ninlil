@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>Filter Lists</h1>
-  <a cButton color="primary" routerLink="/filter-lists/new">
+  <a *appIfPermission="'filterlists:write'" cButton color="primary" routerLink="/filter-lists/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New filter list
   </a>
@@ -18,7 +18,12 @@
     heading="No filter lists yet"
     description="A filter list blocks or allows queries by domain, wildcard, or regex pattern. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/filter-lists/new">
+    <a
+      *appIfPermission="'filterlists:write'"
+      cButton
+      color="primary"
+      routerLink="/filter-lists/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New filter list
     </a>
@@ -68,6 +73,7 @@
             variant="ghost"
             [color]="list.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="list.isDisabled ? 'Enable this filter list' : 'Disable this filter list'"
+            [disabled]="!('filterlists:write' | hasPermission)"
             (click)="toggleDisabled(list)"
           >
             {{ list.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -100,6 +106,7 @@
             <svg cIcon name="cilList" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'filterlists:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -111,6 +118,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'filterlists:write'"
             cButton
             size="sm"
             variant="ghost"

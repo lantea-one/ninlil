@@ -21,6 +21,7 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { MODE_OPTIONS, PALETTE_OPTIONS } from '../../../core/theme/theme-palette.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own *global default* appearance -- the palette and
@@ -48,6 +49,7 @@ import { MODE_OPTIONS, PALETTE_OPTIONS } from '../../../core/theme/theme-palette
 @Component({
   selector: 'app-appearance-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

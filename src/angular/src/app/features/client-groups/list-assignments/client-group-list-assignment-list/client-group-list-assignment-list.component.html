@@ -6,7 +6,12 @@
     </a>
     <h1>{{ groupName() ?? 'Filter list assignments' }}</h1>
   </div>
-  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'list-assignments', 'new']">
+  <a
+    *appIfPermission="'clientgroups:write'"
+    cButton
+    color="primary"
+    [routerLink]="['/client-groups', groupId, 'list-assignments', 'new']"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     Assign filter list
   </a>
@@ -25,6 +30,7 @@
     description="Assign a filter list to this group to control which block/allow lists apply to its matching clients."
   >
     <a
+      *appIfPermission="'clientgroups:write'"
       cButton
       color="primary"
       [routerLink]="['/client-groups', groupId, 'list-assignments', 'new']"
@@ -34,6 +40,12 @@
     </a>
   </app-empty-state>
 } @else {
+  @if (listNamesUnavailable()) {
+    <p class="hint" data-testid="list-names-unavailable">
+      Filter lists are shown by ID: your account can't read filter lists (that needs
+      <code>filterlists:read</code>).
+    </p>
+  }
   <div class="table-card">
     <table cdk-table cTable hover responsive [dataSource]="rows()" class="assignment-table">
       <ng-container cdkColumnDef="listName">
@@ -45,6 +57,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let row" class="actions-cell">
           <button
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"

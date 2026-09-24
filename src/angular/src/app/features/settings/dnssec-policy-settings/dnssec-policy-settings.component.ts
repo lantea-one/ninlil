@@ -16,6 +16,7 @@ import { firstValueFrom } from 'rxjs';
 import { DnssecAlgorithmEnum, DnssecPolicySettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `DnssecAlgorithmPolicyOptions` (`GET`/`PATCH
@@ -30,6 +31,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-dnssec-policy-settings',
   imports: [
+    IfPermissionDirective,
     AlertComponent,
     ButtonDirective,
     CardBodyComponent,

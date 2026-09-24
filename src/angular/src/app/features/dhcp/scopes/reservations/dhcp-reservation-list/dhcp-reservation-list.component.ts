@@ -27,6 +27,7 @@ import {
 import { EmptyStateComponent } from '../../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../../../shared/if-permission/if-permission.directive';
 
 /** How many reservations one page of this list shows -- matches every other list page's own precedent. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -48,6 +49,7 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-dhcp-reservation-list',
   imports: [
+    IfPermissionDirective,
     RouterLink,
     CdkTableModule,
     AlertComponent,

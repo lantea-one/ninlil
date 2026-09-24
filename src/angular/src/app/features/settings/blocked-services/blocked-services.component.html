@@ -30,7 +30,7 @@
         <c-card-body>
           <p>{{ service.description }}</p>
         </c-card-body>
-        <c-card-footer class="d-flex justify-content-end">
+        <c-card-footer *appIfPermission="'filterlists:write'" class="d-flex justify-content-end">
           <button
             cButton
             [color]="service.isEnabled ? 'secondary' : 'danger'"

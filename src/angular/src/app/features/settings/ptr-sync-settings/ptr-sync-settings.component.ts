@@ -19,6 +19,7 @@ import { firstValueFrom } from 'rxjs';
 import { PtrSyncSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `PtrSyncOptions` global defaults (`GET`/`PATCH
@@ -34,6 +35,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-ptr-sync-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

@@ -11,12 +11,18 @@ import {
 } from '../../../../api-client';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { DnssecKeyListComponent } from './dnssec-key-list.component';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('DnssecKeyListComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   let dnssecKeysApiSpy: {
     apiZonesZoneIdDnssecKeysGet: jasmine.Spy;
     apiZonesZoneIdDnssecKeysIdPatch: jasmine.Spy;
@@ -72,6 +78,9 @@ describe('DnssecKeyListComponent', () => {
       ],
     }).compileComponents();
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(DnssecKeyListComponent);
     fixture.detectChanges();
     await flushMicrotasks();

@@ -20,6 +20,7 @@ import { firstValueFrom } from 'rxjs';
 import { ClusterSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this node's own `ClusterOptions` via
@@ -38,6 +39,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-cluster-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

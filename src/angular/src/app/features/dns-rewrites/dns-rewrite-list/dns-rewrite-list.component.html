@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>DNS Rewrites</h1>
-  <a cButton color="primary" routerLink="/dns-rewrites/new">
+  <a *appIfPermission="'dnsrewrites:write'" cButton color="primary" routerLink="/dns-rewrites/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New rewrite
   </a>
@@ -18,7 +18,12 @@
     heading="No DNS rewrites yet"
     description="A rewrite answers a domain locally with your own address or CNAME, consulted before any zone/forwarder/recursive resolution. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/dns-rewrites/new">
+    <a
+      *appIfPermission="'dnsrewrites:write'"
+      cButton
+      color="primary"
+      routerLink="/dns-rewrites/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New rewrite
     </a>
@@ -62,6 +67,7 @@
             variant="ghost"
             [color]="rewrite.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="rewrite.isDisabled ? 'Enable this rewrite' : 'Disable this rewrite'"
+            [disabled]="!('dnsrewrites:write' | hasPermission)"
             (click)="toggleDisabled(rewrite)"
           >
             {{ rewrite.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -83,6 +89,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let rewrite" class="actions-cell">
           <a
+            *appIfPermission="'dnsrewrites:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -94,6 +101,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'dnsrewrites:write'"
             cButton
             size="sm"
             variant="ghost"

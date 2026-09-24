@@ -220,6 +220,12 @@
                     <a routerLink="/cloud-provider-credentials">Cloud Provider Credentials</a> page,
                     or leave it as-is if the credential set exists but this session can't see it.
                   </p>
+                } @else if (cloudCredentialsUnavailable()) {
+                  <p class="hint">
+                    Your account can't list cloud provider credentials (that needs
+                    <code>cloudprovidercredentials:read</code>). Pick "Enter a custom ID&hellip;" to
+                    reference one by its ID.
+                  </p>
                 } @else {
                   <p class="hint">
                     Sourced live from the
@@ -564,6 +570,11 @@
                   This name doesn't match any TSIG key currently visible to this session -- manage
                   keys on the <a routerLink="/tsig-keys">TSIG Keys</a> page, or leave it as-is if
                   the key exists but this session can't see it.
+                </p>
+              } @else if (tsigKeysUnavailable()) {
+                <p class="hint">
+                  Your account can't list TSIG keys (that needs <code>tsigkeys:read</code>). Pick
+                  "Enter a custom name&hellip;" to reference one by name.
                 </p>
               } @else {
                 <p class="hint">

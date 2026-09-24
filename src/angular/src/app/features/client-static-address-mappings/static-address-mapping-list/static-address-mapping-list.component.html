@@ -1,6 +1,11 @@
 <div class="list-header">
   <h1>Static Address Mappings</h1>
-  <a cButton color="primary" routerLink="/client-static-address-mappings/new">
+  <a
+    *appIfPermission="'clients:write'"
+    cButton
+    color="primary"
+    routerLink="/client-static-address-mappings/new"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     New mapping
   </a>
@@ -18,7 +23,12 @@
     heading="No static address mappings yet"
     description="A mapping manually pins one address or CIDR network to a persistent client identifier, for a genuinely static device on a segment this server's ARP table and DHCP engine can never see. Every per-client feature (filter lists, schedules, pause) picks up a pinned identifier for free, the same as any other known client."
   >
-    <a cButton color="primary" routerLink="/client-static-address-mappings/new">
+    <a
+      *appIfPermission="'clients:write'"
+      cButton
+      color="primary"
+      routerLink="/client-static-address-mappings/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New mapping
     </a>
@@ -59,6 +69,7 @@
             variant="ghost"
             [color]="mapping.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="mapping.isDisabled ? 'Enable this mapping' : 'Disable this mapping'"
+            [disabled]="!('clients:write' | hasPermission)"
             (click)="toggleDisabled(mapping)"
           >
             {{ mapping.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -70,6 +81,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let mapping" class="actions-cell">
           <a
+            *appIfPermission="'clients:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -81,6 +93,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'clients:write'"
             cButton
             size="sm"
             variant="ghost"

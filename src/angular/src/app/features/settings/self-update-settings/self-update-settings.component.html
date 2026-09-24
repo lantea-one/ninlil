@@ -37,7 +37,7 @@
       }
     </c-card-body>
 
-    <c-card-footer class="d-flex justify-content-end">
+    <c-card-footer *appIfPermission="'selfupdate:manage'" class="d-flex justify-content-end">
       <button cButton color="secondary" [disabled]="checking()" (click)="checkNow()">
         @if (checking()) {
           <c-spinner size="sm" />
@@ -109,7 +109,7 @@
       </form>
     </c-card-body>
 
-    <c-card-footer class="d-flex justify-content-end">
+    <c-card-footer *appIfPermission="'selfupdatesettings:write'" class="d-flex justify-content-end">
       <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
         @if (submitting()) {
           <c-spinner size="sm" />

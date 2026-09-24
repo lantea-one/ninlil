@@ -20,6 +20,7 @@ import { firstValueFrom } from 'rxjs';
 import { QueryLogPrivacyLevelEnum, QueryLoggingSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This picker's own privacy level catalog: each level's own label and a one-line description of
@@ -75,6 +76,7 @@ const PRIVACY_LEVEL_OPTIONS: {
 @Component({
   selector: 'app-query-logging-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

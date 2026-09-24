@@ -25,6 +25,7 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { buildPfxPasswordPatchField, joinLines, splitLines } from './web-listen-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `WebListenOptions` (`GET`/`PATCH
@@ -43,6 +44,7 @@ import { buildPfxPasswordPatchField, joinLines, splitLines } from './web-listen-
 @Component({
   selector: 'app-web-listen-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

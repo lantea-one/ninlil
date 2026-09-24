@@ -48,6 +48,7 @@ import {
   requiresPrimaryServerAddresses,
   ZONE_TYPE_OPTIONS,
 } from '../zone.model';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /** This function splits a textarea's own one-address-per-line text into a trimmed, non-empty-only array. */
 function splitAddressLines(text: string): string[] {
@@ -123,6 +124,7 @@ export class ZoneFormComponent implements OnInit {
   private readonly cloudCredentialsApi = inject(CloudProviderCredentialsService);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
+  private readonly authService = inject(AuthService);
 
   /** The sentinel the TSIG key select's own "enter a custom name" option carries as its value. */
   readonly customTsigKeyOption = CUSTOM_TSIG_KEY_OPTION;
@@ -144,6 +146,12 @@ export class ZoneFormComponent implements OnInit {
    * as {@link tsigKeys}.
    */
   readonly cloudCredentials = signal<CloudProviderCredentialDetail[]>([]);
+
+  /** Whether {@link tsigKeys} couldn't be loaded (usually no `tsigkeys:read`), leaving it empty. */
+  readonly tsigKeysUnavailable = signal(false);
+
+  /** Whether {@link cloudCredentials} couldn't be loaded (usually no `cloudprovidercredentials:read`). */
+  readonly cloudCredentialsUnavailable = signal(false);
 
   private readonly zoneId = this.route.snapshot.paramMap.get('zoneId');
 
@@ -354,53 +362,63 @@ export class ZoneFormComponent implements OnInit {
   }
 
   /**
-   * This method loads every prerequisite this form needs before it can render meaningfully: the
-   * live TSIG key list and cloud provider credential list always, and the existing zone itself in
-   * edit mode -- all fetched concurrently (not one after another) since none depends on another's
-   * result, only on all three being in hand before `applyExistingZone` can compute the right
-   * initial TSIG key and cloud credential selections.
+   * This method loads what this form needs before it can render meaningfully: the existing zone
+   * itself in edit mode, plus the live TSIG key and cloud provider credential lists the two
+   * pickers offer -- all fetched concurrently, since none depends on another's result, only on
+   * all being in hand before `applyExistingZone` can compute the right initial selections. The
+   * two lists are optional: each needs its own read permission, and one this session can't read
+   * leaves just its picker's "Enter a custom ..." choice (see {@link tsigKeysUnavailable}) rather
+   * than failing the whole form.
    */
   private async initialize(): Promise<void> {
     try {
-      const tsigKeysRequest = firstValueFrom(
-        this.tsigKeysApi.apiTsigKeysGet({ skip: 0, take: 500 }),
-      );
-      const cloudCredentialsRequest = firstValueFrom(
-        this.cloudCredentialsApi.apiCloudProviderCredentialsGet({ skip: 0, take: 500 }),
-      );
+      const [tsigKeys, cloudCredentials, zone] = await Promise.all([
+        this.loadOptionalList('tsigkeys:read', () =>
+          firstValueFrom(this.tsigKeysApi.apiTsigKeysGet({ skip: 0, take: 500 })),
+        ),
+        this.loadOptionalList('cloudprovidercredentials:read', () =>
+          firstValueFrom(
+            this.cloudCredentialsApi.apiCloudProviderCredentialsGet({ skip: 0, take: 500 }),
+          ),
+        ),
+        this.isEditMode && this.zoneId
+          ? firstValueFrom(this.zonesApi.apiZonesIdGet({ id: this.zoneId }))
+          : Promise.resolve(null),
+      ]);
 
-      if (this.isEditMode && this.zoneId) {
-        const [tsigKeysResult, cloudCredentialsResult, zone] = await Promise.all([
-          tsigKeysRequest,
-          cloudCredentialsRequest,
-          firstValueFrom(this.zonesApi.apiZonesIdGet({ id: this.zoneId })),
-        ]);
-        this.tsigKeys.set(tsigKeysResult.items ?? []);
-        this.cloudCredentials.set(cloudCredentialsResult.items ?? []);
+      this.tsigKeys.set(tsigKeys ?? []);
+      this.tsigKeysUnavailable.set(tsigKeys === null);
+      this.cloudCredentials.set(cloudCredentials ?? []);
+      this.cloudCredentialsUnavailable.set(cloudCredentials === null);
+
+      if (zone) {
         this.applyExistingZone(zone);
         // A failure loading catalog membership context is a real but secondary concern -- it
         // must never block the main zone form itself from rendering, so it gets its own signal
         // and its own try/catch rather than sharing this method's own errorMessage.
         void this.loadCatalogMembershipContextAsync(zone);
-      } else {
-        const [tsigKeysResult, cloudCredentialsResult] = await Promise.all([
-          tsigKeysRequest,
-          cloudCredentialsRequest,
-        ]);
-        this.tsigKeys.set(tsigKeysResult.items ?? []);
-        this.cloudCredentials.set(cloudCredentialsResult.items ?? []);
       }
     } catch (error) {
-      this.errorMessage.set(
-        extractErrorMessage(
-          error,
-          this.isEditMode
-            ? 'Could not load this zone.'
-            : 'Could not load the TSIG key / cloud credential lists.',
-        ),
-      );
+      this.errorMessage.set(extractErrorMessage(error, 'Could not load this zone.'));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * This method loads one picker's optional list, or returns `null` when this session lacks the
+   * permission to read it (skipping a request the API would refuse) or the request fails anyway.
+   */
+  private async loadOptionalList<T>(
+    permission: string,
+    load: () => Promise<{ items?: T[] | null }>,
+  ): Promise<T[] | null> {
+    if (!this.authService.hasPermission(permission)) return null;
+
+    try {
+      return (await load()).items ?? [];
+    } catch {
+      return null;
     }
   }
 

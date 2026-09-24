@@ -17,6 +17,7 @@ import { firstValueFrom } from 'rxjs';
 import { TsigSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `TsigServiceOptions` (`GET`/`PATCH
@@ -29,6 +30,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-tsig-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

@@ -21,6 +21,7 @@ import { TransportSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { buildPfxPasswordPatchField, joinLines, splitLines } from './transport-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes every DNS transport's own configuration
@@ -47,6 +48,7 @@ import { buildPfxPasswordPatchField, joinLines, splitLines } from './transport-s
 @Component({
   selector: 'app-transport-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

@@ -27,6 +27,8 @@ import {
   ResetPasswordDialogComponent,
   ResetPasswordDialogTarget,
 } from '../reset-password-dialog/reset-password-dialog.component';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
 /** How many accounts one page of this list shows -- matches `ZoneListComponent`'s own default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -42,6 +44,8 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-user-list',
   imports: [
+    IfPermissionDirective,
+    HasPermissionPipe,
     RouterLink,
     CdkTableModule,
     BadgeComponent,

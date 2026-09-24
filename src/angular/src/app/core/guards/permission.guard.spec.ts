@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
-import { permissionGuard } from './permission.guard';
+import { anyPermissionGuard, permissionGuard } from './permission.guard';
 
 describe('permissionGuard', () => {
   let authServiceFake: { isAuthenticated: jasmine.Spy; hasPermission: jasmine.Spy };
@@ -55,5 +55,31 @@ describe('permissionGuard', () => {
     );
 
     expect(result).toBeTrue();
+  });
+
+  it('anyPermissionGuard allows navigation when any one of its permissions is held', () => {
+    authServiceFake.isAuthenticated.and.returnValue(true);
+    authServiceFake.hasPermission.and.callFake(
+      (permission: string) => permission === 'smtpsettings:read',
+    );
+
+    const guard = anyPermissionGuard(['presets:read', 'smtpsettings:read']);
+    const result = TestBed.runInInjectionContext(() =>
+      guard({} as never, { url: '/settings' } as RouterStateSnapshot),
+    );
+
+    expect(result).toBeTrue();
+  });
+
+  it('anyPermissionGuard redirects to /forbidden when none of its permissions is held', () => {
+    authServiceFake.isAuthenticated.and.returnValue(true);
+    authServiceFake.hasPermission.and.returnValue(false);
+
+    const guard = anyPermissionGuard(['presets:read', 'smtpsettings:read']);
+    const result = TestBed.runInInjectionContext(() =>
+      guard({} as never, { url: '/settings' } as RouterStateSnapshot),
+    ) as UrlTree;
+
+    expect(router.serializeUrl(result)).toBe('/forbidden');
   });
 });

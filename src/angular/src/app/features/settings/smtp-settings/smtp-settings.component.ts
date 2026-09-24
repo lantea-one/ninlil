@@ -20,6 +20,7 @@ import { SmtpSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { buildSmtpSettingsPatchBody } from './smtp-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `EmailSenderOptions` -- the SMTP server that
@@ -43,6 +44,7 @@ import { buildSmtpSettingsPatchBody } from './smtp-settings.model';
 @Component({
   selector: 'app-smtp-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

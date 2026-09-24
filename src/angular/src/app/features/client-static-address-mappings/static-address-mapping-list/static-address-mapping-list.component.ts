@@ -24,6 +24,8 @@ import {
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
+import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -37,6 +39,8 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-static-address-mapping-list',
   imports: [
+    IfPermissionDirective,
+    HasPermissionPipe,
     RouterLink,
     CdkTableModule,
     ButtonDirective,

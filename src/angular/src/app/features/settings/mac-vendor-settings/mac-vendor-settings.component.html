@@ -136,7 +136,13 @@
           }
         </button>
       }
-      <button cButton color="primary" [disabled]="form.invalid || submitting()" (click)="save()">
+      <button
+        *appIfPermission="'macvendorsettings:write'"
+        cButton
+        color="primary"
+        [disabled]="form.invalid || submitting()"
+        (click)="save()"
+      >
         @if (submitting()) {
           <c-spinner size="sm" />
         } @else {

@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
-import { permissionGuard } from './core/guards/permission.guard';
+import { anyPermissionGuard, permissionGuard } from './core/guards/permission.guard';
+import { SETTINGS_TAB_PERMISSIONS } from './features/settings/settings-shell/settings-nav';
+import { settingsLandingGuard } from './features/settings/settings-shell/settings-landing.guard';
 import { AppShellComponent } from './layout/app-shell/app-shell.component';
 import { ForbiddenComponent } from './layout/forbidden/forbidden.component';
 
@@ -407,13 +409,16 @@ export const routes: Routes = [
           },
           // Read-only -- no "new"/"edit" routes at all, since an activity entry is server-written
           // history, never an operator-authored resource, mirroring QueryLogListComponent's own
-          // identical posture.
+          // identical posture. It is the client's slice of the query log, so it needs
+          // `querylog:read` (as ClientActivityController does) on top of the parent's
+          // `clients:read`.
           {
             path: ':clientId/activity',
             loadComponent: () =>
               import('./features/clients/activity/client-activity-list/client-activity-list.component').then(
                 (m) => m.ClientActivityListComponent,
               ),
+            canActivate: [permissionGuard('querylog:read')],
           },
         ],
       },
@@ -822,16 +827,16 @@ export const routes: Routes = [
         // (ZoneSigningSettingsController), and the admin-login brute-force limiter's own attempt
         // threshold/lockout window (AdminLoginRateLimitSettingsController -- genuinely distinct
         // from, and independent of, the "Rate limiting" tab's own DNS-query limiter). Each
-        // sub-page requires its own distinct permission
-        // (not the shared `presets:read` the parent nav item itself uses), matching each
-        // controller's own real `[RequirePermission(...)]` attribute -- see
-        // SettingsShellComponent's own doc comment for why.
+        // sub-page requires its own distinct permission, matching each controller's own real
+        // `[RequirePermission(...)]` attribute -- see SettingsShellComponent's own doc comment
+        // for why. The shell itself opens for anyone holding any one of them, and the presets
+        // page at its root sends a user without `presets:read` on to a tab they can read.
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings-shell/settings-shell.component').then(
             (m) => m.SettingsShellComponent,
           ),
-        canActivate: [permissionGuard('presets:read')],
+        canActivate: [anyPermissionGuard(SETTINGS_TAB_PERMISSIONS)],
         children: [
           {
             path: '',
@@ -839,6 +844,7 @@ export const routes: Routes = [
               import('./features/settings/preset-list/preset-list.component').then(
                 (m) => m.PresetListComponent,
               ),
+            canActivate: [settingsLandingGuard],
           },
           {
             path: 'recursive',

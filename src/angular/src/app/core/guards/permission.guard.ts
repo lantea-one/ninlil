@@ -12,6 +12,14 @@ import { AuthService } from '../auth/auth.service';
  * to directly (a typed-in URL, a bookmark, a link from outside the nav).
  */
 export function permissionGuard(permission: string): CanActivateFn {
+  return anyPermissionGuard([permission]);
+}
+
+/**
+ * This function builds a route guard like {@link permissionGuard}, satisfied by any one of several
+ * permissions -- for a parent route, such as `/settings`, whose children each check their own.
+ */
+export function anyPermissionGuard(permissions: readonly string[]): CanActivateFn {
   return (_route, state) => {
     const authService = inject(AuthService);
     const router = inject(Router);
@@ -20,7 +28,7 @@ export function permissionGuard(permission: string): CanActivateFn {
       return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
     }
 
-    if (authService.hasPermission(permission)) return true;
+    if (permissions.some((permission) => authService.hasPermission(permission))) return true;
 
     return router.createUrlTree(['/forbidden']);
   };

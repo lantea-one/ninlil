@@ -242,6 +242,15 @@ export class AuthService {
     );
   }
 
+  /**
+   * This method checks whether the current session holds at least one of several permissions --
+   * for a page, such as the settings area, that is useful to anyone who can read any one of its
+   * sub-pages.
+   */
+  hasAnyPermission(permissions: readonly string[]): boolean {
+    return permissions.some((permission) => this.hasPermission(permission));
+  }
+
   /** This method applies a fresh access token and decodes the new claims. */
   private applyAccessToken(accessToken: string | null): void {
     this.accessTokenSignal.set(accessToken);

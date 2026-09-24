@@ -24,6 +24,7 @@ import {
   readFileAsDataUri,
   validateLogoFile,
 } from './branding-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own global branding (`GET`/`PATCH
@@ -52,6 +53,7 @@ import {
 @Component({
   selector: 'app-branding-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

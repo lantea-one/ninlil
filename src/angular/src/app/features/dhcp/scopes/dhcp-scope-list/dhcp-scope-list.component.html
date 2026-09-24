@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>DHCP Scopes</h1>
-  <a cButton color="primary" routerLink="/dhcp-scopes/new">
+  <a *appIfPermission="'dhcpscopes:write'" cButton color="primary" routerLink="/dhcp-scopes/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New scope
   </a>
@@ -18,7 +18,7 @@
     heading="No DHCP scopes yet"
     description="A scope is an address pool -- a range of addresses this server hands out as leases, along with the gateway/DNS options that go with them. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/dhcp-scopes/new">
+    <a *appIfPermission="'dhcpscopes:write'" cButton color="primary" routerLink="/dhcp-scopes/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New scope
     </a>
@@ -75,6 +75,7 @@
             variant="ghost"
             [color]="scope.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="scope.isDisabled ? 'Enable this scope' : 'Disable this scope'"
+            [disabled]="!('dhcpscopes:write' | hasPermission)"
             (click)="toggleDisabled(scope)"
           >
             {{ scope.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -97,6 +98,7 @@
             <svg cIcon name="cilAddressBook" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'dhcpscopes:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -108,6 +110,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'dhcpscopes:write'"
             cButton
             size="sm"
             variant="ghost"

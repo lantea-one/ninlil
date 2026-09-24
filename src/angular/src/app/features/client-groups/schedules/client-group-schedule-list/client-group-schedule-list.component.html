@@ -6,7 +6,12 @@
     </a>
     <h1>{{ groupName() ?? 'Schedules' }}</h1>
   </div>
-  <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'schedules', 'new']">
+  <a
+    *appIfPermission="'clientgroups:write'"
+    cButton
+    color="primary"
+    [routerLink]="['/client-groups', groupId, 'schedules', 'new']"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     Add schedule
   </a>
@@ -24,7 +29,12 @@
     heading="No schedules yet"
     description="A schedule blocks all DNS resolution for every client in this group during its own active window -- add one to set up a bedtime or quiet-hours policy for the whole group."
   >
-    <a cButton color="primary" [routerLink]="['/client-groups', groupId, 'schedules', 'new']">
+    <a
+      *appIfPermission="'clientgroups:write'"
+      cButton
+      color="primary"
+      [routerLink]="['/client-groups', groupId, 'schedules', 'new']"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       Add schedule
     </a>
@@ -60,6 +70,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let schedule" class="actions-cell">
           <a
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -71,6 +82,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"

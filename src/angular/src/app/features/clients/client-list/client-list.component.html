@@ -11,7 +11,7 @@
     >
       <svg cIcon name="cilReload" size="sm"></svg>
     </button>
-    <a cButton color="primary" routerLink="/clients/new">
+    <a *appIfPermission="'clients:write'" cButton color="primary" routerLink="/clients/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New client
     </a>
@@ -41,6 +41,12 @@
       </option>
     }
   </select>
+  @if (groupsUnavailable()) {
+    <span class="toolbar-hint" data-testid="groups-unavailable-hint">
+      Group names are hidden: your account can't read client groups (that needs
+      <code>clientgroups:read</code>).
+    </span>
+  }
   @if (onlineWindowText()) {
     <span class="toolbar-hint" data-testid="online-window-hint">
       Online means seen within the last {{ onlineWindowText() }}.
@@ -60,7 +66,7 @@
     heading="No known clients yet"
     description="A known client is a device this server is tracking by its own persistent MAC address/DUID, either registered directly or auto-discovered the first time it was granted a DHCP lease. Register your first one to get started."
   >
-    <a cButton color="primary" routerLink="/clients/new">
+    <a *appIfPermission="'clients:write'" cButton color="primary" routerLink="/clients/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New client
     </a>
@@ -88,6 +94,7 @@
             [attr.aria-label]="row.client.isFavorite ? 'Remove from favorites' : 'Add to favorites'"
             [cTooltip]="row.client.isFavorite ? 'Remove from favorites' : 'Add to favorites'"
             data-testid="favorite-toggle"
+            [disabled]="!('clients:write' | hasPermission)"
             (click)="toggleFavorite(row)"
           >
             <svg cIcon name="cilStar" size="sm"></svg>
@@ -107,13 +114,23 @@
               <svg cIcon [name]="row.icon.icon"></svg>
             </span>
             <div class="device-text">
+              <!-- The name links to the edit form only for a user who may edit the client. -->
               <a
+                *appIfPermission="'clients:write'; else deviceTitleText"
                 class="device-title"
                 [class.unnamed]="!row.hasDisplayName"
                 [routerLink]="['/clients', row.client.id, 'edit']"
                 data-testid="device-title"
                 >{{ row.title }}</a
               >
+              <ng-template #deviceTitleText>
+                <span
+                  class="device-title"
+                  [class.unnamed]="!row.hasDisplayName"
+                  data-testid="device-title"
+                  >{{ row.title }}</span
+                >
+              </ng-template>
               <div class="device-meta">
                 @if (row.client.vendor) {
                   <span data-testid="device-vendor">{{ row.client.vendor }}</span>
@@ -210,6 +227,7 @@
             variant="ghost"
             [color]="row.client.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="row.client.isDisabled ? 'Enable this client' : 'Disable this client'"
+            [disabled]="!('clients:write' | hasPermission)"
             (click)="toggleDisabled(row)"
           >
             {{ row.client.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -262,6 +280,7 @@
             <svg cIcon name="cilMoon" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'querylog:read'"
             cButton
             size="sm"
             variant="ghost"
@@ -273,6 +292,7 @@
             <svg cIcon name="cilHistory" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'clients:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -284,6 +304,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'clients:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -297,10 +318,10 @@
         </td>
       </ng-container>
 
-      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns"></tr>
+      <tr cdk-header-row *cdkHeaderRowDef="displayedColumns()"></tr>
       <tr
         cdk-row
-        *cdkRowDef="let row; columns: displayedColumns"
+        *cdkRowDef="let row; columns: displayedColumns()"
         [class.row-disabled]="row.client.isDisabled"
       ></tr>
     </table>

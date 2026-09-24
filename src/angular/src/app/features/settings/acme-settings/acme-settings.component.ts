@@ -24,6 +24,7 @@ import { AcmeCertificateInventoryEntry, AcmeSettingsService } from '../../../api
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This method splits a textarea's own raw value into a trimmed, non-blank-line array -- the same
@@ -57,6 +58,7 @@ function linesToArray(raw: string): string[] {
 @Component({
   selector: 'app-acme-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     CdkTableModule,
     AlertComponent,

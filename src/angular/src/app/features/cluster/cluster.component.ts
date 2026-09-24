@@ -40,6 +40,7 @@ import {
   RevealSecretDialogData,
 } from '../../shared/reveal-secret-dialog/reveal-secret-dialog.component';
 import { EditNodeDialogComponent } from './edit-node-dialog/edit-node-dialog.component';
+import { IfPermissionDirective } from '../../shared/if-permission/if-permission.directive';
 
 /** How many peers one page of this list shows -- matches `TsigKeyListComponent`'s own default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -66,6 +67,7 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-cluster',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     CdkTableModule,
     DatePipe,

@@ -21,6 +21,7 @@ import { firstValueFrom } from 'rxjs';
 import { SelfUpdateService, SelfUpdateSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `SelfUpdateOptions` (whether, how often, and
@@ -39,6 +40,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-self-update-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     BadgeComponent,

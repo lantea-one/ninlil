@@ -8,12 +8,18 @@ import {
 } from '../../../../api-client';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { ClientListAssignmentListComponent } from './client-list-assignment-list.component';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('ClientListAssignmentListComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   let listAssignmentsApiSpy: {
     apiClientsClientIdListAssignmentsGet: jasmine.Spy;
     apiClientsClientIdListAssignmentsIdDelete: jasmine.Spy;
@@ -67,12 +73,27 @@ describe('ClientListAssignmentListComponent', () => {
       ],
     }).compileComponents();
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(ClientListAssignmentListComponent);
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
     return fixture;
   }
+
+  it('without filterlists:read, still lists the assignments, by list ID, and says why', async () => {
+    deniedPermissions = ['filterlists:read'];
+    const fixture = await createComponent();
+
+    expect(filterListsApiSpy.apiFilterListsGet).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    expect(fixture.componentInstance.rows()[0].listName).toBe('list-1');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="list-names-unavailable"]'),
+    ).not.toBeNull();
+  });
 
   it("loads assignments and resolves each one's own filter list name", async () => {
     const fixture = await createComponent();

@@ -42,6 +42,7 @@ import {
   splitLines,
   triStateBooleanToSelectValue,
 } from './dhcp-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This type alias names one advertised-route row's own typed shape explicitly, the same
@@ -134,6 +135,7 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
 @Component({
   selector: 'app-dhcp-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

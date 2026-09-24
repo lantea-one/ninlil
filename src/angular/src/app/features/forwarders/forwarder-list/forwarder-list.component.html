@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>Forwarders</h1>
-  <a cButton color="primary" routerLink="/forwarders/new">
+  <a *appIfPermission="'forwarders:write'" cButton color="primary" routerLink="/forwarders/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New forwarder
   </a>
@@ -18,7 +18,7 @@
     heading="No forwarders yet"
     description="Create one to send queries for names this server doesn't host to an upstream resolver."
   >
-    <a cButton color="primary" routerLink="/forwarders/new">
+    <a *appIfPermission="'forwarders:write'" cButton color="primary" routerLink="/forwarders/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New forwarder
     </a>
@@ -63,6 +63,7 @@
             variant="ghost"
             [color]="forwarder.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="forwarder.isDisabled ? 'Enable this forwarder' : 'Disable this forwarder'"
+            [disabled]="!('forwarders:write' | hasPermission)"
             (click)="toggleDisabled(forwarder)"
           >
             {{ forwarder.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -84,6 +85,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let forwarder" class="actions-cell">
           <a
+            *appIfPermission="'forwarders:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -95,6 +97,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'forwarders:write'"
             cButton
             size="sm"
             variant="ghost"

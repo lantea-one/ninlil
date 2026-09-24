@@ -1,10 +1,15 @@
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { SettingsShellComponent } from './settings-shell.component';
 
+/** A stand-in for whichever settings page the shell's own outlet would show. */
+@Component({ template: '' })
+class SettingsPageStubComponent {}
+
 describe('SettingsShellComponent', () => {
-  async function createComponent(permissions: readonly string[]) {
+  async function createComponent(permissions: readonly string[], url?: string) {
     const authServiceSpy = jasmine.createSpyObj('AuthService', ['hasPermission']);
     authServiceSpy.hasPermission.and.callFake((permission: string) =>
       permissions.includes(permission),
@@ -12,8 +17,13 @@ describe('SettingsShellComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [SettingsShellComponent],
-      providers: [provideRouter([]), { provide: AuthService, useValue: authServiceSpy }],
+      providers: [
+        provideRouter([{ path: 'settings/:page', component: SettingsPageStubComponent }]),
+        { provide: AuthService, useValue: authServiceSpy },
+      ],
     }).compileComponents();
+
+    if (url) await TestBed.inject(Router).navigateByUrl(url);
 
     const fixture = TestBed.createComponent(SettingsShellComponent);
     fixture.detectChanges();
@@ -83,5 +93,34 @@ describe('SettingsShellComponent', () => {
     const fixture = await createComponent(['dnsseckeyrolloversettings:read']);
 
     expect(flatTabLabels(fixture)).toEqual(['DNSSEC Key Rollover']);
+  });
+
+  function readOnlyNotice(
+    fixture: ReturnType<typeof TestBed.createComponent<SettingsShellComponent>>,
+  ) {
+    return (fixture.nativeElement as HTMLElement).querySelector('c-alert');
+  }
+
+  it("explains that the showing page is read-only when its write permission isn't held", async () => {
+    const fixture = await createComponent(['smtpsettings:read'], '/settings/smtp');
+
+    expect(fixture.componentInstance.missingWritePermission()).toBe('smtpsettings:write');
+    expect(readOnlyNotice(fixture)?.textContent).toContain('smtpsettings:write');
+  });
+
+  it('shows no read-only notice when the showing page may be changed', async () => {
+    const fixture = await createComponent(
+      ['smtpsettings:read', 'smtpsettings:write'],
+      '/settings/smtp',
+    );
+
+    expect(fixture.componentInstance.missingWritePermission()).toBeNull();
+    expect(readOnlyNotice(fixture)).toBeNull();
+  });
+
+  it("uses the storage page's own manage permission rather than a storage:write that doesn't exist", async () => {
+    const fixture = await createComponent(['storage:read'], '/settings/storage');
+
+    expect(fixture.componentInstance.missingWritePermission()).toBe('storage:manage');
   });
 });

@@ -11,7 +11,12 @@
         <c-alert color="danger" [dismissible]="false" role="alert">{{ errorMessage() }}</c-alert>
       }
 
-      @if (availableLists().length === 0) {
+      @if (listsUnavailable()) {
+        <p class="empty-state" data-testid="lists-unavailable">
+          Your account can't list filter lists (that needs <code>filterlists:read</code>), so it has
+          none to pick from here.
+        </p>
+      } @else if (availableLists().length === 0) {
         <p class="empty-state">
           Every filter list is already assigned to this client, or none exist yet.
         </p>

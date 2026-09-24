@@ -27,6 +27,8 @@ import {
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
+import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 
 /** How many records one page of this list shows -- matches the backend's own `PaginationQuery` default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -41,6 +43,8 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-record-list',
   imports: [
+    IfPermissionDirective,
+    HasPermissionPipe,
     RouterLink,
     CdkTableModule,
     BadgeComponent,

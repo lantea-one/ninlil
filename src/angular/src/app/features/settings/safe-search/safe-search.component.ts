@@ -13,6 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { SafeSearchDetail, SafeSearchService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component lists Ninlil's own bundled Safe Search / parental-control catalog
@@ -32,6 +33,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-safe-search',
   imports: [
+    IfPermissionDirective,
     AlertComponent,
     BadgeComponent,
     ButtonDirective,

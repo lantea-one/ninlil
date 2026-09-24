@@ -10,12 +10,18 @@ import {
 } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ZoneFormComponent } from './zone-form.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('ZoneFormComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   // Loosely-typed spies, not `jasmine.SpyObj<ZonesService>` -- see
   // `zone-list.component.spec.ts`'s own identical note for why (the generated service's own
   // multi-overload methods otherwise infer the wrong, `HttpEvent`-wrapped return type).
@@ -99,6 +105,9 @@ describe('ZoneFormComponent', () => {
 
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(ZoneFormComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -327,6 +336,43 @@ describe('ZoneFormComponent', () => {
 
     expect(fixture.componentInstance.form.controls.tsigKeySelection.value).toBe('transfer-key');
     expect(fixture.componentInstance.showCustomTsigKeyField()).toBeFalse();
+  });
+
+  it('still loads the zone without tsigkeys:read or cloudprovidercredentials:read, skipping both lists', async () => {
+    deniedPermissions = ['tsigkeys:read', 'cloudprovidercredentials:read'];
+    const fixture = await createComponent('zone-1', () => {
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({
+          id: 'zone-1',
+          name: 'example.com',
+          type: ZoneTypeEnum.Primary,
+          tsigKeyName: 'transfer-key',
+        }),
+      );
+    });
+
+    expect(tsigKeysApiSpy.apiTsigKeysGet).not.toHaveBeenCalled();
+    expect(cloudCredentialsApiSpy.apiCloudProviderCredentialsGet).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    expect(fixture.componentInstance.form.controls.name.value).toBe('example.com');
+    expect(fixture.componentInstance.tsigKeysUnavailable()).toBeTrue();
+    expect(fixture.componentInstance.cloudCredentialsUnavailable()).toBeTrue();
+    // The existing key is kept, through the picker's own custom-name entry.
+    expect(fixture.componentInstance.form.controls.tsigKeyName.value).toBe('transfer-key');
+    expect(fixture.componentInstance.showCustomTsigKeyField()).toBeTrue();
+  });
+
+  it('still loads the zone when the TSIG key list request itself fails', async () => {
+    const fixture = await createComponent('zone-1', () => {
+      tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(throwError(() => new Error('forbidden')));
+      zonesApiSpy.apiZonesIdGet.and.returnValue(
+        of({ id: 'zone-1', name: 'example.com', type: ZoneTypeEnum.Primary }),
+      );
+    });
+
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    expect(fixture.componentInstance.tsigKeysUnavailable()).toBeTrue();
+    expect(fixture.componentInstance.cloudCredentialsUnavailable()).toBeFalse();
   });
 
   it('TSIG key dropdown: edit mode falls back to the custom field when the zone references a key not in the visible list', async () => {

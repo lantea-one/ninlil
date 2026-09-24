@@ -4,12 +4,18 @@ import { of } from 'rxjs';
 import { ClientListAssignmentsService, FilterListsService } from '../../../../api-client';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { ClientListAssignmentFormComponent } from './client-list-assignment-form.component';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('ClientListAssignmentFormComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   let listAssignmentsApiSpy: {
     apiClientsClientIdListAssignmentsGet: jasmine.Spy;
     apiClientsClientIdListAssignmentsPost: jasmine.Spy;
@@ -64,12 +70,25 @@ describe('ClientListAssignmentFormComponent', () => {
 
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(ClientListAssignmentFormComponent);
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
     return fixture;
   }
+
+  it('without filterlists:read, explains that there is nothing to pick instead of failing', async () => {
+    deniedPermissions = ['filterlists:read'];
+    const fixture = await createComponent();
+
+    expect(filterListsApiSpy.apiFilterListsGet).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    expect(fixture.componentInstance.listsUnavailable()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[data-testid="lists-unavailable"]')).not.toBeNull();
+  });
 
   it('excludes an already-assigned filter list from its own available options', async () => {
     const fixture = await createComponent();

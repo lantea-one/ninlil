@@ -7,7 +7,12 @@
     <h1>{{ scopeName() ?? 'Reservations' }}</h1>
   </div>
   @if (!isPrefixDelegationScope()) {
-    <a cButton color="primary" [routerLink]="['/dhcp-scopes', scopeId, 'reservations', 'new']">
+    <a
+      *appIfPermission="'dhcpscopes:write'"
+      cButton
+      color="primary"
+      [routerLink]="['/dhcp-scopes', scopeId, 'reservations', 'new']"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       Add reservation
     </a>
@@ -34,7 +39,12 @@
     description="A reservation always hands the same client the same address, by its MAC address (DHCPv4) or DUID (DHCPv6). Add your first one to get started."
   >
     @if (!isPrefixDelegationScope()) {
-      <a cButton color="primary" [routerLink]="['/dhcp-scopes', scopeId, 'reservations', 'new']">
+      <a
+        *appIfPermission="'dhcpscopes:write'"
+        cButton
+        color="primary"
+        [routerLink]="['/dhcp-scopes', scopeId, 'reservations', 'new']"
+      >
         <svg cIcon name="cilPlus" size="sm"></svg>
         Add reservation
       </a>
@@ -76,6 +86,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let reservation" class="actions-cell">
           <a
+            *appIfPermission="'dhcpscopes:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -87,6 +98,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'dhcpscopes:write'"
             cButton
             size="sm"
             variant="ghost"

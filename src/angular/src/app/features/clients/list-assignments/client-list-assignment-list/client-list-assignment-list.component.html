@@ -6,7 +6,12 @@
     </a>
     <h1>{{ clientLabel() ?? 'Filter list assignments' }}</h1>
   </div>
-  <a cButton color="primary" [routerLink]="['/clients', clientId, 'list-assignments', 'new']">
+  <a
+    *appIfPermission="'clients:write'"
+    cButton
+    color="primary"
+    [routerLink]="['/clients', clientId, 'list-assignments', 'new']"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     Assign filter list
   </a>
@@ -24,12 +29,23 @@
     heading="No filter lists assigned"
     description="Assign a filter list directly to this client to control which block/allow lists apply to it, on top of whatever its own client group already contributes."
   >
-    <a cButton color="primary" [routerLink]="['/clients', clientId, 'list-assignments', 'new']">
+    <a
+      *appIfPermission="'clients:write'"
+      cButton
+      color="primary"
+      [routerLink]="['/clients', clientId, 'list-assignments', 'new']"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       Assign filter list
     </a>
   </app-empty-state>
 } @else {
+  @if (listNamesUnavailable()) {
+    <p class="hint" data-testid="list-names-unavailable">
+      Filter lists are shown by ID: your account can't read filter lists (that needs
+      <code>filterlists:read</code>).
+    </p>
+  }
   <div class="table-card">
     <table cdk-table cTable hover responsive [dataSource]="rows()" class="assignment-table">
       <ng-container cdkColumnDef="listName">
@@ -41,6 +57,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let row" class="actions-cell">
           <button
+            *appIfPermission="'clients:write'"
             cButton
             size="sm"
             variant="ghost"

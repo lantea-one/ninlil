@@ -128,7 +128,8 @@
   color: var(--cui-body-color);
   text-decoration: none;
 
-  &:hover {
+  // Only when it is a link: a user who can't edit the client sees the name as plain text.
+  &:is(a):hover {
     text-decoration: underline;
   }
 

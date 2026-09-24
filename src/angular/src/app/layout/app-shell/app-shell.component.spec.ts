@@ -16,6 +16,7 @@ class LoginStubComponent {}
 describe('AppShellComponent', () => {
   let authServiceFake: {
     hasPermission: jasmine.Spy;
+    hasAnyPermission: (permissions: readonly string[]) => boolean;
     userName: ReturnType<typeof signal<string | null>>;
     logout: jasmine.Spy;
   };
@@ -23,6 +24,10 @@ describe('AppShellComponent', () => {
   beforeEach(async () => {
     authServiceFake = {
       hasPermission: jasmine.createSpy('hasPermission'),
+      // Answered through hasPermission, as the real AuthService does, so each test's own
+      // hasPermission fake decides both.
+      hasAnyPermission: (permissions) =>
+        permissions.some((permission) => authServiceFake.hasPermission(permission)),
       userName: signal<string | null>('someone'),
       logout: jasmine.createSpy('logout').and.resolveTo(undefined),
     };
@@ -70,6 +75,28 @@ describe('AppShellComponent', () => {
     expect(labels).toContain('Zones');
     expect(labels).not.toContain('TSIG Keys');
     expect(labels).not.toContain('Users');
+  });
+
+  it('shows Presets & Settings to a user who can read any one settings page, not only presets', () => {
+    authServiceFake.hasPermission.and.callFake(
+      (permission: string) => permission === 'smtpsettings:read',
+    );
+
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+
+    const labels = fixture.componentInstance.visibleNavItems().map((item) => item.label);
+    expect(labels).toContain('Presets & Settings');
+  });
+
+  it('hides Presets & Settings from a user who can read no settings page', () => {
+    authServiceFake.hasPermission.and.callFake((permission: string) => permission === 'zones:read');
+
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+
+    const labels = fixture.componentInstance.visibleNavItems().map((item) => item.label);
+    expect(labels).not.toContain('Presets & Settings');
   });
 
   it('shows every nav item once every permission is granted', () => {

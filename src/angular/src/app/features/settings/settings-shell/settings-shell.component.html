@@ -30,6 +30,12 @@
   </nav>
 
   <div class="settings-content">
+    @if (missingWritePermission(); as writePermission) {
+      <c-alert color="info" [dismissible]="false">
+        You can view these settings but not change them. Changing them needs the
+        <code>{{ writePermission }}</code> permission.
+      </c-alert>
+    }
     <router-outlet></router-outlet>
   </div>
 </div>

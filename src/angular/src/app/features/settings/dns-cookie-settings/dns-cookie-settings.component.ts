@@ -20,6 +20,7 @@ import { DnsCookieSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `DnsCookieOptions` (RFC 7873 DNS Cookies) via
@@ -30,6 +31,7 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 @Component({
   selector: 'app-dns-cookie-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

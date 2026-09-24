@@ -21,6 +21,7 @@ import { RateLimitingSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `DnsRateLimitOptions` (RFC-agnostic, per-client
@@ -33,6 +34,7 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 @Component({
   selector: 'app-rate-limiting-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

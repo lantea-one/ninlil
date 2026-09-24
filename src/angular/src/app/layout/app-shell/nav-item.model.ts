@@ -1,3 +1,5 @@
+import { SETTINGS_TAB_PERMISSIONS } from '../../features/settings/settings-shell/settings-nav';
+
 /**
  * This interface describes one entry in the app shell's own side navigation.
  */
@@ -13,10 +15,11 @@ export interface NavItem {
 
   /**
    * The permission claim (`resource:action`, matching the backend's own
-   * `[RequirePermission("...")]` names) required to see and navigate to this item. `null` means
-   * "any signed-in user," with no specific permission required.
+   * `[RequirePermission("...")]` names) required to see and navigate to this item. A list means
+   * any one of those permissions will do. `null` means "any signed-in user," with no specific
+   * permission required.
    */
-  permission: string | null;
+  permission: string | readonly string[] | null;
 }
 
 /**
@@ -110,7 +113,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Presets & Settings',
     path: 'settings',
     icon: 'cilSettings',
-    permission: 'presets:read',
+    permission: SETTINGS_TAB_PERMISSIONS,
   },
   { label: 'Users', path: 'users', icon: 'cilUser', permission: 'users:read' },
   { label: 'Roles', path: 'roles', icon: 'cilShieldAlt', permission: 'roles:read' },

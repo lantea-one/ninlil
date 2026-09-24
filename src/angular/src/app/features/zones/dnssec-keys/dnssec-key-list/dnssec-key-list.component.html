@@ -6,7 +6,12 @@
     </a>
     <h1>DNSSEC keys{{ zoneName() ? ' for ' + zoneName() : '' }}</h1>
   </div>
-  <a cButton color="primary" [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']">
+  <a
+    *appIfPermission="'zones:write'"
+    cButton
+    color="primary"
+    [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     Generate key
   </a>
@@ -24,7 +29,12 @@
     heading="No DNSSEC keys yet"
     description="Generate a key-signing key and a zone-signing key to start signing this zone with DNSSEC."
   >
-    <a cButton color="primary" [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']">
+    <a
+      *appIfPermission="'zones:write'"
+      cButton
+      color="primary"
+      [routerLink]="['/zones', zoneId, 'dnssec-keys', 'new']"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       Generate key
     </a>
@@ -67,6 +77,7 @@
             variant="ghost"
             [color]="key.isRetired ? 'secondary' : 'success'"
             [cTooltip]="key.isRetired ? 'Reactivate this key' : 'Retire this key'"
+            [disabled]="!('zones:write' | hasPermission)"
             (click)="toggleRetired(key)"
           >
             {{ key.isRetired ? 'Retired' : 'Active' }}
@@ -79,6 +90,7 @@
         <td cdk-cell *cdkCellDef="let key" class="actions-cell">
           @if (canStartRollover(key)) {
             <button
+              *appIfPermission="'zones:write'"
               cButton
               size="sm"
               variant="ghost"
@@ -92,6 +104,7 @@
           }
           @if (awaitingParentDsConfirmation(key)) {
             <button
+              *appIfPermission="'zones:write'"
               cButton
               size="sm"
               variant="ghost"
@@ -104,6 +117,7 @@
             </button>
           }
           <button
+            *appIfPermission="'zones:write'"
             cButton
             size="sm"
             variant="ghost"

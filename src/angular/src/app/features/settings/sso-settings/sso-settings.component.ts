@@ -20,6 +20,7 @@ import { OidcSsoSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { buildClientSecretPatchField, joinScopes, splitScopes } from './sso-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `OidcSsoOptions` -- the generic, standards-
@@ -46,6 +47,7 @@ import { buildClientSecretPatchField, joinScopes, splitScopes } from './sso-sett
 @Component({
   selector: 'app-sso-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

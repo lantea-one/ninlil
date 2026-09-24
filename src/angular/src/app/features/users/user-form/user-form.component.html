@@ -70,6 +70,12 @@
           Each role checked below is granted to this account, in addition to the role's own
           permissions. Each change here applies immediately.
         </p>
+        @if (rolesUnavailable()) {
+          <p class="hint" data-testid="roles-unavailable">
+            Current roles: {{ assignedRoleNames().join(', ') || 'none' }}. Your account can't list
+            roles (that needs <code>roles:read</code>), so they can't be changed here.
+          </p>
+        }
         <div class="role-checkboxes">
           @for (role of allRoles(); track role.id) {
             <c-form-check>

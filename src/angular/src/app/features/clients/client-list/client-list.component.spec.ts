@@ -11,6 +11,7 @@ import {
 } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClientListComponent } from './client-list.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -80,6 +81,11 @@ const SUMMARY = {
 };
 
 describe('ClientListComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   let clientsApiSpy: {
     apiClientsGet: jasmine.Spy;
     apiClientsSummaryGet: jasmine.Spy;
@@ -134,6 +140,9 @@ describe('ClientListComponent', () => {
     const router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(ClientListComponent);
     fixture.detectChanges();
     await flushMicrotasks();
@@ -160,6 +169,31 @@ describe('ClientListComponent', () => {
     expect(fixture.componentInstance.rows().length).toBe(2);
     expect(fixture.componentInstance.rows()[0].groupName).toBe('Trusted LAN');
     expect(fixture.componentInstance.rows()[1].groupName).toBeNull();
+  });
+
+  it('without clientgroups:read, still lists the clients but leaves out the Group column and says why', async () => {
+    deniedPermissions = ['clientgroups:read'];
+    const fixture = await createComponent();
+
+    expect(clientGroupsApiSpy.apiClientGroupsGet).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    expect(fixture.componentInstance.rows().length).toBe(2);
+    expect(fixture.componentInstance.displayedColumns()).not.toContain('group');
+    expect(query(fixture, 'groups-unavailable-hint').length).toBe(1);
+  });
+
+  it('offers the activity link only with querylog:read, and the edit link only with clients:write', async () => {
+    deniedPermissions = ['querylog:read', 'clients:write'];
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('[aria-label="View activity"]')).toBeNull();
+    expect(element.querySelector('a[href="/clients/new"]')).toBeNull();
+    // The device name is still shown, as plain text rather than a link to the edit form.
+    const titles = query(fixture, 'device-title');
+    expect(titles.length).toBe(2);
+    expect(titles[0].tagName).toBe('SPAN');
+    expect((query(fixture, 'favorite-toggle')[0] as HTMLButtonElement).disabled).toBeTrue();
   });
 
   it('shows one row per device with every one of its addresses, IPv4 first', async () => {

@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>Webhooks</h1>
-  <a cButton color="primary" routerLink="/webhooks/new">
+  <a *appIfPermission="'webhooks:write'" cButton color="primary" routerLink="/webhooks/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New webhook
   </a>
@@ -18,7 +18,7 @@
     heading="No webhooks yet"
     description="Create one to receive an outbound POST whenever a subscribed event occurs."
   >
-    <a cButton color="primary" routerLink="/webhooks/new">
+    <a *appIfPermission="'webhooks:write'" cButton color="primary" routerLink="/webhooks/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New webhook
     </a>
@@ -61,6 +61,7 @@
             [cTooltip]="
               subscription.isDisabled ? 'Enable this subscription' : 'Disable this subscription'
             "
+            [disabled]="!('webhooks:write' | hasPermission)"
             (click)="toggleDisabled(subscription)"
           >
             {{ subscription.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -83,6 +84,7 @@
             <svg cIcon name="cilHistory" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'webhooks:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -94,6 +96,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'webhooks:write'"
             cButton
             size="sm"
             variant="ghost"

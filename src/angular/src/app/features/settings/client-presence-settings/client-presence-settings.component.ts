@@ -20,6 +20,7 @@ import { firstValueFrom } from 'rxjs';
 import { ClientPresenceSettingsService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * A .NET `TimeSpan` in its invariant `[d.]hh:mm:ss[.fffffff]` form -- the shape the backend both
@@ -42,6 +43,7 @@ const TIME_SPAN_PATTERN = /^(\d+\.)?\d{1,2}:\d{2}:\d{2}(\.\d+)?$/;
 @Component({
   selector: 'app-client-presence-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

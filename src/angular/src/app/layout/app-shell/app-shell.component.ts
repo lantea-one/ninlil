@@ -155,7 +155,11 @@ export class AppShellComponent implements AfterViewInit {
   /** The nav items the current session's own permissions actually grant access to. */
   readonly visibleNavItems = computed(() =>
     NAV_ITEMS.filter(
-      (item) => item.permission === null || this.authService.hasPermission(item.permission),
+      (item) =>
+        item.permission === null ||
+        (typeof item.permission === 'string'
+          ? this.authService.hasPermission(item.permission)
+          : this.authService.hasAnyPermission(item.permission)),
     ),
   );
 

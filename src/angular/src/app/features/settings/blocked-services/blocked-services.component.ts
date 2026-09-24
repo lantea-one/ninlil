@@ -13,6 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { BlockedServiceDetail, BlockedServicesService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component lists Ninlil's own curated "blocked services" catalog
@@ -34,6 +35,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-blocked-services',
   imports: [
+    IfPermissionDirective,
     AlertComponent,
     BadgeComponent,
     ButtonDirective,

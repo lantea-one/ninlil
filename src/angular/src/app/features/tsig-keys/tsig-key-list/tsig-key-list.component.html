@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>TSIG Keys</h1>
-  <a cButton color="primary" routerLink="/tsig-keys/new">
+  <a *appIfPermission="'tsigkeys:write'" cButton color="primary" routerLink="/tsig-keys/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New key
   </a>
@@ -18,7 +18,7 @@
     heading="No TSIG keys yet"
     description="Create one to authenticate zone transfers or dynamic updates."
   >
-    <a cButton color="primary" routerLink="/tsig-keys/new">
+    <a *appIfPermission="'tsigkeys:write'" cButton color="primary" routerLink="/tsig-keys/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New key
     </a>
@@ -45,6 +45,7 @@
             variant="ghost"
             [color]="key.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="key.isDisabled ? 'Enable this key' : 'Disable this key'"
+            [disabled]="!('tsigkeys:write' | hasPermission)"
             (click)="toggleDisabled(key)"
           >
             {{ key.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -56,6 +57,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let key" class="actions-cell">
           <a
+            *appIfPermission="'tsigkeys:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -67,6 +69,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'tsigkeys:write'"
             cButton
             size="sm"
             variant="ghost"

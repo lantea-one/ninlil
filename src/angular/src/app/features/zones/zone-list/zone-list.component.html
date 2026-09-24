@@ -1,6 +1,6 @@
 <div class="zone-list-header">
   <h1>Zones</h1>
-  <a cButton color="primary" routerLink="/zones/new">
+  <a *appIfPermission="'zones:write'" cButton color="primary" routerLink="/zones/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New zone
   </a>
@@ -18,7 +18,7 @@
     heading="No zones yet"
     description="A zone holds the DNS records this server answers for. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/zones/new">
+    <a *appIfPermission="'zones:write'" cButton color="primary" routerLink="/zones/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New zone
     </a>
@@ -58,6 +58,7 @@
             variant="ghost"
             [color]="zone.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="zone.isDisabled ? 'Enable this zone' : 'Disable this zone'"
+            [disabled]="!('zones:write' | hasPermission)"
             (click)="toggleDisabled(zone)"
           >
             {{ zone.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -91,6 +92,7 @@
             <svg cIcon name="cilLockLocked" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'zones:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -102,6 +104,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'zones:write'"
             cButton
             size="sm"
             variant="ghost"

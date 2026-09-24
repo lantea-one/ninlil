@@ -192,6 +192,16 @@ describe('AuthService', () => {
     expect(service.hasPermission('anything:at-all')).toBeTrue();
   });
 
+  it('hasAnyPermission() is satisfied by any one of the listed permissions, and by none when signed out', async () => {
+    expect(service.hasAnyPermission(['zones:read', 'users:read'])).toBeFalse();
+
+    await signIn();
+
+    expect(service.hasAnyPermission(['users:read', 'zones:read'])).toBeTrue();
+    expect(service.hasAnyPermission(['users:read', 'roles:read'])).toBeFalse();
+    expect(service.hasAnyPermission([])).toBeFalse();
+  });
+
   /** This function signs the service in, so a test starts from an authenticated session. */
   async function signIn(): Promise<void> {
     authApiSpy.apiAuthLoginPost.and.returnValue(

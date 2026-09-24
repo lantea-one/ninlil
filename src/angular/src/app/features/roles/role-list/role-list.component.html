@@ -1,6 +1,6 @@
 <div class="list-header">
   <h1>Roles</h1>
-  <a cButton color="primary" routerLink="/roles/new">
+  <a *appIfPermission="'roles:write'" cButton color="primary" routerLink="/roles/new">
     <svg cIcon name="cilPlus" size="sm"></svg>
     New role
   </a>
@@ -18,7 +18,7 @@
     heading="No roles yet"
     description="Create one to group a reusable set of permissions."
   >
-    <a cButton color="primary" routerLink="/roles/new">
+    <a *appIfPermission="'roles:write'" cButton color="primary" routerLink="/roles/new">
       <svg cIcon name="cilPlus" size="sm"></svg>
       New role
     </a>
@@ -66,6 +66,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let role" class="actions-cell">
           <a
+            *appIfPermission="'roles:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -77,6 +78,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'roles:write'"
             cButton
             size="sm"
             variant="ghost"

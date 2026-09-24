@@ -1,6 +1,11 @@
 <div class="list-header">
   <h1>Client Groups</h1>
-  <a cButton color="primary" routerLink="/client-groups/new">
+  <a
+    *appIfPermission="'clientgroups:write'"
+    cButton
+    color="primary"
+    routerLink="/client-groups/new"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     New client group
   </a>
@@ -18,7 +23,12 @@
     heading="No client groups yet"
     description="A client group matches queries by source network and controls which filter lists apply to them. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/client-groups/new">
+    <a
+      *appIfPermission="'clientgroups:write'"
+      cButton
+      color="primary"
+      routerLink="/client-groups/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New client group
     </a>
@@ -38,6 +48,7 @@
             <c-badge color="success">Default</c-badge>
           } @else {
             <button
+              *appIfPermission="'clientgroups:write'"
               cButton
               size="sm"
               variant="ghost"
@@ -60,6 +71,7 @@
             variant="ghost"
             [color]="group.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="group.isDisabled ? 'Enable this client group' : 'Disable this client group'"
+            [disabled]="!('clientgroups:write' | hasPermission)"
             (click)="toggleDisabled(group)"
           >
             {{ group.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -104,6 +116,7 @@
             <svg cIcon name="cilMoon" size="sm"></svg>
           </a>
           <a
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -115,6 +128,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'clientgroups:write'"
             cButton
             size="sm"
             variant="ghost"

@@ -21,6 +21,7 @@ import {
 } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
  * This component assigns one existing filter list to a client group -- there is no edit mode,
@@ -53,6 +54,7 @@ export class ClientGroupListAssignmentFormComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly listAssignmentsApi = inject(ClientGroupListAssignmentsService);
   private readonly filterListsApi = inject(FilterListsService);
+  private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
@@ -60,6 +62,9 @@ export class ClientGroupListAssignmentFormComponent implements OnInit {
 
   /** The filter lists this group is not yet assigned, offered as the select's own options. */
   readonly availableLists = signal<FilterListDetail[]>([]);
+
+  /** Whether this session can't read filter lists (no `filterlists:read`), so has none to pick. */
+  readonly listsUnavailable = signal(false);
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
@@ -97,6 +102,14 @@ export class ClientGroupListAssignmentFormComponent implements OnInit {
   }
 
   private async loadAvailableLists(): Promise<void> {
+    // Picking a list needs the filter lists themselves; without permission to read them, say so
+    // (see listsUnavailable) instead of failing the page on a request the API would refuse.
+    if (!this.authService.hasPermission('filterlists:read')) {
+      this.listsUnavailable.set(true);
+      this.loading.set(false);
+      return;
+    }
+
     try {
       const [allLists, existingAssignments] = await Promise.all([
         firstValueFrom(this.filterListsApi.apiFilterListsGet({ skip: 0, take: 500 })),

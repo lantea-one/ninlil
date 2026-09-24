@@ -32,6 +32,8 @@ import {
   canStartRollover,
   lifecycleStateBadgeColor,
 } from '../dnssec-key.model';
+import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
+import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 
 /** How many keys one page of this list shows -- matches the backend's own `PaginationQuery` default. */
 const DEFAULT_PAGE_SIZE = 25;
@@ -56,6 +58,8 @@ const DEFAULT_PAGE_SIZE = 25;
 @Component({
   selector: 'app-dnssec-key-list',
   imports: [
+    IfPermissionDirective,
+    HasPermissionPipe,
     RouterLink,
     CdkTableModule,
     BadgeComponent,

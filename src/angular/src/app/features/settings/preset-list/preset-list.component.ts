@@ -16,6 +16,7 @@ import {
 } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component lists this project's 5 built-in configuration presets
@@ -29,6 +30,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 @Component({
   selector: 'app-preset-list',
   imports: [
+    IfPermissionDirective,
     AlertComponent,
     ButtonDirective,
     CardBodyComponent,

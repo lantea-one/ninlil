@@ -22,6 +22,7 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { buildSharedSecretPatchField, joinLines, splitLines } from './reverse-proxy-settings.model';
+import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
  * This component reads and writes this host's own `ReverseProxyOptions` -- whether the shared
@@ -50,6 +51,7 @@ import { buildSharedSecretPatchField, joinLines, splitLines } from './reverse-pr
 @Component({
   selector: 'app-reverse-proxy-settings',
   imports: [
+    IfPermissionDirective,
     ReactiveFormsModule,
     AlertComponent,
     ButtonDirective,

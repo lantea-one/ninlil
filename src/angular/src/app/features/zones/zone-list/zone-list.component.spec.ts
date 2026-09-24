@@ -4,12 +4,18 @@ import { of, throwError } from 'rxjs';
 import { ZonesService, ZoneTypeEnum } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ZoneListComponent } from './zone-list.component';
+import { AuthService } from '../../../core/auth/auth.service';
 
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('ZoneListComponent', () => {
+  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
+  // the page as an administrator would unless it denies something first.
+  let deniedPermissions: string[] = [];
+  beforeEach(() => (deniedPermissions = []));
+
   // A manually-shaped spy interface, not `jasmine.SpyObj<ZonesService>` -- the generated
   // `ZonesService`'s own methods are each declared with 4 overloads (one per `observe` value plus
   // the implementation signature), and `jasmine.SpyObj<T>` picks the *last* overload it sees when
@@ -61,12 +67,40 @@ describe('ZoneListComponent', () => {
       ],
     }).compileComponents();
 
+    spyOn(TestBed.inject(AuthService), 'hasPermission').and.callFake(
+      (permission: string) => !deniedPermissions.includes(permission),
+    );
     const fixture = TestBed.createComponent(ZoneListComponent);
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
     return fixture;
   }
+
+  it('offers new, edit and delete, and an enabled status toggle, to a user with zones:write', async () => {
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('a[href="/zones/new"]')).not.toBeNull();
+    expect(element.querySelector('a[href="/zones/zone-1/edit"]')).not.toBeNull();
+    expect(element.querySelector('[aria-label="Delete zone"]')).not.toBeNull();
+    expect(element.querySelector<HTMLButtonElement>('td button')?.disabled).toBeFalse();
+  });
+
+  it('hides new, edit and delete, and disables the status toggle, without zones:write', async () => {
+    deniedPermissions = ['zones:write'];
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('a[href="/zones/new"]')).toBeNull();
+    expect(element.querySelector('a[href="/zones/zone-1/edit"]')).toBeNull();
+    expect(element.querySelector('[aria-label="Delete zone"]')).toBeNull();
+    // The status stays visible -- it is also the zone's only enabled/disabled indicator.
+    expect(element.querySelector<HTMLButtonElement>('td button')?.textContent).toContain('Enabled');
+    expect(element.querySelector<HTMLButtonElement>('td button')?.disabled).toBeTrue();
+    // Read-only navigation to the zone's records is still offered.
+    expect(element.querySelector('a[href="/zones/zone-1/records"]')).not.toBeNull();
+  });
 
   it('loads the first page of zones on init', async () => {
     const fixture = await createComponent();

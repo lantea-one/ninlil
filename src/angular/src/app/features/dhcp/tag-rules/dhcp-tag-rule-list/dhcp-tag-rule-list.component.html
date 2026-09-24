@@ -1,6 +1,11 @@
 <div class="list-header">
   <h1>DHCP Tag Rules</h1>
-  <a cButton color="primary" routerLink="/dhcp-tag-rules/new">
+  <a
+    *appIfPermission="'dhcptagrules:write'"
+    cButton
+    color="primary"
+    routerLink="/dhcp-tag-rules/new"
+  >
     <svg cIcon name="cilPlus" size="sm"></svg>
     New rule
   </a>
@@ -18,7 +23,12 @@
     heading="No tag rules yet"
     description="A tag rule delivers extra DHCP options only to clients matching a Vendor Class Identifier, User Class, or relay agent identifier -- for example, PXE-specific options for netbooting clients. Create your first one to get started."
   >
-    <a cButton color="primary" routerLink="/dhcp-tag-rules/new">
+    <a
+      *appIfPermission="'dhcptagrules:write'"
+      cButton
+      color="primary"
+      routerLink="/dhcp-tag-rules/new"
+    >
       <svg cIcon name="cilPlus" size="sm"></svg>
       New rule
     </a>
@@ -59,6 +69,7 @@
             variant="ghost"
             [color]="rule.isDisabled ? 'secondary' : 'success'"
             [cTooltip]="rule.isDisabled ? 'Enable this rule' : 'Disable this rule'"
+            [disabled]="!('dhcptagrules:write' | hasPermission)"
             (click)="toggleDisabled(rule)"
           >
             {{ rule.isDisabled ? 'Disabled' : 'Enabled' }}
@@ -70,6 +81,7 @@
         <th cdk-header-cell *cdkHeaderCellDef></th>
         <td cdk-cell *cdkCellDef="let rule" class="actions-cell">
           <a
+            *appIfPermission="'dhcptagrules:write'"
             cButton
             size="sm"
             variant="ghost"
@@ -81,6 +93,7 @@
             <svg cIcon name="cilPencil" size="sm"></svg>
           </a>
           <button
+            *appIfPermission="'dhcptagrules:write'"
             cButton
             size="sm"
             variant="ghost"
