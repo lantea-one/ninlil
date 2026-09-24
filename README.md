@@ -532,7 +532,9 @@ A build publishes nothing until every test has passed, and its release stays an 
 until every binary, both Arch Linux packages, the multi-architecture image, and every NuGet
 package have been uploaded. The pipeline needs a `NINLIL_CI_TOKEN` secret (a Forgejo access token
 with repository and package write access) and a `NINLIL_CI_USER` variable (that token's user name)
-on the repository.
+on the repository. Builds and the test container resolve names through `8.8.8.8` and `1.1.1.1`
+(the pipeline runs its own BuildKit daemon container with `--dns`); set a `NINLIL_BUILD_DNS`
+variable to use other nameservers.
 
 ## Contributing: adding a feature
 
