@@ -8,9 +8,9 @@ name: 'Ninlil Pipeline'
 ## installation. Every stage cross-compiles on the runner's own architecture, so any 'archlinux'
 ## runner can build every platform, including both container image architectures.
 ##
-## Builds run on a BuildKit builder with explicit DNS servers (.forgejo/scripts/setup-builder.sh,
-## overridable with the NINLIL_BUILD_DNS variable), because some runners resolve through a local
-## DNS server that build steps cannot reach.
+## Builds run on a BuildKit builder on the runner's own host network
+## (.forgejo/scripts/setup-builder.sh), because a container on Docker's bridge network cannot
+## resolve names on some runners. NINLIL_BUILD_DNS overrides the nameservers build steps use.
 ##
 ## Job graph:
 ##
