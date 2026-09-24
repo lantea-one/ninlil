@@ -245,8 +245,15 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
         DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(20);
         bool oldKeyRemoved = false;
         bool newKeyPromoted = false;
+        bool cacheWithdrewOldKey = false;
 
-        while (DateTimeOffset.UtcNow < deadline && !(oldKeyRemoved && newKeyPromoted))
+        // The background service saves the new lifecycle states before it reloads the signed
+        // zone, so the database can report the rollover finished a moment before the cache
+        // serves it; the loop waits for both.
+        while (
+            DateTimeOffset.UtcNow < deadline
+            && !(oldKeyRemoved && newKeyPromoted && cacheWithdrewOldKey)
+        )
         {
             await Task.Delay(150);
 
@@ -282,6 +289,7 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
 
             oldKeyRemoved = originalKsk.LifecycleState == DnssecKeyLifecycleStateEnum.Removed;
             newKeyPromoted = newKsk.LifecycleState == DnssecKeyLifecycleStateEnum.Active;
+            cacheWithdrewOldKey = current.DnsKeyRecords.Count == 2;
 
             // Until the old key is actually removed, both KSKs must still be co-signing the
             // DNSKEY RRset -- exactly RFC 6781 §4.1.2's own guarantee that a resolver holding
@@ -297,6 +305,10 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
         Assert.True(
             newKeyPromoted,
             "The incoming KSK never became Active within the test's own deadline."
+        );
+        Assert.True(
+            cacheWithdrewOldKey,
+            "The signed zone never stopped serving the original KSK within the test's own deadline."
         );
 
         SignedZoneData final = signedZoneCache.GetSignedData(_zoneId);

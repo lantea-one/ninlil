@@ -253,14 +253,20 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
         DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(20);
         bool oldKeyRemoved = false;
         bool newKeyPromoted = false;
+        bool cacheWithdrewOldKey = false;
 
         // The real, live, continuously-polled proof: for as long as this rollover is in flight,
         // the zone's own currently-live answer must verify against whatever DNSKEY RRset is
         // currently live, at every single point this test happens to look -- and the pre-rollover
         // signature captured above must keep verifying too, for as long as its own key remains
         // published (RFC 6781's own "old RRSIGs are still verifiable" guarantee, checked live
-        // rather than assumed).
-        while (DateTimeOffset.UtcNow < deadline && !(oldKeyRemoved && newKeyPromoted))
+        // rather than assumed). The background service saves the new lifecycle states before it
+        // reloads the signed zone, so the database can report the rollover finished a moment
+        // before the cache serves it; the loop waits for both.
+        while (
+            DateTimeOffset.UtcNow < deadline
+            && !(oldKeyRemoved && newKeyPromoted && cacheWithdrewOldKey)
+        )
         {
             await Task.Delay(150);
 
@@ -296,6 +302,7 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
                 && key.Role == DnssecKeyRoleEnum.Zsk
                 && key.LifecycleState == DnssecKeyLifecycleStateEnum.Active
             );
+            cacheWithdrewOldKey = current.DnsKeyRecords.Count == 2;
 
             if (!oldKeyRemoved)
                 Assert.True(
@@ -316,6 +323,10 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
         Assert.True(
             newKeyPromoted,
             "The incoming ZSK never became Active within the test's own deadline."
+        );
+        Assert.True(
+            cacheWithdrewOldKey,
+            "The signed zone never stopped serving the original ZSK within the test's own deadline."
         );
 
         SignedZoneData final = signedZoneCache.GetSignedData(_zoneId);
