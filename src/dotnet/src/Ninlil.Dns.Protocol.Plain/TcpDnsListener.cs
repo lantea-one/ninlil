@@ -16,21 +16,22 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Protocol.Plain;
 
 /// <summary>
-///     This class implements RFC 1035 §4.2.2/RFC 7766's DNS-over-TCP transport: a two-octet
-///     big-endian length prefix ahead of every message, one connection potentially carrying many
-///     queries in sequence (RFC 7766 §6.2.1 pipelining). An AXFR/IXFR query is recognized here and
-///     answered directly through <see cref="IZoneTransferService" />'s own multi-message
-///     sequence, since <see cref="DnsQueryProcessingPipeline" /> can only ever represent a single
-///     request producing a single response; every other query still goes through that same
-///     shared pipeline, exactly as <see cref="UdpDnsListener" /> already does.
+///     This class implements DNS over TCP (RFC 1035 §4.2.2, RFC 7766): a two-octet big-endian
+///     length prefix ahead of every message, and one connection able to carry many queries (RFC
+///     7766 §6.2.1 pipelining). Ordinary queries go to <see cref="DnsQueryProcessingPipeline" />,
+///     as in <see cref="UdpDnsListener" />. An AXFR or IXFR query is answered here through
+///     <see cref="IZoneTransferService" />, since the pipeline produces one response per request
+///     and a transfer is a sequence of messages. Transfers therefore skip the pipeline's checks
+///     (rate limiting, filtering, the query log) and rely on the transfer service's transport and
+///     TSIG checks.
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
 /// <param name="options">
-///     This transport's listen addresses, port and connection limits -- read through
-///     <see cref="IOptionsMonitor{TOptions}" /> once each time <see cref="ExecuteAsync" /> starts,
-///     so restarting just this listener (<c>POST /api/services/plain-tcp/restart</c>) picks up a
-///     change without restarting the whole process.
+///     The listen addresses, port and connection limits, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> each time <see cref="ExecuteAsync" /> starts, so
+///     restarting this listener (the <c>plain-tcp</c> managed service) picks up a change without
+///     restarting the process.
 /// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
 public sealed class TcpDnsListener(
@@ -41,37 +42,36 @@ public sealed class TcpDnsListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening sockets, one per listen address (or a single
-    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
-    ///     close them, which is what actually unblocks each accept loop's pending
-    ///     <see cref="Socket.AcceptAsync(CancellationToken)" /> call during shutdown.
+    ///     This field contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured). <see cref="StopAsync" /> closes them, which
+    ///     unblocks each accept loop's pending <see cref="Socket.AcceptAsync(CancellationToken)" />
+    ///     call.
     /// </summary>
     private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
 
     /// <summary>
-    ///     This property contains the settings snapshot taken when <see cref="ExecuteAsync" />
-    ///     last started, so every connection uses the same idle timeout until the next restart.
+    ///     This field contains the settings read when <see cref="ExecuteAsync" /> last started, so
+    ///     every connection uses the same idle timeout until the next restart.
     /// </summary>
     private PlainProtocolOptions _settings;
 
     /// <summary>
-    ///     This property bounds how many connections may be accepted concurrently, per
-    ///     <see cref="PlainProtocolOptions.MaxConcurrentTcpConnections" /> -- shared by every
+    ///     This field limits how many connections are served at once, per
+    ///     <see cref="PlainProtocolOptions.MaxConcurrentTcpConnections" />. It is shared by every
     ///     listen address, so the limit is per transport, not per address.
     /// </summary>
     private SemaphoreSlim _connectionLimiter;
 
     /// <summary>
     ///     This property reports whether at least one of this listener's sockets is bound and
-    ///     accepting connections -- read by the <c>/status</c> health-check endpoint, which needs
-    ///     a real "am I bound and running" signal from every transport rather than just the fact
-    ///     that it was registered/configured.
+    ///     accepting connections. <c>TransportListenersHealthCheck</c> reads it, since being
+    ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
-    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
 
@@ -123,14 +123,11 @@ public sealed class TcpDnsListener(
             }
             catch (SocketException)
             {
-                // Cancelling a pending AcceptAsync (via StopAsync closing the listening socket,
-                // or the token itself) surfaces here as a SocketException on this platform/
-                // runtime combination, not as OperationCanceledException/ObjectDisposedException
-                // the way a cleaner cancellation would -- observed directly against a real
-                // shutdown in this project's own smoke test, which is exactly the scenario every
-                // graceful host shutdown goes through. Treated the same way: if we were asked to
-                // stop, this is that; otherwise, keep serving rather than taking the whole
-                // listener down over one accept failure.
+                // Cancelling a pending AcceptAsync (StopAsync closing the listening socket, or the
+                // token) can surface as a SocketException rather than OperationCanceledException
+                // or ObjectDisposedException; this has been seen during a graceful shutdown. If we
+                // were asked to stop, that is what this is; otherwise keep serving rather than
+                // stopping the listener over one failed accept.
                 if (stoppingToken.IsCancellationRequested)
                     break;
 
@@ -139,9 +136,7 @@ public sealed class TcpDnsListener(
 
             if (!_connectionLimiter.Wait(0))
             {
-                // Too many connections already open; reject this one immediately rather than
-                // leaving it to queue behind every other connection this server is already
-                // struggling to keep up with.
+                // Too many connections are open; close this one at once rather than let it queue.
                 connection.Close();
                 continue;
             }
@@ -151,27 +146,21 @@ public sealed class TcpDnsListener(
     }
 
     /// <summary>
-    ///     This method owns a single accepted connection for its entire lifetime: reading every
-    ///     length-prefixed query it sends, answering each in turn, and closing the connection
-    ///     once RFC 7766's idle timeout elapses, the client disconnects, or a zone transfer this
-    ///     connection just served completes.
+    ///     This method serves one accepted connection: it reads each length-prefixed query,
+    ///     answers it, and closes the connection when <see cref="PlainProtocolOptions.TcpIdleTimeout" />
+    ///     passes, the client disconnects, or a zone transfer on it completes.
     ///     <para>
-    ///         That last case is deliberate, not an accident of RFC 7766 §6.2.1 pipelining support:
-    ///         <see cref="ZoneTransferPullOverStream.ReadResponsesAsync" />'s own reassembly loop
-    ///         on the *client* side of a transfer (this project's own <c>TcpZoneTransferClient</c>,
-    ///         used by <c>SecondaryZoneRefreshService</c>, and confirmed against a real, external
-    ///         reference client too) has no way to know a transfer response is complete other than
-    ///         the connection actually closing -- there is no length-prefixed "end of transfer"
-    ///         sentinel in RFC 5936/1995's own wire format, and a single-message AXFR reply (the
-    ///         common case for a small zone) carries no repeated closing SOA to self-terminate on,
-    ///         unlike a multi-message one. Leaving the connection open afterward for further
-    ///         pipelined queries -- technically legal, and what this method used to do
-    ///         unconditionally -- left every such client hanging until its own read-timeout fired,
-    ///         a real bug discovered only by a genuine two-process zone-transfer smoke test driven
-    ///         against separate, real listener processes, not by any unit/integration test run so
-    ///         far (none of which exercised a real, separate-process TCP transfer end-to-end). An
-    ///         ordinary, non-transfer query
-    ///         still keeps the connection open for pipelining exactly as before.
+    ///         Closing after a transfer is required, although RFC 7766 would allow further pipelined
+    ///         queries: the pull client in
+    ///         <see cref="ZoneTransferPullOverStream.ReadResponsesAsync" /> (used by
+    ///         <c>TcpZoneTransferClient</c> for secondary zones) treats the connection closing as
+    ///         the end of the transfer, so a connection left open would make it wait until its
+    ///         read timeout. An ordinary query leaves the connection open for pipelining.
+    ///     </para>
+    ///     <para>
+    ///         The timeout is restarted for each message and also covers handling it, so a zone
+    ///         transfer that takes longer than <see cref="PlainProtocolOptions.TcpIdleTimeout" /> is
+    ///         cancelled.
     ///     </para>
     /// </summary>
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
@@ -228,17 +217,15 @@ public sealed class TcpDnsListener(
     }
 
     /// <summary>
-    ///     This method decodes a single TCP-framed message and routes it: an AXFR/IXFR query is
-    ///     answered directly, as a real multi-message sequence, through
-    ///     <see cref="IZoneTransferService" />; every other query is enqueued onto the shared
-    ///     <see cref="DnsQueryProcessingPipeline" />, the same as any UDP query.
+    ///     This method decodes one TCP-framed message and routes it: an AXFR or IXFR query is
+    ///     answered here, as a sequence of messages, through <see cref="IZoneTransferService" />;
+    ///     every other query is enqueued onto <see cref="DnsQueryProcessingPipeline" />, like a UDP
+    ///     query. A message that does not decode is logged and dropped.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if this connection just finished serving a zone transfer and
-    ///     should now be closed rather than kept open for further RFC 7766 §6.2.1 pipelined
-    ///     queries -- see <see cref="HandleConnectionAsync" />'s own doc comment on why a transfer
-    ///     response, specifically, needs this. <see langword="false" /> for every ordinary query,
-    ///     which keeps the connection open exactly as before.
+    ///     <see langword="true" /> if the connection just served a zone transfer and should be
+    ///     closed (see <see cref="HandleConnectionAsync" /> for why); <see langword="false" /> for
+    ///     any other message, which leaves the connection open.
     /// </returns>
     private async Task<bool> HandleMessageAsync(
         byte[] messageBytes,
@@ -257,8 +244,8 @@ public sealed class TcpDnsListener(
         }
         catch (FormatException exception)
         {
-            // A malformed message has no reliable identifier to answer with, the same reasoning
-            // DnsQueryProcessingPipeline itself already applies to a malformed UDP datagram.
+            // A malformed message has no reliable ID to answer with, so it is not answered, as in
+            // DnsQueryProcessingPipeline.
             logger.LogWarning(
                 exception,
                 "Discarding a malformed TCP DNS message from {RemoteAddress}.",
@@ -300,8 +287,8 @@ public sealed class TcpDnsListener(
     }
 
     /// <summary>
-    ///     This method streams a complete AXFR or IXFR response back, one length-prefixed
-    ///     message at a time, in the exact order <see cref="IZoneTransferService" /> yields them.
+    ///     This method streams an AXFR or IXFR response back, one length-prefixed message at a
+    ///     time, in the order <see cref="IZoneTransferService" /> yields them.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -342,11 +329,9 @@ public sealed class TcpDnsListener(
     }
 
     /// <summary>
-    ///     This method writes a single length-prefixed message to a connection, serialized
-    ///     against every other write on that same connection -- necessary because
-    ///     <see cref="DnsQueryProcessingPipeline" /> may finish answering two pipelined queries on
-    ///     the same connection out of order, and an interleaved write would corrupt the framing
-    ///     for both.
+    ///     This method writes one length-prefixed message to a connection, one writer at a time:
+    ///     <see cref="DnsQueryProcessingPipeline" /> may finish two pipelined queries on the same
+    ///     connection at once, and interleaved writes would corrupt the framing of both.
     /// </summary>
     private static async ValueTask WriteFramedAsync(
         Socket connection,
@@ -380,9 +365,8 @@ public sealed class TcpDnsListener(
     ///     arrived (a clean disconnect between messages, not a truncated one).
     /// </returns>
     /// <exception cref="IOException">
-    ///     Thrown when the connection closes partway through an already-started read -- a
-    ///     genuinely truncated, malformed TCP stream, as opposed to an ordinary disconnect
-    ///     between messages.
+    ///     Thrown when the connection closes partway through a read that has started: a truncated
+    ///     stream rather than an ordinary disconnect between messages.
     /// </exception>
     private static async ValueTask<bool> ReadExactAsync(
         Socket connection,

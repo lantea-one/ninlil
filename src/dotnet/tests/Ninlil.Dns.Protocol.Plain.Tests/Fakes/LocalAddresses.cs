@@ -5,16 +5,16 @@ using System.Net.Sockets;
 namespace Ninlil.Dns.Protocol.Plain.Tests.Fakes;
 
 /// <summary>
-///     This class finds free ports and usable loopback addresses for real-socket listen-address
-///     tests. Ports always come from the OS, never a fixed number: CI runners host real DNS and
-///     DHCP services.
+///     This class finds free ports and usable loopback addresses for the listen-address tests,
+///     which use real sockets. Ports always come from the OS, never a fixed number, because CI
+///     runners run DNS and DHCP services of their own.
 /// </summary>
 public static class LocalAddresses
 {
     /// <summary>
     ///     This property contains an address from the TEST-NET-1 documentation range (RFC 5737),
-    ///     which is never assigned to a real host -- binding it fails with "cannot assign
-    ///     requested address".
+    ///     which is not assigned to any host, so binding it fails with "cannot assign requested
+    ///     address".
     /// </summary>
     public static IPAddress Unassigned { get; } = IPAddress.Parse("192.0.2.1");
 

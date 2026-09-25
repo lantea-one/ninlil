@@ -14,10 +14,11 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Protocol.Plain.Tests;
 
 /// <summary>
-///     This class runs the real <see cref="UdpDnsListener" /> and <see cref="TcpDnsListener" />
-///     with different <see cref="PlainProtocolOptions.ListenAddresses" /> and sends real queries
-///     to real local addresses, checking which ones get answered. Every test starts its own
-///     listeners on an OS-assigned port, since the addresses differ per test.
+///     This class runs <see cref="UdpDnsListener" /> and <see cref="TcpDnsListener" /> on real
+///     sockets with different <see cref="PlainProtocolOptions.ListenAddresses" />, sends queries
+///     to local addresses and checks which get answered. A fake resolver answers every query.
+///     Each test starts its listeners on an OS-assigned port, since the addresses differ per
+///     test.
 /// </summary>
 public sealed class PlainListenAddressTests
 {
@@ -280,8 +281,8 @@ public sealed class PlainListenAddressTests
     }
 
     /// <summary>
-    ///     This resolver answers every query with one fixed A record -- resolution itself isn't
-    ///     under test here, only which addresses a query reaches.
+    ///     This resolver answers every query with one fixed A record. Resolution is not under test
+    ///     here, only which addresses a query reaches.
     /// </summary>
     private sealed class AlwaysAnswerAResolver(IPAddress answer) : IDnsQueryResolver
     {
