@@ -22,19 +22,15 @@ using Xunit.Abstractions;
 namespace Ninlil.Dns.Protocol.DnsOverQuic.Tests;
 
 /// <summary>
-///     This class exercises a real, running <see cref="DnsOverQuicListener" /> over real loopback
-///     QUIC connections -- the permanent xUnit counterpart to this project's own 3f scratch smoke
-///     test, per this repo's hybrid testing convention (smoke tests always, plus a real xUnit
-///     suite for stable, unlikely-to-churn pieces).
+///     This class tests a running <see cref="DnsOverQuicListener" /> over loopback QUIC
+///     connections: query round trips, concurrent streams, a second connection, zone transfers
+///     and listen addresses. The query dispatcher and the zone transfer service are fakes.
 ///     <para>
-///         QUIC needs <c>libmsquic</c> (and, on Linux, OpenSSL) installed as a native OS
-///         dependency this repo does not control -- every test here that needs a real connection
-///         checks <see cref="QuicListener.IsSupported" />/<see cref="QuicConnection.IsSupported" />
-///         and exits early (reported as passed, not skipped -- this repo has no
-///         skip-conditionally-at-runtime convention yet, and adding a new package dependency just
-///         for that felt disproportionate) rather than failing an environment that simply does not
-///         have it installed, matching <see cref="DnsOverQuicListener" />'s own "log and don't
-///         start" behavior for the exact same condition.
+///         QUIC needs <c>libmsquic</c> (and, on Linux, OpenSSL) installed on the host. Every test
+///         that needs a connection checks <see cref="QuicListener.IsSupported" /> and
+///         <see cref="QuicConnection.IsSupported" /> and returns early when they are false, so it
+///         is reported as passed, not skipped (there is no runtime skip mechanism in these test
+///         projects). This matches the listener, which logs and does not start in that case.
 ///     </para>
 /// </summary>
 [SupportedOSPlatform("linux")]
@@ -87,8 +83,8 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         );
         await _listener.StartAsync(CancellationToken.None);
 
-        // The listener's own QuicListener.ListenAsync call happens on a background task; give it
-        // a moment to actually bind before any test tries to connect against it.
+        // The listener calls QuicListener.ListenAsync on a background task; give it a moment to
+        // bind before any test connects.
         await Task.Delay(TimeSpan.FromMilliseconds(250));
     }
 
@@ -131,9 +127,8 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         };
         await SendAsync(stream, query);
 
-        // FakeZoneTransferService (registered in InitializeAsync's own scope factory) yields two
-        // messages for any AXFR query -- both must arrive, on this same stream, before it signals
-        // completion.
+        // FakeZoneTransferService (registered in InitializeAsync's scope factory) yields two
+        // messages for any AXFR query; both must arrive on this stream before it completes.
         DnsMessage first = await ReceiveAsync(stream);
         DnsMessage second = await ReceiveAsync(stream);
 
@@ -144,8 +139,8 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     [Fact]
     public void QuicSupportIsReported()
     {
-        // Documents, rather than asserts, environment capability -- every test below becomes a
-        // no-op (not a failure) when this is false.
+        // Records, rather than asserts, whether QUIC is available; the tests below do nothing
+        // (and pass) when it is not.
         _output.WriteLine(
             $"QuicListener.IsSupported = {QuicListener.IsSupported}, QuicConnection.IsSupported = {QuicConnection.IsSupported}"
         );
@@ -289,9 +284,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method starts a dedicated pipeline/listener pair bound to the given listen
-    ///     addresses on a free port, separate from <see cref="InitializeAsync" />'s shared one
-    ///     (which keeps the default of every address).
+    ///     This method starts a separate pipeline and listener bound to the given listen addresses
+    ///     on a free port, apart from the shared one in <see cref="InitializeAsync" /> (which
+    ///     listens on every address).
     /// </summary>
     private async Task<(
         DnsQueryProcessingPipeline Pipeline,
@@ -318,7 +313,7 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
                     Enable = true,
                     Port = port,
                     ListenAddresses = listenAddresses,
-                    // Reuses the shared self-signed certificate file, so each listener doesn't
+                    // Reuse the shared self-signed certificate file, so each listener does not
                     // generate its own.
                     Certificate = _options.Certificate,
                 }
@@ -380,9 +375,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method reports whether this environment can actually run a real QUIC connection,
-    ///     writing a note to the test output when it cannot, since every calling test's early
-    ///     return would otherwise look like an untested no-op with no explanation.
+    ///     This method reports whether QUIC works in this environment. When it does not, it writes
+    ///     a note to the test output, so a test that returns early does not pass without
+    ///     explanation.
     /// </summary>
     private bool IsQuicAvailable()
     {
@@ -396,12 +391,11 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="IServiceScopeFactory" /> resolving
-    ///     <see cref="IZoneTransferService" /> to a <see cref="FakeZoneTransferService" /> --
-    ///     <see cref="DnsOverQuicListener" />'s own AXFR/IXFR branch needs a real scope factory,
-    ///     but this test project has no reason to stand up the real
-    ///     <c>Ninlil.Dns.Server.Authoritative</c> DI graph (a real zone cache, TSIG, and storage)
-    ///     just to prove the transport/framing side of zone transfer works.
+    ///     This method builds an <see cref="IServiceScopeFactory" /> that resolves
+    ///     <see cref="IZoneTransferService" /> to a <see cref="FakeZoneTransferService" />. The
+    ///     listener's AXFR/IXFR branch needs a scope factory, but testing the transport side of a
+    ///     transfer does not need the zone cache, TSIG and storage of
+    ///     <c>Ninlil.Dns.Server.Authoritative</c>.
     /// </summary>
     private static IServiceScopeFactory BuildScopeFactory() =>
         new ServiceCollection()
@@ -479,10 +473,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This class stands in for the real authoritative/recursive engines, which this test
-    ///     deliberately does not exercise -- their own correctness is this project's other test
-    ///     projects' job. This dispatcher only ever answers with a fixed A record, letting these
-    ///     tests focus entirely on the QUIC transport itself.
+    ///     This class is a fake query dispatcher in place of the resolvers, which other test
+    ///     projects cover. It answers every query with a fixed A record, so these tests exercise
+    ///     only the QUIC transport.
     /// </summary>
     private sealed class EchoingDispatcher : IDnsQueryDispatcher
     {
@@ -517,11 +510,9 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This class stands in for a real <see cref="IZoneTransferService" />, yielding two
-    ///     fixed messages for any AXFR/IXFR query -- enough to prove
-    ///     <see cref="DnsOverQuicListener" />'s own multi-message zone-transfer branch actually
-    ///     writes every message onto the same stream and only completes it after the last one,
-    ///     without needing a real zone cache or TSIG service.
+    ///     This class is a fake <see cref="IZoneTransferService" /> that yields two fixed messages
+    ///     for any AXFR or IXFR query, enough to check that the listener writes every message on
+    ///     the same stream and completes it only after the last.
     /// </summary>
     private sealed class FakeZoneTransferService : IZoneTransferService
     {

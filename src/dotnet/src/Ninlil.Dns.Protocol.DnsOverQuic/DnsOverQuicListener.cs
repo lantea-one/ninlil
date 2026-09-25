@@ -21,32 +21,33 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Protocol.DnsOverQuic;
 
 /// <summary>
-///     This class implements RFC 9250's DNS-over-QUIC transport: a 2-octet length-prefixed DNS
-///     message per QUIC stream, one dedicated bidirectional stream per query (RFC 9250 §4.2) --
-///     never reused for a second query -- with TLS 1.3 already built into the QUIC handshake
-///     itself, unlike DNS-over-TLS's separate TCP-then-TLS handshake. Also answers zone transfer
-///     over the same stream shape: an AXFR/IXFR query is recognized (see
-///     <see cref="HandleZoneTransferAsync" />) and answered as a real multi-message sequence
-///     through <see cref="IZoneTransferService" />, every subsequent message written onto that
-///     same stream rather than opening a new one -- RFC 9250 itself only defines an ordinary
-///     stub-resolver query per stream, but this project applies the identical framing to a
-///     multi-message transfer response, the same analogous extension
-///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own RFC 9103 XFR-over-TLS support
-///     makes of that transport.
+///     This class implements DNS over QUIC (RFC 9250): one bidirectional stream per query, never
+///     reused, carrying a two-octet length-prefixed DNS message each way (RFC 9250 §4.2). TLS 1.3
+///     is part of the QUIC handshake, unlike the separate TCP and TLS handshakes of DNS over TLS.
+///     Ordinary queries go to <see cref="DnsQueryProcessingPipeline" /> (see that class).
 ///     <para>
-///         0-RTT is deliberately left disabled: this class never configures TLS session
-///         resumption/PSK support on <see cref="SslServerAuthenticationOptions" />, which is
-///         what 0-RTT would require -- RFC 9250 itself warns against it due to replay risk.
+///         AXFR and IXFR queries are answered here through <see cref="IZoneTransferService" />
+///         (see <see cref="HandleZoneTransferAsync" />), with every response message written to
+///         the query's stream, as <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c> does
+///         for XFR-over-TLS.
+///     </para>
+///     <para>
+///         0-RTT is not enabled: no TLS session resumption is configured on
+///         <see cref="SslServerAuthenticationOptions" />, which 0-RTT would need. RFC 9250
+///         discusses the replay risk it brings.
+///     </para>
+///     <para>
+///         There is no limit on the number of connections, only on streams per connection
+///         (<see cref="DnsOverQuicOptions.MaxConcurrentBidirectionalStreams" />).
 ///     </para>
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
 /// <param name="options">
-///     This transport's own listen addresses, port, stream limits, and certificate -- read via
-///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
-///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
-///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
-///     parameter documents.
+///     The listen addresses, port, stream limits and certificate, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> so a changed <c>Enable</c> is seen when the
+///     listener is started again (see the <c>options</c> parameter of
+///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records startup failures and connection-level failures to.</param>
 [SupportedOSPlatform("linux")]
@@ -60,28 +61,28 @@ public sealed class DnsOverQuicListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This constant contains RFC 9250 §7.1's registered ALPN token for DNS-over-QUIC.
+    ///     This field contains the ALPN token RFC 9250 registers for DNS-over-QUIC ("doq").
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");
 
     /// <summary>
-    ///     This property contains the server certificate presented to every connecting client --
-    ///     re-checked periodically against disk, so a certificate an operator or
-    ///     <c>Ninlil.Dns.Server.Acme</c> replaces mid-run is picked up without a restart.
+    ///     This field contains the provider of the server certificate presented to every client.
+    ///     It re-checks the certificate on disk periodically, so one an operator or
+    ///     <c>Ninlil.Dns.Server.Acme</c> replaces is picked up for new connections without a
+    ///     restart.
     /// </summary>
     private ReloadableTlsCertificateProvider _certificateProvider;
 
     /// <summary>
-    ///     This property reports whether this listener's own <see cref="QuicListener" /> is
-    ///     currently bound and accepting connections -- read by the <c>/status</c> health-check
-    ///     endpoint, which needs a real "am I bound and running" signal from every transport
-    ///     rather than just the fact that it was registered/configured.
+    ///     This property reports whether at least one <see cref="QuicListener" /> is bound and
+    ///     accepting connections. <c>TransportListenersHealthCheck</c> reads it, since being
+    ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
-    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _failedListenAddresses;
 
@@ -103,11 +104,9 @@ public sealed class DnsOverQuicListener(
 
         if (!QuicListener.IsSupported)
         {
-            // QUIC needs libmsquic (and, on Linux, OpenSSL) present as a native OS dependency --
-            // neither ships inside the .NET runtime itself, unlike every other transport this
-            // project has built so far. Failing loudly here, without taking the rest of the
-            // host down, is deliberately safer than letting a confusing low-level QuicException
-            // surface later.
+            // QUIC needs libmsquic (and, on Linux, OpenSSL) installed on the host; neither ships
+            // with .NET. Logging an error here, without stopping the rest of the host, is clearer
+            // than a low-level QuicException later.
             logger.LogError(
                 "DNS-over-QUIC is enabled, but QUIC is not supported on this platform -- libmsquic (and, on Linux, OpenSSL) must be installed. This transport will not start; every other part of this server is unaffected."
             );
@@ -172,8 +171,8 @@ public sealed class DnsOverQuicListener(
 
     /// <summary>
     ///     This method starts a QUIC listener on one endpoint. With no listen addresses configured
-    ///     (<paramref name="explicitAddress" /> false) a failure throws, exactly as before listen
-    ///     addresses existed. For a configured address, a failure is logged, recorded in
+    ///     (<paramref name="explicitAddress" /> false) a failure throws. For a configured address,
+    ///     a failure is logged, recorded in
     ///     <paramref name="failedAddresses" />, and <see langword="null" /> is returned so the
     ///     other addresses keep serving. An address this host doesn't have is refused up front:
     ///     MsQuic binds a wildcard socket underneath and filters by address itself, so it would
@@ -224,8 +223,9 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method builds the QUIC listener settings for one endpoint -- identical for every
-    ///     listen address apart from the endpoint itself.
+    ///     This method builds the QUIC listener settings for one endpoint; they are the same for
+    ///     every listen address apart from the endpoint. The per-connection settings are read
+    ///     from the options for each new connection.
     /// </summary>
     private QuicListenerOptions BuildListenerOptions(IPEndPoint endpoint) =>
         new()
@@ -243,11 +243,9 @@ public sealed class DnsOverQuicListener(
                             .CurrentValue
                             .MaxConcurrentBidirectionalStreams,
                         MaxInboundUnidirectionalStreams = 0,
-                        // TlsCertificateOptions.AllowedProtocols is deliberately not applied
-                        // here: QUIC mandates TLS 1.3 unconditionally at the transport level
-                        // (RFC 9001), so restricting EnabledSslProtocols would be meaningless at
-                        // best -- and this has not been verified not to throw for QUIC's own
-                        // handshake path, unlike the plain-TCP-based SslStream path DoT uses.
+                        // TlsCertificateOptions.AllowedProtocols is not applied: QUIC always
+                        // uses TLS 1.3 (RFC 9001), so restricting EnabledSslProtocols adds
+                        // nothing, and it has not been checked that QUIC's handshake accepts it.
                         ServerAuthenticationOptions = new SslServerAuthenticationOptions
                         {
                             ApplicationProtocols = [DoqApplicationProtocol],
@@ -281,11 +279,9 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method owns a single accepted QUIC connection for its entire lifetime,
-    ///     accepting every bidirectional stream the peer opens -- each one an entirely
-    ///     independent query, per RFC 9250 §4.2 -- concurrently, since QUIC's own stream
-    ///     multiplexing means (unlike DNS-over-TLS's single shared byte stream) no per-connection
-    ///     write-lock is needed at all.
+    ///     This method serves one accepted QUIC connection, handling every stream the peer opens
+    ///     concurrently; each stream is an independent query (RFC 9250 §4.2). Streams are
+    ///     separate, so unlike DNS over TLS no per-connection write lock is needed.
     /// </summary>
     private async Task HandleConnectionAsync(
         QuicConnection connection,
@@ -305,7 +301,7 @@ public sealed class DnsOverQuicListener(
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
                     // The connection closed (peer disconnect, idle timeout, or a QuicException
-                    // from an abrupt reset) -- either way, there is nothing left to accept.
+                    // from an abrupt reset), so there is nothing left to accept.
                     break;
                 }
 
@@ -319,12 +315,12 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method answers a single query carried on its own dedicated stream: reads the
-    ///     2-octet length-prefixed message (the client itself signals "done sending" via the
-    ///     stream's own FIN, per RFC 9250 §4.2.1, so nothing further needs reading once the
-    ///     declared length is satisfied), enqueues it onto the shared pipeline, and writes the
-    ///     response back the same way, closing the stream's write side once the response has
-    ///     been fully sent (RFC 9250 §4.2.2).
+    ///     This method answers the query on one stream: it reads the length-prefixed message (the
+    ///     client then closes its side of the stream, so nothing more needs reading), routes a
+    ///     zone transfer to <see cref="HandleZoneTransferAsync" /> and any other query to the
+    ///     pipeline, whose response is written back framed the same way before the server closes
+    ///     its side (RFC 9250 §4.2). A message that does not decode is logged and the stream
+    ///     dropped. The source address is the QUIC connection's remote address.
     /// </summary>
     private async Task HandleStreamAsync(
         QuicConnection connection,
@@ -403,11 +399,10 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method answers a real multi-message AXFR/IXFR sequence on this same stream,
-    ///     through <see cref="IZoneTransferService" /> -- the RFC 9250-analogous counterpart to
-    ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own RFC 9103 XFR-over-TLS
-    ///     support, and to <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>'s own original AXFR/IXFR
-    ///     special case.
+    ///     This method answers an AXFR or IXFR query on its stream with the sequence of messages
+    ///     from <see cref="IZoneTransferService" />, the DNS-over-QUIC counterpart of the transfer
+    ///     handling in <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c> and
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -439,10 +434,10 @@ public sealed class DnsOverQuicListener(
                     ? transferService.CreateAxfrResponseAsync(context, stoppingToken)
                     : transferService.CreateIxfrResponseAsync(context, stoppingToken);
 
-            // Every response message is written onto this same stream -- RFC 9250 §4.2 dedicates
-            // one stream per query, and a multi-message transfer response is still, structurally,
-            // the answer to the single query this stream carried; only the very last message
-            // actually closes the stream's write side (RFC 9250 §4.2.2).
+            // Every response message goes on this stream, since RFC 9250 §4.2 gives each query
+            // one stream and a transfer is the answer to one query. Only the last message closes
+            // the stream's write side, so each message is held back one step until the next
+            // arrives.
             byte[] pendingMessageBytes = null;
 
             await foreach (DnsMessage responseMessage in responses.WithCancellation(stoppingToken))
@@ -471,11 +466,9 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method writes one length-prefixed message that is not the last one in a sequence
-    ///     -- used only by <see cref="HandleZoneTransferAsync" />'s own multi-message loop, which
-    ///     buffers one message behind so it always knows, at write time, whether the one it is
-    ///     about to write is the final one (and must therefore close the stream's write side) or
-    ///     not.
+    ///     This method writes one length-prefixed message that is not the last in a sequence,
+    ///     leaving the stream's write side open. Only <see cref="HandleZoneTransferAsync" /> uses
+    ///     it.
     /// </summary>
     private static async ValueTask WriteFramedNotLastAsync(
         QuicStream stream,
@@ -491,9 +484,9 @@ public sealed class DnsOverQuicListener(
     }
 
     /// <summary>
-    ///     This method writes a single length-prefixed response and closes the stream's write
-    ///     side -- no write-lock needed, since this stream belongs to exactly one query and is
-    ///     never reused for another (RFC 9250 §4.2.2 explicitly forbids that).
+    ///     This method writes one length-prefixed response and closes the stream's write side. No
+    ///     write lock is needed, since the stream carries one query and is never reused (RFC 9250
+    ///     §4.2).
     /// </summary>
     private static async ValueTask WriteResponseAsync(
         QuicStream stream,
@@ -524,7 +517,7 @@ public sealed class DnsOverQuicListener(
     ///     arrived.
     /// </returns>
     /// <exception cref="IOException">
-    ///     Thrown when the stream ends partway through an already-started read.
+    ///     Thrown when the stream ends partway through a read that has started.
     /// </exception>
     private static async ValueTask<bool> ReadExactAsync(
         QuicStream stream,
@@ -557,11 +550,9 @@ public sealed class DnsOverQuicListener(
     {
         await base.StopAsync(cancellationToken);
 
-        // ExecuteAsync creates a brand-new ReloadableTlsCertificateProvider (and the polling
-        // Timer inside it) on every restart, the same as
-        // Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener's own certificate provider;
-        // disposing only in this class's own Dispose() -- called once, at final host shutdown,
-        // not on every mid-process stop -- would leak one provider's worth of Timer per restart.
+        // ExecuteAsync creates a new ReloadableTlsCertificateProvider (with its polling timer)
+        // on every start, as DnsOverTlsListener does. Dispose() runs only at final host
+        // shutdown, so disposing only there would leak a timer per restart.
         _certificateProvider?.Dispose();
     }
 

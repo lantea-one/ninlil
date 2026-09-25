@@ -7,7 +7,7 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's DNS-over-QUIC transport.
+///     the DNS-over-QUIC transport.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -15,10 +15,11 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic.Extension;
 public static class ServiceCollectionProtocolDnsOverQuicExtension
 {
     /// <summary>
-    ///     This method registers the DNS-over-QUIC listener. The composition root is still
-    ///     expected to have already called
+    ///     This method registers the DNS-over-QUIC listener as a hosted service. The composition
+    ///     root must also call
     ///     <c>Ninlil.Dns.Server.Core.Extension.ServiceCollectionServerCoreExtension.AddNinlilDnsServerCore</c>,
-    ///     since this transport depends on <c>DnsQueryProcessingPipeline</c>.
+    ///     since the listener depends on <c>DnsQueryProcessingPipeline</c>, and register
+    ///     <c>IZoneTransferService</c> for zone transfers over QUIC.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read transport settings from.</param>
