@@ -4,23 +4,20 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the real, pushed-down
-///     search/count the query log's own REST search endpoint needs, and the bulk retention
-///     deletes its own cleanup service needs. A query log can genuinely reach millions of rows on
-///     a server that has been running for a long time, unlike this project's own much
-///     lower-cardinality entities (zones, forwarders, and so on), where filtering the full,
-///     already-fetched set in memory is an accepted tradeoff -- every method here is expected to
-///     translate into a real, filtered query against the underlying storage engine (an indexed
-///     <c>WHERE</c> clause for a relational provider; a filter document for MongoDB), never a
-///     full table/collection scan materialized into memory first.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the search and count behind
+///     the query log's REST search endpoint, and the bulk deletes its retention cleanup uses. A
+///     query log can reach millions of rows, so every method here must run as a filtered query
+///     in the database (an indexed <c>WHERE</c> clause, or a MongoDB filter document), never a
+///     full scan loaded into memory. It is the model for repositories whose list endpoint takes
+///     filters (<see cref="DnsQueryLogSearchCriteria" />).
 /// </summary>
 public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
 {
     /// <summary>
-    ///     This method searches the query log, newest entries first, applying every filter
-    ///     <paramref name="criteria" /> specifies.
+    ///     This method searches the query log with the filters in <paramref name="criteria" />,
+    ///     newest entries first.
     /// </summary>
-    /// <param name="criteria">The filters to apply; an entirely empty instance matches everything.</param>
+    /// <param name="criteria">The filters to apply; an empty instance matches everything.</param>
     /// <param name="skip">The number of matching entries to skip, for paging.</param>
     /// <param name="take">The maximum number of matching entries to return.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -33,11 +30,10 @@ public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
     );
 
     /// <summary>
-    ///     This method counts how many entries match every filter <paramref name="criteria" />
-    ///     specifies, without materializing them -- the total a paginated search response reports
-    ///     alongside its own current page.
+    ///     This method counts the entries matching <paramref name="criteria" />, for the total a
+    ///     paged search response reports.
     /// </summary>
-    /// <param name="criteria">The filters to apply; an entirely empty instance matches everything.</param>
+    /// <param name="criteria">The filters to apply; an empty instance matches everything.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of matching entries.</returns>
     Task<int> CountAsync(
@@ -46,11 +42,10 @@ public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
     );
 
     /// <summary>
-    ///     This method permanently removes every entry older than <paramref name="cutoffUtc" />,
-    ///     as a single bulk delete rather than loading each matching row into memory first only to
-    ///     immediately discard it.
+    ///     This method deletes every entry older than <paramref name="cutoffUtc" /> as one bulk
+    ///     delete, without loading the rows.
     /// </summary>
-    /// <param name="cutoffUtc">The exclusive age cutoff; an entry at or after this moment survives.</param>
+    /// <param name="cutoffUtc">The exclusive cutoff; an entry at or after this moment is kept.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of entries removed.</returns>
     Task<int> DeleteOlderThanAsync(
@@ -59,22 +54,20 @@ public interface IDnsQueryLogRepository : IRepository<DnsQueryLogEntryEntity>
     );
 
     /// <summary>
-    ///     This method permanently removes every entry beyond the
-    ///     <paramref name="maxRetainedEntries" /> newest ones, as a safety cap independent of
-    ///     <see cref="DeleteOlderThanAsync" />'s own age-based retention -- a server answering an
-    ///     unusually high query volume could otherwise still grow the log unboundedly within a
-    ///     single retention window.
+    ///     This method deletes every entry beyond the <paramref name="maxRetainedEntries" /> newest.
+    ///     It is a size cap alongside the age-based <see cref="DeleteOlderThanAsync" />, because a
+    ///     server with very high query volume could otherwise grow the log without bound within one
+    ///     retention window.
     /// </summary>
     /// <param name="maxRetainedEntries">
-    ///     The number of newest entries to keep; every older entry beyond this count is removed.
+    ///     The number of newest entries to keep; older entries beyond this count are removed.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of entries removed.</returns>
     Task<int> DeleteExcessAsync(int maxRetainedEntries, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method permanently removes every entry currently in the log, for an operator's
-    ///     explicit "clear the log" action.
+    ///     This method deletes every entry in the log, for an operator's "clear the log" action.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of entries removed.</returns>

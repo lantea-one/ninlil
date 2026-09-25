@@ -2,17 +2,15 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single, immutable step in a zone's history: the exact records
-///     added and removed to move the zone from <see cref="OldSerial" /> to <see cref="NewSerial" />.
-///     RFC 1995's incremental zone transfer (IXFR) is defined in exactly these terms -- a
-///     sequence of {old SOA, deleted records, new SOA, added records} steps -- so a chain of
-///     these entries, in serial order, is what lets the IXFR responder serve a real,
-///     precise delta instead of falling back to a full zone transfer for every request.
+///     This class represents one immutable step in a zone's history: the records added and
+///     removed to move the zone from <see cref="OldSerial" /> to <see cref="NewSerial" />. IXFR
+///     (RFC 1995) is defined in these terms, as a sequence of {old SOA, deleted records, new SOA,
+///     added records} steps, so a chain of entries in serial order lets the IXFR responder send
+///     a delta instead of a full transfer.
 ///     <para>
-///         This is append-only: once written, an entry is never updated or deleted (it derives
-///         from <see cref="EntityBase" /> rather than <see cref="AuditableEntityBase" />, the
-///         same way <see cref="LogEntity" /> and <see cref="MetricEntity" /> are), the same way
-///         the zone history it records can't be edited after the fact either.
+///         The journal is append-only: an entry is never updated. It derives from
+///         <see cref="EntityBase" /> rather than <see cref="AuditableEntityBase" />, like
+///         <see cref="LogEntity" /> and <see cref="MetricEntity" />.
 ///     </para>
 /// </summary>
 public class ZoneChangeJournalEntryEntity : EntityBase
@@ -24,10 +22,9 @@ public class ZoneChangeJournalEntryEntity : EntityBase
     public Guid ZoneId { get; set; }
 
     /// <summary>
-    ///     This property contains the zone's SOA serial number before this change, stored as a
-    ///     wider signed type than the wire protocol's own 32-bit unsigned field to avoid
-    ///     unsigned-integer support gaps across the four relational providers this entity is
-    ///     stored on.
+    ///     This property contains the zone's SOA serial number before this change. It is a wider
+    ///     signed type than the 32-bit unsigned wire field because not every relational provider
+    ///     supports unsigned integers.
     /// </summary>
     public long OldSerial { get; set; }
 
@@ -37,10 +34,9 @@ public class ZoneChangeJournalEntryEntity : EntityBase
     public long NewSerial { get; set; }
 
     /// <summary>
-    ///     This property contains every record removed by this change, serialized as a JSON
-    ///     array of <see cref="RecordEntity" /> snapshots -- not a reference to the live
-    ///     <see cref="RecordEntity" /> rows, which are already gone by the time this change has
-    ///     been applied.
+    ///     This property contains every record removed by this change, as a JSON array of
+    ///     <see cref="RecordEntity" /> snapshots. Snapshots are needed because the live rows are gone
+    ///     once the change is applied.
     /// </summary>
     public string RemovedRecordsJson { get; set; }
 

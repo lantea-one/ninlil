@@ -4,17 +4,16 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This class carries every optional filter, plus the ordering, that
-///     <see cref="IDnsClientRepository.SearchAsync" /> and <see cref="IDnsClientRepository.CountAsync" />
-///     accept, bundled into one value the same way <see cref="DnsQueryLogSearchCriteria" /> bundles
-///     the query log's own. A <see langword="null" /> filter means "do not filter on this axis" --
-///     <see cref="All" /> matches every known client, in creation order.
+///     This record carries the optional filters and the ordering that
+///     <see cref="IDnsClientRepository.SearchAsync" /> and
+///     <see cref="IDnsClientRepository.CountAsync" /> accept, as
+///     <see cref="DnsQueryLogSearchCriteria" /> does for the query log. A <see langword="null" />
+///     filter is not applied; <see cref="All" /> matches every client in creation order.
 ///     <para>
-///         Presence is expressed as plain instants rather than an "online" flag because the
-///         repository layer has no notion of the configured online window: a caller computes
-///         "now minus the window" once and passes it as <see cref="SeenSinceUtc" /> (online) or
-///         <see cref="NotSeenSinceUtc" /> (offline), so both filters evaluate against exactly the
-///         same cutoff a read-time <c>IsOnline</c> check would.
+///         Presence is given as times rather than an "online" flag because the repository does
+///         not know the configured online window. The caller computes "now minus the window" once
+///         and passes it as <see cref="SeenSinceUtc" /> (online) or <see cref="NotSeenSinceUtc" />
+///         (offline), so both use the same cutoff as a read-time <c>IsOnline</c> check.
 ///     </para>
 /// </summary>
 /// <param name="IsFavorite">
@@ -26,8 +25,8 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 ///     <see cref="Entity.DnsClientAddressEntity.LastSeenUtc" /> is at or after this instant match.
 /// </param>
 /// <param name="NotSeenSinceUtc">
-///     When set, only clients with no address seen at or after this instant match -- including a
-///     client never seen at all. The exact complement of <see cref="SeenSinceUtc" /> for the same
+///     When set, only clients with no address seen at or after this instant match, including
+///     clients never seen. It is the complement of <see cref="SeenSinceUtc" /> for the same
 ///     instant.
 /// </param>
 /// <param name="CreatedSinceUtc">

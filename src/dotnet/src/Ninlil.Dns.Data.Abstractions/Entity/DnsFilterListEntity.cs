@@ -4,15 +4,16 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single named block/allow list: a set of entries, all of
-///     the same <see cref="Kind" /> and <see cref="Action" />, either entered directly by an
-///     operator or periodically replaced wholesale from a subscribed external URL.
-///     <see cref="DnsFilterListEntryEntity" /> carries the actual entries.
+///     This class represents a named block or allow list: entries of one <see cref="Kind" /> and
+///     <see cref="Action" />, either entered by an operator or replaced on a schedule from a
+///     subscribed URL. The entries are <see cref="DnsFilterListEntryEntity" /> rows. Lists apply to
+///     clients through <see cref="DnsClientGroupListAssignmentEntity" /> and
+///     <see cref="DnsClientListAssignmentEntity" />.
 /// </summary>
 public class DnsFilterListEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains an operator-chosen, human-readable name for this list.
+    ///     This property contains the operator-chosen name of this list.
     /// </summary>
     public string Name { get; set; }
 
@@ -23,17 +24,17 @@ public class DnsFilterListEntity : AuditableEntityBase
     public DnsFilterListKindEnum Kind { get; set; }
 
     /// <summary>
-    ///     This property contains whether a match against this list denies or explicitly permits.
+    ///     This property contains whether a match against this list denies or permits.
     /// </summary>
     public DnsFilterListActionEnum Action { get; set; }
 
     /// <summary>
-    ///     This property contains where this list's own entries come from.
+    ///     This property contains where this list's entries come from.
     /// </summary>
     public DnsFilterListSourceEnum Source { get; set; }
 
     /// <summary>
-    ///     This property contains the URL this list's entries are periodically fetched from, when
+    ///     This property contains the URL this list's entries are fetched from, when
     ///     <see cref="Source" /> is <see cref="DnsFilterListSourceEnum.Subscribed" />; otherwise
     ///     <see langword="null" />.
     /// </summary>
@@ -47,16 +48,15 @@ public class DnsFilterListEntity : AuditableEntityBase
     public TimeSpan? RefreshInterval { get; set; }
 
     /// <summary>
-    ///     This property contains the last time a subscribed list's entries were successfully
-    ///     refetched, or <see langword="null" /> if it never has been (including for a
-    ///     <see cref="DnsFilterListSourceEnum.Local" /> list, which is never fetched at all).
+    ///     This property contains the last time a subscribed list's entries were refetched
+    ///     successfully, or <see langword="null" /> if never (always for a
+    ///     <see cref="DnsFilterListSourceEnum.Local" /> list, which is not fetched).
     /// </summary>
     public DateTimeOffset? LastFetchedAtUtc { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this list is currently disabled. A disabled list is
-    ///     kept on record (and, for a subscribed list, still refreshed) but never consulted while
-    ///     matching a query.
+    ///     This property indicates whether this list is disabled. A disabled list is kept (and a
+    ///     subscribed one is still refreshed) but is not used when matching queries.
     /// </summary>
     public bool IsDisabled { get; set; }
 

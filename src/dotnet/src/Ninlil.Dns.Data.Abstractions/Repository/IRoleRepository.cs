@@ -4,13 +4,10 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups needed to
-///     resolve a <see cref="RoleEntity" /> by name and to inspect the permission claims granted
-///     to it -- plus the real, pushed-down paging <c>RolesController</c>'s own <c>List</c> action
-///     lists every role through. Like <see cref="IZoneRepository" />, this repository takes no
-///     search-criteria parameter: <c>RolesController</c>'s own <c>List</c> action has never
-///     accepted a filter querystring parameter of any kind, only pagination, so there is no real
-///     filter axis for <see cref="SearchAsync" /> to translate.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups for finding a
+///     <see cref="RoleEntity" /> by name and managing its permission claims, used by the Identity
+///     role store, and the paged listing behind <c>RolesController.List</c>, which has no
+///     filters.
 /// </summary>
 public interface IRoleRepository : IRepository<RoleEntity>
 {
@@ -76,11 +73,7 @@ public interface IRoleRepository : IRepository<RoleEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of every role, ordered by name -- a real, translated
-    ///     <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB equivalent) rather than an
-    ///     in-memory sort/skip/take over <see cref="IRepository{TEntity}.ListAsync" />'s own full
-    ///     result, matching the exact ordering <c>RolesController.List</c> already applied
-    ///     in-memory before this method existed.
+    ///     This method lists one page of roles, ordered by name and paged in the database.
     /// </summary>
     /// <param name="skip">The number of matching roles to skip, for paging.</param>
     /// <param name="take">The maximum number of roles to return.</param>
@@ -93,8 +86,8 @@ public interface IRoleRepository : IRepository<RoleEntity>
     );
 
     /// <summary>
-    ///     This method counts every role without materializing them -- the total
-    ///     <see cref="SearchAsync" />'s own paged response reports alongside its current page.
+    ///     This method counts every role, for the total a paged response reports next to
+    ///     <see cref="SearchAsync" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of roles on record.</returns>

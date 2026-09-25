@@ -4,93 +4,73 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents one operator-authored, permanent pin from a source IP address or
-///     CIDR network to a persistent client identifier (<see cref="ClientIdentifier" />/
-///     <see cref="ProtocolVersion" />, the exact same pair <see cref="DnsClientEntity" /> is
-///     itself keyed by) -- the manual, always-available third mechanism a query's own source
-///     address is resolved through, for a device this server's other two real
-///     <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c> implementations can
-///     never see at all: a genuinely static, manually addressed host on a different VLAN/segment/
-///     subnet this server's own ARP table (<c>ArpNeighborTableClientIdentityResolver</c>, IPv4
-///     only, and only for a locally-connected link in the first place) and DHCP engine
-///     (<c>DhcpLeaseClientIdentityResolver</c>) never observe any traffic from or ever grant a
-///     lease to.
+///     This class represents an operator-defined, permanent mapping from a source IP address or
+///     CIDR network to a persistent client identifier (<see cref="ClientIdentifier" /> and
+///     <see cref="ProtocolVersion" />, the pair that identifies a <see cref="DnsClientEntity" />).
+///     It is the third way a query's source address is resolved to a client, for devices the
+///     other <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c> implementations
+///     never see: a statically addressed host on another VLAN or subnet, outside the reach of the
+///     local ARP table (<c>ArpNeighborTableClientIdentityResolver</c>, IPv4 and directly
+///     connected links only) and the DHCP server (<c>DhcpLeaseClientIdentityResolver</c>).
+///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> reads it.
 ///     <para>
-///         <strong>One flat row per network, deliberately.</strong> Mirrors
-///         <see cref="DnsAccessControlRuleEntity" />/<see cref="DnsFilterListEntryEntity" />'s own
-///         "one row per network" shape rather than a group-header-plus-networks split: an operator
-///         who wants to pin two disjoint networks to the same client identifier creates two rows,
-///         each independently enabled/disabled/deleted.
+///         <strong>One row per network.</strong> Like <see cref="DnsAccessControlRuleEntity" />
+///         and <see cref="DnsFilterListEntryEntity" />, there is no group-plus-networks split. To
+///         map two networks to one identifier, an operator creates two rows, each enabled,
+///         disabled or deleted on its own.
 ///     </para>
 ///     <para>
-///         <strong><see cref="Cidr" /> accepts a bare address or full CIDR notation, both
-///         genuinely matched</strong> -- a bare address (no <c>/</c>) matches only that one exact
-///         address; a <c>/</c>-qualified network matches every address it contains. This is the
-///         same dual-format matching <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>'s own
-///         private <c>NetworkContains</c> helper already establishes for a network-kind filter
-///         entry (deliberately not the narrower <see cref="System.Net.IPNetwork" />-parse-only
-///         convention <see cref="DnsAccessControlRuleEntity.Cidr" />'s own controller-level
-///         validation actually enforces despite what that property's doc comment says -- see this
-///         entity's own resolver, <c>Ninlil.Dns.Server.ClientIdentity
-///         .StaticAddressMappingClientIdentityResolver</c>, and its controller's own
-///         <c>TryValidateCidr</c> for the real, working implementation of that dual-format
-///         acceptance).
+///         <strong><see cref="Cidr" /> accepts a bare address or CIDR notation.</strong> A bare
+///         address (no <c>/</c>) matches only that address; a network matches every address in
+///         it. The resolver matches this way, as <c>DnsFilterEngine.NetworkContains</c> does for
+///         network filter entries, and <c>DnsClientStaticAddressMappingsController</c> accepts
+///         both forms when saving.
 ///     </para>
 ///     <para>
-///         <strong><see cref="ClientIdentifier" /> is a free-form string, exactly like
-///         <see cref="DnsClientAddressEntity.ClientIdentifier" />, not a foreign key.</strong> This row
-///         never requires a matching <see cref="DnsClientEntity" /> to already exist -- the same
-///         "resolve to an identifier, let every downstream consumer look that identifier up for
-///         itself" contract every other <c>IClientIdentityResolver</c> implementation already
-///         honors. An operator typically also creates the matching <see cref="DnsClientEntity" />
-///         row (so filter-list assignment/schedules/pause actually have something to attach to),
-///         but this entity itself neither requires nor enforces that ordering.
+///         <strong><see cref="ClientIdentifier" /> is a string, not a foreign key</strong>, like
+///         <see cref="DnsClientAddressEntity.ClientIdentifier" />. A matching
+///         <see cref="DnsClientEntity" /> does not have to exist; like every
+///         <c>IClientIdentityResolver</c>, this only resolves to an identifier and consumers look
+///         it up themselves. Operators usually also create the client so assignments, schedules
+///         and pauses have something to attach to.
 ///     </para>
 /// </summary>
 public class DnsClientStaticAddressMappingEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the source address or network this row pins to
-    ///     <see cref="ClientIdentifier" /> -- a bare IP address (exact-match only) or a
-    ///     <c>/</c>-qualified CIDR network (matches every address it contains). See this class's
-    ///     own doc comment for why this is deliberately not restricted to
-    ///     <see cref="System.Net.IPNetwork" />'s own parse-only grammar.
+    ///     This property contains the source address or network mapped to
+    ///     <see cref="ClientIdentifier" />: a bare IP address (exact match) or a CIDR network (every
+    ///     address in it).
     /// </summary>
     public string Cidr { get; set; }
 
     /// <summary>
-    ///     This property contains the persistent client identifier a query whose source address
-    ///     matches <see cref="Cidr" /> resolves to: a colon-separated hardware (MAC) address for
-    ///     an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping, or a DHCP Unique Identifier
-    ///     (DUID) for an <see cref="InternetProtocolVersionEnum.IPv6" /> one -- the exact same
-    ///     shape <see cref="DnsClientAddressEntity.ClientIdentifier" /> already establishes.
+    ///     This property contains the persistent client identifier a matching query resolves to: a
+    ///     colon-separated MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping,
+    ///     or a DUID for an <see cref="InternetProtocolVersionEnum.IPv6" /> one, in the same format as
+    ///     <see cref="DnsClientAddressEntity.ClientIdentifier" />.
     /// </summary>
     public string ClientIdentifier { get; set; }
 
     /// <summary>
-    ///     This property indicates which of the two disjoint identifier spaces
-    ///     <see cref="ClientIdentifier" /> belongs to. Validated, at write time, to actually agree
-    ///     with <see cref="Cidr" />'s own real address family -- an IPv4 network can only ever map
-    ///     to an <see cref="InternetProtocolVersionEnum.IPv4" /> identifier, and likewise for
-    ///     IPv6 -- so this row can never end up internally inconsistent in a way no real query
-    ///     could ever actually trigger.
+    ///     This property indicates which of the two separate identifier spaces
+    ///     <see cref="ClientIdentifier" /> belongs to. When saving, it is checked against the address
+    ///     family of <see cref="Cidr" />: an IPv4 network maps only to an
+    ///     <see cref="InternetProtocolVersionEnum.IPv4" /> identifier, and likewise for IPv6, so a
+    ///     row cannot hold a mapping no query could use.
     /// </summary>
     public InternetProtocolVersionEnum ProtocolVersion { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this mapping is currently disabled. A disabled mapping
-    ///     is kept on record but never consulted by
-    ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> --
-    ///     the same "kept on record, simply not consulted" convention
-    ///     <see cref="DnsFilterListEntity.IsDisabled" />/<see cref="DnsAccessControlRuleEntity.IsDisabled" />
-    ///     already establish.
+    ///     This property indicates whether this mapping is disabled. A disabled mapping is kept but
+    ///     ignored by the resolver, like a disabled <see cref="DnsFilterListEntity" /> or
+    ///     <see cref="DnsAccessControlRuleEntity" />.
     /// </summary>
     public bool IsDisabled { get; set; }
 
     /// <summary>
-    ///     This property contains free-text operator notes about this mapping -- typically why the
-    ///     device can never be seen by ARP/DHCP (for example, "on the guest VLAN, static address,
-    ///     no DHCP relay configured there").
+    ///     This property contains free-text operator notes about this mapping, typically why ARP and
+    ///     DHCP cannot see the device (for example "guest VLAN, static address, no DHCP relay").
     /// </summary>
     public string Comments { get; set; }
 }

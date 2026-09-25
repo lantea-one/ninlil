@@ -5,16 +5,16 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the filtered, paged
-///     search that the administration console's log viewer needs; browsing the entire log table
-///     a page at a time through the generic <see cref="IRepository{TEntity}.ListAsync" /> would
-///     be impractical once a server has been running for any length of time.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the filtered, paged search
+///     the admin console's log viewer needs. Paging through the whole table with
+///     <see cref="IRepository{TEntity}.ListAsync" /> is impractical once a server has run for a
+///     while.
 /// </summary>
 public interface ILogRepository : IRepository<LogEntity>
 {
     /// <summary>
-    ///     This method searches log entries within a time range, optionally narrowed further by
-    ///     severity and/or category, returning the newest matches first.
+    ///     This method searches log entries in a time range, optionally narrowed by severity and
+    ///     category, newest first.
     /// </summary>
     /// <param name="fromUtc">The inclusive start of the time range to search.</param>
     /// <param name="toUtc">The inclusive end of the time range to search.</param>

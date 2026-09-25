@@ -4,13 +4,11 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single DNS resource record stored inside a <see cref="ZoneEntity" />.
-///     The record's type-specific data (an IPv4 address for an <see cref="DnsResourceRecordTypeEnum.A" />
-///     record, a target and weight for an <see cref="DnsResourceRecordTypeEnum.Srv" />
-///     record, and so on) is intentionally stored here as an opaque JSON payload rather than as a
-///     dozen mutually-exclusive typed columns: the strongly-typed model for each record type
-///     belongs to the wire-format layer built in a later phase, and this data layer's only job is
-///     to keep whatever that layer hands it exactly as given.
+///     This class represents one DNS resource record stored in a <see cref="ZoneEntity" />. The
+///     type-specific data (an IPv4 address for an <see cref="DnsResourceRecordTypeEnum.A" /> record,
+///     a target and weight for an <see cref="DnsResourceRecordTypeEnum.Srv" /> record, and so on)
+///     is stored as a JSON payload rather than many mutually exclusive columns. The typed models
+///     live in <c>Ninlil.Dns.Common.Wire.Records</c>; this layer stores the JSON as given.
 /// </summary>
 public class RecordEntity : AuditableEntityBase
 {
@@ -21,8 +19,8 @@ public class RecordEntity : AuditableEntityBase
     public Guid ZoneId { get; set; }
 
     /// <summary>
-    ///     This property contains the record's owner name. For a record at the zone's apex, this
-    ///     is the same as the zone's own name.
+    ///     This property contains the record's owner name. For a record at the zone apex it equals
+    ///     the zone name.
     /// </summary>
     public string Name { get; set; }
 
@@ -33,26 +31,25 @@ public class RecordEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property contains the record's DNS CLASS. Every record Ninlil serves uses
-    ///     <see cref="DnsClassEnum.Internet" />; the field exists for completeness and forward
-    ///     compatibility rather than because a different value is expected in practice.
+    ///     <see cref="DnsClassEnum.Internet" />; the field exists for completeness.
     /// </summary>
     public DnsClassEnum Class { get; set; } = DnsClassEnum.Internet;
 
     /// <summary>
-    ///     This property contains the record's time-to-live, in seconds -- how long a resolver
-    ///     that caches this record is allowed to keep using its cached copy before asking again.
+    ///     This property contains the record's time-to-live, in seconds: how long a resolver may
+    ///     cache it before asking again.
     /// </summary>
     public uint TimeToLiveSeconds { get; set; }
 
     /// <summary>
-    ///     This property contains the record's type-specific data, serialized as a JSON object
-    ///     whose shape depends on <see cref="Type" />.
+    ///     This property contains the record's type-specific data, as a JSON object whose shape
+    ///     depends on <see cref="Type" />.
     /// </summary>
     public string DataJson { get; set; }
 
     /// <summary>
-    ///     This property indicates whether the record is currently disabled. A disabled record is
-    ///     kept in the zone but omitted from answers.
+    ///     This property indicates whether the record is disabled. A disabled record stays in the
+    ///     zone but is left out of answers.
     /// </summary>
     public bool IsDisabled { get; set; }
 
@@ -62,25 +59,22 @@ public class RecordEntity : AuditableEntityBase
     public string Comments { get; set; }
 
     /// <summary>
-    ///     This property marks a record as local-only: it is never included in an outgoing
-    ///     AXFR/IXFR transfer or cloud-provider export push, and never overwritten or deleted by
-    ///     an incoming AXFR/IXFR apply or cloud-provider import pull, regardless of what a
-    ///     zone's remote master/provider does or does not have. This is what lets an otherwise
-    ///     synced <see cref="ZoneEntity" /> (<see cref="ZoneTypeEnum.Secondary" />,
-    ///     <see cref="ZoneTypeEnum.CloudPrimary" />, or <see cref="ZoneTypeEnum.CloudSecondary" />)
-    ///     still carry records that exist only on this server -- a deliberately simpler
-    ///     alternative to full per-client split-horizon views.
+    ///     This property marks a record as local-only. It is never sent in an outgoing AXFR/IXFR or
+    ///     cloud-provider push, and never overwritten or deleted by an incoming AXFR/IXFR or
+    ///     cloud-provider pull, whatever the remote side has. This lets a synced
+    ///     <see cref="ZoneEntity" /> (<see cref="ZoneTypeEnum.Secondary" />,
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" /> or <see cref="ZoneTypeEnum.CloudSecondary" />) hold
+    ///     records that exist only on this server, a simpler alternative to per-client split-horizon
+    ///     views.
     /// </summary>
     public bool ExcludeFromSync { get; set; }
 
     /// <summary>
-    ///     This property identifies which of Ninlil's own automated record-management
-    ///     features created this record, or <see langword="null" /> for a record an operator
-    ///     added by hand (via REST, RFC 2136 dynamic update, AXFR/IXFR, or cloud sync). A feature
-    ///     that reconciles a zone's own record set against some external source of truth (CAA
-    ///     auto-management, PTR/reverse-zone sync) must only ever add, update, or remove a record
-    ///     it created itself -- checking this field is how it tells its own record apart from an
-    ///     operator-managed one it must never touch.
+    ///     This property identifies which automated record-management feature created this record,
+    ///     or <see langword="null" /> for a record that came from anywhere else (REST, RFC 2136
+    ///     dynamic update, AXFR/IXFR or cloud sync). A reconciling feature (CAA auto-management,
+    ///     reverse-zone sync, and the others in <see cref="RecordManagedByFeatureEnum" />) only adds,
+    ///     updates or removes records it created, and uses this field to tell them apart.
     /// </summary>
     public RecordManagedByFeatureEnum? ManagedByFeature { get; set; }
 }

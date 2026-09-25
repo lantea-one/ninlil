@@ -2,16 +2,12 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class joins a single <see cref="DnsClientEntity" /> to one <see cref="DnsFilterListEntity" />
-///     it should be filtered against -- a many-to-many relationship, since a list may be shared
-///     across several clients and a client may have several lists assigned directly to it. This
-///     mirrors <see cref="DnsClientGroupListAssignmentEntity" /> exactly, but keyed by
-///     <see cref="ClientId" /> instead of <c>ClientGroupId</c>: a client-level assignment is an
-///     <em>additional</em> way for a filter list to apply to a client, unioned with whatever
-///     list(s) its own matched <see cref="DnsClientGroupEntity" /> (by network, DNS-over-HTTPS
-///     ClientID, or its own <see cref="DnsClientEntity.ClientGroupId" /> override) already
-///     contributes -- see <c>DnsFilterEngine.ResolveApplicableListsAsync</c> for the real
-///     resolution logic that consumes this table.
+///     This class joins a <see cref="DnsClientEntity" /> to a <see cref="DnsFilterListEntity" /> it
+///     is filtered against. It mirrors <see cref="DnsClientGroupListAssignmentEntity" />, keyed by
+///     <see cref="ClientId" /> instead of <c>ClientGroupId</c>. A client-level assignment adds to
+///     the lists of the client's matched <see cref="DnsClientGroupEntity" /> (matched by network,
+///     DNS-over-HTTPS ClientID or the <see cref="DnsClientEntity.ClientGroupId" /> override).
+///     <c>DnsFilterEngine.ResolveApplicableListsAsync</c> combines the two.
 /// </summary>
 public class DnsClientListAssignmentEntity : EntityBase
 {

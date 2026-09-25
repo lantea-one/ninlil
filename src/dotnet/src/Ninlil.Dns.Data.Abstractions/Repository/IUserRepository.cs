@@ -4,14 +4,10 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups an identity
-///     provider needs to sign a <see cref="UserEntity" /> in: finding them by the name or e-mail
-///     address they typed, rather than by the internal identifier they don't know -- plus the
-///     real, pushed-down paging <c>UsersController</c>'s own <c>List</c> action lists every
-///     account through. Like <see cref="IZoneRepository" />, this repository takes no
-///     search-criteria parameter: <c>UsersController</c>'s own <c>List</c> action has never
-///     accepted a filter querystring parameter of any kind, only pagination, so there is no real
-///     filter axis for <see cref="SearchAsync" /> to translate.
+///     This interface extends <see cref="IRepository{TEntity}" /> with what the Identity user
+///     store needs to sign a <see cref="UserEntity" /> in and manage it: lookups by the name or
+///     e-mail address a user types, or by external identity, and role and claim management. It
+///     also has the paged listing behind <c>UsersController.List</c>, which has no filters.
 /// </summary>
 public interface IUserRepository : IRepository<UserEntity>
 {
@@ -38,18 +34,17 @@ public interface IUserRepository : IRepository<UserEntity>
     );
 
     /// <summary>
-    ///     This method looks up a user by the external identity provider's own immutable subject
-    ///     identifier, rather than by anything the provider could reuse or reassign (such as an
-    ///     e-mail address) -- the lookup <c>OidcUserProvisioningService</c> performs on every
-    ///     completed OpenID Connect sign-in, both to find an already-provisioned account and to
-    ///     decide whether one needs to be created.
+    ///     This method looks up a user by the external identity provider's immutable subject
+    ///     identifier, rather than by something the provider could reassign (such as an e-mail
+    ///     address). <c>OidcUserProvisioningService</c> calls it on every OpenID Connect sign-in to
+    ///     find the account or decide to create one.
     /// </summary>
     /// <param name="provider">
-    ///     The external identity provider's own fixed name, matching
+    ///     The external identity provider's fixed name, matching
     ///     <see cref="UserEntity.ExternalIdentityProvider" />.
     /// </param>
     /// <param name="subjectId">
-    ///     The provider's own <c>sub</c> claim value, matching <see cref="UserEntity.ExternalSubjectId" />.
+    ///     The provider's <c>sub</c> claim value, matching <see cref="UserEntity.ExternalSubjectId" />.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching user, or <see langword="null" /> if none exists.</returns>
@@ -71,8 +66,8 @@ public interface IUserRepository : IRepository<UserEntity>
     );
 
     /// <summary>
-    ///     This method lists the claims attached directly to a user, not counting the claims they
-    ///     inherit from their roles.
+    ///     This method lists the claims attached directly to a user, not those inherited from
+    ///     roles.
     /// </summary>
     /// <param name="userId">The identifier of the user whose claims should be listed.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -141,8 +136,8 @@ public interface IUserRepository : IRepository<UserEntity>
     );
 
     /// <summary>
-    ///     This method lists every user who has a specific claim attached directly to them, not
-    ///     counting a matching claim inherited from a role.
+    ///     This method lists every user with a specific claim attached directly, not through a
+    ///     role.
     /// </summary>
     /// <param name="claimType">The claim type to search for.</param>
     /// <param name="claimValue">The claim value to search for.</param>
@@ -155,11 +150,8 @@ public interface IUserRepository : IRepository<UserEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of every user account, ordered by sign-in name -- a real,
-    ///     translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB equivalent)
-    ///     rather than an in-memory sort/skip/take over <see cref="IRepository{TEntity}.ListAsync" />'s
-    ///     own full result, matching the exact ordering <c>UsersController.List</c> already
-    ///     applied in-memory before this method existed.
+    ///     This method lists one page of user accounts, ordered by sign-in name and paged in the
+    ///     database.
     /// </summary>
     /// <param name="skip">The number of matching accounts to skip, for paging.</param>
     /// <param name="take">The maximum number of accounts to return.</param>
@@ -172,8 +164,8 @@ public interface IUserRepository : IRepository<UserEntity>
     );
 
     /// <summary>
-    ///     This method counts every user account without materializing them -- the total
-    ///     <see cref="SearchAsync" />'s own paged response reports alongside its current page.
+    ///     This method counts every user account, for the total a paged response reports next to
+    ///     <see cref="SearchAsync" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of user accounts on record.</returns>

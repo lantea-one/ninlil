@@ -2,11 +2,9 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single time-series measurement -- for example, "how many queries
-///     were answered from cache in this interval" -- captured for reporting on the dashboard.
-///     Metric names and categories are deliberately left as free-form strings rather than a fixed
-///     enumeration, since new counters are expected to be added over time as the protocol and
-///     server implementations grow, without requiring a schema change each time.
+///     This class represents one time-series measurement, such as "queries answered from cache in
+///     this interval", kept for the dashboard. Names and categories are free-form strings rather
+///     than an enumeration, so new counters need no schema change.
 /// </summary>
 public class MetricEntity : EntityBase
 {
@@ -33,9 +31,8 @@ public class MetricEntity : EntityBase
     public double Value { get; set; }
 
     /// <summary>
-    ///     This property contains any additional dimensions the measurement should be broken down
-    ///     by (for example, which zone or which DHCP scope it applies to), serialized as a JSON
-    ///     object.
+    ///     This property contains extra dimensions of the measurement (for example the zone or DHCP
+    ///     scope it applies to), as a JSON object.
     /// </summary>
     public string DimensionsJson { get; set; }
 }

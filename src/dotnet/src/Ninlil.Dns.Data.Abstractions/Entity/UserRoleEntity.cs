@@ -2,10 +2,9 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single user's membership in a single role. It exists as its own
-///     entity, rather than as a bare join table, so that a storage engine which cannot express a
-///     composite primary key out of the box (such as MongoDB) can still represent the
-///     relationship as an ordinary document.
+///     This class represents one user's membership in one role. It is an entity rather than a
+///     bare join table so that a storage engine without composite primary keys (such as MongoDB)
+///     can store the relationship as an ordinary document.
 /// </summary>
 public class UserRoleEntity
 {

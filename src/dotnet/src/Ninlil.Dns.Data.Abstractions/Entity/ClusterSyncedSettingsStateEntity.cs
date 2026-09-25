@@ -2,32 +2,27 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class holds the last-write-wins bookkeeping the cluster's own config-sync mechanism
-///     needs for a synced <em>settings</em> section -- one row per section name (for example
+///     This class holds the last-write-wins bookkeeping that cluster config sync needs for a
+///     synced <em>settings</em> section, one row per section name (for example
 ///     <c>"EventBroker"</c>, <c>"RateLimiting"</c>, <c>"DnsCookie"</c>, <c>"ReverseProxy"</c>).
 ///     <para>
-///         Every other category the cluster syncs (filter lists, access-control rules,
-///         rewrites, forwarders) is a real, already-persisted <see cref="AuditableEntityBase" />-
-///         derived row, so its own <see cref="AuditableEntityBase.UpdatedAtUtc" />/
-///         <see cref="AuditableEntityBase.OriginatingNodeId" /> already carry exactly the state a
-///         last-write-wins comparison needs -- no new table required. A settings section has no
-///         such row: its actual values live in the runtime JSON configuration file on disk
-///         (written and read via <c>PresetConfigurationFileApplier</c>/
-///         <c>RuntimeConfigurationOptions</c>), not in the database at all, so there is nowhere to
-///         hang those two fields directly. This entity is that "wherever" -- a small, dedicated
-///         table carrying only the conflict-resolution bookkeeping for a settings section, never
-///         the settings values themselves (which stay exactly where every other settings
-///         controller already keeps them, avoiding a second, parallel, potentially-drifting copy
-///         of configuration this project would then have to keep consistent with the real file).
+///         The other synced categories (filter lists, access-control rules, rewrites,
+///         forwarders) are <see cref="AuditableEntityBase" /> rows, whose
+///         <see cref="AuditableEntityBase.UpdatedAtUtc" /> and
+///         <see cref="AuditableEntityBase.OriginatingNodeId" /> already give last-write-wins what
+///         it needs. A settings section has no row: its values live in the runtime JSON
+///         configuration file (see <c>PresetConfigurationFileApplier</c> and
+///         <c>RuntimeConfigurationOptions</c>), not the database. This table holds only the
+///         conflict-resolution fields for each section, never the values, so there is no second
+///         copy of the configuration to keep in step with the file.
 ///     </para>
 /// </summary>
 public class ClusterSyncedSettingsStateEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the settings section's own stable name -- the same
-    ///     <c>SectionName</c> constant each settings options class already declares (for example
-    ///     <c>DnsServerEventPublisherOptions.SectionName</c>), unique across every row in this
-    ///     table.
+    ///     This property contains the settings section name: the <c>SectionName</c> constant of the
+    ///     options class (for example <c>DnsServerEventPublisherOptions.SectionName</c>). It is
+    ///     unique in this table.
     /// </summary>
     public string SectionName { get; set; }
 }

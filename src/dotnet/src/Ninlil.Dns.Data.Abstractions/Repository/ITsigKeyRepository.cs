@@ -5,13 +5,8 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup TSIG
-///     verification needs on every signed message it processes: given the key name a message
-///     claims to be signed with, find the matching, pre-shared key -- plus the real, pushed-down
-///     paging <c>TsigKeysController</c>'s own <c>List</c> action lists the full key set through.
-///     Like <see cref="IZoneRepository" />, this repository takes no search-criteria parameter:
-///     <c>TsigKeysController</c>'s own <c>List</c> action has never accepted a filter querystring
-///     parameter of any kind, only pagination, so there is no real filter axis for
-///     <see cref="SearchAsync" /> to translate.
+///     verification makes for every signed message (the key a message names), and the paged
+///     listing behind <c>TsigKeysController.List</c>, which has no filters.
 /// </summary>
 public interface ITsigKeyRepository : IRepository<TsigKeyEntity>
 {
@@ -24,10 +19,7 @@ public interface ITsigKeyRepository : IRepository<TsigKeyEntity>
     Task<TsigKeyEntity> FindByNameAsync(string name, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method lists one page of every TSIG key this server knows about, ordered by name --
-    ///     a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB
-    ///     equivalent) rather than an in-memory sort/skip/take over a fully materialized
-    ///     <see cref="IRepository{TEntity}.ListAsync" /> result.
+    ///     This method lists one page of TSIG keys, ordered by name and paged in the database.
     /// </summary>
     /// <param name="skip">The number of matching keys to skip, for paging.</param>
     /// <param name="take">The maximum number of keys to return.</param>
@@ -40,9 +32,8 @@ public interface ITsigKeyRepository : IRepository<TsigKeyEntity>
     );
 
     /// <summary>
-    ///     This method counts every TSIG key this server knows about, without materializing them --
-    ///     the total <see cref="SearchAsync" />'s own paged response reports alongside its current
-    ///     page.
+    ///     This method counts every TSIG key, for the total a paged response reports next to
+    ///     <see cref="SearchAsync" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of TSIG keys.</returns>

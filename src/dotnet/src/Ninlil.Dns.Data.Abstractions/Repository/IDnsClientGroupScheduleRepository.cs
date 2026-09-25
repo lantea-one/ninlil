@@ -5,19 +5,16 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the
-///     parental-control schedule engine's group-derived matching needs: every schedule assigned
-///     to a single client group -- plus the real, pushed-down paging
-///     <c>ClientGroupSchedulesController</c>'s own <c>List</c> action lists a group's own
-///     schedules through. Mirrors <see cref="IDnsClientGroupListAssignmentRepository" /> exactly,
-///     scoped by <see cref="DnsClientGroupScheduleEntity.ClientGroupId" /> instead of a
-///     filter-list assignment.
+///     parental-control schedule engine needs (every schedule of a client group) and the paged
+///     listing behind <c>ClientGroupSchedulesController.List</c>, which is scoped to a group. It
+///     has the same shape as <see cref="IDnsClientGroupListAssignmentRepository" />.
 /// </summary>
 public interface IDnsClientGroupScheduleRepository : IRepository<DnsClientGroupScheduleEntity>
 {
     /// <summary>
-    ///     This method lists every schedule belonging to a single client group -- the lookup
-    ///     <c>DnsClientScheduleEngine.EvaluateAsync</c> uses to check a resolved client's own
-    ///     group's schedules.
+    ///     This method lists every schedule of one client group.
+    ///     <c>DnsClientScheduleEngine.EvaluateAsync</c> uses it to check the schedules of a resolved
+    ///     client's group.
     /// </summary>
     /// <param name="clientGroupId">The owning client group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -28,11 +25,8 @@ public interface IDnsClientGroupScheduleRepository : IRepository<DnsClientGroupS
     );
 
     /// <summary>
-    ///     This method lists one page of the schedules belonging to a single client group,
-    ///     ordered by creation time -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/
-    ///     <c>LIMIT</c> (or the MongoDB equivalent) scoped to <paramref name="clientGroupId" />
-    ///     rather than an in-memory sort/skip/take over <see cref="ListByClientGroupIdAsync" />'s
-    ///     own full result.
+    ///     This method lists one page of one client group's schedules, ordered by creation time and
+    ///     paged in the database.
     /// </summary>
     /// <param name="clientGroupId">The owning client group's identifier.</param>
     /// <param name="skip">The number of matching schedules to skip, for paging.</param>
@@ -47,9 +41,8 @@ public interface IDnsClientGroupScheduleRepository : IRepository<DnsClientGroupS
     );
 
     /// <summary>
-    ///     This method counts every schedule belonging to a single client group without
-    ///     materializing them -- the total <see cref="SearchByClientGroupIdAsync" />'s own paged
-    ///     response reports alongside its current page.
+    ///     This method counts one client group's schedules, for the total a paged response reports
+    ///     next to <see cref="SearchByClientGroupIdAsync" />.
     /// </summary>
     /// <param name="clientGroupId">The owning client group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

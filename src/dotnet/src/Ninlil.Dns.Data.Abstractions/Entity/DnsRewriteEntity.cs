@@ -2,46 +2,37 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single DNS rewrite: a lightweight
-///     <c>domain -&gt; target</c> override consulted early in
-///     <c>DnsQueryProcessingPipeline</c>, before zone/forwarder/recursive resolution -- the
-///     AdGuard Home "DNS rewrites" feature. Deliberately a dedicated entity, not sugar over an
-///     implicit always-present "local overrides" zone (<see cref="ZoneEntity" />): a pseudo-zone
-///     approach would DNSSEC-sign every simple override for no reason and add zone-apex/SOA
-///     bookkeeping a lightweight override has no business needing.
+///     This class represents a DNS rewrite: a lightweight <c>domain -&gt; target</c> override that
+///     <c>DnsRewriteEngine</c> applies early in <c>DnsQueryProcessingPipeline</c>, before zone,
+///     forwarder and recursive resolution (like the "DNS rewrites" of AdGuard Home). It is its own
+///     entity rather than records in a hidden "local overrides" <see cref="ZoneEntity" />, which
+///     would DNSSEC-sign every override and need apex and SOA bookkeeping for nothing.
 /// </summary>
 public class DnsRewriteEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the queried domain this rewrite matches. With no <c>*</c>
-    ///     character, it matches only that exact name (deliberately <b>not</b> also every
-    ///     subdomain -- a real, documented difference from <c>DnsFilterListEntryEntity</c>'s own
-    ///     "domain and every subdomain" convention: a rewrite is meant to override one specific
-    ///     host, not silently redirect its whole subtree; an operator who genuinely wants that
-    ///     writes an explicit <c>*.example.com</c> wildcard entry instead). With a <c>*</c>
-    ///     character present, it is matched as a shell-style glob (translated to an anchored,
-    ///     timeout-guarded regex internally by <c>DnsRewriteEngine</c>, the same technique --
-    ///     independently implemented, to avoid a cross-project dependency -- that
-    ///     <c>DnsFilterEngine.BuildWildcardRegexPattern</c> already established).
+    ///     This property contains the queried domain this rewrite matches. Without a <c>*</c> it
+    ///     matches only that exact name, not its subdomains. This differs from
+    ///     <c>DnsFilterListEntryEntity</c> on purpose: a rewrite overrides one host, and an operator
+    ///     who wants the subtree writes <c>*.example.com</c>. With a <c>*</c> it is a shell-style
+    ///     glob, which <c>DnsRewriteEngine</c> turns into an anchored regular expression with a
+    ///     timeout, the same technique as <c>DnsFilterEngine.BuildWildcardRegexPattern</c> (copied to
+    ///     avoid a project dependency).
     /// </summary>
     public string Domain { get; set; }
 
     /// <summary>
-    ///     This property contains what <see cref="Domain" /> resolves to -- either a literal IP
-    ///     address (an A/AAAA-style rewrite, classified by <c>IPAddress.TryParse</c>) or another
-    ///     domain name (a CNAME-style rewrite, classified as a syntactically valid
-    ///     <see cref="Ninlil.Dns.Common.Wire.DnsName" /> once IP parsing fails). There is no separate, explicit
-    ///     "record type" field -- the answer's own record type is always computed fresh from this
-    ///     value, the same "classify the real, already-validated data, don't store a redundant
-    ///     parallel field that could drift out of sync with it" convention
-    ///     <c>ForwarderDetail.Protocol</c> already establishes for a forwarder's own
-    ///     <c>definitionString</c>.
+    ///     This property contains what <see cref="Domain" /> resolves to: an IP address (an A or AAAA
+    ///     rewrite, recognized by <c>IPAddress.TryParse</c>) or a domain name (a CNAME rewrite, a
+    ///     valid <see cref="Ninlil.Dns.Common.Wire.DnsName" />). There is no record-type field; the
+    ///     type is computed from this value (<see cref="Ninlil.Dns.Common.Enum.DnsRewriteTargetKindEnum" />), so it cannot
+    ///     drift out of step with it.
     /// </summary>
     public string Target { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this rewrite is currently disabled. A disabled
-    ///     rewrite is kept on record but never consulted at query time.
+    ///     This property indicates whether this rewrite is disabled. A disabled rewrite is kept but
+    ///     not used at query time.
     /// </summary>
     public bool IsDisabled { get; set; }
 
@@ -51,28 +42,21 @@ public class DnsRewriteEntity : AuditableEntityBase
     public string Comments { get; set; }
 
     /// <summary>
-    ///     This property, when set, narrows this rewrite so it only ever applies to a query whose
-    ///     own resolved client identity (see <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c>)
-    ///     matches this exact <see cref="DnsClientEntity" /> -- <em>in addition to</em> every
-    ///     unscoped (both this property and <see cref="ClientGroupId" /> <see langword="null" />)
-    ///     rewrite still applying to every query as before; scoping only ever narrows an
-    ///     <em>additional</em> rewrite to a specific audience, it never removes or overrides an
-    ///     existing global one. <see langword="null" /> (the case for every row created before this
-    ///     property existed, and for every row the ordinary <c>DnsRewritesController</c> create/
-    ///     replace path writes today) means this rewrite is unconditionally global, exactly
-    ///     today's behavior. Mutually exclusive with <see cref="ClientGroupId" /> -- a row the real
-    ///     write paths ever produce never has both set at once, though nothing at the storage layer
-    ///     itself enforces that (see <c>DnsRewriteEngine.AppliesToClient</c> for how a row with
-    ///     both set is safely treated, defensively, as scoped to the client alone).
+    ///     This property, when set, limits this rewrite to queries whose resolved client identity
+    ///     (see <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c>) is this
+    ///     <see cref="DnsClientEntity" />. Unscoped rewrites (this and <see cref="ClientGroupId" />
+    ///     both <see langword="null" />) still apply to everyone; scoping only adds rewrites for a
+    ///     narrower audience and never overrides a global one. <see langword="null" /> means the
+    ///     rewrite is global. It is exclusive with <see cref="ClientGroupId" />. The write paths
+    ///     never set both, but storage does not enforce it; <c>DnsRewriteEngine.AppliesToClient</c>
+    ///     treats a row with both as scoped to the client.
     /// </summary>
     public Guid? ClientId { get; set; }
 
     /// <summary>
-    ///     This property, when set, narrows this rewrite so it only ever applies to a query whose
-    ///     own resolved client identity belongs to this exact <see cref="DnsClientGroupEntity" />
-    ///     (via that client's own <see cref="DnsClientEntity.ClientGroupId" />) -- the same
-    ///     additive-only, never-overriding-global convention <see cref="ClientId" />'s own doc
-    ///     comment describes, and mutually exclusive with it the same way.
+    ///     This property, when set, limits this rewrite to queries whose resolved client belongs to
+    ///     this <see cref="DnsClientGroupEntity" /> (through <see cref="DnsClientEntity.ClientGroupId" />).
+    ///     It follows the same rules as <see cref="ClientId" /> and is exclusive with it.
     /// </summary>
     public Guid? ClientGroupId { get; set; }
 }

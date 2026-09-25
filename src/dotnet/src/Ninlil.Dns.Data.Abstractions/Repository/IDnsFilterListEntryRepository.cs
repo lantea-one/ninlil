@@ -5,22 +5,15 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups the filtering
-///     engine's matching logic and external-list refresh service need -- plus the real,
-///     pushed-down paging <c>FilterListEntriesController</c>'s own <c>List</c> action lists a
-///     single list's own entry set through. This is the one entity in this project's own
-///     pagination sweep that can genuinely reach a large row count (a subscribed external block
-///     list can carry tens of thousands of entries), so <see cref="SearchByListIdAsync" />'s own
-///     real, translated <c>WHERE</c>/<c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> query matters more
-///     here than for this project's other, lower-cardinality entities. Like
-///     <see cref="IRecordRepository" />, this repository takes no search-criteria parameter
-///     beyond the list scope itself: <c>FilterListEntriesController</c>'s own <c>List</c> action
-///     has never accepted a filter querystring parameter of any kind, only pagination, so there
-///     is no real filter axis for <see cref="SearchByListIdAsync" /> to translate.
+///     engine and the external-list refresh need, and the paged listing behind
+///     <c>FilterListEntriesController.List</c>, which is scoped to a list and has no other
+///     filters. A subscribed list can hold tens of thousands of entries, so database paging
+///     matters more here than for most entities.
 /// </summary>
 public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryEntity>
 {
     /// <summary>
-    ///     This method lists every entry belonging to a single list.
+    ///     This method lists every entry of one list.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -31,15 +24,9 @@ public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryE
     );
 
     /// <summary>
-    ///     This method lists one page of the entries belonging to a single list, ordered by
-    ///     value -- a real, translated <c>WHERE</c>/<c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or
-    ///     the MongoDB equivalent) scoped to <paramref name="listId" /> rather than an in-memory
-    ///     sort/skip/take over <see cref="ListByListIdAsync" />'s own full result, matching the
-    ///     exact ordering <c>FilterListEntriesController.List</c> already applied in-memory
-    ///     before this method existed. The owning entity configuration
-    ///     (<c>DnsFilterListEntryConfiguration</c>) carries a composite index on
-    ///     <c>(ListId, Value)</c> specifically so this query is genuinely served by an index, not
-    ///     merely syntactically pushed down, at the scale a subscribed list's entry set can reach.
+    ///     This method lists one page of one list's entries, ordered by value and paged in the
+    ///     database. <c>DnsFilterListEntryConfiguration</c> defines an index on
+    ///     <c>(ListId, Value)</c> so this query stays fast for large subscribed lists.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="skip">The number of matching entries to skip, for paging.</param>
@@ -54,9 +41,8 @@ public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryE
     );
 
     /// <summary>
-    ///     This method counts every entry belonging to a single list, without materializing them
-    ///     -- the total <see cref="SearchByListIdAsync" />'s own paged response reports alongside
-    ///     its current page.
+    ///     This method counts one list's entries, for the total a paged response reports next to
+    ///     <see cref="SearchByListIdAsync" />.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -64,10 +50,9 @@ public interface IDnsFilterListEntryRepository : IRepository<DnsFilterListEntryE
     Task<int> CountByListIdAsync(Guid listId, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method atomically replaces every entry belonging to a single list with a freshly
-    ///     supplied set -- what a subscribed list's refresh needs (a wholesale swap-in of a
-    ///     newly fetched list, not an entry-by-entry diff), and what
-    ///     <see cref="IUnitOfWork.SaveChangesAsync" /> then persists.
+    ///     This method replaces every entry of one list with a new set, as a subscribed list's
+    ///     refresh needs (a whole swap, not an entry-by-entry diff). The change is persisted by
+    ///     <see cref="IUnitOfWork.SaveChangesAsync" />.
     /// </summary>
     /// <param name="listId">The owning list's identifier.</param>
     /// <param name="entries">The complete new set of entries, each a value plus its exception flag.</param>

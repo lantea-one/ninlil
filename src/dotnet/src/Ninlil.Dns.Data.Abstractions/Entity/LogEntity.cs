@@ -4,17 +4,15 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single structured log entry captured from the application's
-///     logging pipeline and written to the database, so that an administrator can search and
-///     filter server history from the administration console instead of shelling into the host to
-///     read a log file.
+///     This class represents one structured log entry from the application's logging pipeline,
+///     stored in the database so an administrator can search server history in the admin
+///     console instead of reading log files on the host.
 /// </summary>
 public class LogEntity : EntityBase
 {
     /// <summary>
-    ///     This property contains the UTC date and time at which the event described by this log
-    ///     entry actually occurred. This can differ slightly from <see cref="EntityBase.CreatedAtUtc" />
-    ///     when log writes are buffered and flushed in a batch.
+    ///     This property contains the UTC date and time the logged event occurred. It can differ
+    ///     slightly from <see cref="EntityBase.CreatedAtUtc" /> when log writes are batched.
     /// </summary>
     public DateTimeOffset TimestampUtc { get; set; }
 

@@ -2,10 +2,10 @@
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface commits whatever changes were staged across one or more repositories in a
-///     single, atomic operation. Splitting this out from the repositories themselves lets a
-///     caller change a user, add a session, and revoke an old token, then persist all three
-///     changes together as one unit -- either all of them land, or none of them do.
+///     This interface commits the changes staged across one or more repositories in one atomic
+///     operation. Keeping it apart from the repositories lets a caller, for example, change a
+///     user, add a session and revoke an old token, then save all three together: either all
+///     land or none do. Each storage engine provides an implementation.
 /// </summary>
 public interface IUnitOfWork
 {

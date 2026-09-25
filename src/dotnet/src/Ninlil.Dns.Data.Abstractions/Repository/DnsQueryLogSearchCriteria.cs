@@ -4,16 +4,15 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This class carries every optional filter <see cref="IDnsQueryLogRepository.SearchAsync" />
-///     and <see cref="IDnsQueryLogRepository.CountAsync" /> accept, bundled into one value rather
-///     than a long, repeated parameter list across the repository interface, both of its storage
-///     implementations, and the REST controller that builds one from query-string parameters. A
-///     <see langword="null" /> field means "do not filter on this axis at all" -- an entirely
-///     empty instance matches every entry in the log.
+///     This record carries the optional filters that <see cref="IDnsQueryLogRepository.SearchAsync" />
+///     and <see cref="IDnsQueryLogRepository.CountAsync" /> accept, as one value instead of a long
+///     parameter list repeated in the interface, both storage implementations and the REST
+///     controller that builds it from query-string parameters. A <see langword="null" /> field is
+///     not applied, so an empty instance matches every entry.
 /// </summary>
 /// <param name="ClientAddress">
-///     An exact match against <see cref="Entity.DnsQueryLogEntryEntity.ClientAddress" />'s own
-///     textual form, or <see langword="null" /> to match any client.
+///     An exact match against the text of <see cref="Entity.DnsQueryLogEntryEntity.ClientAddress" />,
+///     or <see langword="null" /> to match any client.
 /// </param>
 /// <param name="DomainContains">
 ///     A case-insensitive substring match against
@@ -37,17 +36,15 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 ///     bound.
 /// </param>
 /// <param name="ClientIdentifier">
-///     An exact match against <see cref="Entity.DnsQueryLogEntryEntity.ClientIdentifier" /> -- the
-///     resolved, persistent client identifier a per-client activity view narrows by, independent
-///     of whatever source address a given entry happened to carry -- or <see langword="null" /> to
-///     match any (or no) resolved client.
+///     An exact match against <see cref="Entity.DnsQueryLogEntryEntity.ClientIdentifier" />, the
+///     resolved client identifier a per-client activity view filters by whatever the entry's
+///     source address, or <see langword="null" /> to match any (or no) resolved client.
 /// </param>
 /// <param name="ClientProtocolVersion">
 ///     An exact match against <see cref="Entity.DnsQueryLogEntryEntity.ClientProtocolVersion" />,
-///     narrowing which of the two disjoint identifier spaces <see cref="ClientIdentifier" /> must
-///     belong to -- combined with <see cref="ClientIdentifier" /> when both are given, mirroring
-///     <c>DnsClientEntity</c>'s own composite uniqueness pair, or <see langword="null" /> to match
-///     either space.
+///     choosing which of the two separate identifier spaces <see cref="ClientIdentifier" />
+///     belongs to (the same pair that makes a <c>DnsClientEntity</c> unique), or
+///     <see langword="null" /> to match either.
 /// </param>
 public sealed record DnsQueryLogSearchCriteria(
     string ClientAddress = null,

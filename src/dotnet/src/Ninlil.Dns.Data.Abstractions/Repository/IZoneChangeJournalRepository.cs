@@ -5,7 +5,7 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup an IXFR
-///     responder needs: given a client's last-known SOA serial, find every change since then, in
+///     responder needs: every change to a zone since the client's last-known SOA serial, in
 ///     order.
 /// </summary>
 public interface IZoneChangeJournalRepository : IRepository<ZoneChangeJournalEntryEntity>

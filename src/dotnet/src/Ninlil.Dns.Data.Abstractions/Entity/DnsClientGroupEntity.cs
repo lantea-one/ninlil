@@ -2,41 +2,38 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a named group of clients (matched by source IP/network, via
-///     <see cref="DnsClientGroupNetworkEntity" />) that share the same set of assigned
-///     block/allow lists (<see cref="DnsClientGroupListAssignmentEntity" />). Exactly one group
-///     should have <see cref="IsDefault" /> set -- the group a client that matches no other
-///     group's own networks falls back to.
+///     This class represents a named group of clients, matched by the rules in
+///     <see cref="DnsClientGroupNetworkEntity" />, that share the filter lists in
+///     <see cref="DnsClientGroupListAssignmentEntity" />. One group should have
+///     <see cref="IsDefault" /> set: the group a client falls back to when it matches no other
+///     group.
 /// </summary>
 public class DnsClientGroupEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains an operator-chosen, human-readable name for this group.
+    ///     This property contains the operator-chosen name of this group.
     /// </summary>
     public string Name { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this is the fallback group a client matching no other
-    ///     group's own networks is treated as belonging to.
+    ///     This property indicates whether this is the fallback group for clients that match no
+    ///     other group.
     /// </summary>
     public bool IsDefault { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this group is currently disabled. A disabled group's
-    ///     own list assignments are never consulted; a client that would otherwise match it falls
-    ///     back to the default group instead.
+    ///     This property indicates whether this group is disabled. A disabled group's list
+    ///     assignments are ignored, and a client that would match it falls back to the default
+    ///     group.
     /// </summary>
     public bool IsDisabled { get; set; }
 
     /// <summary>
-    ///     This property contains the instant, in UTC, until which every member of this group has
-    ///     its own DNS resolution entirely blocked -- the group-scoped counterpart of
-    ///     <see cref="DnsClientEntity.PausedUntilUtc" />, a wholly separate mechanism from
-    ///     <see cref="IsDisabled" /> above (that flag only ever affects filter-list resolution;
-    ///     this one is an unconditional kill switch overriding everything). <see langword="null" />,
-    ///     or any instant that has already passed, means this group is not currently pausing its
-    ///     members; see <see cref="DnsClientEntity.PausedUntilUtc" />'s own doc comment for why no
-    ///     background sweep is needed to clear an elapsed value.
+    ///     This property contains the time, in UTC, until which DNS resolution is blocked for every
+    ///     member of this group: the group counterpart of <see cref="DnsClientEntity.PausedUntilUtc" />.
+    ///     It is separate from <see cref="IsDisabled" />, which only affects filter lists; a pause
+    ///     overrides everything. <see langword="null" /> or a past time means no pause.
+    ///     <see cref="DnsClientEntity.PausedUntilUtc" /> explains why no sweep clears elapsed values.
     /// </summary>
     public DateTimeOffset? PausedUntilUtc { get; set; }
 }

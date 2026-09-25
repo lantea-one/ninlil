@@ -3,9 +3,9 @@ namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
 ///     This class represents a named group of permissions that can be granted to a
-///     <see cref="UserEntity" />. Ninlil expresses what a role can actually do through the
-///     <see cref="RoleClaimEntity" /> records attached to it, rather than through a fixed set of
-///     built-in permission levels, so new capabilities can be authorized without a schema change.
+///     <see cref="UserEntity" />. What a role allows is expressed by its
+///     <see cref="RoleClaimEntity" /> rows rather than fixed permission levels, so new
+///     capabilities need no schema change.
 /// </summary>
 public class RoleEntity : AuditableEntityBase
 {
@@ -21,8 +21,7 @@ public class RoleEntity : AuditableEntityBase
     public string NormalizedName { get; set; }
 
     /// <summary>
-    ///     This property contains a short, human-readable explanation of what this role is meant
-    ///     to be used for.
+    ///     This property contains a short explanation of what this role is for.
     /// </summary>
     public string Description { get; set; }
 
@@ -33,13 +32,12 @@ public class RoleEntity : AuditableEntityBase
     public string ConcurrencyStamp { get; set; }
 
     /// <summary>
-    ///     This property mirrors <see cref="UserEntity.ClusterConflictNote" /> for a role: it is
-    ///     <see langword="null" /> for every ordinary role, and set only when the cluster's own
-    ///     identity/RBAC federation mechanism genuinely detects two nodes independently creating a
-    ///     role with the same <see cref="Name" /> during a real network partition, and this role is
-    ///     the one that lost the deterministic last-write-wins tie-break -- renamed (with a
-    ///     <c>-conflict-&lt;shortnodeid&gt;</c> suffix) and flagged here rather than silently
-    ///     dropped or merged, surfaced via <c>RoleSummary.ClusterConflictNote</c>.
+    ///     This property mirrors <see cref="UserEntity.ClusterConflictNote" /> for a role. It is
+    ///     <see langword="null" /> for an ordinary role. Cluster identity federation sets it when two
+    ///     nodes created a role with the same <see cref="Name" /> during a network partition and this
+    ///     role lost the last-write-wins tie-break: the role is renamed with a
+    ///     <c>-conflict-&lt;shortnodeid&gt;</c> suffix and flagged here instead of being dropped or
+    ///     merged. The API shows it as <c>RoleSummary.ClusterConflictNote</c>.
     /// </summary>
     public string ClusterConflictNote { get; set; }
 }

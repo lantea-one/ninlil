@@ -5,7 +5,7 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the time-range query the
-///     dashboard's charts need in order to plot a metric over time.
+///     dashboard charts use to plot a metric over time.
 /// </summary>
 public interface IMetricRepository : IRepository<MetricEntity>
 {

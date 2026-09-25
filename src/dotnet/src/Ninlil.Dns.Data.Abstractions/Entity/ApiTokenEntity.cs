@@ -5,8 +5,8 @@ namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
 ///     This class represents an API token issued to a <see cref="UserEntity" /> for
-///     machine-to-machine access -- as an alternative to signing in interactively and obtaining a
-///     JWT. See <see cref="ApiTokenTypeEnum" /> for the two ways such a token can behave.
+///     machine-to-machine access, as an alternative to signing in and obtaining a JWT.
+///     <see cref="ApiTokenTypeEnum" /> describes the two kinds of token.
 /// </summary>
 public class ApiTokenEntity : EntityBase
 {
@@ -17,14 +17,14 @@ public class ApiTokenEntity : EntityBase
     public Guid UserId { get; set; }
 
     /// <summary>
-    ///     This property contains the human-readable name given to the token when it was created,
-    ///     such as "Home Lab Dynamic DNS Updater".
+    ///     This property contains the name given to the token when it was created, such as "Home
+    ///     Lab Dynamic DNS Updater".
     /// </summary>
     public string Name { get; set; }
 
     /// <summary>
-    ///     This property contains a salted hash of the token's secret value. As with a password,
-    ///     the plain-text token is only ever shown once, at the moment it is issued.
+    ///     This property contains the SHA-256 hash of the token's secret value (see
+    ///     <c>TokenHasher</c>). The plain-text token is shown only once, when it is issued.
     /// </summary>
     public string TokenHash { get; set; }
 
@@ -43,15 +43,15 @@ public class ApiTokenEntity : EntityBase
     /// <summary>
     ///     This property contains the UTC date and time at which a
     ///     <see cref="ApiTokenTypeEnum.OneTime" /> token was consumed, or <see langword="null" />
-    ///     if it has not been used yet. This field is meaningless for a
-    ///     <see cref="ApiTokenTypeEnum.Static" /> token, which can be reused until it expires or
-    ///     is revoked.
+    ///     if it has not been used yet. It has no meaning for a
+    ///     <see cref="ApiTokenTypeEnum.Static" /> token, which can be reused until it expires or is
+    ///     revoked.
     /// </summary>
     public DateTimeOffset? ConsumedAtUtc { get; set; }
 
     /// <summary>
-    ///     This property contains the UTC date and time at which the token was manually revoked,
-    ///     or <see langword="null" /> if it has not been revoked.
+    ///     This property contains the UTC date and time at which the token was revoked, or
+    ///     <see langword="null" /> if it has not been revoked.
     /// </summary>
     public DateTimeOffset? RevokedAtUtc { get; set; }
 }

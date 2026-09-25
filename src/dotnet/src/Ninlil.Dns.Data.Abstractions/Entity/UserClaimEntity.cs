@@ -2,9 +2,9 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single claim -- a type/value pair, such as
-///     <c>("department", "network-operations")</c> -- attached directly to one
-///     <see cref="UserEntity" />, independent of whatever roles that user might also hold.
+///     This class represents one claim, a type/value pair such as
+///     <c>("department", "network-operations")</c>, attached directly to a
+///     <see cref="UserEntity" /> regardless of the roles the user holds.
 /// </summary>
 public class UserClaimEntity : EntityBase
 {

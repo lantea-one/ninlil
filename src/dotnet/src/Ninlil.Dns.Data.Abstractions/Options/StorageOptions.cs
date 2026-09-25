@@ -4,10 +4,9 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Options;
 
 /// <summary>
-///     This class binds to the <c>Storage</c> section of the application's configuration and
-///     tells the composition root which database engine to wire up and how to reach it. It is the
-///     one piece of storage configuration every hosting project shares, regardless of which
-///     concrete engine ends up being selected.
+///     This class binds to the <c>Storage</c> section of the application's configuration and tells
+///     the composition root which database engine to register and how to reach it. It is the
+///     storage configuration shared by every engine.
 /// </summary>
 public class StorageOptions
 {
@@ -17,17 +16,16 @@ public class StorageOptions
     public const string SectionName = "Storage";
 
     /// <summary>
-    ///     This property contains the database engine to use. Defaults to
-    ///     <see cref="StorageEngineEnum.Sqlite" /> so that a fresh installation works without any
-    ///     configuration at all.
+    ///     This property contains the database engine to use. It defaults to
+    ///     <see cref="StorageEngineEnum.Sqlite" /> so a fresh installation works without
+    ///     configuration.
     /// </summary>
     public StorageEngineEnum Engine { get; set; } = StorageEngineEnum.Sqlite;
 
     /// <summary>
     ///     This property contains the connection string used to reach <see cref="Engine" />. When
-    ///     <see cref="Engine" /> is <see cref="StorageEngineEnum.Sqlite" /> and this is left
-    ///     empty, Ninlil generates a database file automatically instead of requiring one to
-    ///     be configured.
+    ///     <see cref="Engine" /> is <see cref="StorageEngineEnum.Sqlite" /> and this is empty, Ninlil
+    ///     creates a database file automatically.
     /// </summary>
     public string ConnectionString { get; set; }
 }

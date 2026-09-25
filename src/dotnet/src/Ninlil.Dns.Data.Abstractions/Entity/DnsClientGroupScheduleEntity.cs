@@ -4,13 +4,11 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single time-of-day parental-control schedule assigned to one
-///     <see cref="DnsClientGroupEntity" /> -- every client resolved into that group (via
-///     <see cref="DnsClientEntity.ClientGroupId" />) is blocked outright for the schedule's own
-///     active window, mirroring <see cref="DnsClientScheduleEntity" /> exactly but keyed by
-///     <see cref="ClientGroupId" /> instead of a single client. See that class's own doc comment
-///     for the full "separate entity per owner, independently checked, union not override"
-///     reasoning this pair shares.
+///     This class represents a time-of-day parental-control schedule of a
+///     <see cref="DnsClientGroupEntity" />. Every client resolved into the group (through
+///     <see cref="DnsClientEntity.ClientGroupId" />) is blocked during the schedule's window. It
+///     mirrors <see cref="DnsClientScheduleEntity" />, keyed by <see cref="ClientGroupId" />
+///     instead of a client; that class explains why the two are separate and how they combine.
 /// </summary>
 public class DnsClientGroupScheduleEntity : AuditableEntityBase
 {
@@ -21,35 +19,33 @@ public class DnsClientGroupScheduleEntity : AuditableEntityBase
     public Guid ClientGroupId { get; set; }
 
     /// <summary>
-    ///     This property contains the subset of the week's seven days this schedule applies to --
-    ///     see <see cref="DnsClientScheduleEntity.DaysOfWeek" />'s own doc comment.
+    ///     This property contains the days of the week this schedule applies to; see
+    ///     <see cref="DnsClientScheduleEntity.DaysOfWeek" />.
     /// </summary>
     public DnsScheduleDayOfWeekEnum DaysOfWeek { get; set; }
 
     /// <summary>
-    ///     This property contains the wall-clock time, in <see cref="TimeZoneId" />'s own local
-    ///     time, at which the blocking window begins -- see
-    ///     <see cref="DnsClientScheduleEntity.StartTime" />'s own doc comment.
+    ///     This property contains the local time in <see cref="TimeZoneId" /> at which the blocking
+    ///     window begins; see <see cref="DnsClientScheduleEntity.StartTime" />.
     /// </summary>
     public TimeOnly StartTime { get; set; }
 
     /// <summary>
-    ///     This property contains the wall-clock time, in <see cref="TimeZoneId" />'s own local
-    ///     time, at which the blocking window ends -- see
-    ///     <see cref="DnsClientScheduleEntity.EndTime" />'s own doc comment for the real,
-    ///     deliberately supported midnight-wrapping case this field allows.
+    ///     This property contains the local time in <see cref="TimeZoneId" /> at which the blocking
+    ///     window ends; see <see cref="DnsClientScheduleEntity.EndTime" /> for windows that cross
+    ///     midnight.
     /// </summary>
     public TimeOnly EndTime { get; set; }
 
     /// <summary>
-    ///     This property contains a real IANA time zone database identifier -- see
-    ///     <see cref="DnsClientScheduleEntity.TimeZoneId" />'s own doc comment.
+    ///     This property contains an IANA time zone identifier; see
+    ///     <see cref="DnsClientScheduleEntity.TimeZoneId" />.
     /// </summary>
     public string TimeZoneId { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this schedule is currently disabled -- see
-    ///     <see cref="DnsClientScheduleEntity.IsDisabled" />'s own doc comment.
+    ///     This property indicates whether this schedule is disabled; see
+    ///     <see cref="DnsClientScheduleEntity.IsDisabled" />.
     /// </summary>
     public bool IsDisabled { get; set; }
 

@@ -4,35 +4,25 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the real, pushed-down
-///     lookups <c>Server.Webhooks</c>'s own delivery-retry sweep and retention cleanup need. A
-///     long-running deployment can accumulate a genuinely large number of delivery-attempt rows
-///     over time (every matching subscription's own delivery of every noteworthy event, for as
-///     long as the server has been running), so -- mirroring <see cref="IDnsQueryLogRepository" />'s
-///     own already-established precedent for exactly this same "can reach real scale" reasoning --
-///     every method here is expected to translate into a real, filtered/indexed query against the
-///     underlying storage engine, never a full table/collection scan materialized into memory
-///     first.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups the webhook
+///     retry sweep and retention cleanup in <c>Server.Webhooks</c> need. A long-running server
+///     can collect many delivery rows (one per matching subscription per event), so, as with
+///     <see cref="IDnsQueryLogRepository" />, every method here must run as a filtered, indexed
+///     query in the database, never a full scan loaded into memory.
 /// </summary>
 public interface IWebhookDeliveryAttemptRepository : IRepository<WebhookDeliveryAttemptEntity>
 {
     /// <summary>
-    ///     This method finds every delivery currently due for a retry attempt --
-    ///     <see cref="WebhookDeliveryAttemptEntity.Status" /> still
-    ///     <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> and
-    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> at or before
-    ///     <paramref name="asOfUtc" />. This is the one query
-    ///     <c>Server.Webhooks.WebhookDeliveryRetrySweepService</c>'s own periodic sweep (a plain
-    ///     text reference, not <see langword="see cref" />, since this project sits below every
-    ///     <c>Server.*</c> project in the dependency layering and cannot reference back up into
-    ///     one of them) relies on for real restart durability: a row left behind by a process that
-    ///     was killed
-    ///     mid-backoff (or mid-attempt -- see <see cref="WebhookDeliveryAttemptEntity" />'s own
-    ///     "at-least-once" doc comment) is, by construction, already sitting in exactly this state
-    ///     the moment a fresh process's own sweep next runs, with no separate "was this delivery
-    ///     interrupted" bookkeeping needed at all.
+    ///     This method finds every delivery due for a retry: <see cref="WebhookDeliveryAttemptEntity.Status" />
+    ///     is <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> and
+    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> is at or before
+    ///     <paramref name="asOfUtc" />. The periodic sweep in
+    ///     <c>Server.Webhooks.WebhookDeliveryRetrySweepService</c> relies on it to survive restarts:
+    ///     a row left by a process killed during a backoff (or an attempt; see the at-least-once
+    ///     note on <see cref="WebhookDeliveryAttemptEntity" />) is already in this state when the
+    ///     next process's sweep runs, so no "interrupted" bookkeeping is needed.
     /// </summary>
-    /// <param name="asOfUtc">The moment to compare every candidate row's own due time against.</param>
+    /// <param name="asOfUtc">The moment to compare each row's due time against.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>Every delivery due for a retry attempt, in no particular order.</returns>
     Task<IReadOnlyList<WebhookDeliveryAttemptEntity>> ListDueForRetryAsync(
@@ -41,17 +31,16 @@ public interface IWebhookDeliveryAttemptRepository : IRepository<WebhookDelivery
     );
 
     /// <summary>
-    ///     This method permanently removes every delivery that has already reached a terminal
-    ///     outcome (<see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Succeeded" /> or
-    ///     <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.DeadLettered" />) whose own
-    ///     <see cref="WebhookDeliveryAttemptEntity.CompletedAtUtc" /> is older than
-    ///     <paramref name="cutoffUtc" />, as a single bulk delete rather than loading each matching
-    ///     row into memory first only to immediately discard it -- the same retention-sweep shape
-    ///     <see cref="IDnsQueryLogRepository.DeleteOlderThanAsync" /> already establishes. A row
-    ///     still <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> is never
-    ///     touched by this method regardless of age, since it may still genuinely be retried.
+    ///     This method deletes every delivery with a terminal outcome
+    ///     (<see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Succeeded" /> or
+    ///     <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.DeadLettered" />) whose
+    ///     <see cref="WebhookDeliveryAttemptEntity.CompletedAtUtc" /> is before
+    ///     <paramref name="cutoffUtc" />, as one bulk delete without loading the rows, like
+    ///     <see cref="IDnsQueryLogRepository.DeleteOlderThanAsync" />. A
+    ///     <see cref="Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" /> row is never deleted,
+    ///     whatever its age, since it may still be retried.
     /// </summary>
-    /// <param name="cutoffUtc">The exclusive age cutoff; a terminal row completed at or after this moment survives.</param>
+    /// <param name="cutoffUtc">The exclusive cutoff; a terminal row completed at or after this moment is kept.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The number of rows removed.</returns>
     Task<int> DeleteCompletedOlderThanAsync(

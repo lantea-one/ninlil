@@ -5,19 +5,15 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the filtering
-///     engine's matching needs: every list assigned to a single client group -- plus the real,
-///     pushed-down paging <c>ClientGroupListAssignmentsController</c>'s own <c>List</c> action
-///     lists a group's own assignments through. Like <see cref="IRecordRepository" />, this
-///     repository takes no search-criteria parameter beyond the group scope itself:
-///     <c>ClientGroupListAssignmentsController</c>'s own <c>List</c> action has never accepted a
-///     filter querystring parameter of any kind, only pagination, so there is no real filter axis
-///     for <see cref="SearchByGroupIdAsync" /> to translate.
+///     engine needs (every list assigned to a client group) and the paged listing behind
+///     <c>ClientGroupListAssignmentsController.List</c>, which is scoped to a group and has no
+///     other filters.
 /// </summary>
 public interface IDnsClientGroupListAssignmentRepository
     : IRepository<DnsClientGroupListAssignmentEntity>
 {
     /// <summary>
-    ///     This method lists every list assignment belonging to a single client group.
+    ///     This method lists every list assignment of one client group.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -28,12 +24,8 @@ public interface IDnsClientGroupListAssignmentRepository
     );
 
     /// <summary>
-    ///     This method lists one page of the list assignments belonging to a single client
-    ///     group, ordered by creation time -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/
-    ///     <c>LIMIT</c> (or the MongoDB equivalent) scoped to <paramref name="clientGroupId" />
-    ///     rather than an in-memory sort/skip/take over <see cref="ListByGroupIdAsync" />'s own
-    ///     full result, matching the exact ordering <c>ClientGroupListAssignmentsController.List</c>
-    ///     already applied in-memory before this method existed.
+    ///     This method lists one page of one client group's list assignments, ordered by creation
+    ///     time and paged in the database.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="skip">The number of matching assignments to skip, for paging.</param>
@@ -48,9 +40,8 @@ public interface IDnsClientGroupListAssignmentRepository
     );
 
     /// <summary>
-    ///     This method counts every list assignment belonging to a single client group without
-    ///     materializing them -- the total <see cref="SearchByGroupIdAsync" />'s own paged
-    ///     response reports alongside its current page.
+    ///     This method counts one client group's list assignments, for the total a paged response
+    ///     reports next to <see cref="SearchByGroupIdAsync" />.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

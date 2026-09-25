@@ -4,22 +4,16 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single entry within a <see cref="DnsFilterListEntity" /> --
-///     a domain name, an IP address/CIDR network, depending on the parent list's own
-///     <see cref="DnsFilterListEntity.Kind" />.
+///     This class represents one entry of a <see cref="DnsFilterListEntity" />: a domain name or
+///     an IP address/CIDR network, depending on the list's <see cref="DnsFilterListEntity.Kind" />.
 ///     <para>
-///         Derives from <see cref="AuditableEntityBase" /> rather than plain
-///         <see cref="EntityBase" /> (a promotion made specifically for the cluster's own
-///         config-sync mechanism) since an entry in a <see cref="DnsFilterListSourceEnum.Local" /> list is
-///         individually created/edited/deleted by an operator through
-///         <c>FilterListEntriesController</c>, exactly the kind of "changes after it is first
-///         created" entity that base class exists for -- its own
-///         <see cref="AuditableEntityBase.UpdatedAtUtc" />/<see cref="AuditableEntityBase.OriginatingNodeId" />
-///         are what let a receiving node's own last-write-wins comparison actually work for a
-///         single synced entry. A <see cref="DnsFilterListSourceEnum.Subscribed" /> list's own
-///         entries are never individually written this way at all (they are wholesale-replaced by
-///         <c>DnsFilterListExternalRefreshService</c> on its own schedule, independently on every
-///         node), so these two fields simply stay unset for them.
+///         It derives from <see cref="AuditableEntityBase" /> for cluster config sync. Entries of
+///         a <see cref="DnsFilterListSourceEnum.Local" /> list are edited one by one through
+///         <c>FilterListEntriesController</c>, and <see cref="AuditableEntityBase.UpdatedAtUtc" />
+///         and <see cref="AuditableEntityBase.OriginatingNodeId" /> let the receiving node apply
+///         last-write-wins to each. Entries of a <see cref="DnsFilterListSourceEnum.Subscribed" />
+///         list are replaced as a whole by <c>DnsFilterListExternalRefreshService</c> on every
+///         node independently, so those fields stay unset for them.
 ///     </para>
 /// </summary>
 public class DnsFilterListEntryEntity : AuditableEntityBase
@@ -30,49 +24,42 @@ public class DnsFilterListEntryEntity : AuditableEntityBase
     public Guid ListId { get; set; }
 
     /// <summary>
-    ///     This property contains the entry's own value -- a domain name, wildcard glob, or
-    ///     regular expression (depending on <see cref="Kind" />, for a
-    ///     <see cref="DnsFilterListKindEnum.Domain" /> list) or an IP address/CIDR network (for
-    ///     a <see cref="DnsFilterListKindEnum.ResponseIp" />/
-    ///     <see cref="DnsFilterListKindEnum.ClientSource" /> list, where <see cref="Kind" /> is
-    ///     always <see cref="DnsFilterEntryKindEnum.Domain" />).
+    ///     This property contains the entry's value: a domain name, wildcard glob or regular
+    ///     expression (by <see cref="Kind" />) in a <see cref="DnsFilterListKindEnum.Domain" /> list,
+    ///     or an IP address or CIDR network in a <see cref="DnsFilterListKindEnum.ResponseIp" /> or
+    ///     <see cref="DnsFilterListKindEnum.ClientSource" /> list, where <see cref="Kind" /> is always
+    ///     <see cref="DnsFilterEntryKindEnum.Domain" />.
     /// </summary>
     public string Value { get; set; }
 
     /// <summary>
-    ///     This property contains how <see cref="Value" /> is matched -- an exact/subdomain
-    ///     domain match (the default, and the only meaningful value for a
-    ///     <see cref="DnsFilterListKindEnum.ResponseIp" />/<see cref="DnsFilterListKindEnum.ClientSource" />
-    ///     list's entries), a wildcard glob, or a regular expression. An entry with no explicit
-    ///     kind defaults to <see cref="DnsFilterEntryKindEnum.Domain" />, its own numeric value 0,
-    ///     so nothing about a pre-existing entry's own matching behavior
-    ///     changes.
+    ///     This property contains how <see cref="Value" /> is matched: as a domain and its subdomains
+    ///     (the default, <see cref="DnsFilterEntryKindEnum.Domain" />, and the only value for
+    ///     <see cref="DnsFilterListKindEnum.ResponseIp" /> and
+    ///     <see cref="DnsFilterListKindEnum.ClientSource" /> lists), as a wildcard glob, or as a
+    ///     regular expression.
     /// </summary>
     public DnsFilterEntryKindEnum Kind { get; set; }
 
     /// <summary>
-    ///     This property contains free-form operator notes about this entry -- meaningful only
-    ///     for an entry in a <see cref="DnsFilterListSourceEnum.Local" /> list; a subscribed
-    ///     list's own entries carry whatever comment its external source itself included, if any.
+    ///     This property contains free-form operator notes about this entry, for entries of a
+    ///     <see cref="DnsFilterListSourceEnum.Local" /> list.
     /// </summary>
     public string Comment { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this entry is an exception rather than a rule: a name
-    ///     it covers is let through even though another entry in the <em>same</em> list also
-    ///     covers it. It exists for subscribed adblock-syntax lists, whose <c>@@||domain^</c>
-    ///     lines carve an exception out of the list's own broader <c>||domain^</c> rules (for
-    ///     example, blocking <c>tracker.example</c> but not <c>cdn.tracker.example</c>).
+    ///     This property indicates whether this entry is an exception rather than a rule: a name it
+    ///     covers is let through even though another entry in the <em>same</em> list covers it too.
+    ///     It exists for subscribed adblock-syntax lists, whose <c>@@||domain^</c> lines make an
+    ///     exception to broader <c>||domain^</c> rules (for example blocking <c>tracker.example</c>
+    ///     but not <c>cdn.tracker.example</c>).
     ///     <para>
-    ///         Modelled as a flag on the entry, rather than as entries on a separate,
-    ///         automatically managed allow list, because a list has exactly one
-    ///         <see cref="DnsFilterListEntity.Action" /> and a companion list would need its own
-    ///         group/client assignments kept in step with its parent's, a link back to that
-    ///         parent, and a way to hide it from operators. One boolean column keeps the
-    ///         exception with the rules it qualifies, and a list's exceptions only ever cancel
-    ///         that list's own matches -- the operator's own allow lists stay the only way one
-    ///         list overrides another. Only the subscribed-list refresh sets this; an entry
-    ///         typed in by hand is always an ordinary rule.
+    ///         It is a flag on the entry rather than entries on a hidden companion allow list,
+    ///         because a list has one <see cref="DnsFilterListEntity.Action" />, and a companion list
+    ///         would need assignments kept in step with its parent, a link back to it and a way to
+    ///         hide it. With the flag, a list's exceptions only cancel that list's own matches, and
+    ///         the operator's allow lists remain the only way one list overrides another. Only the
+    ///         subscribed-list refresh sets it; an entry typed in by hand is always a rule.
     ///     </para>
     /// </summary>
     public bool IsException { get; set; }

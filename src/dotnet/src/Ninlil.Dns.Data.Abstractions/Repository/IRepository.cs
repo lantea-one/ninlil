@@ -6,9 +6,16 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface describes the read and write operations every persisted entity supports,
-///     regardless of which storage engine ends up implementing it. Entity-specific repositories,
-///     such as <see cref="IZoneRepository" />, extend this with the extra lookups that only make
-///     sense for their own entity.
+///     whichever storage engine implements it. Entity-specific repositories, such as
+///     <see cref="IZoneRepository" />, add lookups that only make sense for their entity. Writes
+///     are staged and saved together by <see cref="IUnitOfWork" />.
+///     <para>
+///         Repositories behind a paged REST list add a <c>SearchAsync</c> and a
+///         <c>CountAsync</c>. These page in the database (<c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>
+///         or the MongoDB equivalent) instead of sorting a full <see cref="ListAsync" /> result in
+///         memory. They take a criteria object only when the list endpoint has filters (see
+///         <see cref="IDnsQueryLogRepository" />); otherwise they take just the page bounds.
+///     </para>
 /// </summary>
 /// <typeparam name="TEntity">The type of entity this repository stores.</typeparam>
 public interface IRepository<TEntity>

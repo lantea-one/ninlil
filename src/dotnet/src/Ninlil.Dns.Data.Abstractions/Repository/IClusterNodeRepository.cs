@@ -4,21 +4,17 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups the join
-///     handshake and heartbeat engine need: finding a peer by the stable node identifier it
-///     asserts about itself, rather than only by this registry's own row identifier -- plus the
-///     real, pushed-down paging <c>ClusterController</c>'s own <c>List</c> action lists the full
-///     peer registry through. Like <see cref="IZoneRepository" />, this repository takes no
-///     search-criteria parameter: <c>ClusterController</c>'s own <c>List</c> action has never
-///     accepted a filter querystring parameter of any kind, only pagination, so there is no real
-///     filter axis for <see cref="SearchAsync" /> to translate.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the join
+///     handshake and heartbeat need (a peer by the node identifier it reports, not the local row
+///     identifier) and the paged listing behind <c>ClusterController.List</c>, which has no
+///     filters.
 /// </summary>
 public interface IClusterNodeRepository : IRepository<ClusterNodeEntity>
 {
     /// <summary>
-    ///     This method looks up a peer by its own self-asserted, stable node identifier.
+    ///     This method looks up a peer by the stable node identifier it reports about itself.
     /// </summary>
-    /// <param name="remoteNodeId">The peer's own <c>ClusterOptions.NodeId</c> value.</param>
+    /// <param name="remoteNodeId">The peer's <c>ClusterOptions.NodeId</c> value.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching peer, or <see langword="null" /> if none is registered.</returns>
     Task<ClusterNodeEntity> FindByRemoteNodeIdAsync(
@@ -27,10 +23,8 @@ public interface IClusterNodeRepository : IRepository<ClusterNodeEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of every peer node currently in this node's own registry,
-    ///     ordered by name -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the
-    ///     MongoDB equivalent) rather than an in-memory sort/skip/take over a fully materialized
-    ///     <see cref="IRepository{TEntity}.ListAsync" /> result.
+    ///     This method lists one page of the local peer registry, ordered by name and paged in the
+    ///     database.
     /// </summary>
     /// <param name="skip">The number of matching peers to skip, for paging.</param>
     /// <param name="take">The maximum number of peers to return.</param>
@@ -43,9 +37,8 @@ public interface IClusterNodeRepository : IRepository<ClusterNodeEntity>
     );
 
     /// <summary>
-    ///     This method counts every peer node currently in this node's own registry, without
-    ///     materializing them -- the total <see cref="SearchAsync" />'s own paged response reports
-    ///     alongside its current page.
+    ///     This method counts every peer in the local registry, for the total a paged response
+    ///     reports next to <see cref="SearchAsync" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of registered peer nodes.</returns>

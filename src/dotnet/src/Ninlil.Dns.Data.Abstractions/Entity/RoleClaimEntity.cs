@@ -2,11 +2,10 @@
 namespace Ninlil.Dns.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single claim granted to every <see cref="UserEntity" /> who holds
-///     a particular <see cref="RoleEntity" />. This is where Ninlil's actual permission
-///     levels live: a role such as "Zone Administrator" is, underneath, just a bundle of claims
-///     like <c>("permission", "zones:read")</c> and <c>("permission", "zones:write")</c> that
-///     ASP.NET Core's policy-based authorization checks against.
+///     This class represents one claim granted to every <see cref="UserEntity" /> who holds a
+///     <see cref="RoleEntity" />. Permissions live here: a role such as "Zone Administrator" is a
+///     bundle of claims like <c>("permission", "zones:read")</c> and
+///     <c>("permission", "zones:write")</c> that ASP.NET Core policy-based authorization checks.
 /// </summary>
 public class RoleClaimEntity : EntityBase
 {

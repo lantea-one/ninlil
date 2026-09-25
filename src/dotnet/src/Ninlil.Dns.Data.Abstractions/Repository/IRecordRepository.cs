@@ -6,8 +6,8 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups a DNS server
-///     needs once it has already found the zone a query belongs to: listing the records at (or
-///     under) a name.
+///     needs once it has found the zone for a query (the records of a zone, or at a name), and
+///     the paged listing behind <c>RecordsController.List</c>.
 /// </summary>
 public interface IRecordRepository : IRepository<RecordEntity>
 {
@@ -42,17 +42,10 @@ public interface IRecordRepository : IRepository<RecordEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of the records stored in a zone, ordered by owner name and
-    ///     then by type -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the
-    ///     MongoDB equivalent) scoped to <paramref name="zoneId" /> rather than an in-memory
-    ///     sort/skip/take over <see cref="ListByZoneIdAsync" />'s own full result, so a
-    ///     high-record-count zone never forces its whole content into memory just to answer one
-    ///     page's worth of a request. Like <see cref="IZoneRepository.SearchAsync" />, this takes
-    ///     no filter-criteria parameter: <c>RecordsController</c>'s own <c>List</c> action has
-    ///     never accepted anything but pagination as a querystring parameter, so there is no real
-    ///     filter axis (by record type, or a name substring, say) to translate yet -- add one, the
-    ///     same shape <see cref="IDnsQueryLogRepository" /> already establishes, once a real
-    ///     caller actually needs it.
+    ///     This method lists one page of a zone's records, ordered by owner name and then type,
+    ///     paged in the database so a large zone is never loaded whole. The endpoint has no filters,
+    ///     so there is no criteria object; if it gains filters, add one as
+    ///     <see cref="IDnsQueryLogRepository" /> does.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose records should be listed.</param>
     /// <param name="skip">The number of matching records to skip, for paging.</param>
@@ -67,9 +60,8 @@ public interface IRecordRepository : IRepository<RecordEntity>
     );
 
     /// <summary>
-    ///     This method counts every record stored in a zone, without materializing them -- the
-    ///     total <see cref="SearchByZoneIdAsync" />'s own paged response reports alongside its
-    ///     current page.
+    ///     This method counts a zone's records, for the total a paged response reports next to
+    ///     <see cref="SearchByZoneIdAsync" />.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose records should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

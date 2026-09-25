@@ -4,21 +4,16 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup a zone's
-///     signing pipeline and DNSKEY/CDS/CDNSKEY responses both need: every key currently on
-///     record for a zone -- plus the real, pushed-down paging <c>DnssecKeysController</c>'s own
-///     <c>List</c> action lists a zone's key set through. Like <see cref="IRecordRepository" />,
-///     this repository takes no search-criteria parameter beyond the zone scope itself:
-///     <c>DnssecKeysController</c>'s own <c>List</c> action has never accepted a filter
-///     querystring parameter of any kind, only pagination, so there is no real filter axis for
-///     <see cref="SearchByZoneIdAsync" /> to translate.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the signing
+///     pipeline and DNSKEY/CDS/CDNSKEY answers need (every key of a zone) and the paged listing
+///     behind <c>DnssecKeysController.List</c>, which is scoped to a zone and has no other
+///     filters.
 /// </summary>
 public interface IDnssecKeyRepository : IRepository<DnssecKeyEntity>
 {
     /// <summary>
-    ///     This method lists every key stored for a zone, removed keys included -- callers that
-    ///     only want keys currently published or currently eligible to sign with should filter on
-    ///     <see cref="DnssecKeyEntity.LifecycleState" /> themselves.
+    ///     This method lists every key stored for a zone, removed keys included. Callers that want
+    ///     only published or signing keys filter on <see cref="DnssecKeyEntity.LifecycleState" />.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose keys should be listed.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -29,12 +24,8 @@ public interface IDnssecKeyRepository : IRepository<DnssecKeyEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of the keys stored for a zone, removed keys included,
-    ///     ordered by role and then by creation time -- a real, translated <c>ORDER BY</c>/
-    ///     <c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB equivalent) scoped to <paramref name="zoneId" />
-    ///     rather than an in-memory sort/skip/take over <see cref="ListByZoneIdAsync" />'s own full
-    ///     result, matching the exact ordering <c>DnssecKeysController.List</c> already applied
-    ///     in-memory before this method existed.
+    ///     This method lists one page of a zone's keys, removed keys included, ordered by role and
+    ///     then by creation time, paged in the database.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose keys should be listed.</param>
     /// <param name="skip">The number of matching keys to skip, for paging.</param>
@@ -49,9 +40,8 @@ public interface IDnssecKeyRepository : IRepository<DnssecKeyEntity>
     );
 
     /// <summary>
-    ///     This method counts every key stored for a zone, removed keys included, without
-    ///     materializing them -- the total <see cref="SearchByZoneIdAsync" />'s own paged response
-    ///     reports alongside its current page.
+    ///     This method counts a zone's keys, removed keys included, for the total a paged response
+    ///     reports next to <see cref="SearchByZoneIdAsync" />.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose keys should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

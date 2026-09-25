@@ -21,7 +21,7 @@ public interface ISessionRepository : IRepository<SessionEntity>
     );
 
     /// <summary>
-    ///     This method lists every currently-active (unrevoked, unexpired) session for a user.
+    ///     This method lists every active (unrevoked, unexpired) session of a user.
     /// </summary>
     /// <param name="userId">The identifier of the user whose sessions should be listed.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

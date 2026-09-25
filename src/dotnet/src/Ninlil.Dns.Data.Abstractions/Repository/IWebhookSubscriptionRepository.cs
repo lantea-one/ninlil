@@ -4,16 +4,10 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups a webhook
-///     subscription's own REST CRUD surface and <c>Server.Webhooks</c>'s delivery engine both
-///     need -- plus the real, pushed-down paging <c>WebhooksController</c>'s own <c>List</c>
-///     action lists the full subscription set through. Like <see cref="IZoneRepository" />, this
-///     repository takes no search-criteria parameter: <c>WebhooksController</c>'s own <c>List</c>
-///     action has never accepted a filter querystring parameter of any kind, only pagination, so
-///     there is no real filter axis for <see cref="SearchAsync" /> to translate. This is distinct
-///     from, and unrelated to, <c>IWebhookDeliveryAttemptRepository</c>'s own separate delivery-
-///     attempt listing (<c>WebhooksController.ListDeliveryAttempts</c>), which this sub-phase does
-///     not touch.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups the webhook
+///     REST API and the delivery engine in <c>Server.Webhooks</c> need, and the paged listing
+///     behind <c>WebhooksController.List</c>, which has no filters. Delivery attempts are listed
+///     separately, through <see cref="IWebhookDeliveryAttemptRepository" />.
 /// </summary>
 public interface IWebhookSubscriptionRepository : IRepository<WebhookSubscriptionEntity>
 {
@@ -29,9 +23,8 @@ public interface IWebhookSubscriptionRepository : IRepository<WebhookSubscriptio
     );
 
     /// <summary>
-    ///     This method lists every currently enabled webhook subscription -- the set the delivery
-    ///     engine filters down by each subscription's own
-    ///     <see cref="WebhookSubscriptionEntity.EventTypeNames" /> for a single occurred event.
+    ///     This method lists every enabled webhook subscription. For each event, the delivery engine
+    ///     narrows this set by <see cref="WebhookSubscriptionEntity.EventTypeNames" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task<IReadOnlyList<WebhookSubscriptionEntity>> ListEnabledAsync(
@@ -39,11 +32,8 @@ public interface IWebhookSubscriptionRepository : IRepository<WebhookSubscriptio
     );
 
     /// <summary>
-    ///     This method lists one page of every webhook subscription this server knows about
-    ///     (enabled and disabled alike), ordered by name -- a real, translated <c>ORDER BY</c>/
-    ///     <c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB equivalent) rather than an in-memory
-    ///     sort/skip/take over a fully materialized <see cref="IRepository{TEntity}.ListAsync" />
-    ///     result.
+    ///     This method lists one page of webhook subscriptions, enabled and disabled, ordered by
+    ///     name and paged in the database.
     /// </summary>
     /// <param name="skip">The number of matching subscriptions to skip, for paging.</param>
     /// <param name="take">The maximum number of subscriptions to return.</param>
@@ -56,9 +46,8 @@ public interface IWebhookSubscriptionRepository : IRepository<WebhookSubscriptio
     );
 
     /// <summary>
-    ///     This method counts every webhook subscription this server knows about, without
-    ///     materializing them -- the total <see cref="SearchAsync" />'s own paged response reports
-    ///     alongside its current page.
+    ///     This method counts every webhook subscription, for the total a paged response reports
+    ///     next to <see cref="SearchAsync" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of webhook subscriptions.</returns>

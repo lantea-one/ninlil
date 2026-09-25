@@ -4,19 +4,15 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the
-///     filtering engine's client-group matching needs: every network a client group is matched
-///     against -- plus the real, pushed-down paging <c>ClientGroupNetworksController</c>'s own
-///     <c>List</c> action lists a group's own networks through. Like <see cref="IRecordRepository" />,
-///     this repository takes no search-criteria parameter beyond the group scope itself:
-///     <c>ClientGroupNetworksController</c>'s own <c>List</c> action has never accepted a filter
-///     querystring parameter of any kind, only pagination, so there is no real filter axis for
-///     <see cref="SearchByGroupIdAsync" /> to translate.
+///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup the filtering
+///     engine uses to match client groups (every rule of a group) and the paged listing behind
+///     <c>ClientGroupNetworksController.List</c>, which is scoped to a group and has no other
+///     filters.
 /// </summary>
 public interface IDnsClientGroupNetworkRepository : IRepository<DnsClientGroupNetworkEntity>
 {
     /// <summary>
-    ///     This method lists every network belonging to a single client group.
+    ///     This method lists every match rule of one client group.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -27,12 +23,8 @@ public interface IDnsClientGroupNetworkRepository : IRepository<DnsClientGroupNe
     );
 
     /// <summary>
-    ///     This method lists one page of the networks belonging to a single client group,
-    ///     ordered by CIDR -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or
-    ///     the MongoDB equivalent) scoped to <paramref name="clientGroupId" /> rather than an
-    ///     in-memory sort/skip/take over <see cref="ListByGroupIdAsync" />'s own full result,
-    ///     matching the exact ordering <c>ClientGroupNetworksController.List</c> already applied
-    ///     in-memory before this method existed.
+    ///     This method lists one page of one client group's match rules, ordered by CIDR and paged
+    ///     in the database.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="skip">The number of matching networks to skip, for paging.</param>
@@ -47,9 +39,8 @@ public interface IDnsClientGroupNetworkRepository : IRepository<DnsClientGroupNe
     );
 
     /// <summary>
-    ///     This method counts every network belonging to a single client group without
-    ///     materializing them -- the total <see cref="SearchByGroupIdAsync" />'s own paged
-    ///     response reports alongside its current page.
+    ///     This method counts one client group's match rules, for the total a paged response
+    ///     reports next to <see cref="SearchByGroupIdAsync" />.
     /// </summary>
     /// <param name="clientGroupId">The owning group's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
