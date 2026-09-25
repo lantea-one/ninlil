@@ -13,21 +13,18 @@ using Ninlil.Dns.Server.DnsCrypt;
 namespace Ninlil.Dns.Protocol.DnsCrypt;
 
 /// <summary>
-///     This class implements DNSCrypt's UDP transport: one query per datagram, one response per
-///     datagram back -- structurally the same shape as
-///     <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>, except every datagram is
-///     first routed through <see cref="DnsCryptQueryHandler" /> to tell a plaintext certificate
-///     discovery query apart from an encrypted client query, since (unlike every other transport
-///     this project has built) DNSCrypt carries both shapes over the very same port.
+///     This class implements the DNSCrypt UDP transport: one query per datagram and one response
+///     per datagram, as in <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>. Each datagram goes
+///     through <see cref="DnsCryptQueryHandler" />, which tells a plaintext certificate discovery
+///     query from an encrypted client query, since DNSCrypt carries both on the same port.
 /// </summary>
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
-/// <param name="store">The store this resolver's own tracked certificates are read from.</param>
+/// <param name="store">The store the tracked certificates are read from.</param>
 /// <param name="options">
-///     This transport's own listen addresses, port and provider name -- read via
-///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
-///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
-///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
-///     parameter documents.
+///     The listen addresses, port and provider name, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> so a changed <c>Enable</c> is seen when the
+///     listener is started again (see the <c>options</c> parameter of
+///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records unexpected socket failures to.</param>
 public sealed class DnsCryptUdpListener(
@@ -38,30 +35,28 @@ public sealed class DnsCryptUdpListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this listener will ever read, the
-    ///     same reasoning and value <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>
-    ///     already uses.
+    ///     This constant contains the size of the receive buffer, the same value and reason as in
+    ///     <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>.
     /// </summary>
     private const int MaximumDatagramSize = 65527;
 
     /// <summary>
-    ///     This property contains the bound sockets, one per listen address (or a single
-    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
-    ///     close them, unblocking each receive loop's pending receive call during shutdown.
+    ///     This field contains the bound sockets, one per listen address (or a single dual-stack
+    ///     one when none are configured). <see cref="StopAsync" /> closes them, which unblocks
+    ///     each receive loop's pending receive.
     /// </summary>
     private ListenSocketSet _sockets = ListenSocketSet.Empty;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
-    ///     accepting datagrams -- read by the <c>/status</c> health-check endpoint, which needs a
-    ///     real "am I bound and running" signal from every transport rather than just the fact
-    ///     that it was registered/configured.
+    ///     This property reports whether at least one of this listener's sockets is bound and
+    ///     receiving. <c>TransportListenersHealthCheck</c> reads it, since being registered or
+    ///     configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
-    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _sockets.FailedAddresses;
 
@@ -73,9 +68,9 @@ public sealed class DnsCryptUdpListener(
 
         if (string.IsNullOrWhiteSpace(options.CurrentValue.ProviderName))
         {
-            // A blank provider name would make every certificate discovery query resolve
-            // against the root name instead of a name only this resolver's own clients would
-            // ever ask about -- silently answering that is worse than not starting at all.
+            // With a blank provider name the discovery name would sit directly under the root
+            // rather than under a name only this resolver's clients ask about; not starting is
+            // better than answering that.
             logger.LogError(
                 "DNSCrypt is enabled, but no ProviderName is configured -- clients would have no name to discover this resolver's certificates under. This transport will not start; every other part of this server is unaffected."
             );

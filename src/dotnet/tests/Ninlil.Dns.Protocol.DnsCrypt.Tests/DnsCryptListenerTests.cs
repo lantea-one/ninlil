@@ -10,13 +10,10 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 
 /// <summary>
-///     This suite exercises <c>Ninlil.Dns.Protocol.DnsCrypt</c>'s real UDP and TCP listeners
-///     end-to-end, over real loopback sockets, against a real
-///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> --
-///     certificate discovery, encrypted query/response round-trips for both supported ciphers,
-///     and the listener's silent-drop behavior for a packet it cannot authenticate. This is this
-///     project's permanent, hybrid-testing counterpart to the 12-check scratch smoke test 3f's
-///     own delivery was originally verified with.
+///     This class tests the DNSCrypt UDP and TCP listeners over loopback sockets, using the
+///     listeners, pipeline and fake resolver of <see cref="DnsCryptListenerTestFixture" />:
+///     certificate discovery, encrypted round trips for both supported ciphers, several queries
+///     on one TCP connection, and silent drops for packets that cannot be authenticated.
 /// </summary>
 public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
     : IClassFixture<DnsCryptListenerTestFixture>
@@ -200,8 +197,8 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
             query
         );
 
-        // Flip a byte well inside the encrypted query, past every envelope field, so the
-        // client-magic still matches a real certificate but AEAD authentication fails.
+        // Flip a byte inside the encrypted query, past the envelope fields, so the client-magic
+        // still matches a certificate but AEAD authentication fails.
         packet[^1] ^= 0xFF;
 
         await AssertNoResponseAsync(packet);
@@ -209,10 +206,9 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
 
     private static async Task<byte[]> ReceiveWithTimeoutAsync(UdpClient client)
     {
-        // UdpClient.ReceiveAsync does not honor Client.ReceiveTimeout (that socket option only
-        // applies to the synchronous Receive path) -- a real timeout needs an explicit
-        // CancellationToken instead, so a genuinely broken listener fails this test quickly
-        // rather than hanging the whole run.
+        // UdpClient.ReceiveAsync ignores Client.ReceiveTimeout (it applies only to the
+        // synchronous Receive), so a CancellationToken provides the timeout and a broken
+        // listener fails this test quickly rather than hanging the run.
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
         return (await client.ReceiveAsync(timeout.Token)).Buffer;
     }
@@ -223,9 +219,8 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
         client.Connect(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
         await client.SendAsync(packet);
 
-        // UdpClient.ReceiveAsync does not honor Client.ReceiveTimeout (that socket option only
-        // applies to the synchronous Receive path) -- a real timeout needs an explicit
-        // CancellationToken instead.
+        // UdpClient.ReceiveAsync ignores Client.ReceiveTimeout, so a CancellationToken provides
+        // the timeout.
         using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(500));
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>

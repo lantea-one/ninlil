@@ -14,20 +14,21 @@ using Ninlil.Dns.Server.DnsCrypt;
 namespace Ninlil.Dns.Protocol.DnsCrypt;
 
 /// <summary>
-///     This class implements DNSCrypt's TCP fallback transport: the same two-octet big-endian
-///     length prefix RFC 1035 §4.2.2/RFC 7766 already define for plain DNS-over-TCP, wrapping
-///     either a plaintext certificate discovery query or an encrypted client query, exactly as
-///     <see cref="DnsCryptUdpListener" /> already distinguishes over UDP -- via the same shared
-///     <see cref="DnsCryptQueryHandler" />.
+///     This class implements the DNSCrypt TCP transport, which clients fall back to: the
+///     two-octet big-endian length prefix of DNS over TCP (RFC 1035 §4.2.2, RFC 7766) around
+///     either a plaintext certificate discovery query or an encrypted client query, told apart
+///     by <see cref="DnsCryptQueryHandler" /> as in <see cref="DnsCryptUdpListener" />. A
+///     connection stays open for further queries until
+///     <c>DnsCryptOptions.TcpIdleTimeout</c> passes with no complete packet, or the client
+///     disconnects.
 /// </summary>
 /// <param name="pipeline">The pipeline every decrypted query is enqueued onto.</param>
-/// <param name="store">The store this resolver's own tracked certificates are read from.</param>
+/// <param name="store">The store the tracked certificates are read from.</param>
 /// <param name="options">
-///     This transport's own listen addresses, port, provider name, and connection limits -- read via
-///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle is genuinely
-///     observed the next time <see cref="ExecuteAsync" /> runs, the same reasoning
-///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>'s own <c>options</c>
-///     parameter documents.
+///     The listen addresses, port, provider name and connection limits, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> so a changed <c>Enable</c> is seen when the
+///     listener is started again (see the <c>options</c> parameter of
+///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
 public sealed class DnsCryptTcpListener(
@@ -38,28 +39,29 @@ public sealed class DnsCryptTcpListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening sockets, one per listen address (or a single
-    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
-    ///     close them, unblocking each accept loop's pending accept call during shutdown.
+    ///     This field contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured). <see cref="StopAsync" /> closes them, which
+    ///     unblocks each accept loop's pending accept.
     /// </summary>
     private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
 
     /// <summary>
-    ///     This property bounds how many connections may be accepted concurrently.
+    ///     This field limits how many connections are served at once, across all listen
+    ///     addresses (<c>DnsCryptOptions.MaxConcurrentTcpConnections</c>); a connection beyond the
+    ///     limit is closed at once.
     /// </summary>
     private SemaphoreSlim _connectionLimiter;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
-    ///     accepting connections -- read by the <c>/status</c> health-check endpoint, which needs
-    ///     a real "am I bound and running" signal from every transport rather than just the fact
-    ///     that it was registered/configured.
+    ///     This property reports whether at least one of this listener's sockets is bound and
+    ///     accepting connections. <c>TransportListenersHealthCheck</c> reads it, since being
+    ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
-    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
 
@@ -71,9 +73,8 @@ public sealed class DnsCryptTcpListener(
 
         if (string.IsNullOrWhiteSpace(options.CurrentValue.ProviderName))
         {
-            // DnsCryptUdpListener already logs this same misconfiguration; both transports
-            // share one Enable toggle and one ProviderName, so both independently refuse to
-            // start rather than one silently answering queries the other cannot.
+            // DnsCryptUdpListener logs the same error. Both listeners share one Enable and one
+            // ProviderName, so both refuse to start rather than one answering alone.
             logger.LogError(
                 "DNSCrypt is enabled, but no ProviderName is configured -- clients would have no name to discover this resolver's certificates under. This transport will not start; every other part of this server is unaffected."
             );
@@ -152,10 +153,9 @@ public sealed class DnsCryptTcpListener(
     }
 
     /// <summary>
-    ///     This method owns a single accepted connection for its entire lifetime: reading every
-    ///     length-prefixed packet it sends, routing each in turn through
-    ///     <see cref="DnsCryptQueryHandler" />, until the idle timeout elapses or the client
-    ///     disconnects.
+    ///     This method serves one accepted connection: it reads each length-prefixed packet and
+    ///     routes it through <see cref="DnsCryptQueryHandler" /> until the idle timeout passes or
+    ///     the client disconnects.
     /// </summary>
     private async Task HandleConnectionAsync(
         Socket connection,
@@ -217,10 +217,9 @@ public sealed class DnsCryptTcpListener(
     }
 
     /// <summary>
-    ///     This method writes a single length-prefixed packet to a connection, serialized
-    ///     against every other write on that same connection, the same reasoning
-    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c> already documents on its
-    ///     own equivalent method.
+    ///     This method writes one length-prefixed packet to a connection, one writer at a time,
+    ///     for the reason given on the matching method of
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
     /// </summary>
     private static async ValueTask WriteFramedAsync(
         Socket connection,

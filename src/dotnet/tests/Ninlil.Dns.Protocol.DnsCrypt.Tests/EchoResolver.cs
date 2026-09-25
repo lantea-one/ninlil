@@ -6,10 +6,10 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 
 /// <summary>
-///     This class is a minimal <see cref="IDnsQueryResolver" /> test double: it answers any A
-///     query for <see cref="QuestionName" /> with a single, fixed A record, and declines every
-///     other query -- enough for this suite to prove a query really made it through the DNSCrypt
-///     listener, the shared pipeline, and back out again, without needing a real zone/database.
+///     This class is a fake <see cref="IDnsQueryResolver" />: it answers an A query for
+///     <see cref="QuestionName" /> with one fixed A record and declines every other query. That
+///     is enough to show a query went through the DNSCrypt listener and the pipeline and back,
+///     without a zone or a database.
 /// </summary>
 internal sealed class EchoResolver : IDnsQueryResolver
 {

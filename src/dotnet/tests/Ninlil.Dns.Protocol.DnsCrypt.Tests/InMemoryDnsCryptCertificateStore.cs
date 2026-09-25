@@ -5,10 +5,9 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 
 /// <summary>
-///     This class is a minimal, in-memory <see cref="IDnsCryptCertificateStore" /> test double --
-///     this suite exercises the wire listener, not certificate persistence (that is
-///     <c>Ninlil.Dns.Server.DnsCrypt.Tests</c>'s own job), so a real file-backed store would
-///     only add unrelated I/O to every test.
+///     This class is an in-memory <see cref="IDnsCryptCertificateStore" /> fake. These tests cover
+///     the listeners, not certificate storage (<c>Ninlil.Dns.Server.DnsCrypt.Tests</c> covers
+///     that), so a file-backed store would only add unrelated I/O.
 /// </summary>
 internal sealed class InMemoryDnsCryptCertificateStore(DnssecKeyPair providerKeyPair)
     : IDnsCryptCertificateStore

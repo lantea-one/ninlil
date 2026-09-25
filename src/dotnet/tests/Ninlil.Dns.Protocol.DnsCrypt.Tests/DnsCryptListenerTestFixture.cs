@@ -12,21 +12,21 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 
 /// <summary>
-///     This class stands up the real DNSCrypt UDP and TCP listeners against a real
-///     <see cref="DnsQueryProcessingPipeline" /> and <see cref="EchoResolver" />, backed by two
-///     real, Ed25519-signed certificates (one per supported cipher) -- everything every test in
-///     this suite sends a real packet against, over real loopback sockets.
+///     This class starts the DNSCrypt UDP and TCP listeners on loopback sockets, with a
+///     <see cref="DnsQueryProcessingPipeline" />, the fake <see cref="EchoResolver" />, and two
+///     Ed25519-signed certificates (one per supported cipher) in an in-memory store. The
+///     <see cref="DnsCryptListenerTests" /> share it.
 /// </summary>
 public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
 {
     /// <summary>
-    ///     This constant contains the fixed UDP/TCP port every test in this suite connects to.
+    ///     This field contains the UDP and TCP port the shared listeners use, chosen free at
+    ///     startup.
     /// </summary>
     public static readonly int Port = GetFreePort();
 
     /// <summary>
-    ///     This constant contains the provider name this suite's resolver advertises its
-    ///     certificates under.
+    ///     This constant contains the provider name the certificates are published under.
     /// </summary>
     public const string ProviderName = "example.test";
 
@@ -35,8 +35,8 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
     private DnsCryptTcpListener _tcpListener;
 
     /// <summary>
-    ///     This property contains this resolver's own long-term Ed25519 provider key pair, used
-    ///     by every test to independently re-verify a discovered certificate's signature.
+    ///     This property contains the long-term Ed25519 provider key pair, which tests use to
+    ///     verify a discovered certificate's signature.
     /// </summary>
     public DnssecKeyPair ProviderKeyPair { get; private set; }
 
@@ -118,11 +118,8 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
         await _udpListener.StartAsync(CancellationToken.None);
         await _tcpListener.StartAsync(CancellationToken.None);
 
-        // Both listeners bind their socket synchronously as the very first thing their own
-        // background loop does, but that loop is still scheduled as a continuation rather than
-        // run fully before StartAsync returns (the same BackgroundService timing behavior
-        // observed while writing Ninlil.Dns.Server.DnsCrypt's own rotation-service tests) --
-        // give both a moment to actually bind before any test tries to connect.
+        // Each listener binds at the start of its background loop, which BackgroundService runs
+        // as a continuation after StartAsync returns, so give both a moment to bind.
         await Task.Delay(200);
     }
 
@@ -176,9 +173,9 @@ public sealed class DnsCryptListenerTestFixture : IAsyncLifetime
 
     /// <summary>
     ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
-    ///     so no test listener ever uses a fixed or well-known port.
+    ///     on loopback and reading back what was assigned. Tests run on shared machines with their
+    ///     own DNS, DHCP and web services, and may run alongside another copy of this suite, so no
+    ///     test listener uses a fixed or well-known port.
     /// </summary>
     /// <returns>A free TCP port number.</returns>
     private static int GetFreePort()

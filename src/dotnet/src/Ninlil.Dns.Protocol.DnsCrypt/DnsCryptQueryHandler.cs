@@ -10,27 +10,30 @@ using Ninlil.Dns.Server.DnsCrypt;
 namespace Ninlil.Dns.Protocol.DnsCrypt;
 
 /// <summary>
-///     This class implements the one packet-routing decision every DNSCrypt transport (UDP and
-///     TCP) needs to make identically: is this an ordinary, plaintext certificate discovery
-///     query (answered directly), or an encrypted client query (decrypted, enqueued onto the
-///     shared <see cref="DnsQueryProcessingPipeline" /> exactly like any other transport's own
-///     query, then its eventual answer re-encrypted before being sent back)? Kept here, shared
-///     by both <see cref="DnsCryptUdpListener" /> and <see cref="DnsCryptTcpListener" />, rather
-///     than duplicated -- the two listeners differ only in how they receive and send raw bytes.
+///     This class makes the routing decision both DNSCrypt listeners need: is a packet a
+///     plaintext certificate discovery query (answered here), or an encrypted client query
+///     (decrypted, enqueued onto <see cref="DnsQueryProcessingPipeline" /> like any other
+///     transport's query, and its answer encrypted before it is sent back)?
+///     <see cref="DnsCryptUdpListener" /> and <see cref="DnsCryptTcpListener" /> share it; they
+///     differ only in how they receive and send bytes.
+///     <para>
+///         Both listeners pass <see cref="DnsTransportProtocolEnum.DnsCrypt" />, so the pipeline
+///         treats DNSCrypt over UDP like a stream transport: no UDP truncation, and the subnet
+///         limit drops rather than truncates. The encrypted response is not limited to the size
+///         of the query.
+///     </para>
 /// </summary>
 internal static class DnsCryptQueryHandler
 {
     /// <summary>
-    ///     This method routes a single received packet: a certificate discovery query is
-    ///     answered directly; anything else is treated as an encrypted client query, decrypted
-    ///     against whichever tracked certificate its client-magic tag names, and (if that
-    ///     succeeds) enqueued onto <paramref name="pipeline" /> with a response delegate that
-    ///     re-encrypts the eventual answer before handing it to <paramref name="sendAsync" />. A
-    ///     packet that fails to parse as either shape is silently dropped -- both a malformed
-    ///     plaintext query and a client query this resolver cannot decrypt (wrong/expired
-    ///     certificate, corrupted or forged ciphertext) have no reliable identifier a useful
-    ///     error response could even be addressed to, and answering strangers at all invites use
-    ///     as a reflection/amplification vector.
+    ///     This method routes one received packet. A certificate discovery query is answered at
+    ///     once. Anything else is treated as an encrypted client query: it is decrypted with the
+    ///     tracked certificate its client-magic names and, if that succeeds, enqueued onto
+    ///     <paramref name="pipeline" /> with a response delegate that encrypts the answer before
+    ///     passing it to <paramref name="sendAsync" />. A packet that is neither is dropped
+    ///     without a reply: a malformed plaintext query or a query that cannot be decrypted (an
+    ///     unknown client-magic, corrupted or forged ciphertext) has no reliable ID to answer, and
+    ///     answering unknown senders would help reflection attacks.
     /// </summary>
     public static async ValueTask HandlePacketAsync(
         ReadOnlyMemory<byte> packet,
@@ -118,8 +121,8 @@ internal static class DnsCryptQueryHandler
     }
 
     /// <summary>
-    ///     This method tries to decode a packet as a plaintext certificate discovery query, and
-    ///     if it is one, builds its already-encoded response.
+    ///     This method tries to decode a packet as a plaintext certificate discovery query and, if
+    ///     it is one, builds the encoded response.
     /// </summary>
     private static bool TryHandleCertificateDiscovery(
         ReadOnlyMemory<byte> packet,
@@ -136,8 +139,8 @@ internal static class DnsCryptQueryHandler
         }
         catch (FormatException)
         {
-            // Not a valid plaintext DNS message at all -- almost certainly an encrypted client
-            // query instead, which is exactly what the caller tries next.
+            // Not a plaintext DNS message, so most likely an encrypted client query, which the
+            // caller tries next.
             response = null;
             return false;
         }
@@ -160,7 +163,8 @@ internal static class DnsCryptQueryHandler
     }
 
     /// <summary>
-    ///     This method finds the currently tracked certificate a client-magic tag names, if any.
+    ///     This method finds the tracked certificate a client-magic tag names, if any. It does not
+    ///     check the certificate's validity period.
     /// </summary>
     private static DnsCryptCertificateEntry FindCertificateByClientMagic(
         IDnsCryptCertificateStore store,

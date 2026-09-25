@@ -18,9 +18,9 @@ namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 ///     This class checks that both DNSCrypt listeners honor <see cref="DnsCryptOptions.ListenAddresses" />.
 ///     The binding itself is the shared <c>ListenSocketSet</c>, whose query-level behavior
 ///     (answered on a listed address, silent on any other) is covered end to end by the Plain
-///     transport's tests; what these tests prove is that the DNSCrypt listeners are wired to it:
-///     they bind only what's listed, and report and log an address they can't use without
-///     giving up the others. Each test starts its own listeners on a free port, separate from
+///     transport's tests; these tests check that the DNSCrypt listeners use it: they bind only
+///     what is listed, and report and log an address they cannot use without giving up the
+///     others. Each test starts its own listeners on a free port, separate from
 ///     <see cref="DnsCryptListenerTestFixture" />'s shared ones.
 /// </summary>
 public sealed class DnsCryptListenAddressTests

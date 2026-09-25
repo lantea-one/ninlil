@@ -8,16 +8,15 @@ using Ninlil.Dns.Server.DnsCrypt;
 namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 
 /// <summary>
-///     This class plays the DNSCrypt <em>client</em> role for this test suite: building an
-///     encrypted client query packet by hand, and decrypting a server response packet back --
-///     the exact wire operations a real DNSCrypt client library performs, kept here so every
-///     test method does not have to re-derive the envelope layout itself.
+///     This class plays the DNSCrypt <em>client</em> for these tests: it builds encrypted query
+///     packets and decrypts response packets, as a DNSCrypt client library would, so each test
+///     does not have to repeat the envelope layout.
 /// </summary>
 internal static class DnsCryptWireTestHelper
 {
     /// <summary>
-    ///     This record carries everything a test needs to remember between building a client
-    ///     query packet and later decrypting that query's own response.
+    ///     This record carries what a test needs to keep between building a client query packet
+    ///     and decrypting its response.
     /// </summary>
     public sealed record ClientQuerySession(
         byte[] ClientPublicKey,
@@ -47,7 +46,7 @@ internal static class DnsCryptWireTestHelper
     }
 
     /// <summary>
-    ///     This method builds a complete, encrypted DNSCrypt client query packet, per the spec's
+    ///     This method builds an encrypted DNSCrypt client query packet, following the spec's
     ///     <c>&lt;client-magic&gt; &lt;client-pk&gt; &lt;client-nonce&gt; &lt;encrypted-query&gt;</c>
     ///     structure.
     /// </summary>
@@ -88,9 +87,9 @@ internal static class DnsCryptWireTestHelper
     }
 
     /// <summary>
-    ///     This method decrypts a complete DNSCrypt server response packet back into the plain
-    ///     DNS message it carries, also returning the raw resolver-magic and echoed client-nonce
-    ///     bytes so a test can independently check both against the spec's own requirements.
+    ///     This method decrypts a DNSCrypt server response packet into the DNS message it carries,
+    ///     and also returns the resolver-magic and echoed client-nonce bytes so a test can check
+    ///     both against the spec.
     /// </summary>
     public static DnsMessage DecryptResponsePacket(
         DnsCryptCertificateEntry certificateEntry,
@@ -127,11 +126,9 @@ internal static class DnsCryptWireTestHelper
     }
 
     /// <summary>
-    ///     This method scans a raw certificate-discovery UDP response for every embedded 124-byte
-    ///     DNSCrypt certificate, by its own <c>"DNSC"</c> magic -- deliberately not via
-    ///     <see cref="DnsMessageReader" />, since this codebase's own <see cref="DnsMessageReader" />
-    ///     corrupts a TXT record's arbitrary binary content on read (a real, known gap),
-    ///     the same workaround this project's own DNSCrypt smoke test needed.
+    ///     This method scans a raw certificate discovery response for every embedded 124-byte
+    ///     DNSCrypt certificate by its <c>"DNSC"</c> magic, without parsing the message with
+    ///     <see cref="DnsMessageReader" />.
     /// </summary>
     public static List<byte[]> ExtractCertificatesFromDiscoveryResponse(byte[] rawResponse)
     {
@@ -148,9 +145,8 @@ internal static class DnsCryptWireTestHelper
     }
 
     /// <summary>
-    ///     This method decodes the fields of one raw, extracted 124-byte certificate needed to
-    ///     independently re-verify its own Ed25519 signature: the exact bytes that were signed,
-    ///     and the signature itself.
+    ///     This method takes from one extracted 124-byte certificate what is needed to verify its
+    ///     Ed25519 signature: the signed bytes and the signature.
     /// </summary>
     public static (
         byte[] SigningInput,
