@@ -7,10 +7,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.Nsec3" />
-///     record, defined by RFC 5155 §3: does the same job as <see cref="NsecRecordData" /> --
-///     proving a name's non-existence -- but names its neighbor by a salted, iterated hash of
-///     the owner name rather than the plain name itself, so that walking a zone by repeatedly
-///     asking for the "next" nonexistent name no longer reveals every real name in it.
+///     record, defined by RFC 5155 §3. It does the job of <see cref="NsecRecordData" /> (proving
+///     that a name does not exist) but names its neighbor by a salted, iterated hash instead of the
+///     plain name, so asking for "next" names repeatedly no longer reveals every name in the zone.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="Salt" /> and
 ///         <see cref="NextHashedOwnerName" /> are <see langword="byte[]" />s and a
@@ -19,29 +18,27 @@ namespace Ninlil.Dns.Common.Wire.Records;
 /// </summary>
 /// <param name="hashAlgorithm">
 ///     The hash algorithm used to produce <see cref="NextHashedOwnerName" />, per IANA's "NSEC3
-///     Hash Algorithms" registry -- 1 is SHA-1, the only value ever assigned.
+///     Hash Algorithms" registry. 1 (SHA-1) is the only value assigned.
 /// </param>
 /// <param name="isOptOut">
-///     Whether this record may also cover an insecure (unsigned) delegation, per RFC 5155 §3
-///     and §6 -- the least significant bit of the RDATA's Flags field. Set on the NSEC3 records
-///     bracketing an unsigned child zone's delegation point, so proving that child's
-///     non-existence does not also require signing every unsigned delegation individually.
+///     The Opt-Out flag (RFC 5155 §3 and §6), the least significant bit of the Flags field. When
+///     set, the span this record covers may contain unsigned delegations that have no NSEC3
+///     record of their own, so a zone with many unsigned delegations need not create one for
+///     each.
 /// </param>
 /// <param name="iterations">
-///     How many additional times the hash is applied, per RFC 5155 §5 -- raises the cost of a
-///     dictionary attack against the salted names at the price of more validator CPU time.
+///     How many additional times the hash is applied (RFC 5155 §5). More iterations make a
+///     dictionary attack costlier, at the price of more validator CPU time.
 /// </param>
 /// <param name="salt">
-///     A value mixed into every hash in this zone, changed periodically so a
-///     precomputed dictionary attack against one snapshot of the zone cannot be reused against
-///     a later one.
+///     A value mixed into every hash in the zone. Changing it makes a dictionary precomputed for
+///     one snapshot of the zone useless against a later one.
 /// </param>
 /// <param name="nextHashedOwnerName">
-///     The hashed form of the next owner name in hash order -- raw binary, per RFC 5155 §3.3,
-///     never the base32hex text form that name uses when written as this record's own owner
-///     name.
+///     The hashed next owner name in hash order, as raw binary (RFC 5155 §3.3), not the base32hex
+///     text form used in owner names.
 /// </param>
-/// <param name="types">Every record type present at the *original*, unhashed owner name.</param>
+/// <param name="types">Every record type present at the original, unhashed owner name.</param>
 public class Nsec3RecordData(
     byte hashAlgorithm,
     bool isOptOut,

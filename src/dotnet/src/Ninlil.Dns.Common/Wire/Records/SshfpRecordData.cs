@@ -6,8 +6,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.SshFp" />
-///     record, defined by RFC 4255: an SSH host key's fingerprint, letting a client verify a
-///     server's key out-of-band from its first SSH connection.
+///     record, defined by RFC 4255: an SSH host key's fingerprint, which lets a client verify a
+///     server's key through DNSSEC instead of trusting it on first connection.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="Fingerprint" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -16,14 +16,14 @@ namespace Ninlil.Dns.Common.Wire.Records;
 /// </summary>
 /// <param name="algorithm">
 ///     The public key's algorithm, per IANA's "SSHFP RR Types for public key algorithms"
-///     registry -- 1 is RSA, 2 is DSA (RFC 4255), 3 is ECDSA (RFC 6594), 4 is Ed25519 (RFC 7479),
-///     and 6 is Ed448 (RFC 8709). Kept as a raw byte rather than an enum, the same way
-///     <see cref="CaaRecordData.Tag" /> and <see cref="AplItem.AddressFamily" /> are: this is a
-///     narrow, record-specific registry rather than one reused throughout the codebase.
+///     registry: 1 is RSA, 2 is DSA (RFC 4255), 3 is ECDSA (RFC 6594), 4 is Ed25519 (RFC 7479)
+///     and 6 is Ed448 (RFC 8709). It is a raw byte rather than an enum, like
+///     <see cref="CaaRecordData.Tag" /> and <see cref="AplItem.AddressFamily" />, because the
+///     registry is specific to this record type.
 /// </param>
 /// <param name="fingerprintType">
 ///     The fingerprint's hash algorithm, per IANA's "SSHFP RR Types for fingerprint types"
-///     registry -- 1 is SHA-1 (RFC 4255), 2 is SHA-256 (RFC 6594).
+///     registry: 1 is SHA-1 (RFC 4255), 2 is SHA-256 (RFC 6594).
 /// </param>
 /// <param name="fingerprint">The fingerprint's raw hash bytes.</param>
 public class SshfpRecordData(byte algorithm, byte fingerprintType, byte[] fingerprint)

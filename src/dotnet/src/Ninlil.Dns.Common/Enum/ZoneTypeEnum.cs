@@ -5,11 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration describes the role a zone plays on this server. It is Ninlil's own
-///     operational vocabulary rather than an IANA-assigned wire value -- the DNS protocol itself
-///     has no "zone type" field -- but the concepts themselves (primary, secondary, stub, and
-///     forwarding zones) are long-standing, cross-implementation DNS operations terminology, and
-///     catalog zones follow the IETF's DNS Catalog Zones specification.
+///     This enumeration describes the role a zone plays on this server. The DNS protocol has no
+///     "zone type" field, so this is Ninlil vocabulary, but primary, secondary, stub and
+///     forwarder zones are common DNS terms, and catalog zones follow the DNS Catalog Zones
+///     specification (RFC 9432).
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<ZoneTypeEnum>>]
 public enum ZoneTypeEnum
@@ -29,31 +28,29 @@ public enum ZoneTypeEnum
     Secondary = 1,
 
     /// <summary>
-    ///     Like <see cref="Secondary" />, but this server only transfers the zone's <c>NS</c>
-    ///     records rather than the full zone, purely to learn who the authoritative name servers
-    ///     are.
+    ///     Like <see cref="Secondary" />, but only the zone's <c>NS</c> records are transferred, to
+    ///     learn which servers are authoritative.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Stub")]
     Stub = 2,
 
     /// <summary>
-    ///     This server holds no data for the zone at all; instead, it forwards every query for
-    ///     names under it to another, explicitly configured set of name servers.
+    ///     This server holds no data for the zone. It forwards every query for names under it to a
+    ///     configured set of name servers.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Forwarder")]
     Forwarder = 3,
 
     /// <summary>
-    ///     A <see cref="Secondary" /> zone whose data happens to be a forwarding configuration
-    ///     transferred in from a primary, rather than authored locally.
+    ///     A <see cref="Secondary" /> zone whose data is a forwarding configuration transferred from a
+    ///     primary, rather than authored locally.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SecondaryForwarder")]
     SecondaryForwarder = 4,
 
     /// <summary>
-    ///     A zone whose records are not DNS answers at all, but a machine-readable list of other
-    ///     zones this server should provision automatically, per the IETF DNS Catalog Zones
-    ///     specification.
+    ///     A zone whose records are not DNS answers but a machine-readable list of other zones to
+    ///     provision automatically, as defined by DNS Catalog Zones.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Catalog")]
     Catalog = 5,
@@ -65,21 +62,18 @@ public enum ZoneTypeEnum
     SecondaryCatalog = 6,
 
     /// <summary>
-    ///     This server holds the master, editable copy of the zone, and continuously pushes its
-    ///     own changes out to a configured cloud DNS provider (Cloudflare, Route 53, DigitalOcean)
-    ///     via that provider's own REST API -- the operator's own choice, made once at zone
-    ///     creation time, of which side is authoritative. Unlike <see cref="Primary" />, this
-    ///     zone's data flows outward to a provider rather than out to RFC 5936/1996 secondaries.
+    ///     This server holds the editable copy of the zone and pushes changes to a configured cloud
+    ///     DNS provider (Cloudflare, Route 53, DigitalOcean) through its REST API. Which side is
+    ///     authoritative is chosen when the zone is created. Unlike <see cref="Primary" />, the data
+    ///     flows to a provider rather than to RFC 5936/1996 secondaries.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "CloudPrimary")]
     CloudPrimary = 7,
 
     /// <summary>
-    ///     This server holds a read-only copy of a zone whose master, editable copy lives at a
-    ///     configured cloud DNS provider, kept in sync by periodically pulling that provider's own
-    ///     current record set via its REST API -- the cloud-provider analogue of
-    ///     <see cref="Secondary" />, but polling a REST API instead of receiving RFC 5936/1996
-    ///     zone transfers.
+    ///     This server holds a read-only copy of a zone whose editable copy lives at a cloud DNS
+    ///     provider. It stays in sync by polling the provider's REST API: the cloud counterpart of
+    ///     <see cref="Secondary" />, without RFC 5936/1996 zone transfers.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "CloudSecondary")]
     CloudSecondary = 8,

@@ -5,8 +5,8 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration describes whether a block/allow list's entries deny or permit a
-///     match -- Ninlil's own operational vocabulary, not an IANA-assigned value.
+///     This enumeration describes whether a filter list's entries deny or permit a match. It is
+///     Ninlil vocabulary, not an IANA-assigned value.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsFilterListActionEnum>>]
 public enum DnsFilterListActionEnum
@@ -18,8 +18,9 @@ public enum DnsFilterListActionEnum
     Block = 0,
 
     /// <summary>
-    ///     A match against this list explicitly permits the query/response/client, overriding a
-    ///     <see cref="Block" />-list match per whichever precedence rule is currently configured.
+    ///     A match against this list permits the query, response or client. Whether it overrides a
+    ///     <see cref="Block" /> list match depends on the configured
+    ///     <see cref="DnsFilterListPrecedenceEnum" />.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Allow")]
     Allow = 1,

@@ -5,20 +5,18 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists how <c>Server.Core</c>'s own internal event bus delivers a
-///     published <c>IDnsServerEvent</c> to its registered subscribers. <see cref="InMemory" /> is
-///     the default: delivery never leaves the process. The two broker options make delivery
-///     fully swappable rather than merely additive -- every subscriber, including ones in the
-///     same process that published the event, receives it only after a real round trip through
-///     the configured broker, specifically so multiple Ninlil instances can share one event
-///     stream.
+///     This enumeration lists how the <c>Server.Core</c> event bus delivers a published
+///     <c>IDnsServerEvent</c> to its subscribers. <see cref="InMemory" /> is the default and never
+///     leaves the process. A broker option replaces in-process delivery instead of adding to it:
+///     every subscriber, including those in the publishing process, receives the event only after
+///     a round trip through the broker, so several Ninlil instances can share one event stream.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<EventTransportEnum>>]
 public enum EventTransportEnum
 {
     /// <summary>
-    ///     Delivery stays entirely in-process, via an in-memory channel. This is the default
-    ///     engine used when no other transport has been configured.
+    ///     Delivery stays in-process, through an in-memory channel. This is the default when no
+    ///     other transport is configured.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "InMemory")]
     InMemory = 0,

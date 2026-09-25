@@ -6,9 +6,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of a <see cref="DnsResourceRecordTypeEnum.Hinfo" /> record,
-///     defined by RFC 1035 §3.3.2: what kind of hardware and operating system the owner name
-///     runs. This is also the record type <see cref="DnsResourceRecordTypeEnum" />'s minimal
-///     answer to an <see cref="DnsResourceRecordTypeEnum.Any" /> query uses, per RFC 8482.
+///     defined by RFC 1035 §3.3.2: the hardware and operating system of the host at the owner
+///     name. RFC 8482 also uses HINFO for the minimal answer to an
+///     <see cref="DnsResourceRecordTypeEnum.Any" /> query.
 /// </summary>
 /// <param name="Cpu">A short description of the host's CPU type.</param>
 /// <param name="OperatingSystem">A short description of the host's operating system.</param>

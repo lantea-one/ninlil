@@ -5,11 +5,9 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists which transport protocol a single upstream forwarder definition
-///     string names -- Ninlil's own operational vocabulary, matching every protocol this
-///     project's own transports already speak (plus plain DNSCrypt, which this project has no
-///     listener-side name for since <c>Ninlil.Dns.Protocol.DnsCrypt</c> already claims that
-///     name for the server role).
+///     This enumeration lists which transport protocol an upstream forwarder definition string
+///     names. It is Ninlil vocabulary and covers every protocol the forwarding resolver can use to
+///     reach an upstream.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<UpstreamForwarderProtocolEnum>>]
 public enum UpstreamForwarderProtocolEnum

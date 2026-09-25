@@ -5,23 +5,22 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists the digest algorithms IANA has assigned for use inside a
-///     <c>DS</c> record -- the hash a parent zone takes of a child zone's key, rather than storing
-///     the key itself. Values are drawn from the "Delegation Signer (DS) Resource Record (RR) Type
-///     Digest Algorithms" registry.
+///     This enumeration lists the digest algorithms IANA has assigned for <c>DS</c> records. A DS
+///     record holds a hash of the child zone's key instead of the key itself. Values come from the
+///     "Delegation Signer (DS) Resource Record (RR) Type Digest Algorithms" registry.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnssecDigestTypeEnum>>]
 public enum DnssecDigestTypeEnum : byte
 {
     /// <summary>
-    ///     SHA-1, defined by RFC 3658. Weak by modern standards; kept for reading legacy DS
-    ///     records but never produced for a newly-signed zone.
+    ///     SHA-1, defined by RFC 3658. Weak by modern standards, and kept so older DS records can be
+    ///     read.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SHA-1")]
     Sha1 = 1,
 
     /// <summary>
-    ///     SHA-256, defined by RFC 4509. Ninlil's recommended default.
+    ///     SHA-256, defined by RFC 4509. The recommended choice.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SHA-256")]
     Sha256 = 2,

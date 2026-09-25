@@ -7,13 +7,12 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data shared by <see cref="DnsResourceRecordTypeEnum.DS" /> and
-///     <see cref="DnsResourceRecordTypeEnum.Cds" /> records -- RFC 4034 §5 and RFC 7344
-///     respectively define both with an identical RDATA shape, a digest of a child zone's
-///     <see cref="DnsKeyRecordData" /> that lets a parent zone vouch for it without needing the
-///     full public key. <see cref="DnsResourceRecordTypeEnum.DS" /> is what a parent actually
-///     publishes; <see cref="DnsResourceRecordTypeEnum.Cds" /> is the child's own copy of what it
-///     wants published, so a parent can pick it up automatically instead of requiring a manual
-///     update.
+///     <see cref="DnsResourceRecordTypeEnum.Cds" /> records, which RFC 4034 §5 and RFC 7344 define
+///     with the same RDATA layout: a digest of a child zone's <see cref="DnsKeyRecordData" /> that
+///     lets the parent vouch for it without holding the full key. The parent publishes
+///     <see cref="DnsResourceRecordTypeEnum.DS" />. The child publishes
+///     <see cref="DnsResourceRecordTypeEnum.Cds" /> as the DS it wants, so the parent can pick it
+///     up automatically instead of by manual update.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="Digest" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -21,19 +20,18 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     </para>
 /// </summary>
 /// <param name="keyTag">
-///     The keyed <see cref="DnsKeyRecordData" />'s key tag, per RFC 4034 Appendix B -- a short
-///     identifier letting a validator narrow down which key among several signed this digest,
-///     without needing to try every one.
+///     The key tag (RFC 4034 Appendix B) of the <see cref="DnsKeyRecordData" /> this digest covers.
+///     It lets a validator find the matching key among several without hashing every one.
 /// </param>
-/// <param name="algorithm">The keyed <see cref="DnsKeyRecordData" />'s own algorithm.</param>
+/// <param name="algorithm">The algorithm of the <see cref="DnsKeyRecordData" /> this digest covers.</param>
 /// <param name="digestType">
 ///     Which digest algorithm produced <see cref="Digest" />, per IANA's "Delegation Signer
-///     (DS) Resource Record (RR) Type Digest Algorithms" registry -- 1 is SHA-1 (RFC 3658), 2 is
+///     (DS) Resource Record (RR) Type Digest Algorithms" registry: 1 is SHA-1 (RFC 3658), 2 is
 ///     SHA-256 (RFC 4509), 3 is GOST R 34.11-94 (RFC 5933), 4 is SHA-384 (RFC 6605).
 /// </param>
 /// <param name="digest">
-///     The digest of the keyed <see cref="DnsKeyRecordData" />'s owner name and RDATA, computed
-///     per RFC 4034 §5.1.4.
+///     The digest of the <see cref="DnsKeyRecordData" /> owner name and RDATA, computed as RFC
+///     4034 §5.1.4 describes.
 /// </param>
 public class DsRecordData(
     ushort keyTag,
@@ -43,12 +41,12 @@ public class DsRecordData(
 ) : IDnsRecordData, IEquatable<DsRecordData>
 {
     /// <summary>
-    ///     This property contains the keyed <see cref="DnsKeyRecordData" />'s key tag.
+    ///     This property contains the key tag of the <see cref="DnsKeyRecordData" /> this digest covers.
     /// </summary>
     public ushort KeyTag { get; } = keyTag;
 
     /// <summary>
-    ///     This property contains the keyed <see cref="DnsKeyRecordData" />'s own algorithm.
+    ///     This property contains the algorithm of the <see cref="DnsKeyRecordData" /> this digest covers.
     /// </summary>
     public DnssecAlgorithmEnum Algorithm { get; } = algorithm;
 
@@ -96,7 +94,7 @@ public class DsRecordData(
 /// <summary>
 ///     This class reads and writes <see cref="DsRecordData" /> for both
 ///     <see cref="DnsResourceRecordTypeEnum.DS" /> and <see cref="DnsResourceRecordTypeEnum.Cds" />,
-///     since RFC 7344 gives the latter an identical RDATA shape to the former.
+///     since RFC 7344 gives CDS the same RDATA layout as DS.
 /// </summary>
 internal static class DsCodec
 {

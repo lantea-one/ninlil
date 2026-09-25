@@ -5,7 +5,8 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Common.Tests.Wire;
 
 /// <summary>
-///     This class tests <see cref="DnsMessageReader" />/<see cref="DnsMessageWriter" />.
+///     This class tests <see cref="DnsMessageReader" /> and <see cref="DnsMessageWriter" /> on
+///     in-memory byte arrays: a round trip of an ordinary query, and malformed input.
 /// </summary>
 public class DnsMessageReaderWriterTests
 {
@@ -35,13 +36,12 @@ public class DnsMessageReaderWriterTests
     }
 
     /// <summary>
-    ///     Regression test for a real bug found while building <c>Protocol.Plain</c>'s smoke
-    ///     test: a genuine 3-byte UDP datagram (too short to even contain a complete 12-byte
-    ///     header) made <see cref="DnsMessageReader.Read(System.ReadOnlySpan{byte},out int)" />
-    ///     throw a raw <see cref="IndexOutOfRangeException" />/<see cref="ArgumentOutOfRangeException" />
-    ///     instead of the documented <see cref="FormatException" /> every other malformed-input
-    ///     case here already throws -- which <c>Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline</c>
-    ///     specifically catches to discard a malformed message silently, per RFC 1035.
+    ///     This test checks that a buffer shorter than the 12-byte header makes
+    ///     <see cref="DnsMessageReader.Read(System.ReadOnlySpan{byte},out int)" /> throw
+    ///     <see cref="FormatException" />, not a raw <see cref="IndexOutOfRangeException" /> or
+    ///     <see cref="ArgumentOutOfRangeException" />.
+    ///     <c>Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline</c> drops a malformed
+    ///     message silently only when it sees <see cref="FormatException" />.
     /// </summary>
     [Theory]
     [InlineData(new byte[] { 0xFF, 0x00, 0x11 })]

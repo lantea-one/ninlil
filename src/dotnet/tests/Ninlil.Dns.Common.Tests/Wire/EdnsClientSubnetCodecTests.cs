@@ -7,8 +7,9 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Common.Tests.Wire;
 
 /// <summary>
-///     This class tests <see cref="EdnsClientSubnetCodec" />, RFC 7871 §6's EDNS Client Subnet
-///     option wire format.
+///     This class tests <see cref="EdnsClientSubnetCodec" />, the EDNS Client Subnet option format
+///     of RFC 7871 §6: encoding, masking, decoding and rejection of malformed payloads. The tests
+///     work on in-memory byte arrays.
 /// </summary>
 public class EdnsClientSubnetCodecTests
 {
@@ -117,7 +118,7 @@ public class EdnsClientSubnetCodecTests
     [Fact]
     public void TryDecodeRejectsASourcePrefixLengthExceedingTheFamilysMaximum()
     {
-        // Family 1 (IPv4) with a source prefix length of 33, one bit past its own 32-bit maximum.
+        // Family 1 (IPv4) with a source prefix length of 33, one bit past the 32-bit maximum.
         DnsEdnsOption overlong = new(
             (ushort)EdnsOptionCodeEnum.ClientSubnet,
             [0, 1, 33, 0, 192, 0, 2, 1, 0]

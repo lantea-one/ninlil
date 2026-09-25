@@ -7,9 +7,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of a <see cref="DnsResourceRecordTypeEnum.Soa" /> record,
-///     defined by RFC 1035 §3.3.13: the record every zone has exactly one of, at its apex,
-///     describing who is responsible for the zone and how secondary servers should keep their
-///     copy of it in sync.
+///     defined by RFC 1035 §3.3.13. Every zone has one, at its apex. It says who is responsible for
+///     the zone and how secondary servers keep their copy in sync.
 /// </summary>
 /// <param name="PrimaryNameServer">The zone's primary (master) name server.</param>
 /// <param name="ResponsiblePersonMailbox">
@@ -57,9 +56,8 @@ public class SoaRecordDataCodec : IDnsRecordDataCodec
     /// <inheritdoc />
     public IDnsRecordData Read(ReadOnlySpan<byte> rdata)
     {
-        // The two owner names are variable-length, so they must be read first, advancing
-        // offset past each; the five 32-bit fields that follow are then always fixed-width
-        // and in a fixed order, per RFC 1035 §3.3.13.
+        // The two names (MNAME and RNAME) are variable-length, so they are read first. The five
+        // 32-bit fields after them have a fixed width and order (RFC 1035 §3.3.13).
         int offset = 0;
         DnsName primaryNameServer = UncompressedDnsNameCodec.Read(rdata, ref offset);
         DnsName responsiblePersonMailbox = UncompressedDnsNameCodec.Read(rdata, ref offset);
@@ -86,9 +84,8 @@ public class SoaRecordDataCodec : IDnsRecordDataCodec
     /// <inheritdoc />
     public IDnsRecordData Read(ReadOnlySpan<byte> rdata, DecompressingNameReader decompressor)
     {
-        // Same fixed layout as the uncompressed overload above, except either name may itself
-        // be (or end in) a compression pointer into the full message -- the decompressor
-        // resolves that against the surrounding message buffer as it reads each name.
+        // Same layout as the uncompressed overload, except either name may be or end in a
+        // compression pointer, which the decompressor resolves against the full message.
         int offset = 0;
         DnsName primaryNameServer = decompressor.Read(ref offset);
         DnsName responsiblePersonMailbox = decompressor.Read(ref offset);

@@ -5,8 +5,8 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration distinguishes IPv4 from IPv6 wherever a piece of data -- most notably a
-///     DHCP lease -- needs to say which address family it belongs to.
+///     This enumeration distinguishes IPv4 from IPv6 wherever data, such as a DHCP lease, needs to
+///     say which address family it belongs to.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<InternetProtocolVersionEnum>>]
 public enum InternetProtocolVersionEnum

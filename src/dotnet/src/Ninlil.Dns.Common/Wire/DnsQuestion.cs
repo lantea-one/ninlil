@@ -4,9 +4,8 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class represents a single entry in a DNS message's Question section: what a client
-///     is actually asking for. Almost every DNS message carries exactly one of these, even though
-///     the wire format technically allows for more.
+///     This class represents one entry in the Question section of a DNS message: what the client
+///     is asking for. Almost every message carries one, although the wire format allows more.
 /// </summary>
 /// <param name="Name">The name being asked about.</param>
 /// <param name="Type">The record type being asked for.</param>

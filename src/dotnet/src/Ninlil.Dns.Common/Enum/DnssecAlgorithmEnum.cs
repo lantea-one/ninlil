@@ -6,19 +6,18 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration lists the DNSSEC signing algorithms assigned by IANA in the "Domain Name
-///     System Security (DNSSEC) Algorithm Numbers" registry. RFC 8624 sorts these into three
-///     buckets -- algorithms a compliant resolver <b>must</b> be able to validate, ones it
-///     <b>should</b>, and a handful it <b>must not</b> use for new signing because they are
-///     cryptographically broken. Ninlil keeps the broken ones in this list purely so that
-///     old, already-signed zones can still be parsed and reported on; it never offers them as a
-///     choice when a new zone is signed.
+///     System Security (DNSSEC) Algorithm Numbers" registry. RFC 8624 sorts them into algorithms
+///     an implementation <b>must</b> support, ones it <b>should</b>, and broken ones that
+///     <b>must not</b> be used for signing. The broken ones are listed so older signed zones can
+///     still be parsed and reported on. Which algorithms may be used for a new key is set by
+///     <c>DnssecAlgorithmPolicyOptions.AllowedAlgorithms</c>.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnssecAlgorithmEnum>>]
 public enum DnssecAlgorithmEnum : byte
 {
     /// <summary>
     ///     RSA/MD5, defined by RFC 3110. Broken; RFC 8624 forbids using it to sign or validate.
-    ///     Retained only so legacy signed zones do not fail to parse.
+    ///     Listed so older signed zones still parse.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "RSAMD5")]
     RsaMd5 = 1,
@@ -71,7 +70,7 @@ public enum DnssecAlgorithmEnum : byte
 
     /// <summary>
     ///     ECDSA using the P-256 curve and SHA-256, defined by RFC 6605. One of RFC 8624's
-    ///     mandatory-to-implement algorithms, and Ninlil's recommended default for new zones.
+    ///     mandatory-to-implement algorithms, and the recommended choice for new zones.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ECDSAP256SHA256")]
     EcdsaP256Sha256 = 13,

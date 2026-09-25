@@ -6,19 +6,17 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration lists the ways a <c>WebhookSubscriptionEntity</c> can authenticate its
-///     own outbound delivery POST against the subscriber's endpoint -- Ninlil's own
-///     operational vocabulary, not an IANA-assigned or otherwise externally standardized value.
-///     Whichever mode is selected determines the shape of the JSON object
-///     <c>WebhookSubscriptionEntity.AuthCredentialsEncrypted</c> decrypts to, the same
-///     "declared type selects an opaque payload's own shape" pattern
-///     <see cref="CloudDnsProviderTypeEnum" /> already establishes for
+///     delivery POST to the subscriber's endpoint. It is Ninlil vocabulary, not an external
+///     standard. The mode decides the shape of the JSON that
+///     <c>WebhookSubscriptionEntity.AuthCredentialsEncrypted</c> decrypts to, in the same way
+///     <see cref="CloudDnsProviderTypeEnum" /> decides the shape of
 ///     <c>CloudDnsProviderCredentialEntity.CredentialsEncrypted</c>.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<WebhookAuthModeEnum>>]
 public enum WebhookAuthModeEnum
 {
     /// <summary>
-    ///     No authentication is attached to the outbound delivery POST at all.
+    ///     No authentication is attached to the delivery POST.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "None")]
     None = 0,

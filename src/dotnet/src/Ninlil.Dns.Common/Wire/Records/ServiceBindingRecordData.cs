@@ -6,21 +6,20 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This class represents a single connection parameter inside a
-///     <see cref="ServiceBindingRecordData" /> record -- for example, the parameter advertising
-///     which Application-Layer Protocol Negotiation values (<c>h2</c>, <c>h3</c>) a service
-///     supports.
+///     This class represents one connection parameter inside a
+///     <see cref="ServiceBindingRecordData" /> record, such as the parameter that lists which
+///     Application-Layer Protocol Negotiation values (<c>h2</c>, <c>h3</c>) a service supports.
 ///     <para>
-///         Like <see cref="DnsResourceRecord" /> before it, this is a plain class rather than a
-///         record, since <see cref="Value" /> is a <see langword="byte[]" /> and a
-///         compiler-generated equality would compare it by reference rather than by content.
+///         Like <see cref="DnsResourceRecord" />, this is a plain class rather than a record:
+///         <see cref="Value" /> is a <see langword="byte[]" />, and compiler-generated equality
+///         would compare it by reference instead of by content.
 ///     </para>
 /// </summary>
 /// <param name="key">
 ///     The parameter's numeric key, assigned by IANA in the "DNS Service Binding (SVCB) Parameter
-///     Registry" -- for example, 1 is <c>alpn</c>, 3 is <c>port</c>.
+///     Registry"; for example 1 is <c>alpn</c> and 3 is <c>port</c>.
 /// </param>
-/// <param name="value">The parameter's value, in whatever shape that specific key defines.</param>
+/// <param name="value">The parameter's value, in the format its key defines.</param>
 public class SvcbParameter(ushort key, byte[] value) : IEquatable<SvcbParameter>
 {
     /// <summary>
@@ -59,17 +58,18 @@ public class SvcbParameter(ushort key, byte[] value) : IEquatable<SvcbParameter>
 
 /// <summary>
 ///     This class represents the data shared by <see cref="DnsResourceRecordTypeEnum.Svcb" /> and
-///     <see cref="DnsResourceRecordTypeEnum.Https" /> records, both defined by RFC 9460: how to
-///     reach a service at the owner name -- an alternate port, supported protocol versions, and
-///     so on -- advertised before a client ever opens a connection.
+///     <see cref="DnsResourceRecordTypeEnum.Https" /> records, both defined by RFC 9460. They tell
+///     a client how to reach a service at the owner name (an alternate port, supported protocol
+///     versions, and so on) before it opens a connection.
 /// </summary>
 /// <param name="Priority">
-///     A value of 0 marks this as an "alias form" record, pointing entirely at
-///     <see cref="TargetName" /> with no parameters of its own; any other value is this record's
-///     preference relative to other records at the same name, lower being preferred.
+///     0 marks an "alias form" record that points at <see cref="TargetName" /> and has no
+///     parameters. Any other value is this record's preference among records at the same name,
+///     lower being preferred.
 /// </param>
 /// <param name="TargetName">
-///     The name actually providing the service, or the root name to mean "this same owner name".
+///     The name that provides the service. In service form, the root name means the owner name
+///     itself.
 /// </param>
 /// <param name="Parameters">The connection parameters this record advertises.</param>
 public record ServiceBindingRecordData(
@@ -80,8 +80,8 @@ public record ServiceBindingRecordData(
 
 /// <summary>
 ///     This class contains the wire encoding <see cref="SvcbRecordDataCodec" /> and
-///     <see cref="HttpsRecordDataCodec" /> share, since RFC 9460 defines both record types with
-///     an identical shape, differing only in what a client uses each one for.
+///     <see cref="HttpsRecordDataCodec" /> share. RFC 9460 gives both record types the same
+///     layout; they differ only in what a client uses them for.
 /// </summary>
 internal static class ServiceBindingCodec
 {
@@ -98,9 +98,8 @@ internal static class ServiceBindingCodec
 
         List<SvcbParameter> parameters = [];
 
-        // The remainder of the RDATA is a run of key/length/value parameters -- a 2-octet key,
-        // a 2-octet value length, then that many octets of value -- repeated until the RDATA
-        // is exhausted, per RFC 9460 §2.1.
+        // The rest of the RDATA is a run of parameters (RFC 9460 §2.1): a 2-octet key, a
+        // 2-octet value length, then that many octets of value, until the RDATA ends.
         while (offset < rdata.Length)
         {
             ushort key = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(offset, 2));
@@ -115,9 +114,9 @@ internal static class ServiceBindingCodec
     }
 
     /// <summary>
-    ///     This method decodes an SVCB-family record's RDATA, resolving a compression pointer in
-    ///     the target name against the full message it came from if it uses one -- lenient
-    ///     reading of something RFC 9460 §2.2 itself forbids a compliant sender from producing.
+    ///     This method decodes an SVCB-family record's RDATA, resolving a compression pointer in the
+    ///     target name against the full message. RFC 9460 §2.2 forbids such a pointer; this reads it
+    ///     anyway to be lenient with nonconforming senders.
     /// </summary>
     public static ServiceBindingRecordData Read(
         ReadOnlySpan<byte> rdata,
@@ -130,9 +129,8 @@ internal static class ServiceBindingCodec
 
         List<SvcbParameter> parameters = [];
 
-        // The remainder of the RDATA is a run of key/length/value parameters -- a 2-octet key,
-        // a 2-octet value length, then that many octets of value -- repeated until the RDATA
-        // is exhausted, per RFC 9460 §2.1.
+        // The rest of the RDATA is a run of parameters (RFC 9460 §2.1): a 2-octet key, a
+        // 2-octet value length, then that many octets of value, until the RDATA ends.
         while (offset < rdata.Length)
         {
             ushort key = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(offset, 2));

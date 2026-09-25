@@ -5,11 +5,10 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This class reads and writes the "Type Bit Maps" field shared, byte-for-byte, by
-///     <see cref="NsecRecordData" /> and <see cref="Nsec3RecordData" /> -- RFC 4034 §4.1.2 and
-///     RFC 5155 §3.2 define the exact same windowed-bitmap encoding for both, listing every
-///     record type that legitimately exists at a name so a resolver can trust the *absence* of
-///     any type not listed.
+///     This class reads and writes the "Type Bit Maps" field of <see cref="NsecRecordData" /> and
+///     <see cref="Nsec3RecordData" />. RFC 4034 §4.1.2 and RFC 5155 §3.2 define the same windowed
+///     bitmap for both. It lists every record type present at a name, so a resolver can trust that
+///     any type not listed is absent.
 /// </summary>
 internal static class NsecTypeBitmapCodec
 {
@@ -18,8 +17,7 @@ internal static class NsecTypeBitmapCodec
     ///     of the RDATA it was given.
     /// </summary>
     /// <param name="rdata">
-    ///     The Type Bit Maps field's bytes -- the remainder of the record's RDATA after every
-    ///     field preceding it has already been consumed.
+    ///     The Type Bit Maps bytes: the rest of the record's RDATA after the preceding fields.
     /// </param>
     /// <returns>Every record type the bitmap marks present, in ascending numeric order.</returns>
     public static List<DnsResourceRecordTypeEnum> Read(ReadOnlySpan<byte> rdata)
@@ -61,18 +59,16 @@ internal static class NsecTypeBitmapCodec
         IReadOnlyList<DnsResourceRecordTypeEnum> types
     )
     {
-        // Group every type by its window (the high 8 bits of its 16-bit value), then emit each
-        // window in ascending order -- RFC 4034 §4.1.2 requires windows to appear in increasing
-        // numerical order, and a window with no types present must be omitted entirely.
+        // Group every type by its window (the high 8 bits of its 16-bit value). RFC 4034
+        // §4.1.2 requires windows in increasing order and omits a window with no types.
         foreach (
             IGrouping<int, DnsResourceRecordTypeEnum> window in types
                 .GroupBy(type => (int)type >> 8)
                 .OrderBy(group => group.Key)
         )
         {
-            // The bitmap's length is however many bytes are needed to reach the highest set bit
-            // in this window, up to the 32-byte (256-bit) maximum; trailing all-zero bytes past
-            // that point must be omitted, per the same section.
+            // The bitmap is as many bytes as needed to reach the highest set bit in this window
+            // (at most 32). The same section requires trailing zero bytes to be omitted.
             int highestBitIndex = window.Max(type => (int)type & 0xFF);
             int bitmapLength = highestBitIndex / 8 + 1;
             byte[] bitmap = new byte[bitmapLength];

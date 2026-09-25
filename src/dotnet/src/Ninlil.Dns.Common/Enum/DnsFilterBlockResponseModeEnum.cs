@@ -5,22 +5,22 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration describes how a domain query blocked by the filtering engine is
-///     answered -- Ninlil's own operational vocabulary, not an IANA-assigned value.
+///     This enumeration describes how the filtering engine answers a blocked query. It backs
+///     <c>DnsFilterOptions.BlockResponseMode</c> and is Ninlil vocabulary, not an IANA-assigned
+///     value.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsFilterBlockResponseModeEnum>>]
 public enum DnsFilterBlockResponseModeEnum
 {
     /// <summary>
-    ///     The query is answered <c>NXDOMAIN</c> -- this project's own default.
+    ///     The query is answered <c>NXDOMAIN</c>. This is the default.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "NxDomain")]
     NxDomain = 0,
 
     /// <summary>
-    ///     The query is answered with a real but useless A/AAAA record pointing at a configured
-    ///     sinkhole address (conventionally <c>0.0.0.0</c>/<c>::</c>) -- the classic Pi-hole
-    ///     approach.
+    ///     The query is answered with an A or AAAA record that points at a configured sinkhole
+    ///     address (by default <c>0.0.0.0</c> or <c>::</c>), the approach Pi-hole made common.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SinkholeAddress")]
     SinkholeAddress = 1,

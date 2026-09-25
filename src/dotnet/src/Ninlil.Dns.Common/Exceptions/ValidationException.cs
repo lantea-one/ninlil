@@ -2,26 +2,23 @@
 namespace Ninlil.Dns.Common.Exceptions;
 
 /// <summary>
-///     This exception is thrown when an administrative operation's own input is malformed or
-///     invalid in a way that goes beyond basic model binding -- an unparseable forwarder
-///     definition string, a malformed regex/wildcard filter-list pattern, record data that does
-///     not match its own declared type, an <c>IdentityResult</c> reporting one or more failures
-///     (a duplicate user name, a password that does not meet the configured policy, and so on).
-///     Mapped by the REST API's own shared exception handler to a <c>400</c> response.
+///     This exception is thrown when the input to an administrative operation is invalid in a way
+///     model binding does not catch: an unparseable forwarder definition, a malformed regex or
+///     wildcard filter pattern, record data that does not match its type, or a failed
+///     <c>IdentityResult</c> (duplicate user name, weak password, and so on). The REST API's
+///     shared exception handler maps it to a <c>400</c> response.
 ///     <para>
-///         Carries an optional, field-keyed <see cref="Errors" /> dictionary -- the same shape
-///         ASP.NET Core's own automatic model-state validation already reports through
-///         <c>ValidationProblemDetails.Errors</c> -- so a caller reporting more than one distinct
-///         field failure at once (as ASP.NET Core Identity's own <c>IdentityResult</c> routinely
-///         does) still produces the identical response shape a single-message validation failure
-///         does, rather than a second, different error format for the multi-error case.
+///         The optional <see cref="Errors" /> dictionary has the same field-keyed shape as
+///         <c>ValidationProblemDetails.Errors</c> from ASP.NET Core model validation, so several
+///         field failures at once (as an <c>IdentityResult</c> often reports) produce the same
+///         response format as a single message.
 ///     </para>
 /// </summary>
 public sealed class ValidationException : NinlilException
 {
     /// <summary>
-    ///     Creates a new instance of this exception carrying a single, free-form validation
-    ///     failure message, with no field-keyed error breakdown.
+    ///     Creates a new instance of this exception with a single free-form message and no
+    ///     field-keyed errors.
     /// </summary>
     /// <param name="message">A description of the failure, safe to return to the caller as-is.</param>
     public ValidationException(string message)
@@ -31,13 +28,12 @@ public sealed class ValidationException : NinlilException
     }
 
     /// <summary>
-    ///     Creates a new instance of this exception carrying a field-keyed breakdown of one or
-    ///     more distinct validation failures -- the same shape a failed <c>IdentityResult</c>, or
-    ///     a set of independently-invalid record fields, naturally produces.
+    ///     Creates a new instance of this exception with field-keyed errors, such as those from a
+    ///     failed <c>IdentityResult</c> or several invalid record fields.
     /// </summary>
     /// <param name="errors">
-    ///     Every distinct validation failure, keyed by the field or error code it applies to, with
-    ///     one or more human-readable messages per key.
+    ///     The validation failures, keyed by field or error code, with one or more readable messages
+    ///     per key.
     /// </param>
     public ValidationException(IReadOnlyDictionary<string, string[]> errors)
         : base("One or more validation errors occurred.")
@@ -46,9 +42,8 @@ public sealed class ValidationException : NinlilException
     }
 
     /// <summary>
-    ///     The field-keyed breakdown of every distinct validation failure this exception carries,
-    ///     or <see langword="null" /> when it was constructed from a single, free-form message
-    ///     instead.
+    ///     The field-keyed validation failures, or <see langword="null" /> when the exception was
+    ///     created from a single message.
     /// </summary>
     public IReadOnlyDictionary<string, string[]> Errors { get; }
 }

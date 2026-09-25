@@ -6,10 +6,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.OpenPgpKey" />
-///     record, defined by RFC 7929: an OpenPGP public key published for the owner name, which
-///     itself encodes the local part of an e-mail address's SHA-256 hash rather than the mailbox
-///     directly. RDATA is the raw OpenPGP Transferable Public Key packet sequence (RFC 4880)
-///     with no framing of its own -- there is nothing else in the record to read.
+///     record, defined by RFC 7929: an OpenPGP public key for an e-mail address. The owner name
+///     holds a SHA-256 hash of the address's local part rather than the mailbox itself. The RDATA
+///     is the OpenPGP Transferable Public Key packet sequence (RFC 4880) with no other framing.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="KeyData" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by

@@ -4,20 +4,18 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This interface converts a single record type's RDATA between the raw bytes RFC 1035 and
-///     its type's defining RFC describe and a strongly-typed <see cref="IDnsRecordData" />
-///     model. <see cref="DnsRecordDataCodecRegistry" /> holds one implementation of this per
-///     supported <see cref="DnsResourceRecordTypeEnum" />.
+///     This interface converts one record type's RDATA between its wire bytes (as RFC 1035 and the
+///     type's RFC define them) and a typed <see cref="IDnsRecordData" /> model.
+///     <see cref="DnsRecordDataCodecRegistry" /> holds one implementation per supported
+///     <see cref="DnsResourceRecordTypeEnum" />.
 ///     <para>
-///         A record type whose RDATA embeds a domain name (an NS record's target, for example) is
-///         written by Ninlil's own <see cref="Wire.DnsMessageWriter" /> uncompressed, always
-///         -- RFC 1035-era types technically permit compressing a name inside RDATA, but nothing
-///         Ninlil serves ever needs the space saving. A message arriving from elsewhere (a
-///         real-world root, TLD, or authoritative server this project's own recursive resolver
-///         queries, most commonly) may still compress one, though, so the decompression-aware
-///         <see cref="Read(System.ReadOnlySpan{byte},DecompressingNameReader)" /> overload exists
-///         for <see cref="Wire.DnsMessageReader" /> to call instead, while it still has the full
-///         message buffer a compression pointer might point into.
+///         Ninlil always writes a domain name inside RDATA (an NS record's target, for example)
+///         uncompressed. RFC 1035 types allow compression there, but Ninlil does not need the
+///         space. Messages from other servers, most often the root, TLD and authoritative servers
+///         the recursive resolver queries, may still compress such names. So
+///         <see cref="Wire.DnsMessageReader" /> calls the
+///         <see cref="Read(System.ReadOnlySpan{byte},DecompressingNameReader)" /> overload while it
+///         still has the full message a pointer could point into.
 ///     </para>
 /// </summary>
 public interface IDnsRecordDataCodec
@@ -28,53 +26,49 @@ public interface IDnsRecordDataCodec
     DnsResourceRecordTypeEnum RecordType { get; }
 
     /// <summary>
-    ///     This property contains the concrete <see cref="IDnsRecordData" /> implementation this
-    ///     codec reads and writes -- for example, <see cref="ARecordDataCodec" /> reports
-    ///     <c>typeof(ARecordData)</c>. This is what lets a caller that only has a record's data
-    ///     stored as JSON, alongside its <see cref="DnsResourceRecordTypeEnum" />, know which
-    ///     concrete type to deserialize that JSON into before this codec ever sees it.
+    ///     This property contains the <see cref="IDnsRecordData" /> type this codec reads and writes;
+    ///     for example, <see cref="ARecordDataCodec" /> reports <c>typeof(ARecordData)</c>. A caller
+    ///     holding a record's data as JSON plus its <see cref="DnsResourceRecordTypeEnum" /> uses it
+    ///     to know which type to deserialize the JSON into.
     /// </summary>
     Type DataType { get; }
 
     /// <summary>
-    ///     This property reports whether this record type's RDATA can ever embed a domain name
-    ///     that might itself use a compression pointer (RFC 1035 §4.1.4) -- <see
-    ///     cref="Wire.DnsMessageReader" /> only pays for the decompression-aware
-    ///     <see cref="Read(System.ReadOnlySpan{byte},DecompressingNameReader)" /> round-trip for a
-    ///     codec that reports <see langword="true" /> here; every other codec's RDATA is kept
-    ///     exactly as sliced off the wire, unmodified. A codec overriding
-    ///     <see cref="Read(System.ReadOnlySpan{byte},DecompressingNameReader)" /> must also
-    ///     override this to <see langword="true" />, or the override is never actually called.
-    ///     Defaults to <see langword="false" />, correct as-is for a record type (TXT, A, AAAA,
-    ///     CAA, and most others) whose RDATA embeds no domain name at all.
+    ///     This property reports whether this type's RDATA can contain a domain name that uses a
+    ///     compression pointer (RFC 1035 §4.1.4). <see cref="Wire.DnsMessageReader" /> only takes the
+    ///     decompression round trip through
+    ///     <see cref="Read(System.ReadOnlySpan{byte},DecompressingNameReader)" /> for codecs that
+    ///     return <see langword="true" />; other RDATA is kept as sliced from the wire. A codec that
+    ///     overrides that overload must also return <see langword="true" /> here, or the override is
+    ///     never called. The default, <see langword="false" />, suits types with no embedded name
+    ///     (TXT, A, AAAA, CAA and most others).
     /// </summary>
     bool CanEmbedCompressedName => false;
 
     /// <summary>
-    ///     This method decodes a record's RDATA into its strongly-typed model.
+    ///     This method decodes a record's RDATA into its typed model.
     /// </summary>
-    /// <param name="rdata">The record's RDATA, exactly as it appears on the wire.</param>
+    /// <param name="rdata">The record's RDATA, as it appears on the wire.</param>
     /// <returns>The decoded, strongly-typed record data.</returns>
     IDnsRecordData Read(ReadOnlySpan<byte> rdata);
 
     /// <summary>
-    ///     This method decodes a record's RDATA into its strongly-typed model, resolving a
-    ///     compression pointer against the full message the RDATA came from should any name
-    ///     embedded in it use one. Only ever called by <see cref="Wire.DnsMessageReader" /> when
-    ///     <see cref="CanEmbedCompressedName" /> is <see langword="true" />; the default
-    ///     implementation simply ignores <paramref name="decompressor" /> and calls
+    ///     This method decodes a record's RDATA into its typed model, resolving any compression
+    ///     pointer in an embedded name against the full message. <see cref="Wire.DnsMessageReader" />
+    ///     calls it only when <see cref="CanEmbedCompressedName" /> is <see langword="true" />. The
+    ///     default implementation ignores <paramref name="decompressor" /> and calls
     ///     <see cref="Read(System.ReadOnlySpan{byte})" />.
     /// </summary>
-    /// <param name="rdata">The record's RDATA, exactly as it appears on the wire.</param>
+    /// <param name="rdata">The record's RDATA, as it appears on the wire.</param>
     /// <param name="decompressor">A reader that can resolve a compression pointer inside <paramref name="rdata" /> against the full message it came from.</param>
     /// <returns>The decoded, strongly-typed record data.</returns>
     IDnsRecordData Read(ReadOnlySpan<byte> rdata, DecompressingNameReader decompressor) =>
         Read(rdata);
 
     /// <summary>
-    ///     This method encodes a strongly-typed record data model into RDATA bytes.
+    ///     This method encodes a typed record data model into RDATA bytes.
     /// </summary>
-    /// <param name="data">The strongly-typed record data to encode.</param>
+    /// <param name="data">The typed record data to encode.</param>
     /// <returns>The encoded RDATA, ready to embed in a <see cref="Wire.DnsResourceRecord" />.</returns>
     byte[] Write(IDnsRecordData data);
 }

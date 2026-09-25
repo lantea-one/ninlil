@@ -5,10 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists the cloud DNS providers Ninlil can sync a
-///     <see cref="ZoneTypeEnum.CloudPrimary" />/<see cref="ZoneTypeEnum.CloudSecondary" /> zone
-///     against, via that provider's own documented REST API rather than RFC 5936/1996 zone
-///     transfer -- Ninlil's own operational vocabulary, not an IANA-assigned value.
+///     This enumeration lists the cloud DNS providers a <see cref="ZoneTypeEnum.CloudPrimary" /> or
+///     <see cref="ZoneTypeEnum.CloudSecondary" /> zone can sync with. Sync uses the provider's REST
+///     API rather than RFC 5936/1996 zone transfer. It is Ninlil vocabulary, not an IANA-assigned
+///     value.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<CloudDnsProviderTypeEnum>>]
 public enum CloudDnsProviderTypeEnum

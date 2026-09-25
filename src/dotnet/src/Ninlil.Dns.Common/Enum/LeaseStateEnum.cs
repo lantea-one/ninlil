@@ -6,10 +6,9 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration describes where a DHCP lease is in its lifecycle, from the moment an
-///     address is tentatively set aside for a client through to it being handed back to the pool.
-///     The states mirror the client/server exchange described for DHCPv4 by RFC 2131 and for
-///     DHCPv6 by RFC 8415; both protocols move a lease through the same conceptual stages even
-///     though their wire messages differ.
+///     address is offered to a client until it goes back to the pool. The states follow the
+///     exchanges in RFC 2131 (DHCPv4) and RFC 8415 (DHCPv6), which move a lease through the same
+///     stages even though their messages differ.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<LeaseStateEnum>>]
 public enum LeaseStateEnum
@@ -34,15 +33,15 @@ public enum LeaseStateEnum
     Expired = 2,
 
     /// <summary>
-    ///     The client explicitly gave the address back before its lease expired (DHCPv4
+    ///     The client gave the address back before its lease expired (DHCPv4
     ///     <c>DHCPRELEASE</c> or DHCPv6 <c>Release</c>).
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Released")]
     Released = 3,
 
     /// <summary>
-    ///     An administrator permanently reserved this address for a specific client, outside the
-    ///     normal offer/lease lifecycle.
+    ///     An administrator reserved this address for a specific client, outside the normal
+    ///     offer/lease lifecycle.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Reserved")]
     Reserved = 4,

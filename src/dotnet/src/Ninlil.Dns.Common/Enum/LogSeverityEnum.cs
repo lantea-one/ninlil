@@ -5,11 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration describes how severe a persisted log entry is. It deliberately mirrors
-///     the six levels <see cref="Microsoft.Extensions.Logging.LogLevel" /> already defines, so
-///     that a log entry read from the ASP.NET Core logging pipeline maps onto it without any loss
-///     of meaning, while still giving Ninlil its own type to attach storage- and
-///     serialization-specific attributes to.
+///     This enumeration describes how severe a persisted log entry is. It mirrors the six levels
+///     of <see cref="Microsoft.Extensions.Logging.LogLevel" />, so an entry from the ASP.NET Core
+///     logging pipeline maps onto it without loss, while Ninlil keeps a type it can put storage
+///     and serialization attributes on.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<LogSeverityEnum>>]
 public enum LogSeverityEnum

@@ -4,49 +4,46 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class represents the TSIG extension to a DNS message, defined by RFC 8945: a
-///     transaction-level authentication tag, computed with a shared secret, proving the message
-///     was neither forged nor altered in transit. Like <see cref="DnsEdnsOptions" />, this
-///     information does not travel as a header field; it rides inside a pseudo-record of type
-///     TSIG, which must be the last record in the message's Additional section. A
-///     <see cref="DnsMessage" /> with no TSIG record present has no <see cref="DnsTsigOptions" />
-///     at all (its <see cref="DnsMessage.Tsig" /> property is <see langword="null" />).
+///     This class represents the TSIG extension of a DNS message (RFC 8945): an authentication
+///     code, computed with a shared secret, that proves the message was not forged or altered.
+///     Like <see cref="DnsEdnsOptions" />, it is not a header field but a TSIG pseudo-record, which
+///     must be the last record in the Additional section. A <see cref="DnsMessage" /> without one
+///     has a <see langword="null" /> <see cref="DnsMessage.Tsig" />. <see cref="TsigCodec" />
+///     builds the bytes the MAC covers.
 ///     <para>
-///         This is a plain class rather than a record, since <see cref="Mac" /> and
-///         <see cref="OtherData" /> are <see langword="byte[]" /> and a compiler-generated
-///         equality would compare them by reference rather than by content.
+///         This is a plain class rather than a record because <see cref="Mac" /> and
+///         <see cref="OtherData" /> are <see langword="byte[]" />, and compiler-generated equality
+///         would compare them by reference instead of by content.
 ///     </para>
 /// </summary>
 /// <param name="keyName">
-///     The name identifying which shared secret was used, matched against a pre-shared key an
-///     operator configured -- not necessarily a real, resolvable domain name.
+///     The name of the shared secret that was used, matched against a key an operator
+///     configured. It need not be a resolvable domain name.
 /// </param>
 /// <param name="algorithmName">
-///     The MAC algorithm used, as a domain name per RFC 8945's convention -- Ninlil only
-///     ever produces and accepts <see cref="HmacSha256AlgorithmName" />.
+///     The MAC algorithm, written as a domain name as RFC 8945 does. Ninlil only produces and
+///     accepts <see cref="HmacSha256AlgorithmName" />.
 /// </param>
 /// <param name="timeSigned">
 ///     When the MAC was generated, as seconds since the Unix epoch. Only the low 48 bits are
 ///     significant on the wire.
 /// </param>
 /// <param name="fudge">How many seconds of clock skew between signer and verifier are tolerated.</param>
-/// <param name="mac">The message authentication code itself.</param>
+/// <param name="mac">The message authentication code.</param>
 /// <param name="originalId">
-///     The original message ID, copied here so a resolver that rewrote the header's ID (an
-///     intermediate forwarder, for example) does not invalidate the signature.
+///     The message ID at signing time. RFC 8945 carries it so a verifier can restore it if a
+///     forwarder rewrote the header ID.
 /// </param>
 /// <param name="error">
-///     A TSIG-specific outcome, per RFC 8945 §5.3 -- <see cref="DnsResponseCodeEnum.NoError" />
-///     on a successfully verified request, or one of
-///     <see cref="DnsResponseCodeEnum.BadVersionOrBadSignature" /> (BADSIG, reusing the same
-///     numeric value RFC 6891 assigns to EDNS's BADVERS), <see cref="DnsResponseCodeEnum.BadKey" />,
-///     or <see cref="DnsResponseCodeEnum.BadTime" /> when a server rejects a signed request and
-///     reports why.
+///     The TSIG outcome (RFC 8945 §5.3): <see cref="DnsResponseCodeEnum.NoError" /> for a verified
+///     request, or <see cref="DnsResponseCodeEnum.BadVersionOrBadSignature" /> (BADSIG, which shares
+///     its value with the EDNS BADVERS code), <see cref="DnsResponseCodeEnum.BadKey" /> or
+///     <see cref="DnsResponseCodeEnum.BadTime" /> when a server rejects a signed request.
 /// </param>
 /// <param name="otherData">
-///     Additional data relevant to <see cref="Error" /> -- populated only when
-///     <see cref="Error" /> is <see cref="DnsResponseCodeEnum.BadTime" />, with the responder's
-///     own current time, so the requestor can resynchronize its clock.
+///     Extra data for <see cref="Error" />. It is only filled when <see cref="Error" /> is
+///     <see cref="DnsResponseCodeEnum.BadTime" />, with the responder's current time, so the
+///     requester can correct its clock.
 /// </param>
 public class DnsTsigOptions(
     DnsName keyName,
@@ -60,9 +57,8 @@ public class DnsTsigOptions(
 ) : IEquatable<DnsTsigOptions>
 {
     /// <summary>
-    ///     This property contains the well-known algorithm name for HMAC-SHA256, the only MAC
-    ///     algorithm Ninlil implements -- a deliberate choice to support HMAC-SHA256 only
-    ///     rather than also accepting the legacy HMAC-SHA1/MD5 algorithms.
+    ///     This property contains the algorithm name for HMAC-SHA256, the only MAC algorithm Ninlil
+    ///     implements. The older HMAC-SHA1 and HMAC-MD5 algorithms are not accepted.
     /// </summary>
     public static DnsName HmacSha256AlgorithmName { get; } = DnsName.Parse("hmac-sha256");
 
@@ -87,7 +83,7 @@ public class DnsTsigOptions(
     public ushort Fudge { get; } = fudge;
 
     /// <summary>
-    ///     This property contains the message authentication code itself.
+    ///     This property contains the message authentication code.
     /// </summary>
     public byte[] Mac { get; } = mac;
 
@@ -97,7 +93,7 @@ public class DnsTsigOptions(
     public ushort OriginalId { get; } = originalId;
 
     /// <summary>
-    ///     This property contains this TSIG record's own outcome.
+    ///     This property contains this TSIG record's outcome.
     /// </summary>
     public DnsResponseCodeEnum Error { get; } = error;
 

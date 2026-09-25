@@ -25,25 +25,24 @@ public record LocRecordData(
 ) : IDnsRecordData;
 
 /// <summary>
-///     This class reads and writes <see cref="LocRecordData" />. RFC 1876 packs its sixteen
-///     octets unusually densely, using two encodings not seen anywhere else in this namespace:
+///     This class reads and writes <see cref="LocRecordData" />. RFC 1876 packs sixteen octets
+///     using two encodings found nowhere else in this namespace:
 ///     <list type="bullet">
 ///         <item>
 ///             <description>
 ///                 <see cref="LocRecordData.DiameterMeters" />, <see cref="LocRecordData.HorizontalPrecisionMeters" />, and
 ///                 <see cref="LocRecordData.VerticalPrecisionMeters" /> are each packed into a single octet, as
 ///                 a base (the high nibble, 0-9) and a power-of-ten exponent (the low nibble,
-///                 0-9) that together mean <c>base * 10^exponent</c> centimeters -- "unsigned
-///                 exponential notation", in the RFC's own words.
+///                 0-9) meaning <c>base * 10^exponent</c> centimeters, which the RFC calls
+///                 "unsigned exponential notation".
 ///             </description>
 ///         </item>
 ///         <item>
 ///             <description>
 ///                 <see cref="LocRecordData.LatitudeDegrees" /> and <see cref="LocRecordData.LongitudeDegrees" /> are each a
-///                 32-bit unsigned integer counting thousandths of an arc-second away from the
-///                 equator (for latitude) or the prime meridian (for longitude), offset so that
-///                 2^31 itself represents zero -- which is what lets a single unsigned integer
-///                 represent both hemispheres without a separate sign.
+///                 32-bit unsigned integer counting thousandths of an arc-second from the equator
+///                 (latitude) or the prime meridian (longitude), offset so that 2^31 means zero.
+///                 That lets one unsigned integer cover both hemispheres without a sign.
 ///             </description>
 ///         </item>
 ///     </list>
@@ -51,15 +50,15 @@ public record LocRecordData(
 public class LocRecordDataCodec : IDnsRecordDataCodec
 {
     /// <summary>
-    ///     This constant contains the unsigned integer value RFC 1876 assigns to zero degrees of
-    ///     latitude or longitude -- the equator, or the prime meridian.
+    ///     This constant contains the value RFC 1876 assigns to zero degrees of latitude or longitude
+    ///     (the equator or the prime meridian).
     /// </summary>
     private const uint AngleZeroValue = 1u << 31;
 
     /// <summary>
-    ///     This constant contains, in centimeters, how far below the WGS 84 reference spheroid
-    ///     RFC 1876's altitude encoding measures from, so that a below-spheroid altitude can
-    ///     still be represented by an unsigned integer.
+    ///     This constant contains, in centimeters, how far below the WGS 84 reference spheroid RFC
+    ///     1876 measures altitude from (100,000 m), so an altitude below the spheroid still fits in
+    ///     an unsigned integer.
     /// </summary>
     private const long AltitudeBaseCentimeters = 100_000 * 100;
 

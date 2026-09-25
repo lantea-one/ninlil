@@ -4,8 +4,9 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Common.Tests.Wire;
 
 /// <summary>
-///     This class tests <see cref="DnsName" />, including its RFC 4034 §6.1/§6.2 canonical-form
-///     support.
+///     This class tests <see cref="DnsName" />: the canonical lower-case form of RFC 4034 §6.1 and
+///     §6.2, case-insensitive equality, and uncompressed wire encoding. The tests are in-memory
+///     checks.
 /// </summary>
 public class DnsNameTests
 {

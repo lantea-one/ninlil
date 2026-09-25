@@ -4,15 +4,14 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class represents a single EDNS(0) option carried inside an OPT pseudo-record's data,
-///     defined by RFC 6891. <see cref="Code" /> is a raw <see langword="ushort" /> rather than an
-///     <see cref="EdnsOptionCodeEnum" /> directly, since RFC 6891 requires that an option code
-///     this server doesn't recognize be preserved and ignored rather than rejected; use
-///     <see cref="TryGetKnownCode" /> to find out whether <see cref="Code" /> is one Ninlil
-///     specifically understands.
+///     This class represents one EDNS(0) option inside an OPT pseudo-record (RFC 6891).
+///     <see cref="Code" /> is a raw <see langword="ushort" /> rather than an
+///     <see cref="EdnsOptionCodeEnum" />, because RFC 6891 requires unknown options to be kept and
+///     ignored rather than rejected. <see cref="TryGetKnownCode" /> says whether Ninlil knows the
+///     code.
 /// </summary>
 /// <param name="code">This option's raw, numeric option code.</param>
-/// <param name="data">This option's data, exactly as it appears on the wire.</param>
+/// <param name="data">This option's data, as it appears on the wire.</param>
 public class DnsEdnsOption(ushort code, byte[] data) : IEquatable<DnsEdnsOption>
 {
     /// <summary>
@@ -21,13 +20,13 @@ public class DnsEdnsOption(ushort code, byte[] data) : IEquatable<DnsEdnsOption>
     public ushort Code { get; } = code;
 
     /// <summary>
-    ///     This property contains this option's data, exactly as it appears on the wire.
+    ///     This property contains this option's data, as it appears on the wire.
     /// </summary>
     public byte[] Data { get; } = data;
 
     /// <summary>
     ///     This method checks whether <see cref="Code" /> is one of the option codes Ninlil
-    ///     specifically recognizes.
+    ///     recognizes.
     /// </summary>
     /// <param name="knownCode">
     ///     The recognized <see cref="EdnsOptionCodeEnum" /> value, if <see cref="Code" /> matched

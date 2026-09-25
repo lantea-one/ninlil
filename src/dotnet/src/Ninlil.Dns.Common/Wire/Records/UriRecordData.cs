@@ -8,9 +8,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of a <see cref="DnsResourceRecordTypeEnum.Uri" /> record,
-///     defined by RFC 7553: a URI associated with the owner name. Unlike most of the record types
-///     in this namespace, <see cref="Target" /> is plain text, not a domain name -- there is
-///     nothing to compress and nothing that follows RFC 1035's label-length-prefixed encoding.
+///     defined by RFC 7553: a URI associated with the owner name. <see cref="Target" /> is plain
+///     text running to the end of the RDATA, not a domain name or a length-prefixed string.
 /// </summary>
 /// <param name="Priority">
 ///     A lower value is preferred over a higher one when more than one URI record exists for the

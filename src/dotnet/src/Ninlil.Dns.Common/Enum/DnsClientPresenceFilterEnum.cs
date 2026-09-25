@@ -5,10 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration names the presence states a list of known clients can be narrowed to. A
-///     device's presence is never stored: it is online when any of its addresses was seen within
-///     the configured online window, evaluated against the current instant at query time, so a
-///     device that goes quiet drops to offline on its own with no background sweep.
+///     This enumeration names the presence states a list of known clients can be narrowed to.
+///     Presence is never stored. A device is online when any of its addresses was seen within the
+///     configured online window, checked against the current time when the list is queried, so a
+///     quiet device becomes offline without any background sweep.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsClientPresenceFilterEnum>>]
 public enum DnsClientPresenceFilterEnum

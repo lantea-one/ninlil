@@ -8,8 +8,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.IpSecKey" />
-///     record, defined by RFC 4025: keying material for an IPsec gateway associated with the
-///     owner name, so a client can discover it before ever attempting to negotiate a tunnel.
+///     record, defined by RFC 4025: keying material for an IPsec gateway for the owner name, so a
+///     client can find it before negotiating a tunnel.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="PublicKey" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -20,13 +20,12 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     Among multiple IPSECKEY records for the same owner name, a lower value is preferred.
 /// </param>
 /// <param name="gatewayType">
-///     What form <see cref="GatewayAddress" />/<see cref="GatewayName" /> takes, per RFC 4025
-///     §2.5 -- 0 means no gateway is specified at all, 1 an IPv4 address, 2 an IPv6 address, and
-///     3 a domain name.
+///     What form <see cref="GatewayAddress" />/<see cref="GatewayName" /> takes (RFC 4025 §2.5):
+///     0 means no gateway, 1 an IPv4 address, 2 an IPv6 address and 3 a domain name.
 /// </param>
 /// <param name="algorithm">
-///     <see cref="PublicKey" />'s format, per RFC 4025 §2.6 -- 0 means no key is present, 1 is a
-///     DSA key, 2 is an RSA key.
+///     The format of <see cref="PublicKey" /> (RFC 4025 §2.6): 0 means no key, 1 is a DSA key and
+///     2 is an RSA key.
 /// </param>
 /// <param name="gatewayAddress">
 ///     The gateway's address, when <see cref="GatewayType" /> is 1 or 2; otherwise
@@ -139,9 +138,9 @@ public class IpSecKeyRecordDataCodec : IDnsRecordDataCodec
         IPAddress gatewayAddress = null;
         DnsName gatewayName = null;
 
-        // The gateway field's own shape depends entirely on gatewayType (0 = absent, already
-        // handled by leaving both outputs null); a 4- or 16-octet address is fixed-width, but
-        // a domain name is variable-width, so only that branch advances offset itself.
+        // The gateway field's layout depends on gatewayType. Type 0 has no gateway, so both
+        // outputs stay null. Addresses are fixed-width; a name is variable-width, so the name
+        // reader advances offset itself.
         switch (gatewayType)
         {
             case 1:
@@ -183,11 +182,9 @@ public class IpSecKeyRecordDataCodec : IDnsRecordDataCodec
         IPAddress gatewayAddress = null;
         DnsName gatewayName = null;
 
-        // Same gatewayType-driven shape as the non-decompressing overload above, except gateway
-        // type 3 reads its name through the decompressor rather than UncompressedDnsNameCodec --
-        // this overload is the one real message decoding actually uses (CanEmbedCompressedName),
-        // since a gateway name embedded in RDATA can itself point back into earlier message
-        // compression the same way an owner name can.
+        // Same layout as the overload above, except a type 3 name is read through the
+        // decompressor. Message decoding uses this overload (CanEmbedCompressedName), so a
+        // nonconforming sender's compressed gateway name is still read.
         switch (gatewayType)
         {
             case 1:
@@ -227,9 +224,8 @@ public class IpSecKeyRecordDataCodec : IDnsRecordDataCodec
         header[2] = typed.Algorithm;
         buffer.Advance(3);
 
-        // Mirror the Read overloads' own gatewayType-driven shape, but writing also validates
-        // the gateway data actually matches the declared type -- Read never needs to, since the
-        // wire bytes it consumes are already self-describing by construction.
+        // Same layout as Read, but writing also checks that the gateway data matches the
+        // declared type. Read does not need to, since the wire bytes describe themselves.
         switch (typed.GatewayType)
         {
             case 1:

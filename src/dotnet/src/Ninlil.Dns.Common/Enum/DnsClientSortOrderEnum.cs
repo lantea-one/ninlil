@@ -5,23 +5,23 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration names the orderings a page of known clients (<c>DnsClientEntity</c>) can
-///     be listed in. Every ordering is translated into the storage engine's own sort, so a page
-///     boundary always falls in the same place the full ordering would put it. Ninlil's own
-///     presentation vocabulary, not an IANA-assigned value.
+///     This enumeration names the orders a page of known clients (<c>DnsClientEntity</c>) can be
+///     listed in. Each order is translated into a storage-engine sort, so page boundaries fall
+///     where the full ordering would put them. It is Ninlil vocabulary, not an IANA-assigned
+///     value.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsClientSortOrderEnum>>]
 public enum DnsClientSortOrderEnum
 {
     /// <summary>
-    ///     Oldest registration first -- the stable, default ordering, unaffected by later activity.
+    ///     Oldest registration first. This is the default, and later activity does not change it.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Created")]
     Created = 0,
 
     /// <summary>
-    ///     Most recently seen first, by the latest sighting across every one of a device's own
-    ///     addresses; a device never seen at all sorts after every device that has been.
+    ///     Most recently seen first, using the latest sighting across all of a device's addresses. A
+    ///     device never seen sorts after every device that has been.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "LastSeen")]
     LastSeen = 1,

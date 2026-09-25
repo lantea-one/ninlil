@@ -6,46 +6,41 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class decodes a raw DNS message off the wire, per RFC 1035 §4, into a
-///     <see cref="DnsMessage" />. It understands DNS name compression (RFC 1035 §4.1.4), the
-///     EDNS(0) OPT pseudo-record (RFC 6891), and the TSIG pseudo-record (RFC 8945), extracting
-///     both into <see cref="DnsMessage.Edns" />/<see cref="DnsMessage.Tsig" /> rather than
-///     leaving them as ordinary records in <see cref="DnsMessage.AdditionalRecords" />.
+///     This class decodes a DNS message from wire bytes (RFC 1035 §4) into a
+///     <see cref="DnsMessage" />. It follows name compression (RFC 1035 §4.1.4) and moves the OPT
+///     (RFC 6891) and TSIG (RFC 8945) pseudo-records into <see cref="DnsMessage.Edns" /> and
+///     <see cref="DnsMessage.Tsig" /> instead of <see cref="DnsMessage.AdditionalRecords" />. The
+///     protocol projects, the query pipeline and the upstream clients all decode through it.
 /// </summary>
 public static class DnsMessageReader
 {
     /// <summary>
-    ///     This constant bounds how many compression-pointer jumps a single name may follow
-    ///     before reading gives up. Because a pointer is required to point strictly backward
-    ///     (see <see cref="ReadName" />), a chain of jumps can never loop forever on its own; this
-    ///     cap exists purely as defense in depth against a message crafted with an unreasonably
-    ///     long (but technically valid) chain of backward pointers, meant to waste CPU time on
-    ///     whoever tries to parse it.
+    ///     This constant limits how many compression-pointer jumps one name may follow. Pointers
+    ///     must point strictly backward (see <see cref="ReadName" />), so a chain cannot loop; the
+    ///     cap is defense in depth against a crafted message with a very long chain of backward
+    ///     pointers meant to waste parsing time.
     /// </summary>
     private const int MaximumCompressionJumps = 128;
 
     /// <summary>
     ///     This method decodes a complete DNS message.
     /// </summary>
-    /// <param name="buffer">The raw message bytes, exactly as received from the wire.</param>
+    /// <param name="buffer">The message bytes, as received from the wire.</param>
     /// <returns>The decoded <see cref="DnsMessage" />.</returns>
     /// <exception cref="FormatException">Thrown when <paramref name="buffer" /> is malformed.</exception>
     public static DnsMessage Read(ReadOnlySpan<byte> buffer) => Read(buffer, out _);
 
     /// <summary>
-    ///     This method decodes a complete DNS message, additionally reporting where a TSIG
-    ///     pseudo-record started, if the message carried one. A caller verifying that record's
-    ///     signature needs this: per RFC 8945 §4.3.3, what gets authenticated is the exact
-    ///     original wire bytes preceding the TSIG record (with the header's additional-record
-    ///     count adjusted to no longer include it), not a value re-serialized from the parsed
-    ///     <see cref="DnsMessage" /> -- which could legitimately differ in byte-for-byte shape
-    ///     (a different, but equally valid, name-compression choice, for example) from whatever
-    ///     was actually sent and signed.
+    ///     This method decodes a complete DNS message and also reports where a TSIG pseudo-record
+    ///     started, if there was one. TSIG verification needs this: RFC 8945 §4.3.3 authenticates
+    ///     the original wire bytes before the TSIG record (with the additional-record count
+    ///     reduced by one), not a re-serialized message, which could differ in bytes (a different
+    ///     compression choice, for example) from what was signed.
     /// </summary>
-    /// <param name="buffer">The raw message bytes, exactly as received from the wire.</param>
+    /// <param name="buffer">The message bytes, as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
-    ///     The offset <paramref name="buffer" /> the TSIG record started at, or -1 if the message
-    ///     carried no TSIG record.
+    ///     The offset in <paramref name="buffer" /> where the TSIG record started, or -1 if the
+    ///     message carried no TSIG record.
     /// </param>
     /// <returns>The decoded <see cref="DnsMessage" />.</returns>
     /// <exception cref="FormatException">Thrown when <paramref name="buffer" /> is malformed.</exception>
@@ -58,13 +53,9 @@ public static class DnsMessageReader
         catch (Exception exception)
             when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
         {
-            // A buffer too short to even contain a complete header, let alone every section its
-            // own counts claim, is unambiguously a malformed message -- the same conclusion
-            // every other kind of malformed input here already throws FormatException for -- not
-            // a programming error in this reader itself, which is what an uncaught
-            // IndexOutOfRangeException/ArgumentOutOfRangeException would otherwise look like to
-            // a caller such as DnsQueryProcessingPipeline, whose "discard silently, do not
-            // respond" handling specifically catches FormatException.
+            // A buffer shorter than its header or section counts claim is a malformed message,
+            // not a bug in this reader. Callers such as DnsQueryProcessingPipeline drop a message
+            // silently only on FormatException, so the index exceptions are translated to it.
             throw new FormatException(
                 "The buffer is too short to contain a complete DNS message.",
                 exception
@@ -73,8 +64,8 @@ public static class DnsMessageReader
     }
 
     /// <summary>
-    ///     This method does the actual decoding <see cref="Read(ReadOnlySpan{byte},out int)" />
-    ///     wraps with a single, consistent <see cref="FormatException" /> translation.
+    ///     This method does the decoding that <see cref="Read(ReadOnlySpan{byte},out int)" /> wraps
+    ///     with its <see cref="FormatException" /> translation.
     /// </summary>
     private static DnsMessage ReadCore(ReadOnlySpan<byte> buffer, out int tsigRecordStartOffset)
     {
@@ -120,10 +111,10 @@ public static class DnsMessageReader
         for (int i = 0; i < authorityCount; i++)
             message.AuthorityRecords.Add(ReadResourceRecord(buffer, ref offset));
 
-        // The Additional section needs special handling: an OPT pseudo-record hiding in it
-        // carries the EDNS(0) extension and the upper 8 bits of an extended response code,
-        // rather than being an ordinary record, and a TSIG pseudo-record (which, per RFC 8945
-        // §5.2, must be the last record in this section) carries transaction authentication.
+        // The Additional section needs special handling. An OPT pseudo-record carries the
+        // EDNS(0) extension and the upper 8 bits of the response code, and a TSIG
+        // pseudo-record (the last record of the section, per RFC 8945 §5.2) carries
+        // transaction authentication. Neither is an ordinary record.
         byte extendedResponseCode = 0;
         tsigRecordStartOffset = -1;
 
@@ -145,9 +136,9 @@ public static class DnsMessageReader
                 continue;
             }
 
-            // The OPT record repurposes CLASS as the requestor's UDP payload size, and TTL as
-            // three packed fields: extended response code, EDNS version, and flags (of which
-            // only the top bit, "DNSSEC OK", is defined).
+            // The OPT record uses CLASS as the requester's UDP payload size, and TTL as three
+            // packed fields: extended response code, EDNS version and flags (only the top bit,
+            // "DNSSEC OK", is defined).
             ushort requestorPayloadSize = (ushort)record.Class;
             uint ttl = record.TimeToLive;
             extendedResponseCode = (byte)((ttl >> 24) & 0xFF);
@@ -202,9 +193,9 @@ public static class DnsMessageReader
     }
 
     /// <summary>
-    ///     This method reads a big-endian, 48-bit value and advances <paramref name="offset" />
-    ///     past it -- RFC 8945's TSIG Time Signed field is 48 bits wide rather than the usual 32
-    ///     or 64, so it fits no standard integer type's native wire width.
+    ///     This method reads a big-endian 48-bit value and advances <paramref name="offset" /> past
+    ///     it. The TSIG Time Signed field (RFC 8945) is 48 bits wide, which matches no standard
+    ///     integer type.
     /// </summary>
     private static ulong ReadUInt48(ReadOnlySpan<byte> buffer, ref int offset)
     {
@@ -221,7 +212,7 @@ public static class DnsMessageReader
     ///     This method decodes the sequence of <c>{code, length, data}</c> options packed into an
     ///     OPT pseudo-record's RDATA.
     /// </summary>
-    /// <param name="rdata">The OPT record's raw RDATA.</param>
+    /// <param name="rdata">The OPT record's RDATA.</param>
     /// <returns>The decoded options, in the order they appeared.</returns>
     private static List<DnsEdnsOption> ReadEdnsOptions(byte[] rdata)
     {
@@ -255,17 +246,13 @@ public static class DnsMessageReader
         byte[] data = buffer.Slice(offset, dataLength).ToArray();
         offset += dataLength;
 
-        // A name embedded in RDATA (an NS record's target, for example) may itself use a
-        // compression pointer, per RFC 1035 §4.1.4 -- real-world root/TLD/authoritative servers
-        // do this routinely for referral NS records. Resolving one needs the full message
-        // buffer, which only exists here, at read time; every other caller of this record's data
-        // only ever sees the isolated RDATA slice stored on it, so it is re-flattened into
-        // canonical, always-uncompressed bytes right now, once, rather than left to fail later.
-        // Gated on CanEmbedCompressedName: a codec whose RDATA can never contain a name (TXT,
-        // most notably) must never go through this round-trip at all -- TxtRecordDataCodec's
-        // UTF-8 character-string encoding silently corrupts arbitrary binary TXT content that
-        // isn't valid UTF-8, and every other name-free codec would pay a pointless
-        // decode/re-encode cost for nothing.
+        // A name inside RDATA (an NS record's target, for example) may use a compression
+        // pointer (RFC 1035 §4.1.4); root, TLD and authoritative servers do this routinely in
+        // referrals. Resolving it needs the full message, which only exists here. Later code
+        // sees only the RDATA slice, so the RDATA is rewritten uncompressed now.
+        // This only runs for codecs with CanEmbedCompressedName. A name-free codec must not
+        // take the round trip: TxtRecordDataCodec decodes strings as UTF-8 and would corrupt
+        // binary TXT content, and the others would pay for nothing.
         if (
             DnsRecordDataCodecRegistry.TryGetCodec(
                 (DnsResourceRecordTypeEnum)type,
@@ -290,13 +277,12 @@ public static class DnsMessageReader
     ///     This method decodes a single domain name, following any compression pointers (RFC
     ///     1035 §4.1.4) it contains.
     /// </summary>
-    /// <param name="buffer">The complete message being read, since a compression pointer can
-    ///     point anywhere earlier in it.</param>
+    /// <param name="buffer">The complete message, since a compression pointer can point anywhere
+    ///     earlier in it.</param>
     /// <param name="offset">
-    ///     On entry, the position the name starts at. On return, the position immediately after
-    ///     the name -- which, if the name contained a compression pointer, is <em>not</em> the
-    ///     same as wherever that pointer led, but the position right after the two-byte pointer
-    ///     itself, so the caller can go on reading whatever follows the name in the message.
+    ///     On entry, the position the name starts at. On return, the position just after the name
+    ///     in the message. If the name used a compression pointer, that is the position after the
+    ///     two-byte pointer, not where the pointer led.
     /// </param>
     /// <exception cref="FormatException">
     ///     Thrown when the name is malformed, uses an unsupported label type, or its compression
@@ -324,13 +310,12 @@ public static class DnsMessageReader
 
                 int pointerTarget = ((lengthOrPointer & 0x3F) << 8) | buffer[currentOffset + 1];
 
-                // Only remember where to resume once, at the very first pointer followed; every
-                // pointer after that is relative to a position we've already recorded.
+                // Remember where to resume only at the first pointer; later pointers are inside
+                // data that has already been jumped to.
                 returnOffset ??= currentOffset + 2;
 
-                // A pointer is only ever valid if it points strictly backward in the message;
-                // this is what makes an infinite pointer loop structurally impossible, rather
-                // than merely unlikely.
+                // A pointer must point strictly backward in the message, which makes a pointer
+                // loop impossible.
                 if (pointerTarget >= currentOffset)
                     throw new FormatException(
                         "A DNS name's compression pointer must point strictly backward in the message."
@@ -340,10 +325,9 @@ public static class DnsMessageReader
                 continue;
             }
 
-            // The top two bits of 00 mark an ordinary label, 1-63 octets long; 00000000 marks
-            // the terminating root label. The remaining combinations (01/10) are reserved,
-            // unassigned label types that no record Ninlil serves or resolves should ever
-            // produce.
+            // Top bits 00 mark an ordinary label of 1-63 octets, and a zero byte marks the root
+            // label that ends the name. The other combinations (01 and 10) are reserved label
+            // types that are not in use.
             if ((lengthOrPointer & 0xC0) != 0)
                 throw new FormatException(
                     $"A DNS name used an unsupported label type (top bits 0x{lengthOrPointer & 0xC0:X2})."

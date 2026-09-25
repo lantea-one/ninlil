@@ -7,28 +7,23 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class implements RFC 4034 §6's canonical form and ordering rules -- the exact,
-///     unambiguous byte representation every DNSSEC signer and validator must agree on, since a
-///     signature computed over one valid-but-different serialization of the same records (a
-///     different name compression choice, mixed letter case, or a different record order) would
-///     simply fail to verify. This is shared groundwork the authoritative signing pipeline needs
-///     for computing <see cref="Records.RrSigRecordData" /> signatures, and the validating
-///     resolver needs for the opposite direction; it has no dependency on which specific signing
-///     algorithm is used, so it belongs here in <c>Ninlil.Dns.Common</c> rather than in an
-///     algorithm-specific project.
+///     This class implements the canonical form and ordering rules of RFC 4034 §6: the one byte
+///     representation every DNSSEC signer and validator must agree on. A signature over a
+///     different but valid serialization of the same records (other compression, mixed case, a
+///     different record order) would not verify. The authoritative signer uses it to compute
+///     <see cref="Records.RrSigRecordData" /> signatures and the validating resolver uses it to
+///     check them. It does not depend on the signing algorithm, so it lives in
+///     <c>Ninlil.Dns.Common</c>.
 /// </summary>
 public static class DnssecCanonicalization
 {
     /// <summary>
-    ///     This property contains every record type whose RDATA embeds a domain name that RFC
-    ///     4034 §6.2 requires to be lower-cased as part of that record's canonical form --
-    ///     transcribed directly from the RFC's own list, restricted to the types this project
-    ///     actually implements (the RFC's list also names several 1980s-era types, such as
-    ///     <c>MD</c>/<c>MF</c>/<c>MB</c>/<c>MG</c>/<c>MR</c>/<c>MINFO</c>/<c>RT</c>/<c>PX</c>/
-    ///     <c>NXT</c>/<c>A6</c>, that <see cref="DnsResourceRecordTypeEnum" /> deliberately leaves
-    ///     out as long-obsolete). <see cref="DnsResourceRecordTypeEnum.Hinfo" /> is included for
-    ///     completeness with the RFC's own list even though its RDATA has no domain name to
-    ///     lower-case at all -- canonicalizing it is simply a no-op.
+    ///     This property contains the record types whose RDATA holds a domain name that RFC 4034 §6.2
+    ///     requires to be lower-cased in canonical form. It is the RFC's list limited to the types
+    ///     Ninlil implements; obsolete types on the list (<c>MD</c>, <c>MF</c>, <c>MB</c>, <c>MG</c>,
+    ///     <c>MR</c>, <c>MINFO</c>, <c>RT</c>, <c>PX</c>, <c>NXT</c>, <c>A6</c>) are not in
+    ///     <see cref="DnsResourceRecordTypeEnum" />. <see cref="DnsResourceRecordTypeEnum.Hinfo" /> is on
+    ///     the RFC's list but holds no name, so canonicalizing it changes nothing.
     /// </summary>
     private static readonly HashSet<DnsResourceRecordTypeEnum> TypesWithEmbeddedNames =
     [
@@ -49,11 +44,10 @@ public static class DnssecCanonicalization
     ];
 
     /// <summary>
-    ///     This method compares two names in RFC 4034 §6.1's canonical DNS name order: labels
-    ///     compared most-significant (rightmost) first, each label treated as a lower-cased,
-    ///     left-justified unsigned octet string in which a shorter label that is a prefix of a
-    ///     longer one sorts first -- the same rule <see cref="Nsec3RecordData" />/
-    ///     <see cref="NsecRecordData" /> chains rely on to know which name is "next".
+    ///     This method compares two names in the canonical order of RFC 4034 §6.1. Labels are compared
+    ///     from the rightmost (most significant) one, each as a lower-cased, left-justified unsigned
+    ///     octet string in which a shorter label that is a prefix of a longer one sorts first. NSEC
+    ///     chains use this order to decide which name is "next".
     /// </summary>
     /// <param name="left">The first name to compare.</param>
     /// <param name="right">The second name to compare.</param>
@@ -63,17 +57,15 @@ public static class DnssecCanonicalization
     /// </returns>
     public static int CompareCanonicalOrder(DnsName left, DnsName right)
     {
-        // What: lower-case both names first (case never affects canonical order) and reverse
-        // each name's own label list. Why/how: RFC 4034 §6.1 compares most-significant label
-        // first -- that's the *rightmost* label as written ("com" before "example" before "www"
-        // in "www.example.com") -- so reversing turns that into an ordinary left-to-right walk.
+        // Lower-case both names (case never affects the order) and reverse their labels. RFC
+        // 4034 §6.1 compares the rightmost label first ("com", then "example", then "www"),
+        // so reversing turns that into a left-to-right walk.
         List<byte[]> leftLabels = [.. left.ToCanonicalLower().Labels.Reverse()];
         List<byte[]> rightLabels = [.. right.ToCanonicalLower().Labels.Reverse()];
 
         int commonCount = Math.Min(leftLabels.Count, rightLabels.Count);
 
-        // Compare label-by-label from the most significant end; the first label that differs
-        // decides the whole comparison, exactly like an ordinary lexicographic string compare.
+        // The first label that differs decides the comparison.
         for (int i = 0; i < commonCount; i++)
         {
             int comparison = CompareOctetString(leftLabels[i], rightLabels[i]);
@@ -82,21 +74,19 @@ public static class DnssecCanonicalization
                 return comparison;
         }
 
-        // Every shared label matched, so whichever name has fewer labels is the other's prefix
-        // and sorts first -- the same "shorter-is-a-prefix sorts first" rule CompareOctetString
-        // itself applies to the bytes within a single label.
+        // All shared labels matched, so the name with fewer labels sorts first, the same rule
+        // CompareOctetString applies within a label.
         return leftLabels.Count - rightLabels.Count;
     }
 
     /// <summary>
-    ///     This method reorders an RRset into RFC 4034 §6.3's canonical order: by the RDATA
-    ///     portion of each record's own canonical form (see <see cref="ToCanonicalRdata" />),
-    ///     treated as a left-justified unsigned octet sequence in which a shorter RDATA that is a
-    ///     prefix of a longer one sorts first.
+    ///     This method orders an RRset canonically (RFC 4034 §6.3): by each record's canonical RDATA
+    ///     (see <see cref="ToCanonicalRdata" />) as a left-justified unsigned octet sequence, in which
+    ///     a shorter RDATA that is a prefix of a longer one sorts first.
     /// </summary>
     /// <param name="rrset">
-    ///     The records to order -- expected to already share one owner name, class, and type, the
-    ///     way every real RRset does, though this method does not itself enforce that.
+    ///     The records to order. They are expected to share one owner name, class and type, as an
+    ///     RRset does; this method does not check that.
     /// </param>
     /// <returns>The same records, in canonical order.</returns>
     public static List<DnsResourceRecord> CanonicalOrder(IEnumerable<DnsResourceRecord> rrset) =>
@@ -110,47 +100,41 @@ public static class DnssecCanonicalization
         ];
 
     /// <summary>
-    ///     This method canonicalizes a single record's RDATA per RFC 4034 §6.2: decoding it,
-    ///     lower-casing every embedded domain name <see cref="TypesWithEmbeddedNames" /> lists for
-    ///     this record's type, and re-encoding it. A record whose type carries no codec, or
-    ///     carries no embedded name, is returned unchanged (as a defensive copy).
+    ///     This method puts one record's RDATA in canonical form (RFC 4034 §6.2): it decodes it,
+    ///     lower-cases the embedded names for types in <see cref="TypesWithEmbeddedNames" />, and
+    ///     re-encodes it. RDATA of a type with no codec or no embedded name is returned as a copy.
     /// </summary>
     /// <param name="type">The record's type.</param>
-    /// <param name="rdata">The record's RDATA, exactly as it appears on the wire.</param>
+    /// <param name="rdata">The record's RDATA, as it appears on the wire.</param>
     /// <returns>The RDATA in canonical form.</returns>
     public static byte[] ToCanonicalRdata(DnsResourceRecordTypeEnum type, byte[] rdata)
     {
-        // A type with no embedded name (or no registered codec at all) has nothing this method
-        // could change, so its RDATA is already in canonical form as-is -- skip the
-        // decode/re-encode round trip entirely rather than doing wasted work for the common case.
+        // A type with no embedded name or no codec is already canonical, so skip the round
+        // trip.
         if (
             !TypesWithEmbeddedNames.Contains(type)
             || !DnsRecordDataCodecRegistry.TryGetCodec(type, out IDnsRecordDataCodec codec)
         )
             return [.. rdata];
 
-        // Decode the RDATA into its structured form, lower-case whichever name field(s) it
-        // carries, then re-encode -- the only way to reach and rewrite a name embedded partway
-        // through an otherwise-opaque RDATA blob.
+        // Decoding is the only way to reach a name in the middle of the RDATA.
         IDnsRecordData canonicalized = LowercaseEmbeddedNames(type, codec.Read(rdata));
 
         return codec.Write(canonicalized);
     }
 
     /// <summary>
-    ///     This method builds the exact byte sequence RFC 4034 §3.1.8.1 defines as a signature's
-    ///     input: the covering <see cref="RrSigRecordData" />'s own RDATA (every field except the
-    ///     Signature field itself, which obviously cannot be part of its own input), followed by
-    ///     every record in the signed RRset, each in the canonical form §6.2 defines and ordered
-    ///     per §6.3.
+    ///     This method builds the signature input of RFC 4034 §3.1.8.1: the RRSIG RDATA without the
+    ///     Signature field, followed by every record of the RRset in canonical form (§6.2) and
+    ///     canonical order (§6.3).
     /// </summary>
     /// <param name="rrsigMetadata">
-    ///     The signature's own metadata -- every <see cref="RrSigRecordData" /> field except
-    ///     <see cref="RrSigRecordData.Signature" />, whose value here is ignored.
+    ///     The signature metadata: every <see cref="RrSigRecordData" /> field except
+    ///     <see cref="RrSigRecordData.Signature" />, which is ignored.
     /// </param>
     /// <param name="ownerName">The signed RRset's owner name.</param>
     /// <param name="recordClass">The signed RRset's class.</param>
-    /// <param name="rrset">The signed RRset's own records.</param>
+    /// <param name="rrset">The records of the signed RRset.</param>
     /// <returns>The bytes to pass to the signing algorithm.</returns>
     public static byte[] BuildSigningInput(
         RrSigRecordData rrsigMetadata,
@@ -161,9 +145,8 @@ public static class DnssecCanonicalization
     {
         ArrayBufferWriter<byte> buffer = new();
 
-        // The signature's own metadata comes first in the signing input, with the Signature
-        // field itself zeroed out -- a signature cannot cover its own not-yet-computed value, so
-        // this rebuilds the RRSIG's RDATA with an empty signature before encoding it.
+        // The RRSIG RDATA comes first, rebuilt with an empty Signature field, since a signature
+        // cannot cover its own value.
         RrSigRecordData rrsigWithoutSignature = new(
             rrsigMetadata.TypeCovered,
             rrsigMetadata.Algorithm,
@@ -185,12 +168,10 @@ public static class DnssecCanonicalization
 
         DnsName canonicalOwnerName = ownerName.ToCanonicalLower();
 
-        // Every record in the RRset, visited in canonical order, contributes its own
-        // owner-name-plus-resource-record-header-plus-RDATA slice to the signing input -- the
-        // same wire shape a real resource record has, but with every field forced to its
-        // canonical form (lower-cased owner name, this record's own original TTL rather than
-        // whatever TTL it happens to carry, canonical RDATA) so the signature is reproducible
-        // regardless of transient wire-encoding choices like compression or a stale cached TTL.
+        // Each record, in canonical order, adds its owner name, header and RDATA in wire form,
+        // with every field canonical: lower-cased owner name, the RRSIG's original TTL instead
+        // of the record's current TTL, and canonical RDATA. That makes the input independent
+        // of compression or a cache's counted-down TTL.
         foreach (DnsResourceRecord record in CanonicalOrder(rrset))
         {
             byte[] canonicalRdata = ToCanonicalRdata(record.Type, record.Data);
@@ -217,8 +198,8 @@ public static class DnssecCanonicalization
     }
 
     /// <summary>
-    ///     This method applies <see cref="DnsName.ToCanonicalLower" /> to every domain name
-    ///     embedded in a decoded record's RDATA, for the specific record types that have one.
+    ///     This method applies <see cref="DnsName.ToCanonicalLower" /> to every domain name in a
+    ///     decoded record's RDATA, for the types that have one.
     /// </summary>
     private static IDnsRecordData LowercaseEmbeddedNames(
         DnsResourceRecordTypeEnum type,
@@ -283,9 +264,9 @@ public static class DnssecCanonicalization
         };
 
     /// <summary>
-    ///     This method lower-cases an <see cref="RrSigRecordData" />'s Signer's Name -- pulled
-    ///     out of the switch above since <see cref="RrSigRecordData" /> is a plain class, not a
-    ///     record, so it has no compiler-generated <c>with</c> expression to lean on.
+    ///     This method lower-cases the Signer's Name of an <see cref="RrSigRecordData" />. It is
+    ///     separate from the switch above because <see cref="RrSigRecordData" /> is a plain class and
+    ///     has no <c>with</c> expression.
     /// </summary>
     private static RrSigRecordData LowercaseRrSigSignerName(RrSigRecordData data) =>
         new(
@@ -301,9 +282,9 @@ public static class DnssecCanonicalization
         );
 
     /// <summary>
-    ///     This method compares two byte sequences as RFC 4034 §6.1/§6.3 require: a left-justified
-    ///     unsigned octet comparison in which the absence of an octet (a shorter sequence that is
-    ///     a prefix of a longer one) sorts before an explicit zero octet.
+    ///     This method compares two byte sequences as RFC 4034 §6.1 and §6.3 require: a
+    ///     left-justified unsigned octet comparison in which a missing octet (a shorter sequence that
+    ///     is a prefix of a longer one) sorts before a zero octet.
     /// </summary>
     private static int CompareOctetString(byte[] left, byte[] right)
     {
@@ -317,7 +298,7 @@ public static class DnssecCanonicalization
     }
 
     /// <summary>
-    ///     This method appends a raw byte sequence to a buffer.
+    ///     This method appends a byte sequence to a buffer.
     /// </summary>
     private static void WriteBytes(IBufferWriter<byte> buffer, byte[] bytes)
     {
@@ -332,7 +313,7 @@ public static class DnssecCanonicalization
     private sealed class OctetStringComparer : IComparer<byte[]>
     {
         /// <summary>
-        ///     This field contains the single shared instance of this stateless comparer.
+        ///     This field contains the shared instance of this stateless comparer.
         /// </summary>
         public static readonly OctetStringComparer Instance = new();
 

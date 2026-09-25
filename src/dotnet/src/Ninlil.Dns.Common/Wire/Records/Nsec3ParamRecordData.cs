@@ -7,9 +7,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.Nsec3Param" />
-///     record, defined by RFC 5155 §4: published at a signed zone's apex so a resolver querying
-///     for a specific name knows exactly how to compute the matching <see cref="Nsec3RecordData" />
-///     hash itself, without needing to guess the zone's hash algorithm, iteration count, or salt.
+///     record, defined by RFC 5155 §4. It sits at a signed zone's apex and gives the hash
+///     algorithm, iteration count and salt the zone's <see cref="Nsec3RecordData" /> chain uses.
+///     Authoritative servers read it to know which hashes to compute for a query.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="Salt" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -84,9 +84,8 @@ public class Nsec3ParamRecordDataCodec : IDnsRecordDataCodec
     {
         byte hashAlgorithm = rdata[0];
 
-        // rdata[1] is the Flags field. RFC 5155 §4.1.2 defines no flags for NSEC3PARAM itself --
-        // Opt-Out is a per-record property of an actual NSEC3 RR, not a zone-wide parameter -- so
-        // there is nothing here for a model property to carry.
+        // rdata[1] is the Flags field. RFC 5155 §4.1.2 defines no NSEC3PARAM flags (Opt-Out
+        // belongs to each NSEC3 record, not the zone), so the model has no property for it.
         ushort iterations = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(2, 2));
         byte saltLength = rdata[4];
         byte[] salt = rdata.Slice(5, saltLength).ToArray();

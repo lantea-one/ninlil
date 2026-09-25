@@ -6,10 +6,11 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Common.Serialization;
 
 /// <summary>
-///     This class provides a JSON converter for a <see cref="DnsName" />, reading and writing it
-///     as its familiar, dot-separated presentation form (<c>www.example.com.</c>) rather than as
-///     its raw label bytes -- the form both a human editing a zone through the admin SPA
-///     and this record's own <see cref="Wire.Records.IDnsRecordDataCodec" /> already expect.
+///     This class is a JSON converter that reads and writes a <see cref="DnsName" /> in its
+///     dot-separated presentation form (<c>www.example.com.</c>) instead of its label bytes. That
+///     is the form people use in the admin console and the form the record data models store.
+///     <see cref="DnsCommonModuleInitializer" /> registers it. A string that does not parse reads
+///     as <see langword="null" />.
 /// </summary>
 public class DnsNameJsonConverter : JsonConverter<DnsName>
 {

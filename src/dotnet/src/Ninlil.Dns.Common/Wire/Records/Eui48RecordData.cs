@@ -8,9 +8,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     defined by RFC 7043: a 48-bit (six-octet) identifier, most often a network interface's MAC
 ///     address, associated with the owner name.
 ///     <para>
-///         Like <see cref="DnsResourceRecord" /> before it, this is a plain class rather than a
-///         record, since <see cref="Identifier" /> is a <see langword="byte[]" /> and a
-///         compiler-generated equality would compare it by reference rather than by content.
+///         Like <see cref="DnsResourceRecord" />, this is a plain class rather than a record:
+///         <see cref="Identifier" /> is a <see langword="byte[]" />, and compiler-generated
+///         equality would compare it by reference instead of by content.
 ///     </para>
 /// </summary>
 /// <param name="identifier">The 48-bit identifier's six octets.</param>

@@ -5,99 +5,76 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists the real states a single <see cref="Wire.Records.DnsKeyRecordData" />
-///     moves through across its own lifetime, per RFC 6781 §4.1.1 (Zone Signing Key rollovers)
-///     and §4.1.2 (Key Signing Key rollovers) -- the two rollover choreographies
-///     <c>Ninlil.Dns.Server.Authoritative.Dnssec.DnssecKeyRolloverBackgroundService</c> actually
-///     automates: the Pre-Publish scheme (RFC 6781 §4.1.1.1) for a
-///     <see cref="DnssecKeyRoleEnum.Zsk" />, and the Double-Signature scheme (RFC 6781 §4.1.2,
-///     Figure 4) for a <see cref="DnssecKeyRoleEnum.Ksk" />. A key generated the ordinary way
-///     (<c>Server.Dnssec.IDnssecKeyManagementService.GenerateKeyAsync</c>, with no rollover in
-///     progress) starts life directly in <see cref="Active" />, exactly matching that method's own
-///     "already active" contract from before this state model existed.
+///     This enumeration lists the states a <see cref="Wire.Records.DnsKeyRecordData" /> key moves
+///     through during its life, following the rollover schemes of RFC 6781 that
+///     <c>Ninlil.Dns.Server.Authoritative.Dnssec.DnssecKeyRolloverBackgroundService</c> automates:
+///     Pre-Publish (§4.1.1.1) for a <see cref="DnssecKeyRoleEnum.Zsk" /> and Double-Signature
+///     (§4.1.2, Figure 4) for a <see cref="DnssecKeyRoleEnum.Ksk" />. A key generated outside a
+///     rollover (<c>Server.Dnssec.IDnssecKeyManagementService.GenerateKeyAsync</c>) starts in
+///     <see cref="Active" />.
 ///     <para>
-///         The two roles reuse the same five states, but not identically: a ZSK's outgoing key
-///         stops signing the moment its replacement takes over (<see cref="Retired" />, still
-///         published, RFC 6781's own "new RRSIGs" stage), since nothing outside this zone depends
-///         on which specific ZSK produced a given RRSIG. A KSK's outgoing key keeps signing the
-///         DNSKEY RRset the entire time -- Figure 4 shows both KSKs' own RRSIGs present right up
-///         until the very last stage -- because a parent's DS record, and any resolver holding it
-///         as a trust anchor, must always find a currently-signing DNSKEY it can verify against;
-///         a KSK rollover reuses <see cref="DoubleSignature" /> for *both* "the new key, not yet
-///         canonical" and "the old key, no longer canonical but still co-signing," distinguished
-///         only by which one is currently the sole <see cref="Active" /> KSK of the pair (see
-///         <c>DnssecKeyRolloverBackgroundService</c>'s own doc comment for exactly how that
-///         distinction is computed, entirely from the surrounding key set rather than a stored
-///         flag).
+///         The two roles use the states differently. An outgoing ZSK stops signing as soon as its
+///         replacement takes over (<see cref="Retired" />, still published), because nothing
+///         outside the zone depends on which ZSK made an RRSIG. An outgoing KSK keeps signing the
+///         DNSKEY RRset until the last stage (Figure 4), because the parent's DS record and any
+///         resolver using it as a trust anchor must always find a signing DNSKEY they can verify.
+///         A KSK rollover therefore uses <see cref="DoubleSignature" /> for both the incoming and
+///         the outgoing key. They are told apart by which one is the <see cref="Active" /> KSK of
+///         the pair, worked out from the key set rather than a stored flag (see
+///         <c>DnssecKeyRolloverBackgroundService</c>).
 ///     </para>
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnssecKeyLifecycleStateEnum>>]
 public enum DnssecKeyLifecycleStateEnum
 {
     /// <summary>
-    ///     The key has just been generated and published in the zone's own DNSKEY RRset, but is
-    ///     not yet used to sign anything -- RFC 6781 §4.1.1.1's "new DNSKEY" stage for a ZSK's
-    ///     incoming replacement. A key stays here until it has been published long enough
-    ///     (the DNSKEY RRset's own TTL, plus a configured propagation delay) that every resolver
-    ///     which might depend on it has had a real chance to load it, at which point it is
-    ///     promoted to <see cref="Active" />. Not a <see cref="DnssecKeyRoleEnum.Ksk" /> state --
-    ///     see this enumeration's own doc comment for why a KSK rollover starts its incoming key
-    ///     directly in <see cref="DoubleSignature" /> instead.
+    ///     The key is published in the zone's DNSKEY RRset but does not sign anything yet: the
+    ///     "new DNSKEY" stage of RFC 6781 §4.1.1.1 for an incoming ZSK. It moves to
+    ///     <see cref="Active" /> once it has been published for the DNSKEY TTL plus a configured
+    ///     propagation delay, so resolvers have had time to load it. KSKs do not use this state;
+    ///     an incoming KSK starts in <see cref="DoubleSignature" />.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Published")]
     Published = 0,
 
     /// <summary>
-    ///     The key is the zone's own canonical, currently-signing key of its role: the sole
-    ///     signer of ordinary RRsets for a <see cref="DnssecKeyRoleEnum.Zsk" />, or the one whose
-    ///     own key tag a parent zone's DS record actually names for a
-    ///     <see cref="DnssecKeyRoleEnum.Ksk" />. Every key this project generates outside an
-    ///     active rollover starts, and normally stays, here.
+    ///     The key is the zone's current signing key for its role: the signer of ordinary RRsets
+    ///     for a <see cref="DnssecKeyRoleEnum.Zsk" />, or the key whose tag the parent's DS record
+    ///     names for a <see cref="DnssecKeyRoleEnum.Ksk" />. A key generated outside a rollover
+    ///     starts here and normally stays here.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Active")]
     Active = 1,
 
     /// <summary>
-    ///     The key is one of two currently co-signing keys of the same role during a KSK
-    ///     rollover's own transitional window (RFC 6781 §4.1.2, Figure 4's "new DNSKEY" and
-    ///     "DS change" stages) -- both the incoming key before it becomes canonical and the
-    ///     outgoing key after it stops being canonical share this one state, see this
-    ///     enumeration's own doc comment for how the two are told apart. Also used, more
-    ///     narrowly, for a <see cref="DnssecKeyRoleEnum.Zsk" /> whose own rollover an operator
-    ///     chose to run as RFC 6781 §4.1.1.2's Double-Signature scheme instead of the ordinary
-    ///     Pre-Publish one this project automates by default -- such a key still signs, exactly
-    ///     as a KSK in this state does, but neither this project's own rollover automation nor
-    ///     its own live-verified test coverage exercises that path; it exists purely so the
-    ///     signing pipeline's own "does this key sign" rule stays a single, uniform check across
-    ///     every state and role rather than a role-specific special case.
+    ///     The key is one of two keys of the same role that both sign during a KSK rollover (the
+    ///     "new DNSKEY" and "DS change" stages of RFC 6781 §4.1.2, Figure 4). The incoming key before
+    ///     it takes over and the outgoing key after it steps down share this state; the enumeration
+    ///     summary explains how they are told apart. A <see cref="DnssecKeyRoleEnum.Zsk" /> can also
+    ///     be in this state if an operator runs its rollover as Double-Signature (RFC 6781
+    ///     §4.1.1.2). Such a key signs like a KSK here, but the rollover automation never takes that
+    ///     path; the state only keeps the "does this key sign" rule the same for every role.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "DoubleSignature")]
     DoubleSignature = 2,
 
     /// <summary>
-    ///     The key remains published in the zone's own DNSKEY RRset -- so a resolver that cached
-    ///     an RRSIG this key produced before it stepped down can still fetch a DNSKEY RRset that
-    ///     verifies it -- but no longer signs anything new. RFC 6781 §4.1.1.1's "new RRSIGs"
-    ///     stage for a ZSK's outgoing key. A key stays here until the zone's own maximum record
-    ///     TTL, plus a configured propagation delay, has elapsed since it stopped signing, at
-    ///     which point it is safe to withdraw entirely (<see cref="Removed" />). Not a
-    ///     <see cref="DnssecKeyRoleEnum.Ksk" /> state under this project's own automated
-    ///     Double-Signature rollover -- see this enumeration's own doc comment for why an
-    ///     outgoing KSK instead moves directly from <see cref="Active" /> back into
-    ///     <see cref="DoubleSignature" />, still signing, rather than stopping here first.
+    ///     The key stays in the zone's DNSKEY RRset but signs nothing new, so a resolver holding an
+    ///     RRSIG it made earlier can still verify it. This is the "new RRSIGs" stage of RFC 6781
+    ///     §4.1.1.1 for an outgoing ZSK. After the zone's maximum record TTL plus a configured
+    ///     propagation delay it is withdrawn (<see cref="Removed" />). The automated KSK rollover
+    ///     does not use this state: an outgoing KSK goes from <see cref="Active" /> back to
+    ///     <see cref="DoubleSignature" /> and keeps signing.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Retired")]
     Retired = 3,
 
     /// <summary>
-    ///     The key has been fully withdrawn from the zone's own DNSKEY RRset -- RFC 6781's own
-    ///     "DNSKEY removal" stage -- and is no longer published or used to sign anything. Kept on
-    ///     record rather than deleted outright, for the same audit-trail reason
-    ///     <c>Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity</c>'s own class-level doc
-    ///     comment already gives; a manual REST retirement (<c>DnssecKeyWriteRequest.IsRetired</c>
-    ///     set <see langword="true" />) also lands a key directly here, matching that field's own
-    ///     pre-existing "taken out of active signing use" contract from before this state model
-    ///     existed.
+    ///     The key has been withdrawn from the DNSKEY RRset (the "DNSKEY removal" stage of RFC 6781)
+    ///     and is neither published nor used to sign. The row is kept rather than deleted, for the
+    ///     audit reason given on <c>Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity</c>. Setting
+    ///     <c>DnssecKeyWriteRequest.IsRetired</c> to <see langword="true" /> through the REST API also
+    ///     moves a key straight here.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Removed")]
     Removed = 4,

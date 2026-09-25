@@ -7,8 +7,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.Afsdb" /> record,
-///     defined by RFC 1183 §1: the location of a server for the AFS distributed file system (or a
-///     similarly-structured cell database) that the owner name belongs to.
+///     defined by RFC 1183 §1: the location of an AFS cell database server (or a DCE name server)
+///     for the owner name.
 /// </summary>
 /// <param name="Subtype">Which kind of server <see cref="Hostname" /> is, per RFC 1183 §1.</param>
 /// <param name="Hostname">The server's name.</param>

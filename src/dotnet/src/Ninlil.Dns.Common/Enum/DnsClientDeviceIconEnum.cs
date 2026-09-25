@@ -6,17 +6,15 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration is the fixed catalog of device icons a known client (<c>DnsClientEntity</c>)
-///     can be shown with -- Ninlil's own small, deliberately closed vocabulary of device kinds, not
-///     an IANA-assigned or vendor-defined value. Each member names a kind of device rather than an
-///     artwork file: the admin SPA maps every member onto one icon from the free CoreUI icon set it
-///     already bundles, so the backend never depends on (or has to validate) any particular icon
-///     library's own glyph names. Every member's wire name is its <c>EnumMember</c> value, and a
-///     REST write naming anything outside this catalog is rejected rather than silently coerced.
+///     can be shown with. It is a closed Ninlil vocabulary of device kinds. Each member names a
+///     kind of device, not an image: the admin console maps each one to an icon from the CoreUI
+///     icon set, so the backend does not depend on any icon library's glyph names. The wire name
+///     is the <c>EnumMember</c> value, and a REST write with any other name is rejected.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsClientDeviceIconEnum>>]
 public enum DnsClientDeviceIconEnum
 {
-    /// <summary>A device of no more specific kind -- the neutral, catch-all icon.</summary>
+    /// <summary>A device of no more specific kind; the neutral, catch-all icon.</summary>
     [System.Runtime.Serialization.EnumMember(Value = "Generic")]
     Generic = 0,
 

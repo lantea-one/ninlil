@@ -5,14 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists every DNS resource record TYPE that Ninlil understands, using
-///     the numeric values assigned by IANA in the "Resource Record (RR) TYPEs" registry. A DNS
-///     message never spells out a record's type in English; it sends this two-byte number on the
-///     wire, and both sides look the number up in the same registry so they agree on what it
-///     means. Only actively-used types are represented here -- long-obsolete or purely
-///     experimental types from the DNS's earliest days (such as <c>MD</c>, <c>MB</c>, or
-///     <c>NSAP</c>) have been left out on purpose, since a modern server has no reason to
-///     originate them.
+///     This enumeration lists every DNS resource record TYPE Ninlil understands, with the values
+///     IANA assigns in the "Resource Record (RR) TYPEs" registry. On the wire a type is this
+///     two-byte number. Obsolete or experimental early types (such as <c>MD</c>, <c>MB</c> or
+///     <c>NSAP</c>) are left out, since a modern server has no reason to originate them.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsResourceRecordTypeEnum>>]
 public enum DnsResourceRecordTypeEnum : ushort
@@ -142,9 +138,9 @@ public enum DnsResourceRecordTypeEnum : ushort
     Dname = 39,
 
     /// <summary>
-    ///     The pseudo-record used to carry EDNS(0) metadata -- the requestor's UDP payload size,
-    ///     extended flags, and options such as Cookies -- defined by RFC 6891. It never appears in
-    ///     zone data; it only ever travels in the additional section of a live DNS message.
+    ///     The pseudo-record that carries EDNS(0) metadata (the requester's UDP payload size,
+    ///     extended flags, and options such as Cookies), defined by RFC 6891. It never appears in zone
+    ///     data, only in the additional section of a message.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "OPT")]
     Opt = 41,
@@ -184,7 +180,7 @@ public enum DnsResourceRecordTypeEnum : ushort
 
     /// <summary>
     ///     The "next secure" record, defined by RFC 4034. Authenticates the non-existence of a
-    ///     name by listing, in signed form, the very next name that does exist in the zone.
+    ///     name by listing, in signed form, the next name that does exist in the zone.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "NSEC")]
     Nsec = 47,
@@ -267,24 +263,23 @@ public enum DnsResourceRecordTypeEnum : ushort
     Csync = 62,
 
     /// <summary>
-    ///     A zone message digest, defined by RFC 8976. Lets anyone with a copy of a zone verify,
-    ///     end-to-end, that it matches exactly what the zone's owner published.
+    ///     A zone message digest, defined by RFC 8976. Lets anyone with a copy of a zone verify that
+    ///     it matches what the zone's owner published.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ZONEMD")]
     ZoneMd = 63,
 
     /// <summary>
-    ///     Service binding, defined by RFC 9460. Advertises connection parameters -- such as
-    ///     supported protocol versions or an alternate port -- for a plain, protocol-agnostic
-    ///     service.
+    ///     Service binding, defined by RFC 9460. Advertises connection parameters, such as supported
+    ///     protocol versions or an alternate port, for a service of any protocol.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "SVCB")]
     Svcb = 64,
 
     /// <summary>
     ///     HTTPS service binding, defined by RFC 9460. The same mechanism as <see cref="Svcb" />,
-    ///     specialized for HTTPS -- this is the record that lets a browser discover HTTP/3 support
-    ///     for a domain before it ever opens a connection.
+    ///     specialized for HTTPS. It lets a browser learn that a domain supports HTTP/3 before it
+    ///     opens a connection.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "HTTPS")]
     Https = 65,
@@ -309,29 +304,28 @@ public enum DnsResourceRecordTypeEnum : ushort
     TKey = 249,
 
     /// <summary>
-    ///     A transaction signature, defined by RFC 8945. Authenticates an individual DNS message
-    ///     -- most importantly a zone transfer or dynamic update -- using a shared secret rather
-    ///     than DNSSEC's public-key signatures.
+    ///     A transaction signature, defined by RFC 8945. Authenticates a single message, most often a
+    ///     zone transfer or dynamic update, with a shared secret instead of public-key signatures.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "TSIG")]
     Tsig = 250,
 
     /// <summary>
-    ///     Not a stored record at all, but the QTYPE a secondary server sends to request an
+    ///     Not a stored record, but the QTYPE a secondary server sends to request an
     ///     incremental zone transfer, defined by RFC 1995.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "IXFR")]
     Ixfr = 251,
 
     /// <summary>
-    ///     Not a stored record at all, but the QTYPE a secondary server sends to request a full
+    ///     Not a stored record, but the QTYPE a secondary server sends to request a full
     ///     zone transfer, defined by RFC 5936.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "AXFR")]
     Axfr = 252,
 
     /// <summary>
-    ///     Not a stored record at all, but the QTYPE a client sends to ask for every record set
+    ///     Not a stored record, but the QTYPE a client sends to ask for every record set
     ///     that exists at a name, defined by RFC 1035.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "ANY")]
@@ -351,16 +345,16 @@ public enum DnsResourceRecordTypeEnum : ushort
     Caa = 257,
 
     /// <summary>
-    ///     A DNSSEC trust authority record. Never standardized in an RFC, but kept here for
-    ///     interoperability with the small number of legacy zones that still carry one.
+    ///     A DNSSEC trust authority record. Never standardized in an RFC; kept for legacy zones that
+    ///     still carry one.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "TA")]
     Ta = 32768,
 
     /// <summary>
-    ///     A DNSSEC lookaside validation record, defined by the (historic) RFC 4431. Lookaside
-    ///     validation itself has been deprecated for years; this value is kept only so that
-    ///     legacy zone data can round-trip without being rejected.
+    ///     A DNSSEC lookaside validation record, defined by the historic RFC 4431. Lookaside
+    ///     validation is deprecated; the value is kept so legacy zone data round-trips instead of
+    ///     being rejected.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "DLV")]
     Dlv = 32769,

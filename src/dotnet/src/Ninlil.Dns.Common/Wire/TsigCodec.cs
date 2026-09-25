@@ -7,29 +7,27 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class builds the exact byte sequences RFC 8945 §4.3.3 defines as going into a TSIG
-///     message authentication code -- pure, deterministic wire-format assembly with no
-///     cryptography of its own. Computing and verifying an actual MAC from these bytes (which
-///     needs a shared secret, and typically a key lookup) is deliberately kept out of
-///     <c>Ninlil.Dns.Common</c>; see <c>Ninlil.Dns.Server.Tsig</c> for that.
+///     This class builds the byte sequences that RFC 8945 §4.3.3 feeds into a TSIG message
+///     authentication code. It only assembles wire bytes and does no cryptography. Computing and
+///     verifying the MAC needs a shared secret and a key lookup, so it lives in
+///     <c>Ninlil.Dns.Server.Tsig</c> instead.
 /// </summary>
 public static class TsigCodec
 {
     /// <summary>
-    ///     This method builds the "TSIG Variables" RFC 8945 §4.3.3 defines: everything about a
-    ///     TSIG record relevant to its own authentication, excluding the fields that are either
-    ///     the MAC itself (<see cref="DnsTsigOptions.Mac" />) or already implicitly covered by
-    ///     the signed message's own header (<see cref="DnsTsigOptions.OriginalId" />).
+    ///     This method builds the "TSIG Variables" of RFC 8945 §4.3.3: the TSIG fields that are
+    ///     authenticated, leaving out the MAC itself (<see cref="DnsTsigOptions.Mac" />) and the
+    ///     original ID (<see cref="DnsTsigOptions.OriginalId" />), which the signed header already
+    ///     covers.
     /// </summary>
     /// <param name="tsig">The TSIG fields to build the variables from.</param>
-    /// <returns>The TSIG Variables, ready to be appended after the signed message's own bytes.</returns>
+    /// <returns>The TSIG Variables, to append after the signed message bytes.</returns>
     public static byte[] BuildVariables(DnsTsigOptions tsig)
     {
         ArrayBufferWriter<byte> buffer = new();
 
-        // The key name and algorithm name are written exactly as given, in whatever case they
-        // were parsed with -- RFC 8945 §4.3.3 does not downcase or otherwise canonicalize the
-        // domain names making up the TSIG Variables, unlike DNSSEC's canonical signing form.
+        // The key and algorithm names are written in the case they were parsed with. Unlike
+        // DNSSEC, RFC 8945 §4.3.3 does not lowercase the names in the TSIG Variables.
         UncompressedDnsNameCodec.Write(buffer, tsig.KeyName);
         WriteUInt16(buffer, (ushort)DnsClassEnum.Any);
         WriteUInt32(buffer, 0);
@@ -45,20 +43,15 @@ public static class TsigCodec
     }
 
     /// <summary>
-    ///     This method builds the "TSIG Timers" RFC 8945 §5.3.1 defines: the reduced digest
-    ///     component every second-and-subsequent message in a multi-message, TSIG-protected
-    ///     answer sequence (a multi-message AXFR/IXFR, most commonly) is signed with, instead of
-    ///     the full <see cref="BuildVariables" /> a first message or an ordinary single-message
-    ///     answer uses -- just the Time Signed and Fudge fields, in that order, with none of the
-    ///     key name, algorithm name, error, or other-data fields <see cref="BuildVariables" />
-    ///     also includes. The RFC's own reasoning: signing every message in a long transfer with
-    ///     the full variables would be needless, expensive overhead the connection itself does not
-    ///     need, since only the very first message actually has to re-establish who is signing and
-    ///     with what algorithm.
+    ///     This method builds the "TSIG Timers" of RFC 8945 §5.3.1: just the Time Signed and Fudge
+    ///     fields. Every message after the first in a multi-message answer (usually an AXFR/IXFR) is
+    ///     signed with these instead of the full <see cref="BuildVariables" />. Only the first
+    ///     message needs to establish the key and algorithm; repeating them in every message of a
+    ///     long transfer would add cost for nothing.
     /// </summary>
-    /// <param name="timeSigned">The signing message's own Time Signed field.</param>
-    /// <param name="fudge">The signing message's own Fudge field.</param>
-    /// <returns>The TSIG Timers, ready to be appended after the running prior-MAC-plus-message bytes.</returns>
+    /// <param name="timeSigned">The Time Signed field of the message being signed.</param>
+    /// <param name="fudge">The Fudge field of the message being signed.</param>
+    /// <returns>The TSIG Timers, to append after the prior MAC and message bytes.</returns>
     public static byte[] BuildTimersOnly(ulong timeSigned, ushort fudge)
     {
         ArrayBufferWriter<byte> buffer = new();
@@ -70,21 +63,18 @@ public static class TsigCodec
     }
 
     /// <summary>
-    ///     This method reconstructs the "message" component RFC 8945 §4.3.3 defines as the first
-    ///     part of what a TSIG MAC covers: the raw bytes exactly as received, up to (but not
-    ///     including) the TSIG record itself, with the header's additional-record count
-    ///     decremented by one so it no longer counts the TSIG record that was removed. This
-    ///     operates on the literal bytes a message arrived as, rather than re-serializing the
-    ///     parsed <see cref="DnsMessage" />, since a different (but equally valid) choice of name
-    ///     compression could otherwise produce different bytes than whatever was actually signed.
+    ///     This method rebuilds the "message" part of what a TSIG MAC covers (RFC 8945 §4.3.3): the
+    ///     bytes as received, up to but not including the TSIG record, with the header's
+    ///     additional-record count reduced by one. It works on the received bytes rather than
+    ///     re-serializing the parsed <see cref="DnsMessage" />, because a different compression
+    ///     choice could produce bytes that differ from what was signed.
     /// </summary>
-    /// <param name="rawMessage">The complete message, exactly as received from the wire.</param>
+    /// <param name="rawMessage">The complete message, as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
-    ///     The offset the TSIG record started at, as reported by
-    ///     <see cref="DnsMessageReader" />'s message-decoding overload that reports the TSIG
-    ///     record's starting offset.
+    ///     The offset where the TSIG record started, as reported by
+    ///     <see cref="DnsMessageReader.Read(ReadOnlySpan{byte},out int)" />.
     /// </param>
-    /// <returns>The message bytes that were actually signed.</returns>
+    /// <returns>The message bytes that were signed.</returns>
     public static byte[] ExtractSignedMessageBytes(
         ReadOnlySpan<byte> rawMessage,
         int tsigRecordStartOffset
@@ -120,9 +110,8 @@ public static class TsigCodec
     }
 
     /// <summary>
-    ///     This method writes a big-endian, 48-bit value -- RFC 8945's TSIG Time Signed field is
-    ///     48 bits wide rather than the usual 32 or 64, so it fits no standard integer type's
-    ///     native wire width.
+    ///     This method writes a big-endian 48-bit value, the width of the TSIG Time Signed field
+    ///     (RFC 8945).
     /// </summary>
     private static void WriteUInt48(IBufferWriter<byte> buffer, ulong value)
     {

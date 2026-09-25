@@ -6,11 +6,9 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of a <see cref="DnsResourceRecordTypeEnum.Txt" /> record,
-///     defined by RFC 1035 §3.3.14: one or more free-form text strings. Despite the name, a
-///     single TXT record's data is not one string but a sequence of them, each up to 255 octets;
-///     software that publishes a value longer than that (a lengthy SPF or DKIM policy, for
-///     example) splits it across several strings that a reader is expected to concatenate back
-///     together.
+///     defined by RFC 1035 §3.3.14: one or more free-form text strings. A TXT record holds a
+///     sequence of strings of up to 255 octets each. A longer value, such as a long SPF or DKIM
+///     policy, is split across several strings that readers concatenate.
 /// </summary>
 /// <param name="Values">This record's text strings, in the order they appear on the wire.</param>
 public record TxtRecordData(IReadOnlyList<string> Values) : IDnsRecordData;

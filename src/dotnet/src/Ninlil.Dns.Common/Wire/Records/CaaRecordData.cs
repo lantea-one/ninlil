@@ -18,7 +18,7 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     What kind of policy this record expresses -- commonly <c>issue</c>, <c>issuewild</c>, or
 ///     <c>iodef</c>.
 /// </param>
-/// <param name="Value">The policy value itself -- for an <c>issue</c> tag, the permitted issuer's domain name.</param>
+/// <param name="Value">The policy value; for an <c>issue</c> tag, the permitted issuer's domain name.</param>
 public record CaaRecordData(bool IsCritical, string Tag, string Value) : IDnsRecordData;
 
 /// <summary>
@@ -44,9 +44,9 @@ public class CaaRecordDataCodec : IDnsRecordDataCodec
         bool isCritical = (rdata[0] & CriticalFlagBit) != 0;
         int offset = 1;
 
-        // The tag is a length-prefixed character-string, but the value is not: per RFC 8659
-        // §4, it simply runs to the end of the RDATA, so it is decoded directly rather than
-        // through CharacterStringCodec.
+        // The tag is a length-prefixed character-string, but the value is not: RFC 8659 §4
+        // has it run to the end of the RDATA, so it is decoded here rather than through
+        // CharacterStringCodec.
         string tag = CharacterStringCodec.Read(rdata, ref offset);
         string value = Encoding.UTF8.GetString(rdata[offset..]);
 

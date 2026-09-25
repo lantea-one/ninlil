@@ -7,8 +7,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.Eui64" /> record,
 ///     defined by RFC 7043: a 64-bit (eight-octet) identifier associated with the owner name.
 ///     <para>
-///         Like <see cref="Eui48RecordData" />, this is a plain class rather than a record, for
-///         the same reason: <see cref="Identifier" /> is a <see langword="byte[]" />.
+///         Like <see cref="Eui48RecordData" />, this is a plain class rather than a record because
+///         <see cref="Identifier" /> is a <see langword="byte[]" />.
 ///     </para>
 /// </summary>
 /// <param name="identifier">The 64-bit identifier's eight octets.</param>

@@ -4,14 +4,11 @@ using System.Text;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class represents a single domain name, such as <c>www.example.com</c>, the way DNS
-///     itself represents one: as an ordered sequence of labels -- <c>www</c>, <c>example</c>,
-///     <c>com</c> -- each stored as its own raw bytes rather than as a single joined string.
-///     RFC 1035 §3.1 defines a label as an arbitrary byte sequence, not necessarily printable
-///     text, so this class keeps that byte-level fidelity rather than assuming every name is
-///     plain ASCII; in practice, the overwhelming majority of real names are ASCII (or the
-///     ASCII-only "xn--" punycode form of an internationalized name), but nothing here requires
-///     that.
+///     This class represents a domain name, such as <c>www.example.com</c>, the way DNS does: an
+///     ordered sequence of labels (<c>www</c>, <c>example</c>, <c>com</c>), each kept as bytes
+///     rather than one joined string. RFC 1035 §3.1 allows any bytes in a label, so this class
+///     does not assume ASCII, although almost all names are ASCII or the "xn--" punycode form of
+///     an internationalized name. Comparison is case-insensitive for ASCII letters only.
 /// </summary>
 public sealed class DnsName : IEquatable<DnsName>
 {
@@ -22,22 +19,20 @@ public sealed class DnsName : IEquatable<DnsName>
     public const int MaximumLabelLength = 63;
 
     /// <summary>
-    ///     This constant contains the maximum length, in octets, a complete name may occupy on
-    ///     the wire (every label's length octet and content, plus the final zero-length root
-    ///     label), defined by RFC 1035 §3.1.
+    ///     This constant contains the maximum length, in octets, of a complete name on the wire
+    ///     (each label's length octet and content, plus the final root label), defined by RFC 1035
+    ///     §3.1.
     /// </summary>
     public const int MaximumWireLength = 255;
 
     /// <summary>
-    ///     This property contains the root name: the name with no labels at all, written in
-    ///     presentation form as a single dot.
+    ///     This property contains the root name: the name with no labels, written as a single dot.
     /// </summary>
     public static DnsName Root { get; } = new([]);
 
     /// <summary>
-    ///     This property contains this name's labels, in the same left-to-right order they would
-    ///     be written in (for <c>www.example.com</c>: <c>www</c>, then <c>example</c>, then
-    ///     <c>com</c>).
+    ///     This property contains this name's labels in left-to-right order (for
+    ///     <c>www.example.com</c>: <c>www</c>, <c>example</c>, <c>com</c>).
     /// </summary>
     public IReadOnlyList<byte[]> Labels { get; }
 
@@ -47,17 +42,15 @@ public sealed class DnsName : IEquatable<DnsName>
     public bool IsRoot => Labels.Count == 0;
 
     /// <summary>
-    ///     This property contains how many octets this name occupies on the wire, uncompressed:
-    ///     one length-prefix octet per label plus that label's own octets, plus a final
-    ///     zero-length octet marking the root.
+    ///     This property contains the uncompressed wire length of this name: one length octet plus
+    ///     the content of each label, plus the final root octet.
     /// </summary>
     public int WireLength => Labels.Sum(label => label.Length + 1) + 1;
 
     /// <summary>
-    ///     This method instantiates a name directly from its labels. Callers outside this class
-    ///     should normally use <see cref="Parse" /> instead; this constructor exists for the wire
-    ///     reader, which already has each label's raw bytes in hand and has no presentation-format
-    ///     string to parse.
+    ///     This method instantiates a name from its labels. Most callers should use
+    ///     <see cref="Parse" />; this constructor is for the wire reader, which already has the
+    ///     label bytes and no presentation string.
     /// </summary>
     /// <param name="labels">This name's labels, in left-to-right order.</param>
     /// <exception cref="ArgumentException">
@@ -83,10 +76,10 @@ public sealed class DnsName : IEquatable<DnsName>
     }
 
     /// <summary>
-    ///     This method parses a name's presentation-format representation -- the familiar,
-    ///     dot-separated form such as <c>www.example.com</c> -- into a <see cref="DnsName" />.
-    ///     A literal dot or backslash inside a label is written escaped, as <c>\.</c> or
-    ///     <c>\\</c>; an arbitrary byte value is written as a decimal escape, such as <c>\000</c>.
+    ///     This method parses a name's presentation form, the dot-separated form such as
+    ///     <c>www.example.com</c>, into a <see cref="DnsName" />. A literal dot or backslash inside a
+    ///     label is escaped as <c>\.</c> or <c>\\</c>; any byte value can be written as a decimal
+    ///     escape such as <c>\000</c>.
     /// </summary>
     /// <param name="presentation">The presentation-format name to parse.</param>
     /// <returns>The parsed <see cref="DnsName" />.</returns>
@@ -97,9 +90,8 @@ public sealed class DnsName : IEquatable<DnsName>
             : throw new FormatException(error);
 
     /// <summary>
-    ///     This method attempts to parse a name's presentation-format representation into a
-    ///     <see cref="DnsName" />, the same as <see cref="Parse" />, but without throwing when the
-    ///     input is malformed.
+    ///     This method parses a name's presentation form like <see cref="Parse" />, but returns
+    ///     <see langword="false" /> instead of throwing when the input is malformed.
     /// </summary>
     /// <param name="presentation">The presentation-format name to parse.</param>
     /// <param name="name">
@@ -110,7 +102,7 @@ public sealed class DnsName : IEquatable<DnsName>
         TryParse(presentation, out name, out _);
 
     /// <summary>
-    ///     This method does the actual work behind <see cref="Parse" /> and <see cref="TryParse(string,out DnsName)" />.
+    ///     This method does the work behind <see cref="Parse" /> and <see cref="TryParse(string,out DnsName)" />.
     /// </summary>
     /// <param name="presentation">The presentation-format name to parse.</param>
     /// <param name="name">
@@ -180,8 +172,8 @@ public sealed class DnsName : IEquatable<DnsName>
             }
         }
 
-        // A trailing, unescaped dot (the fully-qualified form, "example.com.") simply marks the
-        // end of the name; anything else left over is one final label to add.
+        // A trailing unescaped dot (the fully-qualified form, "example.com.") just ends the
+        // name; anything left over is one final label.
         if (currentLabel.Count > 0)
             labels.Add([.. currentLabel]);
 
@@ -209,8 +201,8 @@ public sealed class DnsName : IEquatable<DnsName>
         {
             foreach (byte b in label)
             {
-                // Escape the two characters that are otherwise ambiguous in presentation format,
-                // and any byte outside the printable ASCII range, as a three-digit decimal value.
+                // Escape the two characters that are ambiguous in presentation form, and write any
+                // byte outside printable ASCII as a three-digit decimal escape.
                 if (b is (byte)'.' or (byte)'\\')
                 {
                     builder.Append('\\').Append((char)b);
@@ -228,8 +220,8 @@ public sealed class DnsName : IEquatable<DnsName>
             builder.Append('.');
         }
 
-        // We're done. Every label was followed by a trailing dot above, including the last one,
-        // which gives exactly the fully-qualified presentation form callers expect.
+        // Every label, including the last, is followed by a dot, which gives the
+        // fully-qualified form.
         return builder.ToString();
     }
 
@@ -245,8 +237,8 @@ public sealed class DnsName : IEquatable<DnsName>
         if (Labels.Count != other.Labels.Count)
             return false;
 
-        // DNS names compare case-insensitively, per RFC 1035 §3.1, but only across the standard
-        // ASCII letters; any other byte value must match exactly.
+        // DNS names compare case-insensitively (RFC 1035 §3.1), but only for ASCII letters;
+        // any other byte must match exactly.
         for (int i = 0; i < Labels.Count; i++)
         {
             byte[] left = Labels[i];
@@ -290,8 +282,7 @@ public sealed class DnsName : IEquatable<DnsName>
     public static bool operator !=(DnsName left, DnsName right) => !(left == right);
 
     /// <summary>
-    ///     This method upper-cases a single byte if, and only if, it is an ASCII lowercase
-    ///     letter, leaving every other byte value (including non-ASCII bytes) untouched.
+    ///     This method upper-cases a byte only if it is an ASCII lowercase letter.
     /// </summary>
     /// <param name="value">The byte to upper-case.</param>
     /// <returns>The upper-cased byte.</returns>
@@ -299,12 +290,10 @@ public sealed class DnsName : IEquatable<DnsName>
         value is >= (byte)'a' and <= (byte)'z' ? (byte)(value - 32) : value;
 
     /// <summary>
-    ///     This method encodes this name exactly the way <see cref="Wire.Records.UncompressedDnsNameCodec" />
-    ///     does -- one length-prefixed label at a time, followed by the final zero-length root
-    ///     label -- but as a public, standalone operation, for callers outside
-    ///     <c>Ninlil.Dns.Common</c> that need a name's raw uncompressed bytes without any
-    ///     compression support at all: RFC 4034 §5.1.4's DS digest input, for example, which
-    ///     hashes a DNSKEY's owner name in exactly this form.
+    ///     This method encodes this name as <see cref="Wire.Records.UncompressedDnsNameCodec" /> does
+    ///     (length-prefixed labels followed by the root label), as a public operation for callers
+    ///     outside <c>Ninlil.Dns.Common</c>. The DS digest input of RFC 4034 §5.1.4, for example,
+    ///     hashes a DNSKEY owner name in this form.
     /// </summary>
     /// <returns>This name's uncompressed wire-format bytes.</returns>
     public byte[] ToUncompressedWireBytes()
@@ -325,12 +314,10 @@ public sealed class DnsName : IEquatable<DnsName>
     }
 
     /// <summary>
-    ///     This method returns this name with every ASCII uppercase letter converted to
-    ///     lowercase, per RFC 4034 §6.1/§6.2's DNSSEC canonical form -- needed wherever a name
-    ///     (an owner name, or an embedded name inside RDATA for the specific record types §6.2
-    ///     lists) must be hashed or signed in a case-normalized form, since two zone
-    ///     administrators typing <c>WWW.example.com</c> and <c>www.example.com</c> must produce
-    ///     an identical signature.
+    ///     This method returns this name with ASCII uppercase letters converted to lowercase, the
+    ///     DNSSEC canonical form of RFC 4034 §6.1 and §6.2. Owner names, and names inside the RDATA
+    ///     of the types §6.2 lists, are hashed and signed in this form so that
+    ///     <c>WWW.example.com</c> and <c>www.example.com</c> produce the same signature.
     /// </summary>
     /// <returns>
     ///     This same instance if every label is already lowercase, or a new, lowercased
@@ -338,10 +325,7 @@ public sealed class DnsName : IEquatable<DnsName>
     /// </returns>
     public DnsName ToCanonicalLower()
     {
-        // Track whether lower-casing ever actually changed a byte while building the lowered
-        // copy unconditionally alongside it, rather than checking case first and lowering in a
-        // second pass -- one pass over the labels either way, but this avoids a second full scan
-        // of every label just to answer "was anything uppercase at all?" up front.
+        // Build the lowered copy and track whether any byte changed in the same pass.
         bool alreadyLower = true;
         List<byte[]> lowered = new(Labels.Count);
 
@@ -360,14 +344,13 @@ public sealed class DnsName : IEquatable<DnsName>
             lowered.Add(loweredLabel);
         }
 
-        // Return this same instance when nothing actually changed, so a name that's already
-        // canonical-form doesn't pay for a redundant allocation on every signing/validation pass.
+        // Return this instance when nothing changed, so an already-canonical name does not
+        // allocate on every signing or validation pass.
         return alreadyLower ? this : new DnsName(lowered);
     }
 
     /// <summary>
-    ///     This method lower-cases a single byte if, and only if, it is an ASCII uppercase
-    ///     letter, leaving every other byte value (including non-ASCII bytes) untouched.
+    ///     This method lower-cases a byte only if it is an ASCII uppercase letter.
     /// </summary>
     /// <param name="value">The byte to lower-case.</param>
     /// <returns>The lower-cased byte.</returns>

@@ -4,11 +4,10 @@ using System.Buffers;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This class reads and writes a single domain name embedded inside a record's own RDATA --
-///     an NS record's nameserver, an MX record's exchange, and so on -- rather than a name in a
-///     message's header sections, which <see cref="DnsMessageReader" />/<see cref="DnsMessageWriter" />
-///     already handle with full compression support. Names read and written here are always
-///     uncompressed: see <see cref="IDnsRecordDataCodec" /> for why.
+///     This class reads and writes one domain name inside a record's RDATA, such as an NS record's
+///     name server or an MX record's exchange. Names in the message sections themselves are handled
+///     by <see cref="DnsMessageReader" /> and <see cref="DnsMessageWriter" />, with compression.
+///     Names here are always uncompressed; <see cref="IDnsRecordDataCodec" /> explains why.
 /// </summary>
 internal static class UncompressedDnsNameCodec
 {
@@ -29,10 +28,9 @@ internal static class UncompressedDnsNameCodec
     {
         List<byte[]> labels = [];
 
-        // A name is a sequence of length-prefixed labels, terminated by a zero-length label
-        // (the root). The top two bits of a length byte being set would instead mark a
-        // compression pointer, per RFC 1035 §4.1.4 -- unsupported here, since resolving one
-        // needs the full message buffer this codec is never given.
+        // A name is a sequence of length-prefixed labels ending in a zero-length label (the
+        // root). A length byte with its top two bits set is a compression pointer (RFC 1035
+        // §4.1.4), which is unsupported here because resolving it needs the full message.
         while (true)
         {
             byte lengthByte = rdata[offset];

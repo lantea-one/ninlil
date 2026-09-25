@@ -5,11 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists the DNS OPCODE values assigned by IANA -- the four-bit field in a
-///     DNS message header that says what kind of operation the message is performing. Nearly
-///     every message a resolver ever sends is a plain <see cref="Query" />; the other values exist
-///     for the handful of operations, like zone updates and change notifications, that need to
-///     look different on the wire.
+///     This enumeration lists the DNS OPCODE values assigned by IANA: the four-bit header field
+///     that says what kind of operation a message performs. Nearly every message is a plain
+///     <see cref="Query" />; the others cover operations such as zone updates and change
+///     notifications.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsOpcodeEnum>>]
 public enum DnsOpcodeEnum : byte
@@ -21,8 +20,8 @@ public enum DnsOpcodeEnum : byte
     Query = 0,
 
     /// <summary>
-    ///     An inverse query, defined by RFC 1035 and formally retired by RFC 3425. Kept only so
-    ///     that a message using it is recognized and rejected cleanly rather than misread.
+    ///     An inverse query, defined by RFC 1035 and retired by RFC 3425. Kept so a message that uses
+    ///     it is recognized and rejected rather than misread.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "IQUERY")]
     InverseQuery = 1,
@@ -34,9 +33,8 @@ public enum DnsOpcodeEnum : byte
     Status = 2,
 
     /// <summary>
-    ///     A zone change notification, defined by RFC 1996. A primary server sends this to tell a
-    ///     secondary that a zone's serial number has increased, without the secondary having to
-    ///     poll for it.
+    ///     A zone change notification, defined by RFC 1996. A primary sends it to tell a secondary
+    ///     that a zone's serial number has increased, so the secondary does not have to poll.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "NOTIFY")]
     Notify = 4,

@@ -5,19 +5,18 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists every color palette the Angular admin SPA's own theming engine can
-///     render the application in -- five hand-tuned, WCAG-AA-checked palettes, each with its own
-///     light and dark variant. A value here carries no server-side rendering behavior of its own;
-///     this server only stores and returns the caller's chosen palette (as this host's own global
-///     default, in <c>AppearanceOptions</c>, or as a signed-in user's own override, on
-///     <c>UserEntity</c>) for the SPA's own theming engine to apply.
+///     This enumeration lists the color palettes the admin console can use. Each palette has a
+///     light and a dark variant, chosen by <see cref="UiThemeModeEnum" />. The value has no effect
+///     on the server. The server only stores and returns it, either as the host default in
+///     <c>AppearanceOptions</c> or as a user's override on <c>UserEntity</c>, and the console
+///     applies it.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<UiThemePaletteEnum>>]
 public enum UiThemePaletteEnum
 {
     /// <summary>
-    ///     The teal palette -- this server's own compiled-in default, applied whenever neither
-    ///     this host's own global default nor a signed-in user's own override has ever been set.
+    ///     The teal palette. It is used when neither the host default nor the user's override has
+    ///     been set.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Teal")]
     Teal = 0,

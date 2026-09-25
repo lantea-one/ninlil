@@ -4,22 +4,16 @@ using System.Text.Json.Serialization;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration names the seven days of the week as independent bit flags, so a single
-///     value can carry an arbitrary subset of days (e.g. "school nights" = Sunday through
-///     Thursday) rather than forcing a caller to store seven separate boolean columns or a
-///     single-value <see cref="DayOfWeek" />. Used by <c>DnsClientScheduleEntity</c>/
-///     <c>DnsClientGroupScheduleEntity</c> (<c>Ninlil.Dns.Data.Abstractions</c>) to say which days
-///     a parental-control time-of-day schedule applies to.
+///     This enumeration names the seven days of the week as bit flags, so one value can hold any
+///     set of days (for example "school nights", Sunday through Thursday) instead of seven boolean
+///     columns or a single <see cref="DayOfWeek" />. <c>DnsClientScheduleEntity</c> and
+///     <c>DnsClientGroupScheduleEntity</c> use it to say which days a parental-control schedule
+///     applies to.
 ///     <para>
-///         <strong>Wire representation</strong>: this enum's own type-level
-///         <see cref="JsonStringEnumConverter{TEnum}" /> attribute is the plain, built-in
-///         System.Text.Json converter (not this project's own <c>EnumDescriptionJsonConverter{TEnum}</c>,
-///         which reads/writes exactly one name and has no notion of combining several) --
-///         <see cref="JsonStringEnumConverter{TEnum}" /> already has first-class, built-in support
-///         for a <c>[Flags]</c> enum, serializing a combined value as a comma-separated list of
-///         its own set member names (e.g. <c>"Monday, Tuesday, Wednesday"</c>) and parsing that
-///         same shape back on the way in, so no bespoke flag-combination logic is needed here at
-///         all.
+///         It uses the built-in <see cref="JsonStringEnumConverter{TEnum}" /> rather than
+///         <c>EnumDescriptionJsonConverter{TEnum}</c>, which handles one name only. The built-in
+///         converter writes a combined value as a comma-separated list of member names (for
+///         example <c>"Monday, Tuesday, Wednesday"</c>) and parses the same form.
 ///     </para>
 /// </summary>
 [Flags]
@@ -27,8 +21,8 @@ namespace Ninlil.Dns.Common.Enum;
 public enum DnsScheduleDayOfWeekEnum
 {
     /// <summary>
-    ///     No day at all -- never a meaningful value for a real schedule to be saved with (see
-    ///     each schedule controller's own <c>TryValidate</c>), only ever the type's own default.
+    ///     No day. It is the type's default and is not valid for a saved schedule (see each schedule
+    ///     controller's <c>TryValidate</c>).
     /// </summary>
     None = 0,
 

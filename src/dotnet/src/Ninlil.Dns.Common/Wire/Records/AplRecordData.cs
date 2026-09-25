@@ -9,22 +9,22 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     This class represents a single address-family/prefix item inside an
 ///     <see cref="AplRecordData" /> record, defined by RFC 3123 §4.
 ///     <para>
-///         Like <see cref="DnsResourceRecord" /> and <see cref="DnsEdnsOption" /> before it, this
-///         is a plain class rather than a record: <see cref="AddressFamilyDependentPart" /> is a
-///         <see langword="byte[]" />, and a compiler-generated equality would compare it by
-///         reference rather than by content.
+///         Like <see cref="DnsResourceRecord" /> and <see cref="DnsEdnsOption" />, this is a plain
+///         class rather than a record: <see cref="AddressFamilyDependentPart" /> is a
+///         <see langword="byte[]" />, and compiler-generated equality would compare it by
+///         reference instead of by content.
 ///     </para>
 /// </summary>
 /// <param name="addressFamily">
-///     The IANA address family number the prefix belongs to -- 1 for IPv4, 2 for IPv6.
+///     The IANA address family number of the prefix: 1 for IPv4, 2 for IPv6.
 /// </param>
 /// <param name="prefixLength">The prefix length, in bits.</param>
 /// <param name="negated">
 ///     Whether this item excludes the given prefix from the list rather than including it.
 /// </param>
 /// <param name="addressFamilyDependentPart">
-///     The address's significant bytes, with trailing zero bytes trimmed -- for example, a /24
-///     IPv4 prefix carries only its first three octets, not all four.
+///     The address's significant bytes, with trailing zero bytes trimmed. For example, a /24 IPv4
+///     prefix carries only its first three octets.
 /// </param>
 public class AplItem(
     ushort addressFamily,
@@ -118,17 +118,16 @@ public class AplRecordDataCodec : IDnsRecordDataCodec
         List<AplItem> items = [];
         int offset = 0;
 
-        // Each item is a variable-length run: a 2-octet address family, a 1-octet prefix
-        // length, a 1-octet negation flag + data length, and finally that many octets of
-        // address data -- so the loop advances by a different amount on every iteration.
+        // Each item is variable-length: a 2-octet address family, a 1-octet prefix length, a
+        // 1-octet negation flag plus data length, then that many octets of address data.
         while (offset < rdata.Length)
         {
             ushort addressFamily = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(offset, 2));
             byte prefixLength = rdata[offset + 2];
             byte negationAndLength = rdata[offset + 3];
 
-            // The top bit of this octet is the negation flag; the remaining 7 bits are the
-            // address-data length in octets (never more than 127, well within an IPv6 address).
+            // The top bit of this octet is the negation flag; the other 7 bits are the
+            // address-data length in octets (at most 127, more than an IPv6 address needs).
             bool negated = (negationAndLength & NegationBit) != 0;
             int dataLength = negationAndLength & 0x7F;
             byte[] addressFamilyDependentPart = rdata.Slice(offset + 4, dataLength).ToArray();
@@ -148,7 +147,6 @@ public class AplRecordDataCodec : IDnsRecordDataCodec
         AplRecordData typed = (AplRecordData)data;
         ArrayBufferWriter<byte> buffer = new();
 
-        // Re-encode each item back into the same variable-length wire layout Read() decodes.
         foreach (AplItem item in typed.Items)
         {
             Span<byte> familySpan = buffer.GetSpan(2);

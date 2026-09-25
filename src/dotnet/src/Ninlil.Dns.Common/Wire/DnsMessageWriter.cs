@@ -8,27 +8,23 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Wire;
 
 /// <summary>
-///     This class encodes a <see cref="DnsMessage" /> into the raw bytes RFC 1035 §4 describes,
-///     applying DNS name compression (RFC 1035 §4.1.4) to every name in the header sections, and
-///     re-assembling <see cref="DnsMessage.Edns" /> back into an OPT pseudo-record (RFC 6891) in
-///     the Additional section.
+///     This class encodes a <see cref="DnsMessage" /> into wire bytes (RFC 1035 §4). It compresses
+///     question and owner names (RFC 1035 §4.1.4) and writes <see cref="DnsMessage.Edns" /> and
+///     <see cref="DnsMessage.Tsig" /> back as OPT (RFC 6891) and TSIG (RFC 8945) pseudo-records in
+///     the Additional section. It is the counterpart of <see cref="DnsMessageReader" />.
 ///     <para>
-///         Name compression here only ever applies to a record's <em>owner name</em> -- the name
-///         a record is attached to -- not to any domain name that might be embedded inside a
-///         record's own type-specific data (an NS record's target, for example). RFC 1035 makes
-///         compressing those optional, and doing so would require this writer to understand every
-///         record type's internal shape, which is deliberately out of scope for the
-///         storage-agnostic <see cref="DnsResourceRecord" /> this class works with. A record whose
-///         data happens to contain a name will simply carry that name uncompressed, which is
-///         valid, if very slightly larger, wire output.
+///         Compression only applies to question and owner names, not to names inside RDATA
+///         (an NS record's target, for example). RFC 1035 makes that optional, and it would need
+///         this writer to understand every record type, while <see cref="DnsResourceRecord" />
+///         carries RDATA as opaque bytes. Such names are written uncompressed, which is valid and
+///         only slightly larger.
 ///     </para>
 /// </summary>
 public static class DnsMessageWriter
 {
     /// <summary>
-    ///     This constant contains the largest offset a compression pointer's 14 usable bits can
-    ///     address. A name that first appears at or beyond this point in the message can still be
-    ///     written out, just never pointed back to.
+    ///     This constant contains the largest offset the 14 bits of a compression pointer can
+    ///     address. A name first written beyond it is still written, but never pointed back to.
     /// </summary>
     private const int MaximumCompressionPointerOffset = 0x3FFF;
 
@@ -79,8 +75,8 @@ public static class DnsMessageWriter
         if (message.Edns is not null)
             WriteOptRecord(buffer, message.Edns, extendedResponseCode);
 
-        // RFC 8945 §5.2 requires the TSIG record to be the last record in the message, so it is
-        // always written after everything else, including the OPT record.
+        // RFC 8945 §5.2 requires the TSIG record to be the last record in the message, so it
+        // comes after everything else, including the OPT record.
         if (message.Tsig is not null)
             WriteTsigRecord(buffer, message.Tsig);
 
@@ -123,8 +119,8 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method splits a combined, up-to-12-bit response code into the 4 bits that live in
-    ///     the header itself and the 8 extended bits that live in an OPT record's TTL field.
+    ///     This method splits a response code of up to 12 bits into the 4 bits in the header and the
+    ///     8 extended bits in the OPT record's TTL field.
     /// </summary>
     private static (byte Base, byte Extended) SplitResponseCode(DnsResponseCodeEnum responseCode)
     {
@@ -168,16 +164,15 @@ public static class DnsMessageWriter
         WriteUInt16(buffer, (ushort)DnsResourceRecordTypeEnum.Opt);
         WriteUInt16(buffer, edns.RequestorPayloadSize);
 
-        // Pack the extended response code, EDNS version, and DNSSEC-OK flag into what would
-        // otherwise be the TTL field.
+        // Pack the extended response code, EDNS version and DNSSEC-OK flag into the TTL field.
         uint ttl =
             ((uint)extendedResponseCode << 24)
             | ((uint)edns.Version << 16)
             | (edns.DnssecOk ? 0x8000u : 0u);
         WriteUInt32(buffer, ttl);
 
-        // The RDATA's length has to be known before it can be written, so it is assembled into
-        // its own buffer first.
+        // The RDATA length must be written before the RDATA, so the RDATA is built in a
+        // separate buffer first.
         ArrayBufferWriter<byte> rdata = new();
 
         foreach (DnsEdnsOption option in edns.Options)
@@ -196,8 +191,8 @@ public static class DnsMessageWriter
     /// <summary>
     ///     This method encodes a TSIG pseudo-record from a <see cref="DnsTsigOptions" />, the
     ///     reverse of the extraction <see cref="DnsMessageReader" /> performs when reading a
-    ///     message. Per RFC 8945 §4.2, neither the record's own owner name (the key name) nor its
-    ///     RDATA's algorithm name is compressed against any other name in the message.
+    ///     message. Per RFC 8945 §4.2, neither the owner name (the key name) nor the algorithm name
+    ///     in the RDATA is compressed.
     /// </summary>
     private static void WriteTsigRecord(ArrayBufferWriter<byte> buffer, DnsTsigOptions tsig)
     {
@@ -207,8 +202,8 @@ public static class DnsMessageWriter
         WriteUInt16(buffer, (ushort)DnsClassEnum.Any);
         WriteUInt32(buffer, 0);
 
-        // The RDATA's length has to be known before it can be written, so it is assembled into
-        // its own buffer first.
+        // The RDATA length must be written before the RDATA, so the RDATA is built in a
+        // separate buffer first.
         ArrayBufferWriter<byte> rdata = new();
 
         UncompressedDnsNameCodec.Write(rdata, tsig.AlgorithmName);
@@ -229,14 +224,14 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method encodes a single domain name, compressing it against every name already
-    ///     written earlier in the same message wherever a shared suffix allows it.
+    ///     This method encodes one domain name, compressing it against names already written in the
+    ///     message wherever they share a suffix.
     /// </summary>
     /// <param name="buffer">The message being written.</param>
     /// <param name="name">The name to encode.</param>
     /// <param name="compressionOffsetsByName">
-    ///     Every name suffix already written so far in this message, and the offset it started
-    ///     at, so a later name sharing that suffix can point back to it instead of repeating it.
+    ///     Every name suffix already written in this message and the offset it starts at, so a later
+    ///     name with that suffix can point back to it.
     /// </param>
     private static void WriteName(
         ArrayBufferWriter<byte> buffer,
@@ -246,8 +241,8 @@ public static class DnsMessageWriter
     {
         IReadOnlyList<byte[]> labels = name.Labels;
 
-        // Look for the longest suffix of this name -- starting with the whole name itself --
-        // that has already been written earlier in the message.
+        // Look for the longest suffix of this name, starting with the whole name, that has
+        // already been written.
         for (int start = 0; start < labels.Count; start++)
         {
             if (
@@ -258,8 +253,7 @@ public static class DnsMessageWriter
             )
                 continue;
 
-            // A match was found: write the leading labels that aren't covered by it literally,
-            // then a pointer to where the matched suffix begins.
+            // Write the labels before the match literally, then a pointer to the matched suffix.
             for (int i = 0; i < start; i++)
                 WriteLabel(buffer, labels, i, compressionOffsetsByName);
 
@@ -267,8 +261,8 @@ public static class DnsMessageWriter
             return;
         }
 
-        // No earlier name shares any suffix with this one; write every label literally,
-        // remembering each suffix's starting offset for names written later in the message.
+        // No earlier name shares a suffix with this one: write every label literally and
+        // record each suffix's offset for later names.
         for (int i = 0; i < labels.Count; i++)
             WriteLabel(buffer, labels, i, compressionOffsetsByName);
 
@@ -277,9 +271,8 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method writes a single label, first recording where it starts (so a later name
-    ///     can compress against it) if that position still fits within a compression pointer's
-    ///     14 usable bits.
+    ///     This method writes one label, first recording where it starts so later names can point
+    ///     to it, if the position fits in a compression pointer's 14 bits.
     /// </summary>
     private static void WriteLabel(
         ArrayBufferWriter<byte> buffer,
@@ -301,11 +294,10 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method builds a unique, case-insensitive key representing the suffix of a name
-    ///     starting at <paramref name="start" />, used to look up (and record) where that exact
-    ///     suffix was first written in the message. Each label is written length-prefixed, the
-    ///     same way it would be on the wire, so that two different label sequences can never
-    ///     accidentally produce the same key.
+    ///     This method builds a case-insensitive key for the suffix of a name starting at
+    ///     <paramref name="start" />, used to find where that suffix was first written. Each label is
+    ///     length-prefixed as on the wire, so two different label sequences cannot produce the same
+    ///     key.
     /// </summary>
     private static string BuildSuffixKey(IReadOnlyList<byte[]> labels, int start)
     {
@@ -324,8 +316,8 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method upper-cases a single byte if, and only if, it is an ASCII lowercase
-    ///     letter, matching the case-insensitive comparison <see cref="DnsName" /> itself uses.
+    ///     This method upper-cases a byte only if it is an ASCII lowercase letter, matching the
+    ///     case-insensitive comparison <see cref="DnsName" /> uses.
     /// </summary>
     private static byte AsciiUpper(byte value) =>
         value is >= (byte)'a' and <= (byte)'z' ? (byte)(value - 32) : value;
@@ -351,9 +343,8 @@ public static class DnsMessageWriter
     }
 
     /// <summary>
-    ///     This method writes a big-endian, 48-bit value -- RFC 8945's TSIG Time Signed field is
-    ///     48 bits wide rather than the usual 32 or 64, so it fits no standard integer type's
-    ///     native wire width.
+    ///     This method writes a big-endian 48-bit value, the width of the TSIG Time Signed field
+    ///     (RFC 8945).
     /// </summary>
     private static void WriteUInt48(IBufferWriter<byte> buffer, ulong value)
     {

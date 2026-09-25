@@ -7,13 +7,13 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data shared by <see cref="DnsResourceRecordTypeEnum.DnsKey" /> and
-///     <see cref="DnsResourceRecordTypeEnum.CdnsKey" /> records -- RFC 4034 §2 and RFC 7344
-///     respectively define both with an identical RDATA shape, a public key a resolver uses to
-///     validate <see cref="RrSigRecordData" /> signatures. <see cref="DnsResourceRecordTypeEnum.DnsKey" />
-///     is what a zone actually publishes; <see cref="DnsResourceRecordTypeEnum.CdnsKey" /> is the
-///     child's own copy of what it wants a parent to publish as a <see cref="DsRecordData" />,
-///     the same automated-update pairing <see cref="DnsResourceRecordTypeEnum.Cds" /> has with
-///     <see cref="DnsResourceRecordTypeEnum.DS" />.
+///     <see cref="DnsResourceRecordTypeEnum.CdnsKey" /> records, which RFC 4034 §2 and RFC 7344
+///     define with the same RDATA layout: a public key a resolver uses to validate
+///     <see cref="RrSigRecordData" /> signatures. A zone publishes
+///     <see cref="DnsResourceRecordTypeEnum.DnsKey" />. A child publishes
+///     <see cref="DnsResourceRecordTypeEnum.CdnsKey" /> as the key it wants its parent to publish a
+///     <see cref="DsRecordData" /> for, the same automated pairing
+///     <see cref="DnsResourceRecordTypeEnum.Cds" /> has with <see cref="DnsResourceRecordTypeEnum.DS" />.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="PublicKey" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -21,29 +21,27 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     </para>
 /// </summary>
 /// <param name="isZoneKey">
-///     Whether this key is a zone key -- bit 7 of the RDATA's Flags field. Every key this
-///     project generates sets this, per RFC 4034 §2.1.1; the field exists at all only because the
-///     original design once imagined non-zone DNSSEC keys that were never actually standardized.
+///     Whether this key is a zone key: bit 7 of the Flags field. Every key Ninlil generates sets
+///     it, as RFC 4034 §2.1.1 requires for keys that sign zone data.
 /// </param>
 /// <param name="isSecureEntryPoint">
-///     Whether this key is a Secure Entry Point (a key-signing key, conventionally) -- bit 15 of
-///     the Flags field. Per RFC 4034 §2.1.1, this is purely a hint for zone-signing tooling; it
-///     has no effect on how a validator actually verifies a signature.
+///     Whether this key is a Secure Entry Point (by convention a key-signing key): bit 15 of the
+///     Flags field. RFC 4034 §2.1.1 makes it a hint for signing tools only; it does not change how
+///     a validator verifies a signature.
 /// </param>
 /// <param name="algorithm">This key's cryptographic algorithm.</param>
 /// <param name="publicKey">
-///     The public key material itself, encoded in whatever format <see cref="Algorithm" />
-///     defines -- RFC 3110's exponent-then-modulus form for the RSA family, the raw concatenated
-///     curve point for ECDSA (RFC 6605), or the raw encoded point for EdDSA (RFC 8080).
+///     The public key, in the format <see cref="Algorithm" /> defines: exponent then modulus for
+///     RSA (RFC 3110), the concatenated curve point for ECDSA (RFC 6605), or the encoded point for
+///     EdDSA (RFC 8080).
 /// </param>
 /// <param name="isRevoked">
-///     Whether this key is announcing its own revocation -- bit 8 of the Flags field, per RFC
-///     5011 §3. A key does this by re-publishing itself with this bit set, self-signed with
-///     that same key; a validator that sees this (and verifies the self-signature) must stop
-///     trusting the key immediately, with no RFC 5011 §2.3 hold-down delay, since this is a
-///     deliberate signal rather than a passive absence. Never set by anything this project
-///     itself signs (a project always retracts a key by simply stopping publication of it, not
-///     by revocation), so this defaults to <see langword="false" /> for every existing caller.
+///     Whether the key announces its revocation: bit 8 of the Flags field (RFC 5011 §3). A key
+///     revokes itself by being republished with this bit set and signed by itself. A validator
+///     that verifies that signature stops trusting the key at once, without the hold-down delay
+///     of RFC 5011 §2.3. Keys Ninlil signs never set it (Ninlil retires a key by no longer
+///     publishing it), so it defaults to <see langword="false" />.
+///     <c>TrustAnchorRolloverService</c> reads it from upstream keys.
 /// </param>
 public class DnsKeyRecordData(
     bool isZoneKey,
@@ -54,9 +52,8 @@ public class DnsKeyRecordData(
 ) : IDnsRecordData, IEquatable<DnsKeyRecordData>
 {
     /// <summary>
-    ///     This constant contains the RDATA's Protocol field value -- RFC 4034 §2.1.2 fixes this
-    ///     at 3 for every DNSKEY that has ever existed, and requires treating any other value as
-    ///     invalid; it is not a configurable choice.
+    ///     This constant contains the RDATA's Protocol field value. RFC 4034 §2.1.2 fixes it at 3 and
+    ///     requires any other value to be treated as invalid.
     /// </summary>
     public const byte Protocol = 3;
 
@@ -71,7 +68,7 @@ public class DnsKeyRecordData(
     public bool IsSecureEntryPoint { get; } = isSecureEntryPoint;
 
     /// <summary>
-    ///     This property contains whether this key is announcing its own revocation.
+    ///     This property contains whether this key announces its revocation.
     /// </summary>
     public bool IsRevoked { get; } = isRevoked;
 
@@ -121,7 +118,7 @@ public class DnsKeyRecordData(
 /// <summary>
 ///     This class reads and writes <see cref="DnsKeyRecordData" /> for both
 ///     <see cref="DnsResourceRecordTypeEnum.DnsKey" /> and <see cref="DnsResourceRecordTypeEnum.CdnsKey" />,
-///     since RFC 7344 gives the latter an identical RDATA shape to the former.
+///     since RFC 7344 gives CDNSKEY the same RDATA layout as DNSKEY.
 /// </summary>
 internal static class DnsKeyCodec
 {
@@ -150,8 +147,8 @@ internal static class DnsKeyCodec
     {
         ushort flags = BinaryPrimitives.ReadUInt16BigEndian(rdata[..2]);
 
-        // rdata[2] is the Protocol field, always 3 per RFC 4034 §2.1.2; there is nothing else it
-        // could legally be, so there is no separate model property to carry it.
+        // rdata[2] is the Protocol field, always 3 (RFC 4034 §2.1.2), so the model has no
+        // property for it.
         DnssecAlgorithmEnum algorithm = (DnssecAlgorithmEnum)rdata[3];
         byte[] publicKey = rdata[4..].ToArray();
 

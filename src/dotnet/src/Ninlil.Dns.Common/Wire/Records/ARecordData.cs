@@ -15,12 +15,9 @@ public record ARecordData(IPAddress Address) : IDnsRecordData;
 /// <summary>
 ///     This class reads and writes <see cref="ARecordData" />.
 ///     <para>
-///         This is one of a small number of files in this namespace that, unlike the rest of the
-///         codebase's one-class-per-file convention, deliberately keep a record type's data model
-///         and its codec together: the two are permanently paired (a codec without its data model
-///         is meaningless, and vice versa), and with dozens of record types to implement, keeping
-///         each type's story in one place reads more clearly than splitting it across two files
-///         that are never used independently of one another.
+///         Unlike the one-class-per-file convention elsewhere, each file in this namespace keeps a
+///         record type's data model and its codec together. The two are always used as a pair, and
+///         with dozens of record types, one file per type reads more clearly than two.
 ///     </para>
 /// </summary>
 public class ARecordDataCodec : IDnsRecordDataCodec

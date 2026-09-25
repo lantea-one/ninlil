@@ -7,8 +7,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
 ///     This class represents the data of an <see cref="DnsResourceRecordTypeEnum.RrSig" />
-///     record, defined by RFC 4034 §3: the cryptographic signature over one complete RRset that
-///     lets a validating resolver trust it actually came from the zone's owner, unmodified.
+///     record, defined by RFC 4034 §3: the signature over one complete RRset that lets a
+///     validating resolver trust it came unmodified from the zone's owner.
 ///     <para>
 ///         This is a plain class rather than a record, since <see cref="Signature" /> is a
 ///         <see langword="byte[]" /> and a compiler-generated equality would compare it by
@@ -18,16 +18,15 @@ namespace Ninlil.Dns.Common.Wire.Records;
 /// <param name="typeCovered">Which RRset (by type) this signature covers.</param>
 /// <param name="algorithm">The signing algorithm used to produce <see cref="Signature" />.</param>
 /// <param name="labels">
-///     The number of labels in the signed RRset's owner name, excluding the root label and,
-///     per RFC 4034 §3.1.3, an owner name's own wildcard label if it has one -- this is what
-///     lets a validator detect that a response was synthesized from a wildcard rather than
-///     matching a real name, and reject one that claims more labels than the signature allows.
+///     The number of labels in the signed RRset's owner name, not counting the root label or a
+///     leading wildcard label (RFC 4034 §3.1.3). It lets a validator tell that an answer was
+///     synthesized from a wildcard, and reject one that claims more labels than the signature
+///     allows.
 /// </param>
 /// <param name="originalTimeToLiveSeconds">
-///     The signed RRset's TTL in the authoritative zone, per RFC 4034 §3.1.4 -- carried
-///     separately from the RRset's own served TTL, which a caching resolver decrements over
-///     time, because the signature was computed over this original value and would not verify
-///     against a decremented one.
+///     The signed RRset's TTL in the authoritative zone (RFC 4034 §3.1.4). It is carried
+///     separately from the served TTL, which caches count down, because the signature covers
+///     this original value and would not verify against a lower one.
 /// </param>
 /// <param name="signatureExpiration">
 ///     The point after which this signature is no longer valid, as a 32-bit count of seconds
@@ -38,11 +37,11 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     <see cref="SignatureExpiration" />.
 /// </param>
 /// <param name="keyTag">
-///     The signing <see cref="DnsKeyRecordData" />'s key tag, letting a validator narrow down
-///     which key among several signed this RRset without needing to try every one.
+///     The key tag of the signing <see cref="DnsKeyRecordData" />. It lets a validator find the
+///     signing key among several without trying every one.
 /// </param>
 /// <param name="signerName">The name of the zone whose key produced this signature.</param>
-/// <param name="signature">The signature itself, in whatever form <see cref="Algorithm" /> defines.</param>
+/// <param name="signature">The signature, in the form <see cref="Algorithm" /> defines.</param>
 public class RrSigRecordData(
     DnsResourceRecordTypeEnum typeCovered,
     DnssecAlgorithmEnum algorithm,
@@ -164,8 +163,8 @@ public class RrSigRecordDataCodec : IDnsRecordDataCodec
         uint inception = BinaryPrimitives.ReadUInt32BigEndian(rdata.Slice(12, 4));
         ushort keyTag = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(16, 2));
 
-        // RFC 4034 §3.1.7 forbids compressing the Signer's Name; that is also all
-        // UncompressedDnsNameCodec supports, which is exactly what this field needs.
+        // RFC 4034 §3.1.7 forbids compressing the Signer's Name, so UncompressedDnsNameCodec
+        // is enough here.
         int offset = 18;
         DnsName signerName = UncompressedDnsNameCodec.Read(rdata, ref offset);
         byte[] signature = rdata[offset..].ToArray();

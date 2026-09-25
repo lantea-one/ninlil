@@ -17,8 +17,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     Among rules sharing the same <see cref="Order" />, a lower value is preferred.
 /// </param>
 /// <param name="Flags">
-///     Controls how this rule is interpreted -- for example, <c>"S"</c> means the result is a
-///     name to look up an SRV record for, and <c>"U"</c> means the result is a URI.
+///     Controls how this rule is interpreted. For example, <c>"S"</c> means the result is a name
+///     to look up an SRV record for, and <c>"U"</c> means the result is a URI.
 /// </param>
 /// <param name="Services">Which service (and protocol) this rule applies to.</param>
 /// <param name="RegularExpression">

@@ -5,12 +5,10 @@ using Ninlil.Common.Serializer.Attribute;
 namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
-///     This enumeration lists the DNS RCODE values assigned by IANA -- the number a server puts
-///     in a response header to tell the requester what happened. The original twelve values fit
-///     inside the four bits RFC 1035 allocated for them; RFC 6891's EDNS(0) extension widened the
-///     field to twelve bits so that finer-grained failures (mostly around DNSSEC and DNS Cookies)
-///     could be reported without breaking older software that only understands the first sixteen
-///     values.
+///     This enumeration lists the DNS RCODE values assigned by IANA: the number a server puts in a
+///     response header to say what happened. RFC 1035 gave the field four bits. EDNS(0) (RFC 6891)
+///     widened it to twelve bits, so finer-grained failures (mostly TSIG and DNS Cookies) can be
+///     reported without confusing software that only knows the first sixteen values.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<DnsResponseCodeEnum>>]
 public enum DnsResponseCodeEnum : ushort
@@ -93,14 +91,11 @@ public enum DnsResponseCodeEnum : ushort
     DsoTypeNotImplemented = 11,
 
     /// <summary>
-    ///     IANA assigns code 16 two names for two different contexts that never collide in a
-    ///     single message: as an EDNS(0) extended RCODE (RFC 6891) it means the requestor's
-    ///     advertised EDNS version is not supported ("BADVERS"); inside a TSIG record's own error
-    ///     field (RFC 8945) it means the signature failed verification ("BADSIG"). Because both
-    ///     names share the same numeric value, they are modeled here as a single member rather
-    ///     than two enum members that a plain <see langword="int" /> comparison could never tell
-    ///     apart; check which context produced the code (the OPT pseudo-record vs. the TSIG
-    ///     record) to know which meaning applies.
+    ///     IANA gives code 16 two names for two contexts. As an EDNS(0) extended RCODE (RFC 6891) it
+    ///     means the requester's EDNS version is not supported ("BADVERS"). In the error field of a
+    ///     TSIG record (RFC 8945) it means the signature failed verification ("BADSIG"). One member
+    ///     covers both, since two members with the same value could not be told apart; the context
+    ///     (OPT pseudo-record or TSIG record) says which meaning applies.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "BADVERS")]
     BadVersionOrBadSignature = 16,

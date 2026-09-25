@@ -4,17 +4,13 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This class is the single place that knows which <see cref="IDnsRecordDataCodec" /> handles
-///     which <see cref="DnsResourceRecordTypeEnum" />. A record type with no codec registered here
-///     is simply carried as opaque bytes by <see cref="Wire.DnsResourceRecord" />, exactly as RFC
-///     3597 requires for a type an implementation does not specifically understand -- which is
-///     also how a genuinely unknown, future record type behaves without needing any code change
-///     at all.
+///     This class is the one place that maps each <see cref="DnsResourceRecordTypeEnum" /> to its
+///     <see cref="IDnsRecordDataCodec" />. A type with no codec here is carried as opaque bytes by
+///     <see cref="Wire.DnsResourceRecord" />, as RFC 3597 requires for unknown types, so a new
+///     record type passes through without any code change.
 ///     <para>
-///         This registry is deliberately a static lookup table rather than something registered
-///         through dependency injection: which codec handles which record type is fixed at
-///         compile time, the same way <see cref="Ninlil.Common.Serializer.JsonSerializer.Converters" />
-///         is a fixed, static list rather than a per-application configuration choice.
+///         It is a static table rather than a dependency injection registration because the
+///         mapping is fixed at compile time and is needed from static code.
 ///     </para>
 /// </summary>
 public static class DnsRecordDataCodecRegistry
@@ -76,28 +72,27 @@ public static class DnsRecordDataCodecRegistry
     ) => Codecs.TryGetValue(recordType, out codec);
 
     /// <summary>
-    ///     This method decodes a record's RDATA into its strongly-typed model, if a codec is
-    ///     registered for its type.
+    ///     This method decodes a record's RDATA into its typed model, if a codec is registered for
+    ///     its type.
     /// </summary>
     /// <param name="recordType">The RDATA's record type.</param>
     /// <param name="rdata">The RDATA to decode.</param>
     /// <returns>
-    ///     The decoded, strongly-typed record data, or <see langword="null" /> if no codec is
+    ///     The decoded record data, or <see langword="null" /> if no codec is
     ///     registered for <paramref name="recordType" />.
     /// </returns>
     public static IDnsRecordData Decode(DnsResourceRecordTypeEnum recordType, byte[] rdata) =>
         TryGetCodec(recordType, out IDnsRecordDataCodec codec) ? codec.Read(rdata) : null;
 
     /// <summary>
-    ///     This method encodes a strongly-typed record data model into RDATA bytes.
+    ///     This method encodes a typed record data model into RDATA bytes.
     /// </summary>
     /// <param name="recordType">
-    ///     The record type <paramref name="data" /> belongs to. This is not inferred from
-    ///     <paramref name="data" />'s runtime type -- <see cref="ServiceBindingRecordData" />, for
-    ///     example, is shared by two different record types -- so the caller, which already knows
-    ///     which type it is encoding, states it explicitly.
+    ///     The record type <paramref name="data" /> belongs to. It is not inferred from the runtime
+    ///     type of <paramref name="data" />, because some models, such as
+    ///     <see cref="ServiceBindingRecordData" />, serve two record types.
     /// </param>
-    /// <param name="data">The strongly-typed record data to encode.</param>
+    /// <param name="data">The typed record data to encode.</param>
     /// <returns>The encoded RDATA.</returns>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when no codec is registered for <paramref name="recordType" />.

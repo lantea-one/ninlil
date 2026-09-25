@@ -6,20 +6,16 @@ namespace Ninlil.Dns.Common.Enum;
 
 /// <summary>
 ///     This enumeration lists the EDNS(0) option codes assigned by IANA in the "DNS EDNS0 Option
-///     Codes" registry. These travel inside the RDATA of the OPT pseudo-record defined by RFC
-///     6891, each carrying a small piece of side-channel metadata a resolver or server wants to
-///     attach to a query or response without changing the core DNS message format itself. Only
-///     the options Ninlil actually recognizes are listed here; an option code that isn't
-///     (there are dozens, most vendor-specific or experimental) is still read and carried along
-///     as raw bytes rather than rejected, since RFC 6891 requires an unrecognized option to be
-///     ignored, not treated as an error.
+///     Codes" registry. Options travel in the RDATA of the OPT pseudo-record (RFC 6891) and attach
+///     metadata to a query or response without changing the core message format. Only the options
+///     Ninlil recognizes are listed. Any other code is still read and carried as raw bytes, because
+///     RFC 6891 requires an unknown option to be ignored rather than treated as an error.
 /// </summary>
 [JsonConverter<EnumDescriptionJsonConverter<EdnsOptionCodeEnum>>]
 public enum EdnsOptionCodeEnum : ushort
 {
     /// <summary>
-    ///     A long-lived query, defined by the (expired) LLQ draft. Kept for interoperability with
-    ///     the small number of clients that still send it.
+    ///     A long-lived query, defined by the expired LLQ draft (later RFC 8764).
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "LLQ")]
     LongLivedQuery = 1,
@@ -31,9 +27,8 @@ public enum EdnsOptionCodeEnum : ushort
     UpdateLease = 2,
 
     /// <summary>
-    ///     A name server identifier, defined by RFC 5001. Lets a resolver ask a server to
-    ///     identify itself, useful for debugging an anycast deployment where many physical
-    ///     servers answer under one address.
+    ///     A name server identifier, defined by RFC 5001. Lets a resolver ask a server to identify
+    ///     itself, which helps debug an anycast deployment where many servers share one address.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "NSID")]
     NameServerIdentifier = 3,
@@ -57,9 +52,9 @@ public enum EdnsOptionCodeEnum : ushort
     Nsec3HashUnderstood = 7,
 
     /// <summary>
-    ///     The client's subnet, defined by RFC 7871. Lets a recursive resolver tell an
-    ///     authoritative server roughly where the original client is, so the server can return an
-    ///     answer (commonly a CDN's closest edge address) tailored to that location.
+    ///     The client's subnet, defined by RFC 7871. Lets a recursive resolver tell an authoritative
+    ///     server roughly where the client is, so the answer (often a CDN's nearest edge) can suit
+    ///     that location.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "edns-client-subnet")]
     ClientSubnet = 8,
@@ -71,9 +66,8 @@ public enum EdnsOptionCodeEnum : ushort
     Expire = 9,
 
     /// <summary>
-    ///     A DNS Cookie, defined by RFC 7873. A lightweight, pre-shared value exchanged between a
-    ///     client and server that makes off-path response spoofing significantly harder without
-    ///     the overhead of a full cryptographic exchange.
+    ///     A DNS Cookie, defined by RFC 7873. A client and server exchange cookie values that make
+    ///     off-path spoofing much harder without the cost of full cryptographic authentication.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "COOKIE")]
     Cookie = 10,
@@ -85,9 +79,8 @@ public enum EdnsOptionCodeEnum : ushort
     TcpKeepalive = 11,
 
     /// <summary>
-    ///     Padding, defined by RFC 7830. Pads an encrypted query or response (DoT/DoH/DoQ) out to
-    ///     a fixed size, so an observer watching only the encrypted packet lengths cannot guess
-    ///     which query was asked from its size alone.
+    ///     Padding, defined by RFC 7830. Pads an encrypted query or response (DoT/DoH/DoQ) to a
+    ///     block size, so an observer cannot guess the query from the packet length.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Padding")]
     Padding = 12,
@@ -105,9 +98,9 @@ public enum EdnsOptionCodeEnum : ushort
     KeyTag = 14,
 
     /// <summary>
-    ///     An extended DNS error, defined by RFC 8914. Lets a server explain, in machine-readable
-    ///     form, more specifically *why* a query failed (for example, "blocked by policy" versus
-    ///     "DNSSEC signature expired") than the base RCODE alone can express.
+    ///     An extended DNS error, defined by RFC 8914. Lets a server say in machine-readable form
+    ///     why a query failed (for example "blocked" or "DNSSEC signature expired"), which the RCODE
+    ///     alone cannot express.
     /// </summary>
     [System.Runtime.Serialization.EnumMember(Value = "Extended DNS Error")]
     ExtendedDnsError = 15,

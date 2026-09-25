@@ -5,10 +5,9 @@ using System.Text;
 namespace Ninlil.Dns.Common.Wire.Records;
 
 /// <summary>
-///     This class reads and writes a single RFC 1035 §3.3 <c>&lt;character-string&gt;</c>: a
-///     single length-prefix octet (0-255) followed by that many octets of text. Several record
-///     types -- TXT, HINFO, NAPTR, and CAA among the ones Ninlil implements -- are built out
-///     of one or more of these.
+///     This class reads and writes one RFC 1035 §3.3 <c>&lt;character-string&gt;</c>: a length
+///     octet (0-255) followed by that many octets of text. TXT, HINFO, NAPTR and CAA records use
+///     it.
 /// </summary>
 internal static class CharacterStringCodec
 {

@@ -6,8 +6,8 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Tests.Wire.Records;
 
 /// <summary>
-///     This class tests the DNSSEC chain-of-trust record codecs: DS/CDS, DNSKEY/CDNSKEY, RRSIG,
-///     NSEC, NSEC3, and NSEC3PARAM.
+///     This class tests the DNSSEC record codecs (DS/CDS, DNSKEY/CDNSKEY, RRSIG, NSEC, NSEC3 and
+///     NSEC3PARAM) by round-tripping records and checking specific wire bytes.
 /// </summary>
 public class DnssecRecordCodecTests
 {
@@ -107,8 +107,8 @@ public class DnssecRecordCodecTests
 
         Assert.Equal(rrsig, decoded);
 
-        // Byte 18 onward is the Signer's Name; the top two bits of a compression pointer's first
-        // byte must never be set here, per RFC 4035 §3.1.7.
+        // Byte 18 onward is the Signer's Name, which RFC 4034 §3.1.7 forbids compressing, so
+        // the top two bits of its first byte must not be set.
         Assert.True((wire[18] & 0xC0) == 0 || wire[18] == 0);
     }
 
@@ -122,7 +122,7 @@ public class DnssecRecordCodecTests
             DnsResourceRecordTypeEnum.NS,
             DnsResourceRecordTypeEnum.RrSig,
             DnsResourceRecordTypeEnum.Nsec,
-            DnsResourceRecordTypeEnum.Caa, // 257 -- forces a second bitmap window.
+            DnsResourceRecordTypeEnum.Caa, // 257, which forces a second bitmap window.
         ];
 
         NsecRecordData nsec = new(nextName, types);

@@ -16,10 +16,10 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     </para>
 /// </summary>
 /// <param name="certificateType">
-///     The certificate's format, per IANA's "Certificate Type Values" registry -- for example, 1
-///     is PKIX (an X.509 certificate), 3 is PGP. Kept as a raw <see langword="ushort" /> rather
-///     than an enum, the same way <see cref="SshfpRecordData.Algorithm" /> is: this is a narrow,
-///     record-specific registry.
+///     The certificate's format, per IANA's "Certificate Type Values" registry; for example 1 is
+///     PKIX (an X.509 certificate) and 3 is PGP. It is a raw <see langword="ushort" /> rather than
+///     an enum, like <see cref="SshfpRecordData.Algorithm" />, because the registry is specific to
+///     this record type.
 /// </param>
 /// <param name="keyTag">
 ///     The same key tag algorithm defined for <c>DNSKEY</c> records (RFC 4034 Appendix B),

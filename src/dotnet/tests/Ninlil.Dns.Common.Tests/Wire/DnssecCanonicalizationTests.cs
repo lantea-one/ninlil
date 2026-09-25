@@ -6,15 +6,16 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Common.Tests.Wire;
 
 /// <summary>
-///     This class tests <see cref="DnssecCanonicalization" />: RFC 4034 §6's canonical form and
-///     ordering rules that every DNSSEC signature depends on.
+///     This class tests <see cref="DnssecCanonicalization" />, the canonical form and ordering
+///     rules of RFC 4034 §6 that every DNSSEC signature depends on. Expected values are taken from
+///     the RFC or assembled by hand in the test.
 /// </summary>
 public class DnssecCanonicalizationTests
 {
     /// <summary>
-    ///     This test reproduces RFC 4034 §6.1's own worked example of canonical DNS name order
-    ///     verbatim, after shuffling it, to confirm <see cref="DnssecCanonicalization.CompareCanonicalOrder" />
-    ///     reconstructs exactly the RFC's own ordering rather than merely a plausible one.
+    ///     This test shuffles the worked example of canonical name order from RFC 4034 §6.1 and
+    ///     checks that <see cref="DnssecCanonicalization.CompareCanonicalOrder" /> restores the RFC's
+    ///     order.
     /// </summary>
     [Fact]
     public void CompareCanonicalOrderReproducesRfc4034WorkedExample()
@@ -116,9 +117,9 @@ public class DnssecCanonicalizationTests
     }
 
     /// <summary>
-    ///     This test hand-assembles the exact bytes RFC 4034 §3.1.8.1 defines as a signature's
-    ///     input for a single-record RRset, and confirms <see cref="DnssecCanonicalization.BuildSigningInput" />
-    ///     produces them byte for byte.
+    ///     This test assembles by hand the signature input of RFC 4034 §3.1.8.1 for a single-record
+    ///     RRset and checks that <see cref="DnssecCanonicalization.BuildSigningInput" /> produces the
+    ///     same bytes.
     /// </summary>
     [Fact]
     public void BuildSigningInputProducesTheExactHandAssembledBytes()
@@ -140,7 +141,7 @@ public class DnssecCanonicalizationTests
             1900000000,
             9999,
             DnsName.Parse("example.com"),
-            [] // Ignored -- the signature has not been computed yet.
+            [] // Ignored: the signature has not been computed yet.
         );
 
         byte[] signingInput = DnssecCanonicalization.BuildSigningInput(
