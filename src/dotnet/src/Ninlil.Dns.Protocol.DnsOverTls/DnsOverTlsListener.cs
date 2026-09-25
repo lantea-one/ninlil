@@ -21,29 +21,28 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Protocol.DnsOverTls;
 
 /// <summary>
-///     This class implements RFC 7858's DNS-over-TLS transport: the same 2-octet length-
-///     prefixed message framing RFC 1035 §4.2.2/RFC 7766 already define for plain DNS-over-TCP
-///     (RFC 7858 §3.3 says so explicitly), carried inside a TLS session instead of a bare TCP
-///     one, so a network observer can see that a DNS query happened but not what it asked.
-///     Also answers RFC 9103 XFR-over-TLS: an AXFR/IXFR query arriving on this same connection is
-///     recognized (see <see cref="HandleZoneTransferAsync" />) and answered directly through
-///     <see cref="IZoneTransferService" />'s own multi-message sequence, streamed back over this
-///     same <see cref="SslStream" />, exactly mirroring how <c>Ninlil.Dns.Protocol.Plain</c>'s own
-///     TCP listener special-cases the identical query types -- TSIG remains the actual
-///     authentication layer either way, this transport only adds transport confidentiality.
+///     This class implements DNS over TLS (RFC 7858): the two-octet length-prefixed framing of DNS
+///     over TCP (RFC 1035 §4.2.2, RFC 7766; RFC 7858 §3.3 reuses it) inside a TLS session, so a
+///     network observer can see that a query happened but not what it asked. Ordinary queries go
+///     to <see cref="DnsQueryProcessingPipeline" /> (see that class). It also serves RFC 9103
+///     XFR-over-TLS: an AXFR or IXFR query is answered here through
+///     <see cref="IZoneTransferService" /> (see <see cref="HandleZoneTransferAsync" />), as
+///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c> does. TSIG still authenticates the
+///     transfer; TLS adds confidentiality.
+///     <para>
+///         A trusted TCP proxy can pass the client address with a PROXY protocol header (see
+///         <see cref="ProxyProtocolOptions" />). Otherwise the client address is the socket peer,
+///         which on the default dual-stack socket is IPv4-mapped for IPv4 clients.
+///     </para>
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
 /// <param name="scopeFactory">The factory used to reach a scoped <see cref="IZoneTransferService" /> per transfer.</param>
 /// <param name="options">
-///     This transport's own listen addresses, port, connection limits, and certificate -- read via
-///     <see cref="IOptionsMonitor{TOptions}" /> rather than a fixed <see cref="IOptions{TOptions}" />
-///     snapshot specifically so a REST-driven <c>enable</c> toggle (mid-process, no restart) is
-///     genuinely observed the next time <see cref="ExecuteAsync" /> itself runs: a caller that
-///     writes a fresh configuration value and then calls this component's own
-///     <see cref="Microsoft.Extensions.Hosting.IHostedService.StartAsync" /> again (exactly what
-///     <c>Ninlil.Web</c>'s own transport settings controller does) needs
-///     <see cref="ExecuteAsync" />'s very first check to see that new value, not whatever this
-///     transport's <c>Enable</c> flag happened to be at process startup.
+///     The listen addresses, port, connection limits and certificate, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> rather than <see cref="IOptions{TOptions}" /> so
+///     that when <c>Ninlil.Web</c>'s transport settings controller changes <c>Enable</c> and
+///     starts the listener again, <see cref="ExecuteAsync" /> sees the new value rather than the
+///     one from process startup.
 /// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
 public sealed class DnsOverTlsListener(
@@ -54,63 +53,56 @@ public sealed class DnsOverTlsListener(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property contains the listening sockets, one per listen address (or a single
-    ///     dual-stack one when none are configured) -- kept here so <see cref="StopAsync" /> can
-    ///     close them, which is what actually unblocks each accept loop's pending
-    ///     <see cref="Socket.AcceptAsync(CancellationToken)" /> call during shutdown.
+    ///     This field contains the listening sockets, one per listen address (or a single
+    ///     dual-stack one when none are configured). <see cref="StopAsync" /> closes them, which
+    ///     unblocks each accept loop's pending <see cref="Socket.AcceptAsync(CancellationToken)" />
+    ///     call.
     /// </summary>
     private ListenSocketSet _listenSockets = ListenSocketSet.Empty;
 
     /// <summary>
-    ///     This property bounds how many connections may be accepted concurrently, per
-    ///     <see cref="DnsOverTlsOptions.MaxConcurrentConnections" />.
+    ///     This field limits how many connections are served at once, per
+    ///     <see cref="DnsOverTlsOptions.MaxConcurrentConnections" />, across all listen addresses.
     /// </summary>
     private SemaphoreSlim _connectionLimiter;
 
     /// <summary>
-    ///     This property contains the server certificate presented to every connecting client --
-    ///     re-checked periodically against disk, so a certificate an operator or
-    ///     <c>Ninlil.Dns.Server.Acme</c> replaces mid-run is picked up without a restart.
+    ///     This field contains the provider of the server certificate presented to every client.
+    ///     It re-checks the certificate on disk periodically, so one an operator or
+    ///     <c>Ninlil.Dns.Server.Acme</c> replaces is picked up without a restart.
     /// </summary>
     private ReloadableTlsCertificateProvider _certificateProvider;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
-    ///     accepting connections -- read by the <c>/status</c> health-check endpoint, which needs
-    ///     a real "am I bound and running" signal from every transport rather than just the fact
-    ///     that it was registered/configured.
+    ///     This property reports whether at least one of this listener's sockets is bound and
+    ///     accepting connections. <c>TransportListenersHealthCheck</c> reads it, since being
+    ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
-    ///     as "address (reason)" -- read by the <c>/status</c> health check.
+    ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
 
     /// <summary>
-    ///     This property contains how long <see cref="HandleConnectionAsync" /> waits for a
-    ///     complete PROXY protocol header, from an already-trusted source, before giving up and
-    ///     aborting the connection -- the PROXY protocol specification's own recommended minimum
-    ///     ("at least 3 seconds to cover a TCP retransmit"), with a small margin added; not itself
-    ///     configurable, matching this project's own precedent of a fixed, undocumented-as-a-
-    ///     setting timeout for a narrow, defensive read (compare
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>'s own fixed regex match
-    ///     timeout).
+    ///     This field contains how long <see cref="HandleConnectionAsync" /> waits for a complete
+    ///     PROXY protocol header from a trusted source before aborting the connection: the
+    ///     specification's recommended minimum ("at least 3 seconds to cover a TCP retransmit")
+    ///     plus a margin. It is fixed rather than configurable.
     /// </summary>
     private static readonly TimeSpan ProxyProtocolHeaderTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    ///     This property contains every individually-listed address this listener trusts to open
-    ///     a connection carrying a PROXY protocol header, parsed once from
-    ///     <see cref="DnsOverTlsOptions.ProxyProtocol" /> at startup.
+    ///     This field contains the individual addresses trusted to send a PROXY protocol header,
+    ///     parsed from <see cref="DnsOverTlsOptions.ProxyProtocol" /> when the listener starts.
     /// </summary>
     private List<IPAddress> _knownProxyProtocolAddresses;
 
     /// <summary>
-    ///     This property contains every CIDR network this listener trusts to open a connection
-    ///     carrying a PROXY protocol header, parsed once from
-    ///     <see cref="DnsOverTlsOptions.ProxyProtocol" /> at startup.
+    ///     This field contains the CIDR networks trusted to send a PROXY protocol header, parsed
+    ///     from <see cref="DnsOverTlsOptions.ProxyProtocol" /> when the listener starts.
     /// </summary>
     private List<IPNetwork> _knownProxyProtocolNetworks;
 
@@ -127,10 +119,7 @@ public sealed class DnsOverTlsListener(
         );
         _connectionLimiter = new SemaphoreSlim(options.CurrentValue.MaxConcurrentConnections);
 
-        // Parsed once, up front, rather than re-parsed on every single connection -- this
-        // listener re-reads every option fresh from IOptionsMonitor<T> only when ExecuteAsync
-        // itself (re)starts, the same restart granularity every other option this method reads
-        // only once here already has.
+        // Parsed once per start rather than per connection, like the other options read here.
         ProxyProtocolTrustEvaluator.ParseKnownSources(
             options.CurrentValue.ProxyProtocol,
             logger,
@@ -180,9 +169,8 @@ public sealed class DnsOverTlsListener(
             }
             catch (SocketException)
             {
-                // Mirrors Ninlil.Dns.Protocol.Plain.TcpDnsListener's own observed shutdown
-                // behavior: a cancelled accept surfaces here as a SocketException on this
-                // platform/runtime, not as either exception above.
+                // A cancelled accept can surface as a SocketException rather than either
+                // exception above (see Ninlil.Dns.Protocol.Plain.TcpDnsListener).
                 if (stoppingToken.IsCancellationRequested)
                     break;
 
@@ -191,7 +179,7 @@ public sealed class DnsOverTlsListener(
 
             if (!_connectionLimiter.Wait(0))
             {
-                // Too many connections already open; reject this one immediately.
+                // Too many connections are open; close this one at once.
                 connection.Close();
                 continue;
             }
@@ -201,10 +189,11 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
-    ///     This method owns a single accepted connection for its entire lifetime: optionally
-    ///     reading a PROXY protocol header off it (see <see cref="TryReadProxyProtocolHeaderAsync" />),
-    ///     completing its TLS handshake, then reading every length-prefixed query it sends and
-    ///     answering each in turn, until the idle timeout elapses or the client disconnects.
+    ///     This method serves one accepted connection: it reads a PROXY protocol header if the peer
+    ///     is trusted to send one (see <see cref="TryReadProxyProtocolHeaderAsync" />), completes the
+    ///     TLS handshake, then reads and answers each length-prefixed query until the idle timeout
+    ///     passes, the client disconnects, or a zone transfer completes. The handshake itself has
+    ///     no timeout of its own; only the host's stopping token ends it.
     /// </summary>
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
     {
@@ -216,10 +205,8 @@ public sealed class DnsOverTlsListener(
 
         try
         {
-            // A PROXY protocol header, when this connection's own peer is trusted to send one,
-            // must be read directly off the raw, still-plaintext stream -- it always precedes
-            // whatever the proxy is actually relaying (here, the TLS ClientHello itself), so this
-            // must happen before SslStream is ever constructed around this same stream.
+            // A PROXY protocol header comes before whatever the proxy relays (here, the TLS
+            // ClientHello), so it is read off the plaintext stream before SslStream wraps it.
             if (
                 !await TryReadProxyProtocolHeaderAsync(
                     networkStream,
@@ -269,12 +256,8 @@ public sealed class DnsOverTlsListener(
                     idleCts.Token
                 );
 
-                // A completed zone transfer closes this connection rather than keeping it open
-                // for further pipelined queries -- see
-                // Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync's own doc
-                // comment for why this project's own zone-transfer client (and any standards-
-                // conforming reference client) has no way to detect a transfer's completion other
-                // than the connection actually closing.
+                // A completed zone transfer closes the connection; see
+                // Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync for why.
                 if (wasZoneTransfer)
                     break;
             }
@@ -299,16 +282,16 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
-    ///     This method decodes a single TLS-framed message and routes it: an AXFR/IXFR query is
-    ///     answered directly, as a real multi-message sequence, through
-    ///     <see cref="IZoneTransferService" />; every other query is enqueued onto the shared
-    ///     <see cref="DnsQueryProcessingPipeline" />, exactly as <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>
-    ///     already does for its own plain-TCP connections.
+    ///     This method decodes one framed message and routes it: an AXFR or IXFR query is answered
+    ///     here, as a sequence of messages, through <see cref="IZoneTransferService" />; every other
+    ///     query is enqueued onto <see cref="DnsQueryProcessingPipeline" />, as in
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>. A message that does not decode is
+    ///     logged and dropped.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if this connection just finished serving a zone transfer and
-    ///     should now be closed -- see <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener
-    ///     .HandleConnectionAsync</c>'s own doc comment for why.
+    ///     <see langword="true" /> if the connection just served a zone transfer and should be
+    ///     closed (see <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener.HandleConnectionAsync</c> for
+    ///     why).
     /// </returns>
     private async Task<bool> HandleMessageAsync(
         byte[] messageBytes,
@@ -327,8 +310,8 @@ public sealed class DnsOverTlsListener(
         }
         catch (FormatException exception)
         {
-            // A malformed message has no reliable identifier to answer with, the same reasoning
-            // DnsQueryProcessingPipeline itself already applies to a malformed UDP datagram.
+            // A malformed message has no reliable ID to answer with, so it is not answered, as in
+            // DnsQueryProcessingPipeline.
             logger.LogWarning(
                 exception,
                 "Discarding a malformed DNS-over-TLS message from {RemoteAddress}.",
@@ -370,11 +353,10 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
-    ///     This method streams a complete AXFR or IXFR response back over this same
-    ///     <see cref="SslStream" />, one length-prefixed message at a time, in the exact order
-    ///     <see cref="IZoneTransferService" /> yields them -- the RFC 9103 XFR-over-TLS
-    ///     counterpart to <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>'s own identically-shaped
-    ///     private method of the same name.
+    ///     This method streams an AXFR or IXFR response back over the <see cref="SslStream" />, one
+    ///     length-prefixed message at a time, in the order <see cref="IZoneTransferService" /> yields
+    ///     them. It is the XFR-over-TLS (RFC 9103) counterpart of the method of the same name in
+    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -415,35 +397,28 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
-    ///     This method optionally reads and validates a PROXY protocol header off the very start
-    ///     of a connection, ahead of the TLS handshake -- but only when this connection's own peer
-    ///     is one this listener actually trusts to send one at all
-    ///     (<see cref="ProxyProtocolTrustEvaluator.IsKnownSource" />). A connection from any other
-    ///     source is never even inspected for a PROXY protocol prefix, so a client outside the
-    ///     configured allowlist has no way to forge one, exactly the same anti-spoofing posture
-    ///     <c>Ninlil.Web.Middleware.ReverseProxyTrustGatingMiddleware</c> already takes for
-    ///     a forwarded HTTP header.
+    ///     This method reads and checks a PROXY protocol header at the start of a connection,
+    ///     before the TLS handshake, but only when the feature is on and the peer is trusted to
+    ///     send one (<see cref="ProxyProtocolTrustEvaluator.IsKnownSource" />). A connection from
+    ///     any other source is never inspected for a header, so a client outside the allowlist
+    ///     cannot forge one, as <c>Ninlil.Web.Middleware.ReverseProxyTrustGatingMiddleware</c> does
+    ///     for forwarded HTTP headers.
     ///     <para>
-    ///         Once a peer <em>is</em> trusted, the PROXY protocol specification requires it to
-    ///         always send a header, on every connection, with no ambiguity about whether one is
-    ///         present -- so a missing or malformed header from a trusted peer is never treated as
-    ///         "this connection just doesn't use the PROXY protocol" and silently allowed through
-    ///         on the raw connection's own real address. It is instead a protocol violation this
-    ///         method treats as a genuine trust failure (the trusted proxy is misconfigured, or
-    ///         this connection did not actually originate from it at all, despite sharing an
-    ///         allowlisted address) and rejects outright, per the specification's own explicit
-    ///         guidance: "any sequence which does not exactly match the protocol must be discarded
-    ///         and cause the receiver to abort the connection."
+    ///         A trusted peer must send a header on every connection, so a missing, malformed or
+    ///         late header is not taken to mean "no PROXY protocol here" and let through with the
+    ///         peer address. It is treated as a trust failure (the proxy is misconfigured, or the
+    ///         connection did not come from it) and the connection is rejected, as the
+    ///         specification requires: "any sequence which does not exactly match the protocol must
+    ///         be discarded and cause the receiver to abort the connection."
     ///     </para>
     /// </summary>
-    /// <param name="networkStream">The raw, not-yet-TLS-wrapped connection stream.</param>
-    /// <param name="remoteEndpoint">The connection's own real peer endpoint, used only for logging.</param>
-    /// <param name="stoppingToken">The listener's own shutdown token.</param>
-    /// <param name="applyClaimedAddress">Invoked with the header's own claimed client address, when it carries one.</param>
+    /// <param name="networkStream">The connection stream, before TLS.</param>
+    /// <param name="remoteEndpoint">The connection's peer endpoint, used for the trust check and logging.</param>
+    /// <param name="stoppingToken">The listener's shutdown token.</param>
+    /// <param name="applyClaimedAddress">Called with the header's claimed client address, when it carries one.</param>
     /// <returns>
-    ///     <see langword="true" /> if the connection should proceed to the TLS handshake (whether
-    ///     or not a header was ever expected or read), or <see langword="false" /> if it must be
-    ///     abandoned immediately.
+    ///     <see langword="true" /> if the connection should go on to the TLS handshake (whether or
+    ///     not a header was expected), or <see langword="false" /> if it must be dropped.
     /// </returns>
     private async Task<bool> TryReadProxyProtocolHeaderAsync(
         NetworkStream networkStream,
@@ -475,8 +450,7 @@ public sealed class DnsOverTlsListener(
         }
         catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
         {
-            // The header-read timeout elapsed without a complete header ever arriving -- treated
-            // identically to a structurally malformed one, per this method's own doc comment.
+            // The header timeout passed without a complete header; treat it as malformed.
             headerResult = ProxyProtocolParseResult.Failed;
         }
 
@@ -497,11 +471,9 @@ public sealed class DnsOverTlsListener(
     }
 
     /// <summary>
-    ///     This method writes a single length-prefixed message to a connection, serialized
-    ///     against every other write on that same connection -- necessary because
-    ///     <see cref="DnsQueryProcessingPipeline" /> may finish answering two pipelined queries on
-    ///     the same connection out of order, and an interleaved write would corrupt the framing
-    ///     for both.
+    ///     This method writes one length-prefixed message to a connection, one writer at a time:
+    ///     <see cref="DnsQueryProcessingPipeline" /> may finish two pipelined queries on the same
+    ///     connection at once, and interleaved writes would corrupt the framing of both.
     /// </summary>
     private static async ValueTask WriteFramedAsync(
         Stream stream,
@@ -535,7 +507,7 @@ public sealed class DnsOverTlsListener(
     ///     arrived (a clean disconnect between messages, not a truncated one).
     /// </returns>
     /// <exception cref="IOException">
-    ///     Thrown when the connection closes partway through an already-started read.
+    ///     Thrown when the connection closes partway through a read that has started.
     /// </exception>
     private static async ValueTask<bool> ReadExactAsync(
         Stream stream,
@@ -570,12 +542,10 @@ public sealed class DnsOverTlsListener(
         _listenSockets.Close();
         await base.StopAsync(cancellationToken);
 
-        // ExecuteAsync creates a brand-new ReloadableTlsCertificateProvider (and the polling
-        // Timer inside it) on every restart; disposing only in this class's own Dispose() --
-        // called once, at final host shutdown, not on every mid-process stop -- would leak one
-        // provider's worth of Timer per restart. Safe to dispose even if a connection accepted
-        // just before shutdown is still finishing its handshake: Dispose only stops the polling
-        // Timer, it never invalidates the already-loaded certificate Current still returns.
+        // ExecuteAsync creates a new ReloadableTlsCertificateProvider (with its polling timer)
+        // on every start. Dispose() runs only at final host shutdown, so disposing only there
+        // would leak a timer per restart. It is safe while a connection is still handshaking:
+        // Dispose only stops the timer, and Current still returns the loaded certificate.
         _certificateProvider?.Dispose();
     }
 

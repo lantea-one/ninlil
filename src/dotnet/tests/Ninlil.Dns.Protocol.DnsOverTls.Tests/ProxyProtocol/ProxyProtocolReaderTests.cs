@@ -7,13 +7,11 @@ using Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 namespace Ninlil.Dns.Protocol.DnsOverTls.Tests.ProxyProtocol;
 
 /// <summary>
-///     This class covers <see cref="ProxyProtocolReader" /> directly against real, hand-built
-///     PROXY protocol v1 (text) and v2 (binary) byte sequences, fed through a plain
-///     <see cref="MemoryStream" /> -- no socket, listener, or TLS handshake needed, since this
-///     class's own job is purely to decode bytes into a <see cref="ProxyProtocolParseResult" />.
-///     The real end-to-end wiring (a genuine TCP connection, an allowlisted vs. non-allowlisted
-///     source, the TLS handshake that follows) is covered separately in
-///     <c>DnsOverTlsListenerTests</c>.
+///     This class tests <see cref="ProxyProtocolReader" /> against hand-built PROXY protocol v1
+///     (text) and v2 (binary) byte sequences read from a <see cref="MemoryStream" />; decoding
+///     bytes into a <see cref="ProxyProtocolParseResult" /> needs no socket or TLS. The listener
+///     side (a TCP connection, trusted and untrusted sources, the TLS handshake that follows) is
+///     covered in <c>DnsOverTlsListenerTests</c>.
 /// </summary>
 public sealed class ProxyProtocolReaderTests
 {
@@ -143,8 +141,8 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V1_AnUnknownLineWithPlaceholderAddresses_IsValidButCarriesNoClaimedAddress()
     {
-        // Some real proxy implementations still append placeholder address/port fields even for
-        // an UNKNOWN line -- this must be tolerated, not rejected as a token-count mismatch.
+        // Some proxies append placeholder address and port fields to an UNKNOWN line; this must
+        // be accepted, not rejected for the token count.
         byte[] bytes = Encoding.ASCII.GetBytes("PROXY UNKNOWN 0.0.0.0 0.0.0.0 0 0\r\n");
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
@@ -159,7 +157,7 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V1_AFamilyAddressMismatch_IsRejected()
     {
-        // TCP4 claimed, but the address itself is a real IPv6 literal.
+        // TCP4 is claimed, but the address is an IPv6 literal.
         byte[] bytes = Encoding.ASCII.GetBytes("PROXY TCP4 2001:db8::1 2001:db8::2 1 2\r\n");
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
@@ -201,7 +199,7 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V1_ALineWithNoTerminatingCrlfWithinTheDefensiveMaximum_IsRejected()
     {
-        // Well past the 108-byte defensive maximum, with no CRLF anywhere in it.
+        // Well past the 108-byte maximum, with no CRLF anywhere.
         byte[] bytes = Encoding.ASCII.GetBytes("PROXY " + new string('X', 200));
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
@@ -302,8 +300,8 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V2_ALocalCommand_IsValidButCarriesNoClaimedAddress()
     {
-        // Command 0x0 (LOCAL) -- a health check. Even with a full, well-formed IPv4 address
-        // block present, its contents must be ignored.
+        // Command 0x0 (LOCAL), a health check. The well-formed IPv4 address block that follows
+        // must be ignored.
         byte[] addressBlock = BuildV2Ipv4AddressBlock(
             IPAddress.Parse("192.0.2.5"),
             IPAddress.Parse("192.0.2.6"),
@@ -328,8 +326,7 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V2_AnUnsupportedFamily_IsValidButCarriesNoClaimedAddress()
     {
-        // 0x00 == AF_UNSPEC/UNSPEC -- structurally valid, but not a family this TCP-only listener
-        // can use.
+        // 0x00 is AF_UNSPEC/UNSPEC: valid, but not a family this TCP listener can use.
         byte[] header = BuildV2Header(versionAndCommand: 0x21, familyAndProtocol: 0x00, []);
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(
@@ -344,7 +341,7 @@ public sealed class ProxyProtocolReaderTests
     [Fact]
     public async Task V2_AnUnsupportedVersion_IsRejected()
     {
-        // High nibble 0x1 == version 1, which this project does not understand at all.
+        // High nibble 0x1 is version 1 in binary form, which is not understood.
         byte[] header = BuildV2Header(versionAndCommand: 0x11, familyAndProtocol: 0x11, []);
 
         ProxyProtocolParseResult result = await ProxyProtocolReader.ReadAsync(

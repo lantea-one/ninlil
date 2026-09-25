@@ -6,29 +6,21 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 
 /// <summary>
 ///     This class decides which connecting peers are trusted to prepend a PROXY protocol header
-///     onto a DNS-over-TLS connection, from a <see cref="ProxyProtocolOptions" /> instance's own
-///     <see cref="ProxyProtocolOptions.KnownProxies" />/<see cref="ProxyProtocolOptions.KnownNetworks" />
-///     allowlist -- the IP/CIDR-allowlist half of
-///     <c>Ninlil.Web.Middleware.ReverseProxyTrustGatingMiddleware</c>'s own trust check,
-///     independently re-implemented here (not cross-project-referenced, since this project has no
-///     reference onto <c>Ninlil.Web</c> at all) for the identical reasoning
-///     <c>Ninlil.Dns.Server.Rewrites.DnsRewriteEngine</c> already documents for its own
-///     independent re-implementation of a wildcard-matching technique it could not reference
-///     cross-project either.
+///     onto a DNS-over-TLS connection, from the <see cref="ProxyProtocolOptions.KnownProxies" />
+///     and <see cref="ProxyProtocolOptions.KnownNetworks" /> allowlist. It repeats the address
+///     allowlist part of the trust check in <c>Ninlil.Web.Middleware.ReverseProxyTrustGatingMiddleware</c>,
+///     since this project cannot reference <c>Ninlil.Web</c>.
 /// </summary>
 public static class ProxyProtocolTrustEvaluator
 {
     /// <summary>
-    ///     This method parses <paramref name="options" />'s own string-typed
-    ///     <see cref="ProxyProtocolOptions.KnownProxies" />/<see cref="ProxyProtocolOptions.KnownNetworks" />
-    ///     into the real <see cref="IPAddress" />/<see cref="IPNetwork" /> values
-    ///     <see cref="IsKnownSource" /> compares against, once, up front -- a malformed entry is
-    ///     skipped and warned about rather than failing the whole parse, mirroring
-    ///     <c>Ninlil.Web.Middleware.ReverseProxyForwardedHeadersConfigurator</c>'s own
-    ///     precedent (this should never actually happen against configuration
-    ///     <c>ReverseProxySettingsController</c>'s own <c>PATCH</c> action wrote, since it already
-    ///     validates every entry before persisting it, but a non-REST edit of the configuration
-    ///     file could still introduce one).
+    ///     This method parses the <see cref="ProxyProtocolOptions.KnownProxies" /> and
+    ///     <see cref="ProxyProtocolOptions.KnownNetworks" /> strings into the
+    ///     <see cref="IPAddress" /> and <see cref="IPNetwork" /> values <see cref="IsKnownSource" />
+    ///     compares against. A malformed entry is skipped with a warning rather than failing the
+    ///     whole parse, as in <c>Ninlil.Web.Middleware.ReverseProxyForwardedHeadersConfigurator</c>.
+    ///     <c>ReverseProxySettingsController</c> validates entries before saving them, so a bad
+    ///     entry can only come from editing the configuration file by hand.
     /// </summary>
     /// <param name="options">The configured allowlist to parse.</param>
     /// <param name="logger">A logger a malformed entry is warned through.</param>
@@ -68,13 +60,11 @@ public static class ProxyProtocolTrustEvaluator
     }
 
     /// <summary>
-    ///     This method checks a connecting peer's own address against both
-    ///     <paramref name="knownAddresses" /> (an exact match) and <paramref name="knownNetworks" />
-    ///     (a CIDR containment check) -- comparing both the address as reported and, since this
-    ///     listener binds an IPv6 socket that also accepts IPv4 connections mapped into IPv6 form
-    ///     (<c>::ffff:a.b.c.d</c>), its own unmapped IPv4 equivalent when one exists, so an operator
-    ///     configuring a plain IPv4 proxy address or network still matches regardless of which form
-    ///     the connection actually arrived in.
+    ///     This method checks a peer address against <paramref name="knownAddresses" /> (exact
+    ///     match) and <paramref name="knownNetworks" /> (CIDR containment). It tries the address as
+    ///     reported and, for an IPv4-mapped IPv6 address (<c>::ffff:a.b.c.d</c>, as the default
+    ///     dual-stack socket reports IPv4 peers), its IPv4 form, so a plain IPv4 proxy entry
+    ///     matches either way.
     /// </summary>
     public static bool IsKnownSource(
         IPAddress remoteAddress,

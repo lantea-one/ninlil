@@ -6,9 +6,9 @@ using Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 namespace Ninlil.Dns.Protocol.DnsOverTls.Tests.ProxyProtocol;
 
 /// <summary>
-///     This class covers <see cref="ProxyProtocolTrustEvaluator" /> directly -- parsing a
-///     configured allowlist and matching a connecting peer's own address against it, including the
-///     IPv4-mapped-to-IPv6 handling this listener's own dual-stack socket needs.
+///     This class tests <see cref="ProxyProtocolTrustEvaluator" />: parsing the allowlist and
+///     matching a peer address against it, including the IPv4-mapped IPv6 addresses a dual-stack
+///     socket reports.
 /// </summary>
 public sealed class ProxyProtocolTrustEvaluatorTests
 {
@@ -91,9 +91,8 @@ public sealed class ProxyProtocolTrustEvaluatorTests
     [Fact]
     public void IsKnownSource_AnIpv4MappedToIpv6Address_MatchesItsPlainIpv4Entry()
     {
-        // This listener binds a dual-stack IPv6 socket, so an IPv4 peer's own address arrives
-        // mapped into IPv6 form (::ffff:a.b.c.d) -- an operator configuring the plain IPv4 form
-        // must still match.
+        // On a dual-stack socket an IPv4 peer arrives as ::ffff:a.b.c.d; an entry in plain IPv4
+        // form must still match.
         bool result = ProxyProtocolTrustEvaluator.IsKnownSource(
             IPAddress.Parse("::ffff:203.0.113.10"),
             [IPAddress.Parse("203.0.113.10")],

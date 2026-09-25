@@ -23,14 +23,12 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Protocol.DnsOverTls.Tests;
 
 /// <summary>
-///     This class exercises RFC 7858's DNS-over-TLS transport end-to-end over a real TCP socket
-///     and a real TLS handshake against the self-signed certificate <see cref="DnsOverTlsListener" />
-///     generates on its own -- promoted from this project's original 3e scratch smoke test into a
-///     permanent suite, per this project's own "hybrid testing" convention: a resolver behind the
-///     transport is deliberately a minimal, always-answering fake here, since resolution
-///     correctness itself is already covered by <c>Ninlil.Dns.Server.Authoritative.Tests</c>
-///     and <c>Ninlil.Dns.Server.Dnssec.Tests</c> -- what this class actually verifies is that
-///     the transport framing, TLS handshake, and pipeline wiring are correct.
+///     This class tests the DNS-over-TLS transport (RFC 7858) over real TCP sockets and TLS
+///     handshakes, against the self-signed certificate the certificate provider generates when
+///     none is configured. It covers framing, pipelining, zone transfers, allowed protocols, the
+///     PROXY protocol and listen addresses. The resolver is a fake that answers every query, and
+///     the zone transfer service is a fake that yields two messages; resolution itself is covered
+///     by the resolver projects' tests.
 /// </summary>
 public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 {
@@ -72,9 +70,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         );
         await _listener.StartAsync(CancellationToken.None);
 
-        // Give the listener's own ExecuteAsync a moment to actually bind before any test
-        // connects -- BackgroundService schedules ExecuteAsync's body as a continuation rather
-        // than running it fully synchronously before StartAsync returns.
+        // Give ExecuteAsync a moment to bind before any test connects: BackgroundService runs it
+        // as a continuation, so it may not have bound when StartAsync returns.
         await Task.Delay(200);
     }
 
@@ -122,12 +119,11 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="IServiceScopeFactory" /> resolving
-    ///     <see cref="IZoneTransferService" /> to a <see cref="FakeZoneTransferService" /> --
-    ///     <see cref="DnsOverTlsListener" />'s own AXFR/IXFR branch needs a real scope factory,
-    ///     but this test project has no reason to stand up the real
-    ///     <c>Ninlil.Dns.Server.Authoritative</c> DI graph (a real zone cache, TSIG, and storage)
-    ///     just to prove the transport/framing side of zone transfer works.
+    ///     This method builds an <see cref="IServiceScopeFactory" /> that resolves
+    ///     <see cref="IZoneTransferService" /> to a <see cref="FakeZoneTransferService" />. The
+    ///     listener's AXFR/IXFR branch needs a scope factory, but testing the transport side of a
+    ///     transfer does not need the zone cache, TSIG and storage of
+    ///     <c>Ninlil.Dns.Server.Authoritative</c>.
     /// </summary>
     private static IServiceScopeFactory BuildScopeFactory() =>
         new ServiceCollection()
@@ -155,10 +151,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         };
         await WriteQueryAsync(stream, query);
 
-        // FakeZoneTransferService (registered via BuildScopeFactory) yields two messages for any
-        // AXFR query -- both must arrive on this same TLS-wrapped connection, in order, proving
-        // this is a real TLS handshake carrying a real multi-message transfer response, not just
-        // an ordinary single-answer query/response round trip.
+        // FakeZoneTransferService (registered in BuildScopeFactory) yields two messages for any
+        // AXFR query; both must arrive on this TLS connection, in order, which a single
+        // query/response round trip would not produce.
         DnsMessage first = await ReadResponseAsync(stream);
         DnsMessage second = await ReadResponseAsync(stream);
 
@@ -222,8 +217,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         DnsMessage firstResponse = await ReadResponseAsync(stream);
         DnsMessage secondResponse = await ReadResponseAsync(stream);
 
-        // RFC 7766 §6.2.1 pipelining is answered by a shared worker pool -- either query may
-        // finish first, so only the *set* of IDs answered is guaranteed, not their order.
+        // Pipelined queries (RFC 7766 §6.2.1) are answered by a shared worker pool, so either may
+        // finish first; only the set of IDs is guaranteed, not the order.
         Assert.Equal(
             new HashSet<ushort> { 10, 11 },
             new HashSet<ushort> { firstResponse.Id, secondResponse.Id }
@@ -322,10 +317,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     {
         using SslStream stream = await ConnectAsync();
 
-        // A length prefix of 3, followed by 3 garbage bytes -- too short to be a valid 12-byte
-        // header, so DnsMessageReader.Read throws FormatException and the pipeline silently
-        // discards it (RFC 1035 gives no reliable identifier to answer a malformed message
-        // with). Framing itself stays in sync since exactly 3 bytes were consumed either way.
+        // A length prefix of 3 and 3 garbage bytes, too short for the 12-byte header, so
+        // DnsMessageReader.Read throws FormatException and the listener drops the message (it has
+        // no reliable ID to answer with). Framing stays in sync, since the 3 bytes were read.
         byte[] malformedLengthPrefix = new byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(malformedLengthPrefix, 3);
         await stream.WriteAsync(malformedLengthPrefix);
@@ -355,9 +349,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     ];
 
     /// <summary>
-    ///     This method builds a real, well-formed PROXY protocol v2 binary "PROXY"/TCP-over-IPv4
-    ///     header claiming <paramref name="claimedSource" /> as the connection's own real client
-    ///     address.
+    ///     This method builds a well-formed PROXY protocol v2 binary header (command PROXY, TCP over
+    ///     IPv4) claiming <paramref name="claimedSource" /> as the client address.
     /// </summary>
     private static byte[] BuildV2ProxyHeader(IPAddress claimedSource)
     {
@@ -385,10 +378,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method starts a dedicated pipeline/listener pair, isolated from
-    ///     <see cref="InitializeAsync" />'s own shared instance, configured with
-    ///     <see cref="ProxyProtocolOptions" /> -- every PROXY protocol test needs its own listener
-    ///     since the trusted-source allowlist itself is what each test varies.
+    ///     This method starts a separate pipeline and listener, apart from the shared one in
+    ///     <see cref="InitializeAsync" />, configured with <see cref="ProxyProtocolOptions" />. Each
+    ///     PROXY protocol test needs its own listener, since the allowlist is what each varies.
     /// </summary>
     private static async Task<(
         DnsQueryProcessingPipeline Pipeline,
@@ -528,8 +520,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     {
         int port = GetFreePort();
 
-        // The PROXY protocol feature is enabled, but only for a source that is not loopback --
-        // a spoofed header from an untrusted connection must never even be read as one.
+        // The PROXY protocol is on, but only for a source that is not loopback, so a forged
+        // header from this untrusted connection must not be read as one.
         (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener, _) =
             await StartProxyProtocolListenerAsync(
                 port,
@@ -542,10 +534,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             await client.ConnectAsync(IPAddress.Loopback, port);
             NetworkStream rawStream = client.GetStream();
 
-            // A forged v1 header from a source this listener does not trust -- since the peer
-            // itself is untrusted, these bytes are never consumed as a PROXY protocol header at
-            // all, and are instead fed straight into the TLS handshake as (garbage) ClientHello
-            // bytes, which must fail.
+            // A forged v1 header from an untrusted source is not read as a header; the bytes go
+            // to the TLS handshake as a garbage ClientHello, which must fail.
             await rawStream.WriteAsync(
                 Encoding.ASCII.GetBytes("PROXY TCP4 203.0.113.1 203.0.113.2 1 2\r\n")
             );
@@ -582,9 +572,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             await client.ConnectAsync(IPAddress.Loopback, port);
             NetworkStream rawStream = client.GetStream();
 
-            // A trusted source, but a garbage, non-PROXY-protocol line -- the specification's own
-            // "abort the connection" guidance applies, so the server closes the socket before the
-            // TLS handshake ever begins.
+            // A trusted source sends a line that is not a PROXY protocol header, so the server
+            // aborts the connection, as the specification requires, before the TLS handshake.
             await rawStream.WriteAsync(Encoding.ASCII.GetBytes("THIS IS NOT A PROXY HEADER\r\n"));
 
             using SslStream sslStream = new(
@@ -603,8 +592,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method starts a dedicated pipeline/listener pair bound to the given listen
-    ///     addresses on a free port, isolated from <see cref="InitializeAsync" />'s shared one.
+    ///     This method starts a separate pipeline and listener bound to the given listen addresses
+    ///     on a free port, apart from the shared one in <see cref="InitializeAsync" />.
     /// </summary>
     private static async Task<(
         DnsQueryProcessingPipeline Pipeline,
@@ -734,9 +723,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This resolver always claims every query and answers it with one fixed A record,
-    ///     regardless of the question asked -- deliberately simplified, since resolution
-    ///     correctness is not what this test class is verifying.
+    ///     This resolver claims every query and answers it with one fixed A record, whatever the
+    ///     question; resolution is not under test here.
     /// </summary>
     private sealed class AlwaysAnswerAResolver(IPAddress answer) : IDnsQueryResolver
     {
@@ -771,16 +759,14 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This resolver behaves exactly like <see cref="AlwaysAnswerAResolver" />, but also
-    ///     records the address every query actually arrived with, via
-    ///     <see cref="DnsQueryContext.RemoteAddress" /> -- what a PROXY protocol test needs to
-    ///     confirm the claimed client address genuinely reached the resolver, not merely that the
-    ///     TLS handshake/query framing itself still worked.
+    ///     This resolver works like <see cref="AlwaysAnswerAResolver" /> but also records each
+    ///     query's <see cref="DnsQueryContext.RemoteAddress" />, so a PROXY protocol test can check
+    ///     that the claimed client address reached the resolver.
     /// </summary>
     private sealed class RemoteAddressCapturingResolver(IPAddress answer) : IDnsQueryResolver
     {
         /// <summary>
-        ///     This property contains the most recent query's own <see cref="DnsQueryContext.RemoteAddress" />.
+        ///     This property contains the most recent query's <see cref="DnsQueryContext.RemoteAddress" />.
         /// </summary>
         public IPAddress LastRemoteAddress { get; private set; }
 
@@ -817,8 +803,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This publisher discards every event -- the internal event bus itself is already
-    ///     covered by <c>Ninlil.Dns.Common.Tests</c>' own 3a coverage.
+    ///     This publisher discards every event; the event bus is not under test here.
     /// </summary>
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {
@@ -826,11 +811,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This class stands in for a real <see cref="IZoneTransferService" />, yielding two
-    ///     fixed messages for any AXFR/IXFR query -- enough to prove
-    ///     <see cref="DnsOverTlsListener" />'s own multi-message zone-transfer branch actually
-    ///     streams every message back over the same TLS connection, in order, without needing a
-    ///     real zone cache or TSIG service.
+    ///     This class is a fake <see cref="IZoneTransferService" /> that yields two fixed messages
+    ///     for any AXFR or IXFR query, enough to check that the listener streams every message back
+    ///     over the same TLS connection, in order.
     /// </summary>
     private sealed class FakeZoneTransferService : IZoneTransferService
     {
@@ -853,9 +836,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 
     /// <summary>
     ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
-    ///     so no test listener ever uses a fixed or well-known port.
+    ///     on loopback and reading back what was assigned. Tests run on shared machines with their
+    ///     own DNS, DHCP and web services, and may run alongside another copy of this suite, so no
+    ///     test listener uses a fixed or well-known port.
     /// </summary>
     /// <returns>A free TCP port number.</returns>
     private static int GetFreePort()
