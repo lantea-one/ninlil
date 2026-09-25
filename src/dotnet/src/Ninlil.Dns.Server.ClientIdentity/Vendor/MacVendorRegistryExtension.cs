@@ -3,7 +3,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 
 /// <summary>
 ///     This class provides the fixed facts about each <see cref="MacVendorRegistryEnum" /> member:
-///     its prefix length and the registry name IEEE's own CSV files use in their first column.
+///     its prefix length and the registry name the IEEE CSV files use in their first column.
 /// </summary>
 public static class MacVendorRegistryExtension
 {
@@ -28,13 +28,13 @@ public static class MacVendorRegistryExtension
             };
 
         /// <summary>
-        ///     This property contains the registry's prefix length in hexadecimal digits -- the
-        ///     exact length of every value in its CSV file's <c>Assignment</c> column.
+        ///     This property contains the registry's prefix length in hexadecimal digits, which is
+        ///     the length of every value in its CSV file's <c>Assignment</c> column.
         /// </summary>
         public int PrefixHexDigits => registry.PrefixBits / 4;
 
         /// <summary>
-        ///     This property contains the registry's own name as IEEE's CSV files spell it in their
+        ///     This property contains the registry's name as the IEEE CSV files spell it in their
         ///     <c>Registry</c> column (for example <c>MA-L</c>).
         /// </summary>
         public string IeeeName =>
@@ -48,7 +48,7 @@ public static class MacVendorRegistryExtension
     }
 
     /// <summary>
-    ///     This method finds the registry whose prefixes are exactly <paramref name="hexDigits" />
+    ///     This method finds the registry whose prefixes are <paramref name="hexDigits" />
     ///     hexadecimal digits long.
     /// </summary>
     /// <param name="hexDigits">A prefix's length in hexadecimal digits.</param>

@@ -26,9 +26,9 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
 
     /// <summary>
     ///     This field contains pending hardware-address sightings, keyed by lowercase hex MAC and the
-    ///     sighting's own address family -- a dual-stack device is reachable over IPv4 and IPv6 at
-    ///     once under one MAC, and keeping each family's newest sighting separately is what lets an
-    ///     IPv4 identity still learn its IPv4 address when an IPv6 sighting of the same MAC is newer.
+    ///     sighting's address family. A dual-stack device is seen over IPv4 and IPv6 under one MAC;
+    ///     keeping each family's newest sighting lets an IPv4 identity still learn its IPv4 address
+    ///     when an IPv6 sighting of the same MAC is newer.
     /// </summary>
     private ConcurrentDictionary<(string, AddressFamily), Sighting> _hardwareAddresses = new();
 
@@ -89,9 +89,9 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
     /// <summary>
     ///     This method atomically swaps in empty buffers and returns the previous ones. A sighting
     ///     recorded in the instant a buffer is being swapped can, rarely, land in the old buffer
-    ///     after the flush has already read it and be lost -- deliberately accepted rather than
-    ///     locked against, since presence is re-observed continuously and the device's very next
-    ///     sighting restores it.
+    ///     after the flush has already read it and be lost. That is accepted rather than locked
+    ///     against, since presence is observed continuously and the device's next sighting
+    ///     restores it.
     /// </summary>
     /// <returns>The drained sightings.</returns>
     public ClientPresenceSnapshot Drain() =>
@@ -116,9 +116,9 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
         );
 
     /// <summary>
-    ///     This method unmaps an IPv4-mapped IPv6 address back to plain IPv4. This project's own
-    ///     dual-stack listeners report every IPv4 client in the mapped (<c>::ffff:a.b.c.d</c>)
-    ///     form, which would otherwise never be recorded against an IPv4 identity.
+    ///     This method unmaps an IPv4-mapped IPv6 address back to plain IPv4. A dual-stack listener
+    ///     reports an IPv4 client in the mapped (<c>::ffff:a.b.c.d</c>) form, which would otherwise
+    ///     never be recorded against an IPv4 identity.
     /// </summary>
     private static IPAddress Normalize(IPAddress address) =>
         address is { IsIPv4MappedToIPv6: true } ? address.MapToIPv4() : address;

@@ -12,29 +12,22 @@ namespace Ninlil.Dns.Server.ClientIdentity.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's ARP/neighbor-table and manual-static-mapping client identity resolvers.
+///     client identity: the ARP and static-mapping resolvers, presence tracking and MAC vendor
+///     lookup.
 /// </summary>
 public static class ServiceCollectionClientIdentityExtension
 {
     /// <summary>
-    ///     This method registers <see cref="ArpNeighborTableClientIdentityResolver" /> as a
-    ///     singleton, under both its own concrete type (so a composition root can compose it into
-    ///     a <c>CompositeClientIdentityResolver</c> alongside other resolvers) and
-    ///     <see cref="IHostedService" /> (so the host starts its background refresh loop) -- the
-    ///     exact same "one singleton, two registrations" shape
-    ///     <c>Ninlil.Dns.Server.AccessControl.Extension.ServiceCollectionAccessControlExtension</c>
-    ///     already uses for <c>DnsAccessControlRuleCache</c>. Also registers
-    ///     <see cref="StaticAddressMappingClientIdentityResolver" /> as a singleton, under its own
-    ///     concrete type only -- it needs no <see cref="IHostedService" /> registration at all,
-    ///     since (unlike the ARP resolver's polled snapshot) it re-queries its own repository
-    ///     fresh on every single call and so has no background refresh loop to start.
+    ///     This method registers <see cref="ArpNeighborTableClientIdentityResolver" /> as one
+    ///     singleton under its concrete type (so the composition root can put it in a
+    ///     <c>CompositeClientIdentityResolver</c>) and as <see cref="IHostedService" /> (so the host
+    ///     starts its refresh loop), as <c>DnsAccessControlRuleCache</c> is registered. It also
+    ///     registers <see cref="StaticAddressMappingClientIdentityResolver" /> as a singleton under
+    ///     its concrete type; it reads its repository on every call, so it has no loop to start.
     ///     <para>
-    ///         This method deliberately does <em>not</em> also register
-    ///         <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c> itself -- which
-    ///         concrete resolver(s) actually answer that interface, and in what fallback order, is
-    ///         a composition-root decision made explicitly in <c>Ninlil.Web/Program.cs</c> (see
-    ///         <c>CompositeClientIdentityResolver</c>'s own doc comment), exactly like every other
-    ///         "select the active implementation once" precedent in this project.
+    ///         It does not register <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c>
+    ///         itself: which resolvers answer it, and in what order, is decided in
+    ///         <c>Ninlil.Web/Program.cs</c>.
     ///     </para>
     ///     <para>
     ///         Also registers passive client presence tracking: <see cref="ClientPresenceOptions" />,
@@ -46,13 +39,16 @@ public static class ServiceCollectionClientIdentityExtension
     ///     <para>
     ///         Also registers MAC vendor lookup: <see cref="MacVendorLookupOptions" />, the
     ///         <see cref="MacVendorLookupService" /> singleton (as <see cref="IMacVendorLookupService" />
-    ///         too), and <see cref="MacVendorRefreshService" /> -- a singleton reachable by its own
-    ///         type for an on-demand refresh, and the hosted service running the periodic one --
-    ///         with its own named <see cref="System.Net.Http.HttpClient" />.
+    ///         too), and <see cref="MacVendorRefreshService" />, one singleton reachable by its type
+    ///         for an on-demand refresh and registered as the hosted service that runs the periodic
+    ///         one, with a named <see cref="System.Net.Http.HttpClient" />.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
-    /// <param name="configuration">The configuration <see cref="ClientPresenceOptions" /> is bound from.</param>
+    /// <param name="configuration">
+    ///     The configuration <see cref="ClientPresenceOptions" /> and
+    ///     <see cref="MacVendorLookupOptions" /> are bound from.
+    /// </param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
     public static IServiceCollection AddNinlilDnsServerClientIdentity(
         this IServiceCollection instance,

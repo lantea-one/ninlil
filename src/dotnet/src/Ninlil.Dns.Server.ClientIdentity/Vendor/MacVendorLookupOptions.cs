@@ -2,22 +2,23 @@
 namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 
 /// <summary>
-///     This class holds the settings for MAC vendor lookup's own automatic data refresh. Lookups
+///     This class holds the settings for the automatic refresh of MAC vendor data. Lookups
 ///     themselves need no configuration: a snapshot of the IEEE registries is compiled into this
 ///     assembly, so a vendor resolves offline from the very first boot.
 ///     <para>
 ///         <b>Automatic refresh is on by default.</b> The IEEE assigns new blocks continually, and
 ///         this server's deployment target is a homelab box left running for years; a compiled-in
 ///         snapshot alone would drift further out of date with every month nobody upgrades it.
-///         Refreshing is a plain, conditional HTTPS download of three public files on a slow
-///         schedule -- no new listening surface and nothing sent about the local network -- so it
-///         follows this project's "self-maintaining features default on" rule. A failed or
-///         implausible download never replaces the data already loaded.
+///         Refreshing is a conditional HTTPS download of three public files on a slow schedule,
+///         with no new listening surface and nothing sent about the local network, so it follows
+///         the rule that self-maintaining features default on. A failed or implausible download
+///         never replaces the data already loaded.
 ///     </para>
 ///     <para>
 ///         Every value except <see cref="DataFilePath" /> is read live through
-///         <c>IOptionsMonitor</c>. <see cref="DataFilePath" /> is read once at startup and is
-///         deliberately configuration-file-only, like every other on-disk state path.
+///         <c>IOptionsMonitor</c>. <see cref="DataFilePath" /> can only be set in the
+///         configuration file, like every other on-disk state path, and the lookup service reads
+///         the persisted table from it once at startup.
 ///     </para>
 /// </summary>
 public sealed class MacVendorLookupOptions
@@ -28,23 +29,23 @@ public sealed class MacVendorLookupOptions
     public const string SectionName = "DnsServer:MacVendorLookup";
 
     /// <summary>
-    ///     This constant contains the IEEE's own URL for the MA-L (24-bit OUI) registry.
+    ///     This constant contains the IEEE URL for the MA-L (24-bit OUI) registry.
     /// </summary>
     public const string DefaultMaLRegistryUrl = "https://standards-oui.ieee.org/oui/oui.csv";
 
     /// <summary>
-    ///     This constant contains the IEEE's own URL for the MA-M (28-bit) registry.
+    ///     This constant contains the IEEE URL for the MA-M (28-bit) registry.
     /// </summary>
     public const string DefaultMaMRegistryUrl = "https://standards-oui.ieee.org/oui28/mam.csv";
 
     /// <summary>
-    ///     This constant contains the IEEE's own URL for the MA-S (36-bit) registry.
+    ///     This constant contains the IEEE URL for the MA-S (36-bit) registry.
     /// </summary>
     public const string DefaultMaSRegistryUrl = "https://standards-oui.ieee.org/oui36/oui36.csv";
 
     /// <summary>
     ///     This property indicates whether the registries are periodically re-downloaded from the
-    ///     IEEE. On by default -- see this class's own doc comment.
+    ///     IEEE. On by default (see the class summary).
     /// </summary>
     public bool EnableAutomaticRefresh { get; set; } = true;
 

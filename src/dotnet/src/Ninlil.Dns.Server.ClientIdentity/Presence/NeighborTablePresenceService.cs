@@ -10,10 +10,10 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 /// <summary>
 ///     This background service samples the kernel neighbor table on
 ///     <see cref="ClientPresenceOptions.NeighborTablePollInterval" /> and records a hardware-address
-///     sighting for every entry the kernel currently holds as confirmed reachable -- the presence
-///     signal that covers a device which neither leases an address from this server nor sends it
-///     DNS queries. Entirely passive: it only reads the table the kernel already maintains, and
-///     sends nothing on the network.
+///     sighting for every entry the kernel currently holds as confirmed reachable. This signal
+///     covers a device that neither leases an address from this server nor sends it DNS queries.
+///     It is passive: it only reads the table the kernel maintains and sends nothing on the
+///     network.
 ///     <para>
 ///         Sampling is skipped while <see cref="ClientPresenceOptions.EnableNeighborTableSignal" />
 ///         is off, re-checked every interval so a settings change applies live. When the table

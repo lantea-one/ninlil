@@ -16,7 +16,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 /// <summary>
 ///     This background service periodically drains <see cref="ClientPresenceTracker" /> and
 ///     persists every buffered sighting onto the known-client address it belongs to, advancing
-///     that address's own <see cref="DnsClientAddressEntity.LastSeenUtc" /> (and, when the
+///     that address's <see cref="DnsClientAddressEntity.LastSeenUtc" /> (and, when the
 ///     sighting's address family matches, its <see cref="DnsClientAddressEntity.Address" />).
 ///     <para>
 ///         Each kind of sighting is matched differently. An identity sighting matches the address
@@ -38,7 +38,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///     </para>
 /// </summary>
 /// <param name="tracker">The buffer sightings are drained from.</param>
-/// <param name="scopeFactory">The factory each flush opens its own fresh scope from.</param>
+/// <param name="scopeFactory">The factory each flush opens a new scope from.</param>
 /// <param name="options">The live presence options (flush interval).</param>
 /// <param name="logger">The logger flush failures are recorded to.</param>
 public sealed class ClientPresenceFlushService(
@@ -149,7 +149,7 @@ public sealed class ClientPresenceFlushService(
             )
         )
         {
-            // Gather every sighting that belongs to this address: its own identity, plus any
+            // Gather every sighting that belongs to this address: its identity, plus any
             // hardware sighting (of either address family) of a MAC its identifier embeds.
             List<Sighting> candidates = [];
 
@@ -184,8 +184,8 @@ public sealed class ClientPresenceFlushService(
 
             row.LastSeenUtc = newest.SeenAtUtc;
 
-            // The recorded address comes from the newest sighting of the row's own family only --
-            // an IPv6 sighting of a device's MAC must never overwrite its IPv4 identity's address.
+            // The recorded address comes from the newest sighting of the row's family only: an
+            // IPv6 sighting of a device's MAC must never overwrite its IPv4 identity's address.
             Sighting sameFamily = candidates
                 .Where(candidate =>
                     candidate.Address?.AddressFamily == FamilyOf(row.ProtocolVersion)
@@ -205,7 +205,8 @@ public sealed class ClientPresenceFlushService(
     }
 
     /// <summary>
-    ///     This method derives a stored address's own link keys by its protocol version.
+    ///     This method derives a stored address's link keys from its identifier, by protocol
+    ///     version.
     /// </summary>
     private static IReadOnlySet<string> LinkKeysFor(DnsClientAddressEntity row) =>
         row.ProtocolVersion == InternetProtocolVersionEnum.IPv6

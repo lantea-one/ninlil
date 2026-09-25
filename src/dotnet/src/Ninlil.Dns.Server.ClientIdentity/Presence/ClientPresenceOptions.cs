@@ -8,10 +8,10 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///     <c>IOptionsMonitor</c>, so a change written through the settings REST surface takes effect
 ///     without a restart.
 ///     <para>
-///         Presence is entirely passive: it is inferred from signals this server already observes
+///         Presence is passive: it is inferred from signals this server already observes
 ///         (confirmed-reachable kernel neighbor entries, DHCP lease grants and renewals, and live
 ///         DNS queries), never from active network scanning. Online/offline is never stored; it is
-///         computed at read time by comparing an address's own last sighting against
+///         computed at read time by comparing an address's last sighting against
 ///         <see cref="OnlineWindow" />, so it self-corrects the moment a device goes quiet, with no
 ///         sweep required.
 ///     </para>

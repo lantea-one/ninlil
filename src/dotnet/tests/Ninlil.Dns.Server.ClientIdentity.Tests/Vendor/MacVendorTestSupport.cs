@@ -13,7 +13,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests.Vendor;
 internal static class MacVendorTestSupport
 {
     /// <summary>
-    ///     This method builds a registry CSV in IEEE's own format with <paramref name="count" />
+    ///     This method builds a registry CSV in the IEEE format with <paramref name="count" />
     ///     sequential prefixes starting at <paramref name="firstPrefix" />.
     /// </summary>
     public static string BuildRegistryCsv(

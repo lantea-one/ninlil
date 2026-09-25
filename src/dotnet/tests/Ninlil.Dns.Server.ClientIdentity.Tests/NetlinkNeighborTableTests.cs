@@ -12,9 +12,9 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
 ///     This class covers the rtnetlink neighbor-table path: <see cref="NetlinkNeighborMessageParser" />
-///     against constructed datagrams, <see cref="NetlinkNeighborTableReader" /> against this
-///     machine's real kernel, and <see cref="NeighborTablePresenceService" />'s filtering of which
-///     entries count as a sighting.
+///     against constructed datagrams, <see cref="NetlinkNeighborTableReader" /> against the test
+///     machine's kernel, and the filtering in <see cref="NeighborTablePresenceService" /> of which
+///     entries count as a sighting (with a fake reader and a recording recorder).
 /// </summary>
 public class NetlinkNeighborTableTests
 {
@@ -81,7 +81,7 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test proves IPv4 and IPv6 entries, their MACs and states, all parse from one
+    ///     This test checks that IPv4 and IPv6 entries, their MACs and states, all parse from one
     ///     datagram, and that a datagram without <c>NLMSG_DONE</c> is reported as unfinished.
     /// </summary>
     [Fact]
@@ -110,7 +110,7 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test proves <c>NLMSG_DONE</c> ends the dump, and that an unresolved entry (no
+    ///     This test checks that <c>NLMSG_DONE</c> ends the dump, and that an unresolved entry (no
     ///     <c>NDA_LLADDR</c>) still parses, with no link-layer address.
     /// </summary>
     [Fact]
@@ -128,7 +128,7 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test proves a truncated message stops parsing rather than misreading past it.
+    ///     This test checks that a truncated message stops parsing rather than misreading past it.
     /// </summary>
     [Fact]
     public void ATruncatedMessageEndsParsingSafely()
@@ -150,9 +150,9 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test reads this machine's real kernel neighbor table over a real rtnetlink socket
-    ///     -- proof the request encoding and native calls work against a real kernel, not merely
-    ///     against bytes this test suite constructed itself.
+    ///     This test reads the test machine's neighbor table over an rtnetlink socket, which shows
+    ///     the request encoding and native calls work against a kernel and not only against bytes
+    ///     the tests built. On a non-Linux host it checks that the reader returns null.
     /// </summary>
     [Fact]
     public void ReadsTheRealKernelNeighborTableOnLinux()
@@ -170,8 +170,8 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test proves sampling records only confirmed-reachable entries that carry an
-    ///     Ethernet MAC -- a STALE or DELAY entry, or one with no MAC, is never a sighting.
+    ///     This test checks that sampling records only confirmed-reachable entries that carry an
+    ///     Ethernet MAC; a STALE or DELAY entry, or one with no MAC, is never a sighting.
     /// </summary>
     [Fact]
     public void SamplingRecordsOnlyConfirmedReachableEntries()
@@ -206,7 +206,7 @@ public class NetlinkNeighborTableTests
     }
 
     /// <summary>
-    ///     This test proves an unreadable neighbor table records nothing and does not throw.
+    ///     This test checks that an unreadable neighbor table records nothing and does not throw.
     /// </summary>
     [Fact]
     public void AnUnsupportedPlatformRecordsNothing()

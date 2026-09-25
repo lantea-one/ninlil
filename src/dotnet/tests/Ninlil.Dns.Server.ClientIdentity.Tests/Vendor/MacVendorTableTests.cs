@@ -5,14 +5,14 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests.Vendor;
 
 /// <summary>
 ///     This class covers <see cref="MacVendorTable" />'s longest-prefix matching,
-///     <see cref="MacVendorSnapshotCodec" />'s round trip, and the real snapshot embedded in this
+///     <see cref="MacVendorSnapshotCodec" />'s round trip, and the snapshot embedded in this
 ///     build.
 /// </summary>
 public class MacVendorTableTests
 {
     /// <summary>
     ///     This method builds a table nesting an MA-S block inside an MA-M block inside an MA-L
-    ///     block, the way IEEE's own registration-authority blocks really nest.
+    ///     block, the way IEEE Registration Authority blocks nest.
     /// </summary>
     private static MacVendorTable BuildNestedTable() =>
         new(

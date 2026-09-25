@@ -4,16 +4,15 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 
 /// <summary>
-///     This static class suggests a device icon from a hardware vendor's name -- a small,
-///     hand-written heuristic, deliberately conservative. A vendor maps to a suggestion only when
+///     This static class suggests a device icon from a hardware vendor's name, using a small,
+///     hand-written, conservative list. A vendor maps to a suggestion only when
 ///     nearly everything it puts on a home network is one kind of device (a printer maker, a
 ///     single-board-computer foundation, a speaker company). Vendors whose products span many kinds
 ///     (the large phone/laptop/TV conglomerates, or a network chip supplier whose silicon ends up in
-///     anything) deliberately get no suggestion at all, since a wrong icon is worse than the
-///     neutral one.
+///     anything) get no suggestion, since a wrong icon is worse than the neutral one.
 ///     <para>
 ///         A suggestion is only ever computed at read time and shown as such; it is never written
-///         to a client row, so an operator's own explicit choice always takes precedence and this
+///         to a client row, so an operator's explicit choice always takes precedence and this
 ///         list can be improved without touching any stored data.
 ///     </para>
 /// </summary>

@@ -21,7 +21,7 @@ public sealed class MacVendorLookupServiceTests : IDisposable
     );
 
     /// <summary>
-    ///     This method builds a lookup service reading its persisted data from this test's own path.
+    ///     This method builds a lookup service that reads persisted data from this test's path.
     /// </summary>
     private MacVendorLookupService CreateService() =>
         new(

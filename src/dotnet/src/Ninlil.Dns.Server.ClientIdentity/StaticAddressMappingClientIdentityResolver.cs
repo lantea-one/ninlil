@@ -8,42 +8,30 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.ClientIdentity;
 
 /// <summary>
-///     This class implements <see cref="IClientIdentityResolver" /> against every
-///     operator-authored <see cref="DnsClientStaticAddressMappingEntity" /> row -- the manual,
-///     always-available third resolver, for a device the other two real implementations
-///     (<see cref="ArpNeighborTableClientIdentityResolver" />, this server's own DHCP-lease
-///     resolver) can never see at all: a genuinely static, manually addressed host on a different
-///     VLAN/segment/subnet this server's own ARP table or DHCP engine never observes any traffic
-///     from.
+///     This class implements <see cref="IClientIdentityResolver" /> from the operator's
+///     <see cref="DnsClientStaticAddressMappingEntity" /> rows. It covers devices the automatic
+///     resolvers (<see cref="ArpNeighborTableClientIdentityResolver" /> and the DHCP-lease
+///     resolver) cannot see, such as a statically addressed host on another VLAN or subnet whose
+///     traffic reaches this server only through a router.
 ///     <para>
-///         <strong>Tried first, not last, in <c>Ninlil.Web/Program.cs</c>'s own composed
-///         <see cref="CompositeClientIdentityResolver" /> order.</strong> An operator who
-///         explicitly pins one address to one identifier has expressed a deliberate, authoritative
-///         intent -- if that same address also happens to appear in this server's own ARP table or
-///         DHCP lease set (a device that moved, a stale entry, a misconfigured relay), the manual
-///         pin should still win, not be silently shadowed by whichever automatic signal happens to
-///         answer first. Every other resolver in this chain only ever reports what this server
-///         incidentally observed; this one reports what an administrator explicitly declared, which
-///         is why it is consulted before either of them.
+///         <strong>It is tried first</strong> in the <see cref="CompositeClientIdentityResolver" />
+///         chain built in <c>Ninlil.Web/Program.cs</c>. A mapping is an explicit statement by an
+///         administrator, while the other resolvers report what the server happened to observe,
+///         so if the same address also appears in the ARP table or a DHCP lease (a device that
+///         moved, a stale entry, a misconfigured relay), the mapping wins.
 ///     </para>
 ///     <para>
-///         Mirrors <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseClientIdentityResolver</c>'s own
-///         "open a fresh repository scope per call, cache nothing" shape rather than
-///         <see cref="ArpNeighborTableClientIdentityResolver" />'s in-memory-snapshot one -- a
-///         mapping can be added, edited, or removed through the real REST/UI surface at any
-///         moment, and this resolver is not on this project's hot query-answering path, so there
-///         is no performance reason to trade up-to-the-moment correctness away for a cache this
-///         feature does not need. The one exception to "no caching at all" is deliberately absent
-///         here too: unlike <c>DnsFilterEngine</c>'s own CIDR/DoH-ClientID matching (evaluated
-///         against every query, a genuine hot path), a client-identity resolution happens at most
-///         once per query and is already the least-hot of this project's three resolvers to be
-///         tried, so a handful of enabled mappings scanned linearly on every call is never a real
-///         cost.
+///         Like <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseClientIdentityResolver</c>, it opens
+///         a repository scope on every call and caches nothing, so a mapping added or changed
+///         through the API applies to the next query. The enabled mappings are read and scanned
+///         in order on each call; the first that matches wins. Every query that needs a client
+///         identity (filtering, rewrites, schedules, the query log) goes through this resolver
+///         first, so each of those checks costs a database read.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to reach <see cref="IDnsClientStaticAddressMappingRepository" /> in a
-///     scope of its own, once per call.
+///     short-lived scope, once per call.
 /// </param>
 public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFactory scopeFactory)
     : IClientIdentityResolver
@@ -57,14 +45,10 @@ public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFact
         if (remoteAddress == null)
             return null;
 
-        // This project's own Plain DNS UDP listener is always a dual-stack socket bound to the
-        // IPv6 wildcard address, so a real IPv4 client's own address arrives everywhere
-        // downstream -- including here -- as an IPv4-mapped IPv6 address ("::ffff:x.x.x.x"), not
-        // the plain dotted-quad form an operator would actually type into a mapping's own Cidr
-        // field. Unmapping it first is what makes both the bare-address exact match and the CIDR
-        // containment check below actually match a genuine, real-world query instead of silently
-        // never resolving one at all -- the same normalization every other resolver in this chain
-        // already applies.
+        // With no listen addresses configured, the listeners use one dual-stack socket, so an
+        // IPv4 client arrives as an IPv4-mapped IPv6 address ("::ffff:x.x.x.x") rather than the
+        // dotted-quad form an operator types into a mapping. Unmap it so the exact match and the
+        // CIDR check below work; the other resolvers in the chain do the same.
         IPAddress normalizedAddress = remoteAddress.IsIPv4MappedToIPv6
             ? remoteAddress.MapToIPv4()
             : remoteAddress;
@@ -89,14 +73,11 @@ public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFact
     }
 
     /// <summary>
-    ///     This method checks whether a mapping's own <see cref="DnsClientStaticAddressMappingEntity.Cidr" />
-    ///     -- a bare address (exact match) or a <c>/</c>-qualified CIDR network (containment) --
-    ///     covers a single address. Duplicated, deliberately, from
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>'s own private, identically-shaped
-    ///     helper rather than shared, since that method is private to its own class and this
-    ///     project has no existing shared "network-or-address matching" utility to reach for
-    ///     instead -- both are small, stable, and each is more naturally read alongside its own
-    ///     caller.
+    ///     This method checks whether a mapping's <see cref="DnsClientStaticAddressMappingEntity.Cidr" />
+    ///     (a bare address, matched exactly, or a CIDR network, matched by containment) covers an
+    ///     address. A value that does not parse matches nothing. It is a copy of the private helper
+    ///     in <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>; there is no shared utility for
+    ///     this.
     /// </summary>
     private static bool NetworkContains(string entry, IPAddress address)
     {

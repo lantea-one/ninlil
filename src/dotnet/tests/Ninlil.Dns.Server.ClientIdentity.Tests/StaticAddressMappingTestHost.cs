@@ -9,10 +9,10 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
-///     This class builds a real, throwaway SQLite-backed dependency injection host for
-///     <see cref="StaticAddressMappingClientIdentityResolver" />'s own tests -- the same
-///     "real repositories, real <c>SaveChangesAsync</c> commits, real reads back from storage"
-///     shape <c>Ninlil.Dns.Server.QueryLog.Tests.QueryLogTestHost</c> already establishes.
+///     This class builds a host with the Entity Framework storage layer on a temporary SQLite
+///     database file and the <see cref="StaticAddressMappingClientIdentityResolver" /> under test,
+///     like <c>Ninlil.Dns.Server.QueryLog.Tests.QueryLogTestHost</c>. It seeds and reads rows
+///     through the repositories, each in a new scope.
 /// </summary>
 public sealed class StaticAddressMappingTestHost : IAsyncDisposable
 {
@@ -22,21 +22,19 @@ public sealed class StaticAddressMappingTestHost : IAsyncDisposable
     );
 
     /// <summary>
-    ///     This property contains the real dependency injection container this test's own scopes
-    ///     are created against.
+    ///     This property contains the host whose services the tests create scopes from.
     /// </summary>
     public IHost Host { get; private set; }
 
     /// <summary>
-    ///     This property resolves the real, singleton resolver under test.
+    ///     This property resolves the singleton resolver under test.
     /// </summary>
     public StaticAddressMappingClientIdentityResolver Resolver =>
         Host.Services.GetRequiredService<StaticAddressMappingClientIdentityResolver>();
 
     /// <summary>
-    ///     This method builds and starts the host, applying the entity model directly (via
-    ///     <c>EnsureCreatedAsync</c>) rather than the real relational migrations, the same
-    ///     shortcut every comparable test host in this project already takes.
+    ///     This method builds the host (it is not started) and creates the schema from the entity
+    ///     model with <c>EnsureCreatedAsync</c> rather than running the migrations.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -54,8 +52,7 @@ public sealed class StaticAddressMappingTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a static address mapping row directly through the real repository, in
-    ///     its own fresh scope.
+    ///     This method seeds a static address mapping row through the repository, in a new scope.
     /// </summary>
     public async Task<DnsClientStaticAddressMappingEntity> SeedMappingAsync(
         string cidr,
@@ -84,11 +81,8 @@ public sealed class StaticAddressMappingTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a known-client registry row directly through the real repository, in
-    ///     its own fresh scope -- used by the live end-to-end proof that a resolved identity
-    ///     actually matches the exact <see cref="DnsClientEntity" /> key every other per-client
-    ///     feature (filter-list assignment, schedules, pause, activity view) is itself keyed
-    ///     against.
+    ///     This method seeds a known-client registry row through the repository, in a new scope,
+    ///     for the test that a resolved identity finds its <see cref="DnsClientEntity" />.
     /// </summary>
     public async Task<DnsClientEntity> SeedKnownClientAsync(
         string clientIdentifier,
@@ -128,8 +122,8 @@ public sealed class StaticAddressMappingTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method looks a known client up by the exact <c>(ClientIdentifier, ProtocolVersion)</c>
-    ///     pair every other per-client feature keys against, in its own fresh scope.
+    ///     This method looks a known client up by its <c>(ClientIdentifier, ProtocolVersion)</c>
+    ///     pair, in a new scope.
     /// </summary>
     public async Task<DnsClientEntity> FindKnownClientAsync(
         string clientIdentifier,

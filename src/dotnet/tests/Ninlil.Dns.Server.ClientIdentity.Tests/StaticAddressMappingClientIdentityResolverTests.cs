@@ -7,10 +7,10 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
-///     This test proves the real Phase 16h manual static-address-mapping resolver end to end:
-///     driven directly against a real, SQLite-backed <see cref="StaticAddressMappingTestHost" />
-///     -- real repositories, real <c>SaveChangesAsync</c> commits, real reads back from storage,
-///     not mocked collaborators.
+///     This class tests <see cref="StaticAddressMappingClientIdentityResolver" />: exact-address
+///     and CIDR mappings, disabled mappings, IPv4-mapped addresses, and that a resolved identity
+///     finds its known client. It runs against <see cref="StaticAddressMappingTestHost" />, which
+///     uses the Entity Framework repositories on a temporary SQLite database.
 /// </summary>
 public sealed class StaticAddressMappingClientIdentityResolverTests : IAsyncLifetime
 {
@@ -138,13 +138,9 @@ public sealed class StaticAddressMappingClientIdentityResolverTests : IAsyncLife
     }
 
     /// <summary>
-    ///     This test is the regression proof for the exact shape of bug this project's own
-    ///     Phase 15c fix addresses for the ARP resolver, applied here: this project's own Plain
-    ///     DNS UDP listener is always a dual-stack socket bound to the IPv6 wildcard address, so a
-    ///     real IPv4 client's own source address arrives at this resolver as an IPv4-mapped IPv6
-    ///     address ("::ffff:x.x.x.x") rather than a plain IPv4 one -- an operator who configures a
-    ///     mapping's own <c>Cidr</c> as a plain IPv4 address/network must still have it match a
-    ///     real, dual-stack-arriving query.
+    ///     This test checks that an IPv4-mapped IPv6 source address ("::ffff:x.x.x.x"), as a
+    ///     dual-stack listener reports an IPv4 client, still matches a mapping whose <c>Cidr</c> is
+    ///     a plain IPv4 address or network.
     /// </summary>
     [Fact]
     public async Task ResolveAsync_Ipv4MappedIPv6Address_ResolvesTheSameAsItsPlainIPv4Form()
@@ -172,17 +168,13 @@ public sealed class StaticAddressMappingClientIdentityResolverTests : IAsyncLife
     }
 
     /// <summary>
-    ///     This is the live, end-to-end proof that a resolved identity genuinely functions as a
-    ///     known client, not merely as an opaque string: a real query from a manually-pinned
-    ///     address resolves to a <see cref="ClientIdentityResolution" /> whose own
-    ///     <c>(ClientIdentifier, ProtocolVersion)</c> pair matches -- by exact key, not by
-    ///     coincidence -- a real, independently-seeded <c>DnsClientEntity</c> row read back through
-    ///     <see cref="IDnsClientRepository" />, the exact known-client registry every per-client
-    ///     feature (filter-list assignment, schedules, pause, the activity view) is itself keyed
-    ///     against. This is chosen over driving the full DNS query pipeline because it proves the
-    ///     one thing every downstream consumer actually depends on -- the resolved identifier is a
-    ///     real, matchable key into the known-client registry -- without needing to also stand up
-    ///     and assert through an entire unrelated feature (filtering) as a proxy for that same fact.
+    ///     This test checks that a resolved identity finds a known client: the
+    ///     <c>(ClientIdentifier, ProtocolVersion)</c> pair of the <see cref="ClientIdentityResolution" />
+    ///     finds a separately seeded <c>DnsClientEntity</c> through
+    ///     <see cref="IDnsClientRepository" />, the registry that per-client features (list
+    ///     assignments, schedules, pause, the activity view) are keyed on. That is what those
+    ///     features depend on, so the test checks it directly rather than through the query
+    ///     pipeline.
     /// </summary>
     [Fact]
     public async Task ResolveAsync_ThenLookupInKnownClientRegistry_FindsTheSameRealClient()

@@ -6,9 +6,9 @@ using System.Text;
 namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 
 /// <summary>
-///     This static class reads and writes Ninlil's own compact vendor snapshot format -- the one
-///     format used both for the snapshot embedded in this assembly and for the refreshed copy
-///     persisted to disk, so either can be substituted for the other.
+///     This static class reads and writes Ninlil's compact vendor snapshot format. The same format
+///     is used for the snapshot embedded in this assembly and for the refreshed copy persisted to
+///     disk, so either can stand in for the other.
 ///     <para>
 ///         The format is Brotli-compressed UTF-8 text. Leading <c>#</c> lines carry metadata, tab
 ///         separated: <c>#ninlil-mac-vendors</c> and a format version, <c>#generated</c> and an
@@ -16,8 +16,8 @@ namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 ///         <c>ETag</c>, <c>Last-Modified</c>). Every other line is one organization, a tab, then
 ///         every prefix assigned to it, comma separated, as uppercase hexadecimal; a prefix's
 ///         length (6, 7, or 9 digits) identifies its registry. Grouping prefixes under their
-///         organization stores each name once, which is most of the saving over IEEE's own files
-///         (those also carry postal addresses this format drops entirely).
+///         organization stores each name once, which is most of the saving over the IEEE files
+///         (those also carry postal addresses, which this format drops).
 ///     </para>
 ///     <para>
 ///         <b>Regenerating the embedded snapshot</b>: run a server with this build, trigger a
@@ -160,9 +160,9 @@ public static class MacVendorSnapshotCodec
                 continue;
             }
 
-            // An organization line: the name, then its comma-separated prefixes. Only the exact
-            // metadata keys above are metadata, so an organization whose name happens to begin
-            // with '#' still round-trips as an ordinary line.
+            // An organization line: the name, then its comma-separated prefixes. Only the
+            // metadata keys above, with their field counts, are metadata, so an organization whose
+            // name begins with '#' still round-trips as an ordinary line.
             if (parts.Length != 2 || parts[0].Length == 0)
                 throw new InvalidDataException($"Malformed snapshot line: '{line}'.");
 

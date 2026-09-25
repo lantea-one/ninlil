@@ -18,16 +18,16 @@ public interface INeighborTableReader
 
 /// <summary>
 ///     This class reads the kernel neighbor table (both IPv4 ARP and IPv6 NDP entries) over a
-///     Linux rtnetlink socket, via one <c>RTM_GETNEIGH</c> dump request -- unlike
-///     <c>/proc/net/arp</c>, rtnetlink reports each entry's real reachability state, which is what
-///     lets presence tracking tell a device that is here now from one whose stale entry the kernel
-///     simply never evicted.
+///     Linux rtnetlink socket, with one <c>RTM_GETNEIGH</c> dump request. Unlike
+///     <c>/proc/net/arp</c>, rtnetlink reports each entry's reachability state, which lets
+///     presence tracking tell a device that is here now from one whose stale entry the kernel has
+///     not evicted.
 ///     <para>
 ///         .NET's managed <see cref="System.Net.Sockets.Socket" /> refuses the netlink address
 ///         family outright, so this class calls the C library's socket functions directly. Only the
 ///         Linux 64-bit targets this project builds for are supported; on any other platform, or if
 ///         the socket cannot be opened (a sandbox forbidding netlink, for example), <see cref="Read" />
-///         returns <see langword="null" /> and presence tracking simply goes without this signal.
+///         returns <see langword="null" /> and presence tracking goes without this signal.
 ///     </para>
 /// </summary>
 public sealed partial class NetlinkNeighborTableReader : INeighborTableReader

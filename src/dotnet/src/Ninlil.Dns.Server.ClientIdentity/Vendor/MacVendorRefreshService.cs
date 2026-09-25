@@ -19,17 +19,16 @@ namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 ///         <see cref="MaximumMalformedRowFraction" /> of its rows malformed, and hold at least
 ///         <see cref="GetMinimumEntryCount" /> entries and at least
 ///         <see cref="MinimumRetainedFraction" /> of the entry count already loaded for that
-///         registry. If any registry fails any of that -- or its download fails outright -- the
-///         whole refresh is abandoned and the loaded table stays exactly as it was: an HTML error
-///         page, a truncated transfer, or a registry that suddenly shrank can never replace good
-///         data. Only a refresh where every registry either passed or was confirmed unchanged
-///         builds a new table, which is written to disk first (atomically, via a temporary file and
-///         a rename) and only then swapped in.
+///         registry. If any registry fails a check, or its download fails, the whole refresh is
+///         abandoned and the loaded table stays as it was, so an HTML error page, a truncated
+///         transfer or a registry that suddenly shrank cannot replace good data. Only a refresh in
+///         which every registry passed or was confirmed unchanged builds a new table, which is
+///         written to disk first (through a temporary file and a rename) and then swapped in.
 ///     </para>
 ///     <para>
 ///         <b>Scheduling.</b> A check is due once <see cref="MacVendorLookupOptions.RefreshInterval" />
-///         has passed since the last successful check -- or, if there has never been one, since
-///         the loaded data was generated, so a fresh install whose embedded snapshot is still
+///         has passed since the last successful check or, if there has never been one, since the
+///         loaded data was generated, so a fresh install whose embedded snapshot is still
 ///         recent does not download anything yet. After a failure, the next attempt waits
 ///         <see cref="FailureRetryInterval" /> (or the refresh interval, if shorter) instead. The
 ///         bookkeeping behind that is persisted beside the data file, so a restart never triggers
@@ -49,20 +48,21 @@ public sealed class MacVendorRefreshService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This constant contains the name this service's own <see cref="HttpClient" /> is
-    ///     registered under.
+    ///     This constant contains the name this service's <see cref="HttpClient" /> is registered
+    ///     under.
     /// </summary>
     public const string HttpClientName = "Ninlil.Dns.Server.ClientIdentity.MacVendorRefresh";
 
     /// <summary>
-    ///     This field contains the largest fraction of a registry file's rows that may be
+    ///     This constant contains the largest fraction of a registry file's rows that may be
     ///     malformed before the whole file is distrusted.
     /// </summary>
     public const double MaximumMalformedRowFraction = 0.01;
 
     /// <summary>
-    ///     This field contains the smallest fraction of the currently loaded entry count a
-    ///     registry's new download must retain -- a registry never legitimately halves overnight.
+    ///     This constant contains the smallest fraction of the currently loaded entry count a
+    ///     registry's new download must keep, since a registry never legitimately halves between
+    ///     checks.
     /// </summary>
     public const double MinimumRetainedFraction = 0.5;
 
@@ -100,9 +100,9 @@ public sealed class MacVendorRefreshService(
     public MacVendorRefreshStatus Status => _status ??= LoadStatus();
 
     /// <summary>
-    ///     This method returns the minimum plausible entry count for a registry -- well under
-    ///     each registry's real size (tens of thousands of MA-L blocks, several thousand of each
-    ///     smaller kind), but far above anything a truncated or substituted file would hold.
+    ///     This method returns the minimum plausible entry count for a registry: well under each
+    ///     registry's size (tens of thousands of MA-L blocks, several thousand of each smaller
+    ///     kind), but far above what a truncated or substituted file would hold.
     /// </summary>
     /// <param name="registry">The registry.</param>
     /// <returns>The minimum entry count a download must reach.</returns>
@@ -110,8 +110,8 @@ public sealed class MacVendorRefreshService(
         registry == MacVendorRegistryEnum.MaL ? 10_000 : 1_000;
 
     /// <summary>
-    ///     This method computes when the next automatic refresh is due -- see this class's own doc
-    ///     comment for the rule.
+    ///     This method computes when the next automatic refresh is due (see the class summary for
+    ///     the rule).
     /// </summary>
     /// <returns>The instant the next refresh is due; possibly already in the past.</returns>
     public DateTimeOffset GetNextRefreshDueUtc()
@@ -189,7 +189,7 @@ public sealed class MacVendorRefreshService(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Nothing was replaced: the loaded table stays exactly as it was.
+                // Nothing was replaced: the loaded table stays as it was.
                 logger.LogWarning(
                     exception,
                     "MAC vendor registry refresh failed; keeping the currently loaded data."
@@ -299,7 +299,7 @@ public sealed class MacVendorRefreshService(
     }
 
     /// <summary>
-    ///     This method rejects a parsed registry download that does not look like the real thing.
+    ///     This method rejects a parsed registry download that does not look like a registry file.
     /// </summary>
     /// <param name="registry">The registry that was downloaded.</param>
     /// <param name="parsed">The parse outcome.</param>
@@ -332,8 +332,9 @@ public sealed class MacVendorRefreshService(
     }
 
     /// <summary>
-    ///     This method writes a table to disk atomically: to a temporary file beside the target,
-    ///     then renamed over it, so a crash mid-write can never leave a truncated data file.
+    ///     This method writes a table to a temporary file beside the target and renames it over
+    ///     the target, so a process that stops mid-write leaves the previous file in place rather
+    ///     than a truncated one.
     /// </summary>
     private static void Persist(MacVendorTable table, string path)
     {
@@ -349,7 +350,7 @@ public sealed class MacVendorRefreshService(
     }
 
     /// <summary>
-    ///     This method returns the bookkeeping file's path, beside the data file.
+    ///     This property contains the bookkeeping file's path, beside the data file.
     /// </summary>
     private string StatePath => options.CurrentValue.DataFilePath + ".state.json";
 

@@ -6,8 +6,8 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests.Vendor;
 
 /// <summary>
 ///     This class covers <see cref="MacVendorDeviceIconSuggester" />: a suggestion for a
-///     single-purpose vendor (spelled exactly as the IEEE publishes it), and deliberately none for
-///     a vendor whose products span many kinds of device.
+///     single-purpose vendor (spelled as the IEEE publishes it), and none for a vendor whose
+///     products span many kinds of device.
 /// </summary>
 public class MacVendorDeviceIconSuggesterTests
 {

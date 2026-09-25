@@ -6,7 +6,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence.Netlink;
 
 /// <summary>
 ///     This record is one kernel neighbor-table entry: an IP address, the link-layer address the
-///     kernel has resolved it to, and the kernel's own reachability state for it.
+///     kernel has resolved it to, and the kernel's reachability state for it.
 /// </summary>
 /// <param name="Address">The neighbor's IP address (IPv4 via ARP, or IPv6 via NDP).</param>
 /// <param name="LinkLayerAddress">The neighbor's link-layer address, or <see langword="null" /> when unresolved.</param>
@@ -15,19 +15,18 @@ public sealed record NeighborTableEntry(IPAddress Address, byte[] LinkLayerAddre
 {
     /// <summary>
     ///     This property indicates whether the kernel has positively confirmed the neighbor
-    ///     reachable recently (<c>NUD_REACHABLE</c>). Deliberately the only state counted as a
-    ///     sighting: <c>STALE</c> persists indefinitely on a small network after a device has
-    ///     left, and <c>DELAY</c>/<c>PROBE</c> mean only that this host <em>sent</em> to a stale
-    ///     entry and is still awaiting a reply -- exactly what traffic toward a departed device
-    ///     looks like.
+    ///     reachable recently (<c>NUD_REACHABLE</c>). It is the only state counted as a sighting:
+    ///     <c>STALE</c> can persist indefinitely on a small network after a device has left, and
+    ///     <c>DELAY</c>/<c>PROBE</c> mean only that this host <em>sent</em> to a stale entry and is
+    ///     still waiting for a reply, which is what traffic toward a departed device looks like.
     /// </summary>
     public bool IsConfirmedReachable => (State & NetlinkNeighborMessageParser.NudReachable) != 0;
 }
 
 /// <summary>
 ///     This static class parses the reply to an rtnetlink neighbor dump (<c>RTM_GETNEIGH</c> with
-///     <c>NLM_F_DUMP</c>) into <see cref="NeighborTableEntry" /> values. It is deliberately free of
-///     any socket code, so it can be exercised directly against constructed byte sequences.
+///     <c>NLM_F_DUMP</c>) into <see cref="NeighborTableEntry" /> values. It contains no socket
+///     code, so tests can run it against constructed byte sequences.
 ///     <para>
 ///         Every layout below is taken from the Linux <c>netlink(7)</c> and <c>rtnetlink(7)</c>
 ///         manual pages. A reply is a sequence of messages, each a 16-octet <c>nlmsghdr</c>

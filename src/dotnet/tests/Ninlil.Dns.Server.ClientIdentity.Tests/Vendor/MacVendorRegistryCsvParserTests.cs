@@ -4,14 +4,14 @@ using Ninlil.Dns.Server.ClientIdentity.Vendor;
 namespace Ninlil.Dns.Server.ClientIdentity.Tests.Vendor;
 
 /// <summary>
-///     This class covers <see cref="MacVendorRegistryCsvParser" /> against the exact shapes IEEE's
-///     own registry files use: RFC 4180 quoting (commas and doubled quotes inside a quoted name),
-///     CRLF line endings, a line break inside a quoted address, and each registry's own prefix
-///     width -- plus the rejections that keep a bad download from ever being trusted.
+///     This class covers <see cref="MacVendorRegistryCsvParser" /> against the shapes the IEEE
+///     registry files use: RFC 4180 quoting (commas and doubled quotes inside a quoted name),
+///     CRLF line endings, a line break inside a quoted address and each registry's prefix width,
+///     plus the rejections that keep a bad download from being trusted.
 /// </summary>
 public class MacVendorRegistryCsvParserTests
 {
-    /// <summary>IEEE's header row, exactly as published.</summary>
+    /// <summary>The IEEE header row, as published.</summary>
     private const string Header = "Registry,Assignment,Organization Name,Organization Address\r\n";
 
     [Fact]

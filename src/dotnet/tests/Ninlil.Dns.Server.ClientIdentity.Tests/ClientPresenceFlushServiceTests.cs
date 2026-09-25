@@ -15,7 +15,7 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
 ///     This class covers <see cref="ClientPresenceTracker" /> and
-///     <see cref="ClientPresenceFlushService" /> end to end against a real SQLite database: each
+///     <see cref="ClientPresenceFlushService" /> together against a temporary SQLite database: each
 ///     sighting kind reaching the right stored address, family-safe address updates, source
 ///     addresses resolved through <see cref="IClientIdentityResolver" />, and sightings that must
 ///     never move presence backwards or touch unknown devices.
@@ -25,7 +25,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     /// <summary>A sample MAC address.</summary>
     private const string Mac = "aa:bb:cc:dd:ee:01";
 
-    /// <summary>This test's own throwaway database file.</summary>
+    /// <summary>The temporary database file for this test.</summary>
     private readonly string _databasePath = Path.Combine(
         Path.GetTempPath(),
         $"ninlil-dns-presence-tests-{Guid.NewGuid()}.sqlite3"
@@ -37,7 +37,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     /// <summary>The tracker sightings are recorded into.</summary>
     private readonly ClientPresenceTracker _tracker = new();
 
-    /// <summary>The host providing the real repositories.</summary>
+    /// <summary>The host providing the Entity Framework repositories.</summary>
     private IHost _host;
 
     /// <summary>The service under test.</summary>
@@ -120,7 +120,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves an identity sighting advances its own address's presence and address,
+    ///     This test checks that an identity sighting advances its address row's presence and address,
     ///     matching the identifier case-insensitively.
     /// </summary>
     [Fact]
@@ -143,7 +143,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a neighbor-table MAC sighting reaches both of a dual-stack device's
+    ///     This test checks that a neighbor-table MAC sighting reaches both of a dual-stack device's
     ///     addresses (the IPv4 MAC and an IPv6 DUID-LL embedding it), while its IPv4 address is
     ///     recorded only on the IPv4 row.
     /// </summary>
@@ -172,9 +172,9 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a MAC reachable over both IPv4 and IPv6 at once -- the IPv6 sighting
-    ///     the newer of the two -- still gives the IPv4 identity its IPv4 address and the IPv6
-    ///     identity its IPv6 address, rather than the newest sighting shadowing the other family.
+    ///     This test checks that a MAC seen over both IPv4 and IPv6, with the IPv6 sighting newer,
+    ///     still gives the IPv4 identity its IPv4 address and the IPv6 identity its IPv6 address,
+    ///     rather than the newest sighting shadowing the other family.
     /// </summary>
     [Fact]
     public async Task ADualStackHardwareSightingGivesEachFamilyItsOwnAddress()
@@ -198,8 +198,8 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a DNS source-address sighting -- including one arriving in IPv4-mapped
-    ///     form from a dual-stack listener -- is resolved to its identity at flush time.
+    ///     This test checks that a DNS source-address sighting, including one in IPv4-mapped form
+    ///     from a dual-stack listener, is resolved to its identity at flush time.
     /// </summary>
     [Fact]
     public async Task ASourceAddressSightingIsResolvedAtFlushTime()
@@ -217,7 +217,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves an older sighting never moves presence backwards.
+    ///     This test checks that an older sighting never moves presence backwards.
     /// </summary>
     [Fact]
     public async Task AnOlderSightingNeverMovesPresenceBackwards()
@@ -234,7 +234,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a sighting of an unregistered device changes nothing.
+    ///     This test checks that a sighting of an unregistered device changes nothing.
     /// </summary>
     [Fact]
     public async Task ASightingOfAnUnknownDeviceChangesNothing()
@@ -253,7 +253,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves the tracker keeps only the most recent sighting per key, regardless of
+    ///     This test checks that the tracker keeps only the most recent sighting per key, regardless of
     ///     recording order.
     /// </summary>
     [Fact]
@@ -270,7 +270,7 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves the online window is applied at read time.
+    ///     This test checks that the online window is applied at read time.
     /// </summary>
     [Fact]
     public void OnlineIsInferredFromTheWindow()
@@ -284,7 +284,8 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This class resolves addresses from a fixed map.
+    ///     This class is a fake <see cref="IClientIdentityResolver" /> that resolves addresses from a
+    ///     fixed map.
     /// </summary>
     private sealed class FakeResolver : IClientIdentityResolver
     {

@@ -39,7 +39,7 @@ public sealed class MacVendorLookupService : IMacVendorLookupService
     private MacVendorTable _current;
 
     /// <summary>
-    ///     This constructor loads the newest available table -- see this class's own doc comment.
+    ///     This constructor loads the newest available table (see the class summary).
     /// </summary>
     /// <param name="options">The vendor lookup options, read once for the persisted data path.</param>
     /// <param name="logger">The logger a failed load of the persisted file is reported to.</param>
@@ -61,8 +61,8 @@ public sealed class MacVendorLookupService : IMacVendorLookupService
     public MacVendorTable Current => Volatile.Read(ref _current);
 
     /// <summary>
-    ///     This method atomically replaces the table answering lookups -- every lookup already in
-    ///     flight finishes against the table it started with.
+    ///     This method atomically replaces the table answering lookups. A lookup already in flight
+    ///     finishes against the table it started with.
     /// </summary>
     /// <param name="table">The new table.</param>
     public void Replace(MacVendorTable table)

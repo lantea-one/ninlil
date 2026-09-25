@@ -4,11 +4,10 @@ using System.Net;
 namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
-///     This class covers <see cref="ArpNeighborTableParser" /> against synthetic content written
-///     in the exact real format the Linux kernel exposes at <c>/proc/net/arp</c> (verified
-///     live against this machine's own real file before writing these fixtures) -- header
-///     line, then whitespace-columned data rows of <c>IP address / HW type / Flags / HW
-///     address / Mask / Device</c>.
+///     This class tests <see cref="ArpNeighborTableParser" /> against constructed text in the
+///     format the Linux kernel uses for <c>/proc/net/arp</c>: a header line, then
+///     whitespace-separated rows of <c>IP address / HW type / Flags / HW address / Mask /
+///     Device</c>.
 /// </summary>
 public sealed class ArpNeighborTableParserTests
 {
@@ -45,7 +44,7 @@ public sealed class ArpNeighborTableParserTests
     public void Parse_WithAnIncompleteEntry_SkipsTheUnresolvedPlaceholderAddress()
     {
         // The kernel writes the all-zero placeholder, with Flags 0x0, for an address it is still
-        // waiting on an ARP reply for -- never a real mapping.
+        // waiting for an ARP reply for.
         string contents =
             $"{Header}\n192.168.1.9      0x1         0x0         00:00:00:00:00:00     *        eth0\n";
 
@@ -57,9 +56,8 @@ public sealed class ArpNeighborTableParserTests
     [Fact]
     public void Parse_WithFlagsMissingTheCompleteBit_SkipsTheEntry()
     {
-        // A real hardware address can, in principle, still be present with an unexpected Flags
-        // value that does not carry ATF_COM (0x2) set -- this parser trusts only a genuinely
-        // "complete" entry.
+        // A hardware address can appear with a Flags value that lacks ATF_COM (0x2); only a
+        // complete entry is trusted.
         string contents =
             $"{Header}\n192.168.1.9      0x1         0x4         aa:bb:cc:dd:ee:ff     *        eth0\n";
 

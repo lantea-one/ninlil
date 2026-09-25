@@ -5,9 +5,9 @@ using System.Text;
 namespace Ninlil.Dns.Server.ClientIdentity.Vendor;
 
 /// <summary>
-///     This static class parses one of the IEEE Registration Authority's own published registry
-///     CSV files (<c>oui.csv</c>, <c>mam.csv</c>, <c>oui36.csv</c>). The format is derived solely
-///     from those files themselves: a header row of <c>Registry,Assignment,Organization Name,
+///     This static class parses one of the registry CSV files the IEEE Registration Authority
+///     publishes (<c>oui.csv</c>, <c>mam.csv</c>, <c>oui36.csv</c>). The format is taken from
+///     those files: a header row of <c>Registry,Assignment,Organization Name,
 ///     Organization Address</c>, then one row per assignment, fields quoted per RFC 4180 whenever
 ///     they contain a comma or a double quote (a literal quote doubled), lines ending in CRLF.
 ///     Only the first three columns are read; the postal address is never kept.

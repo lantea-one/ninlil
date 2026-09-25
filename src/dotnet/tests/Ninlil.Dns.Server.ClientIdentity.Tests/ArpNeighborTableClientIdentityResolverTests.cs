@@ -7,32 +7,25 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
-///     This class proves <see cref="ArpNeighborTableClientIdentityResolver" /> genuinely reads
-///     and resolves against this machine's own real, live <c>/proc/net/arp</c> file -- not a
-///     synthetic substitute -- since this project's own working-style rule ("a passing
-///     <c>dotnet build</c> is not evidence anything works") requires a real backing mechanism to
-///     actually be exercised wherever the sandbox genuinely has one, and this sandbox confirmed
-///     does (verified directly via <c>cat /proc/net/arp</c> before writing this test). This test
-///     discovers its own expected answer from a fresh, independent read of the same real file
-///     rather than hardcoding any specific address, so it keeps passing regardless of which
-///     specific neighbors this machine happens to know about at test time.
+///     This class tests <see cref="ArpNeighborTableClientIdentityResolver" /> against the test
+///     machine's live <c>/proc/net/arp</c>, so it needs a Linux host. The expected answer comes
+///     from reading the same file independently rather than from a hardcoded address, so the
+///     tests pass whichever neighbors the machine knows. When the table is empty, the tests fall
+///     back to weaker checks (see each test).
 /// </summary>
 public sealed class ArpNeighborTableClientIdentityResolverTests
 {
     [Fact]
     public async Task RefreshAsync_ThenResolveAsync_ResolvesARealEntryFromThisMachinesOwnArpTable()
     {
-        // Read the real file ourselves, independently of the resolver under test, to discover
-        // one real entry to assert against -- this is what makes this test self-verifying rather
-        // than dependent on a specific IP happening to exist on whatever machine runs it.
+        // Read the file independently of the resolver to find an entry to assert against, so
+        // the test does not depend on a particular address existing on the machine.
         IReadOnlyList<ArpNeighborTableEntry> realEntries = ArpNeighborTableParser.Parse(
             await File.ReadAllTextAsync("/proc/net/arp")
         );
 
-        // If this sandbox's own ARP table happens to be genuinely empty at the moment this test
-        // runs, there is nothing left to assert against real content -- rather than failing (or
-        // silently no-op'ing), fall back to proving the resolver's own "no known entries yet"
-        // behavior is still correct and non-crashing.
+        // With an empty ARP table there is no entry to resolve, so check instead that the
+        // resolver answers null without throwing.
         if (realEntries.Count == 0)
         {
             ArpNeighborTableClientIdentityResolver emptyTableResolver = new(
@@ -54,8 +47,7 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
             NullLogger<ArpNeighborTableClientIdentityResolver>.Instance
         );
 
-        // Force a real, synchronous read of the real file rather than waiting on the background
-        // timer loop.
+        // Read the file now rather than waiting for the background loop.
         await resolver.RefreshAsync();
 
         ClientIdentityResolution resolution = await resolver.ResolveAsync(realEntry.IpAddress);
@@ -73,8 +65,8 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
         );
         await resolver.RefreshAsync();
 
-        // TEST-NET-3 (RFC 5737) -- reserved for documentation, guaranteed never to appear on any
-        // real network this sandbox could actually be attached to.
+        // TEST-NET-3 (RFC 5737) is reserved for documentation, so it should not be in the ARP
+        // table of a test machine.
         ClientIdentityResolution resolution = await resolver.ResolveAsync(
             IPAddress.Parse("203.0.113.254")
         );
@@ -85,7 +77,7 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
     [Fact]
     public async Task ResolveAsync_WithAnIPv6Address_AlwaysReturnsNull()
     {
-        // ARP itself (RFC 826) only ever resolves IPv4 -- see this resolver's own doc comment.
+        // ARP (RFC 826) resolves IPv4 only.
         ArpNeighborTableClientIdentityResolver resolver = new(
             NullLogger<ArpNeighborTableClientIdentityResolver>.Instance
         );
@@ -97,16 +89,11 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
     }
 
     /// <summary>
-    ///     This test is the regression proof for a real, previously-undiscovered bug 15c's own
-    ///     live end-to-end verification found: this project's own Plain DNS UDP listener is
-    ///     always a dual-stack socket bound to the IPv6 wildcard address, so a real IPv4 client's
-    ///     own source address arrives at this resolver as an IPv4-mapped IPv6 address
-    ///     ("::ffff:x.x.x.x", <see cref="System.Net.Sockets.AddressFamily.InterNetworkV6" />)
-    ///     rather than a plain <see cref="System.Net.Sockets.AddressFamily.InterNetwork" /> one --
-    ///     before this fix, the family check
-    ///     inside <see cref="ArpNeighborTableClientIdentityResolver.ResolveAsync" /> silently
-    ///     rejected every single real-world query's own address before ever reaching the
-    ///     dictionary lookup, no matter how complete the ARP table itself was.
+    ///     This test checks that an IPv4-mapped IPv6 address ("::ffff:x.x.x.x",
+    ///     <see cref="System.Net.Sockets.AddressFamily.InterNetworkV6" />) resolves like its plain
+    ///     IPv4 form. A dual-stack listener reports IPv4 clients that way, and without unmapping,
+    ///     the IPv4 family check in <see cref="ArpNeighborTableClientIdentityResolver.ResolveAsync" />
+    ///     would reject every such query. With an empty ARP table the test asserts nothing.
     /// </summary>
     [Fact]
     public async Task RefreshAsync_ThenResolveAsync_ResolvesAnIPv4MappedIPv6AddressTheSameAsItsPlainIPv4Form()
