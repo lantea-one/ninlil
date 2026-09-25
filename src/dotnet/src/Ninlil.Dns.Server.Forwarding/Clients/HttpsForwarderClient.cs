@@ -7,10 +7,10 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
-///     This class forwards a query per RFC 8484's DNS-over-HTTPS POST form: the raw wire-format
-///     message as the request body, <c>Content-Type: application/dns-message</c> -- the
-///     outbound counterpart of what this project's own <c>DnsOverHttpsHostedService.HandlePostAsync</c>
-///     already expects on the server side.
+///     This class forwards a query over DNS-over-HTTPS (RFC 8484) as a POST: the wire-format
+///     message is the request body, with <c>Content-Type: application/dns-message</c>. A
+///     non-success HTTP status throws. Certificates are validated by the default
+///     <see cref="HttpClient" /> handler.
 /// </summary>
 public sealed class HttpsForwarderClient : IUpstreamForwarderClient
 {
@@ -21,9 +21,8 @@ public sealed class HttpsForwarderClient : IUpstreamForwarderClient
     private const string DnsMessageContentType = "application/dns-message";
 
     /// <summary>
-    ///     This property contains the single, shared <see cref="HttpClient" /> every forwarded
-    ///     query reuses -- creating a fresh one per call would defeat connection pooling/keep-
-    ///     alive against a forwarder this server may query many times a second.
+    ///     This field contains the one <see cref="HttpClient" /> every forwarded query reuses, so
+    ///     connections to a forwarder are pooled and kept alive.
     /// </summary>
     private static readonly HttpClient SharedHttpClient = new();
 

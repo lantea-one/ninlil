@@ -11,12 +11,12 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
-///     This class forwards a query per RFC 9250's DNS-over-QUIC transport: one dedicated
-///     bidirectional stream per query, 2-byte length-prefixed framing, matching this project's
-///     own DoQ <em>listener</em> shape but as the client/connecting side. Certificate validation
-///     uses .NET's ordinary OS trust-store validation (never disabled), against
-///     <see cref="UpstreamForwarderDefinition.TlsHostName" /> when named, or the forwarder's own
-///     IP address string otherwise.
+///     This class forwards a query over DNS-over-QUIC (RFC 9250): a new QUIC connection per
+///     query, one bidirectional stream, 2-byte length-prefixed framing. The query is sent with
+///     its existing message ID. The certificate is validated against the operating system's
+///     trust store (never disabled), for <see cref="UpstreamForwarderDefinition.TlsHostName" />
+///     when named or for the forwarder's IP address otherwise. It needs libmsquic, hence the
+///     platform attributes.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -24,10 +24,8 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 public sealed class QuicForwarderClient : IUpstreamForwarderClient
 {
     /// <summary>
-    ///     This constant contains RFC 9250 §7.1's registered ALPN token for DNS-over-QUIC --
-    ///     redeclared here rather than referenced across projects, since
-    ///     <c>Ninlil.Dns.Protocol.DnsOverQuic.DnsOverQuicListener</c>'s own copy is private
-    ///     to that listener.
+    ///     This field contains the registered DNS-over-QUIC ALPN token (RFC 9250 §7.1). The
+    ///     listener in <c>Ninlil.Dns.Protocol.DnsOverQuic</c> keeps a private copy of it.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");
 

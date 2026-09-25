@@ -13,27 +13,24 @@ namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
 ///     This class forwards a query to an upstream DNSCrypt resolver, addressed via an
-///     <c>sdns://</c> stamp (<see cref="Definition.DnsCryptStampParser" />). Unlike every other
-///     <see cref="IUpstreamForwarderClient" />, this one must complete a full certificate
-///     discovery round trip -- a plaintext TXT query, Ed25519 signature verification against the
-///     stamp's own embedded public key -- before it can encrypt anything, the exact client-side
-///     mirror of what <c>Ninlil.Dns.Protocol.DnsCrypt</c>'s own listener answers for a
-///     connecting client. This project's existing <c>Server.DnsCrypt</c> crypto/certificate
-///     wire-format code (<see cref="DnsCryptCryptoBox" />, <see cref="DnsCryptCertificateCodec" />,
-///     <see cref="DnsCryptEnvelopeCodec" />) is reused directly rather than reimplemented, since
-///     the construction is symmetric between the two roles.
+///     <c>sdns://</c> stamp (<see cref="Definition.DnsCryptStampParser" />). Before it can
+///     encrypt, it discovers the resolver's certificate: a plaintext TXT query, whose answers are
+///     checked against the stamp's Ed25519 public key. That is the client side of what the
+///     listener in <c>Ninlil.Dns.Protocol.DnsCrypt</c> answers. The crypto and wire-format code
+///     from <c>Server.DnsCrypt</c> (<see cref="DnsCryptCryptoBox" />,
+///     <see cref="DnsCryptCertificateCodec" />, <see cref="DnsCryptEnvelopeCodec" />) is shared
+///     with the server role. The encrypted query goes over UDP, with TCP as a fallback (see
+///     <see cref="SendUdpAsync" />).
 ///     <para>
-///         A discovered certificate is deliberately never cached across calls: this client has
-///         no background rotation-tracking service of its own (unlike this resolver's own
-///         server-role <c>DnsCryptCertificateRotationService</c>), so re-discovering on every
-///         forwarded query is the only way to notice the upstream rotating its own certificate
-///         without this client silently going stale.
+///         A discovered certificate is not cached: there is no background service tracking the
+///         upstream's certificate rotation, so every forwarded query discovers it again, at the
+///         cost of an extra round trip.
 ///     </para>
 /// </summary>
 public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this client will ever read.
+    ///     This constant contains the largest UDP datagram this client reads.
     /// </summary>
     private const int MaximumDatagramSize = 65527;
 
@@ -90,9 +87,9 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
 
     /// <summary>
     ///     This method sends the plaintext <c>2.dnscrypt-cert.&lt;providerName&gt;</c> TXT query
-    ///     to the upstream, verifies every returned certificate's own Ed25519 signature against
-    ///     the stamp's own embedded public key, and returns the highest-serial one still
-    ///     currently valid.
+    ///     to the upstream (the provider name includes that prefix), checks each returned
+    ///     certificate's Ed25519 signature against the stamp's public key, and returns the valid
+    ///     one with the highest serial.
     /// </summary>
     /// <exception cref="CryptographicException">
     ///     Thrown when no returned certificate both verifies and is currently valid.
@@ -141,11 +138,9 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
             if (answer.Type != DnsResourceRecordTypeEnum.Txt || answer.Data.Length < 1)
                 continue;
 
-            // A single RFC 1035 §3.3 <character-string>: a one-byte length prefix followed by
-            // the certificate's own raw bytes, built the same way
-            // DnsCryptCertificateDiscoveryResponder writes it -- read directly off the raw
-            // RDATA rather than through TxtRecordDataCodec, which round-trips through UTF-8 and
-            // would corrupt this certificate's arbitrary binary content.
+            // One RFC 1035 §3.3 <character-string>: a length byte, then the certificate bytes,
+            // as DnsCryptCertificateDiscoveryResponder writes it. It is read from the raw RDATA
+            // because TxtRecordDataCodec goes through UTF-8 and would corrupt binary data.
             int certificateLength = answer.Data[0];
 
             if (answer.Data.Length < 1 + certificateLength)
@@ -189,9 +184,9 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     }
 
     /// <summary>
-    ///     This method sends a single plaintext UDP query and reads back a single response
-    ///     datagram, decoded -- used only for certificate discovery, which is always sent in the
-    ///     clear.
+    ///     This method sends one plaintext UDP query and decodes the first datagram received, for
+    ///     certificate discovery. The source and message ID are not checked; the certificate
+    ///     signature check protects the result.
     /// </summary>
     private static async Task<DnsMessage> SendPlainUdpAsync(
         byte[] queryBytes,
@@ -213,11 +208,10 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     }
 
     /// <summary>
-    ///     This method sends a single already-encrypted packet over UDP and reads back a single
-    ///     response datagram, raw -- returning <see langword="null" /> if the datagram looks
-    ///     truncated (exactly filled this client's own receive buffer), signaling the caller to
-    ///     retry over TCP instead, the same convention <c>PlainForwarderClient</c> uses for its
-    ///     own plaintext queries.
+    ///     This method sends an encrypted packet over UDP and returns the first datagram received,
+    ///     still encrypted. It returns <see langword="null" />, so the caller retries over TCP,
+    ///     only when the datagram fills the receive buffer; a decrypted answer with the TC flag set
+    ///     is not retried.
     /// </summary>
     private static async Task<byte[]> SendUdpAsync(
         byte[] packet,
@@ -242,10 +236,9 @@ public sealed class DnsCryptForwarderClient : IUpstreamForwarderClient
     }
 
     /// <summary>
-    ///     This method sends a single already-encrypted packet over a fresh, single-use TCP
-    ///     connection, 2-byte length-prefixed per the DNSCrypt spec's own TCP framing (identical
-    ///     to RFC 1035 §4.2.2's plain-DNS framing), and reads back exactly one length-prefixed
-    ///     response, raw.
+    ///     This method sends an encrypted packet over a new, single-use TCP connection with a
+    ///     2-byte length prefix (the same framing as RFC 1035 §4.2.2) and returns one
+    ///     length-prefixed response, still encrypted.
     /// </summary>
     private static async Task<byte[]> SendTcpAsync(
         byte[] packet,

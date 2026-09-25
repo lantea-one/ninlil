@@ -7,11 +7,11 @@ using Ninlil.Dns.Server.Forwarding.Clients;
 namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 
 /// <summary>
-///     This class proves <see cref="HttpsForwarderClient" /> works end-to-end against a real
-///     public DoH resolver -- the same real-internet-dependency reasoning
-///     <see cref="TlsForwarderClientTests" /> documents applies here too: HTTPS certificate
-///     validation is handled entirely by <see cref="System.Net.Http.HttpClient" />'s own default
-///     (real, OS-trust-store) behavior, which nothing in this client overrides.
+///     This class tests <see cref="HttpsForwarderClient" /> end to end against Cloudflare's public
+///     DoH resolver over the internet, for the reason <see cref="TlsForwarderClientTests" /> gives:
+///     certificate validation is left to <see cref="System.Net.Http.HttpClient" />'s default
+///     handler, so only a publicly trusted server can pass it. Without internet access the test
+///     fails.
 /// </summary>
 public sealed class HttpsForwarderClientTests
 {

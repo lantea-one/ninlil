@@ -9,13 +9,11 @@ using Ninlil.Dns.Server.Forwarding.Clients;
 namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 
 /// <summary>
-///     This class proves <see cref="QuicForwarderClient" /> works end-to-end against a real
-///     public DoQ resolver (AdGuard DNS, which publishes a documented DoQ endpoint) -- the same
-///     real-internet-dependency reasoning <see cref="TlsForwarderClientTests" /> documents
-///     applies here too, plus the same <c>libmsquic</c> native-dependency caveat
-///     <c>Ninlil.Dns.Protocol.DnsOverQuic.Tests</c> already documents: if
-///     <see cref="QuicConnection.IsSupported" /> is <see langword="false" /> in whatever
-///     environment runs this, the test reports that explicitly rather than failing.
+///     This class tests <see cref="QuicForwarderClient" /> end to end against AdGuard DNS's public
+///     DoQ endpoint over the internet, for the reason <see cref="TlsForwarderClientTests" />
+///     gives. It needs internet access and <c>libmsquic</c>; when
+///     <see cref="QuicConnection.IsSupported" /> is <see langword="false" />, the test returns
+///     early and passes.
 /// </summary>
 public sealed class QuicForwarderClientTests
 {
@@ -40,9 +38,8 @@ public sealed class QuicForwarderClientTests
     {
         if (!QuicConnection.IsSupported)
         {
-            // libmsquic (and, on Linux, OpenSSL) is a real native OS dependency not bundled in
-            // the .NET runtime pack -- absent here, not a code bug. Matches this project's own
-            // established "check IsSupported, report rather than fail" convention.
+            // libmsquic (and, on Linux, OpenSSL) is a native dependency outside the .NET runtime,
+            // so its absence is an environment gap, not a code bug.
             return;
         }
 

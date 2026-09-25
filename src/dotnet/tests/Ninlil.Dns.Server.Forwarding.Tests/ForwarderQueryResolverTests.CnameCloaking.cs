@@ -16,13 +16,13 @@ using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
 namespace Ninlil.Dns.Server.Forwarding.Tests;
 
 /// <summary>
-///     This part of <see cref="ForwarderQueryResolverTests" /> proves CNAME-cloaking protection
-///     on a real forwarded answer: a query for an allowed name goes through the real
-///     <see cref="DnsQueryProcessingPipeline" /> to the real <see cref="ForwarderQueryResolver" />,
-///     out over a real UDP socket to a fake upstream, and the upstream's answer -- a CNAME to a
-///     blocked tracker domain, name-compressed on the wire as a real server would send it -- is
-///     replaced by the real <see cref="DnsFilterEngine" />'s block response before it reaches
-///     the client, and recorded that way in the answered event the query log is built from.
+///     This part of <see cref="ForwarderQueryResolverTests" /> tests CNAME-cloaking protection on
+///     a forwarded answer. A query for an allowed name goes through
+///     <see cref="DnsQueryProcessingPipeline" /> to <see cref="ForwarderQueryResolver" /> and over
+///     UDP to a fake upstream. The upstream's answer, a name-compressed CNAME to a blocked
+///     tracker domain, is replaced by <see cref="DnsFilterEngine" />'s block response before it
+///     reaches the client, and recorded that way in the answered event the query log is built
+///     from.
 /// </summary>
 public sealed partial class ForwarderQueryResolverTests
 {
@@ -125,9 +125,9 @@ public sealed partial class ForwarderQueryResolverTests
     }
 
     /// <summary>
-    ///     This method sends one query through a real pipeline whose only resolver is the real
-    ///     forwarder, filtered by the real engine, and returns the wire answer plus every
-    ///     answered event the pipeline published.
+    ///     This method sends one query through a pipeline whose only resolver is the forwarder,
+    ///     filtered by the engine, and returns the wire answer plus every answered event the
+    ///     pipeline published.
     /// </summary>
     private async Task<(
         DnsMessage Response,
@@ -262,7 +262,7 @@ public sealed partial class ForwarderQueryResolverTests
     }
 
     /// <summary>
-    ///     This fake records every <see cref="DnsQueryAnsweredEvent" /> -- the event
+    ///     This fake records every <see cref="DnsQueryAnsweredEvent" />, the event
     ///     <c>DnsQueryLogSubscriber</c> writes each query log row from.
     /// </summary>
     private sealed class CapturingEventPublisher : IDnsServerEventPublisher

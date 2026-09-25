@@ -16,12 +16,11 @@ using Ninlil.Dns.Server.Forwarding.Clients;
 namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 
 /// <summary>
-///     This class proves <see cref="PlainForwarderClient" /> works end-to-end against this
-///     project's own real, already-working <see cref="UdpDnsListener" />/<see cref="TcpDnsListener" />
-///     server-role transports -- no certificate-trust concern applies to plain DNS, so a local
-///     listener (rather than a real public resolver, which <see cref="TlsForwarderClientTests" />
-///     and <c>HttpsForwarderClientTests</c> need instead) is the natural, fully deterministic
-///     choice here.
+///     This class tests <see cref="PlainForwarderClient" /> end to end against Ninlil's
+///     <see cref="UdpDnsListener" /> and <see cref="TcpDnsListener" /> on loopback ports, with a
+///     pipeline behind them: a UDP round trip, and a truncated UDP answer retried over TCP. Plain
+///     DNS has no certificates, so unlike <see cref="TlsForwarderClientTests" /> and
+///     <c>HttpsForwarderClientTests</c> it needs no public resolver.
 /// </summary>
 public sealed class PlainForwarderClientTests : IAsyncLifetime
 {
@@ -125,9 +124,8 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
     {
         PlainForwarderClient client = new();
 
-        // Enough A records that the pipeline's own RFC 1035 §4.2.1 UDP truncation logic (512-byte
-        // default payload size, since this query carries no EDNS) kicks in -- each A answer is
-        // roughly 16-20 bytes on the wire, so 40 records comfortably exceeds 512 bytes.
+        // Enough A records to pass the 512-byte limit for a query without EDNS (RFC 1035
+        // §4.2.1), so the pipeline truncates: each A record is about 16 bytes, so 40 is plenty.
         _manyRecordsResolver.AnswerCount = 40;
 
         UpstreamForwarderDefinition definition = new(
@@ -149,8 +147,8 @@ public sealed class PlainForwarderClientTests : IAsyncLifetime
 
     /// <summary>
     ///     This resolver answers every query with a configurable number of identical A records,
-    ///     letting <see cref="ForwardAsync_WhenTheUdpAnswerIsTruncated_RetriesOverTcpAndGetsTheFullAnswer" />
-    ///     force a real, pipeline-driven UDP truncation.
+    ///     so <see cref="ForwardAsync_WhenTheUdpAnswerIsTruncated_RetriesOverTcpAndGetsTheFullAnswer" />
+    ///     can make the pipeline truncate a UDP answer.
     /// </summary>
     private sealed class ManyRecordsResolver(IPAddress answer) : IDnsQueryResolver
     {

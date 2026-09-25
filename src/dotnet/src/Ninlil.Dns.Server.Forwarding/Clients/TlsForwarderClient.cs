@@ -10,14 +10,11 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
-///     This class forwards a query per RFC 7858's DNS-over-TLS transport: a fresh TCP-then-TLS
-///     connection per query, 2-byte length-prefixed framing identical to plain TCP. Unlike this
-///     project's own DoT <em>listener</em> (which presents a self-signed certificate an inbound
-///     client is expected to already trust), this is an outbound connection to a third party --
-///     the forwarder's own certificate is validated for real, against
-///     <see cref="UpstreamForwarderDefinition.TlsHostName" /> when the operator named a hostname,
-///     or the forwarder's own IP address string otherwise, using .NET's ordinary OS trust-store
-///     validation. Certificate validation is never disabled here.
+///     This class forwards a query over DNS-over-TLS (RFC 7858): a new TCP and TLS connection per
+///     query, with the same 2-byte length-prefixed framing as plain TCP. The forwarder's
+///     certificate is validated against the operating system's trust store, for
+///     <see cref="UpstreamForwarderDefinition.TlsHostName" /> when the definition names a host,
+///     or for the forwarder's IP address otherwise. Validation is never disabled.
 /// </summary>
 public sealed class TlsForwarderClient : IUpstreamForwarderClient
 {

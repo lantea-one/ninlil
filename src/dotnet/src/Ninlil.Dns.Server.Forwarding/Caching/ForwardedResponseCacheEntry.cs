@@ -5,11 +5,13 @@ using Ninlil.Dns.Server.Core.Caching;
 namespace Ninlil.Dns.Server.Forwarding.Caching;
 
 /// <summary>
-///     This class holds one cached upstream answer: a private copy of the whole response exactly
-///     as the forwarder sent it, and when it was stored. The copy is never handed out itself;
-///     every hit builds a fresh message from it, because the query pipeline changes the message
-///     it is given (it attaches this server's DNS cookie, and truncates an oversized UDP answer
-///     in place), and one client's reply must never leak into the next client's.
+///     This class holds one cached upstream answer for <see cref="ForwardedResponseCache" />: a
+///     private copy of the whole response as the forwarder sent it, and when it was stored. The
+///     copy is never handed out; every hit builds a new message from it, because the query
+///     pipeline changes the message it is given (it attaches a DNS cookie and truncates an
+///     oversized UDP answer in place), and one client's reply must not leak into the next.
+///     The EDNS record is shared between copies, which is safe because it is an immutable
+///     record that the pipeline replaces rather than edits.
 /// </summary>
 public sealed class ForwardedResponseCacheEntry : IDnsCacheEntry
 {
@@ -49,9 +51,8 @@ public sealed class ForwardedResponseCacheEntry : IDnsCacheEntry
 
     /// <summary>
     ///     This method builds the answer to <paramref name="request" /> from this entry, with
-    ///     every TTL reduced by how long the answer has already sat in the cache -- a client (or
-    ///     a downstream cache) must never be told it may keep an answer longer than the upstream
-    ///     allowed from the moment it was first sent.
+    ///     every TTL reduced by how long the answer has been cached, so no client or downstream
+    ///     cache keeps it longer than the upstream allowed.
     /// </summary>
     /// <param name="request">The client's request being answered.</param>
     /// <param name="now">The current time on the cache's clock.</param>
@@ -80,8 +81,8 @@ public sealed class ForwardedResponseCacheEntry : IDnsCacheEntry
 
     /// <summary>
     ///     This method copies <paramref name="source" /> into a new message addressed to
-    ///     <paramref name="request" /> (its ID and its question, so a client using 0x20 case
-    ///     randomization gets its own spelling back), optionally rewriting every record's TTL.
+    ///     <paramref name="request" /> (its ID, RD and CD bits and its question, so a client using
+    ///     0x20 case randomization gets its spelling back), optionally rewriting every record's TTL.
     /// </summary>
     /// <param name="source">The message to copy.</param>
     /// <param name="request">The request the copy answers.</param>

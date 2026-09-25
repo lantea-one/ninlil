@@ -8,18 +8,12 @@ using Ninlil.Dns.Server.Forwarding.Clients;
 namespace Ninlil.Dns.Server.Forwarding.ClientProtocols.Tests;
 
 /// <summary>
-///     This class proves <see cref="TlsForwarderClient" /> works end-to-end, including real
-///     certificate validation against the OS trust store. Unlike <see cref="PlainForwarderClientTests" />,
-///     this cannot point at a local listener: this project's own DoT <em>listener</em>
-///     deliberately presents a self-signed certificate to inbound clients, and
-///     <see cref="TlsForwarderClient" /> deliberately never exposes a way to bypass certificate
-///     validation (a real security boundary for an outbound connection to a third party) -- so
-///     the only way to prove validation genuinely succeeds against a real, trusted certificate
-///     chain is to query a real public DoT resolver over the internet. This is a real, live
-///     network dependency, the same category of dependency this project's own first genuinely
-///     over-the-wire smoke test already accepted for real root/TLD servers -- if this
-///     environment (or CI) ever loses outbound internet access, this specific test will fail for
-///     that reason, not a code regression.
+///     This class tests <see cref="TlsForwarderClient" /> end to end, including certificate
+///     validation against the operating system's trust store, by querying Cloudflare's public
+///     DoT resolver over the internet. A local listener cannot be used: Ninlil's DoT listener
+///     presents a self-signed certificate by default, and <see cref="TlsForwarderClient" /> has no way to
+///     skip validation. Without outbound internet access the test fails, which then says nothing
+///     about the code.
 /// </summary>
 public sealed class TlsForwarderClientTests
 {

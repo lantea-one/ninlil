@@ -6,9 +6,10 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 
 /// <summary>
 ///     This record struct is what two forwarded questions must share for one's cached answer to
-///     be a correct answer to the other. The question alone is not enough: the same name can
-///     legitimately get a different answer depending on what else the query asked for and where
-///     it was sent, so every such input is part of the key.
+///     be a correct answer to the other. The question alone is not enough: the same name can get
+///     a different answer depending on the query's flags and where it was sent, so every such
+///     input is part of the key. <see cref="ForwarderQueryResolver" /> builds it with
+///     <see cref="Create" />.
 /// </summary>
 /// <param name="Name">
 ///     The queried name. <see cref="DnsName" /> compares case-insensitively, so
@@ -36,7 +37,7 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 /// </param>
 /// <param name="UpstreamSet">
 ///     The forwarder set the query went to (every definition string, in order). Conditional
-///     forwarding sends a name under a forwarder zone to that zone's own servers, which can
+///     forwarding sends a name under a forwarder zone to that zone's servers, which can
 ///     answer differently from the global forwarders (a split-horizon internal zone, for
 ///     example), so answers from different sets must never be mixed. It also means editing a
 ///     forwarder list starts from an empty cache for that set, without an explicit flush.
@@ -64,7 +65,7 @@ public readonly record struct ForwardedResponseCacheKey(
     /// <summary>
     ///     This method builds the key for one forwarded query.
     /// </summary>
-    /// <param name="clientRequest">The client's own request, for the question and header bits.</param>
+    /// <param name="clientRequest">The client's request, for the question and header bits.</param>
     /// <param name="outboundRequest">
     ///     The request actually sent upstream, which differs from <paramref name="clientRequest" />
     ///     only by an attached ECS option.

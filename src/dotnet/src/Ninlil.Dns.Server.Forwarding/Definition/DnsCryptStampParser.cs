@@ -8,29 +8,27 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding.Definition;
 
 /// <summary>
-///     This class parses an <c>sdns://</c> DNS Stamp -- specifically only the plain-DNSCrypt
-///     stamp type (protocol identifier <c>0x01</c>); DoH/DoT/ODoH stamp types are out of scope,
-///     since this project's forwarder definition strings already have their own, separate
-///     <c>tls://</c>/<c>https://</c>/<c>quic://</c> forms for those. Wire format sourced
-///     directly from the current stamps specification text
-///     (<c>https://dnscrypt.info/stamps-specifications</c>), never inferred from any
-///     implementation, per this project's clean-room policy.
+///     This class parses an <c>sdns://</c> DNS Stamp of the plain DNSCrypt type (protocol
+///     identifier <c>0x01</c>) for <see cref="UpstreamForwarderDefinitionParser" />. DoH, DoT and
+///     ODoH stamps are not accepted, since those protocols have their own <c>tls://</c>,
+///     <c>https://</c> and <c>quic://</c> forms. The format follows the stamps specification
+///     (<c>https://dnscrypt.info/stamps-specifications</c>), not any implementation, per the
+///     clean-room policy.
 ///     <para>
-///         The stamp's own wire layout, exactly as the specification defines it:
+///         The decoded layout is
 ///         <c>0x01 || props (8 bytes, little-endian) || LP(addr) || LP(pk) || LP(providerName)</c>,
-///         where <c>LP(x) = len(x) (1 byte) || x</c>. The whole byte sequence that follows
-///         <c>sdns://</c> is base64url-encoded (no padding assumed, since the spec text does not
-///         say either way and every real-world stamp observed omits it).
+///         where <c>LP(x) = len(x) (1 byte) || x</c>. Everything after <c>sdns://</c> is
+///         base64url without padding (the specification does not say, and published stamps omit
+///         it).
 ///     </para>
 ///     <para>
-///         <b>Provider-name convention note:</b> a stamp's own <c>providerName</c> field is, by
-///         real-world DNSCrypt convention, already the *complete* certificate-discovery query
-///         name (for example <c>2.dnscrypt-cert.example.com</c>) -- unlike this project's own
-///         server-role <c>DnsCryptOptions.ProviderName</c>, which is only the zone part, with
-///         <c>DnsCryptCertificateDiscoveryResponder.BuildProviderCertificateName</c> prepending
-///         the <c>2.dnscrypt-cert.</c> prefix itself. A client parsing an external stamp must
-///         use the decoded <see cref="UpstreamForwarderDefinition.DnsCryptProviderName" /> value
-///         directly as the discovery query name, and must not prepend that prefix a second time.
+///         <b>Provider name.</b> By DNSCrypt convention a stamp's <c>providerName</c> is already
+///         the full certificate-discovery name (for example <c>2.dnscrypt-cert.example.com</c>).
+///         The server-role <c>DnsCryptOptions.ProviderName</c> is only the zone part, and
+///         <c>DnsCryptCertificateDiscoveryResponder.BuildProviderCertificateName</c> adds the
+///         prefix. So the forwarder client uses
+///         <see cref="UpstreamForwarderDefinition.DnsCryptProviderName" /> as the query name as is,
+///         without adding the prefix again.
 ///     </para>
 /// </summary>
 public static class DnsCryptStampParser
@@ -42,21 +40,20 @@ public static class DnsCryptStampParser
     private const byte DnsCryptProtocolId = 0x01;
 
     /// <summary>
-    ///     This constant contains the length, in bytes, of the little-endian props bitmask that
-    ///     follows the protocol identifier -- unused by this parser beyond skipping past it,
-    ///     since none of its bits (DNSSEC support, no-logging, no-filtering) affect how a
-    ///     forwarder client actually connects.
+    ///     This constant contains the length, in bytes, of the little-endian props bitmask after
+    ///     the protocol identifier. It is skipped, since none of its bits (DNSSEC support,
+    ///     no-logging, no-filtering) affect how the client connects.
     /// </summary>
     private const int PropsLength = 8;
 
     /// <summary>
-    ///     This constant contains a DNSCrypt resolver's own Ed25519 public key length, in bytes.
+    ///     This constant contains the length, in bytes, of a DNSCrypt provider's Ed25519 public key.
     /// </summary>
     private const int PublicKeyLength = 32;
 
     /// <summary>
-    ///     This constant contains the port a stamp's own address is assumed to name when it
-    ///     specifies no port at all -- the conventional DNSCrypt default.
+    ///     This constant contains the port used when a stamp's address has none, the usual
+    ///     DNSCrypt default.
     /// </summary>
     private const int DefaultPort = 443;
 
@@ -117,8 +114,8 @@ public static class DnsCryptStampParser
     }
 
     /// <summary>
-    ///     This method reads a single <c>LP(x)</c> length-prefixed field's own raw bytes,
-    ///     advancing <paramref name="offset" /> past it.
+    ///     This method reads one <c>LP(x)</c> length-prefixed field's bytes and advances
+    ///     <paramref name="offset" /> past it.
     /// </summary>
     private static byte[] ReadLengthPrefixedBytes(
         byte[] decoded,
@@ -146,7 +143,7 @@ public static class DnsCryptStampParser
     }
 
     /// <summary>
-    ///     This method reads a single <c>LP(x)</c> length-prefixed field as a UTF-8 string.
+    ///     This method reads one <c>LP(x)</c> length-prefixed field as a UTF-8 string.
     /// </summary>
     private static string ReadLengthPrefixedString(
         byte[] decoded,
@@ -155,9 +152,8 @@ public static class DnsCryptStampParser
     ) => Encoding.UTF8.GetString(ReadLengthPrefixedBytes(decoded, ref offset, stampString));
 
     /// <summary>
-    ///     This method parses a stamp's own <c>addr [:port]</c> address field -- an IPv4 address,
-    ///     or a bracketed IPv6 address, optionally followed by a port; the conventional DNSCrypt
-    ///     default port when none is given.
+    ///     This method parses a stamp's <c>addr[:port]</c> field: an IPv4 address or a bracketed
+    ///     IPv6 address, optionally followed by a port (<see cref="DefaultPort" /> otherwise).
     /// </summary>
     private static (IPAddress Address, int Port) ParseAddress(string addr, string stampString)
     {
@@ -184,10 +180,9 @@ public static class DnsCryptStampParser
 
         int lastColon = addr.LastIndexOf(':');
 
-        // A bare IPv4 address contains no colons at all; an IPv4 address with a port has
-        // exactly one. An unbracketed IPv6 address (which contains several colons) is not a
-        // form the stamps specification itself defines, so it is deliberately not accepted
-        // here.
+        // A bare IPv4 address has no colon and one with a port has one. The specification does
+        // not define an unbracketed IPv6 address; one is split at its last colon, and usually
+        // fails to parse.
         if (lastColon < 0)
             return (ParseIpAddress(addr, stampString), DefaultPort);
 
@@ -198,8 +193,8 @@ public static class DnsCryptStampParser
     }
 
     /// <summary>
-    ///     This method parses a bare IP address string, throwing a stamp-specific
-    ///     <see cref="FormatException" /> instead of returning a bare parse failure.
+    ///     This method parses an IP address, throwing a <see cref="FormatException" /> that names
+    ///     the stamp on failure.
     /// </summary>
     private static IPAddress ParseIpAddress(string host, string stampString) =>
         IPAddress.TryParse(host, out IPAddress address)
@@ -209,8 +204,7 @@ public static class DnsCryptStampParser
             );
 
     /// <summary>
-    ///     This method parses a port number string, validating it falls within the valid
-    ///     1-65535 range before returning it.
+    ///     This method parses a port number, which must be from 1 to 65535.
     /// </summary>
     private static int ParsePort(string portText, string stampString) =>
         int.TryParse(portText, out int port) && port is > 0 and <= 65535

@@ -18,81 +18,63 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Forwarding;
 
 /// <summary>
-///     This class implements the dispatcher-level forwarding step. Registered as an
-///     <see cref="IDnsQueryResolver" /> <b>between</b> <c>Server.Authoritative</c>'s own resolver
-///     and <c>Server.Recursive</c>'s own resolver (see
-///     <see cref="Extension.ServiceCollectionForwardingExtension.AddNinlilDnsServerForwarding" />'s
-///     own doc comment for the required registration order) -- a name this server does not host
-///     itself is offered to a configured forwarder first; only once every configured forwarder
-///     fails does the dispatcher fall through to this server's own iterative resolution, per the
-///     "forwarder-first, iterate on failure" design decision.
+///     This class is the forwarding step of query resolution. It is an
+///     <see cref="IDnsQueryResolver" /> registered between the authoritative and recursive
+///     resolvers (see
+///     <see cref="Extension.ServiceCollectionForwardingExtension.AddNinlilDnsServerForwarding" />),
+///     so <see cref="DnsQueryDispatcher" /> offers it every name this server does not host (see
+///     the dispatcher and <c>DnsQueryProcessingPipeline</c> for the whole query path). The
+///     forwarder set is the closest enabled forwarder zone's addresses, or else the global
+///     forwarders. The forwarders are tried in order, each with
+///     <see cref="ForwardingOptions.PerForwarderTimeout" />; when all fail, the dispatcher falls
+///     through to recursive iteration.
 ///     <para>
-///         Every forwarded answer is re-validated against the DNSSEC chain of trust locally
-///         (when <see cref="RecursiveServerOptions.EnableDnssecValidation" /> is on), via the
-///         exact same <see cref="IDnssecValidator" /> a normal iterative answer would use --
-///         this server's own "full validating resolver" guarantee holds regardless of which path
-///         actually answered. A <see cref="DnssecValidationStateEnum.Bogus" /> result is treated
-///         identically to the forwarder itself having failed (tried next, or fallen through to
-///         iteration) -- a forwarder that returns a plausible-looking but cryptographically
-///         invalid answer gets no more trust than one that timed out.
+///         When <see cref="RecursiveServerOptions.EnableDnssecValidation" /> is on, each
+///         forwarded answer is checked locally with the same <see cref="IDnssecValidator" /> as an
+///         iterative answer. A <see cref="DnssecValidationStateEnum.Bogus" /> result counts as a
+///         failed forwarder, so the next one is tried. Other results are returned as received;
+///         the upstream's header flags, including AD, are passed through unchanged.
 ///     </para>
 ///     <para>
-///         <b>Caching.</b> Answers are cached here, inside this resolver, rather than around the
-///         whole dispatcher: only this resolver knows which forwarder set a name goes to and
-///         which ECS subnet it sends, both of which are part of what makes two questions "the
-///         same" (see <see cref="ForwardedResponseCacheKey" />), and authoritative, rewritten or
-///         recursively resolved answers already have their own sources of truth. The lookup
-///         happens after the forwarder set is chosen and before anything is sent; a validated,
-///         cacheable answer is stored before it is returned. Because filtering, CNAME-cloaking
-///         checks and rewrites run in the pipeline on whatever the dispatcher returns, a cache hit
-///         is filtered per client exactly like a fresh answer, and the cache itself only ever
-///         holds the upstream's unfiltered answer. When every forwarder fails, an expired answer
-///         is served stale if the server-wide RFC 8767 serve-stale setting allows it, before
-///         falling through to recursion.
+///         <b>Caching.</b> Answers are cached inside this resolver rather than around the
+///         dispatcher, because only this resolver knows which forwarder set and ECS subnet a query
+///         uses, and both are part of the cache key (see <see cref="ForwardedResponseCacheKey" />).
+///         The lookup happens after the forwarder set is chosen and before anything is sent; an
+///         accepted, cacheable answer is stored before it is returned. The pipeline filters
+///         whatever the dispatcher returns, so a cache hit is filtered per client like a fresh
+///         answer. When every forwarder fails, an expired answer is served stale if the
+///         server-wide RFC 8767 serve-stale setting allows it, before falling through to
+///         recursion.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     Used to open a fresh scope per query for <see cref="IZoneRepository" />/
-///     <see cref="IDnsForwarderRepository" /> access -- this resolver is registered as a
-///     singleton (matching <c>AuthoritativeQueryResolver</c>/<c>RecursiveQueryResolver</c>'s own
-///     registration), but those two repositories are scoped, the same captive-dependency
-///     concern <c>CloudDnsZoneSyncService</c> already solves the same way.
+///     Used to open a scope per query for the scoped <see cref="IZoneRepository" /> and
+///     <see cref="IDnsForwarderRepository" />, since this resolver is a singleton.
 /// </param>
 /// <param name="clients">Every registered forwarder client, one per protocol.</param>
-/// <param name="definitionParser">Parses a forwarder's own definition string.</param>
+/// <param name="definitionParser">Parses a forwarder's definition string.</param>
 /// <param name="healthTracker">Tracks per-forwarder health for the round-robin strategy.</param>
-/// <param name="dnssecValidator">Re-validates a forwarded answer's own DNSSEC status locally.</param>
+/// <param name="dnssecValidator">Validates a forwarded answer's DNSSEC status locally.</param>
 /// <param name="forwardingOptions">
-///     This resolver's own configured <see cref="ForwardingOptions.Enable" /> gate, failover
-///     strategy, and timeouts -- read live via <see cref="IOptionsMonitor{TOptions}" /> rather
-///     than the older, snapshotted <see cref="IOptions{TOptions}" />, since this resolver is now
-///     always registered as a DI singleton (<c>ServiceCollectionForwardingExtension</c>)
-///     regardless of <see cref="ForwardingOptions.Enable" />'s own value at process startup -- a
-///     <c>ForwardingSettingsController.Patch</c> write toggling it on or off must be observed on
-///     this same, already-constructed instance's very next query, with no restart.
+///     The <see cref="ForwardingOptions.Enable" /> switch, failover strategy and timeout, read
+///     live through <see cref="IOptionsMonitor{TOptions}" /> rather than
+///     <see cref="IOptions{TOptions}" />, so a <c>ForwardingSettingsController.Patch</c> applies
+///     to the next query without a restart.
 /// </param>
 /// <param name="recursiveOptions">
-///     Read only for <see cref="RecursiveServerOptions.EnableDnssecValidation" /> (should a
-///     forwarded answer be re-validated at all) and to build the <see cref="QueryBudget" /> a
-///     re-validation's own DS/DNSKEY lookups are bounded by -- read live via
-///     <see cref="IOptionsMonitor{TOptions}" />, the same reason
-///     <see cref="Ninlil.Dns.Server.Recursive.Resolution.RecursiveQueryResolver" />'s own doc
-///     comment gives: this resolver, too, is registered as a singleton, so the usual snapshotted
-///     <see cref="IOptions{TOptions}" /> would never see a live
-///     <c>RecursiveSettingsController.Patch</c> write.
+///     Read live for <see cref="RecursiveServerOptions.EnableDnssecValidation" /> and to build
+///     the <see cref="QueryBudget" /> that bounds a validation's DS and DNSKEY lookups, so a
+///     <c>RecursiveSettingsController.Patch</c> applies without a restart.
 /// </param>
 /// <param name="logger">The logger this resolver records a forwarder failure or Bogus result to.</param>
 /// <param name="clientSubnetService">
-///     The RFC 7871 EDNS Client Subnet builder this resolver consults to attach an ECS option to
-///     every query it forwards upstream on a client's behalf. Defaults to <see langword="null" />
-///     -- the same optional-cross-cutting-dependency idiom this project's other resolvers already
-///     establish for a similarly optional engine -- in which case no ECS option is ever attached,
-///     functionally identical to <see cref="EdnsClientSubnetOptions.Enable" /> being off.
+///     The RFC 7871 EDNS Client Subnet service that builds the ECS option attached to each
+///     forwarded query. <see langword="null" /> (the default) attaches none, the same as
+///     <see cref="EdnsClientSubnetOptions.Enable" /> being off.
 /// </param>
 /// <param name="responseCache">
-///     The forwarded-response cache. Defaults to <see langword="null" />, the same
-///     optional-dependency idiom as <paramref name="clientSubnetService" />, in which case every
-///     query goes upstream exactly as it did before the cache existed.
+///     The forwarded-response cache. <see langword="null" /> (the default) sends every query
+///     upstream.
 /// </param>
 public sealed class ForwarderQueryResolver(
     IServiceScopeFactory scopeFactory,
@@ -151,11 +133,9 @@ public sealed class ForwarderQueryResolver(
                 ? healthTracker.OrderForAttempt(candidates)
                 : candidates;
 
-        // Built once per query, outside the per-forwarder retry loop below: the ECS option (if
-        // this feature is enabled at all -- off by default) is the same regardless of which
-        // forwarder ends up answering. clientSubnetService.AttachToRequest clones the request
-        // rather than mutating context.Request in place, since that instance is shared with
-        // every other IDnsQueryResolver this same dispatch might still fall through to.
+        // Built once per query: the ECS option is the same whichever forwarder answers.
+        // AttachToRequest returns a copy, because context.Request is shared with the resolvers
+        // this dispatch may still fall through to.
         DnsEdnsOption clientSubnetOption = clientSubnetService?.BuildOutboundOption(
             context.RemoteAddress,
             context.Request
@@ -248,9 +228,8 @@ public sealed class ForwarderQueryResolver(
             return Answer(cacheKey, response);
         }
 
-        // Every forwarder failed. RFC 8767: an expired answer still inside the serve-stale
-        // window is better than none -- the same server-wide setting the recursive resolver's
-        // own stale fallback honours. Nothing cached means falling through as before.
+        // Every forwarder failed. RFC 8767: an expired answer inside the serve-stale window is
+        // better than none. Without one, the dispatcher falls through to recursion.
         if (
             cacheKey is { } staleKey
             && responseCache.TryGetStale(staleKey, context.Request) is { } stale
@@ -267,9 +246,9 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method caches an accepted upstream answer (when it is cacheable at all) and hands
-    ///     it back as this resolver's result. The cache takes its own copy, so the pipeline is
-    ///     free to change <paramref name="response" /> afterwards.
+    ///     This method caches an accepted upstream answer (when it is cacheable) and returns it as
+    ///     this resolver's result. The cache takes a copy, so the pipeline may change
+    ///     <paramref name="response" /> afterwards.
     /// </summary>
     private DnsQueryResolution Answer(ForwardedResponseCacheKey? cacheKey, DnsMessage response)
     {
@@ -280,15 +259,14 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method finds the forwarder set to use for a query: a matching
-    ///     <see cref="ZoneTypeEnum.Forwarder" />/<see cref="ZoneTypeEnum.SecondaryForwarder" />
-    ///     zone's own <see cref="ZoneEntity.ForwarderAddresses" /> takes priority over the global
-    ///     <see cref="DnsForwarderEntity" /> set. A <see cref="ZoneTypeEnum.SecondaryForwarder" />
-    ///     zone's own <see cref="ZoneEntity.ForwarderAddresses" /> is populated by
-    ///     <c>Refresh.SecondaryZoneRefreshService</c>'s own AXFR/IXFR pull from its configured
-    ///     <see cref="ZoneTypeEnum.Forwarder" /> primary, decoded back from that primary's own
-    ///     apex TXT records -- from this resolver's own point of view, once populated, it behaves
-    ///     identically to an operator-authored <see cref="ZoneTypeEnum.Forwarder" /> zone.
+    ///     This method finds the forwarder set for a query. It walks from the queried name up to
+    ///     the root, and the first enabled <see cref="ZoneTypeEnum.Forwarder" /> or
+    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone with addresses wins; otherwise the
+    ///     enabled global <see cref="DnsForwarderEntity" /> set is used, in order. A
+    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone gets its
+    ///     <see cref="ZoneEntity.ForwarderAddresses" /> from <c>SecondaryZoneRefreshService</c>,
+    ///     which transfers them from a forwarder-zone primary's apex TXT records; here it behaves
+    ///     like any forwarder zone. This costs one zone lookup per label on every query.
     /// </summary>
     private async Task<IReadOnlyList<string>> ResolveForwarderSetAsync(
         DnsName queriedName,
@@ -326,9 +304,9 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method parses (and caches, per <see cref="_parsedDefinitions" />) a forwarder's
-    ///     own definition string, so repeat queries never re-parse the same string -- an
-    ///     unparseable definition is logged once and skipped, rather than failing the whole query.
+    ///     This method parses a forwarder's definition string, caching the result in
+    ///     <see cref="_parsedDefinitions" />. An unparseable definition is logged and skipped on
+    ///     every query that uses it, rather than failing the query.
     /// </summary>
     private bool TryParse(string definitionString, out UpstreamForwarderDefinition definition)
     {
@@ -354,15 +332,12 @@ public sealed class ForwarderQueryResolver(
     }
 
     /// <summary>
-    ///     This method re-validates a forwarded response's own DNSSEC status, reusing the exact
-    ///     same <see cref="IDnssecValidator" /> a normal iterative answer would use. Mirrors
-    ///     <c>IterativeResolutionEngine</c>'s own Answer-section/Authority-section splitting
-    ///     logic when building the <see cref="IterativeResolutionResult" /> the validator expects.
-    ///     A response code other than <see cref="DnsResponseCodeEnum.NoError" />/
-    ///     <see cref="DnsResponseCodeEnum.NxDomain" /> (SERVFAIL, REFUSED, ...) carries no
-    ///     answer or negative-proof content to validate at all, and is treated as
-    ///     <see cref="DnssecValidationStateEnum.Insecure" /> -- returned to the client as-is,
-    ///     exactly like this server's own iterative resolver would for the same response code.
+    ///     This method validates a forwarded response with <see cref="IDnssecValidator" />, first
+    ///     turning it into the <see cref="IterativeResolutionResult" /> shape the validator expects
+    ///     (answer and RRSIG records for a positive answer, authority SOA and proofs for NXDOMAIN or
+    ///     NODATA). A response code other than <see cref="DnsResponseCodeEnum.NoError" /> or
+    ///     <see cref="DnsResponseCodeEnum.NxDomain" /> has nothing to validate and is treated as
+    ///     <see cref="DnssecValidationStateEnum.Insecure" />, so it is returned as received.
     /// </summary>
     private async Task<DnssecValidationStateEnum> ValidateAsync(
         DnsQuestion question,
@@ -435,8 +410,8 @@ public sealed class ForwarderQueryResolver(
 
     /// <summary>
     ///     This method builds the negative-answer shape <see cref="IDnssecValidator" /> expects
-    ///     for an NXDOMAIN or NODATA response -- the response's own SOA and NSEC/NSEC3/RRSIG
-    ///     authority-section records, needed to validate the negative-answer proof itself.
+    ///     for an NXDOMAIN or NODATA response: the authority section's SOA and its NSEC, NSEC3 and
+    ///     RRSIG records, which make up the denial proof.
     /// </summary>
     private static IterativeResolutionResult BuildNegativeResult(
         RecursiveResolutionStatusEnum status,

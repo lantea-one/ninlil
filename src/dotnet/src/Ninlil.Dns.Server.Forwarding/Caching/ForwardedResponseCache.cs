@@ -11,15 +11,17 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 
 /// <summary>
 ///     This class caches whole forwarded answers, so a repeat of the same question is answered
-///     locally until the answer's TTL runs out. It stores through the same
-///     <see cref="DnsCacheStore{TKey, TEntry}" /> the recursive resolver's cache uses, so expiry,
-///     the size bound, serve-stale retention, eviction events, flushing and per-name removal
-///     behave identically for both.
+///     locally until the answer's TTL runs out. <see cref="ForwarderQueryResolver" /> uses it
+///     through <see cref="IForwardedResponseCache" />, and the cache endpoint and
+///     <see cref="DnsCacheEvictionService" /> through <see cref="IDnsCache" />. It stores through
+///     the same <see cref="DnsCacheStore{TKey, TEntry}" /> as the recursive cache, so expiry, the
+///     size bound, serve-stale retention, eviction events, flushing and per-name removal behave
+///     the same for both.
 ///     <para>
 ///         <b>Why a response cache and not the recursive RRset cache.</b> The recursive cache
-///         holds single RRsets its own iterative engine assembles into answers. A forwarder hands
-///         back a finished message -- a CNAME chain, its RRSIGs when DO was set, an SOA and
-///         NSEC proof for a negative answer -- whose exact content depends on the DO and CD bits,
+///         holds single RRsets that the iterative engine assembles into answers. A forwarder hands
+///         back a finished message (a CNAME chain, its RRSIGs when DO was set, an SOA and NSEC
+///         proof for a negative answer) whose content depends on the DO and CD bits,
 ///         on which forwarder set answered and on the ECS subnet sent. Splitting that into
 ///         RRsets would lose the DNSSEC and negative-answer framing, and would let a
 ///         conditional forwarder's answer leak into the global view, so the cache keeps the
@@ -27,10 +29,10 @@ namespace Ninlil.Dns.Server.Forwarding.Caching;
 ///         (<see cref="ForwardedResponseCacheKey" />).
 ///     </para>
 ///     <para>
-///         <b>What is never cached.</b> Only the upstream's own answer is stored, before
-///         anything client-specific happens to it: the pipeline applies filtering, CNAME-cloaking
-///         checks, rewrites and cookies to whatever the dispatcher returns, on a cache hit
-///         exactly as on a fresh answer, so every client still gets its own block lists. A
+///         <b>What is never cached.</b> Only the upstream's answer is stored, before anything
+///         client-specific happens to it. The pipeline applies response filtering, CNAME-cloaking
+///         checks and cookies to whatever the dispatcher returns, on a cache hit as on a fresh
+///         answer, so every client still gets its own block lists. A
 ///         truncated or TSIG-signed answer, SERVFAIL, REFUSED and every other error code, a
 ///         negative answer without an SOA to bound it, and a TTL of zero are not cached (see
 ///         <see cref="ComputeLifetime" />). A forwarder that failed or answered with bogus DNSSEC
@@ -45,14 +47,14 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     public const string CacheName = "forwarded";
 
     /// <summary>
-    ///     This constant contains the longest a positive answer is cached, however long its TTL:
+    ///     This field contains the longest a positive answer is cached, however long its TTL:
     ///     seven days, the cap RFC 8767 §4 recommends, so a misconfigured multi-year TTL cannot
     ///     pin an answer in memory indefinitely.
     /// </summary>
     public static readonly TimeSpan MaxPositiveLifetime = TimeSpan.FromDays(7);
 
     /// <summary>
-    ///     This constant contains the longest a negative (NXDOMAIN or NODATA) answer is cached:
+    ///     This field contains the longest a negative (NXDOMAIN or NODATA) answer is cached:
     ///     three hours, the upper end of what RFC 2308 §5 recommends, so a name that is created
     ///     after a lookup failed becomes visible within a bounded time.
     /// </summary>
@@ -76,10 +78,9 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     ///     <see cref="ForwardingOptions.MaxCacheEntries" /> bound.
     /// </param>
     /// <param name="recursiveOptions">
-    ///     The existing serve-stale switch and window (<see cref="RecursiveServerOptions.EnableServeStale" />,
+    ///     The serve-stale switch and window (<see cref="RecursiveServerOptions.EnableServeStale" />,
     ///     <see cref="RecursiveServerOptions.MaxStaleServeAge" />). Serve-stale is one server-wide
-    ///     policy that already lives there, so forwarded answers follow the same setting rather
-    ///     than growing a second one.
+    ///     policy, so forwarded answers follow the recursive setting.
     /// </param>
     /// <param name="eventPublisher">The publisher eviction events go out through.</param>
     /// <param name="timeProvider">The clock, replaceable in tests; the system clock by default.</param>
@@ -163,7 +164,8 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     ///     how long.
     ///     <list type="bullet">
     ///         <item>
-    ///             A positive answer (NOERROR with a record of the queried type) lives for the
+    ///             A positive answer (NOERROR with a record of the queried type, or any record for
+    ///             an ANY query) lives for the
     ///             lowest TTL of any record in it, capped at <see cref="MaxPositiveLifetime" />:
     ///             the whole message is served as one, so it must not outlive its shortest-lived
     ///             part.
@@ -171,14 +173,14 @@ public sealed class ForwardedResponseCache : IForwardedResponseCache, IDnsCache
     ///         <item>
     ///             A negative answer (NXDOMAIN, or NOERROR without a record of the queried type:
     ///             NODATA, possibly after a CNAME) lives per RFC 2308 §5 for the lesser of the SOA
-    ///             record's own TTL and its MINIMUM field (and of any CNAME before it), capped at
+    ///             MINIMUM field and the lowest TTL of any record in the message, capped at
     ///             <see cref="MaxNegativeLifetime" />. Without an SOA there is nothing to bound it
     ///             by, and RFC 2308 says not to cache it.
     ///         </item>
     ///         <item>
-    ///             Anything else -- SERVFAIL, REFUSED, FORMERR, NOTIMP and every other code, a
-    ///             truncated answer (incomplete by definition), a TSIG-signed one (signed for one
-    ///             transaction only) or a lifetime of zero -- is not cached.
+    ///             Anything else is not cached: SERVFAIL, REFUSED, FORMERR, NOTIMP and every other
+    ///             code, a truncated answer (incomplete), a TSIG-signed one (signed for one
+    ///             transaction only), or a lifetime of zero.
     ///         </item>
     ///     </list>
     /// </summary>

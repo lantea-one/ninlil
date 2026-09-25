@@ -11,24 +11,18 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Forwarding.Clients;
 
 /// <summary>
-///     This class forwards a query per RFC 1035's original plain UDP/TCP transport: one
-///     datagram out, one datagram back, falling back to a single TCP retry when the forwarder's
-///     own UDP answer comes back truncated (RFC 1035 §4.2.1) -- the same client-side behavior
-///     every real stub resolver implements, mirrored here for this project's own outbound
-///     forwarding client role.
+///     This class forwards a query over plain DNS (RFC 1035): one UDP datagram out, one back,
+///     and a single TCP retry when the UDP answer is truncated (RFC 1035 §4.2.1), as a stub
+///     resolver does.
 /// </summary>
 /// <param name="socketPool">
-///     The shared, source-port-pooling outbound socket pool this client's own UDP forwards are
-///     sent through -- see <see cref="IOutboundUdpSocketPool" />'s own doc comment. Defaults to
-///     <see langword="null" /> so a caller/test that constructs this client directly (bypassing
-///     dependency injection) keeps compiling and running unchanged, falling back to this class's
-///     own pre-pool behavior: a fresh, one-off, OS-ephemeral-port socket per forward.
+///     The shared outbound UDP socket pool (see <see cref="IOutboundUdpSocketPool" />).
+///     <see langword="null" /> (the default, for code that builds this client directly) uses a
+///     new socket on an OS-chosen port per forward.
 /// </param>
 /// <param name="logger">
-///     The logger this client records a dropped, mismatched (spoofed or stray) response to.
-///     Defaults to <see langword="null" />, in which case a mismatch is silently dropped without
-///     logging, the same graceful-degradation idiom this project's other optional constructor
-///     parameters already establish.
+///     The logger this client records dropped (spoofed, stray or malformed) responses to.
+///     <see langword="null" /> (the default) drops them without logging.
 /// </param>
 public sealed class PlainForwarderClient(
     IOutboundUdpSocketPool socketPool = null,
@@ -36,8 +30,8 @@ public sealed class PlainForwarderClient(
 ) : IUpstreamForwarderClient
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this client will ever read, matching
-    ///     <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>'s own server-side buffer size.
+    ///     This constant contains the largest UDP datagram this client reads, the same as the
+    ///     server-side buffer of <c>Ninlil.Dns.Protocol.Plain.UdpDnsListener</c>.
     /// </summary>
     private const int MaximumDatagramSize = 65527;
 
@@ -63,19 +57,13 @@ public sealed class PlainForwarderClient(
     }
 
     /// <summary>
-    ///     This method sends the query as a single UDP datagram and reads back a single response
-    ///     datagram, validating that it actually arrived from <paramref name="endpoint" /> and
-    ///     carries <paramref name="expectedId" /> before accepting it -- this client's own
-    ///     anti-spoofing hardening. Before this hardening existed, this method trusted the very
-    ///     first datagram to arrive on this socket at all, from anyone, with no transaction-ID or
-    ///     source-address check whatsoever -- a real, exploitable gap for a socket-sharing forward
-    ///     path such as this one. A mismatched
-    ///     datagram is logged and discarded, never accepted as this call's own answer; this
-    ///     method still honors this interface's own "throw <see cref="OperationCanceledException" />
-    ///     on any failure, never return <see langword="null" />" contract (<see cref="IUpstreamForwarderClient.ForwardAsync" />)
-    ///     -- <paramref name="stoppingToken" />'s own cancellation (a caller-enforced per-forwarder
-    ///     timeout, most commonly) is what ends a run of nothing-but-mismatched datagrams, exactly
-    ///     as it would end a run of no datagrams at all.
+    ///     This method sends the query as one UDP datagram and returns the first response that
+    ///     comes from <paramref name="endpoint" />, parses, and carries
+    ///     <paramref name="expectedId" />. Anything else is logged and discarded, since a pooled
+    ///     socket can receive stray or spoofed datagrams. Only cancellation of
+    ///     <paramref name="stoppingToken" /> (usually the caller's per-forwarder timeout) ends a
+    ///     wait that sees no acceptable datagram; the method never returns
+    ///     <see langword="null" />. The question section is not compared.
     /// </summary>
     private async Task<DnsMessage> ForwardUdpAsync(
         byte[] queryBytes,
@@ -159,13 +147,11 @@ public sealed class PlainForwarderClient(
     }
 
     /// <summary>
-    ///     This method preserves this client's own pre-pool behavior: a fresh, one-off,
-    ///     OS-ephemeral-port socket per forward -- used only when <see cref="IOutboundUdpSocketPool" />
-    ///     is unavailable (a caller bypassing dependency injection), since
-    ///     <see cref="IOutboundUdpSocketPool.RentAsync" /> itself already returns an equivalent
-    ///     one-off socket whenever <c>OutboundQueryOptions.EnableSourcePortPool</c> is off. Still
-    ///     applies the same source-address/transaction-ID validation hardening
-    ///     <see cref="ForwardUdpAsync" /> does with a pooled socket.
+    ///     This method forwards over a new socket on an OS-chosen port, for when no
+    ///     <see cref="IOutboundUdpSocketPool" /> was supplied. (With the pool,
+    ///     <see cref="IOutboundUdpSocketPool.RentAsync" /> already hands out such a socket when
+    ///     <c>OutboundQueryOptions.EnableSourcePortPool</c> is off.) It applies the same source and
+    ///     transaction-ID checks as <see cref="ForwardUdpAsync" />, without logging.
     /// </summary>
     private static async Task<DnsMessage> ForwardUdpWithFreshSocketAsync(
         byte[] queryBytes,
@@ -210,11 +196,9 @@ public sealed class PlainForwarderClient(
     }
 
     /// <summary>
-    ///     This method sends the query over a fresh, single-use TCP connection, 2-byte
-    ///     length-prefixed per RFC 1035 §4.2.2, and reads back exactly one length-prefixed
-    ///     response. A TCP connection, by construction, cannot receive a reply from anywhere but
-    ///     the peer this client itself connected to -- no separate source-address check is needed
-    ///     here the way <see cref="ForwardUdpAsync" /> needs one for an unconnected UDP socket.
+    ///     This method sends the query over a new, single-use TCP connection with the 2-byte
+    ///     length prefix of RFC 1035 §4.2.2 and reads back one length-prefixed response. A
+    ///     connected TCP socket only hears from its peer, so no source check is needed here.
     /// </summary>
     private static async Task<DnsMessage> ForwardTcpAsync(
         byte[] queryBytes,
@@ -241,8 +225,7 @@ public sealed class PlainForwarderClient(
 
     /// <summary>
     ///     This method fills a buffer completely from a socket, throwing if the connection closes
-    ///     before every requested byte arrives -- a forwarder's own truncated TCP stream is a
-    ///     genuine failure, not something a caller can meaningfully recover from.
+    ///     before every requested byte arrives.
     /// </summary>
     private static async Task ReadExactAsync(
         Socket socket,

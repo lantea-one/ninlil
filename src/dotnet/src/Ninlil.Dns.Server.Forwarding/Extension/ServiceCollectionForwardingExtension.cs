@@ -14,9 +14,8 @@ namespace Ninlil.Dns.Server.Forwarding.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's upstream forwarding. Carries the same
-///     <see cref="SupportedOSPlatformAttribute" /> set as <see cref="QuicForwarderClient" />
-///     itself, since this class is what registers it.
+///     upstream forwarding. It carries the same <see cref="SupportedOSPlatformAttribute" /> set
+///     as <see cref="QuicForwarderClient" />, since it registers that client.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -24,31 +23,20 @@ namespace Ninlil.Dns.Server.Forwarding.Extension;
 public static class ServiceCollectionForwardingExtension
 {
     /// <summary>
-    ///     This method registers every forwarder client, the definition parser, the health
-    ///     tracker, and <see cref="ForwarderQueryResolver" /> itself as an
-    ///     <see cref="IDnsQueryResolver" /> -- all unconditionally, regardless of
-    ///     <see cref="ForwardingOptions.Enable" />'s own value at process startup. Registering
-    ///     <see cref="ForwarderQueryResolver" /> only when already enabled at startup (this
-    ///     method's own original shape) would mean a fresh install -- which starts with
-    ///     forwarding off by design -- could never turn it on live at all, the same structural gap
-    ///     this project's own DNS-over-HTTPS route-mapping registration had to be fixed for.
-    ///     <see cref="ForwarderQueryResolver" /> itself already carries the live
-    ///     <see cref="ForwardingOptions.Enable" /> check internally (via
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, its own
-    ///     <c>TryResolveAsync</c>'s very first check), so a disabled resolver costs one field read
-    ///     per query, immediately returning <see cref="DnsQueryResolution.NotHandled" />, never a
-    ///     database round trip.
+    ///     This method binds <see cref="ForwardingOptions" /> and registers every forwarder client,
+    ///     the definition parser, the health tracker, the forwarded-response cache, and
+    ///     <see cref="ForwarderQueryResolver" /> as an <see cref="IDnsQueryResolver" />. All are
+    ///     registered even when <see cref="ForwardingOptions.Enable" /> is off at startup, so
+    ///     forwarding can be turned on without a restart (a fresh install starts with it off). A
+    ///     disabled resolver checks the flag first and returns
+    ///     <see cref="DnsQueryResolution.NotHandled" /> at the cost of one field read.
     ///     <para>
-    ///         <b>Required registration order:</b> the real composition root (<c>Ninlil.Web</c>'s
-    ///         own <c>Program.cs</c>) must call this method <em>between</em>
-    ///         <c>Server.Authoritative</c>'s own <c>AddNinlilDnsServerAuthoritative</c> and
-    ///         <c>Server.Recursive</c>'s own <c>AddNinlilDnsServerRecursive</c> --
-    ///         <see cref="IDnsQueryResolver" /> implementations are tried by
-    ///         <see cref="DnsQueryDispatcher" /> in dependency-injection registration
-    ///         order, and the "forwarder-first, iterate on failure" design decision depends on
-    ///         authoritative winning first, this resolver second, and recursive iteration only as
-    ///         the final fallback -- true regardless of whether forwarding is currently enabled,
-    ///         since this resolver is now always registered.
+    ///         <b>Registration order matters.</b> <see cref="DnsQueryDispatcher" /> tries
+    ///         <see cref="IDnsQueryResolver" /> implementations in registration order, and
+    ///         forwarding sits between authoritative answers and recursive iteration. So
+    ///         <c>Program.cs</c> in <c>Ninlil.Web</c> must call this method after
+    ///         <c>AddNinlilDnsServerAuthoritative</c> and before
+    ///         <c>AddNinlilDnsServerRecursive</c>.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>

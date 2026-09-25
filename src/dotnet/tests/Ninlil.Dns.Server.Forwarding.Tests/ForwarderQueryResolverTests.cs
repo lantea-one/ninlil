@@ -29,10 +29,12 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Forwarding.Tests;
 
 /// <summary>
-///     This class proves <see cref="ForwarderQueryResolver" /> end-to-end: forwarder-set
-///     resolution (global vs. per-zone override), real network round trips against a minimal
-///     fake UDP responder standing in for an upstream, and DNSSEC re-validation of a forwarded
-///     answer via the real <see cref="DnssecValidator" />.
+///     This class tests <see cref="ForwarderQueryResolver" /> end to end: choosing the forwarder
+///     set (global or a forwarder zone), round trips over UDP to a fake upstream on a loopback
+///     port (<see cref="FakeUdpUpstream" />), the live <see cref="ForwardingOptions.Enable" />
+///     switch, and DNSSEC validation of a forwarded answer with <see cref="DnssecValidator" />.
+///     Zones and forwarders live in an in-memory SQLite database. The other parts of this class
+///     cover caching and CNAME cloaking.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -53,8 +55,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         services.AddScoped<IDnsForwarderRepository, DnsForwarderRepository>();
         services.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
 
-        // The filtering repositories are only used by the CNAME-cloaking tests, which run a
-        // forwarded answer through the real filter engine.
+        // The filtering repositories are used by the CNAME-cloaking and caching tests, which run
+        // a forwarded answer through the filter engine.
         services.AddScoped<IDnsFilterListRepository, DnsFilterListRepository>();
         services.AddScoped<IDnsFilterListEntryRepository, DnsFilterListEntryRepository>();
         services.AddScoped<IDnsClientGroupRepository, DnsClientGroupRepository>();
@@ -135,16 +137,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     }
 
     /// <summary>
-    ///     This test proves a structural invariant: <see cref="ForwarderQueryResolver" />
-    ///     is registered (and therefore constructed) regardless of
-    ///     <see cref="ForwardingOptions.Enable" />'s own value at process startup, with its own
-    ///     already-existing live check (<c>TryResolveAsync</c>'s very first line) reading
-    ///     <c>IOptionsMonitor</c>'s <c>CurrentValue</c> fresh on every query -- so the *same,
-    ///     already-constructed* resolver instance genuinely starts forwarding once
-    ///     <see cref="ForwardingOptions.Enable" /> flips to <see langword="true" /> on the shared
-    ///     options object it was built against, with no restart and no new instance, mirroring
-    ///     <c>RecursiveOptionsHotReloadTests</c>'s own "same instance, before/after" proof shape
-    ///     for <c>RecursiveServerOptions</c>.
+    ///     This test checks that a resolver built while <see cref="ForwardingOptions.Enable" /> is
+    ///     off starts forwarding, without being rebuilt, once the flag turns on, because it reads
+    ///     <c>CurrentValue</c> on every query.
     /// </summary>
     [Fact]
     public async Task TryResolveAsync_WhenEnableFlipsLiveOnTheSharedOptionsObject_TheSameResolverInstanceStartsForwarding()
@@ -162,9 +157,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         };
         ForwarderQueryResolver resolver = CreateResolver(forwardingOptions: sharedOptions);
 
-        // Before: a real, reachable forwarder is configured, but the resolver is disabled, so its
-        // own live Enable check declines outright -- this is the "structural" half of the proof,
-        // distinguishing "no forwarder answered" from "declined because disabled."
+        // A reachable forwarder is configured, so NotHandled here means "disabled", not "no
+        // forwarder answered".
         DnsQueryResolution before = await resolver.TryResolveAsync(
             BuildContext(BuildQuery(7, "example.com."))
         );
@@ -172,8 +166,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
 
         sharedOptions.Enable = true;
 
-        // After: the identical resolver instance, with no reconstruction, now genuinely reaches
-        // the same upstream and returns its real answer.
+        // The same instance now reaches the upstream.
         DnsQueryResolution after = await resolver.TryResolveAsync(
             BuildContext(BuildQuery(7, "example.com."))
         );
@@ -210,15 +203,12 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     }
 
     /// <summary>
-    ///     This test proves a <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone's own
-    ///     <see cref="ZoneEntity.ForwarderAddresses" /> -- populated, in real deployment, by a real
-    ///     AXFR/IXFR pull from its configured <see cref="ZoneTypeEnum.Forwarder" /> primary and
-    ///     decoded back from that primary's own apex TXT records (see
-    ///     <c>Ninlil.Dns.Server.Authoritative.Tests.Forwarding.SecondaryForwarderZoneTransferTests</c>
-    ///     for that real, two-host transfer end to end) -- is honored by
-    ///     <see cref="ForwarderQueryResolver" /> exactly like an ordinary
-    ///     <see cref="ZoneTypeEnum.Forwarder" /> zone's own list: a real query genuinely reaches
-    ///     the configured upstream and returns its real answer.
+    ///     This test checks that a <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone's
+    ///     <see cref="ZoneEntity.ForwarderAddresses" /> are used like a
+    ///     <see cref="ZoneTypeEnum.Forwarder" /> zone's. In a deployment they come from a zone
+    ///     transfer (covered by
+    ///     <c>Ninlil.Dns.Server.Authoritative.Tests.Forwarding.SecondaryForwarderZoneTransferTests</c>);
+    ///     here they are seeded directly.
     /// </summary>
     [Fact]
     public async Task TryResolveAsync_WithASecondaryForwarderTypeZone_ForwardsUsingItsOwnAddresses()
@@ -329,7 +319,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             new FixedTrustAnchorStoreStub([trustAnchor])
         );
 
-        // Secure case: the upstream returns the genuinely signed answer.
+        // Secure case: the upstream returns the correctly signed answer.
         using (
             FakeUdpUpstream secureUpstream = FakeUdpUpstream.Start(
                 BuildSignedPositiveResponse(answer, genuineRrsig)
@@ -350,10 +340,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
             Assert.True(secureResolution.IsHandled);
         }
 
-        // Bogus case: a second global forwarder is the ONLY configured one, returning an
-        // answer whose RRSIG signature has been tampered with -- ForwarderQueryResolver must
-        // reject it (treat it as a failed attempt), so nothing is left to try and the overall
-        // result is NotHandled.
+        // Bogus case: the only configured forwarder returns an answer with a tampered RRSIG. It
+        // must count as a failed attempt, leaving nothing to try, so the result is NotHandled.
         await using NinlilDnsContext resetContext = _provider
             .GetRequiredService<IServiceScopeFactory>()
             .CreateScope()
@@ -476,14 +464,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
 
     /// <summary>
     ///     This method seeds a <see cref="ZoneTypeEnum.Forwarder" /> or
-    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone directly with its own
-    ///     <see cref="ZoneEntity.ForwarderAddresses" /> already populated -- standing in for a
-    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone's own real AXFR/IXFR pull (covered
-    ///     end-to-end, over a real two-host TCP transfer, by
-    ///     <c>Ninlil.Dns.Server.Authoritative.Tests.Forwarding.SecondaryForwarderZoneTransferTests</c>)
-    ///     so this class's own tests can prove <see cref="ForwarderQueryResolver" /> itself treats
-    ///     the two zone types identically once that list is populated, with no real transfer
-    ///     needed here at all.
+    ///     <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone with its
+    ///     <see cref="ZoneEntity.ForwarderAddresses" /> already filled in, in place of the zone
+    ///     transfer a secondary forwarder zone gets them from.
     /// </summary>
     private async Task SeedForwarderZoneAsync(
         string zoneName,
@@ -621,9 +604,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     }
 
     /// <summary>
-    ///     This class always reports Insecure -- the default validator stand-in for every test
-    ///     that does not itself exercise DNSSEC re-validation, since <see cref="RecursiveServerOptions.EnableDnssecValidation" />
-    ///     is left off for those.
+    ///     This class always reports Insecure. It is the validator for tests that do not exercise
+    ///     DNSSEC, which leave <see cref="RecursiveServerOptions.EnableDnssecValidation" /> off.
     /// </summary>
     private sealed class AlwaysInsecureDnssecValidatorStub : IDnssecValidator
     {
@@ -637,7 +619,7 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         ) => Task.FromResult(DnssecValidationResult.Insecure());
     }
 
-    /// <summary>This class always reports a cache miss, forcing <c>DnssecValidator</c>'s own <c>FindOwningZone</c> fallback to resolve to the root.</summary>
+    /// <summary>This class always reports a cache miss, so <c>DnssecValidator</c>'s <c>FindOwningZone</c> falls back to the root.</summary>
     private sealed class EmptyRecursiveCacheStub : IRecursiveCache
     {
         public RecursiveCacheEntry TryGet(
@@ -742,11 +724,10 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
     }
 
     /// <summary>
-    ///     This class is a minimal fake upstream DNS server: it binds a real UDP socket on an
-    ///     ephemeral loopback port, and answers every received datagram with the exact same
-    ///     canned response bytes, regardless of what was asked -- enough to exercise
-    ///     <see cref="PlainForwarderClient" />/<see cref="ForwarderQueryResolver" /> for real over
-    ///     a real socket, without needing this project's own full listener/pipeline stack.
+    ///     This class is a minimal fake upstream DNS server: a UDP socket on an ephemeral loopback
+    ///     port that answers every datagram with the same canned response, whatever was asked.
+    ///     That is enough to exercise <see cref="PlainForwarderClient" /> and
+    ///     <see cref="ForwarderQueryResolver" /> over a socket without a listener and pipeline.
     /// </summary>
     private sealed class FakeUdpUpstream : IDisposable
     {
@@ -765,8 +746,8 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
         public int Port => ((IPEndPoint)_socket.LocalEndPoint).Port;
 
         /// <summary>
-        ///     This property contains how many queries this upstream has received -- how the
-        ///     cache tests prove a cached answer never went upstream.
+        ///     This property contains how many queries this upstream has received, which the
+        ///     cache tests use to show a cached answer never went upstream.
         /// </summary>
         public int QueryCount => Volatile.Read(ref _queryCount);
 
@@ -794,10 +775,9 @@ public sealed partial class ForwarderQueryResolverTests : IDisposable
 
                     Interlocked.Increment(ref _queryCount);
 
-                    // Echo the real query's own transaction ID (the DNS header's first two
-                    // octets, RFC 1035 §4.1.1) into the canned response before sending it back --
-                    // exactly what a real forwarder does, and what PlainForwarderClient's own
-                    // anti-spoofing hardening now requires a genuine answer to match.
+                    // Copy the query's transaction ID (the header's first two octets, RFC 1035
+                    // §4.1.1) into the canned response, as a server does; PlainForwarderClient
+                    // discards answers whose ID does not match.
                     byte[] response = (byte[])responseBytes.Clone();
                     response[0] = buffer[0];
                     response[1] = buffer[1];

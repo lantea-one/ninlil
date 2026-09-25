@@ -18,13 +18,12 @@ using Ninlil.Dns.Server.Recursive;
 namespace Ninlil.Dns.Server.Forwarding.Tests;
 
 /// <summary>
-///     This part of <see cref="ForwarderQueryResolverTests" /> proves the forwarded-response
-///     cache on the real query path: the real <see cref="ForwarderQueryResolver" /> over a real
-///     UDP socket to a fake upstream that counts what it receives, and, for the per-client
-///     tests, the real <see cref="DnsQueryProcessingPipeline" /> with the real
-///     <see cref="DnsFilterEngine" /> in front of it -- so "answered from cache" means the
-///     upstream really saw no second query, and "filtered per client" means a real block list
-///     really blocked a cached answer for one client and not another.
+///     This part of <see cref="ForwarderQueryResolverTests" /> tests the forwarded-response cache
+///     on the query path: <see cref="ForwarderQueryResolver" /> over UDP to a fake upstream that
+///     counts what it receives, and, for the per-client tests, a
+///     <see cref="DnsQueryProcessingPipeline" /> with <see cref="DnsFilterEngine" /> in front of
+///     it. So "answered from cache" means the upstream saw no second query, and "filtered per
+///     client" means a block list blocked a cached answer for one client and not another.
 /// </summary>
 public sealed partial class ForwarderQueryResolverTests
 {

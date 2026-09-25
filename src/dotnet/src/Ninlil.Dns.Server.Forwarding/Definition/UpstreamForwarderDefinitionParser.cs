@@ -7,12 +7,14 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding.Definition;
 
 /// <summary>
-///     This class implements <see cref="IUpstreamForwarderDefinitionParser" /> for every
-///     Technitium/AdGuard Home-style definition-string form this project supports: a bare
-///     address (plain UDP/TCP, the conventional no-scheme form), <c>udp://</c>/<c>tcp://</c>
-///     (also plain), <c>tls://host[:port]</c> (DNS-over-TLS), <c>https://url</c>
-///     (DNS-over-HTTPS), <c>quic://host[:port]</c> (DNS-over-QUIC), and <c>sdns://...</c>
-///     (a DNSCrypt stamp, delegated to <see cref="DnsCryptStampParser" />).
+///     This class implements <see cref="IUpstreamForwarderDefinitionParser" /> for the forwarder
+///     definition strings Ninlil accepts, in the common scheme-prefixed style: a bare address or
+///     <c>udp://</c>/<c>tcp://</c> (plain DNS; both mean UDP with TCP fallback),
+///     <c>tls://host[:port]</c> (DNS-over-TLS), <c>https://url</c> (DNS-over-HTTPS),
+///     <c>quic://host[:port]</c> (DNS-over-QUIC) and <c>sdns://...</c> (a DNSCrypt stamp,
+///     handed to <see cref="DnsCryptStampParser" />). <see cref="ForwarderQueryResolver" /> and
+///     <c>ForwardersController</c> call it. An IPv6 address must be in brackets; an unbracketed
+///     one is split at its last colon as if that were a port.
 /// </summary>
 public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefinitionParser
 {
@@ -66,8 +68,8 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
                 PlainDefaultPort
             );
 
-        // No recognized scheme: a bare address, the conventional plain-DNS form (e.g. "1.1.1.1"
-        // or "1.1.1.1:53" or "[2606:4700:4700::1111]:53").
+        // No recognized scheme: a bare plain-DNS address, such as "1.1.1.1", "1.1.1.1:53" or
+        // "[2606:4700:4700::1111]:53".
         return ParseHostPort(
             trimmed,
             prefix: "",
@@ -77,12 +79,11 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
     }
 
     /// <summary>
-    ///     This method parses <c>https://</c>'s own definition string: a complete DoH URL. The
-    ///     URL's own host and port are still resolved into <see cref="UpstreamForwarderDefinition.Address" />/
-    ///     <see cref="UpstreamForwarderDefinition.Port" />, even though <c>HttpsForwarderClient</c>
-    ///     itself only ever uses <see cref="UpstreamForwarderDefinition.DohUri" /> to actually
-    ///     connect -- a future health-checker needs a real address/port to probe reachability
-    ///     independently of the DoH-specific request itself.
+    ///     This method parses an <c>https://</c> definition: a complete DoH URL. The host is still
+    ///     resolved into <see cref="UpstreamForwarderDefinition.Address" /> and
+    ///     <see cref="UpstreamForwarderDefinition.Port" />, although <c>HttpsForwarderClient</c>
+    ///     connects through <see cref="UpstreamForwarderDefinition.DohUri" /> alone, so a host that
+    ///     cannot be resolved here makes the definition invalid.
     /// </summary>
     private static UpstreamForwarderDefinition ParseHttps(string definitionString)
     {
@@ -101,10 +102,9 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
     }
 
     /// <summary>
-    ///     This method parses every <c>&lt;scheme&gt;://host[:port]</c> form (and the
-    ///     no-scheme bare-address form, when <paramref name="prefix" /> is empty), resolving a
-    ///     hostname to a real address up front -- a forwarder is configured once, not re-resolved
-    ///     per query.
+    ///     This method parses every <c>&lt;scheme&gt;://host[:port]</c> form (and the bare-address
+    ///     form, when <paramref name="prefix" /> is empty). A hostname is resolved here, once,
+    ///     not per query.
     /// </summary>
     private static UpstreamForwarderDefinition ParseHostPort(
         string definitionString,
@@ -155,8 +155,8 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
         bool isLiteralAddress = IPAddress.TryParse(host, out IPAddress literalAddress);
         IPAddress address = isLiteralAddress ? literalAddress : ResolveHost(host, definitionString);
 
-        // A bare IP address never needs a separate SNI/certificate-validation hostname; a real
-        // hostname does, for both TlsForwarderClient and QuicForwarderClient.
+        // TlsForwarderClient and QuicForwarderClient validate the certificate for this hostname;
+        // for an IP literal they use the address instead.
         string tlsHostName = isLiteralAddress ? null : host;
 
         return new UpstreamForwarderDefinition(
@@ -169,8 +169,9 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
     }
 
     /// <summary>
-    ///     This method resolves a hostname to a real IP address at parse (configuration-load)
-    ///     time, once -- not per query.
+    ///     This method resolves a hostname through the operating system's resolver, synchronously,
+    ///     and returns the first address. Because <see cref="ForwarderQueryResolver" /> caches
+    ///     parsed definitions, the address is kept until the process restarts.
     /// </summary>
     private static IPAddress ResolveHost(string host, string definitionString)
     {
@@ -195,8 +196,7 @@ public sealed class UpstreamForwarderDefinitionParser : IUpstreamForwarderDefini
     }
 
     /// <summary>
-    ///     This method parses a port number string, validating it falls within the valid
-    ///     1-65535 range before returning it.
+    ///     This method parses a port number, which must be from 1 to 65535.
     /// </summary>
     private static int ParsePort(string portText, string definitionString) =>
         int.TryParse(portText, out int port) && port is > 0 and <= 65535

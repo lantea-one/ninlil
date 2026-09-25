@@ -10,30 +10,24 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Forwarding;
 
 /// <summary>
-///     This class tracks every currently-known upstream forwarder's own health, for
+///     This class tracks the health of each upstream forwarder for
 ///     <see cref="ForwarderQueryResolver" />'s <see cref="ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin" />
-///     strategy. A forwarder becomes "known" the first time <see cref="ForwarderQueryResolver" />
-///     ever considers it (<see cref="EnsureTracked" />) -- this tracker never discovers the
-///     forwarder set on its own, since doing so would need its own scoped repository access the
-///     same way <c>CloudDnsZoneSyncService</c> needs (this class stays a plain singleton
-///     instead). Health state is fed from two sources: this class's own periodic background
-///     probe, and <see cref="ForwarderQueryResolver" /> recording every real query's own outcome
-///     (<see cref="RecordResult" />) -- a real failure is reflected immediately, not only at the
-///     next scheduled probe.
+///     strategy. A forwarder becomes known the first time the resolver orders it
+///     (<see cref="EnsureTracked" />); the tracker does not read the forwarder set from storage,
+///     and it never forgets a forwarder, so one removed from the configuration is still probed
+///     until restart. Health comes from two sources: a background probe every
+///     <see cref="ForwardingOptions.HealthCheckInterval" />, and the resolver recording the
+///     outcome of every query (<see cref="RecordResult" />), so a failure counts at once.
 /// </summary>
 /// <param name="clients">Every registered forwarder client, used to send a trivial probe query.</param>
 /// <param name="options">
-///     This tracker's own configured <see cref="ForwardingOptions.Enable" />/
-///     <see cref="ForwardingOptions.FailoverStrategy" /> gate, probe interval, and per-attempt
-///     timeout -- read live via <see cref="IOptionsMonitor{TOptions}" /> and re-checked on every
-///     loop iteration (not just once before this service's own loop starts), so a live
-///     <c>ForwardingSettingsController.Patch</c> write turning forwarding on, or switching the
-///     failover strategy to <see cref="ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin" />,
-///     genuinely resumes probing with no restart -- the same per-iteration-check fix
-///     <c>TrustAnchorRolloverService.ExecuteAsync</c> already established for the identical
-///     "checked once before a loop that only ever runs once per process" shape.
+///     The <see cref="ForwardingOptions.Enable" /> and <see cref="ForwardingOptions.FailoverStrategy" />
+///     settings, probe interval and per-attempt timeout. They are checked on every loop
+///     iteration, so turning forwarding on or switching to
+///     <see cref="ForwarderFailoverStrategyEnum.HealthCheckedRoundRobin" /> through
+///     <c>ForwardingSettingsController.Patch</c> starts probing without a restart.
 /// </param>
-/// <param name="logger">The logger this tracker records a health-state change to.</param>
+/// <param name="logger">The logger this tracker records failed queries and probe passes to.</param>
 public sealed class ForwarderHealthTracker(
     IEnumerable<IUpstreamForwarderClient> clients,
     IOptionsMonitor<ForwardingOptions> options,
@@ -49,9 +43,8 @@ public sealed class ForwarderHealthTracker(
     private int _roundRobinCursor = -1;
 
     /// <summary>
-    ///     This method registers a forwarder as known, if it is not already -- a brand-new
-    ///     forwarder starts out marked healthy, so it is immediately usable rather than blocked
-    ///     until the first background probe completes.
+    ///     This method registers a forwarder as known, if it is not already. A new forwarder
+    ///     starts healthy, so it is usable before the first probe.
     /// </summary>
     public void EnsureTracked(UpstreamForwarderDefinition definition) =>
         _tracked.GetOrAdd(
@@ -60,14 +53,14 @@ public sealed class ForwarderHealthTracker(
         );
 
     /// <summary>
-    ///     This method reports whether a forwarder is currently considered healthy.
+    ///     This method reports whether a forwarder is considered healthy. An unknown forwarder is.
     /// </summary>
     public bool IsHealthy(string definitionString) =>
         !_tracked.TryGetValue(definitionString, out TrackedForwarder tracked) || tracked.IsHealthy;
 
     /// <summary>
-    ///     This method records a real query's own outcome against a forwarder, updating its
-    ///     health state immediately.
+    ///     This method records the outcome of a query or probe against a forwarder. One result
+    ///     sets its health: a single failure marks it unhealthy, a single success healthy again.
     /// </summary>
     public void RecordResult(UpstreamForwarderDefinition definition, bool succeeded)
     {
@@ -85,10 +78,9 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This method picks the next forwarder to try, round-robin, among whichever of
-    ///     <paramref name="candidates" /> are currently healthy -- falling back to the full,
-    ///     unfiltered candidate list if none are (yet) marked healthy, so a cold start (or every
-    ///     candidate having just failed) never locks out forwarding entirely.
+    ///     This method orders <paramref name="candidates" /> for one query: only the healthy ones,
+    ///     rotated round-robin. If none is healthy, all candidates are used, so forwarding is
+    ///     never locked out.
     /// </summary>
     public IReadOnlyList<UpstreamForwarderDefinition> OrderForAttempt(
         IReadOnlyList<UpstreamForwarderDefinition> candidates
@@ -104,11 +96,8 @@ public sealed class ForwarderHealthTracker(
 
         List<UpstreamForwarderDefinition> pool = healthy.Count > 0 ? healthy : [.. candidates];
 
-        // A single, ever-incrementing cursor shared across every query (rather than one cursor
-        // per candidate set) advances the starting point by one on every call; wrapping it into
-        // range via modulo, then rotating the pool to start there (the tail moved to the front),
-        // spreads consecutive queries' first attempt evenly across every healthy forwarder rather
-        // than always preferring whichever one happens to be first in the list.
+        // One cursor shared by every query moves the starting point by one per call, spreading
+        // first attempts across the healthy forwarders.
         int start = Math.Abs(Interlocked.Increment(ref _roundRobinCursor)) % pool.Count;
 
         return [.. pool.Skip(start), .. pool.Take(start)];
@@ -126,11 +115,8 @@ public sealed class ForwarderHealthTracker(
 
             if (!shouldProbe)
             {
-                // Forwarding is off, or a different failover strategy is active -- there is
-                // nothing to probe right now, but a live PATCH could change either at any
-                // moment, so this loop keeps ticking (at the same cadence a real health-check
-                // pass would use) rather than exiting, the same per-iteration-check shape
-                // TrustAnchorRolloverService.ExecuteAsync already establishes.
+                // Nothing to probe now, but a settings change could turn probing on, so keep
+                // ticking at the probe interval instead of exiting.
                 try
                 {
                     await Task.Delay(options.CurrentValue.HealthCheckInterval, stoppingToken);
@@ -160,7 +146,7 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This method probes every currently-known forwarder once, in parallel.
+    ///     This method probes every known forwarder once, in parallel.
     /// </summary>
     private async Task ProbeAllAsync(CancellationToken stoppingToken)
     {
@@ -170,10 +156,10 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This method sends a single trivial root NS probe query to one forwarder, recording the
-    ///     outcome (success or failure/timeout) via <see cref="RecordResult" /> -- a forwarder
-    ///     whose protocol has no registered client is silently skipped rather than treated as
-    ///     unhealthy, since that reflects a configuration gap, not the forwarder's own reachability.
+    ///     This method sends a root NS query to one forwarder and records the outcome through
+    ///     <see cref="RecordResult" />. Any response counts as success, whatever its response code.
+    ///     A forwarder whose protocol has no registered client is skipped, since that is a
+    ///     configuration gap, not a reachability problem.
     /// </summary>
     private async Task ProbeOneAsync(
         UpstreamForwarderDefinition definition,
@@ -213,8 +199,7 @@ public sealed class ForwarderHealthTracker(
     }
 
     /// <summary>
-    ///     This record pairs a single forwarder's own definition with its currently tracked
-    ///     health state.
+    ///     This record pairs a forwarder's definition with its tracked health.
     /// </summary>
     private sealed record TrackedForwarder(UpstreamForwarderDefinition Definition, bool IsHealthy);
 }

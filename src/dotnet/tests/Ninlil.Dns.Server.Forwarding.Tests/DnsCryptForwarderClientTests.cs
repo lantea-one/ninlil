@@ -18,11 +18,11 @@ using Ninlil.Dns.Server.Forwarding.Tests.Fakes;
 namespace Ninlil.Dns.Server.Forwarding.Tests;
 
 /// <summary>
-///     This class verifies <see cref="DnsCryptForwarderClient" /> and <see cref="DnsCryptStampParser" />
-///     end-to-end, against this project's own real <see cref="DnsCryptUdpListener" /> standing in
-///     for a real-world upstream DNSCrypt resolver -- the only way to exercise the client role
-///     without a live third-party DNSCrypt server, and a genuinely real round trip (real
-///     sockets, real X25519/Ed25519 crypto, real certificate discovery) rather than a mock.
+///     This class tests <see cref="DnsCryptForwarderClient" /> and <see cref="DnsCryptStampParser" />
+///     end to end against Ninlil's <see cref="DnsCryptUdpListener" /> on a loopback port, standing
+///     in for a third-party DNSCrypt resolver. The round trip uses sockets, X25519 and Ed25519
+///     crypto and certificate discovery, with no mocks; a fixed-answer dispatcher sits behind the
+///     listener.
 /// </summary>
 public class DnsCryptForwarderClientTests
 {
