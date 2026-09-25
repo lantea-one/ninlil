@@ -9,42 +9,47 @@ using Ninlil.Dns.Server.Core.Pipeline;
 namespace Ninlil.Dns.Protocol.DnsOverHttps;
 
 /// <summary>
-///     This class implements RFC 8484 §4.1's actual request handling -- both the GET form (the
-///     query base64url-encoded in a <c>dns</c> query-string parameter) and the POST form (the
-///     raw wire-format message as the request body) -- shared by both
-///     <see cref="DnsOverHttpsHostedService" /> (which still self-hosts its own separate Kestrel
-///     instance for standalone use) and
-///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension" /> (which maps these same
-///     two forms onto an already-running host's own Kestrel instance instead), so the two never
-///     drift out of sync with each other.
+///     This class handles DNS-over-HTTPS requests (RFC 8484 §4.1): the GET form (the query
+///     base64url-encoded in a <c>dns</c> query-string parameter) and the POST form (the
+///     wire-format message as the body). <see cref="DnsOverHttpsHostedService" /> and
+///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension" /> both use it, so the
+///     two hosting modes answer the same way. Each query goes to
+///     <see cref="DnsQueryProcessingPipeline" /> (see that class) with the connection's remote
+///     address, which the web host's forwarded-headers handling may have set from a trusted
+///     proxy.
+///     <para>
+///         The handler waits for the pipeline's response with no timeout of its own; a query the
+///         pipeline drops without answering (rate limiting, a denied client, a malformed message)
+///         leaves the request waiting until the client gives up.
+///     </para>
 /// </summary>
 internal static class DnsOverHttpsRequestHandler
 {
     /// <summary>
-    ///     This constant contains RFC 8484 §6's required media type for a wire-format DNS
-    ///     message carried over HTTP, both received (POST) and sent (both forms).
+    ///     This constant contains the media type RFC 8484 §6 registers for a wire-format DNS
+    ///     message over HTTP, required on a POST body and set on every response. A POST whose
+    ///     Content-Type differs in any way, parameters included, gets <c>415</c>.
     /// </summary>
     private const string DnsMessageContentType = "application/dns-message";
 
     /// <summary>
-    ///     This method answers RFC 8484 §4.1's GET form.
+    ///     This method answers the GET form of RFC 8484 §4.1. A missing or undecodable
+    ///     <c>dns</c> parameter gets <c>400</c>.
     /// </summary>
     /// <param name="context">The current HTTP request/response.</param>
     /// <param name="pipeline">The pipeline the decoded query is enqueued onto.</param>
-    /// <param name="options">This transport's own path and maximum message size.</param>
+    /// <param name="options">The maximum message size.</param>
     /// <param name="gate">
-    ///     An optional live start/stop signal -- see <see cref="DnsOverHttpsTransportGate" />'s own
-    ///     doc comment. Omitted (the default) for <see cref="DnsOverHttpsHostedService" />'s own
-    ///     self-hosted Kestrel, which already has a genuine socket-level stop of its own and
-    ///     therefore needs no separate gate; supplied whenever this handler is reached through
-    ///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />'s
-    ///     own shared-Kestrel mapping instead, which has no such mechanism of its own.
+    ///     The start/stop gate (see <see cref="DnsOverHttpsTransportGate" />), or
+    ///     <see langword="null" />. <see cref="DnsOverHttpsHostedService" /> passes none, since it
+    ///     stops its own Kestrel server; the mapping made by
+    ///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />
+    ///     passes one. While the gate is closed the request gets <c>503</c>.
     /// </param>
     /// <param name="clientId">
-    ///     The <c>{clientid}</c> URL-path segment this request carried, or <see langword="null" />
-    ///     for a request against the bare <c>options.Path</c> route (no ClientID at all) -- see
-    ///     <see cref="Server.Core.Pipeline.DnsInboundMessage.ClientId" />'s own doc comment for
-    ///     what this identifier is used for downstream.
+    ///     The <c>{clientid}</c> path segment of the request, or <see langword="null" /> for the
+    ///     bare route (see <see cref="Server.Core.Pipeline.DnsInboundMessage.ClientId" /> for how it
+    ///     is used).
     /// </param>
     public static Task HandleGetAsync(
         HttpContext context,
@@ -84,16 +89,13 @@ internal static class DnsOverHttpsRequestHandler
     }
 
     /// <summary>
-    ///     This method answers RFC 8484 §4.1's POST form.
+    ///     This method answers the POST form of RFC 8484 §4.1.
     /// </summary>
     /// <param name="context">The current HTTP request/response.</param>
     /// <param name="pipeline">The pipeline the decoded query is enqueued onto.</param>
-    /// <param name="options">This transport's own path and maximum message size.</param>
-    /// <param name="gate">
-    ///     An optional live start/stop signal -- see <see cref="HandleGetAsync" />'s own
-    ///     <paramref name="gate" /> doc comment for the full explanation.
-    /// </param>
-    /// <param name="clientId">The <c>{clientid}</c> URL-path segment this request carried -- see <see cref="HandleGetAsync" />'s own <paramref name="clientId" /> doc comment.</param>
+    /// <param name="options">The maximum message size.</param>
+    /// <param name="gate">The start/stop gate, or <see langword="null" /> (see <see cref="HandleGetAsync" />).</param>
+    /// <param name="clientId">The <c>{clientid}</c> path segment, or <see langword="null" /> (see <see cref="HandleGetAsync" />).</param>
     public static async Task HandlePostAsync(
         HttpContext context,
         DnsQueryProcessingPipeline pipeline,
@@ -114,11 +116,9 @@ internal static class DnsOverHttpsRequestHandler
             return;
         }
 
-        // A DNS message can never legally exceed 65535 bytes; bounding the request body limit
-        // to just above that (scoped to only this request, not the whole shared host's own
-        // default) means a client cannot make this handler buffer an arbitrarily large body
-        // before the MaxMessageSizeBytes check inside ResolveAndRespondAsync below ever gets a
-        // chance to reject it.
+        // Cap this request's body (not the whole host's default) just above
+        // MaxMessageSizeBytes, so a client cannot make the handler buffer a huge body before the
+        // size check in ResolveAndRespondAsync rejects it.
         context.Features.Get<IHttpMaxRequestBodySizeFeature>().MaxRequestBodySize =
             options.MaxMessageSizeBytes + 1024;
 
@@ -129,9 +129,9 @@ internal static class DnsOverHttpsRequestHandler
     }
 
     /// <summary>
-    ///     This method does the actual work shared by both forms: enqueuing the decoded query
-    ///     onto the shared pipeline, and writing whatever it answers with back as the HTTP
-    ///     response body.
+    ///     This method does the work shared by both forms: it rejects an empty or oversized
+    ///     message with <c>400</c>, enqueues the query onto the pipeline, and writes the answer
+    ///     back as the response body.
     /// </summary>
     private static async Task ResolveAndRespondAsync(
         HttpContext context,

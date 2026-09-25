@@ -8,51 +8,40 @@ using Ninlil.Dns.Server.Core.Pipeline;
 namespace Ninlil.Dns.Protocol.DnsOverHttps.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IEndpointRouteBuilder" /> extension for mapping RFC
-///     8484's DNS-over-HTTPS transport onto an already-running host's own Kestrel instance --
-///     the alternative to <see cref="DnsOverHttpsHostedService" />'s own self-hosted Kestrel,
-///     for a composition root (<c>Ninlil.Web</c>) that already has one HTTP(S) listener and
-///     does not want a second one competing for the same port range in the same process.
+///     This class provides our <see cref="IEndpointRouteBuilder" /> extension for mapping DNS
+///     over HTTPS (RFC 8484) onto the web host's Kestrel server. <c>Ninlil.Web</c> uses it instead
+///     of <see cref="DnsOverHttpsHostedService" />, so the process has one HTTPS listener, not
+///     two.
 /// </summary>
 public static class EndpointRouteBuilderDnsOverHttpsExtension
 {
     /// <summary>
-    ///     This method maps RFC 8484 §4.1's GET and POST forms at
-    ///     <see cref="DnsOverHttpsOptions.Path" />, <b>unconditionally</b> -- regardless of
-    ///     <see cref="DnsOverHttpsOptions.Enable" />'s own value at the moment this method runs.
+    ///     This method maps the GET and POST forms of RFC 8484 §4.1 at
+    ///     <see cref="DnsOverHttpsOptions.Path" />, <b>whatever</b> the value of
+    ///     <see cref="DnsOverHttpsOptions.Enable" />.
     ///     <para>
-    ///         This is deliberate, not an oversight: ASP.NET Core's Minimal API routing has no
-    ///         supported "map this route later" operation, so a route left unmapped while
-    ///         <see cref="DnsOverHttpsOptions.Enable" /> was <see langword="false" /> at process
-    ///         startup could never be added afterward without a full process restart -- silently
-    ///         defeating a later REST-driven <c>enable</c> toggle
-    ///         (<c>Ninlil.Web</c>'s own transport settings controller) for exactly the
-    ///         installations that start with this transport off, this project's own documented
-    ///         default. Mapping the route always and gating every request through
-    ///         <see cref="DnsOverHttpsTransportGate" /> instead -- opened here only when
-    ///         <see cref="DnsOverHttpsOptions.Enable" /> starts <see langword="true" />, and
-    ///         opened/closed afterward only by that gate's own <c>StartAsync</c>/<c>StopAsync</c> --
-    ///         is what makes toggling this transport on or off genuinely live in both directions,
-    ///         with no restart, matching every other transport's own real socket-level start/stop.
+    ///         Minimal API routing cannot add a route after startup, so a route skipped because the
+    ///         transport started disabled (the default) could never be added without a restart,
+    ///         and enabling it through <c>Ninlil.Web</c>'s transport settings controller would do
+    ///         nothing. Instead the route is always mapped and every request goes through
+    ///         <see cref="DnsOverHttpsTransportGate" />, which is opened here only when the
+    ///         transport starts enabled and is opened and closed afterwards through its
+    ///         <c>StartAsync</c>/<c>StopAsync</c>. That makes enabling and disabling work without a
+    ///         restart, like the socket-level start and stop of the other transports.
     ///     </para>
     ///     <para>
-    ///         Only <see cref="DnsOverHttpsOptions.Enable" />, <see cref="DnsOverHttpsOptions.Path" />,
-    ///         and <see cref="DnsOverHttpsOptions.MaxMessageSizeBytes" /> apply when mapped this
-    ///         way -- <see cref="DnsOverHttpsOptions.Port" /> and
-    ///         <see cref="DnsOverHttpsOptions.Certificate" /> are specific to
-    ///         <see cref="DnsOverHttpsHostedService" />'s own self-hosted Kestrel instance and are
-    ///         silently ignored here; the shared host's own Kestrel configuration (its own port
-    ///         and certificate) decides both instead.
+    ///         Only <see cref="DnsOverHttpsOptions.Enable" />, <see cref="DnsOverHttpsOptions.Path" />
+    ///         and <see cref="DnsOverHttpsOptions.MaxMessageSizeBytes" /> apply here, and the last
+    ///         two are read once, when the route is mapped. <see cref="DnsOverHttpsOptions.Port" />
+    ///         and <see cref="DnsOverHttpsOptions.Certificate" /> are ignored; the web host's
+    ///         Kestrel configuration sets the port and certificate.
     ///     </para>
     ///     <para>
-    ///         Also maps a second pair of routes, one path segment longer
-    ///         (<c>{options.Path}/{{clientid}}</c>, e.g. <c>/dns-query/{clientid}</c>), for
-    ///         encrypted-DNS client identification -- a client that wants its own answers
-    ///         evaluated against a specific <c>DnsClientGroupEntity</c> (rather than whichever
-    ///         group its own source address falls into) queries through this path instead, with
-    ///         its own chosen ClientID as the trailing segment. The bare route mapped above is left
-    ///         completely unchanged and keeps answering exactly as before for a client that never
-    ///         sends one.
+    ///         It also maps a second pair of routes one segment longer
+    ///         (<c>{options.Path}/{{clientid}}</c>, e.g. <c>/dns-query/{clientid}</c>). A client
+    ///         that wants its queries matched to a particular <c>DnsClientGroupEntity</c>, rather
+    ///         than the group its source address falls into, puts its ClientID in that last
+    ///         segment. The bare route works as before for clients that send none.
     ///     </para>
     /// </summary>
     /// <param name="endpoints">The current <see cref="IEndpointRouteBuilder" /> instance.</param>
@@ -66,15 +55,11 @@ public static class EndpointRouteBuilderDnsOverHttpsExtension
         DnsQueryProcessingPipeline pipeline =
             endpoints.ServiceProvider.GetRequiredService<DnsQueryProcessingPipeline>();
 
-        // This mapping has no socket of its own to bind/unbind -- it rides the shared host's own
-        // Kestrel instance, which is always already running by the time this method runs. The
-        // gate is this transport's own substitute for that: opened here, right after mapping,
-        // only when this transport starts enabled -- exactly like the generic host opening every
-        // other transport's socket at startup only when its own Enable flag says to -- and
-        // closed/reopened later by ServicesController's own stop/start actions, or by
-        // TransportSettingsController's own enable toggle, either way through the exact same gate
-        // instance (see DnsOverHttpsTransportGate's own doc comment for why a gate, not a real
-        // unmap, is necessary here at all).
+        // This mapping has no socket to bind; it uses the web host's Kestrel server. The gate
+        // takes the socket's place: it is opened here only when the transport starts enabled,
+        // as the other transports bind only when enabled, and is later closed and reopened by
+        // ServicesController's stop/start actions or TransportSettingsController's enable
+        // toggle, all through this one singleton (see DnsOverHttpsTransportGate for why).
         DnsOverHttpsTransportGate gate =
             endpoints.ServiceProvider.GetRequiredService<DnsOverHttpsTransportGate>();
 

@@ -17,12 +17,10 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Protocol.DnsOverHttps.Tests;
 
 /// <summary>
-///     This class exercises RFC 8484's DNS-over-HTTPS transport end-to-end over a real, nested
-///     Kestrel host and a real HTTP/2 connection, promoted from this project's original 3e
-///     scratch smoke test into a permanent suite, per this project's own "hybrid testing"
-///     convention. Like <c>Ninlil.Dns.Protocol.DnsOverTls.Tests</c>, the resolver behind the
-///     transport is deliberately a minimal, always-answering fake -- resolution correctness
-///     itself is covered elsewhere.
+///     This class tests DNS over HTTPS (RFC 8484) through <see cref="DnsOverHttpsHostedService" />,
+///     which runs its own Kestrel server, over real HTTP/2 connections: the POST and GET forms,
+///     HTTP/2 negotiation, allowed TLS protocols and the error statuses. The resolver is a fake
+///     that answers every query; resolution is covered elsewhere.
 /// </summary>
 public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
 {
@@ -243,9 +241,8 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This resolver always claims every query and answers it with one fixed A record,
-    ///     regardless of the question asked -- deliberately simplified, since resolution
-    ///     correctness is not what this test class is verifying.
+    ///     This resolver claims every query and answers it with one fixed A record, whatever the
+    ///     question; resolution is not under test here.
     /// </summary>
     private sealed class AlwaysAnswerAResolver(IPAddress answer) : IDnsQueryResolver
     {
@@ -280,8 +277,7 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This publisher discards every event -- the internal event bus itself is already
-    ///     covered by <c>Ninlil.Dns.Common.Tests</c>' own 3a coverage.
+    ///     This publisher discards every event; the event bus is not under test here.
     /// </summary>
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {
@@ -290,9 +286,9 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
 
     /// <summary>
     ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
-    ///     so no test listener ever uses a fixed or well-known port.
+    ///     on loopback and reading back what was assigned. Tests run on shared machines with their
+    ///     own DNS, DHCP and web services, and may run alongside another copy of this suite, so no
+    ///     test listener uses a fixed or well-known port.
     /// </summary>
     /// <returns>A free TCP port number.</returns>
     private static int GetFreePort()

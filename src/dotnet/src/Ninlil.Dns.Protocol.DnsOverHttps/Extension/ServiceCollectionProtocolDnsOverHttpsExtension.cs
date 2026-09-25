@@ -6,13 +6,15 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's DNS-over-HTTPS transport.
+///     DNS over HTTPS on its own Kestrel server. <c>Ninlil.Web</c> does not use it; it maps the
+///     transport onto its own host with <see cref="EndpointRouteBuilderDnsOverHttpsExtension" />
+///     instead.
 /// </summary>
 public static class ServiceCollectionProtocolDnsOverHttpsExtension
 {
     /// <summary>
-    ///     This method registers the DNS-over-HTTPS hosted service. The composition root is
-    ///     still expected to have already called
+    ///     This method registers <see cref="DnsOverHttpsHostedService" />. The composition root
+    ///     must also call
     ///     <c>Ninlil.Dns.Server.Core.Extension.ServiceCollectionServerCoreExtension.AddNinlilDnsServerCore</c>,
     ///     since this transport depends on <c>DnsQueryProcessingPipeline</c>.
     /// </summary>

@@ -2,10 +2,9 @@
 namespace Ninlil.Dns.Protocol.DnsOverHttps.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsOverHttpsTransportGate" />'s own start/stop signal in
-///     isolation -- the real end-to-end proof that a stopped gate actually makes a mapped
-///     DNS-over-HTTPS request fail lives in <c>Ninlil.Web.Tests</c>' own
-///     <c>ServicesControllerCrudTests</c>, against the real shared-Kestrel-mapped endpoint.
+///     This class tests the start/stop flag of <see cref="DnsOverHttpsTransportGate" /> on its
+///     own. The effect of the gate on requests to the mapped endpoint is tested in
+///     <c>Ninlil.Web.Tests</c> (<c>TransportSettingsControllerTests</c>).
 /// </summary>
 public sealed class DnsOverHttpsTransportGateTests
 {

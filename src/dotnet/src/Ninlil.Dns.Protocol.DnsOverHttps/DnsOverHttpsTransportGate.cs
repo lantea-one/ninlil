@@ -4,47 +4,40 @@ using Microsoft.Extensions.Hosting;
 namespace Ninlil.Dns.Protocol.DnsOverHttps;
 
 /// <summary>
-///     This class gives RFC 8484 DNS-over-HTTPS a real, in-process hot start/stop lifecycle when
-///     it is mapped directly onto an already-running host's own shared Kestrel instance (see
+///     This class lets DNS over HTTPS be started and stopped while the process runs when it is
+///     mapped onto the web host's Kestrel server (see
 ///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />)
-///     rather than self-hosted via <see cref="DnsOverHttpsHostedService" />'s own separate,
-///     independently start/stop-able Kestrel instance.
+///     rather than hosted on its own by <see cref="DnsOverHttpsHostedService" />.
+///     <c>Ninlil.Web/Program.cs</c> registers it as a singleton.
 ///     <para>
-///         ASP.NET Core's own Minimal API routing has no supported "unmap this endpoint" operation
-///         -- once <c>MapGet</c>/<c>MapPost</c> registers a route against a running host, it stays
-///         registered for the life of the process. This class exists purely to give
-///         <see cref="DnsOverHttpsRequestHandler" /> a live, checkable "should I actually answer
-///         this request" signal instead: every GET/POST request still reaches the already-mapped
-///         route, but is answered <c>503 Service Unavailable</c> immediately, without ever
-///         touching the DNS resolution pipeline, whenever this gate reports itself stopped. From a
-///         client's own point of view this is functionally equivalent to the socket-level
-///         stop/start every other transport listener in this project genuinely performs -- a
-///         query sent while this gate is closed gets no usable answer, exactly as it would against
-///         an unbound socket.
+///         Minimal API routing cannot unmap an endpoint: once <c>MapGet</c>/<c>MapPost</c> adds a
+///         route, it stays for the life of the process. So the route stays mapped and
+///         <see cref="DnsOverHttpsRequestHandler" /> checks this gate: while it is closed, every
+///         request is answered <c>503 Service Unavailable</c> without reaching the pipeline. For a
+///         client that is as good as the socket-level stop the other transports do: a query gets
+///         no usable answer.
 ///     </para>
 /// </summary>
 public sealed class DnsOverHttpsTransportGate : IHostedService
 {
     /// <summary>
-    ///     This field tracks whether a request should currently be answered. Marked
-    ///     <see langword="volatile" /> since the request-handling path and a future
-    ///     <c>ServicesController</c>'s own start/stop actions run on different threads.
+    ///     This field tracks whether requests should be answered. It is <see langword="volatile" />
+    ///     because request handling and the start and stop actions run on different threads.
     /// </summary>
     private volatile bool _isRunning;
 
     /// <summary>
-    ///     This property reports whether a DNS-over-HTTPS request reaching the already-mapped
-    ///     route should currently be answered.
+    ///     This property reports whether a DNS-over-HTTPS request reaching the mapped route should
+    ///     be answered.
     /// </summary>
     public bool IsRunning => _isRunning;
 
     /// <summary>
-    ///     This method opens the gate, so a subsequent request is answered normally. Called once,
-    ///     directly (not through the generic host, since this class is never registered as an
-    ///     ordinary <see cref="IHostedService" />), by
+    ///     This method opens the gate, so later requests are answered normally. The generic host
+    ///     never calls it (the gate is not registered as a hosted service).
     ///     <see cref="Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />
-    ///     right after mapping the route, and again by a future <c>ServicesController</c>'s own
-    ///     start/restart actions.
+    ///     calls it after mapping the route when the transport starts enabled, and the web host's
+    ///     service start/restart and transport settings actions call it later.
     /// </summary>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     public Task StartAsync(CancellationToken cancellationToken)
@@ -54,9 +47,9 @@ public sealed class DnsOverHttpsTransportGate : IHostedService
     }
 
     /// <summary>
-    ///     This method closes the gate, so a subsequent request is answered
-    ///     <c>503 Service Unavailable</c> instead of a real DNS response, until
-    ///     <see cref="StartAsync" /> is called again.
+    ///     This method closes the gate, so later requests are answered
+    ///     <c>503 Service Unavailable</c> instead of a DNS response until <see cref="StartAsync" />
+    ///     is called again.
     /// </summary>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     public Task StopAsync(CancellationToken cancellationToken)
