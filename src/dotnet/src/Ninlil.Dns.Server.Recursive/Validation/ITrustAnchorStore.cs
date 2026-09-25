@@ -2,27 +2,27 @@
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This interface holds this resolver's own current set of trust anchor candidates, in
-///     every RFC 5011 state, persisting it durably enough that a pending key's hold-down clock
-///     survives a process restart.
+///     This interface holds the resolver's trust anchor candidates in every RFC 5011 state, and
+///     persists them so a pending key's hold-down clock survives a restart.
+///     <see cref="DnssecValidator" /> reads the valid anchors; <see cref="TrustAnchorRolloverService" />
+///     updates the set. <see cref="FileTrustAnchorStore" /> implements it.
 /// </summary>
 public interface ITrustAnchorStore
 {
     /// <summary>
-    ///     This method returns every currently <see cref="TrustAnchorStateEnum.Valid" /> anchor,
-    ///     in the smaller shape actual signature verification needs.
+    ///     This method returns every <see cref="TrustAnchorStateEnum.Valid" /> anchor, in the
+    ///     smaller shape validation needs.
     /// </summary>
     IReadOnlyList<TrustAnchor> GetValidAnchors();
 
     /// <summary>
-    ///     This method returns every tracked candidate, regardless of state -- used only by
-    ///     <see cref="TrustAnchorRolloverService" /> to run RFC 5011's own state machine.
+    ///     This method returns every tracked candidate in any state, for
+    ///     <see cref="TrustAnchorRolloverService" /> to run the RFC 5011 state machine on.
     /// </summary>
     IReadOnlyList<PersistedTrustAnchor> GetAll();
 
     /// <summary>
-    ///     This method replaces this store's entire tracked set, both in memory and on whatever
-    ///     durable storage backs it.
+    ///     This method replaces the whole tracked set, in memory and in durable storage.
     /// </summary>
     /// <param name="anchors">The complete, new set of tracked candidates.</param>
     void Save(IReadOnlyList<PersistedTrustAnchor> anchors);

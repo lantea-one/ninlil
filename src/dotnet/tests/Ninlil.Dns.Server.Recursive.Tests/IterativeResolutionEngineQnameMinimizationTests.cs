@@ -9,12 +9,10 @@ using Ninlil.Dns.Server.Recursive.Tests.Fakes;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class covers RFC 9156 QNAME minimization end to end against a fake upstream server
-///     that records every query it actually receives -- confirming an intermediate hop's own
-///     query genuinely carries only a minimized name (never the full QNAME), that a real referral
-///     is still followed correctly, that a hostile/unexpected signal from a non-conformant server
-///     triggers this engine's own documented full-query fallback, and that a minimized probe never
-///     leaks the client's own EDNS Client Subnet option.
+///     This class tests RFC 9156 QNAME minimization against a fake upstream client that records
+///     every query: intermediate servers see only minimized NS queries, referrals are still
+///     followed, a server that mishandles a probe triggers the fallback to full queries, and a
+///     minimized probe never carries the client's ECS option.
 /// </summary>
 public sealed class IterativeResolutionEngineQnameMinimizationTests
 {
@@ -28,9 +26,8 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
     );
 
     /// <summary>
-    ///     Builds a harness with QNAME minimization explicitly enabled (this class's own real
-    ///     subject, unlike <see cref="IterativeResolutionEngineTests" />'s own harness, which
-    ///     defaults it off since that class tests unrelated behavior).
+    ///     This method builds a harness with QNAME minimization on (it is off in
+    ///     <see cref="IterativeResolutionEngineTests" />).
     /// </summary>
     private static Harness CreateHarness()
     {
@@ -111,22 +108,22 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
         IPAddress exampleNsAddress = IPAddress.Parse("198.51.100.2");
         DnsResourceRecord finalAnswer = BuildARecord(queried, IPAddress.Parse("192.0.2.50"));
 
-        // The root is asked only about "com" -- via QTYPE=NS -- never the full "www.example.com".
+        // The root is asked only about "com", with QTYPE NS, never the full name.
         harness.Client.AddResponse(
             RootAddress,
             comZoneCut,
             DnsResourceRecordTypeEnum.NS,
             BuildReferral(comZoneCut, comNs, comNsAddress)
         );
-        // "com"'s own server is asked only about "example.com", again via QTYPE=NS.
+        // The "com" server is asked only about "example.com", again with QTYPE NS.
         harness.Client.AddResponse(
             comNsAddress,
             exampleZoneCut,
             DnsResourceRecordTypeEnum.NS,
             BuildReferral(exampleZoneCut, exampleNs, exampleNsAddress)
         );
-        // Only "example.com"'s own server -- genuinely authoritative for the full name -- ever
-        // sees the real name and the real requested type.
+        // Only the "example.com" server, authoritative for the name, sees the full name and
+        // type.
         harness.Client.AddResponse(
             exampleNsAddress,
             queried,
@@ -143,8 +140,7 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
 
         Assert.Equal(RecursiveResolutionStatusEnum.Success, result.Status);
         Assert.Single(result.Answer);
-        // The real chain-of-trust bookkeeping DnssecValidator depends on is unaffected by
-        // minimization -- the same zone cuts are recorded as the non-minimized equivalent test.
+        // The zone cuts DnssecValidator relies on are the same as without minimization.
         Assert.Equal([DnsName.Root, comZoneCut, exampleZoneCut], result.ZoneCutsTraversed);
 
         Assert.Equal(3, harness.Client.Queries.Count);
@@ -178,17 +174,15 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
     public async Task AMinimizedProbeNeverCarriesTheClientsOwnSubnetOptionButTheFinalRealQueryDoes()
     {
         Harness harness = CreateHarness();
-        // A two-label name -- one referral hop (root -> "com") away from a probe that already
-        // equals the full name ("example.com" itself), so the very next query is the real,
-        // final one, not a further minimized probe.
+        // A two-label name: after one referral (root to "com") the probe equals the full name, so
+        // the next query is the final one.
         DnsName queried = DnsName.Parse("example.com");
         DnsName comZoneCut = DnsName.Parse("com");
         DnsName comNs = DnsName.Parse("ns1.com");
         IPAddress comNsAddress = IPAddress.Parse("198.51.100.1");
         DnsResourceRecord finalAnswer = BuildARecord(queried, IPAddress.Parse("192.0.2.51"));
-        // Code 8 is RFC 7871's real EDNS Client Subnet option code -- the actual payload bytes
-        // are irrelevant here, since this test only confirms whether the option is forwarded at
-        // all, never decoded.
+        // Code 8 is the RFC 7871 EDNS Client Subnet option. The payload is irrelevant; the test
+        // only checks whether the option is sent.
         DnsEdnsOption clientSubnet = new(8, [192, 0, 2, 0]);
 
         harness.Client.AddResponse(
@@ -231,24 +225,23 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
         IPAddress comNsAddress = IPAddress.Parse("198.51.100.1");
         DnsResourceRecord finalAnswer = BuildARecord(queried, IPAddress.Parse("192.0.2.52"));
 
-        // The root does not handle a minimized "com"/NS probe at all.
+        // The root does not handle a minimized "com"/NS probe.
         harness.Client.AddResponse(
             RootAddress,
             comZoneCut,
             DnsResourceRecordTypeEnum.NS,
             BuildError(hostileCode)
         );
-        // Once minimization is abandoned, the root is retried with the real, full query -- and
-        // answers it normally with an ordinary referral, exactly as a non-minimizing resolver
-        // would always have asked it in the first place.
+        // With minimization abandoned, the root is asked the full query and answers with a
+        // referral.
         harness.Client.AddResponse(
             RootAddress,
             queried,
             DnsResourceRecordTypeEnum.A,
             BuildReferral(comZoneCut, comNs, comNsAddress)
         );
-        // Minimization stays disabled for the rest of this resolution -- the next hop is asked
-        // the full name too, never a further minimized probe.
+        // Minimization stays off for the rest of the resolution: the next server is asked the
+        // full name too.
         harness.Client.AddResponse(
             comNsAddress,
             queried,
@@ -279,16 +272,15 @@ public sealed class IterativeResolutionEngineQnameMinimizationTests
         DnsName comZoneCut = DnsName.Parse("com");
         DnsResourceRecord finalAnswer = BuildARecord(queried, IPAddress.Parse("192.0.2.53"));
 
-        // A minimized probe for "com" gets NXDOMAIN -- which, taken at face value, would wrongly
-        // suggest the real "www.example.com" cannot exist either. This is exactly the real-world
-        // wildcard/CDN interoperability wrinkle RFC 9156 itself warns about.
+        // NXDOMAIN to the minimized "com" probe would wrongly suggest "www.example.com" cannot
+        // exist; RFC 9156 warns some servers answer this way.
         harness.Client.AddResponse(
             RootAddress,
             comZoneCut,
             DnsResourceRecordTypeEnum.NS,
             new DnsMessage { ResponseCode = DnsResponseCodeEnum.NxDomain }
         );
-        // The real, non-minimized query reveals the true answer: the name genuinely does exist.
+        // The full query shows the name does exist.
         harness.Client.AddResponse(
             RootAddress,
             queried,

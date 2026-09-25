@@ -5,9 +5,8 @@ using Ninlil.Dns.Server.Recursive.Resolution;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IterativeResolutionEngine" />, so
-///     <see cref="Validation.DnssecValidator" /> can be tested against exact, controlled
-///     DS/DNSKEY answers without needing a full referral-following resolution underneath it.
+///     This class is a fake IterativeResolutionEngine that returns canned results per name and
+///     type, so DnssecValidator and RecursiveQueryResolver can be tested without resolution.
 /// </summary>
 public sealed class FakeIterativeResolutionEngine : IIterativeResolutionEngine
 {

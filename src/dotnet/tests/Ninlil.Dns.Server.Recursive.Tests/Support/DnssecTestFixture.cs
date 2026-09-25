@@ -8,10 +8,9 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests.Support;
 
 /// <summary>
-///     This class builds real, cryptographically valid DNSSEC material (DNSKEY/DS/RRSIG) for
-///     tests that need an actual chain of trust to walk, rather than faking the verification
-///     result itself -- Ed25519 throughout, since it needs no key-size parameter and is the
-///     cheapest algorithm this repo's registry already supports.
+///     This class builds cryptographically valid DNSKEY, DS and RRSIG records for tests that walk
+///     a chain of trust, so verification is not faked. It uses Ed25519 throughout: no key size to
+///     choose, and cheap.
 /// </summary>
 public sealed class DnssecTestFixture
 {
@@ -29,16 +28,13 @@ public sealed class DnssecTestFixture
     );
 
     /// <summary>
-    ///     This method generates a fresh zone-signing key and its own <c>DNSKEY</c> record.
+    ///     This method generates a new zone key and its DNSKEY record.
     /// </summary>
-    /// <param name="owner">The key's own owner name.</param>
-    /// <param name="ttl">The generated <c>DNSKEY</c> record's own TTL.</param>
+    /// <param name="owner">The key's owner name.</param>
+    /// <param name="ttl">The DNSKEY record's TTL.</param>
     /// <param name="isSecureEntryPoint">
-    ///     Whether the generated key's own SEP (secure entry point / KSK) bit is set --
-    ///     <see langword="false" /> by default (the simplest DNSKEY flavor most DNSSEC
-    ///     validation logic branches on), but RFC 5011 §7.2 requires this bit set on any key a
-    ///     trust-anchor-rollover test wants treated as a real trust point candidate at all -- set
-    ///     <see langword="true" /> for exactly that case.
+    ///     Whether the key's SEP (KSK) bit is set. Off by default; a trust anchor rollover test
+    ///     sets it, since only SEP keys are rollover candidates (RFC 5011).
     /// </param>
     public ZoneKey GenerateZoneKey(DnsName owner, uint ttl = 3600, bool isSecureEntryPoint = false)
     {
@@ -61,9 +57,7 @@ public sealed class DnssecTestFixture
             rdata
         );
 
-        // The key tag is computed over the already-wire-encoded RDATA, not the key material
-        // directly, matching the real algorithm every validator (and every signer) must use so a
-        // key tag computed here matches what a real resolver would compute for the same key.
+        // The key tag is computed over the encoded RDATA, as validators and signers compute it.
         ushort keyTag = DnssecKeyTag.Compute(DnssecAlgorithmEnum.Ed25519, rdata);
 
         return new ZoneKey(keyPair, record, keyTag);
@@ -81,10 +75,9 @@ public sealed class DnssecTestFixture
     )
     {
         DnsResourceRecord first = rrset[0];
-        // Default to a validity window that is already open (started a day ago) and will stay
-        // open for a month, so an ordinary test signing a record never has to reason about clock
-        // skew or a signature expiring mid-run -- a test that specifically needs an expired or
-        // not-yet-valid signature passes its own inception/expiration explicitly instead.
+        // The default validity window opened a day ago and lasts a month, so ordinary tests need
+        // not think about clocks; a test that needs an expired or future signature passes its own
+        // times.
         DateTimeOffset actualInception = inception ?? DateTimeOffset.UtcNow.AddDays(-1);
         DateTimeOffset actualExpiration = expiration ?? DateTimeOffset.UtcNow.AddDays(30);
 
@@ -100,9 +93,9 @@ public sealed class DnssecTestFixture
             []
         );
 
-        // RFC 4034's own canonical form (owner names lowercased, RRset sorted, TTLs normalized to
-        // the RRSIG's own original-TTL field) has to be rebuilt here exactly as a real validator
-        // would, or a signature this fixture produces would verify only by accident.
+        // The RFC 4034 canonical form (lowercased owner names, sorted RRset, TTLs set to the
+        // RRSIG's original TTL) is rebuilt here as a validator would, or signatures would verify only
+        // by accident.
         byte[] signingInput = DnssecCanonicalization.BuildSigningInput(
             unsigned,
             first.Name,
@@ -137,9 +130,7 @@ public sealed class DnssecTestFixture
     /// </summary>
     public DnsResourceRecord BuildDs(DnsName childApex, ZoneKey childKey, uint ttl = 3600)
     {
-        // Digest type 2 is SHA-256, per the IANA "Delegation Signer (DS) Resource Record (RR)
-        // Type Digest Algorithms" registry -- the one digest type every real validator this
-        // codebase targets is required to support.
+        // Digest type 2 is SHA-256, which every validator must support.
         byte[] digest = DsDigestCodec.Compute(2, childApex, childKey.DnsKeyRecord.Data);
         DsRecordData ds = new(childKey.KeyTag, DnssecAlgorithmEnum.Ed25519, 2, digest);
 

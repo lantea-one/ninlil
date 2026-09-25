@@ -5,9 +5,8 @@ using Ninlil.Dns.Server.Recursive.Caching;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class always reports a cache miss -- enough for <see cref="Validation.DnssecValidator" />
-///     tests that never exercise its cache-hit-provenance fallback (<c>FindOwningZone</c>),
-///     since every test result already carries a non-empty <c>ZoneCutsTraversed</c>.
+///     This class always reports a cache miss. It suits DnssecValidator tests, whose results
+///     always carry zone cuts, so the cache fallback (FindOwningZone) is never needed.
 /// </summary>
 public sealed class EmptyRecursiveCache : IRecursiveCache
 {

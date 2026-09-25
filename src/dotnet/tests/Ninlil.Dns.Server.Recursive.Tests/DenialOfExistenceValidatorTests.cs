@@ -7,9 +7,9 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class tests <see cref="DenialOfExistenceValidator" /> -- the purely structural half
-///     of RFC 4035 §5.4 / RFC 5155 §8's authenticated denial of existence, independent of
-///     signature verification.
+///     This class tests <see cref="DenialOfExistenceValidator" />, the structural half of
+///     authenticated denial of existence (RFC 4035 §5.4, RFC 5155 §8), with hand-built NSEC and
+///     NSEC3 records and no signatures.
 /// </summary>
 public class DenialOfExistenceValidatorTests
 {
@@ -217,14 +217,12 @@ public class DenialOfExistenceValidatorTests
     [Fact]
     public void VerifyOptOutIsFalseWhenTheOptOutBitIsSetButTheRangeDoesNotActuallyCoverTheDelegation()
     {
-        // The opt-out bit alone proves nothing -- it must be set on the specific NSEC3 range
-        // that actually covers the delegation's own hash. Here it's set on an entirely
-        // different, non-covering range, which must not be treated as proof for this name.
+        // The opt-out bit proves nothing unless it is on the range that covers the delegation's
+        // hash. Here it is on a different range, which must not count.
         DnsName delegation = DnsName.Parse("unsigned-child.example.com");
         byte[] delegationHash = Hash(delegation);
 
-        // A range that starts strictly after the delegation's own hash can never cover it,
-        // regardless of where it ends.
+        // A range that starts after the delegation's hash cannot cover it, wherever it ends.
         byte[] rangeStart = (byte[])delegationHash.Clone();
         rangeStart[0]++;
         byte[] allFf = Enumerable.Repeat((byte)0xFF, 20).ToArray();
@@ -254,8 +252,8 @@ public class DenialOfExistenceValidatorTests
             false,
             DnsResourceRecordTypeEnum.NS
         );
-        // A catch-all covering range: any real SHA-1 hash falls strictly between all-zero and
-        // all-0xFF, so this single entry proves both "b.example.com" and "*.example.com" absent.
+        // A catch-all range: any SHA-1 hash falls between all-zero and all-0xFF, so this one
+        // entry proves both "b.example.com" and "*.example.com" absent.
         DnsResourceRecord catchAll = BuildNsec3(allZero, allFf, false, DnsResourceRecordTypeEnum.A);
 
         bool result = DenialOfExistenceValidator.VerifyNxDomainNsec3(

@@ -4,22 +4,20 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class binds one entry of <see cref="RecursiveServerOptions.TrustAnchorsOverride" />
-///     -- an operator-configured replacement for the hardcoded root trust anchors
-///     (<see cref="RootTrustAnchors" />), for a deployment validating against something other
-///     than the real internet root (an internal-only resolver with a private root, or a test
-///     double).
+///     This class binds one entry of <see cref="RecursiveServerOptions.TrustAnchorsOverride" />,
+///     which replaces the built-in root trust anchors (<see cref="RootTrustAnchors" />) for a
+///     deployment that validates against a private root or a test double.
 /// </summary>
 public sealed class TrustAnchorOption
 {
     /// <summary>
     ///     This property contains the trusted <see cref="Common.Wire.Records.DnsKeyRecordData" />'s
-    ///     own key tag.
+    ///     key tag.
     /// </summary>
     public ushort KeyTag { get; set; }
 
     /// <summary>
-    ///     This property contains the trusted key's own algorithm.
+    ///     This property contains the trusted key's algorithm.
     /// </summary>
     public DnssecAlgorithmEnum Algorithm { get; set; }
 
@@ -30,7 +28,7 @@ public sealed class TrustAnchorOption
     public byte DigestType { get; set; }
 
     /// <summary>
-    ///     This property contains the trusted key's own digest, as a hexadecimal string (parsed
+    ///     This property contains the trusted key's digest, as a hexadecimal string (parsed
     ///     via <see cref="Convert.FromHexString(string)" />).
     /// </summary>
     public string DigestHex { get; set; }

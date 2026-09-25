@@ -11,10 +11,10 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class tests <see cref="DnssecValidator" /> end-to-end against real, cryptographically
-///     signed DNSKEY/DS/RRSIG material (via <see cref="DnssecTestFixture" />), with a fake
-///     <see cref="IIterativeResolutionEngine" /> standing in for the network so each zone cut's
-///     own DS/DNSKEY answer is exactly controlled.
+///     This class tests <see cref="DnssecValidator" /> end to end with signed DNSKEY, DS and
+///     RRSIG records built by <see cref="DnssecTestFixture" />, and a fake
+///     <see cref="IIterativeResolutionEngine" /> in place of the network so each zone cut's DS
+///     and DNSKEY answers are controlled.
 /// </summary>
 public class DnssecValidatorTests
 {

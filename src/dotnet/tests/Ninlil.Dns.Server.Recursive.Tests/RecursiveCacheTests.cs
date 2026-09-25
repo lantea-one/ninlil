@@ -9,7 +9,9 @@ using Ninlil.Dns.Server.Recursive.Tests.Fakes;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class tests <see cref="RecursiveCache" />.
+///     This class tests <see cref="RecursiveCache" /> directly: storing and expiring positive
+///     and negative entries, eviction and its events, serve-stale lookups and retention, prefetch
+///     candidates, and the <c>IDnsCache</c> statistics, flush and removal.
 /// </summary>
 public class RecursiveCacheTests
 {
@@ -24,13 +26,8 @@ public class RecursiveCacheTests
                 new RecursiveServerOptions
                 {
                     MaxCacheEntries = maxEntries,
-                    // Off by default here, even though the real class defaults it on: most of
-                    // this fixture's own tests predate RFC 8767 serve-stale and assert that an
-                    // expired entry is evicted immediately -- true only when this is off, since
-                    // EvictExpiredAndOverCapacity otherwise retains an expired entry for the
-                    // whole configured MaxStaleServeAge window. See
-                    // EvictExpiredAndOverCapacityRespectsTheStaleRetentionWindowWhenServeStaleIsOn
-                    // below for dedicated coverage of the "on" case.
+                    // Serve-stale is off in this fixture (it is on by default) so an expired entry is evicted
+                    // at once; the stale-retention tests below turn it on.
                     EnableServeStale = enableServeStale,
                     MaxStaleServeAge = maxStaleServeAge ?? TimeSpan.FromHours(24),
                 }
@@ -274,8 +271,7 @@ public class RecursiveCacheTests
 
         Assert.Equal(0, evicted);
         Assert.Empty(publisher.Published);
-        // Still genuinely gone from TryGet's own ordinary (non-stale-tolerant) perspective --
-        // only eviction itself is deferred, not visibility to a normal lookup.
+        // TryGet no longer returns it; only eviction is deferred.
         Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
     }
 
@@ -383,8 +379,7 @@ public class RecursiveCacheTests
             [BuildARecord(name, 5)],
             []
         );
-        // A real access marks _lastAccessedUtc, the "still being queried" signal the prefetch
-        // window itself has no other way to observe.
+        // A lookup records the access time, which is how prefetch tells a name is still in use.
         cache.TryGet(name, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet);
 
         var candidates = cache.GetPrefetchCandidates(
@@ -427,8 +422,7 @@ public class RecursiveCacheTests
         RecursiveCache cache = CreateCache();
         DnsName name = DnsName.Parse("unaccessed.example.com");
 
-        // Stored, nearing expiry, but never looked up via TryGet/TryGetStale -- no
-        // _lastAccessedUtc entry exists for it at all.
+        // Stored and near expiry, but never looked up, so it has no access time.
         cache.StorePositive(
             name,
             DnsResourceRecordTypeEnum.A,

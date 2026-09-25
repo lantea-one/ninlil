@@ -4,9 +4,13 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive;
 
 /// <summary>
-///     This class binds to the <c>DnsServer:Recursive</c> section of the application's
-///     configuration and controls whether, and how, <see cref="Resolution.RecursiveQueryResolver" />
-///     recurses.
+///     This class binds to the <c>DnsServer:Recursive</c> configuration section and controls
+///     recursive resolution, DNSSEC validation, trust anchor rollover and the recursive cache.
+///     <c>RecursiveSettingsController</c> edits it at runtime; the resolver, engine, cache,
+///     upstream client and background services read it live through
+///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, except the root
+///     hints priming and the trust anchor store, which read it once at startup. The forwarding
+///     resolver also reads the validation and serve-stale settings here.
 /// </summary>
 public class RecursiveServerOptions
 {
@@ -16,215 +20,169 @@ public class RecursiveServerOptions
     public const string SectionName = "DnsServer:Recursive";
 
     /// <summary>
-    ///     This property controls whether this server recurses for a query it is not itself
-    ///     authoritative for at all. Off by default, the same security-conscious posture as
-    ///     every other off-by-default toggle this project has built so far (CHAOS queries,
-    ///     dynamic update) -- an open recursive resolver reachable from the public internet is a
-    ///     real, well-known abuse vector (DNS amplification), so an operator must opt in
-    ///     explicitly.
+    ///     This property controls whether this server recurses for names it is not authoritative
+    ///     for. It is off by default because an open resolver reachable from the internet is a
+    ///     well-known amplification vector, so an operator opts in. An access-control rule can
+    ///     still allow recursion for particular clients while this is off.
     /// </summary>
     public bool EnableRecursion { get; set; }
 
     /// <summary>
-    ///     This property controls whether a successfully resolved answer is also validated
-    ///     against the DNSSEC chain of trust -- this resolver is a full validating resolver, not
-    ///     merely an iterative one. Left independently toggleable from <see cref="EnableRecursion" />
-    ///     so an operator who wants faster, non-validating resolution can still have it.
+    ///     This property controls whether answers are validated against the DNSSEC chain of trust,
+    ///     for recursive and forwarded answers alike. It is separate from
+    ///     <see cref="EnableRecursion" /> so an operator can choose faster, non-validating
+    ///     resolution.
     /// </summary>
     public bool EnableDnssecValidation { get; set; } = true;
 
     /// <summary>
     ///     This property controls whether <see cref="Resolution.IterativeResolutionEngine" />
-    ///     applies RFC 9156 QNAME minimization: rather than sending a query's full name to every
-    ///     name server along an iterative referral walk, only the minimum name genuinely needed
-    ///     to make progress -- one label deeper than the closest zone cut already known -- is
-    ///     revealed to each intermediate server, with the full name (and real query type) sent
-    ///     only to the server actually authoritative for it. This reduces how much of a client's
-    ///     own query a resolver leaks to every server along the way, a real, if modest, privacy
-    ///     improvement with no correctness cost of its own (the RFC's own required fallback -- a
-    ///     minimized query that a server does not handle correctly, or an untrustworthy
-    ///     intermediate NXDOMAIN, both abandon minimization for the remainder of that one
-    ///     resolution and retry with an ordinary, full query -- keeps a non-conformant or
-    ///     wildcard-heavy authoritative server from ever breaking a real answer). Defaults to
-    ///     <see langword="true" />, the same "on by default" treatment already given to DNSSEC
-    ///     validation and RFC 5011 auto-update -- a pure correctness/privacy improvement with no
-    ///     corresponding new attack surface, per this project's own confirmed toggle-default
-    ///     convention. An operator who hits a real-world authoritative server that mishandles
-    ///     minimized queries in a way this resolver's own fallback does not already catch can
-    ///     disable it here.
+    ///     applies RFC 9156 QNAME minimization: each intermediate server sees only one label more
+    ///     than the zone cut already known, and only the authoritative server sees the full name
+    ///     and real type. This leaks less of the client's query along the way. When a server
+    ///     mishandles a minimized query, or returns an NXDOMAIN that cannot be trusted, the
+    ///     resolution falls back to full queries (see the engine). It is on by default; turn it
+    ///     off for an authoritative server that breaks in a way the fallback does not catch.
     /// </summary>
     public bool EnableQnameMinimization { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how long a single upstream query may take before this
-    ///     resolver gives up on that particular name server and tries the next one.
+    ///     This property contains how long one upstream query may take before the resolver gives up
+    ///     on that name server and tries the next.
     /// </summary>
     public TimeSpan UpstreamQueryTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>
-    ///     This property contains the overall time budget for one client-facing query,
-    ///     encompassing every referral this resolver follows and every upstream server it tries,
-    ///     after which it gives up and answers SERVFAIL.
+    ///     This property contains the time budget for one client query, covering every referral
+    ///     and every server tried (see <see cref="Resolution.QueryBudget" />), after which it
+    ///     answers SERVFAIL.
     /// </summary>
     public TimeSpan OverallQueryTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    ///     This property bounds how many referrals (zone cuts followed deeper) a single
-    ///     resolution may walk through before giving up with SERVFAIL -- a defense against a
-    ///     misconfigured or deliberately malicious delegation loop.
+    ///     This property bounds how many referrals one resolution may follow before giving up with
+    ///     SERVFAIL, as a defense against delegation loops.
     /// </summary>
     public int MaxReferralDepth { get; set; } = 30;
 
     /// <summary>
-    ///     This property bounds how many CNAME hops a single resolution may follow before giving
-    ///     up with SERVFAIL.
+    ///     This property bounds how many CNAME hops one resolution may follow before giving up
+    ///     with SERVFAIL.
     /// </summary>
     public int MaxCnameChainLength { get; set; } = 15;
 
     /// <summary>
-    ///     This property bounds how many upstream queries, in total, a single client-facing
-    ///     query may issue -- across every referral, every retried name server, and every
-    ///     independent lookup an out-of-bailiwick name server's own address needs -- before
+    ///     This property bounds how many upstream queries one client query may issue in total,
+    ///     across referrals, retries, name server address lookups and DNSSEC validation, before
     ///     giving up with SERVFAIL.
     /// </summary>
     public int MaxUpstreamQueries { get; set; } = 100;
 
     /// <summary>
-    ///     This property contains how large the in-memory response cache may grow, in entries,
-    ///     before the oldest are evicted to make room for new ones.
+    ///     This property contains how many entries the recursive cache may hold before the
+    ///     soonest-to-expire are evicted.
     /// </summary>
     public int MaxCacheEntries { get; set; } = 100000;
 
     /// <summary>
-    ///     This property, when non-empty, replaces the hardcoded <see cref="RootHints" /> list
-    ///     entirely -- both what <see cref="Resolution.RootHintsPrimingService" /> seeds at
-    ///     startup and primes against, and what <see cref="Resolution.IterativeResolutionEngine" />
-    ///     falls back to if nothing at all is cached yet. Empty by default, meaning "use the real
-    ///     internet root."
+    ///     This property, when not empty, replaces the built-in <see cref="RootHints" /> list:
+    ///     what <see cref="Resolution.RootHintsPrimingService" /> seeds and primes against at
+    ///     startup, and what <see cref="Resolution.IterativeResolutionEngine" /> falls back to when
+    ///     nothing is cached. Empty by default, meaning the internet root.
     /// </summary>
     public List<RootHintServerOption> RootHintServersOverride { get; set; } = [];
 
     /// <summary>
-    ///     This property, when non-empty, replaces the hardcoded <see cref="RootTrustAnchors" />
-    ///     list entirely -- the *initial* seed <see cref="ITrustAnchorStore" /> starts from the
-    ///     first time it ever runs (or if its own state file is ever missing or unreadable).
-    ///     Once seeded, <see cref="TrustAnchorRolloverService" /> owns keeping this set current if
-    ///     <see cref="EnableAutomaticTrustAnchorUpdate" /> is on; this override has no further
-    ///     effect after that first seed. Empty by default, meaning "use the real IANA root trust
-    ///     anchors."
+    ///     This property, when not empty, replaces the built-in <see cref="RootTrustAnchors" /> as
+    ///     the seed <see cref="ITrustAnchorStore" /> starts from when its state file is missing or
+    ///     unreadable. Once the file exists this has no effect, and
+    ///     <see cref="TrustAnchorRolloverService" /> keeps the set current if
+    ///     <see cref="EnableAutomaticTrustAnchorUpdate" /> is on. Empty by default, meaning the IANA
+    ///     root anchors.
     /// </summary>
     public List<TrustAnchorOption> TrustAnchorsOverride { get; set; } = [];
 
     /// <summary>
-    ///     This property controls whether this resolver keeps its own trust anchors current
-    ///     automatically, per RFC 5011, rather than only ever trusting whatever was hardcoded (or
-    ///     configured) at startup. On by default -- unlike the other, abuse-vector-driven
-    ///     off-by-default toggles in this class, an out-of-date trust anchor is a pure
-    ///     availability/correctness risk with no corresponding abuse concern, and the primary
-    ///     deployment this resolver targets (a homelab or home router, set up once and then left
-    ///     running for years) is exactly the case that would otherwise silently lose the ability
-    ///     to validate anything once the root KSK eventually rolls over, with no operator around
-    ///     to notice or intervene.
+    ///     This property controls whether the resolver keeps its trust anchors current with
+    ///     RFC 5011 rollover (<see cref="TrustAnchorRolloverService" />). It is on by default: an
+    ///     outdated anchor is only an availability risk, and a home server left running for years
+    ///     would otherwise stop validating after a root KSK rollover.
     /// </summary>
     public bool EnableAutomaticTrustAnchorUpdate { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how often <see cref="TrustAnchorRolloverService" /> actively
-    ///     queries the root's own DNSKEY RRset to look for a new or revoked key. RFC 5011 §2.3
-    ///     recommends never querying more often than once every 15 days, both to avoid needlessly
-    ///     loading the root servers and because a rollover unfolds over months regardless of how
-    ///     often it is checked for; this default matches that recommendation exactly.
+    ///     This property contains how often <see cref="TrustAnchorRolloverService" /> queries the
+    ///     root DNSKEY RRset for new or revoked keys. The default, 15 days, is the longest interval
+    ///     RFC 5011 §2.3 allows; the RFC's formula gives a shorter one for the root's TTL and
+    ///     signature lifetimes. The first check happens one interval after startup.
     /// </summary>
     public TimeSpan TrustAnchorRefreshInterval { get; set; } = TimeSpan.FromDays(15);
 
     /// <summary>
-    ///     This property contains how long a newly observed candidate key must be continuously
-    ///     present in the root's own DNSKEY RRset, every time it is checked, before this resolver
-    ///     starts trusting it -- RFC 5011 §2.3's add hold-down time, whose recommended (and here,
-    ///     default) value is 30 days.
+    ///     This property contains how long a new candidate key must be present in the root DNSKEY
+    ///     RRset, on every check, before the resolver trusts it: RFC 5011's add hold-down time,
+    ///     30 days by default as the RFC recommends.
     /// </summary>
     public TimeSpan TrustAnchorHoldDownDuration { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
-    ///     This property contains how long a previously-<see cref="Validation.TrustAnchorStateEnum.Valid" />
-    ///     key may stay <see cref="Validation.TrustAnchorStateEnum.Missing" /> -- absent from a
-    ///     target zone's own DNSKEY RRset -- before <see cref="TrustAnchorRolloverService" />
-    ///     gives up on it reappearing and transitions it to
-    ///     <see cref="Validation.TrustAnchorStateEnum.Removed" />. RFC 5011 §2.3's remove
-    ///     hold-down time, whose recommended (and here, default) value is 30 days, the same as
-    ///     <see cref="TrustAnchorHoldDownDuration" />'s own add hold-down default -- the RFC
-    ///     recommends the same duration for both, but exposes them as independently configurable
-    ///     since nothing requires they stay equal.
+    ///     This property contains how long a <see cref="Validation.TrustAnchorStateEnum.Valid" />
+    ///     key may stay <see cref="Validation.TrustAnchorStateEnum.Missing" /> (absent from the root
+    ///     DNSKEY RRset) before <see cref="TrustAnchorRolloverService" /> marks it
+    ///     <see cref="Validation.TrustAnchorStateEnum.Removed" />. It is modeled on RFC 5011's
+    ///     remove hold-down time and defaults to 30 days, like
+    ///     <see cref="TrustAnchorHoldDownDuration" />.
     /// </summary>
     public TimeSpan TrustAnchorRemoveHoldDownDuration { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
-    ///     This property contains the path <see cref="ITrustAnchorStore" /> persists its own
-    ///     state to -- which candidate keys are pending, how long they have been observed for,
-    ///     and which are already trusted -- so that state (in particular, a pending key's
-    ///     hold-down clock) survives this process restarting, which it otherwise could not.
-    ///     Defaults to a <c>data</c> directory alongside the application itself, the same
-    ///     convention <c>Ninlil.Dns.Data.EntityFrameworkCore</c>'s own SQLite bootstrap store
-    ///     already uses for local, non-database state.
+    ///     This property contains the file <see cref="ITrustAnchorStore" /> persists the trust
+    ///     anchor state to (which keys are pending, since when, and which are trusted), so a
+    ///     pending key's hold-down clock survives a restart. It defaults to a <c>data</c> directory
+    ///     next to the application.
     /// </summary>
     public string TrustAnchorStateFilePath { get; set; } =
         Path.Combine(AppContext.BaseDirectory, "data", "recursive-trust-anchors.json");
 
     /// <summary>
-    ///     This property controls whether <see cref="Resolution.IterativeResolutionEngine" />
-    ///     serves an expired-but-still-within-<see cref="MaxStaleServeAge" /> cache entry when a
-    ///     fresh answer cannot be obtained (every reachable name server timed out, was
-    ///     unreachable, or answered SERVFAIL), per RFC 8767. On by default: a pure availability
-    ///     improvement over unconditionally answering SERVFAIL during a genuine upstream outage,
-    ///     with no corresponding new attack surface -- the same "self-maintaining capabilities
-    ///     default on" posture <see cref="EnableAutomaticTrustAnchorUpdate" /> already follows, and
-    ///     particularly apt for this project's own homelab deployment target (a server
-    ///     "set up once and left running for years"): an operator who is not watching this
-    ///     server closely should see a brief upstream blip degrade to "slightly stale answers,"
-    ///     never "every query fails."
+    ///     This property controls RFC 8767 serve-stale: when a fresh answer cannot be obtained
+    ///     (every name server timed out, was unreachable or answered SERVFAIL),
+    ///     <see cref="Resolution.IterativeResolutionEngine" /> serves an expired cache entry that is
+    ///     within <see cref="MaxStaleServeAge" />. The forwarding resolver follows the same
+    ///     setting. It is on by default, so a brief upstream outage gives slightly stale answers
+    ///     rather than failures.
     /// </summary>
     public bool EnableServeStale { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how long past its own TTL expiry a cache entry remains eligible
-    ///     to be served stale (see <see cref="EnableServeStale" />) before
-    ///     <c>Ninlil.Dns.Server.Core.Caching.DnsCacheEvictionService</c> discards it for good. Defaults to
-    ///     24 hours -- RFC 8767 §4 recommends a resolver keep expired data available "for a period
-    ///     on the order of a day or more" while cautioning against keeping it indefinitely (its own
-    ///     illustrative examples cap a stale-serve window at a small number of days); one day is
-    ///     this project's own deliberately conservative pick within that range, long enough to ride
-    ///     out a typical transient upstream outage without risking a genuinely stale answer
-    ///     lingering for very long once real connectivity returns.
+    ///     This property contains how long past expiry a cache entry may still be served stale
+    ///     (see <see cref="EnableServeStale" />) before
+    ///     <c>Ninlil.Dns.Server.Core.Caching.DnsCacheEvictionService</c> discards it. The default
+    ///     is 24 hours, at the short end of the one-to-seven-day range RFC 8767 §4 suggests: long
+    ///     enough to ride out a typical outage without keeping stale data for long.
     /// </summary>
     public TimeSpan MaxStaleServeAge { get; set; } = TimeSpan.FromHours(24);
 
     /// <summary>
     ///     This property controls whether <see cref="Caching.RecursiveCachePrefetchService" />
-    ///     proactively refreshes a cache entry that is both nearing TTL expiry
-    ///     (<see cref="PrefetchWindow" />) and has genuinely been queried recently
-    ///     (<see cref="PrefetchRecentAccessWindow" />), rather than waiting for the next real
-    ///     client query to trigger a cold, on-the-critical-path refresh. On by default, for the
-    ///     same "pure availability/latency improvement, no new attack surface" reasoning
-    ///     <see cref="EnableServeStale" /> already documents -- a popular name's own answer simply
-    ///     never goes cold from this resolver's own perspective.
+    ///     refreshes a positive cache entry that is near expiry (<see cref="PrefetchWindow" />) and
+    ///     was looked up recently (<see cref="PrefetchRecentAccessWindow" />), so a popular name is
+    ///     refreshed before a client has to wait for it. On by default.
     /// </summary>
     public bool EnablePrefetch { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how close to its own TTL expiry a cache entry must be before
-    ///     <see cref="Caching.RecursiveCachePrefetchService" /> considers refreshing it. Defaults
-    ///     to 10 seconds -- long enough that a genuinely popular name's refresh reliably completes
-    ///     before the original entry actually expires (this project's own default
-    ///     <see cref="UpstreamQueryTimeout" /> is 3 seconds per attempt), short enough that this
-    ///     service is not constantly re-resolving every cached entry in the whole cache.
+    ///     This property contains how close to expiry a cache entry must be before
+    ///     <see cref="Caching.RecursiveCachePrefetchService" /> considers refreshing it. The default,
+    ///     10 seconds, leaves time for a refresh (the per-server timeout is 3 seconds) without
+    ///     refreshing entries long before they expire.
     /// </summary>
     public TimeSpan PrefetchWindow { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    ///     This property contains how recently a cache entry must have actually been looked up
-    ///     (via a real client query) to be considered "still being queried," and therefore worth
-    ///     prefetching, rather than a name nobody has asked for in a while that merely happens to
-    ///     be about to expire. Defaults to 5 minutes.
+    ///     This property contains how recently a cache entry must have been returned by a lookup
+    ///     to be worth prefetching, so names nobody asks for are left to expire. Lookups include
+    ///     the engine's internal ones. Defaults to 5 minutes.
     /// </summary>
     public TimeSpan PrefetchRecentAccessWindow { get; set; } = TimeSpan.FromMinutes(5);
 }

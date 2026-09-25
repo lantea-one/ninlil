@@ -11,15 +11,10 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class covers RFC 4035 §5.3's per-CNAME-hop chain-of-trust validation --
-///     <see cref="DnssecValidator" />'s own real behavior against a genuine, multi-record
-///     <see cref="IterativeResolutionResult.CnameChain" />, previously entirely untested (every
-///     prior test in <see cref="DnssecValidatorTests" /> exercises a chain with zero CNAME hops).
-///     Confirms a hop's own signature is authenticated independently of the terminal answer -- a
-///     tampered intermediate hop fails the whole validation even though the terminal answer's own
-///     signature is genuinely valid, and a hop landing in a real, provably-unsigned delegation
-///     correctly downgrades an otherwise-fully-valid chain from Secure to Insecure rather than
-///     silently ignoring it.
+///     This class tests per-hop CNAME validation in <see cref="DnssecValidator" /> (RFC 4035
+///     §5.3) with signed records from <see cref="DnssecTestFixture" />: a tampered intermediate hop
+///     makes the result Bogus even though the final answer verifies, and a hop in a provably
+///     unsigned zone lowers an otherwise valid chain to Insecure.
 /// </summary>
 public sealed class DnssecValidatorCnameChainTests
 {
@@ -52,10 +47,9 @@ public sealed class DnssecValidatorCnameChainTests
         );
 
     /// <summary>
-    ///     Flips one bit of a genuine RRSIG's own signature -- the same tampering technique
-    ///     <see cref="DnssecValidatorTests.ValidateAsyncReturnsBogusWhenTheFinalAnswersSignatureWasTampered" />
-    ///     already established, applied here to a CNAME hop's own signature instead of the
-    ///     terminal answer's.
+    ///     This method flips one bit of an RRSIG's signature, the same tampering as
+    ///     <see cref="DnssecValidatorTests.ValidateAsyncReturnsBogusWhenTheFinalAnswersSignatureWasTampered" />,
+    ///     here applied to a CNAME hop.
     /// </summary>
     private static DnsResourceRecord Tamper(DnsResourceRecord genuineRrsig, DnsName owner)
     {
@@ -106,10 +100,8 @@ public sealed class DnssecValidatorCnameChainTests
             [childKey.DnsKeyRecord]
         );
 
-        // The CNAME hop itself is genuinely signed by example.com's own real key -- but the
-        // signature actually carried alongside it (as a real resolution would cache/forward) is
-        // corrupted, simulating an attacker (or a genuine transmission fault) tampering with an
-        // intermediate hop specifically, while leaving the terminal answer's own signature intact.
+        // The CNAME hop is signed by example.com's key, but the signature carried with it is
+        // corrupted, while the final answer's signature is intact.
         DnsName alias = DnsName.Parse("alias.example.com");
         DnsName www = DnsName.Parse("www.example.com");
         DnsResourceRecord cnameRecord = BuildCnameRecord(alias, www);
@@ -179,8 +171,8 @@ public sealed class DnssecValidatorCnameChainTests
             CreateBudget()
         );
 
-        // Bogus -- not Secure -- proving this hop's own signature is genuinely checked
-        // independently of the terminal answer's (which, on its own, validates perfectly fine).
+        // Bogus, not Secure: the hop's signature is checked on its own, although the final answer
+        // verifies.
         Assert.Equal(DnssecValidationStateEnum.Bogus, validation.State);
     }
 
@@ -194,9 +186,8 @@ public sealed class DnssecValidatorCnameChainTests
             [rootKey.DnsKeyRecord]
         );
 
-        // insecure.com: a real, provably-unsigned delegation (NSEC3 proves no DS exists), the
-        // exact same shape DnssecValidatorTests.ValidateAsyncReturnsInsecureForAProvablyUnsignedDelegation
-        // already establishes -- this hop's own zone genuinely has no DNSSEC material at all.
+        // insecure.com: a provably unsigned delegation (NSEC3 proves no DS), as in
+        // DnssecValidatorTests.ValidateAsyncReturnsInsecureForAProvablyUnsignedDelegation.
         DnsName insecureCom = DnsName.Parse("insecure.com");
         byte[] hash = Nsec3Hasher.ComputeHash(1, insecureCom, 0, []);
         DnsResourceRecord nsec3 = new(
@@ -211,7 +202,7 @@ public sealed class DnssecValidatorCnameChainTests
         );
         DnsResourceRecord nsec3Rrsig = _fixture.Sign(rootKey, DnsName.Root, [nsec3]);
 
-        // example.com: fully signed, genuinely valid -- the terminal answer's own zone.
+        // example.com: fully signed, the final answer's zone.
         DnsName exampleCom = DnsName.Parse("example.com");
         DnssecTestFixture.ZoneKey childKey = _fixture.GenerateZoneKey(exampleCom);
         DnsResourceRecord ds = _fixture.BuildDs(exampleCom, childKey);
@@ -224,8 +215,7 @@ public sealed class DnssecValidatorCnameChainTests
 
         DnsName alias = DnsName.Parse("alias.insecure.com");
         DnsName www = DnsName.Parse("www.example.com");
-        // A hop genuinely owned by an unsigned zone carries no RRSIG at all -- there is nothing
-        // to verify against, per CnameChainHop's own doc comment.
+        // A hop in an unsigned zone carries no RRSIG (see CnameChainHop).
         DnsResourceRecord cnameRecord = BuildCnameRecord(alias, www);
 
         DnsResourceRecord answer = BuildARecord(www);
@@ -302,8 +292,8 @@ public sealed class DnssecValidatorCnameChainTests
             CreateBudget()
         );
 
-        // Insecure -- not Secure -- even though the terminal answer's own zone validates
-        // perfectly: one genuinely unsigned hop anywhere in the chain caps the whole result.
+        // Insecure, not Secure, although the final answer's zone validates: one unsigned hop caps
+        // the whole result.
         Assert.Equal(DnssecValidationStateEnum.Insecure, validation.State);
     }
 }

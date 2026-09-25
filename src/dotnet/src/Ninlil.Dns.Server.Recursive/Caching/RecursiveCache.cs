@@ -15,19 +15,17 @@ namespace Ninlil.Dns.Server.Recursive.Caching;
 ///     flush and per-name removal are what the cache REST endpoint reports and acts on, and
 ///     <see cref="DnsCacheEvictionService" /> sweeps it alongside the forwarded-response cache.
 ///     <para>
-///         Its hit and miss counts include the iterative engine's own internal lookups (name
+///         Its hit and miss counts include the iterative engine's internal lookups (name
 ///         server addresses, delegations, CNAME hops), not only lookups for a client's question,
 ///         so they describe how much upstream traffic the cache saves rather than a per-query
 ///         hit rate.
 ///     </para>
 /// </summary>
 /// <param name="options">
-///     This cache's own capacity limit and serve-stale window, read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> -- see <see cref="Resolution.RecursiveQueryResolver" />'s
-///     own doc comment for why this cache, registered as a singleton, cannot use the usual
-///     snapshotted <see cref="IOptions{TOptions}" /> instead.
+///     The capacity limit and serve-stale window, read live through
+///     <see cref="IOptionsMonitor{TOptions}" /> so settings changes apply without a restart.
 /// </param>
-/// <param name="eventPublisher">The publisher this cache reports its own evictions through.</param>
+/// <param name="eventPublisher">The publisher this cache reports evictions through.</param>
 public sealed class RecursiveCache(
     IOptionsMonitor<RecursiveServerOptions> options,
     IDnsServerEventPublisher eventPublisher
@@ -45,8 +43,8 @@ public sealed class RecursiveCache(
         CacheName,
         key => key.Name,
         () => options.CurrentValue.MaxCacheEntries,
-        // A TTL-expired entry is kept for this resolver's own stale-serve grace window (zero,
-        // when RFC 8767 serve-stale is disabled entirely) -- TryGetStale needs it until then.
+        // An expired entry is kept for the serve-stale window (zero when serve-stale is off),
+        // since TryGetStale needs it until then.
         () =>
             options.CurrentValue.EnableServeStale
                 ? options.CurrentValue.MaxStaleServeAge

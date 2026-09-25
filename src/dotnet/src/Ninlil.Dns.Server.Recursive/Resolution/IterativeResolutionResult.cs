@@ -4,30 +4,32 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This class carries a single iterative resolution's complete outcome.
+///     This record carries the outcome of one iterative resolution, as
+///     <see cref="IIterativeResolutionEngine" /> returns it and <see cref="Validation.IDnssecValidator" />
+///     checks it.
 /// </summary>
 /// <param name="Status">How resolution concluded.</param>
 /// <param name="Answer">
-///     The final answer, in order -- every CNAME hop followed, then the real records, for
-///     <see cref="RecursiveResolutionStatusEnum.Success" />; empty otherwise.
+///     The final answer in order, every CNAME hop followed and then the records of the queried
+///     type, for <see cref="RecursiveResolutionStatusEnum.Success" />; empty otherwise.
 /// </param>
 /// <param name="DnssecRecords">
-///     Whatever RRSIG/NSEC/NSEC3/DNSKEY content accompanied <see cref="Answer" /> or
-///     <see cref="Soa" />, if DNSSEC data was requested and received at all.
+///     The RRSIG, NSEC, NSEC3 or DNSKEY records that came with the final RRset of
+///     <see cref="Answer" /> or with <see cref="Soa" />, if DNSSEC data was requested. The CNAME
+///     hops' signatures are in <see cref="CnameChain" />.
 /// </param>
 /// <param name="Soa">
 ///     For <see cref="RecursiveResolutionStatusEnum.NxDomain" />/<see cref="RecursiveResolutionStatusEnum.NoData" />,
-///     the authoritative zone's own SOA record. <see langword="null" /> otherwise.
+///     the zone's SOA record. <see langword="null" /> otherwise.
 /// </param>
 /// <param name="ZoneCutsTraversed">
-///     Every zone cut this resolution walked through, root first -- <see cref="Validation.DnssecValidator" />
-///     walks this exact same chain to verify DS/DNSKEY at each step.
+///     Every zone cut this resolution walked through, root first.
+///     <see cref="Validation.DnssecValidator" /> takes the last one as the answer's zone.
 /// </param>
 /// <param name="CnameChain">
-///     Every CNAME hop this resolution followed to reach <see cref="Answer" />, in order, each
-///     carrying its own owning zone and signature material -- see <see cref="Resolution.CnameChainHop" />.
-///     Empty when no CNAME was followed. <see cref="Validation.DnssecValidator" /> walks this list
-///     to authenticate each hop independently, rather than only the chain's terminal RRset.
+///     Every CNAME hop followed to reach <see cref="Answer" />, in order, each with its zone and
+///     signatures (see <see cref="Resolution.CnameChainHop" />). Empty when no CNAME was followed.
+///     <see cref="Validation.DnssecValidator" /> checks each hop, not only the final RRset.
 /// </param>
 public sealed record IterativeResolutionResult(
     RecursiveResolutionStatusEnum Status,
@@ -39,9 +41,8 @@ public sealed record IterativeResolutionResult(
 )
 {
     /// <summary>
-    ///     Normalizes a <see langword="null" /> constructor argument (every pre-existing call site
-    ///     that predates this property, none of which chased a CNAME chain of its own) down to an
-    ///     empty list, so every caller of this record can always enumerate this property safely.
+    ///     This property turns a <see langword="null" /> <c>CnameChain</c> argument into an empty
+    ///     list, so callers can always enumerate it.
     /// </summary>
     public IReadOnlyList<CnameChainHop> CnameChain { get; init; } = CnameChain ?? [];
 

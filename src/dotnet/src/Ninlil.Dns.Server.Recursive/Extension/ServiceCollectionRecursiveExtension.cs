@@ -12,17 +12,19 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's recursive DNS engine.
+///     This class provides our <see cref="IServiceCollection" /> extension for wiring up the
+///     recursive DNS resolver.
 /// </summary>
 public static class ServiceCollectionRecursiveExtension
 {
     /// <summary>
-    ///     This method registers everything <c>Ninlil.Dns.Server.Recursive</c> needs. The
-    ///     composition root is still expected to have already called
-    ///     <c>Ninlil.Dns.Server.Core.Extension.ServiceCollectionServerCoreExtension.AddNinlilDnsServerCore</c>,
-    ///     and to register this resolver *after* <c>Ninlil.Dns.Server.Authoritative</c>'s own,
-    ///     since an authoritative answer always wins regardless of the RD bit.
+    ///     This method binds <see cref="RecursiveServerOptions" /> and registers the cache, prefetch,
+    ///     upstream client, iterative engine, root-hints priming, trust anchor store and rollover,
+    ///     DNSSEC validator, and <see cref="RecursiveQueryResolver" /> as an
+    ///     <see cref="IDnsQueryResolver" />. The caller must already have called
+    ///     <c>AddNinlilDnsServerCore</c>, and must call this last among the resolvers (after the
+    ///     authoritative and forwarding ones), because the dispatcher tries resolvers in
+    ///     registration order and recursion is the final fallback.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read recursive settings from.</param>
@@ -36,16 +38,15 @@ public static class ServiceCollectionRecursiveExtension
             configuration.GetSection(RecursiveServerOptions.SectionName)
         );
 
-        // IRecursiveCache is a singleton -- an iterative resolution's whole point is to build up
-        // shared knowledge (name servers, glue, answers) that every future query benefits from,
-        // not something scoped to a single request.
+        // A singleton, so the name servers, glue and answers one resolution learns serve every
+        // later query.
         instance.AddSingleton<RecursiveCache>();
         instance.AddSingleton<IRecursiveCache>(provider =>
             provider.GetRequiredService<RecursiveCache>()
         );
 
-        // The same instance is also an IDnsCache, which is how Server.Core's own
-        // DnsCacheEvictionService sweeps it and the cache REST endpoint reports and flushes it.
+        // The same instance is also an IDnsCache, so DnsCacheEvictionService sweeps it and the
+        // cache REST endpoint reports and flushes it.
         instance.AddSingleton<IDnsCache>(provider => provider.GetRequiredService<RecursiveCache>());
         instance.AddHostedService<RecursiveCachePrefetchService>();
 
@@ -53,9 +54,7 @@ public static class ServiceCollectionRecursiveExtension
         instance.AddSingleton<IIterativeResolutionEngine, IterativeResolutionEngine>();
         instance.AddHostedService<RootHintsPrimingService>();
 
-        // ITrustAnchorStore is a singleton for the same reason IRecursiveCache is: its whole
-        // point (durable RFC 5011 rollover state) only makes sense shared across every query and
-        // every check, never scoped to one.
+        // A singleton, since the RFC 5011 state is shared by every query and every check.
         instance.AddSingleton<ITrustAnchorStore, FileTrustAnchorStore>();
         instance.AddHostedService<TrustAnchorRolloverService>();
 

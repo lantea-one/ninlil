@@ -2,11 +2,12 @@
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This class tracks the two bounds <see cref="IterativeResolutionEngine" /> enforces across
-///     an *entire* client-facing query -- including every nested lookup needed to resolve a name
-///     server's own address -- rather than per referral level: an overall deadline, and a total
-///     count of upstream queries issued -- iterative resolution bounds rather than trusts the
-///     network, the same posture the authoritative side's own delegation-loop protection takes.
+///     This class tracks two bounds across a whole client query, including nested lookups for
+///     name server addresses and DNSSEC validation: an overall deadline
+///     (<see cref="RecursiveServerOptions.OverallQueryTimeout" />) and a total number of upstream
+///     queries (<see cref="RecursiveServerOptions.MaxUpstreamQueries" />). They keep a hostile or
+///     broken delegation from making one query do unbounded work. The deadline starts when the
+///     budget is created.
 /// </summary>
 /// <param name="options">The configured bounds to enforce.</param>
 public sealed class QueryBudget(RecursiveServerOptions options)

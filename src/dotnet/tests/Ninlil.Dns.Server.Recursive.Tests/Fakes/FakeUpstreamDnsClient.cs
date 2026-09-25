@@ -6,9 +6,8 @@ using Ninlil.Dns.Server.Recursive.Transport;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real upstream name server: canned responses keyed by which
-///     address was queried and what was asked, so <see cref="Resolution.IterativeResolutionEngine" />
-///     can be exercised without any real network access.
+///     This class is a fake upstream name server: canned responses keyed by the queried address,
+///     name and type, so IterativeResolutionEngine runs without network access.
 /// </summary>
 public sealed class FakeUpstreamDnsClient : IUpstreamDnsClient
 {
@@ -20,10 +19,8 @@ public sealed class FakeUpstreamDnsClient : IUpstreamDnsClient
     public int QueryCount { get; private set; }
 
     /// <summary>
-    ///     Every query this client has actually been asked, in order -- the exact name/type/ECS
-    ///     shape a test needs to confirm RFC 9156 QNAME minimization genuinely sent a minimized
-    ///     probe name (rather than a full query) at an intermediate hop, or that a probe carried
-    ///     no client subnet option at all.
+    ///     This property contains every query received, in order, with its name, type and ECS
+    ///     option, so tests can check QNAME minimization and ECS handling.
     /// </summary>
     public List<(
         IPAddress Address,

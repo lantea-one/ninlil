@@ -4,13 +4,14 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class carries a single trust anchor -- a DS-form digest of a DNSKEY this resolver
-///     trusts with no parent to vouch for it, per RFC 4035 §4.3's definition of a "trusted key."
+///     This record carries one trust anchor: the DS-form digest of a DNSKEY the resolver trusts
+///     without a parent to vouch for it (a "trusted key" in RFC 4035). <see cref="DnssecValidator" />
+///     starts every chain of trust from these.
 /// </summary>
-/// <param name="KeyTag">The trusted key's own key tag.</param>
-/// <param name="Algorithm">The trusted key's own algorithm.</param>
+/// <param name="KeyTag">The trusted key's key tag.</param>
+/// <param name="Algorithm">The trusted key's algorithm.</param>
 /// <param name="DigestType">Which digest algorithm produced <see cref="Digest" />.</param>
-/// <param name="Digest">The trusted key's own digest.</param>
+/// <param name="Digest">The trusted key's digest.</param>
 public sealed record TrustAnchor(
     ushort KeyTag,
     DnssecAlgorithmEnum Algorithm,
@@ -19,21 +20,19 @@ public sealed record TrustAnchor(
 );
 
 /// <summary>
-///     This class holds the hardcoded root zone trust anchor(s) every chain-of-trust validation
-///     ultimately has to reach -- this is only the *initial* seed; <see cref="TrustAnchorRolloverService" />
-///     keeps the running set current afterward, per RFC 5011, when
-///     <see cref="RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate" /> is on. This seed
-///     was re-verified directly against IANA's own, live <c>root-anchors.xml</c> (rather than
-///     solely relying on a recalled value) before being hardcoded here, since a stale or wrong
-///     digest would leave this resolver unable to validate anything at all. Current as of
-///     2026-08-29: both the still-valid 2017 KSK and its already-published 2024 successor are
-///     listed, since IANA publishes a successor well ahead of the root zone actually switching to
-///     signing with it, and a resolver needs to accept either during that overlap.
+///     This class holds the built-in root zone trust anchors. They only seed
+///     <see cref="FileTrustAnchorStore" /> on first run; after that
+///     <see cref="TrustAnchorRolloverService" /> keeps the set current (RFC 5011) while
+///     <see cref="RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate" /> is on. The values
+///     come from IANA's <c>root-anchors.xml</c>: the 2017 KSK (key tag 20326) and its 2024
+///     successor (38696). Both are listed because IANA publishes a successor well before the
+///     root switches to it, and a resolver must accept either during the overlap. A wrong digest
+///     here would stop validation entirely, so check any change against IANA's file.
 /// </summary>
 public static class RootTrustAnchors
 {
     /// <summary>
-    ///     This property contains the root zone's own trust anchor(s).
+    ///     This property contains the built-in root zone trust anchors.
     /// </summary>
     public static IReadOnlyList<TrustAnchor> Anchors { get; } =
     [
@@ -58,7 +57,7 @@ public static class RootTrustAnchors
     /// <summary>
     ///     This method resolves the effective trust anchor list:
     ///     <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> when the operator configured
-    ///     one, or this class's own hardcoded <see cref="Anchors" /> otherwise.
+    ///     one, or the built-in <see cref="Anchors" /> otherwise.
     /// </summary>
     /// <param name="options">The options to read an override from, if any.</param>
     /// <returns>The effective trust anchor list.</returns>

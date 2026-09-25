@@ -2,48 +2,42 @@
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This enumeration lists the states a single trust anchor candidate can be in, implementing
-///     RFC 5011 §4.2's full five-state automated rollover model end to end.
-///     <see cref="TrustAnchorRolloverService" /> drives every transition below.
+///     This enumeration lists the states a trust anchor candidate can be in, after the RFC 5011
+///     rollover model. <see cref="TrustAnchorRolloverService" /> drives every transition, and
+///     only <see cref="Valid" /> anchors are used for validation.
 /// </summary>
 public enum TrustAnchorStateEnum
 {
     /// <summary>
-    ///     A new candidate key, observed in a validly-signed DNSKEY RRset but not yet trusted --
-    ///     it must be seen continuously, on every check, for the configured add hold-down
-    ///     duration before being promoted to <see cref="Valid" />.
+    ///     A new candidate key seen in a signed DNSKEY RRset but not yet trusted. It must be seen
+    ///     on every check for the add hold-down duration before it becomes <see cref="Valid" />;
+    ///     missing one check drops it.
     /// </summary>
     AddPend,
 
     /// <summary>
-    ///     A key this resolver actively trusts and uses as a chain-of-trust starting point.
+    ///     A key the resolver trusts and uses as a chain-of-trust starting point.
     /// </summary>
     Valid,
 
     /// <summary>
-    ///     A previously-<see cref="Valid" /> key that this resolver's most recent check did not
-    ///     observe in the target zone's own DNSKEY RRset at all (and which did not announce its
-    ///     own revocation) -- RFC 5011 §4.2's deliberately conservative middle ground between
-    ///     immediately distrusting a key on a single missed check and never noticing a real,
-    ///     permanent retirement at all. A key reappearing while <see cref="Missing" /> returns
-    ///     directly to <see cref="Valid" />; one that stays absent through the configured remove
-    ///     hold-down duration transitions to <see cref="Removed" />.
+    ///     A <see cref="Valid" /> key that the latest check did not find in the root DNSKEY RRset,
+    ///     without a revocation. It is not used for validation meanwhile. If it reappears it
+    ///     returns to <see cref="Valid" />; if it stays absent for the remove hold-down duration it
+    ///     becomes <see cref="Removed" />.
     /// </summary>
     Missing,
 
     /// <summary>
-    ///     A key that announced its own revocation (RFC 5011 §5.5) -- no longer trusted, kept in
-    ///     the persisted store only so it is never mistakenly re-added as a fresh candidate.
+    ///     A key that announced its revocation with the REVOKE bit (RFC 5011). It is no longer
+    ///     trusted, and is kept in the store so it is never re-added as a new candidate.
     /// </summary>
     Revoked,
 
     /// <summary>
-    ///     A key that stayed <see cref="Missing" /> for the full configured remove hold-down
-    ///     duration without ever reappearing -- RFC 5011 §4.2's terminal state for a key that has
-    ///     genuinely been retired rather than merely delayed by a transient issue. No longer
-    ///     trusted; a key that later reappears from this state is treated as a brand-new
-    ///     candidate, restarting the add hold-down clock from scratch, rather than silently
-    ///     resurrected.
+    ///     A key that stayed <see cref="Missing" /> for the whole remove hold-down duration. It is
+    ///     no longer trusted; if it reappears it starts again as a new <see cref="AddPend" />
+    ///     candidate.
     /// </summary>
     Removed,
 }

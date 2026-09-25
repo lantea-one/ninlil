@@ -7,22 +7,21 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
 ///     This interface validates an <see cref="IterativeResolutionResult" /> against the DNSSEC
-///     chain of trust, per RFC 4035 §5.
+///     chain of trust (RFC 4035 §5). <see cref="RecursiveQueryResolver" /> and the forwarding
+///     resolver call it; <see cref="DnssecValidator" /> implements it.
 /// </summary>
 public interface IDnssecValidator
 {
     /// <summary>
-    ///     This method validates a single resolution's outcome.
+    ///     This method validates one resolution's outcome.
     /// </summary>
-    /// <param name="queriedName">The name the client actually queried.</param>
-    /// <param name="queriedType">The record type the client actually queried.</param>
+    /// <param name="queriedName">The name the client queried.</param>
+    /// <param name="queriedType">The record type the client queried.</param>
     /// <param name="recordClass">The query's class.</param>
     /// <param name="result">The resolution outcome to validate.</param>
     /// <param name="budget">
-    ///     The same budget the original resolution was bounded by -- every additional lookup
-    ///     this validation needs (DS and DNSKEY at each zone cut) counts against it too, so a
-    ///     validating resolution cannot be made to issue unbounded extra upstream queries beyond
-    ///     what already bounds a plain resolution.
+    ///     The budget the resolution used. Validation's DS and DNSKEY lookups count against it
+    ///     too, so validation cannot issue unbounded extra queries.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The validation's outcome.</returns>

@@ -12,30 +12,25 @@ using Ninlil.Dns.Server.Recursive.Resolution;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class implements RFC 5011's automated trust anchor rollover: periodically checking
-///     the root zone's own DNSKEY RRset for a new candidate key or a self-revoked one, and
-///     updating <see cref="ITrustAnchorStore" /> accordingly -- so a deployment left running for
-///     years (the homelab/home router use case this was specifically added for) keeps
-///     validating correctly straight through a root KSK rollover with no operator intervention,
-///     rather than either breaking or silently falling back to unauthenticated answers once its
-///     originally-hardcoded anchor is eventually retired.
+///     This class implements RFC 5011 automated trust anchor rollover. Every
+///     <see cref="RecursiveServerOptions.TrustAnchorRefreshInterval" /> it fetches the root
+///     DNSKEY RRset, checks that it is signed by a tracked key, and moves each candidate through
+///     the states in <see cref="TrustAnchorStateEnum" />, saving the result in
+///     <see cref="ITrustAnchorStore" />. This lets a server left running for years follow a root
+///     KSK rollover without an operator. The first check happens one interval after startup,
+///     so the wait restarts with every restart.
 /// </summary>
-/// <param name="engine">The engine this service resolves the root's own DNSKEY RRset through.</param>
+/// <param name="engine">The engine this service resolves the root DNSKEY RRset through.</param>
 /// <param name="store">The trust anchor store this service reads from and updates.</param>
 /// <param name="options">
-///     This service's own configured refresh interval and hold-down duration, read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> -- see <see cref="ExecuteAsync" />'s own doc
-///     comment for why this background service's own enable check is re-evaluated every loop
-///     iteration rather than once at entry.
+///     The enable switch, refresh interval and hold-down durations, read live (see
+///     <see cref="ExecuteAsync" />).
 /// </param>
-/// <param name="logger">The logger this service records every state transition, and every failed check, to.</param>
+/// <param name="logger">The logger this service records state changes and failed checks to.</param>
 /// <param name="eventPublisher">
-///     The publisher this service raises <see cref="TrustAnchorRolloverEvent" /> through
-///     whenever an anchor's own RFC 5011 state actually changes (promoted to <c>Valid</c>, or
-///     revoked) -- optional, defaulting to <see langword="null" />, the same pattern
-///     <c>SignedZoneCache</c>'s/<c>AcmeCertificateRenewalService</c>'s/
-///     <c>CloudDnsZoneSyncService</c>'s own new <c>eventPublisher</c> parameters follow, so every
-///     pre-existing caller/test keeps compiling and behaving unchanged.
+///     The publisher for <see cref="TrustAnchorRolloverEvent" />, raised when an anchor becomes
+///     Valid, Missing, Revoked or Removed. <see langword="null" /> (the default) publishes
+///     nothing.
 /// </param>
 public sealed class TrustAnchorRolloverService(
     IIterativeResolutionEngine engine,
@@ -46,14 +41,11 @@ public sealed class TrustAnchorRolloverService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This method runs this service's own real check loop for as long as this host is
-    ///     running. Unlike a <see langword="return" />-once-and-exit gate checked only before
-    ///     entering the loop, <see cref="RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate" />
-    ///     is re-read fresh (via <c>options.CurrentValue</c>) on every iteration, so a live
-    ///     <c>RecursiveSettingsController.Patch</c> write toggling it takes effect on this same
-    ///     running instance -- including turning it back on after this service was started with
-    ///     it off, which an early <see langword="return" /> could never recover from since
-    ///     <see cref="BackgroundService.ExecuteAsync" /> only ever runs once per process.
+    ///     This method runs the check loop for the life of the host: wait one refresh interval,
+    ///     then check if <see cref="RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate" /> is
+    ///     on. The flag is read on every iteration rather than once before the loop, because
+    ///     <see cref="BackgroundService.ExecuteAsync" /> runs only once per process, so turning it
+    ///     on through <c>RecursiveSettingsController.Patch</c> must not need a restart.
     /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -72,19 +64,18 @@ public sealed class TrustAnchorRolloverService(
             }
             catch (Exception exception)
             {
-                // A single failed check (the root unreachable, a transient network issue) must
-                // never take this whole background service down -- there is always another
-                // check, at worst RefreshInterval later.
+                // A failed check (root unreachable, a network error) must not stop the service;
+                // the next check is one interval later.
                 logger.LogWarning(exception, "A trust anchor rollover check failed unexpectedly.");
             }
         }
     }
 
     /// <summary>
-    ///     This method runs one complete RFC 5011 check: fetching the root's own DNSKEY RRset,
-    ///     confirming it is validly signed by a key this resolver already trusts, and only then
-    ///     running the actual RFC 5011 §4.2 state machine (add/valid/missing/revoke/removed)
-    ///     against it.
+    ///     This method runs one check: fetch the root DNSKEY RRset from the root down, confirm its
+    ///     signature against a DNSKEY that matches a tracked anchor, then apply the state
+    ///     transitions (add, promote, revoke, missing, removed) and save. The signing key may match
+    ///     an anchor in any tracked state, not only <see cref="TrustAnchorStateEnum.Valid" />.
     /// </summary>
     private async Task RunOneCheckAsync(CancellationToken stoppingToken)
     {
@@ -111,11 +102,9 @@ public sealed class TrustAnchorRolloverService(
 
         List<PersistedTrustAnchor> currentAnchors = [.. store.GetAll()];
 
-        // RFC 5011 §5.1: an update is only ever trusted if the RRset it arrived in is itself
-        // validly signed by a key that is *already* Valid -- found here by normalizing away
-        // each candidate's own Revoke bit before matching, since a self-revoking key's key tag
-        // and digest both change the moment that bit is set (RFC 5011 §5.5), and would
-        // otherwise never match the anchor it was originally trusted as.
+        // RFC 5011: an update is only accepted from an RRset signed by a trusted key. Keys are
+        // matched with the REVOKE bit cleared, because setting it changes the key tag and
+        // digest, and a revoked key must still match the anchor it was trusted as.
         List<(
             DnsResourceRecord Record,
             DnsKeyRecordData Data,
@@ -201,15 +190,12 @@ public sealed class TrustAnchorRolloverService(
             if (data.IsRevoked || !data.IsSecureEntryPoint)
                 continue;
 
-            // A previously-Removed candidate reappearing is treated exactly like a brand-new one
-            // (RFC 5011 does not forbid re-trusting a genuinely-retired-then-returned key through
-            // the ordinary hold-down process again) -- every other already-tracked state
-            // (AddPend/Valid/Missing/Revoked) is handled by its own dedicated loop below instead.
+            // A Removed key that reappears is treated as a new candidate and must pass the
+            // hold-down again. Other tracked states are handled by the loops below.
             if (matchedAnchor is not null && matchedAnchor.State != TrustAnchorStateEnum.Removed)
                 continue;
 
-            // A brand-new (or previously-Removed, now-returned) candidate -- start its hold-down
-            // clock from scratch.
+            // A new (or returning Removed) candidate: start its hold-down clock.
             (ushort keyTag, byte digestType, byte[] digest) = ComputeIdentity(record, data);
             updated[(keyTag, data.Algorithm, digestType)] = new PersistedTrustAnchor(
                 keyTag,
@@ -227,9 +213,8 @@ public sealed class TrustAnchorRolloverService(
             );
         }
 
-        // Any AddPend candidate this check did *not* see at all must restart its hold-down
-        // clock from scratch the next time it reappears, per RFC 5011 §2.3's requirement that
-        // the hold-down period be continuous, uninterrupted observation.
+        // An AddPend candidate missing from this check is dropped, so its hold-down restarts if it
+        // returns: RFC 5011 requires the key to be seen throughout the hold-down period.
         foreach (PersistedTrustAnchor anchor in currentAnchors)
         {
             if (anchor.State != TrustAnchorStateEnum.AddPend)
@@ -253,9 +238,8 @@ public sealed class TrustAnchorRolloverService(
 
             if (matchingEntry.Record is null || matchingEntry.Data.IsRevoked)
             {
-                // Not seen at all this check, or seen only because it revoked itself before ever
-                // completing its hold-down -- either way, this candidate never becomes Valid;
-                // drop it from tracking rather than let a stale timer eventually promote it.
+                // Not seen, or seen revoked before finishing its hold-down: drop it, so a stale
+                // timer can never promote it.
                 updated.Remove(key);
                 continue;
             }
@@ -282,12 +266,10 @@ public sealed class TrustAnchorRolloverService(
             }
         }
 
-        // RFC 5011 §4.2: a currently Valid anchor that this check's own DNSKEY RRset did not
-        // include at all -- and which the revocation branch above did not already handle --
-        // transitions to Missing rather than either staying Valid forever or being dropped
-        // immediately. A genuine permanent retirement and a transient outage/partial-response
-        // glitch look identical on any single check; the remove hold-down clock started here,
-        // and resolved by the loop just below, is what actually tells them apart over time.
+        // A Valid anchor absent from this RRset (and not revoked above) becomes Missing. One check
+        // cannot tell a retirement from a glitch, so the remove hold-down started here decides
+        // (see the next loop). A Missing anchor is no longer used for validation. Presence is
+        // matched by key tag only.
         foreach (
             PersistedTrustAnchor anchor in currentAnchors.Where(a =>
                 a.State == TrustAnchorStateEnum.Valid
@@ -334,9 +316,8 @@ public sealed class TrustAnchorRolloverService(
             );
         }
 
-        // The other half of RFC 5011 §4.2's Missing state: an anchor already Missing either
-        // reappears (returned directly to Valid, its clock cleared) or, having stayed Missing
-        // through the full remove hold-down duration with no reappearance, is retired to Removed.
+        // A Missing anchor either reappears (back to Valid) or, after the remove hold-down, is
+        // Removed.
         foreach (
             PersistedTrustAnchor anchor in currentAnchors.Where(a =>
                 a.State == TrustAnchorStateEnum.Missing
@@ -349,8 +330,7 @@ public sealed class TrustAnchorRolloverService(
                 anchor.DigestType
             );
 
-            // Already handled this same check by the per-record revocation branch above (a
-            // Missing anchor can announce its own revocation just as a Valid one can).
+            // Already revoked above (a Missing anchor can announce revocation too).
             if (
                 updated.TryGetValue(key, out PersistedTrustAnchor alreadyUpdated)
                 && alreadyUpdated.State == TrustAnchorStateEnum.Revoked
@@ -411,19 +391,17 @@ public sealed class TrustAnchorRolloverService(
     }
 
     /// <summary>
-    ///     This method decodes a DNSKEY record, returning <see langword="null" /> for anything
-    ///     that fails to decode rather than throwing -- a single malformed record in an
-    ///     otherwise-valid response should not take this entire check down.
+    ///     This method decodes a DNSKEY record. Malformed RDATA makes the codec throw, which fails
+    ///     the whole check (the loop logs it and tries again next interval).
     /// </summary>
     private static DnsKeyRecordData DecodeDnsKey(DnsResourceRecord record) =>
         DnsRecordDataCodecRegistry.Decode(DnsResourceRecordTypeEnum.DnsKey, record.Data)
         as DnsKeyRecordData;
 
     /// <summary>
-    ///     This method computes a DNSKEY's key tag and DS-form digest, always with its own
-    ///     Revoke bit cleared first -- the identity a persisted trust anchor is tracked and
-    ///     matched by, since revoking a key changes both its key tag and its digest (RFC 5011
-    ///     §5.5), but must still resolve back to the *same* tracked candidate it always was.
+    ///     This method computes a DNSKEY's key tag and SHA-256 DS digest with the REVOKE bit
+    ///     cleared. That is the identity a tracked anchor is matched by, since revoking a key
+    ///     changes its key tag and digest but it must still match the same anchor.
     /// </summary>
     private static (ushort KeyTag, byte DigestType, byte[] Digest) ComputeIdentity(
         DnsResourceRecord record,
@@ -449,8 +427,8 @@ public sealed class TrustAnchorRolloverService(
     }
 
     /// <summary>
-    ///     This method finds whichever already-tracked anchor a DNSKEY record's normalized
-    ///     identity matches, if any.
+    ///     This method finds the tracked anchor, in any state, that a DNSKEY's normalized identity
+    ///     matches, if any.
     /// </summary>
     private static PersistedTrustAnchor FindMatchingAnchor(
         DnsResourceRecord record,

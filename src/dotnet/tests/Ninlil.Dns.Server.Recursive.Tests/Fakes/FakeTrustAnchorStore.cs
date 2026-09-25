@@ -3,9 +3,8 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class hands back a fixed, caller-supplied set of trust anchors -- standing in for
-///     <see cref="FileTrustAnchorStore" /> so a test can control exactly which root key
-///     <see cref="DnssecValidator" /> is meant to trust, without touching disk.
+///     This class is an in-memory trust anchor store with a fixed set of anchors, so a test
+///     controls which root key DnssecValidator trusts without touching disk.
 /// </summary>
 public sealed class FakeTrustAnchorStore(IReadOnlyList<TrustAnchor> anchors) : ITrustAnchorStore
 {

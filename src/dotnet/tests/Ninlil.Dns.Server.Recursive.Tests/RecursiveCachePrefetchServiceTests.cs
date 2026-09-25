@@ -9,18 +9,16 @@ using Ninlil.Dns.Server.Recursive.Tests.Fakes;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class tests <see cref="RecursiveCachePrefetchService" />, exercised as a real,
-///     started <see cref="Microsoft.Extensions.Hosting.BackgroundService" /> across its own
-///     5-second sweep interval -- there is no protected/internal seam to invoke a single sweep
-///     directly, so these tests genuinely wait for one real sweep rather than reflecting into
-///     <c>ExecuteAsync</c>.
+///     This class tests <see cref="RecursiveCachePrefetchService" /> as a started background
+///     service, waiting out its five-second sweep interval, since there is no way to run a single
+///     sweep directly. A stub cache supplies the candidates and a recording engine records the
+///     prefetches.
 /// </summary>
 public class RecursiveCachePrefetchServiceTests
 {
     /// <summary>
-    ///     This class stands in for a real <see cref="IRecursiveCache" />, reporting a fixed,
-    ///     test-supplied prefetch-candidate set and counting how many times
-    ///     <see cref="GetPrefetchCandidates" /> was actually called.
+    ///     This class is a stub <see cref="IRecursiveCache" /> that returns a fixed candidate set
+    ///     and counts calls to <see cref="GetPrefetchCandidates" />.
     /// </summary>
     private sealed class StubRecursiveCache(
         IReadOnlyList<(DnsName Name, DnsResourceRecordTypeEnum Type, DnsClassEnum Class)> candidates
@@ -72,10 +70,9 @@ public class RecursiveCachePrefetchServiceTests
     }
 
     /// <summary>
-    ///     This class stands in for a real <see cref="IIterativeResolutionEngine" />, recording
-    ///     every name <see cref="PrefetchAsync" /> was actually called for, and throwing instead
-    ///     of resolving for any name in <paramref name="namesThatThrow" /> -- proof one
-    ///     candidate's own failure does not stop the rest of the same sweep.
+    ///     This class is a fake <see cref="IIterativeResolutionEngine" /> that records every name
+    ///     <see cref="PrefetchAsync" /> is called for and throws for any name in
+    ///     <paramref name="namesThatThrow" />, to show one failure does not stop the sweep.
     /// </summary>
     private sealed class RecordingIterativeResolutionEngine(IReadOnlySet<DnsName> namesThatThrow)
         : IIterativeResolutionEngine
@@ -125,8 +122,7 @@ public class RecursiveCachePrefetchServiceTests
         using CancellationTokenSource cts = new();
         await service.StartAsync(cts.Token);
 
-        // The service's own sweep interval is a fixed 5 seconds; wait comfortably past that for
-        // one real sweep to complete before inspecting what it did.
+        // The sweep interval is five seconds; wait past it for one sweep to finish.
         await Task.Delay(TimeSpan.FromSeconds(6));
 
         cts.Cancel();

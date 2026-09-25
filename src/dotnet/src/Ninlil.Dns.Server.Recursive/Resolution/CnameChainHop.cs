@@ -4,23 +4,21 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This record carries one CNAME hop's own owner zone and accompanying DNSSEC material, as
-///     captured live by <see cref="IterativeResolutionEngine" /> while it follows a CNAME chain.
-///     <see cref="Validation.DnssecValidator" /> walks a result's own list of these to authenticate
-///     each hop independently against whichever zone actually owns and signed it, per RFC 4035
-///     §5.3 -- a signed parent can delegate, via CNAME, into a differently-signed (or entirely
-///     unsigned) descendant zone, so each hop's own RRset can only ever be trusted against the
-///     DNSKEY of the zone that actually produced it, never against the terminal answer's own zone.
+///     This record carries one CNAME hop, with its signatures and the zone that served it, as
+///     <see cref="IterativeResolutionEngine" /> records it while following a chain.
+///     <see cref="Validation.DnssecValidator" /> checks each hop against the zone that signed it
+///     (RFC 4035 §5.3): a chain can cross into differently signed or unsigned zones, so a hop
+///     can only be verified with its own zone's DNSKEY, not the final answer's.
 /// </summary>
 /// <param name="CnameRecord">The single CNAME record this hop followed.</param>
 /// <param name="DnssecRecords">
-///     Whatever RRSIG accompanied this hop's own CNAME RRset -- empty when DNSSEC data was not
-///     requested/received for this hop, or when the zone that produced it is genuinely unsigned.
+///     The RRSIGs that came with this hop's CNAME RRset; empty when DNSSEC data was not requested
+///     or the zone is unsigned.
 /// </param>
 /// <param name="OwningZone">
-///     The zone cut that actually served this hop's own CNAME RRset -- the zone
-///     <see cref="Validation.DnssecValidator" /> must build a fresh chain of trust to before this
-///     hop's own signature can be checked against it.
+///     The zone that served this hop's CNAME RRset, to which
+///     <see cref="Validation.DnssecValidator" /> builds a chain of trust before checking the
+///     hop's signature.
 /// </param>
 public sealed record CnameChainHop(
     DnsResourceRecord CnameRecord,

@@ -6,14 +6,14 @@ using Ninlil.Common.Serializer;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class implements <see cref="ITrustAnchorStore" /> as a single JSON file on disk,
-///     following the same "small local file for state that genuinely cannot live in the
-///     database" convention already used elsewhere (the SQLite bootstrap store's own file,
-///     under an app-relative <c>data</c> directory) -- a full database dependency would be
-///     disproportionate for tracking a handful of trust anchor candidates, and this resolver has
-///     no other reason to depend on <c>Ninlil.Dns.Data.Abstractions</c> at all.
+///     This class implements <see cref="ITrustAnchorStore" /> as one JSON file at
+///     <see cref="RecursiveServerOptions.TrustAnchorStateFilePath" />, kept in memory behind a
+///     lock. A file keeps this project free of a database dependency for a handful of keys. The
+///     file is loaded once, when the store is created; if it is missing or empty, the store is
+///     seeded from <see cref="RootTrustAnchors.Resolve" /> and written. Once the file exists,
+///     <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> has no effect.
 /// </summary>
-/// <param name="options">This store's own configured file path and initial seed.</param>
+/// <param name="options">The state file path and the initial seed.</param>
 /// <param name="logger">The logger this store records a corrupt or unreadable state file to.</param>
 public sealed class FileTrustAnchorStore(
     IOptions<RecursiveServerOptions> options,
@@ -58,9 +58,10 @@ public sealed class FileTrustAnchorStore(
     }
 
     /// <summary>
-    ///     This method loads this store's state file, or seeds a brand-new one from this
-    ///     resolver's own configured (or hardcoded) initial trust anchors if the file does not
-    ///     exist yet, or cannot be read at all.
+    ///     This method loads the state file, or seeds a new one from the configured (or built-in)
+    ///     trust anchors if the file does not exist, is empty, or throws an
+    ///     <see cref="IOException" /> or <see cref="FormatException" /> while loading. Other
+    ///     exceptions, such as a JSON parse error, propagate.
     /// </summary>
     private static List<PersistedTrustAnchor> LoadOrSeed(
         RecursiveServerOptions options,
@@ -112,8 +113,7 @@ public sealed class FileTrustAnchorStore(
     }
 
     /// <summary>
-    ///     This method writes this store's state to disk, creating its containing directory if
-    ///     it does not exist yet.
+    ///     This method writes the state file, creating its directory if needed.
     /// </summary>
     private static void WriteFile(
         string path,
@@ -132,9 +132,8 @@ public sealed class FileTrustAnchorStore(
         }
         catch (IOException exception)
         {
-            // A failed write leaves the in-memory state (already updated by the caller) as the
-            // only copy until the next successful write -- correct behavior keeps working for
-            // the rest of this process's lifetime either way, so this is a warning, not fatal.
+            // The in-memory state stays correct for this process, so a failed write is only a
+            // warning; the change is lost at restart unless a later write succeeds.
             logger.LogWarning(
                 exception,
                 "Failed to persist the trust anchor state file at '{Path}'.",

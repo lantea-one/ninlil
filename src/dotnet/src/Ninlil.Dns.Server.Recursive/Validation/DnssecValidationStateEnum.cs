@@ -8,29 +8,28 @@ namespace Ninlil.Dns.Server.Recursive.Validation;
 public enum DnssecValidationStateEnum
 {
     /// <summary>
-    ///     The response's chain of trust, all the way from a configured trust anchor down to the
-    ///     answer (or its authenticated denial), verified successfully.
+    ///     The chain of trust from a trust anchor down to the answer (or its authenticated
+    ///     denial) verified.
     /// </summary>
     Secure,
 
     /// <summary>
-    ///     A validly signed, authenticated proof established that no chain of trust exists for
-    ///     this name at all -- an unsigned delegation, proven absent rather than merely missing.
+    ///     A signed proof shows there is no chain of trust for this name: an unsigned delegation,
+    ///     proven rather than merely missing.
     /// </summary>
     Insecure,
 
     /// <summary>
-    ///     Enough DNSSEC data existed to attempt validation, but something failed to verify -- a
-    ///     signature, a DS/DNSKEY match, or a denial-of-existence proof. This is the state that
-    ///     actually indicates tampering or misconfiguration, and the one response a validating
-    ///     resolver must never hand a client without being asked to (<c>CD</c>) not to check.
+    ///     Validation was attempted but something failed to verify: a signature, a DS/DNSKEY match
+    ///     or a denial proof. This indicates tampering or misconfiguration, and the resolver answers
+    ///     SERVFAIL unless the client set <c>CD</c>.
     /// </summary>
     Bogus,
 
     /// <summary>
-    ///     Validation could not be completed at all -- a resolution failure while building the
-    ///     chain of trust, an exhausted query budget, or a root DNSKEY RRset that matches none of
-    ///     this resolver's own configured trust anchors.
+    ///     Validation could not be completed: a resolution failure while building the chain of
+    ///     trust, an exhausted query budget, or a root DNSKEY RRset that matches none of the trust
+    ///     anchors.
     /// </summary>
     Indeterminate,
 }

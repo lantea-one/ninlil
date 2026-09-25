@@ -11,18 +11,17 @@ using Ninlil.Dns.Server.Recursive.Transport;
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This class seeds <see cref="IRecursiveCache" /> with the root zone's own name servers at
-///     startup, so <see cref="IterativeResolutionEngine" /> never has to special-case "nothing
-///     is cached yet" -- it always has at least the root to start walking from. The hardcoded
-///     <see cref="RootHints" /> list is stored first, synchronously, so this resolver can
-///     bootstrap even with no network access at all; an RFC 8109 priming query (an ordinary
-///     <c>NS .</c> query, sent to one of those same root servers) is then attempted to refresh
-///     it with whatever the root's own, currently-live answer actually is, which is preferred
-///     over the hardcoded list once it succeeds.
+///     This class seeds <see cref="IRecursiveCache" /> with the root name servers at startup, so
+///     <see cref="IterativeResolutionEngine" /> always has the root to start from. It first
+///     stores the <see cref="RootHints" /> list (or its override) with a six-day TTL, which needs
+///     no network. It then sends an RFC 8109 priming query (<c>NS .</c>) to the first address of
+///     the first root server and, if that answers, replaces the list with the root's answer and
+///     glue. A failed priming query is logged and the list stays. This runs once, in
+///     <see cref="StartAsync" />, reading the options snapshot.
 /// </summary>
 /// <param name="cache">The cache this service seeds.</param>
-/// <param name="upstreamClient">The client used to send the priming query itself.</param>
-/// <param name="options">Whether DNSSEC validation (and so, whether to request signed root data) is enabled.</param>
+/// <param name="upstreamClient">The client used to send the priming query.</param>
+/// <param name="options">The root hints override and whether to set DO on the priming query.</param>
 /// <param name="logger">The logger this service records a failed priming query to.</param>
 public sealed class RootHintsPrimingService(
     IRecursiveCache cache,
@@ -42,8 +41,8 @@ public sealed class RootHintsPrimingService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // The hardcoded seed above already leaves this resolver able to bootstrap; a failed
-            // priming query (no network access yet at startup, most commonly) is not fatal.
+            // The seeded list is enough to bootstrap, so a failed priming query (commonly no
+            // network yet at startup) is not fatal.
             logger.LogWarning(
                 exception,
                 "Failed to prime the root hints from a live root server; continuing with the hardcoded list."
@@ -55,8 +54,7 @@ public sealed class RootHintsPrimingService(
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
-    ///     This method stores the hardcoded <see cref="RootHints" /> list directly, with no
-    ///     network access needed at all.
+    ///     This method stores the root hints list (NS, A and AAAA records) in the cache.
     /// </summary>
     private void SeedHardcodedRootHints()
     {
@@ -143,8 +141,9 @@ public sealed class RootHintsPrimingService(
     }
 
     /// <summary>
-    ///     This method sends a real RFC 8109 priming query and, if it succeeds, replaces the
-    ///     hardcoded seed above with the root's own, currently-live answer.
+    ///     This method sends the RFC 8109 priming query and, if it returns NS records, stores them
+    ///     and every A/AAAA record in the additional section, replacing the seed. The response is
+    ///     not DNSSEC-validated.
     /// </summary>
     private async Task PrimeFromALiveRootServerAsync(CancellationToken cancellationToken)
     {

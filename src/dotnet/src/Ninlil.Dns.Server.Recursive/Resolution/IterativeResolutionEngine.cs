@@ -10,18 +10,26 @@ using Ninlil.Dns.Server.Recursive.Transport;
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This class implements <see cref="IIterativeResolutionEngine" />: the classic RFC 1035 §7
-///     algorithm -- start from the closest zone cut this resolver already has cached name
-///     servers for (falling back to the root), query one, and either accept its answer, follow
-///     its referral one zone cut deeper, or give up and try a different name server.
+///     This class implements <see cref="IIterativeResolutionEngine" /> with the RFC 1035 §7
+///     algorithm: start from the closest zone cut with cached name servers (or the root), query
+///     a server, and either accept its answer, follow its referral one cut deeper, or chase a
+///     CNAME. Answers, negative answers, referrals and in-bailiwick glue are cached in
+///     <see cref="IRecursiveCache" />.
+///     <para>
+///         Name server addresses are tried in order until one returns any response; that
+///         response is used whatever its code, so a SERVFAIL ends the resolution (with
+///         serve-stale as the fallback), and other error codes are treated like an empty
+///         answer. When <see cref="RecursiveServerOptions.EnableQnameMinimization" /> is on,
+///         intermediate servers get RFC 9156 minimized NS queries, with the fallbacks noted
+///         below. Every query counts against the <see cref="QueryBudget" />.
+///     </para>
 /// </summary>
 /// <param name="cache">The cache this engine reads name servers and answers from, and writes them back to.</param>
-/// <param name="upstreamClient">The client used to actually send a query to a chosen name server.</param>
+/// <param name="upstreamClient">The client used to send a query to a chosen name server.</param>
 /// <param name="options">
-///     This engine's own bounds (referral depth, CNAME chain length, query budget), read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> -- see <see cref="Resolution.RecursiveQueryResolver" />'s
-///     own doc comment for why this engine, registered as a singleton, cannot use the usual
-///     snapshotted <see cref="IOptions{TOptions}" /> instead.
+///     The bounds (referral depth, CNAME chain length, query budget), QNAME minimization,
+///     serve-stale and root hints override, read live through <see cref="IOptionsMonitor{TOptions}" />
+///     so settings changes apply without a restart.
 /// </param>
 public sealed class IterativeResolutionEngine(
     IRecursiveCache cache,
@@ -94,11 +102,8 @@ public sealed class IterativeResolutionEngine(
     {
         QueryBudget budget = new(options.CurrentValue);
 
-        // bypassCache: true is what makes this genuinely different from an ordinary
-        // ResolveAsync call -- a prefetch candidate is, by construction (see
-        // RecursiveCache.GetPrefetchCandidates), still fresh enough that the ordinary
-        // cachedExact short-circuit below would just hand back the same not-yet-expired entry
-        // unchanged, defeating the entire point of refreshing it before it actually expires.
+        // bypassCache skips the fresh-cache shortcut for the queried name, since a prefetch
+        // candidate is still fresh and would otherwise be returned unchanged.
         return ResolveInternalAsync(
             name,
             type,
@@ -116,7 +121,8 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method does the actual work, recursing into itself once per CNAME hop followed.
+    ///     This method does the resolution, calling itself once per CNAME hop and for name server
+    ///     addresses it has to look up.
     /// </summary>
     private async Task<IterativeResolutionResult> ResolveInternalAsync(
         DnsName name,
@@ -133,14 +139,9 @@ public sealed class IterativeResolutionEngine(
         CancellationToken stoppingToken
     )
     {
-        // A cached exact answer (positive or negative) short-circuits everything below. Its own
-        // zone-cut provenance was never recorded alongside it, but the same cache walk
-        // FindBestNameServers already does to pick a starting point recovers exactly the same
-        // answer -- needed so a cache hit's own IterativeResolutionResult remains just as usable
-        // for DNSSEC chain-of-trust validation as a freshly-walked one, rather than silently
-        // losing which zone the cached data actually belongs to. Skipped entirely when
-        // bypassCache is set -- see PrefetchAsync's own doc comment for why active cache
-        // prefetching is the one caller that must never take this shortcut.
+        // A cached answer (positive or negative) is returned directly. The cache does not record
+        // which zone it came from, so BuildResultFromCacheEntry recovers the zone cut from the
+        // cached NS sets, which DNSSEC validation needs. Prefetch skips this (see PrefetchAsync).
         RecursiveCacheEntry cachedExact = bypassCache
             ? null
             : cache.TryGet(name, type, recordClass);
@@ -154,8 +155,8 @@ public sealed class IterativeResolutionEngine(
                 precedingHops
             );
 
-        // A cached CNAME at this name, even though we were not asked for one, means this name's
-        // only real data *is* the alias -- chase it before ever going out to the network.
+        // A cached CNAME at this name means the alias is its only data, so chase it without
+        // going to the network.
         if (type != DnsResourceRecordTypeEnum.Cname)
         {
             RecursiveCacheEntry cachedCname = cache.TryGet(
@@ -166,10 +167,8 @@ public sealed class IterativeResolutionEngine(
 
             if (cachedCname is { IsNegative: false })
             {
-                // A cache hit carries no zone-cut provenance of its own (see BuildResultFromCacheEntry's
-                // own doc comment for why) -- the same cache walk FindBestNameServers already does
-                // recovers exactly which zone this cached CNAME RRset actually belongs to, needed so
-                // DnssecValidator can build a fresh chain of trust to that specific zone for this hop.
+                // Recover the CNAME's zone from the cached NS sets, so DnssecValidator can build a
+                // chain of trust to it for this hop.
                 DnsName owningZone = FindBestNameServers(
                     name,
                     DnsResourceRecordTypeEnum.Cname,
@@ -200,16 +199,12 @@ public sealed class IterativeResolutionEngine(
         );
         List<DnsName> zoneCutsTraversed = [zoneCut];
 
-        // RFC 9156 QNAME minimization state: `minimizationDisabled` starts from this engine's own
-        // configured toggle, but can also flip permanently mid-resolution the moment a server
-        // shows any sign of mishandling a minimized query (see the fallback triggers below) --
-        // once disabled, every remaining hop of this one resolution sends the ordinary, full
-        // name/type, exactly as if minimization had never been attempted at all.
-        // `currentProbeName` tracks progress independently of `zoneCut`: a genuine referral resets
-        // it to a fresh one-label-past-the-new-cut probe, while a NOERROR/no-referral response at
-        // the current probe name (no deeper delegation exists there, but the real target might
-        // still have one further down) extends it by one more label and asks the very same server
-        // again, without ever touching `zoneCut` itself.
+        // RFC 9156 QNAME minimization. `minimizationDisabled` starts from the setting and turns
+        // on for the rest of this resolution when a server mishandles a minimized query (see
+        // the fallbacks below); after that every hop sends the full name and type.
+        // `currentProbeName` moves separately from `zoneCut`: a referral resets it to one label
+        // past the new cut, and a NOERROR without a referral extends it by one label and asks
+        // the same servers again.
         bool minimizationDisabled = !options.CurrentValue.EnableQnameMinimization;
         DnsName currentProbeName = minimizationDisabled ? name : ExtendTowardTarget(zoneCut, name);
 
@@ -227,12 +222,8 @@ public sealed class IterativeResolutionEngine(
             DnsResourceRecordTypeEnum queryType = isMinimizedProbe
                 ? DnsResourceRecordTypeEnum.NS
                 : type;
-            // A minimized probe deliberately never carries the client's own EDNS Client Subnet
-            // option -- it is internal plumbing toward answering the real question, not the
-            // question itself, the same "internal lookups don't leak ECS" precedent
-            // ResolveNameServerAddressesAsync's own doc comment already establishes, and
-            // forwarding it here would defeat minimization's whole point of limiting what an
-            // intermediate server ever learns about the client-driven query.
+            // A minimized probe carries no ECS option: it is not the client's question, and
+            // sending the client's subnet would defeat the point of minimizing.
             DnsEdnsOption probeClientSubnetOption = isMinimizedProbe ? null : clientSubnetOption;
 
             DnsMessage response = null;
@@ -263,9 +254,8 @@ public sealed class IterativeResolutionEngine(
                     break;
             }
 
-            // No reachable name server answered at all -- true regardless of whether this hop was
-            // a minimized probe or the real query, and retrying with a different query shape
-            // against servers that never responded at all would not help either way.
+            // No name server answered. Changing the query shape would not help servers that never
+            // responded.
             if (response is null)
                 return TryServeStale(
                         name,
@@ -280,20 +270,15 @@ public sealed class IterativeResolutionEngine(
             {
                 if (isMinimizedProbe)
                 {
-                    // A server that cannot even answer a minimized probe (rather than a clean
-                    // FORMERR/NOTIMP/REFUSED) is treated exactly like those signals below -- RFC
-                    // 9156 §4.3's same documented fallback: give up on minimization for the rest
-                    // of this resolution and retry the very same hop with the ordinary, full
-                    // query, rather than failing the whole lookup over what may be nothing more
-                    // than this one server's own minimization support gap.
+                    // SERVFAIL to a minimized probe is treated like FORMERR/NOTIMP/REFUSED below:
+                    // stop minimizing and retry this hop with the full query (RFC 9156 §4.3).
                     minimizationDisabled = true;
                     continue;
                 }
 
-                // RFC 8767 "serve stale": every reachable name server answered SERVFAIL to the
-                // real query -- if a (possibly expired, but still within this resolver's own
-                // configured grace window) cached answer exists, it is served instead of failing
-                // this query outright.
+                // RFC 8767 serve-stale: the first server to respond answered SERVFAIL to the full
+                // query (the others are not tried), so serve a stale cached answer if there is
+                // one.
                 return TryServeStale(
                         name,
                         type,
@@ -306,10 +291,9 @@ public sealed class IterativeResolutionEngine(
 
             if (isMinimizedProbe)
             {
-                // A genuine referral is handled identically whether this hop was minimized or
-                // not: `TryExtractReferral` only cares that the referral point is a real suffix
-                // of the eventual target `name` and strictly deeper than `zoneCut`, both of which
-                // hold regardless of what exact name this probe asked about.
+                // A referral is handled the same way whether or not the hop was minimized:
+                // TryExtractReferral only checks that the referral point encloses `name` and is
+                // deeper than `zoneCut`.
                 (DnsName probeReferralZoneCut, List<DnsName> probeReferralNameServers) =
                     TryExtractReferral(response, name, zoneCut);
 
@@ -341,35 +325,28 @@ public sealed class IterativeResolutionEngine(
                         or DnsResponseCodeEnum.Refused
                 )
                 {
-                    // A clean signal that this server does not understand -- or refuses -- a
-                    // minimized query at all. RFC 9156 §4.3's documented fallback: abandon
-                    // minimization for the remainder of this one resolution and retry this exact
-                    // hop with the ordinary, full name/type instead.
+                    // The server does not handle minimized queries. RFC 9156 §4.3: stop minimizing
+                    // for this resolution and retry this hop with the full name and type.
                     minimizationDisabled = true;
                     continue;
                 }
 
                 if (response.ResponseCode == DnsResponseCodeEnum.NxDomain)
                 {
-                    // An NXDOMAIN for an intermediate, minimized ancestor name is real evidence
-                    // the full target name cannot exist either -- except real-world wildcard and
-                    // CDN configurations make that inference genuinely unreliable in practice.
-                    // Rather than risk a false negative on a real answer, fall back to an
-                    // ordinary, full, non-minimized query and let its own real response (a real
-                    // NXDOMAIN, this time actually naming the queried name itself) settle it.
+                    // NXDOMAIN for an ancestor should mean the target cannot exist, but some servers
+                    // get this wrong, so stop minimizing and let the full query decide.
                     minimizationDisabled = true;
                     continue;
                 }
 
-                // NOERROR with no referral at this exact probe name: no deeper delegation exists
-                // here, but the real target name may still have one further down -- extend the
-                // probe by one more label and ask this very same server again, without ever
-                // moving `zoneCut`.
+                // NOERROR without a referral: no cut at this probe name, but there may be one
+                // further down, so extend the probe by one label and ask again.
                 currentProbeName = ExtendTowardTarget(currentProbeName, name);
                 continue;
             }
 
-            // A real answer: either exactly the requested type, or a CNAME to chase.
+            // An answer: records of the requested type at `name`, or a CNAME to chase. Only
+            // records owned by `name` are taken; the AA bit is not checked.
             List<DnsResourceRecord> exactAnswers =
             [
                 .. response.Answers.Where(record => record.Name == name && record.Type == type),
@@ -404,11 +381,8 @@ public sealed class IterativeResolutionEngine(
 
             if (type != DnsResourceRecordTypeEnum.Cname && cnameAnswers.Count > 0)
             {
-                // This hop's own RRSIG (if DNSSEC data was requested/received) is captured and
-                // cached alongside the CNAME RRset itself -- previously discarded here entirely,
-                // which is exactly why a cross-zone-cut CNAME chain's own intermediate hop could
-                // never actually be authenticated: there was never any signature left to check it
-                // against, even from a fresh (non-cached) lookup.
+                // Keep this hop's RRSIGs with the CNAME RRset, in the cache and in the chain, so the
+                // validator can check the hop against its zone.
                 List<DnsResourceRecord> cnameDnssecRecords =
                 [
                     .. response.Answers.Where(record =>
@@ -451,8 +425,7 @@ public sealed class IterativeResolutionEngine(
                     zoneCutsTraversed
                 );
 
-            // A referral: NS records, in the Authority section, for a zone strictly deeper than
-            // the one we just asked -- go one level deeper and try again.
+            // A referral: authority NS records for a zone deeper than the current cut. Follow it.
             (DnsName referralZoneCut, List<DnsName> referralNameServers) = TryExtractReferral(
                 response,
                 name,
@@ -479,8 +452,8 @@ public sealed class IterativeResolutionEngine(
                 continue;
             }
 
-            // Neither an answer nor a referral: NODATA if an authoritative SOA came back,
-            // otherwise there is nothing left to do but give up.
+            // Neither an answer nor a referral: NODATA. Without an SOA it is not cached, but it is
+            // still reported as NODATA (so a REFUSED from a lame server reads as NODATA).
             return HandleNegativeResponse(
                 name,
                 type,
@@ -495,11 +468,9 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method builds an <see cref="IterativeResolutionResult" /> straight from a cache
-    ///     hit -- shared by the ordinary "still-fresh cache hit" short-circuit at the top of
-    ///     <see cref="ResolveInternalAsync" /> and by <see cref="TryServeStale" />'s own
-    ///     RFC 8767 stale-serving fallback, since both need to turn a <see cref="RecursiveCacheEntry" />
-    ///     into the exact same result shape.
+    ///     This method builds an <see cref="IterativeResolutionResult" /> from a fresh cache hit.
+    ///     The zone cut is recovered from the cached NS sets, as the closest cached cut above the
+    ///     name.
     /// </summary>
     private IterativeResolutionResult BuildResultFromCacheEntry(
         RecursiveCacheEntry entry,
@@ -533,20 +504,15 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method implements RFC 8767 "serve stale": when every reachable name server for
-    ///     <paramref name="name" /> either failed to answer at all or answered with SERVFAIL, an
-    ///     expired-but-still-within-<see cref="RecursiveServerOptions.MaxStaleServeAge" /> cache
-    ///     entry is served instead of failing this query outright -- real availability during a
-    ///     genuine upstream/authoritative outage, at the cost of serving an answer this resolver
-    ///     already knows may no longer be current. Every caller within
-    ///     <see cref="ResolveInternalAsync" /> that would otherwise return
-    ///     <see cref="IterativeResolutionResult.ServFail" /> tries this first.
+    ///     This method implements RFC 8767 serve-stale: when no name server answered, the answer was
+    ///     SERVFAIL, the query budget ran out or the referral depth was exceeded, a cache entry
+    ///     within <see cref="RecursiveServerOptions.MaxStaleServeAge" /> of expiry is used instead
+    ///     of failing. The CNAME-length and malformed-CNAME failures do not try it.
     /// </summary>
     /// <returns>
-    ///     A stale-but-usable result, or <see langword="null" /> when this feature is disabled
-    ///     (<see cref="RecursiveServerOptions.EnableServeStale" />) or no cache entry exists at
-    ///     all, even an expired one -- in which case the caller's own
-    ///     <see cref="IterativeResolutionResult.ServFail" /> fallback still applies.
+    ///     A result from the stale entry, or <see langword="null" /> when
+    ///     <see cref="RecursiveServerOptions.EnableServeStale" /> is off or nothing usable is
+    ///     cached, in which case the caller returns <see cref="IterativeResolutionResult.ServFail" />.
     /// </returns>
     private IterativeResolutionResult TryServeStale(
         DnsName name,
@@ -570,9 +536,8 @@ public sealed class IterativeResolutionEngine(
         if (stale is null)
             return null;
 
-        // Reuses zoneCutsTraversed (the real walk this attempt actually took) rather than
-        // BuildResultFromCacheEntry's own re-derived cachedZoneCutsTraversed -- this call already
-        // has the real one in hand, and it is at least as accurate.
+        // Uses the zone cuts this attempt walked, rather than rebuilding them from the cache as
+        // BuildResultFromCacheEntry does.
         return stale.IsNegative
             ? new IterativeResolutionResult(
                 stale.NegativeResponseCode == DnsResponseCodeEnum.NxDomain
@@ -595,13 +560,11 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method follows a CNAME one hop further, recursing into
-    ///     <see cref="ResolveInternalAsync" /> for the target name -- which may land in a
-    ///     completely different zone, so the referral walk starts fresh from whatever is already
-    ///     cached for it (or the root). This hop's own owning zone and signature material are
-    ///     recorded into a fresh <see cref="CnameChainHop" />, appended to the chain the eventual
-    ///     result carries, so <see cref="Validation.DnssecValidator" /> can authenticate this hop
-    ///     independently rather than only the chain's terminal answer.
+    ///     This method follows a CNAME one hop by resolving its target, which may be in another
+    ///     zone, so the walk starts again from the cache (or the root). Only the first CNAME record
+    ///     is followed. The hop is recorded as a <see cref="CnameChainHop" /> so
+    ///     <see cref="Validation.DnssecValidator" /> can check it. Exceeding
+    ///     <see cref="RecursiveServerOptions.MaxCnameChainLength" /> gives SERVFAIL.
     /// </summary>
     private async Task<IterativeResolutionResult> ChaseCnameAsync(
         IReadOnlyList<DnsResourceRecord> cnameRecords,
@@ -648,8 +611,8 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method builds a negative result, caching it too when the response actually
-    ///     carried the SOA record RFC 2308 needs to do so.
+    ///     This method builds a negative result, and caches it when the response carried the SOA
+    ///     record RFC 2308 needs.
     /// </summary>
     private IterativeResolutionResult HandleNegativeResponse(
         DnsName name,
@@ -695,22 +658,19 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method finds the closest zone cut this resolver already has cached name servers
-    ///     for, walking upward from <paramref name="name" /> toward the root.
+    ///     This method finds the closest zone cut with cached name servers, walking up from
+    ///     <paramref name="name" /> to the root.
     /// </summary>
     /// <param name="name">The name about to be queried.</param>
     /// <param name="type">
-    ///     The record type about to be queried -- <see cref="DnsResourceRecordTypeEnum.DS" />
-    ///     is special: per RFC 4035 §3.1.4.1, a DS record lives only in the *parent* zone, so an
-    ///     exact-match cache entry at <paramref name="name" /> itself (its own zone cut, if it
-    ///     happens to be a delegation point too) must never be used -- the search always starts
-    ///     one level up, at the immediate parent, the same way the authoritative side's own
-    ///     <c>AuthoritativeZoneCache.FindZone</c> delegation fix handles the identical
-    ///     NS/DS-at-a-delegation-point ambiguity.
+    ///     The record type about to be queried. <see cref="DnsResourceRecordTypeEnum.DS" /> is
+    ///     special: a DS record lives in the parent zone (RFC 4035 §3.1.4.1), so the NS set at
+    ///     <paramref name="name" /> itself must not be used, and the search starts one label up
+    ///     (as <c>AuthoritativeZoneCache.FindZone</c> does for the same reason).
     /// </param>
     /// <param name="forceRootStart">
-    ///     Whether to skip this cache walk entirely and always start from the root zone's own
-    ///     name servers -- see <see cref="IIterativeResolutionEngine.ResolveAsync(DnsName,DnsResourceRecordTypeEnum,DnsClassEnum,bool,QueryBudget,bool,DnsEdnsOption,CancellationToken)" />.
+    ///     Whether to skip the walk and start from the root name servers (see
+    ///     <see cref="IIterativeResolutionEngine.ResolveAsync(DnsName,DnsResourceRecordTypeEnum,DnsClassEnum,bool,QueryBudget,bool,DnsEdnsOption,CancellationToken)" />).
     /// </param>
     private (DnsName ZoneCut, List<DnsName> NameServerNames) FindBestNameServers(
         DnsName name,
@@ -736,8 +696,8 @@ public sealed class IterativeResolutionEngine(
                 return (candidate, [.. cached.Records.Select(ExtractNameServerName)]);
         }
 
-        // Nothing at all is cached yet, not even the root -- this should only happen before
-        // RootHintsPrimingService has ever run once; fall back to the hardcoded list directly.
+        // Not even the root is cached: before RootHintsPrimingService has run, or after its
+        // six-day entries expired. Fall back to the root hints list.
         return (
             DnsName.Root,
             [
@@ -749,9 +709,9 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method resolves a set of name servers' own addresses, preferring whatever is
-    ///     already cached (glue, most commonly) and only issuing a fresh, nested lookup -- for
-    ///     at most a handful of candidates -- when nothing at all is already known.
+    ///     This method returns the addresses of a set of name servers. It uses cached A and AAAA
+    ///     records (usually glue) when any are known; otherwise it looks up A records for up to
+    ///     three of the servers, one at a time, and stops at the first that yields an address.
     /// </summary>
     private async Task<List<IPAddress>> ResolveNameServerAddressesAsync(
         IReadOnlyList<DnsName> nameServerNames,
@@ -779,17 +739,14 @@ public sealed class IterativeResolutionEngine(
         if (addresses.Count > 0)
             return addresses;
 
-        // Nothing at all is known for any name server in this set -- resolve a bounded handful
-        // of them, one at a time, stopping as soon as one actually yields an address.
+        // No address is known for any of these servers: look up a few, one at a time, and stop
+        // at the first that yields an address.
         const int maxNameServersToResolve = 3;
 
         foreach (DnsName nsName in nameServerNames.Take(maxNameServersToResolve))
         {
-            // Deliberately no clientSubnetOption here: resolving a name server's own address is
-            // internal plumbing to answer the client's real question, not the question itself --
-            // see IIterativeResolutionEngine's own doc comment for why ECS is scoped only to the
-            // client-driven query chain (the original name and any CNAME target), not every
-            // nested lookup a resolution happens to need along the way.
+            // No ECS option: a name server address is not the client's question (see
+            // IIterativeResolutionEngine).
             IterativeResolutionResult aResult = await ResolveInternalAsync(
                 nsName,
                 DnsResourceRecordTypeEnum.A,
@@ -816,9 +773,9 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method checks whether a response's Authority section carries a genuine referral
-    ///     -- NS records for a zone strictly deeper than the one just queried -- and, if so,
-    ///     extracts its own zone cut name and name server names.
+    ///     This method checks whether a response's authority section is a referral: NS records for
+    ///     a zone deeper than the current cut that encloses the queried name. It returns that
+    ///     zone and its name server names, or nulls.
     /// </summary>
     private static (DnsName ZoneCut, List<DnsName> NameServerNames) TryExtractReferral(
         DnsMessage response,
@@ -857,13 +814,10 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method caches a referral's own NS RRset, plus whatever glue from its Additional
-    ///     section is actually in-bailiwick -- an address for a name server that itself falls
-    ///     under the zone being delegated. Out-of-bailiwick glue is discarded entirely rather
-    ///     than trusted directly (an off-path name server has no business supplying an address
-    ///     for a name outside the zone it was just delegated); that name server's address is
-    ///     instead resolved through its own, independent lookup the next time it is actually
-    ///     needed.
+    ///     This method caches a referral's NS set (with a fixed one-hour TTL, not the referral's)
+    ///     and the glue for name servers inside the delegated zone. Glue for names outside it is
+    ///     discarded, since the parent has no authority over those names; their addresses are
+    ///     looked up separately when needed.
     /// </summary>
     private void CacheReferral(DnsName zoneCut, List<DnsName> nameServerNames, DnsMessage response)
     {
@@ -927,8 +881,8 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method checks whether one name is a suffix of another (or equal to it) -- the
-    ///     bailiwick/ancestor test used throughout this class.
+    ///     This method checks whether one name is a suffix of (or equal to) another, the
+    ///     bailiwick test used throughout this class.
     /// </summary>
     private static bool IsSuffixOf(DnsName suffix, DnsName name)
     {
@@ -941,13 +895,10 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method builds RFC 9156's own minimized query name: <paramref name="target" />'s
-    ///     rightmost labels, exactly one label longer than <paramref name="current" /> -- "the
-    ///     next label down from what is already known, plus the already-known suffix itself" --
-    ///     or <paramref name="target" /> unchanged once <paramref name="current" /> already has as
-    ///     many (or more) labels. Used both to build a fresh probe name one label past a newly
-    ///     discovered zone cut, and to extend an existing probe by one further label when a server
-    ///     has already confirmed no deeper delegation exists at the probe's current length.
+    ///     This method builds an RFC 9156 minimized query name: the rightmost labels of
+    ///     <paramref name="target" />, one more than <paramref name="current" /> has, or
+    ///     <paramref name="target" /> itself once <paramref name="current" /> is as long. It builds
+    ///     the first probe past a new zone cut and extends a probe that found no cut.
     /// </summary>
     private static DnsName ExtendTowardTarget(DnsName current, DnsName target)
     {
@@ -960,7 +911,7 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method decodes an NS record's own name server name.
+    ///     This method decodes an NS record's name server name.
     /// </summary>
     private static DnsName ExtractNameServerName(DnsResourceRecord record) =>
         (
@@ -969,7 +920,7 @@ public sealed class IterativeResolutionEngine(
         ).NameServer;
 
     /// <summary>
-    ///     This method extracts every address from a cache entry's own A/AAAA records.
+    ///     This method extracts every address from a cache entry's A/AAAA records.
     /// </summary>
     private static List<IPAddress> ExtractAddresses(RecursiveCacheEntry entry) =>
         entry is { IsNegative: false } ? ExtractAddresses(entry.Records) : [];

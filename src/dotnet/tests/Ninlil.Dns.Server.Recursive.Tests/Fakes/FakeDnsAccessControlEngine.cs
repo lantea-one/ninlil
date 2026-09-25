@@ -5,11 +5,9 @@ using Ninlil.Dns.Server.Core.AccessControl;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IDnsAccessControlEngine" />, granting a
-///     capability to exactly the addresses a test configures -- so
-///     <see cref="Resolution.RecursiveQueryResolver" />'s own real capability-gate widening can be
-///     exercised deterministically, without needing the real cache/repository/event-bus machinery
-///     <c>Ninlil.Dns.Server.AccessControl.Tests</c> already covers directly.
+///     This class is a fake IDnsAccessControlEngine that grants a capability to the addresses a
+///     test configures, so RecursiveQueryResolver's recursion gate can be tested without the
+///     access-control cache and repositories.
 /// </summary>
 public sealed class FakeDnsAccessControlEngine : IDnsAccessControlEngine
 {

@@ -11,13 +11,11 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class covers <see cref="TrustAnchorRolloverEvent" />, confirming it actually fires
-///     from <see cref="TrustAnchorRolloverService" />'s own real trigger point
-///     -- a genuine RFC 5011 promotion-to-<c>Valid</c> state transition, computed by that
-///     service's real state machine against a real, cryptographically valid, signed root DNSKEY
-///     RRset (via <see cref="DnssecTestFixture" />), not a stubbed-out result. This is this
-///     project's first permanent test of <see cref="TrustAnchorRolloverService" /> itself; every
-///     prior verification of it was a smoke test only.
+///     This class checks that <see cref="TrustAnchorRolloverService" /> publishes
+///     <see cref="TrustAnchorRolloverEvent" /> when a candidate completes its hold-down and becomes
+///     <c>Valid</c>. The service runs as a started background service with a short refresh
+///     interval, a fake engine returning a signed root DNSKEY RRset from
+///     <see cref="DnssecTestFixture" />, and an in-memory store.
 /// </summary>
 public sealed class TrustAnchorRolloverServiceEventTests
 {
@@ -80,9 +78,8 @@ public sealed class TrustAnchorRolloverServiceEventTests
     {
         DnssecTestFixture fixture = new();
 
-        // keyA is the currently Valid, active root anchor; keyB is a candidate this resolver
-        // already observed on a previous check (AddPend) whose hold-down period has, as of now,
-        // already elapsed.
+        // keyA is the Valid root anchor; keyB is an AddPend candidate seen on an earlier check
+        // whose hold-down has now elapsed.
         DnssecTestFixture.ZoneKey keyA = fixture.GenerateZoneKey(DnsName.Root);
         DnssecTestFixture.ZoneKey keyB = fixture.GenerateZoneKey(DnsName.Root);
 
@@ -117,10 +114,7 @@ public sealed class TrustAnchorRolloverServiceEventTests
         {
             EnableAutomaticTrustAnchorUpdate = true,
             TrustAnchorHoldDownDuration = TimeSpan.FromDays(30),
-            // Deliberately tiny -- ExecuteAsync awaits this delay *before* its first check
-            // (unlike CloudDnsZoneSyncService's/AcmeCertificateRenewalService's own loops, which
-            // run their real work before their first delay), so this needs to be short enough for
-            // a real StartAsync-then-poll test to observe the check's own side effect quickly.
+            // Short, because ExecuteAsync waits this long before its first check.
             TrustAnchorRefreshInterval = TimeSpan.FromMilliseconds(50),
         };
 
@@ -130,7 +124,7 @@ public sealed class TrustAnchorRolloverServiceEventTests
             pendingAnchorShape.DigestType,
             pendingAnchorShape.Digest,
             TrustAnchorStateEnum.AddPend,
-            // Comfortably past the hold-down duration configured above.
+            // Well past the hold-down duration configured above.
             DateTimeOffset.UtcNow
                 - options.TrustAnchorHoldDownDuration
                 - TimeSpan.FromDays(1),
@@ -148,13 +142,8 @@ public sealed class TrustAnchorRolloverServiceEventTests
             publisher
         );
 
-        // TrustAnchorRolloverService.ExecuteAsync runs its own real check loop as a
-        // BackgroundService; StartAsync returns once ExecuteAsync hits its first genuine await
-        // (the configured refresh interval, set deliberately tiny above), the same real,
-        // empirically-confirmed scheduling gap CloudDnsZoneSyncServiceTests'/
-        // AcmeCertificateRenewalServiceEventTests' own StartAsync-then-poll pattern already
-        // establishes for two different background services -- poll for the expected side
-        // effect instead of assuming it has already happened.
+        // StartAsync returns once ExecuteAsync reaches its first await (the refresh delay), so
+        // poll for the event rather than assuming the check has run.
         await service.StartAsync(CancellationToken.None);
 
         for (int attempt = 0; attempt < 100 && publisher.Published.Count == 0; attempt++)

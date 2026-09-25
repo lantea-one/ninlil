@@ -8,28 +8,26 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class verifies an RRset's own RRSIG against a set of candidate DNSKEY records --
-///     the cryptographic check every step of RFC 4035 §5.3's chain-of-trust building comes down
-///     to, whether the RRset being checked is an ordinary answer, a DS RRset, or a DNSKEY RRset
-///     verifying itself against a trust anchor.
+///     This class does the cryptographic checks of chain-of-trust building (RFC 4035 §5): an
+///     RRset's RRSIG against trusted DNSKEYs, a DNSKEY against a DS, and a DNSKEY against a trust
+///     anchor. <see cref="DnssecValidator" /> and <see cref="TrustAnchorRolloverService" /> use it.
 /// </summary>
 public static class RrsetSignatureVerifier
 {
     /// <summary>
-    ///     This method checks whether at least one RRSIG -- sharing <paramref name="rrset" />'s
-    ///     own owner name and covering its type -- verifies against at least one of
-    ///     <paramref name="candidateKeys" />, and is currently within its own validity window.
+    ///     This method checks whether at least one RRSIG with <paramref name="rrset" />'s owner name
+    ///     and covered type, inside its validity window, verifies against one of
+    ///     <paramref name="candidateKeys" />. The RRSIG's signer name and labels count are not
+    ///     checked.
     /// </summary>
-    /// <param name="rrset">The RRset to verify -- expected to already share one owner name and type.</param>
+    /// <param name="rrset">The RRset to verify, all of one owner name and type.</param>
     /// <param name="rrsigRecords">
-    ///     Every RRSIG (and, commonly, NSEC/NSEC3/other DNSSEC record) that accompanied
-    ///     <paramref name="rrset" /> -- only the ones that are actually RRSIGs, sharing its owner
-    ///     name, and covering its type are considered.
+    ///     The DNSSEC records that came with <paramref name="rrset" />; only RRSIGs with its owner
+    ///     name and covered type are used.
     /// </param>
     /// <param name="candidateKeys">
-    ///     Every DNSKEY record already trusted at this point in the chain -- only these, never
-    ///     any DNSKEY that might incidentally also be present in <paramref name="rrsigRecords" />
-    ///     itself, are eligible to verify against.
+    ///     The DNSKEY records trusted at this point in the chain. Only these are used, never a
+    ///     DNSKEY found in <paramref name="rrsigRecords" />.
     /// </param>
     /// <param name="now">The point in time to check each RRSIG's validity window against.</param>
     /// <returns>A <see langword="bool" /> indicating whether verification succeeded.</returns>
@@ -46,15 +44,10 @@ public static class RrsetSignatureVerifier
         DnsName ownerName = rrset[0].Name;
         DnsResourceRecordTypeEnum coveredType = rrset[0].Type;
 
-        // An RRset can legitimately carry more than one RRSIG (a zone mid-algorithm-rollover,
-        // most commonly), and any one candidate key might correspond to any one of them -- so
-        // this is a genuine cross product, not a single linear scan: every RRSIG that plausibly
-        // covers this RRset is tried against every candidate key, and the whole method succeeds
-        // the moment any single (RRSIG, key) pairing verifies. The outer loop first narrows down
-        // to RRSIGs that are structurally eligible at all (right owner name, right covered type,
-        // currently inside their own inception/expiration window, and a supported algorithm)
-        // before ever touching a key, so an obviously-inapplicable RRSIG never even reaches the
-        // expensive cryptographic verification step.
+        // An RRset can have several RRSIGs (during an algorithm rollover, for example), so every
+        // eligible RRSIG is tried against every key, and one match is enough. RRSIGs with the
+        // wrong owner or type, outside their window or with an unsupported algorithm are skipped
+        // before any cryptography.
         foreach (DnsResourceRecord rrsigRecord in rrsigRecords)
         {
             if (
@@ -86,9 +79,7 @@ public static class RrsetSignatureVerifier
             )
                 continue;
 
-            // Only a candidate key whose own algorithm and key tag match this specific RRSIG is
-            // worth the cost of actually rebuilding the canonical signing input and running the
-            // real cryptographic verification against it.
+            // Only a key with this RRSIG's algorithm and key tag is worth verifying against.
             foreach (DnsResourceRecord keyRecord in candidateKeys)
             {
                 if (keyRecord.Type != DnsResourceRecordTypeEnum.DnsKey)
@@ -123,12 +114,11 @@ public static class RrsetSignatureVerifier
     }
 
     /// <summary>
-    ///     This method finds whichever record in a DNSKEY RRset matches a DS RRset published for
-    ///     the same name in the parent zone -- key tag, algorithm, and digest all agreeing -- per
-    ///     RFC 4035 §5.2.
+    ///     This method finds the record in a DNSKEY RRset that matches the parent's DS RRset for
+    ///     the same name, with key tag, algorithm and digest agreeing (RFC 4035 §5.2).
     /// </summary>
-    /// <param name="dnsKeyRecords">The child zone's own DNSKEY RRset.</param>
-    /// <param name="ownerName">The DNSKEY RRset's owner name -- the child zone's own apex.</param>
+    /// <param name="dnsKeyRecords">The child zone's DNSKEY RRset.</param>
+    /// <param name="ownerName">The DNSKEY RRset's owner name, the child zone's apex.</param>
     /// <param name="dsRecords">The DS RRset published for the same name in the parent zone.</param>
     /// <returns>The matching DNSKEY record, or <see langword="null" /> if none matches.</returns>
     public static DnsResourceRecord FindKeyMatchingDs(
@@ -180,13 +170,12 @@ public static class RrsetSignatureVerifier
     }
 
     /// <summary>
-    ///     This method finds whichever record in the root zone's own DNSKEY RRset matches a
-    ///     hardcoded trust anchor -- the base case of the chain of trust, with no parent DS to
-    ///     check against instead.
+    ///     This method finds the record in a DNSKEY RRset that matches a trust anchor: the base of
+    ///     the chain of trust, where there is no parent DS.
     /// </summary>
-    /// <param name="dnsKeyRecords">The root zone's own DNSKEY RRset.</param>
-    /// <param name="ownerName">The DNSKEY RRset's owner name -- the root.</param>
-    /// <param name="anchors">This resolver's own configured trust anchors.</param>
+    /// <param name="dnsKeyRecords">The DNSKEY RRset, normally the root's.</param>
+    /// <param name="ownerName">The DNSKEY RRset's owner name.</param>
+    /// <param name="anchors">The trust anchors to match.</param>
     /// <returns>The matching DNSKEY record, or <see langword="null" /> if none matches.</returns>
     public static DnsResourceRecord FindKeyMatchingTrustAnchor(
         IReadOnlyList<DnsResourceRecord> dnsKeyRecords,

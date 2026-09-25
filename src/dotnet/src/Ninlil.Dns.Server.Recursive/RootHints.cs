@@ -4,25 +4,24 @@ using System.Net;
 namespace Ninlil.Dns.Server.Recursive;
 
 /// <summary>
-///     This class carries a single root (or, after an override, alternate) name server's own
-///     name and addresses.
+///     This record carries one root name server's name and addresses (or an alternate root's,
+///     from <see cref="RecursiveServerOptions.RootHintServersOverride" />).
 /// </summary>
-/// <param name="Name">The name server's own name.</param>
-/// <param name="Addresses">The name server's own addresses, IPv4 and IPv6 both.</param>
+/// <param name="Name">The name server's name.</param>
+/// <param name="Addresses">The name server's IPv4 and IPv6 addresses.</param>
 public sealed record RootHintServer(string Name, IReadOnlyList<IPAddress> Addresses);
 
 /// <summary>
-///     This class holds the hardcoded root server list every iterative resolution starts from,
-///     used until <see cref="Resolution.RootHintsPrimingService" /> has completed its own RFC
-///     8109 priming query -- and as the fallback if that priming query ever fails. This is the
-///     current IANA root server set, current as of 2026-08-29, re-verified directly against a
-///     live root server (rather than solely relying on a recalled list) before being hardcoded
-///     here, since a stale address would leave this resolver unable to bootstrap at all.
+///     This class holds the built-in root server list that
+///     <see cref="Resolution.RootHintsPrimingService" /> seeds the cache with at startup, before
+///     its RFC 8109 priming query replaces it with the root's answer (the list stays in use
+///     if priming fails). It is the IANA root server set; stale addresses could stop the
+///     resolver bootstrapping, so check any change against IANA.
 /// </summary>
 public static class RootHints
 {
     /// <summary>
-    ///     This property contains the 13 root servers, by their own published letter names.
+    ///     This property contains the 13 root servers, a through m.
     /// </summary>
     public static IReadOnlyList<RootHintServer> Servers { get; } =
     [
@@ -82,7 +81,7 @@ public static class RootHints
 
     /// <summary>
     ///     This method resolves the effective root hints list: <see cref="RecursiveServerOptions.RootHintServersOverride" />
-    ///     when the operator configured one, or this class's own hardcoded <see cref="Servers" />
+    ///     when the operator configured one, or the built-in <see cref="Servers" />
     ///     otherwise.
     /// </summary>
     /// <param name="options">The options to read an override from, if any.</param>

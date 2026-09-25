@@ -3,9 +3,8 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class captures every event published to it, in order, instead of actually
-///     dispatching them anywhere -- enough to assert a cache eviction was reported without
-///     standing up the real <see cref="DnsServerEventDispatcher" />.
+///     This class records every event published to it, in order, instead of dispatching it,
+///     so tests can assert on cache eviction events.
 /// </summary>
 public sealed class RecordingEventPublisher : IDnsServerEventPublisher
 {

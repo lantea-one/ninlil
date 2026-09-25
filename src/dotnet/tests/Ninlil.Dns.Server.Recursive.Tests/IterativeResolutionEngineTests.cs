@@ -9,9 +9,10 @@ using Ninlil.Dns.Server.Recursive.Tests.Fakes;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class tests <see cref="IterativeResolutionEngine" /> against a fake upstream name
-///     server, standing in for a real root/TLD/authoritative server -- the same technique the
-///     original throwaway smoke tests used, but as a permanent, hybrid-testing-policy xUnit suite.
+///     This class tests <see cref="IterativeResolutionEngine" /> against a fake upstream client
+///     (<see cref="FakeUpstreamDnsClient" />) with canned answers per server: referrals, glue,
+///     CNAME chasing, negative caching, zone cut bookkeeping, DS routing and the resolution
+///     bounds.
 /// </summary>
 public class IterativeResolutionEngineTests
 {
@@ -27,20 +28,16 @@ public class IterativeResolutionEngineTests
 
     private static Harness CreateHarness(Action<RecursiveServerOptions> configure = null)
     {
-        // QNAME minimization defaults off for this harness -- every test in this class exercises
-        // referral-following/glue/CNAME-chasing/cache behavior against a fake upstream server that
-        // only ever answers the exact, full name/type it expects, not RFC 9156's own minimized
-        // NS probes (covered by its own dedicated test class instead, which opts back into this
-        // engine's real default via its own `configure` callback).
+        // QNAME minimization is off in this harness, because the fake servers only answer the
+        // full name and type. IterativeResolutionEngineQnameMinimizationTests covers it.
         RecursiveServerOptions options = new() { EnableQnameMinimization = false };
         configure?.Invoke(options);
 
         StaticOptionsMonitor<RecursiveServerOptions> optionsMonitor = new(options);
         RecursiveCache cache = new(optionsMonitor, new RecordingEventPublisher());
 
-        // Seed the cache exactly as RootHintsPrimingService would at real startup -- a single
-        // fake root nameserver, so every test starts from a realistic "already primed" resolver
-        // rather than exercising the (deliberately narrower) never-primed-at-all bootstrap path.
+        // Seed the cache as RootHintsPrimingService would, with one fake root server, so every
+        // test starts from a primed resolver.
         cache.StorePositive(
             DnsName.Root,
             DnsResourceRecordTypeEnum.NS,
@@ -306,9 +303,8 @@ public class IterativeResolutionEngineTests
     }
 
     /// <summary>
-    ///     Regression test for the historical bug where a cache-hit short-circuit left
-    ///     <see cref="IterativeResolutionResult.ZoneCutsTraversed" /> silently empty, breaking any
-    ///     future DNSSEC-validation consumer even though the plain resolver itself never noticed.
+    ///     This test checks that a cache hit still reports
+    ///     <see cref="IterativeResolutionResult.ZoneCutsTraversed" />, which DNSSEC validation needs.
     /// </summary>
     [Fact]
     public async Task ResolveAsyncPreservesZoneCutsTraversedOnASubsequentCacheHit()
@@ -344,10 +340,9 @@ public class IterativeResolutionEngineTests
     }
 
     /// <summary>
-    ///     Regression test for the historical delegation-point NS/DS lookup ambiguity: a DS query
-    ///     for a name that is both a delegation point in its parent and separately cached as its
-    ///     own zone must be routed to the parent, never answered from the child's own cached NS
-    ///     entry (which has no DS data at all, per RFC 4035 §3.1.4.1).
+    ///     This test checks that a DS query for a name that is also cached as its own zone goes
+    ///     to the parent's servers, not the child's, since DS lives in the parent
+    ///     (RFC 4035 §3.1.4.1).
     /// </summary>
     [Fact]
     public async Task ResolveAsyncRoutesADsQueryToTheParentZoneEvenWhenTheNameIsAlsoCachedAsItsOwnZone()
@@ -360,8 +355,8 @@ public class IterativeResolutionEngineTests
         IPAddress parentNsAddress = IPAddress.Parse("198.51.100.1");
         IPAddress childNsAddress = IPAddress.Parse("198.51.100.2");
 
-        // "example.com" is already cached as its own zone (as if resolved by an earlier,
-        // unrelated query) -- this cached NS entry must never be used to answer a DS query.
+        // "example.com" is already cached as its own zone, as if from an earlier query; that
+        // NS entry must not be used for a DS query.
         harness.Cache.StorePositive(
             name,
             DnsResourceRecordTypeEnum.NS,
@@ -391,9 +386,8 @@ public class IterativeResolutionEngineTests
             []
         );
 
-        // Only the parent's own nameserver has a canned response -- if the engine mistakenly
-        // queried the child's own (cached) nameserver instead, it would get no response at all
-        // and fail, since nothing was registered for childNsAddress.
+        // Only the parent's server has a canned response, so querying the child's server
+        // instead would get no answer and fail.
         DnsResourceRecord ds = new(
             name,
             DnsResourceRecordTypeEnum.DS,

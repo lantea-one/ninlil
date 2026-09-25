@@ -9,13 +9,12 @@ using Ninlil.Dns.Server.Recursive.Tests.Fakes;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class proves the real per-client/network access-control engine's own widening of
-///     <see cref="RecursiveQueryResolver" />'s
-///     recursion gate: a client matching an enabled <see cref="DnsAccessControlCapabilityEnum.RecursionAccess" />
-///     rule is granted recursion even while <see cref="RecursiveServerOptions.EnableRecursion" />
-///     is globally off, and a non-matching client is still refused -- against the real resolver
-///     and a real <see cref="IIterativeResolutionEngine" /> result, not a mock of
-///     <see cref="RecursiveQueryResolver" /> itself.
+///     This class tests how access-control rules widen <see cref="RecursiveQueryResolver" />'s
+///     recursion gate: a client matching an enabled
+///     <see cref="DnsAccessControlCapabilityEnum.RecursionAccess" /> rule gets recursion while
+///     <see cref="RecursiveServerOptions.EnableRecursion" /> is off, and other clients are still
+///     declined. It uses <see cref="FakeDnsAccessControlEngine" /> and a fake engine with a canned
+///     result, with validation off.
 /// </summary>
 public sealed class RecursiveQueryResolverAccessControlTests
 {

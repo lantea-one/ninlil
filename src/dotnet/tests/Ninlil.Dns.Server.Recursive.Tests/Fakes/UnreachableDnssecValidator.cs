@@ -6,10 +6,8 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IDnssecValidator" /> in a test that disables
-///     <see cref="RecursiveServerOptions.EnableDnssecValidation" /> -- <see cref="RecursiveQueryResolver" />
-///     must never call it in that configuration, so any call reaching this fake fails the test
-///     loudly rather than silently returning a plausible-looking result.
+///     This class is an IDnssecValidator that fails the test if called, for tests with
+///     DNSSEC validation off, where RecursiveQueryResolver must not call a validator.
 /// </summary>
 public sealed class UnreachableDnssecValidator : IDnssecValidator
 {

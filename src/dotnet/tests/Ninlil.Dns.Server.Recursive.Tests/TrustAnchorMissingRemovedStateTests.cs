@@ -11,12 +11,10 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests;
 
 /// <summary>
-///     This class covers RFC 5011 §4.2's <see cref="TrustAnchorStateEnum.Missing" />/
-///     <see cref="TrustAnchorStateEnum.Removed" /> states end to end -- a previously-untested
-///     part of <see cref="TrustAnchorRolloverService" />'s own real state machine, using the same
-///     real, cryptographically-signed root DNSKEY RRset (via <see cref="DnssecTestFixture" />)
-///     and single-check-at-a-time invocation style <see cref="TrustAnchorRolloverServiceEventTests" />
-///     already established.
+///     This class tests the <see cref="TrustAnchorStateEnum.Missing" /> and
+///     <see cref="TrustAnchorStateEnum.Removed" /> states of <see cref="TrustAnchorRolloverService" />,
+///     one check at a time, with a signed root DNSKEY RRset from <see cref="DnssecTestFixture" />
+///     (the same setup as <see cref="TrustAnchorRolloverServiceEventTests" />).
 /// </summary>
 public sealed class TrustAnchorMissingRemovedStateTests
 {
@@ -75,15 +73,10 @@ public sealed class TrustAnchorMissingRemovedStateTests
     }
 
     /// <summary>
-    ///     Runs exactly one <c>TrustAnchorRolloverService</c> check against a canned resolution
-    ///     result and returns the store's own state afterward. Polls for
-    ///     <see cref="FakeTrustAnchorStore.LastSaved" /> changing reference identity from
-    ///     <paramref name="initialAnchors" /> as its completion signal (the service's own
-    ///     <c>RunOneCheckAsync</c> always calls <c>store.Save(...)</c> exactly once per check,
-    ///     replacing that reference, regardless of whether any anchor's own state actually
-    ///     changed) rather than <see cref="TrustAnchorRolloverServiceEventTests" />'s own
-    ///     publisher-fired signal, since a check that only promotes a Removed anchor back to a
-    ///     fresh AddPend candidate publishes no event at all.
+    ///     This method runs one <c>TrustAnchorRolloverService</c> check against a canned result
+    ///     and returns the saved state. It waits for <see cref="FakeTrustAnchorStore.LastSaved" /> to
+    ///     change from <paramref name="initialAnchors" />, since every check saves once, rather than
+    ///     for an event: re-admitting a Removed key as AddPend publishes none.
     /// </summary>
     private static async Task<(
         IReadOnlyList<PersistedTrustAnchor> Saved,
@@ -126,8 +119,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
         DnssecTestFixture.ZoneKey keyA = fixture.GenerateZoneKey(DnsName.Root);
         DnsResourceRecord rrsig = fixture.Sign(keyA, DnsName.Root, [keyA.DnsKeyRecord]);
 
-        // keyB is Valid and already trusted, but this check's own DNSKEY RRset carries only
-        // keyA -- keyB has genuinely disappeared from the target zone's own answer.
+        // keyB is Valid, but this check's DNSKEY RRset carries only keyA.
         TrustAnchor keyAShape = fixture.BuildTrustAnchor(DnsName.Root, keyA);
         DnssecTestFixture.ZoneKey keyB = fixture.GenerateZoneKey(DnsName.Root);
         TrustAnchor keyBShape = fixture.BuildTrustAnchor(DnsName.Root, keyB);
@@ -173,7 +165,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
         Assert.Equal(TrustAnchorStateEnum.Missing, savedB.State);
         Assert.NotNull(savedB.MissingSinceUtc);
 
-        // keyA is untouched -- still present, still Valid.
+        // keyA is untouched: still present, still Valid.
         PersistedTrustAnchor savedA = saved.Single(anchor => anchor.KeyTag == keyAShape.KeyTag);
         Assert.Equal(TrustAnchorStateEnum.Valid, savedA.State);
 
@@ -199,8 +191,8 @@ public sealed class TrustAnchorMissingRemovedStateTests
         TrustAnchor keyAShape = fixture.BuildTrustAnchor(DnsName.Root, keyA);
         TrustAnchor keyBShape = fixture.BuildTrustAnchor(DnsName.Root, keyB);
 
-        // This check's own DNSKEY RRset carries both keys again -- keyB, previously Missing, has
-        // reappeared before its remove hold-down elapsed.
+        // This check's RRset carries both keys again: keyB reappeared before its remove
+        // hold-down elapsed.
         IterativeResolutionResult canned = new(
             RecursiveResolutionStatusEnum.Success,
             [keyA.DnsKeyRecord, keyB.DnsKeyRecord],
@@ -226,7 +218,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
             TrustAnchorStateEnum.Missing,
             DateTimeOffset.UtcNow.AddDays(-400),
             DateTimeOffset.UtcNow.AddDays(-370),
-            // Comfortably within the remove hold-down window still.
+            // Still inside the remove hold-down window.
             DateTimeOffset.UtcNow.AddDays(-1)
         );
 
@@ -262,8 +254,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
         DnssecTestFixture.ZoneKey keyB = fixture.GenerateZoneKey(DnsName.Root);
         TrustAnchor keyBShape = fixture.BuildTrustAnchor(DnsName.Root, keyB);
 
-        // keyB is absent again this check too -- it has now been Missing for longer than the
-        // configured remove hold-down duration, with no reappearance.
+        // keyB is absent again and has been Missing longer than the remove hold-down.
         IterativeResolutionResult canned = new(
             RecursiveResolutionStatusEnum.Success,
             [keyA.DnsKeyRecord],
@@ -295,7 +286,7 @@ public sealed class TrustAnchorMissingRemovedStateTests
             TrustAnchorStateEnum.Missing,
             DateTimeOffset.UtcNow.AddDays(-400),
             DateTimeOffset.UtcNow.AddDays(-370),
-            // Comfortably past the configured remove hold-down duration.
+            // Well past the remove hold-down duration.
             DateTimeOffset.UtcNow
                 - options.TrustAnchorRemoveHoldDownDuration
                 - TimeSpan.FromDays(1)
@@ -320,9 +311,8 @@ public sealed class TrustAnchorMissingRemovedStateTests
     {
         DnssecTestFixture fixture = new();
         DnssecTestFixture.ZoneKey keyA = fixture.GenerateZoneKey(DnsName.Root);
-        // RFC 5011 §7.2: only a key with its own SEP (secure entry point / KSK) bit set is ever
-        // considered a real trust point candidate at all -- required here since this test's own
-        // real assertion is about keyB being re-admitted as a brand-new AddPend candidate.
+        // Only a key with the SEP (KSK) bit set is treated as a trust point candidate (RFC 5011),
+        // so keyB needs it to be re-admitted as AddPend.
         DnssecTestFixture.ZoneKey keyB = fixture.GenerateZoneKey(
             DnsName.Root,
             isSecureEntryPoint: true

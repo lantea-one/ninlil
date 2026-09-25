@@ -12,27 +12,24 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Recursive.Transport;
 
 /// <summary>
-///     This class implements <see cref="IUpstreamDnsClient" /> with real UDP and TCP sockets.
+///     This class implements <see cref="IUpstreamDnsClient" /> over UDP and TCP port 53. UDP
+///     goes through the shared <see cref="IOutboundUdpSocketPool" /> when one is registered. A
+///     response is accepted only from the queried address and with the query's message ID; the
+///     question section is not compared.
 /// </summary>
 /// <param name="options">
-///     This client's own per-query timeout, read live via <see cref="IOptionsMonitor{TOptions}" />
-///     -- see <see cref="Resolution.RecursiveQueryResolver" />'s own doc comment for why this
-///     client, registered as a singleton, cannot use the usual snapshotted
-///     <see cref="IOptions{TOptions}" /> instead.
+///     The per-query timeout (<see cref="RecursiveServerOptions.UpstreamQueryTimeout" />), read
+///     live through <see cref="IOptionsMonitor{TOptions}" />. It covers the UDP attempt and any
+///     TCP retry together.
 /// </param>
 /// <param name="socketPool">
-///     The shared, source-port-pooling outbound socket pool this client's own UDP queries are
-///     sent through -- see <see cref="IOutboundUdpSocketPool" />'s own doc comment. Defaults to
-///     <see langword="null" /> so a caller/test that constructs this client directly (bypassing
-///     dependency injection) keeps compiling and running unchanged, falling back to this class's
-///     own pre-pool behavior: a fresh, one-off, OS-ephemeral-port socket per query.
+///     The shared outbound UDP socket pool (see <see cref="IOutboundUdpSocketPool" />).
+///     <see langword="null" /> (the default, for code that builds this client directly) uses a
+///     new connected socket on an OS-chosen port per query.
 /// </param>
 /// <param name="logger">
-///     The logger this client records a dropped, mismatched (spoofed or stray) response to.
-///     Defaults to <see langword="null" />, in which case a mismatch is silently dropped without
-///     logging -- the same "every optional cross-cutting dependency degrades gracefully, never
-///     throws, when absent" idiom this project's other <see langword="null" />-defaulted
-///     constructor parameters already establish.
+///     The logger this client records datagrams from the wrong source to.
+///     <see langword="null" /> (the default) drops them without logging.
 /// </param>
 public sealed class UpstreamDnsClient(
     IOptionsMonitor<RecursiveServerOptions> options,
@@ -46,8 +43,8 @@ public sealed class UpstreamDnsClient(
     private const int DnsPort = 53;
 
     /// <summary>
-    ///     This constant contains the largest buffer a UDP response is read into. 65527 octets is
-    ///     the theoretical maximum a UDP payload can occupy.
+    ///     This constant contains the size of the UDP receive buffer, large enough for any UDP
+    ///     payload.
     /// </summary>
     private const int MaximumUdpResponseSize = 65527;
 
@@ -66,10 +63,7 @@ public sealed class UpstreamDnsClient(
         DnsMessage request = new()
         {
             Id = id,
-            // This server is doing the recursing itself; each individual query sent to an
-            // upstream authoritative server is an ordinary, non-recursive lookup -- setting RD
-            // here would ask that server to recurse on our behalf too, which authoritative
-            // servers correctly ignore anyway, but is not what an iterative resolver means to ask.
+            // Iterative queries to authoritative servers do not ask for recursion.
             RecursionDesired = false,
             Questions = { new DnsQuestion(name, type, recordClass) },
             Edns = new DnsEdnsOptions(
@@ -92,19 +86,16 @@ public sealed class UpstreamDnsClient(
             response =
                 await QueryTcpAsync(serverAddress, requestBytes, timeoutCts.Token) ?? response;
 
-        // A reply whose ID doesn't match what we asked is either a stray, unrelated packet or a
-        // spoofing attempt -- either way, not a real answer to this query.
+        // A reply with the wrong ID is stray or spoofed. It makes this query fail rather than
+        // waiting for the right one.
         return response is not null && response.Id == id ? response : null;
     }
 
     /// <summary>
-    ///     This method sends one query over UDP and reads back a single response, validating that
-    ///     it actually arrived from the name server queried before accepting it -- a real
-    ///     anti-spoofing check, not merely the transaction-ID comparison <see cref="QueryAsync" />
-    ///     already does on top of this one, since an off-path attacker guessing a 16-bit
-    ///     transaction ID is a real, historically exploited threat this project treats as
-    ///     survivable only in combination with source-address validation and source-port
-    ///     unpredictability, not either alone.
+    ///     This method sends one query over UDP and returns the first datagram that comes from the
+    ///     queried server, or <see langword="null" /> on timeout, a socket error or a malformed
+    ///     reply. The source check adds to the ID check in <see cref="QueryAsync" />: an off-path
+    ///     attacker can guess a 16-bit ID, so the ID alone is not enough.
     /// </summary>
     private async Task<DnsMessage> QueryUdpAsync(
         IPAddress serverAddress,
@@ -128,12 +119,9 @@ public sealed class UpstreamDnsClient(
 
             byte[] buffer = new byte[MaximumUdpResponseSize];
 
-            // A pooled socket is unconnected (it outlives any single remote peer across its own
-            // reuse), so nothing at the OS level filters out a reply from anyone other than
-            // serverAddress -- checked explicitly here instead. A mismatched sender is logged and
-            // discarded, and this loop keeps waiting for the real reply until stoppingToken's own
-            // deadline elapses, rather than either trusting the first datagram to arrive or
-            // giving up on the very first stray one.
+            // A pooled socket is unconnected, since it is reused across servers, so the OS does
+            // not filter senders. A datagram from anyone else is logged and skipped, and the
+            // loop keeps waiting until the timeout.
             while (!stoppingToken.IsCancellationRequested)
             {
                 SocketReceiveFromResult result = await lease.Socket.ReceiveFromAsync(
@@ -169,12 +157,10 @@ public sealed class UpstreamDnsClient(
     }
 
     /// <summary>
-    ///     This method preserves this client's own pre-pool behavior: a fresh, one-off,
-    ///     OS-ephemeral-port, connected socket per query -- used only when
-    ///     <see cref="IOutboundUdpSocketPool" /> is unavailable (a caller bypassing dependency
-    ///     injection), since <see cref="IOutboundUdpSocketPool.RentAsync" /> itself already
-    ///     returns an equivalent one-off socket whenever
-    ///     <c>OutboundQueryOptions.EnableSourcePortPool</c> is off.
+    ///     This method queries over a new connected socket on an OS-chosen port, for when no
+    ///     <see cref="IOutboundUdpSocketPool" /> was supplied. (With the pool,
+    ///     <see cref="IOutboundUdpSocketPool.RentAsync" /> hands out a one-off socket when
+    ///     <c>OutboundQueryOptions.EnableSourcePortPool</c> is off.)
     /// </summary>
     private static async Task<DnsMessage> QueryUdpWithFreshSocketAsync(
         IPEndPoint endpoint,
@@ -186,9 +172,8 @@ public sealed class UpstreamDnsClient(
         {
             using Socket socket = new(endpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
 
-            // Connecting a UDP socket sets its default peer and filters out anything arriving
-            // from any other address:port -- basic protection against unrelated or spoofed
-            // traffic landing on this same locally-bound socket.
+            // A connected UDP socket only receives from its peer, so the OS filters other
+            // senders.
             await socket.ConnectAsync(endpoint, stoppingToken);
             await socket.SendAsync(requestBytes, stoppingToken);
 
@@ -205,8 +190,9 @@ public sealed class UpstreamDnsClient(
     }
 
     /// <summary>
-    ///     This method sends one query over a fresh TCP connection and reads back a single,
-    ///     length-prefixed response, per RFC 1035 §4.2.2.
+    ///     This method sends one query over a new TCP connection and reads back one
+    ///     length-prefixed response (RFC 1035 §4.2.2), or returns <see langword="null" /> on any
+    ///     failure.
     /// </summary>
     private static async Task<DnsMessage> QueryTcpAsync(
         IPAddress serverAddress,

@@ -7,25 +7,25 @@ using Ninlil.Dns.Server.Recursive.Resolution;
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class implements <see cref="IDnssecValidator" />: RFC 4035 §5's chain-of-trust walk,
-///     from a configured trust anchor at the root down to whichever zone actually produced
-///     <see cref="IterativeResolutionResult" />'s answer (or its negative proof), verifying a
-///     DS/DNSKEY pair at every real zone cut along the way.
+///     This class implements <see cref="IDnssecValidator" /> with the RFC 4035 §5 chain-of-trust
+///     walk: from a trust anchor at the root down to the zone that produced a result's answer or
+///     negative proof, verifying the DS and DNSKEY at every zone cut. Each CNAME hop is checked
+///     against its own zone first. It fetches DS and DNSKEY records through the engine, sharing
+///     the caller's <see cref="QueryBudget" />. The answer's zone is the last of the result's
+///     <see cref="IterativeResolutionResult.ZoneCutsTraversed" />, and the chain to it is
+///     rediscovered with a DS query for that zone started at the root.
 /// </summary>
 /// <param name="engine">
-///     The same resolution engine the original query used -- every DS/DNSKEY lookup this
-///     validator issues shares its cache and, via the caller-supplied
-///     <see cref="QueryBudget" />, its overall bounds too.
+///     The resolution engine for the DS and DNSKEY lookups; it shares the resolver's cache, and
+///     the lookups count against the caller's <see cref="QueryBudget" />.
 /// </param>
 /// <param name="cache">
-///     Used only to recover which zone owns a name when the original resolution was served
-///     entirely from cache, and so carries no <see cref="IterativeResolutionResult.ZoneCutsTraversed" />
-///     of its own to walk.
+///     Used only to find a name's zone when a result has no
+///     <see cref="IterativeResolutionResult.ZoneCutsTraversed" />.
 /// </param>
 /// <param name="trustAnchorStore">
-///     This validator's own current, possibly RFC 5011-updated, set of trusted root keys --
-///     never the hardcoded/configured list directly, since that only ever seeds this store the
-///     first time it runs.
+///     The current trusted root keys, kept up to date by RFC 5011 rollover. The built-in or
+///     configured list only seeds this store.
 /// </param>
 public sealed class DnssecValidator(
     IIterativeResolutionEngine engine,
@@ -43,15 +43,10 @@ public sealed class DnssecValidator(
         CancellationToken stoppingToken = default
     )
     {
-        // RFC 4035 §5.3: a CNAME chain that crosses a zone cut can have each hop owned and signed
-        // by a completely different zone than the terminal answer -- so each hop is authenticated
-        // independently, against a fresh chain of trust built to *its own* owning zone, before the
-        // terminal answer is ever considered. A hop landing in a provably unsigned zone contributes
-        // no signature to check (there is nothing to verify against), but still downgrades the
-        // overall result to at most Insecure -- a fully Secure verdict requires every real RRset in
-        // the whole chain, not merely the final one, to carry a valid, verified signature. A single
-        // Bogus/Indeterminate verdict at any hop short-circuits the whole validation immediately;
-        // there is no partial credit for a chain that breaks partway down.
+        // RFC 4035 §5.3: each CNAME hop may be signed by a different zone, so each is checked
+        // against a chain of trust to its own zone before the final answer. A hop in a provably
+        // unsigned zone has nothing to check but caps the result at Insecure, since Secure needs
+        // every RRset in the chain verified. A Bogus or Indeterminate hop ends validation.
         bool anyHopInsecure = false;
         DnsName lastHopZone = null;
         ZoneTrustChainResult lastHopTrust = default;
@@ -78,9 +73,8 @@ public sealed class DnssecValidator(
 
             if (lastHopTrust.State == DnssecValidationStateEnum.Insecure)
             {
-                // hop.OwningZone is a provably unsigned delegation -- this hop's own CNAME record
-                // needs no RRSIG at all, and none is expected; the chain simply can no longer be
-                // fully Secure end-to-end.
+                // The hop's zone is provably unsigned, so no RRSIG is expected, but the chain can
+                // no longer be Secure.
                 anyHopInsecure = true;
                 continue;
             }
@@ -117,16 +111,14 @@ public sealed class DnssecValidator(
         )
             return new DnssecValidationResult(terminalTrust.State, terminalTrust.Reason);
 
-        // leafZone itself is a provably unsigned delegation -- whatever it served cannot be
-        // authenticated at all, regardless of what the answer/negative-proof content looks like.
+        // The answer's zone is provably unsigned, so nothing it served can be authenticated.
         if (terminalTrust.State == DnssecValidationStateEnum.Insecure)
             return DnssecValidationResult.Insecure();
 
-        // The chain of trust now extends all the way to the zone that actually produced the
-        // original query's own answer (or negative proof); validate that against it. Only the
-        // terminal RRset itself is checked here -- result.Answer also carries every CNAME hop
-        // already authenticated above, which must be excluded (by type) or a mixed-type/owner RRset
-        // would never verify against any single RRSIG at all.
+        // The chain now reaches the answer's zone. Check only the final RRset: result.Answer also
+        // holds the CNAME hops checked above, which are filtered out by type, since a mixed RRset
+        // would match no RRSIG. A negative answer's NSEC/NSEC3 records are checked; its SOA
+        // signature is not.
         if (result.Status == RecursiveResolutionStatusEnum.Success)
         {
             List<DnsResourceRecord> terminalAnswer =
@@ -169,11 +161,10 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This record carries <see cref="BuildTrustedKeysForZoneAsync" />'s own outcome: either a
-    ///     validated DNSKEY RRset for the target zone (<see cref="DnssecValidationStateEnum.Secure" />),
-    ///     confirmation the zone is a provably unsigned delegation
-    ///     (<see cref="DnssecValidationStateEnum.Insecure" />, no keys), or a hard failure
-    ///     (<see cref="DnssecValidationStateEnum.Bogus" />/<see cref="DnssecValidationStateEnum.Indeterminate" />,
+    ///     This record carries the outcome of <see cref="BuildTrustedKeysForZoneAsync" />: the zone's
+    ///     validated DNSKEY RRset (<see cref="DnssecValidationStateEnum.Secure" />), proof the zone
+    ///     is unsigned (<see cref="DnssecValidationStateEnum.Insecure" />, no keys), or a failure
+    ///     (<see cref="DnssecValidationStateEnum.Bogus" /> or <see cref="DnssecValidationStateEnum.Indeterminate" />,
     ///     with a reason).
     /// </summary>
     private readonly record struct ZoneTrustChainResult(
@@ -196,12 +187,15 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method walks RFC 4035 §5's chain of trust from the root down to
-    ///     <paramref name="targetZone" />, returning either that zone's own validated DNSKEY RRset,
-    ///     confirmation the zone is a provably unsigned delegation, or the specific failure that
-    ///     broke the chain -- the shared walk both the terminal answer's own zone and every
-    ///     independent CNAME-chain hop's owning zone need, generalized from what was originally a
-    ///     single hardcoded walk to just the terminal leaf zone.
+    ///     This method walks the RFC 4035 §5 chain of trust down to <paramref name="targetZone" />
+    ///     and returns the zone's validated DNSKEY RRset, proof it is unsigned, or the failure that
+    ///     broke the chain. It serves both the answer's zone and each CNAME hop's zone.
+    ///     <para>
+    ///         The chain is the zone cuts of a DS query for the target started at the root. If
+    ///         that DS answer is already cached, the engine returns it without walking, and the
+    ///         chain then starts at the closest cached cut rather than the root; the first element
+    ///         is always checked against the root trust anchors.
+    ///     </para>
     /// </summary>
     private async Task<ZoneTrustChainResult> BuildTrustedKeysForZoneAsync(
         DnsName targetZone,
@@ -219,10 +213,8 @@ public sealed class DnssecValidator(
         }
         else
         {
-            // A single DS query for the target zone, forced to start from the root, passively
-            // rediscovers every *real* intermediate zone cut on the way -- which the original
-            // query's own ZoneCutsTraversed might have skipped straight past, if a closer
-            // ancestor happened to already be cached from a completely unrelated prior query.
+            // A DS query for the target, started at the root, finds every zone cut on the way,
+            // which the original query may have skipped by starting from a cached ancestor.
             targetDsResult = await engine.ResolveAsync(
                 targetZone,
                 DnsResourceRecordTypeEnum.DS,
@@ -236,10 +228,8 @@ public sealed class DnssecValidator(
             realChain = [.. targetDsResult.ZoneCutsTraversed, targetZone];
         }
 
-        // Walk realChain from the root outward, one real zone cut at a time, building up
-        // trustedKeys as we go: at each step, trustedKeys holds the *previous* zone's own
-        // already-verified DNSKEY RRset, which is exactly what authenticates the *next* zone's
-        // own DS (and, transitively, its DNSKEY) -- the textbook RFC 4035 §5 chain-of-trust walk.
+        // Walk realChain from the top. At each step trustedKeys holds the previous zone's
+        // verified DNSKEY RRset, which authenticates the next zone's DS and so its DNSKEY.
         IReadOnlyList<DnsResourceRecord> trustedKeys = null;
 
         for (int i = 0; i < realChain.Count; i++)
@@ -248,11 +238,8 @@ public sealed class DnssecValidator(
 
             if (i == 0)
             {
-                // The root of the chain has no parent DS to check against -- it is instead
-                // verified directly against this resolver's own configured/RFC-5011-updated
-                // trust anchors: fetch the root's DNSKEY RRset, find the specific key whose own
-                // digest matches a trusted anchor, and verify the whole RRset's signature under
-                // that one key.
+                // The top of the chain has no parent DS. Its DNSKEY RRset must contain a key
+                // matching a valid trust anchor, and be signed by that key.
                 IterativeResolutionResult dnsKeyResult = await ResolveDnsKeyAsync(
                     zone,
                     recordClass,
@@ -293,13 +280,10 @@ public sealed class DnssecValidator(
                 continue;
             }
 
-            // Every zone after the root is authenticated in two steps: first its own DS record
-            // (fetched from, and verified against, the parent zone's already-trusted DNSKEY set
-            // held in trustedKeys), then its own DNSKEY RRset -- matched against that DS by
-            // digest and verified by signature -- which becomes the new trustedKeys for the
-            // next zone one level deeper. A missing DS is only acceptable when its own absence
-            // can itself be proven authentic (an unsigned delegation); anything else along this
-            // path is Bogus.
+            // Each later zone takes two steps: verify its DS with the parent's keys, then find the
+            // DNSKEY matching that DS and verify the DNSKEY RRset with it; that RRset becomes
+            // trustedKeys. A missing DS is accepted only with a signed proof of absence (an
+            // unsigned delegation, Insecure); otherwise the chain is Bogus.
             DnsName parentZone = realChain[i - 1];
             IterativeResolutionResult dsResult =
                 zone == targetZone && targetDsResult is not null
@@ -383,8 +367,8 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method resolves a zone's own DNSKEY RRset, returning <see langword="null" /> if
-    ///     that resolution did not succeed at all.
+    ///     This method resolves a zone's DNSKEY RRset, or returns <see langword="null" /> if the
+    ///     resolution did not succeed.
     /// </summary>
     private async Task<IterativeResolutionResult> ResolveDnsKeyAsync(
         DnsName zone,
@@ -408,10 +392,8 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method finds the closest zone cut this resolver already has cached name servers
-    ///     for -- the same walk <see cref="IterativeResolutionEngine" /> itself does internally,
-    ///     needed here only because a cache-hit <see cref="IterativeResolutionResult" /> carries
-    ///     no zone-cut provenance of its own.
+    ///     This method finds the closest zone cut with cached name servers, the same walk
+    ///     <see cref="IterativeResolutionEngine" /> does, for a result with no zone cuts.
     /// </summary>
     private DnsName FindOwningZone(DnsName name)
     {
@@ -432,8 +414,9 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method proves that a DS record's absence at a delegation point is authentic
-    ///     rather than merely missing, per RFC 4035 §5.4 / RFC 5155 §5.2/§8.1.
+    ///     This method checks the signed proof that a delegation has no DS (RFC 4035 §5.4,
+    ///     RFC 5155): an NSEC or matching NSEC3 without the DS bit, or an opt-out NSEC3 covering
+    ///     the name. The NS and SOA bits are not checked.
     /// </summary>
     private static bool VerifyAbsenceOfDs(
         DnsName zone,
@@ -463,8 +446,8 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method proves the original query's own negative response (NXDOMAIN/NODATA) is
-    ///     authentic, per RFC 4035 §5.4 / RFC 5155 §8.
+    ///     This method checks the signed proof for a negative answer (NXDOMAIN or NODATA), per
+    ///     RFC 4035 §5.4 and RFC 5155 §8.
     /// </summary>
     private static bool VerifyNegativeResult(
         DnsName queriedName,
@@ -499,11 +482,9 @@ public sealed class DnssecValidator(
     }
 
     /// <summary>
-    ///     This method verifies every distinct NSEC/NSEC3 RRset present -- each one is its own
-    ///     RRset, with its own owner name and its own RRSIG, since two NSEC3 records covering
-    ///     different hash ranges are never the same RRset -- against a set of already-trusted
-    ///     keys, so a fabricated (but structurally covering) record without a valid signature
-    ///     cannot "prove" anything.
+    ///     This method verifies the signature of every NSEC and NSEC3 RRset present (each owner
+    ///     name is its own RRset) against trusted keys, so an unsigned record cannot prove
+    ///     anything. It fails when there are none.
     /// </summary>
     private static bool VerifyAllNsecOrNsec3Signatures(
         IReadOnlyList<DnsResourceRecord> dnssecRecords,

@@ -5,13 +5,11 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Recursive.Caching;
 
 /// <summary>
-///     This interface caches the results of iterative resolution, in memory only, since a
-///     resolver cache is inherently ephemeral and TTL-bound and so never belongs in the database
-///     the way zone data does. One cache, keyed by (name, type, class),
-///     serves both an ordinary answer cache and -- since an NS RRset is cached exactly the same
-///     way as any other type -- the "which name servers do I already know about for this name's
-///     ancestors" lookup <see cref="Resolution.IterativeResolutionEngine" /> needs to avoid
-///     re-querying the root for every single query.
+///     This interface caches the results of iterative resolution in memory, keyed by (name,
+///     type, class). It is both the answer cache and, since NS and address RRsets are cached like
+///     any other type, the store of known name servers that lets
+///     <see cref="Resolution.IterativeResolutionEngine" /> start below the root.
+///     <see cref="RecursiveCache" /> implements it; cached TTLs are returned as stored.
 /// </summary>
 public interface IRecursiveCache
 {
@@ -29,22 +27,19 @@ public interface IRecursiveCache
     );
 
     /// <summary>
-    ///     This method looks up a cached entry regardless of whether it has already expired, as
-    ///     long as it is still within <paramref name="maxStaleAge" /> of its own expiry -- RFC
-    ///     8767 "serve stale" support, consulted by <see cref="Resolution.IterativeResolutionEngine" />
-    ///     only once a genuine attempt at a fresh answer has already failed (see
-    ///     <see cref="RecursiveServerOptions.EnableServeStale" />'s own doc comment). Updates the
-    ///     same last-accessed bookkeeping <see cref="TryGet" /> does on a hit, since serving an
-    ///     entry stale is still real, current evidence this name is actively being queried.
+    ///     This method looks up a cached entry even if it has expired, as long as it is within
+    ///     <paramref name="maxStaleAge" /> of expiry. It is RFC 8767 serve-stale, which
+    ///     <see cref="Resolution.IterativeResolutionEngine" /> uses only after a fresh attempt has
+    ///     failed (see <see cref="RecursiveServerOptions.EnableServeStale" />). A hit counts as an
+    ///     access for prefetch, like <see cref="TryGet" />.
     /// </summary>
     /// <param name="name">The name to look up.</param>
     /// <param name="type">The record type to look up.</param>
     /// <param name="recordClass">The class to look up.</param>
-    /// <param name="maxStaleAge">How far past its own expiry a cache entry may still be served from.</param>
+    /// <param name="maxStaleAge">How far past its expiry a cache entry may still be served.</param>
     /// <returns>
-    ///     The cached entry, however stale (up to <paramref name="maxStaleAge" />), or
-    ///     <see langword="null" /> if nothing is cached at all, or what is cached has aged past
-    ///     even that grace window.
+    ///     The cached entry, fresh or stale up to <paramref name="maxStaleAge" />, or
+    ///     <see langword="null" /> if nothing usable is cached.
     /// </returns>
     RecursiveCacheEntry TryGetStale(
         DnsName name,
@@ -55,9 +50,8 @@ public interface IRecursiveCache
 
     /// <summary>
     ///     This method stores a positive answer, replacing whatever was previously cached for
-    ///     the same (name, type, class). The cached TTL is the lowest TTL among
-    ///     <paramref name="records" />, the conventional, conservative choice when an RRset's
-    ///     individual records could, in principle, carry slightly different TTLs.
+    ///     the same (name, type, class). The entry lives for the lowest TTL among
+    ///     <paramref name="records" />. An empty list is ignored.
     /// </summary>
     /// <param name="name">The answer's owner name.</param>
     /// <param name="type">The answer's record type.</param>
@@ -73,8 +67,8 @@ public interface IRecursiveCache
     );
 
     /// <summary>
-    ///     This method stores a negative (NXDOMAIN/NODATA) answer, per RFC 2308, capped at the
-    ///     authoritative zone's own SOA-minimum TTL.
+    ///     This method stores a negative (NXDOMAIN/NODATA) answer for the lesser of the SOA
+    ///     record's TTL and its MINIMUM field (RFC 2308).
     /// </summary>
     /// <param name="name">The name that does not exist, or lacks the queried type.</param>
     /// <param name="type">The record type that was queried for.</param>
@@ -83,8 +77,8 @@ public interface IRecursiveCache
     ///     <see cref="DnsResponseCodeEnum.NxDomain" /> or <see cref="DnsResponseCodeEnum.NoError" />
     ///     (NODATA).
     /// </param>
-    /// <param name="soa">The authoritative zone's own SOA record, for its negative-caching minimum.</param>
-    /// <param name="dnssecRecords">The SOA's own RRSIG and denial-of-existence proof, if any.</param>
+    /// <param name="soa">The zone's SOA record, which sets the negative-caching lifetime.</param>
+    /// <param name="dnssecRecords">The SOA's RRSIG and the denial-of-existence proof, if any.</param>
     void StoreNegative(
         DnsName name,
         DnsResourceRecordTypeEnum type,
@@ -95,27 +89,23 @@ public interface IRecursiveCache
     );
 
     /// <summary>
-    ///     This method removes every expired entry, publishing
-    ///     <see cref="Ninlil.Dns.Server.Core.Events.DnsCacheEvictedEvent" /> for each one --
-    ///     this cache's own producer of that event. Also enforces
-    ///     <see cref="RecursiveServerOptions.MaxCacheEntries" /> by evicting the
-    ///     soonest-to-expire entries first when the cache has grown past it, even among entries
-    ///     that have not expired yet.
+    ///     This method removes expired entries that are past the serve-stale window, and enforces
+    ///     <see cref="RecursiveServerOptions.MaxCacheEntries" /> by evicting the soonest-to-expire
+    ///     entries, publishing <see cref="Ninlil.Dns.Server.Core.Events.DnsCacheEvictedEvent" />
+    ///     for the evictions.
     /// </summary>
     /// <returns>How many entries were evicted.</returns>
     int EvictExpiredAndOverCapacity();
 
     /// <summary>
-    ///     This method finds every cache entry that is both nearing its own TTL expiry and has
-    ///     genuinely been queried recently -- the exact candidate set
-    ///     <see cref="Caching.RecursiveCachePrefetchService" /> proactively refreshes. Only
-    ///     positive (non-negative) entries are ever returned: a negative (NXDOMAIN/NODATA) answer
-    ///     nearing expiry is simply left to the next real client query, since re-confirming that a
-    ///     name still does not exist has none of positive prefetch's own latency-hiding value.
+    ///     This method finds every unexpired entry that is within <paramref name="prefetchWindow" />
+    ///     of expiry and was looked up within <paramref name="recentAccessWindow" />: the candidates
+    ///     <see cref="Caching.RecursiveCachePrefetchService" /> refreshes. Only positive entries are
+    ///     returned; refreshing a negative answer early saves little.
     /// </summary>
     /// <param name="prefetchWindow">How close to expiry an entry must be to qualify.</param>
-    /// <param name="recentAccessWindow">How recently an entry must have actually been looked up to qualify.</param>
-    /// <returns>Every qualifying entry's own name, type, and class.</returns>
+    /// <param name="recentAccessWindow">How recently an entry must have been looked up to qualify.</param>
+    /// <returns>Every qualifying entry's name, type and class.</returns>
     IReadOnlyList<(
         DnsName Name,
         DnsResourceRecordTypeEnum Type,

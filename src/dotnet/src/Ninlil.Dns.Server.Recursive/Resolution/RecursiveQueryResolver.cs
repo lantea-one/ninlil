@@ -11,55 +11,40 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Resolution;
 
 /// <summary>
-///     This class implements <see cref="IDnsQueryResolver" /> for recursive queries: declining
-///     entirely (<see cref="DnsQueryResolution.NotHandled" />) unless recursion is both enabled
-///     by configuration and desired by the client, so <see cref="IDnsQueryDispatcher" /> only
-///     ever reaches this resolver for a name this server is not itself authoritative for -- an
-///     authoritative answer always wins regardless of the RD bit.
+///     This class is the recursive step of query resolution, the last
+///     <see cref="IDnsQueryResolver" /> <see cref="IDnsQueryDispatcher" /> tries, after the
+///     authoritative and forwarding resolvers (see the dispatcher and
+///     <c>DnsQueryProcessingPipeline</c> for the whole query path). It declines
+///     (<see cref="DnsQueryResolution.NotHandled" />) unless recursion is allowed for the client,
+///     the client set RD, and the question is class IN. Otherwise it resolves through
+///     <see cref="IIterativeResolutionEngine" />, validates with <see cref="IDnssecValidator" />,
+///     applies DNS64 when configured, and builds the response.
 ///     <para>
-///         This resolver is registered as a singleton, the same lifetime every
-///         <see cref="IDnsQueryResolver" /> in the dispatch chain shares, and reads
-///         <see cref="RecursiveServerOptions" /> via <see cref="IOptionsMonitor{TOptions}" />
-///         rather than the usual, snapshotted <see cref="IOptions{TOptions}" /> every other
-///         pre-<c>AppearanceOptions</c> runtime settings class in this project still uses --
-///         <see cref="IOptions{TOptions}" />'s own <c>Value</c> is computed once and cached for
-///         the life of the process, so a singleton capturing it would never see a write
-///         <c>RecursiveSettingsController.Patch</c> merges into the configuration file. Reading
-///         <c>options.CurrentValue</c> fresh on every query is what makes toggling
-///         <see cref="RecursiveServerOptions.EnableRecursion" /> (and every other field this
-///         resolver reads) take effect on this same running instance immediately, with no
-///         restart.
+///         It is a singleton and reads <see cref="RecursiveServerOptions" /> through
+///         <see cref="IOptionsMonitor{TOptions}" /> on every query, because
+///         <see cref="IOptions{TOptions}" /> is computed once per process and would never see a
+///         change written by <c>RecursiveSettingsController.Patch</c>.
 ///     </para>
 /// </summary>
-/// <param name="engine">The engine this resolver actually resolves through.</param>
-/// <param name="validator">The DNSSEC chain-of-trust validator this resolver checks every answer against -- this is a full validating resolver, not merely an iterative one.</param>
-/// <param name="options">This resolver's own recursion/validation toggles, read live -- see this class's own doc comment.</param>
+/// <param name="engine">The engine this resolver resolves through.</param>
+/// <param name="validator">The DNSSEC validator this resolver checks answers with, when validation is on.</param>
+/// <param name="options">The recursion and validation settings, read live (see the class summary).</param>
 /// <param name="accessControlEngine">
-///     The real per-client/network access-control engine this resolver consults so a
-///     client matching an enabled rule can be granted recursion even while
-///     <see cref="RecursiveServerOptions.EnableRecursion" /> is globally off. Defaults to
-///     <see langword="null" /> -- the same optional-cross-cutting-dependency idiom
-///     <c>DnsQueryProcessingPipeline</c> already establishes for its own filter/rate-limit/rewrite
-///     engines -- so every existing caller that constructs this resolver directly keeps compiling
-///     unchanged; a <see langword="null" /> engine behaves as if no rule ever grants anything,
-///     never as an error.
+///     The access-control engine, which can grant recursion to a client while
+///     <see cref="RecursiveServerOptions.EnableRecursion" /> is off. <see langword="null" /> (the
+///     default) grants nothing.
 /// </param>
 /// <param name="clientSubnetService">
-///     The RFC 7871 EDNS Client Subnet builder this resolver consults to attach an ECS option to
-///     every upstream query it issues on this client's behalf. Defaults to <see langword="null" />
-///     (the same optional-cross-cutting-dependency idiom <paramref name="accessControlEngine" />
-///     already establishes), in which case no ECS option is ever attached -- functionally
-///     identical to <see cref="EdnsClientSubnetOptions.Enable" /> being off.
+///     The RFC 7871 EDNS Client Subnet service that builds the ECS option for the upstream
+///     queries answering this client's question. <see langword="null" /> (the default) attaches
+///     none, the same as <see cref="EdnsClientSubnetOptions.Enable" /> being off.
 /// </param>
 /// <param name="dns64Service">
-///     The RFC 6147 DNS64 synthesis service this resolver consults whenever an AAAA query comes
-///     back with <see cref="RecursiveResolutionStatusEnum.NoData" /> (the name exists, but has no
-///     AAAA of its own) -- a second, explicit A lookup for the same name is issued only in that
-///     one case, and only when <see cref="Dns64Options.Enable" /> is on, so this never adds a
-///     second upstream round trip to any query DNS64 could not possibly apply to. Defaults to
-///     <see langword="null" /> (the same optional-cross-cutting-dependency idiom
-///     <paramref name="clientSubnetService" /> already establishes), in which case no synthesis is
-///     ever attempted -- functionally identical to <see cref="Dns64Options.Enable" /> being off.
+///     The RFC 6147 DNS64 synthesis service. When it is enabled and an AAAA query comes back
+///     <see cref="RecursiveResolutionStatusEnum.NoData" />, the resolver looks up A for the same
+///     name and synthesizes AAAA records from it; no other query pays for the extra lookup. The
+///     A lookup is not DNSSEC-validated. <see langword="null" /> (the default) disables DNS64,
+///     the same as <see cref="Dns64Options.Enable" /> being off.
 /// </param>
 public class RecursiveQueryResolver(
     IIterativeResolutionEngine engine,
@@ -78,18 +63,12 @@ public class RecursiveQueryResolver(
     {
         DnsMessage request = context.Request;
 
-        // This resolver is registered as a singleton (the same lifetime every IDnsQueryResolver
-        // in this project's dispatch chain shares) -- reading options.CurrentValue fresh on
-        // every query, rather than capturing a snapshot at construction time, is what actually
-        // makes a live RecursiveSettingsController.Patch write (in particular, flipping
-        // EnableRecursion on) take effect on this same running instance with no restart.
+        // Read once per query, so a settings change applies to the next query (see the class
+        // summary).
         RecursiveServerOptions currentOptions = options.CurrentValue;
 
-        // A client whose own source address matches an enabled access-control rule
-        // granting RecursionAccess is treated as if EnableRecursion were true for them
-        // specifically, even while it is globally off -- accessControlEngine defaults to null
-        // (see this class's own constructor doc comment), in which case this check is skipped
-        // entirely and only the global toggle governs, exactly as before this capability existed.
+        // An access-control rule granting RecursionAccess to the client's address allows
+        // recursion for that client while EnableRecursion is off.
         bool recursionPermitted =
             currentOptions.EnableRecursion
             || (
@@ -111,17 +90,12 @@ public class RecursiveQueryResolver(
 
         bool clientRequestedDnssec = request.Edns?.DnssecOk == true;
 
-        // DNSSEC content is requested from upstream whenever
-        // validation is enabled at all, regardless of whether the client's own query set DO --
-        // validating the answer needs the RRSIGs either way; whether to also *show* them to the
-        // client is a separate question, decided below.
+        // DNSSEC records are requested upstream whenever validation is on, whatever the client's
+        // DO bit, because validation needs them; whether the client sees them is decided below.
         //
-        // The ECS option this resolution's own outbound queries carry (if this feature is
-        // enabled at all -- off by default, see EdnsClientSubnetOptions.Enable) is built once,
-        // here, from this exact query's own client address and request, then threaded through
-        // every upstream query the resolution issues for the client's real question (including a
-        // followed CNAME's own target) -- never into a nested name-server-address lookup, which
-        // is internal plumbing rather than an answer to what the client actually asked.
+        // The ECS option is built once from the client's address and passed to every upstream
+        // query for the client's question (including CNAME targets), but not to name server
+        // address lookups, which are not the client's question.
         DnsEdnsOption clientSubnetOption = clientSubnetService?.BuildOutboundOption(
             context.RemoteAddress,
             request
@@ -139,10 +113,8 @@ public class RecursiveQueryResolver(
             stoppingToken
         );
 
-        // RFC 4035 §3.2.2/§4.6: a resolver always validates whether or not the client set CD,
-        // so a later query for the same, now-cached name can still be judged correctly -- CD
-        // only controls whether a Bogus result is enforced (SERVFAIL) or the client is simply
-        // trusted to have wanted the unauthenticated data anyway.
+        // RFC 4035 §3.2.2 and §4.6: validate whether or not the client set CD. CD only decides
+        // whether a Bogus result becomes SERVFAIL or is returned to the client.
         DnssecValidationResult validation =
             currentOptions.EnableDnssecValidation
             && result.Status
@@ -162,12 +134,9 @@ public class RecursiveQueryResolver(
         bool isBogus = validation.State == DnssecValidationStateEnum.Bogus;
         bool enforceBogus = isBogus && !request.CheckingDisabled;
 
-        // RFC 6147 DNS64: only ever attempted for an AAAA query that came back NoData (the name
-        // exists but has no AAAA of its own) -- never for NXDOMAIN, ServFail, or a
-        // Bogus-and-enforced result, since none of those means "this name might still have a
-        // usable A record worth synthesizing from". dns64Service defaults to null (see this
-        // class's own constructor doc comment), in which case this is skipped entirely, exactly
-        // as if Dns64Options.Enable were off.
+        // RFC 6147 DNS64: only for an AAAA query that came back NoData, never for NXDOMAIN,
+        // SERVFAIL or an enforced Bogus result, since only NoData means the name may have an A
+        // record to synthesize from.
         IReadOnlyList<DnsResourceRecord> synthesizedAaaa = [];
 
         if (
@@ -202,16 +171,12 @@ public class RecursiveQueryResolver(
             RecursionDesired = request.RecursionDesired,
             RecursionAvailable = true,
             CheckingDisabled = request.CheckingDisabled,
-            // Echoed back so a validating/cookie-aware client can correlate this response with
-            // the query it sent -- see AuthoritativeQueryResolver.CreateAnswerHeader's own doc
-            // comment for the fuller reasoning; this resolver needed the identical fix.
+            // Echoed back so the client can match this response to its query (as
+            // AuthoritativeQueryResolver.CreateAnswerHeader does).
             Questions = [.. request.Questions],
-            // A synthesized DNS64 answer is never presented as DNSSEC-authenticated, regardless
-            // of what the original (NoData) AAAA validation state was -- see
-            // Dns64SynthesisService's own doc comment for the full RFC 6147 §3 / RFC 6840 §5.1
-            // reasoning. The response being sent is no longer the validated-or-not NoData answer
-            // that validation.State actually describes; it is a fabricated record that was never
-            // signed by anyone.
+            // A synthesized DNS64 answer is never marked authenticated, whatever the NoData
+            // answer's validation state: the records were made here and signed by no one (see
+            // Dns64SynthesisService).
             AuthenticData =
                 !didSynthesizeDns64Answer && validation.State == DnssecValidationStateEnum.Secure,
             ResponseCode = enforceBogus
@@ -239,11 +204,8 @@ public class RecursiveQueryResolver(
 
             if (clientRequestedDnssec)
             {
-                // Every CNAME hop's own RRSIG (per-hop, now that each is independently validated
-                // -- see DnssecValidator) is shown to the client alongside the terminal answer's
-                // own signature, in chain order -- a downstream validating stub resolver needs
-                // every hop's own signature to re-verify this chain itself, not merely the final
-                // one.
+                // Each CNAME hop's RRSIGs, in chain order, then the final answer's, so a
+                // validating client can check the whole chain itself.
                 foreach (CnameChainHop hop in result.CnameChain)
                     response.Answers.AddRange(hop.DnssecRecords);
 
@@ -252,8 +214,7 @@ public class RecursiveQueryResolver(
         }
         else if (didSynthesizeDns64Answer)
         {
-            // No RRSIGs ever accompany a synthesized answer, requested or not -- there is no real
-            // signature over a record this resolver itself just invented.
+            // A synthesized answer has no RRSIGs; nothing signed it.
             response.Answers.AddRange(synthesizedAaaa);
         }
         else if (

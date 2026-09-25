@@ -6,11 +6,8 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Dns.Server.Recursive.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IDnssecValidator" />, always returning the same,
-///     caller-supplied <see cref="DnssecValidationResult" /> regardless of what it is actually
-///     asked to validate -- useful for a test that needs a fixed validation outcome (most commonly
-///     <see cref="DnssecValidationResult.Secure" />) without needing a real DS/DNSKEY chain
-///     underneath it.
+///     This class is an IDnssecValidator that returns the same result for every call, for tests
+///     that need a fixed validation outcome without a DS/DNSKEY chain.
 /// </summary>
 /// <param name="result">The fixed result every call returns.</param>
 public sealed class StaticDnssecValidator(DnssecValidationResult result) : IDnssecValidator

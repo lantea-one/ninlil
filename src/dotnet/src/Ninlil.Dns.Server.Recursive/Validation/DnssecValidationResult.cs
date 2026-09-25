@@ -2,13 +2,13 @@
 namespace Ninlil.Dns.Server.Recursive.Validation;
 
 /// <summary>
-///     This class carries a single validation attempt's outcome.
+///     This record carries the outcome of one validation by <see cref="IDnssecValidator" />.
 /// </summary>
 /// <param name="State">Which of RFC 4035 §4.3's four states this attempt concluded in.</param>
 /// <param name="Reason">
-///     A short, human-readable explanation of why <see cref="State" /> is
-///     <see cref="DnssecValidationStateEnum.Bogus" /> or <see cref="DnssecValidationStateEnum.Indeterminate" />
-///     -- for logging, since a client is never shown this directly. <see langword="null" /> for
+///     A short explanation of why <see cref="State" /> is
+///     <see cref="DnssecValidationStateEnum.Bogus" /> or <see cref="DnssecValidationStateEnum.Indeterminate" />,
+///     for logs and tests; clients never see it. <see langword="null" /> for
 ///     <see cref="DnssecValidationStateEnum.Secure" />/<see cref="DnssecValidationStateEnum.Insecure" />.
 /// </param>
 public sealed record DnssecValidationResult(DnssecValidationStateEnum State, string Reason = null)
