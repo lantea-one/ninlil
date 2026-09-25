@@ -11,34 +11,37 @@ using Ninlil.Dns.Server.Core.RateLimiting;
 namespace Ninlil.Dns.Server.RateLimiting;
 
 /// <summary>
-///     This class implements <see cref="IDnsRateLimiter" /> as a classic token bucket per
-///     client IP, held entirely in memory -- by the user's own explicit choice, given this
-///     project's current single-instance homelab deployment target, a bucket resetting on
-///     restart is harmless and needs no persisted state or repository at all. Also implements
-///     this interface's own second, independent layer -- a fixed-window counter bucketed by CIDR
-///     subnet rather than exact IP -- entirely separately from the token-bucket state above; the
-///     two layers share nothing but this class and <paramref name="options" />.
+///     This class implements <see cref="IDnsRateLimiter" />, which
+///     <c>DnsQueryProcessingPipeline</c> calls before decoding each query (see that class). It
+///     has two independent layers that share only the options:
+///     <list type="bullet">
+///         <item>
+///             A token bucket per client IP (<see cref="TryAcquireAsync" />): each query spends
+///             one token, and tokens refill at <see cref="DnsRateLimitOptions.QueriesPerSecond" />
+///             up to <see cref="DnsRateLimitOptions.BurstSize" />.
+///         </item>
+///         <item>
+///             A fixed-window counter per subnet (<see cref="CheckSubnetLimitAsync" />), which
+///             catches a flood spread over many addresses in one network.
+///         </item>
+///     </list>
+///     All state is in memory and resets on restart, which is harmless for a limiter. A client
+///     granted <see cref="DnsAccessControlCapabilityEnum.RateLimitBypass" /> by an access-control
+///     rule skips both layers. <see cref="DnsRateLimitCleanupService" /> evicts idle entries.
 /// </summary>
-/// <param name="options">This limiter's own configured rate, burst size, and tracking limits.</param>
+/// <param name="options">The rate, burst size, subnet limits and tracking limits.</param>
 /// <param name="accessControlEngine">
-///     The real per-client/network access-control engine this limiter consults so a
-///     client matching an enabled rule can be exempted from rate limiting entirely -- checked
-///     before a bucket is ever looked up or created for that client, so an exempt client's own
-///     bucket is never even touched. Defaults to <see langword="null" /> -- the same
-///     optional-cross-cutting-dependency idiom <c>DnsQueryProcessingPipeline</c> already
-///     establishes for its own filter/rewrite engines -- so every existing caller that constructs
-///     this limiter directly keeps compiling unchanged; a <see langword="null" /> engine behaves
-///     as if no rule ever grants an exemption, never as an error.
+///     The access-control engine consulted for the rate-limit bypass capability, before any
+///     bucket or window is looked up or created, so an exempt client never gets one. It is
+///     optional: with <see langword="null" /> no client is exempt.
 /// </param>
 /// <param name="randomSource">
-///     The source of randomness <see cref="CheckSubnetLimitAsync" /> uses to decide, per
-///     over-limit UDP query, whether it lands on the <see cref="DnsSubnetRateLimitDecisionEnum.RespondTruncated" />
-///     or <see cref="DnsSubnetRateLimitDecisionEnum.Drop" /> side of
-///     <see cref="DnsRateLimitOptions.SubnetTruncatePercentage" />'s own split -- a function
-///     returning a value in <c>[0, 1)</c>, matching <see cref="Random.NextDouble" />'s own
-///     contract. Defaults to <see cref="Random.Shared" />'s own <see cref="Random.NextDouble" />;
-///     overridable so a test can inject a deterministic sequence instead of asserting against
-///     real randomness.
+///     A function returning a value in <c>[0, 1)</c>, like <see cref="Random.NextDouble" />, that
+///     <see cref="CheckSubnetLimitAsync" /> uses to decide whether an over-limit UDP query gets
+///     <see cref="DnsSubnetRateLimitDecisionEnum.RespondTruncated" /> or
+///     <see cref="DnsSubnetRateLimitDecisionEnum.Drop" /> (see
+///     <see cref="DnsRateLimitOptions.SubnetTruncatePercentage" />). It defaults to
+///     <see cref="Random.Shared" />; tests pass a fixed sequence.
 /// </param>
 public sealed class TokenBucketDnsRateLimiter(
     IOptions<DnsRateLimitOptions> options,
@@ -47,28 +50,24 @@ public sealed class TokenBucketDnsRateLimiter(
 ) : IDnsRateLimiter
 {
     /// <summary>
-    ///     This field contains the actual randomness source <see cref="CheckSubnetLimitAsync" />
-    ///     consults, resolving this class's own <c>randomSource</c> constructor parameter's
-    ///     <see langword="null" /> default to <see cref="Random.Shared" />'s
-    ///     <see cref="Random.NextDouble" /> once, here, rather than re-checking for
-    ///     <see langword="null" /> on every single call.
+    ///     This field contains the randomness source <see cref="CheckSubnetLimitAsync" /> uses:
+    ///     the <c>randomSource</c> constructor parameter, or <see cref="Random.Shared" /> when it
+    ///     is <see langword="null" />.
     /// </summary>
     private readonly Func<double> _randomSource =
         randomSource ?? (() => Random.Shared.NextDouble());
 
     /// <summary>
-    ///     This property contains every client IP's own bucket currently being tracked, keyed by
-    ///     source address. Exposed internally so <see cref="DnsRateLimitCleanupService" /> can
-    ///     sweep it without this class needing to run its own background timer too.
+    ///     This property contains the bucket of every tracked client IP, keyed by source address.
+    ///     It is public so <see cref="DnsRateLimitCleanupService" /> can sweep it and tests can
+    ///     inspect it.
     /// </summary>
     public ConcurrentDictionary<IPAddress, Bucket> Buckets { get; } = new();
 
     /// <summary>
-    ///     This property contains every subnet's own fixed-window query counters currently being
-    ///     tracked, keyed by that subnet's masked network address (see
-    ///     <see cref="MaskToPrefix" />). Exposed internally for the same reason
-    ///     <see cref="Buckets" /> is: so <see cref="DnsRateLimitCleanupService" /> can sweep it
-    ///     without this class needing its own background timer too.
+    ///     This property contains the window of every tracked subnet, keyed by the masked network
+    ///     address (see <see cref="MaskToPrefix" />). It is public for the same reason as
+    ///     <see cref="Buckets" />.
     /// </summary>
     public ConcurrentDictionary<IPAddress, SubnetWindow> SubnetWindows { get; } = new();
 
@@ -81,11 +80,8 @@ public sealed class TokenBucketDnsRateLimiter(
         if (!options.Value.Enable)
             return true;
 
-        // A client matching an enabled access-control rule granting RateLimitBypass is exempt
-        // entirely -- checked here, before the bucket lookup/creation below, so an
-        // exempt client's own bucket is never even touched. accessControlEngine defaults to null
-        // (see this class's own constructor doc comment), in which case this check is skipped
-        // entirely and every client is limited exactly as before this capability existed.
+        // A client granted RateLimitBypass is exempt. The check runs before the bucket lookup
+        // so an exempt client never gets a bucket.
         if (
             accessControlEngine is not null
             && await accessControlEngine.HasCapabilityAsync(
@@ -98,22 +94,18 @@ public sealed class TokenBucketDnsRateLimiter(
 
         if (!Buckets.TryGetValue(remoteAddress, out Bucket bucket))
         {
-            // A source address this limiter has never seen before is only added if there is
-            // still room in the tracking table -- see DnsRateLimitOptions.MaxTrackedClients's
-            // own doc comment for why exceeding it fails open rather than denying.
+            // A new address is only tracked while there is room; see
+            // DnsRateLimitOptions.MaxTrackedClients for why a full table fails open.
             if (Buckets.Count >= options.Value.MaxTrackedClients)
                 return true;
 
             bucket = Buckets.GetOrAdd(remoteAddress, _ => new Bucket(options.Value.BurstSize));
         }
 
-        // The classic token-bucket refill-then-spend sequence, done under this bucket's own lock
-        // so two concurrent queries from the same client never race on the same balance: first,
-        // top the bucket up by however many tokens should have accrued since it was last
-        // refilled (elapsed real time times the configured steady-state rate), capped at the
-        // bucket's own burst capacity so a long-idle client can never bank an unbounded reserve.
-        // Then, if at least one whole token remains, spend exactly one for this query and allow
-        // it through; otherwise deny without touching the balance further.
+        // Refill, then spend, under the bucket's lock so concurrent queries from one client do
+        // not race on the balance. The refill adds elapsed time times QueriesPerSecond, capped at
+        // BurstSize so an idle client cannot bank an unbounded reserve. One whole token lets the
+        // query through; otherwise it is denied.
         lock (bucket)
         {
             long now = Stopwatch.GetTimestamp();
@@ -169,10 +161,8 @@ public sealed class TokenBucketDnsRateLimiter(
             !SubnetWindows.TryGetValue(subnetKey, out SubnetWindow window)
             && SubnetWindows.Count >= options.Value.MaxTrackedClients
         )
-            // The same fail-open posture Buckets' own MaxTrackedClients check already takes,
-            // applied to this second, independent dictionary -- a subnet-tracking table that
-            // itself became unboundedly large must never become its own denial-of-service vector
-            // either.
+            // A full subnet table fails open, as the per-IP table does (see
+            // DnsRateLimitOptions.MaxTrackedClients).
             return DnsSubnetRateLimitDecisionEnum.Allow;
 
         window = SubnetWindows.GetOrAdd(subnetKey, _ => new SubnetWindow(Stopwatch.GetTimestamp()));
@@ -181,10 +171,9 @@ public sealed class TokenBucketDnsRateLimiter(
         {
             long now = Stopwatch.GetTimestamp();
 
-            // A fixed (not sliding) window: once SubnetSampleWindow has elapsed since it was
-            // last reset, both counters snap back to zero and a fresh window starts from now --
-            // simpler than a sliding window and adequate for catching a genuine sustained flood,
-            // which this check exists for, rather than smoothing every short-lived spike.
+            // A fixed, not sliding, window: once SubnetSampleWindow has passed since the last
+            // reset, both counters go back to zero. It is simpler than a sliding window and good
+            // enough for catching a sustained flood.
             if (
                 Stopwatch.GetElapsedTime(window.WindowStartTimestamp, now).TotalSeconds
                 >= options.Value.SubnetSampleWindow.TotalSeconds
@@ -204,19 +193,16 @@ public sealed class TokenBucketDnsRateLimiter(
                 if (window.UdpCount <= options.Value.SubnetUdpQueryLimit)
                     return DnsSubnetRateLimitDecisionEnum.Allow;
 
-                // Past the limit, UDP gets a graduated response rather than a flat drop: a
-                // random draw against SubnetTruncatePercentage decides whether this particular
-                // over-limit query is answered truncated (pushing a legitimate retry onto TCP,
-                // where the per-subnet TCP limit below takes over) or dropped outright -- see
-                // this limiter's own constructor doc comment for why a random split, rather than
-                // e.g. every Nth query, is used.
+                // Past the limit, a random draw against SubnetTruncatePercentage decides whether
+                // this query is answered truncated (a legitimate client retries over TCP, where
+                // the TCP limit below applies) or dropped.
                 return _randomSource() < options.Value.SubnetTruncatePercentage / 100.0
                     ? DnsSubnetRateLimitDecisionEnum.RespondTruncated
                     : DnsSubnetRateLimitDecisionEnum.Drop;
             }
 
-            // TCP gets no graduated response -- an over-limit TCP query is simply dropped, since
-            // there is no lower-cost transport left to redirect a legitimate retry onto.
+            // An over-limit TCP query is dropped: there is no other transport to send the client
+            // to.
             window.TcpCount++;
 
             return window.TcpCount <= options.Value.SubnetTcpQueryLimit
@@ -227,9 +213,10 @@ public sealed class TokenBucketDnsRateLimiter(
 
     /// <summary>
     ///     This method checks whether <paramref name="address" /> falls within any CIDR entry in
-    ///     <paramref name="bypassCidrs" />. A malformed entry is skipped rather than throwing --
-    ///     the same "an operator's configuration mistake degrades a feature, it does not crash the
-    ///     server" posture this project applies to comparable operator-supplied text elsewhere.
+    ///     <paramref name="bypassCidrs" />. A malformed entry is skipped rather than throwing, so a
+    ///     configuration mistake disables one entry instead of breaking query handling. An entry
+    ///     must name the network address itself: host bits after the prefix make it match
+    ///     nothing.
     /// </summary>
     private static bool IsBypassed(IPAddress address, List<string> bypassCidrs)
     {
@@ -257,11 +244,10 @@ public sealed class TokenBucketDnsRateLimiter(
     }
 
     /// <summary>
-    ///     This method masks <paramref name="address" /> down to its own network portion --
+    ///     This method masks <paramref name="address" /> to its network portion, keeping
     ///     <paramref name="prefixLengthIPv4" /> or <paramref name="prefixLengthIPv6" /> leading
-    ///     bits kept, every bit beyond that zeroed -- which is what actually turns "one address"
-    ///     into "one subnet bucket key": every address sharing the same masked result shares the
-    ///     same bucket.
+    ///     bits and zeroing the rest. The result is the subnet window key: addresses with the same
+    ///     masked value share a window. An IPv4-mapped IPv6 address is treated as IPv6.
     /// </summary>
     private static IPAddress MaskToPrefix(
         IPAddress address,
@@ -289,9 +275,9 @@ public sealed class TokenBucketDnsRateLimiter(
     }
 
     /// <summary>
-    ///     This class represents a single subnet's own fixed-window query counters. Every access
-    ///     to its mutable fields must hold a lock on the instance itself -- the same instance
-    ///     <see cref="CheckSubnetLimitAsync" /> already locks around a window-check-and-count.
+    ///     This class holds one subnet's fixed-window query counters. Every access to its fields
+    ///     must hold a lock on the instance, as <see cref="CheckSubnetLimitAsync" /> and
+    ///     <see cref="DnsRateLimitCleanupService" /> do.
     /// </summary>
     public sealed class SubnetWindow(long windowStartTimestamp)
     {
@@ -308,23 +294,22 @@ public sealed class TokenBucketDnsRateLimiter(
         public int TcpCount;
 
         /// <summary>
-        ///     This field contains when this window was last touched by a real query, consulted
-        ///     by <see cref="DnsRateLimitCleanupService" /> to decide whether this subnet bucket
-        ///     is stale enough to evict.
+        ///     This field contains when a query last touched this window.
+        ///     <see cref="DnsRateLimitCleanupService" /> uses it to decide when to evict it.
         /// </summary>
         public DateTimeOffset LastTouchedUtc = DateTimeOffset.UtcNow;
     }
 
     /// <summary>
-    ///     This class represents a single client IP's own token bucket. Every access to its
-    ///     mutable fields must hold a lock on the instance itself -- the same instance
-    ///     <see cref="TryAcquireAsync" /> already locks around a refill-and-spend check.
+    ///     This class holds one client IP's token bucket. Every access to its fields must hold a
+    ///     lock on the instance, as <see cref="TryAcquireAsync" /> and
+    ///     <see cref="DnsRateLimitCleanupService" /> do.
     /// </summary>
     public sealed class Bucket(double initialTokens)
     {
         /// <summary>
-        ///     This field contains the number of tokens currently available to spend -- one per
-        ///     query allowed through, refilled continuously up to <see cref="DnsRateLimitOptions.BurstSize" />.
+        ///     This field contains the tokens available to spend, one per query let through. It
+        ///     refills up to <see cref="DnsRateLimitOptions.BurstSize" />.
         /// </summary>
         public double Tokens = initialTokens;
 
@@ -335,9 +320,8 @@ public sealed class TokenBucketDnsRateLimiter(
         public long LastRefillTimestamp = Stopwatch.GetTimestamp();
 
         /// <summary>
-        ///     This field contains when this bucket was last touched by a real query, consulted
-        ///     by <see cref="DnsRateLimitCleanupService" /> to decide whether this bucket is
-        ///     stale enough to evict.
+        ///     This field contains when a query last touched this bucket.
+        ///     <see cref="DnsRateLimitCleanupService" /> uses it to decide when to evict it.
         /// </summary>
         public DateTimeOffset LastTouchedUtc = DateTimeOffset.UtcNow;
     }

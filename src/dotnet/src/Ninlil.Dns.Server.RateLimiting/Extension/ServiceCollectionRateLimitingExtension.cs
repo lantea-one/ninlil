@@ -7,18 +7,17 @@ namespace Ninlil.Dns.Server.RateLimiting.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's per-client-IP rate limiter.
+///     the DNS query rate limiter (per client IP and per subnet).
 /// </summary>
 public static class ServiceCollectionRateLimitingExtension
 {
     /// <summary>
     ///     This method registers <see cref="IDnsRateLimiter" /> (backed by
-    ///     <see cref="TokenBucketDnsRateLimiter" />) and its background cleanup sweep. A
-    ///     composition root that never calls this method leaves
-    ///     <see cref="Server.Core.Pipeline.DnsQueryProcessingPipeline" />'s own optional
-    ///     <c>rateLimiter</c> constructor parameter unresolved (<see langword="null" />), which
-    ///     is exactly equivalent to calling this method with <see cref="DnsRateLimitOptions.Enable" />
-    ///     left at its own <see langword="false" /> default.
+    ///     <see cref="TokenBucketDnsRateLimiter" />) and its cleanup service. Without this call,
+    ///     the optional <c>rateLimiter</c> parameter of
+    ///     <see cref="Server.Core.Pipeline.DnsQueryProcessingPipeline" /> stays
+    ///     <see langword="null" />, which behaves the same as registering it with
+    ///     <see cref="DnsRateLimitOptions.Enable" /> left <see langword="false" />.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read rate-limiting settings from.</param>

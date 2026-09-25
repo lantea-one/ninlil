@@ -6,15 +6,13 @@ using Ninlil.Dns.Server.Core.AccessControl;
 namespace Ninlil.Dns.Server.AccessControl;
 
 /// <summary>
-///     This class implements <see cref="IDnsAccessControlEngine" /> as a thin, synchronous-under-
-///     the-hood wrapper around <see cref="DnsAccessControlRuleCache" />'s own in-memory
-///     CIDR-containment check -- the exact "define the abstraction in <c>Server.Core</c>,
-///     implement it against an already-warm cache" shape
-///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c> establishes for
-///     <c>Ninlil.Dns.Server.Filtering.IDnsFilterEngine</c>, registered as a singleton the
-///     same way.
+///     This class implements <see cref="IDnsAccessControlEngine" />, which answers "does this
+///     client address hold this capability?" for the recursive resolver (recursion access) and
+///     <c>TokenBucketDnsRateLimiter</c> (rate-limit bypass). It is a thin wrapper over the
+///     in-memory check in <see cref="DnsAccessControlRuleCache" />, so a check never touches the
+///     database and completes synchronously. It is registered as a singleton.
 /// </summary>
-/// <param name="cache">The already-warm cache this engine answers every check from.</param>
+/// <param name="cache">The cache, loaded at startup, that answers every check.</param>
 public sealed class DnsAccessControlEngine(DnsAccessControlRuleCache cache)
     : IDnsAccessControlEngine
 {

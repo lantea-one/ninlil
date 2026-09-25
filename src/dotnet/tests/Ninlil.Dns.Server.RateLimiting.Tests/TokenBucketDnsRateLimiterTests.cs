@@ -8,6 +8,13 @@ using Ninlil.Dns.Server.RateLimiting.Tests.Fakes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.RateLimiting.Tests;
 
+/// <summary>
+///     This class tests the per-IP token bucket in <see cref="TokenBucketDnsRateLimiter" />
+///     (<see cref="TokenBucketDnsRateLimiter.TryAcquireAsync" />): burst, refill, per-client
+///     independence, failing open when the table is full, cleanup of idle buckets and the
+///     access-control bypass. It constructs the limiter directly, with a fake access-control
+///     engine where needed.
+/// </summary>
 public class TokenBucketDnsRateLimiterTests
 {
     private static readonly IPAddress ClientA = IPAddress.Parse("203.0.113.10");
@@ -88,8 +95,7 @@ public class TokenBucketDnsRateLimiterTests
         Assert.True(await limiter.TryAcquireAsync(ClientA));
         Assert.False(await limiter.TryAcquireAsync(ClientA));
 
-        // ClientB has never queried before, so its own bucket starts fully stocked regardless
-        // of ClientA's already-exhausted budget.
+        // ClientB has not queried before, so its bucket starts full whatever ClientA has spent.
         Assert.True(await limiter.TryAcquireAsync(ClientB));
     }
 
@@ -106,13 +112,12 @@ public class TokenBucketDnsRateLimiterTests
             }
         );
 
-        // ClientA fills the one available tracking slot, then exhausts its own budget.
+        // ClientA takes the one tracking slot, then exhausts its budget.
         Assert.True(await limiter.TryAcquireAsync(ClientA));
         Assert.False(await limiter.TryAcquireAsync(ClientA));
 
-        // ClientB would need a second tracking slot that does not exist; failing open (rather
-        // than denying) is the deliberate, documented choice so this limiter cannot itself
-        // become an unbounded-memory denial-of-service target.
+        // ClientB would need a second slot, so it is let through (see
+        // DnsRateLimitOptions.MaxTrackedClients).
         Assert.True(await limiter.TryAcquireAsync(ClientB));
     }
 
@@ -167,15 +172,13 @@ public class TokenBucketDnsRateLimiterTests
             accessControlEngine
         );
 
-        // Every one of these would exhaust, and then be denied by, an ordinary 1-token bucket --
-        // proved by AllowsUpToBurstSizeThenDeniesTheNextQuery above using the exact same options
-        // for a non-exempt client. This client is granted RateLimitBypass, so every single one of
-        // these must still succeed, against the real token-bucket implementation, not a mock.
+        // With these options a client without the bypass is denied after one query (see
+        // AllowsUpToBurstSizeThenDeniesTheNextQuery). This client holds RateLimitBypass, so all
+        // twenty succeed.
         for (int i = 0; i < 20; i++)
             Assert.True(await limiter.TryAcquireAsync(ClientA));
 
-        // The bypass check runs before the bucket lookup/creation, so an exempt client's own
-        // bucket must never even be created.
+        // The bypass check runs before the bucket lookup, so no bucket is created.
         Assert.False(limiter.Buckets.ContainsKey(ClientA));
     }
 
@@ -197,8 +200,7 @@ public class TokenBucketDnsRateLimiterTests
             accessControlEngine
         );
 
-        // ClientB is not granted the bypass, so it is limited exactly as before this capability
-        // existed, even though the same limiter instance also holds a granted client.
+        // ClientB has no bypass, so it is limited normally although ClientA is exempt.
         Assert.True(await limiter.TryAcquireAsync(ClientB));
         Assert.False(await limiter.TryAcquireAsync(ClientB));
     }
@@ -206,8 +208,7 @@ public class TokenBucketDnsRateLimiterTests
     [Fact]
     public async Task ANullAccessControlEngineLimitsEveryClientExactlyAsBeforeThisCapabilityExisted()
     {
-        // The default -- every existing caller that constructs this limiter directly (including
-        // every other test in this file) keeps compiling and behaving unchanged.
+        // No access-control engine (the default): no client is exempt.
         TokenBucketDnsRateLimiter limiter = CreateLimiter(
             new DnsRateLimitOptions
             {
@@ -223,19 +224,19 @@ public class TokenBucketDnsRateLimiterTests
 }
 
 /// <summary>
-///     This class covers <see cref="TokenBucketDnsRateLimiter.CheckSubnetLimitAsync" /> -- the
-///     second, independent, CIDR-subnet-bucketed rate-limit layer -- kept separate from
-///     <see cref="TokenBucketDnsRateLimiterTests" /> itself so each file stays focused on one of
-///     the two genuinely independent layers this class implements.
+///     This class tests the per-subnet layer of <see cref="TokenBucketDnsRateLimiter" />
+///     (<see cref="TokenBucketDnsRateLimiter.CheckSubnetLimitAsync" />): IPv4 /24 and IPv6 /56
+///     grouping, the truncate-or-drop split for UDP (with a fixed random source), dropping for
+///     TCP, bypass CIDRs, failing open, cleanup, and independence from the per-IP layer. It
+///     constructs the limiter directly.
 /// </summary>
 public class TokenBucketDnsRateLimiterSubnetTests
 {
-    // Both share one IPv4 /24 (203.0.113.0/24) -- the exact "different exact IP, same subnet"
-    // shape this layer exists to catch.
+    // Two addresses in one IPv4 /24 (203.0.113.0/24): different IPs, same subnet.
     private static readonly IPAddress ClientA = IPAddress.Parse("203.0.113.10");
     private static readonly IPAddress ClientB = IPAddress.Parse("203.0.113.20");
 
-    // A separate IPv4 /24 (RFC 5737 TEST-NET-2), for proving cross-subnet independence.
+    // A different IPv4 /24 (RFC 5737 TEST-NET-2), to show subnets are independent.
     private static readonly IPAddress ClientOtherSubnet = IPAddress.Parse("198.51.100.5");
 
     // Two addresses sharing one IPv6 /56 (RFC 3849 documentation prefix), and one outside it.
@@ -384,8 +385,8 @@ public class TokenBucketDnsRateLimiterSubnetTests
     [Fact]
     public async Task OverLimitUdpQueriesSplitBetweenTruncatedAndDroppedByTheConfiguredPercentage()
     {
-        // A fixed randomSource makes the split's own threshold comparison fully deterministic:
-        // 0.3 always lands below a 50% cutoff (truncated), 0.7 always lands above it (dropped).
+        // A fixed random source makes the split deterministic: 0.3 is below the 50% cutoff
+        // (truncated), 0.7 above it (dropped).
         Queue<double> randomValues = new([0.3, 0.7]);
         TokenBucketDnsRateLimiter limiter = CreateLimiter(
             new DnsRateLimitOptions
@@ -411,8 +412,8 @@ public class TokenBucketDnsRateLimiterSubnetTests
     [Fact]
     public async Task OverLimitTcpQueriesAreAlwaysDroppedNeverTruncated()
     {
-        // TC-forcing-a-TCP-retry is meaningless to a client already using TCP -- see
-        // DnsSubnetRateLimitDecisionEnum.RespondTruncated's own doc comment.
+        // Truncating to force a TCP retry means nothing to a client already on TCP (see
+        // DnsSubnetRateLimitDecisionEnum.RespondTruncated).
         TokenBucketDnsRateLimiter limiter = CreateLimiter(
             new DnsRateLimitOptions
             {
@@ -463,15 +464,14 @@ public class TokenBucketDnsRateLimiterSubnetTests
             }
         );
 
-        // ClientA's own /24 fills the one available subnet-tracking slot, then exhausts its own
-        // budget (limit of 0).
+        // ClientA's /24 takes the one subnet slot and is over its limit of 0 at once.
         Assert.Equal(
             DnsSubnetRateLimitDecisionEnum.Drop,
             await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)
         );
 
-        // A second, genuinely different /24 would need a second tracking slot that does not
-        // exist; failing open mirrors TryAcquireAsync's own MaxTrackedClients posture exactly.
+        // A second /24 would need a second slot, so it is let through, as TryAcquireAsync does
+        // for a full per-IP table.
         Assert.Equal(
             DnsSubnetRateLimitDecisionEnum.Allow,
             await limiter.CheckSubnetLimitAsync(ClientOtherSubnet, isUdp: true)
@@ -517,9 +517,8 @@ public class TokenBucketDnsRateLimiterSubnetTests
     [Fact]
     public async Task ThePerIpTokenBucketLayerIsCompletelyUnaffectedByTheSubnetLayer()
     {
-        // Both layers share the same class and DnsRateLimitOptions, but nothing else -- a real
-        // regression test that exhausting one never touches the other, not just an assertion
-        // that they happen not to share fields today.
+        // The two layers share the class and the options but no state: exhausting one must not
+        // affect the other.
         TokenBucketDnsRateLimiter limiter = CreateLimiter(
             new DnsRateLimitOptions
             {
@@ -532,20 +531,18 @@ public class TokenBucketDnsRateLimiterSubnetTests
             }
         );
 
-        // Exhaust ClientA's own subnet budget first.
+        // Exhaust ClientA's subnet budget first.
         Assert.Equal(
             DnsSubnetRateLimitDecisionEnum.Drop,
             await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)
         );
 
-        // The exact-IP token bucket has never been touched by any of the above, so it still
-        // grants its own full, independent burst allowance.
+        // The per-IP bucket is untouched, so it still grants its full burst.
         for (int i = 0; i < 5; i++)
             Assert.True(await limiter.TryAcquireAsync(ClientA));
         Assert.False(await limiter.TryAcquireAsync(ClientA));
 
-        // And the reverse: exhausting the per-IP bucket above must not have touched the subnet
-        // window's own already-exhausted state.
+        // And the reverse: exhausting the per-IP bucket leaves the subnet window as it was.
         Assert.Equal(
             DnsSubnetRateLimitDecisionEnum.Drop,
             await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)

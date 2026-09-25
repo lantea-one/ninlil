@@ -9,37 +9,28 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.AccessControl;
 
 /// <summary>
-///     This class holds every currently-enabled <see cref="DnsAccessControlRuleEntity" />, in
-///     memory, as a plain snapshot list -- the one thing standing between
-///     <see cref="DnsAccessControlEngine" /> and a database round trip on every single capability
-///     check it answers on this project's hot query-answering path.
+///     This class holds every enabled <see cref="DnsAccessControlRuleEntity" /> in memory, so
+///     <see cref="DnsAccessControlEngine" /> can answer capability checks on the query path
+///     without a database round trip.
 ///     <para>
-///         This mirrors <c>Ninlil.Dns.Server.Authoritative.Cache.AuthoritativeZoneCache</c>'s
-///         own "load once in <see cref="StartAsync" />, invalidate via the event bus" shape --
-///         confirmed by Phase 5o-10a's own design record to be the real, working precedent for
-///         this pattern in this codebase, not <c>DnsFilterEngine</c> (which, read directly, opens
-///         a fresh repository scope on every single call and caches nothing about client
-///         groups/networks at all). Unlike <c>AuthoritativeZoneCache</c>, which reloads a single
-///         changed zone in isolation, this cache always reloads its <em>entire</em> snapshot on
-///         invalidation -- a deliberate difference: an access-control rule table is small and
-///         flat, homelab-scale (the same assumption <c>Ninlil.Dns.Server.RateLimiting.TokenBucketDnsRateLimiter</c>'s
-///         own doc comment already makes about this deployment target), so a full reload is
-///         simpler and cheap enough not to need row-level invalidation the way a zone's own
-///         potentially-thousands-of-records content would.
+///         It follows the pattern of <c>Ninlil.Dns.Server.Authoritative.Cache.AuthoritativeZoneCache</c>:
+///         it loads in <see cref="StartAsync" /> and is invalidated through the event bus
+///         (<see cref="DnsAccessControlRuleChangedEventSubscriber" />, fed by
+///         <c>DnsAccessControlRulesController</c>). Unlike the zone cache, which reloads one
+///         changed zone, it always reloads the whole rule set: the table is small and flat, so a
+///         full reload is simple and cheap.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to reach <see cref="IDnsAccessControlRuleRepository" /> in a scope of its
-///     own, so this cache never holds a database context open longer than a single load.
+///     The factory used to reach <see cref="IDnsAccessControlRuleRepository" /> in a short-lived
+///     scope, so the cache never holds a database context open longer than one load.
 /// </param>
 public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory) : IHostedService
 {
     /// <summary>
-    ///     This field contains the current, complete, immutable snapshot of every enabled rule.
-    ///     Replaced wholesale, never mutated in place, so a concurrent reader never observes a
-    ///     half-built snapshot -- the same "swap a whole new immutable value in" safety a
-    ///     <c>ConcurrentDictionary</c> gives <c>AuthoritativeZoneCache</c> per-key, applied here at
-    ///     the whole-list granularity this cache actually reloads at.
+    ///     This field contains the current snapshot of every enabled rule. A reload replaces the
+    ///     whole list and never mutates it in place, so a concurrent reader never sees a
+    ///     half-built snapshot.
     /// </summary>
     private volatile IReadOnlyList<DnsAccessControlRuleEntity> _rules = [];
 
@@ -51,18 +42,16 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
-    ///     This method checks whether any currently-cached, enabled rule grants a specific
-    ///     capability to an address -- answered entirely from the in-memory snapshot
-    ///     <see cref="_rules" /> already holds, with zero synchronous database I/O.
+    ///     This method checks whether any cached rule grants a capability to an address. It reads
+    ///     only the in-memory snapshot in <see cref="_rules" />, never the database.
     /// </summary>
-    /// <param name="remoteAddress">The querying client's own source address.</param>
+    /// <param name="remoteAddress">The querying client's source address.</param>
     /// <param name="capability">The capability being checked for.</param>
     /// <returns><see langword="true" /> if at least one cached rule grants it.</returns>
     public bool HasCapability(IPAddress remoteAddress, DnsAccessControlCapabilityEnum capability)
     {
-        // Capture the current snapshot reference once -- ReloadAsync may swap _rules to a new
-        // list concurrently, but this method must only ever see one consistent list for the
-        // duration of this single check, never a mix of the old and new.
+        // Read the snapshot reference once: ReloadAsync may swap _rules concurrently, and one
+        // check must see a single consistent list, never a mix of old and new.
         IReadOnlyList<DnsAccessControlRuleEntity> rules = _rules;
 
         foreach (DnsAccessControlRuleEntity rule in rules)
@@ -78,10 +67,8 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
     }
 
     /// <summary>
-    ///     This method reloads this cache's entire snapshot from the database, replacing whatever
-    ///     it currently holds -- the only reload shape this cache supports (see this class's own
-    ///     doc comment for why a whole-set reload, rather than a single-rule reload, is the right
-    ///     tradeoff here).
+    ///     This method reloads the whole snapshot from the database and replaces the current one.
+    ///     There is no single-rule reload (see the class summary for why).
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadAsync(CancellationToken stoppingToken = default)
@@ -95,10 +82,10 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
 
     /// <summary>
     ///     This method checks whether a network entry (a bare address or a CIDR network) contains
-    ///     a single address -- the same tolerant parsing <c>DnsFilterEngine.NetworkContains</c>
-    ///     already applies to a comparably free-text network field, even though
-    ///     <see cref="DnsAccessControlRuleEntity.Cidr" />'s own doc comment expects every stored
-    ///     value to already be in <see cref="IPNetwork.Parse(string)" />-compatible form.
+    ///     an address. The controller validates <see cref="DnsAccessControlRuleEntity.Cidr" />,
+    ///     but the parsing stays tolerant, as in <c>DnsFilterEngine.NetworkContains</c>: a value
+    ///     that does not parse matches nothing. The comparison is exact, so an IPv4-mapped IPv6
+    ///     address does not match an IPv4 network.
     /// </summary>
     private static bool NetworkContains(string cidr, IPAddress address)
     {

@@ -5,12 +5,13 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dns.Server.RateLimiting;
 
 /// <summary>
-///     This class periodically evicts every tracked bucket <see cref="TokenBucketDnsRateLimiter" />
-///     has not seen a query from in at least <see cref="DnsRateLimitOptions.TrackedClientExpiry" />,
-///     so a client that stops querying does not sit in memory forever.
+///     This class runs every <see cref="DnsRateLimitOptions.CleanupInterval" /> and evicts the
+///     per-IP buckets and subnet windows of <see cref="TokenBucketDnsRateLimiter" /> that have not
+///     seen a query for <see cref="DnsRateLimitOptions.TrackedClientExpiry" />, so a client that
+///     stops querying does not stay in memory. It does nothing when rate limiting is disabled.
 /// </summary>
-/// <param name="rateLimiter">The limiter whose own tracked buckets this service sweeps.</param>
-/// <param name="options">This service's own configured sweep interval and eviction age.</param>
+/// <param name="rateLimiter">The limiter whose tracked buckets this service sweeps.</param>
+/// <param name="options">The sweep interval and eviction age.</param>
 public sealed class DnsRateLimitCleanupService(
     TokenBucketDnsRateLimiter rateLimiter,
     IOptions<DnsRateLimitOptions> options
@@ -37,10 +38,9 @@ public sealed class DnsRateLimitCleanupService(
     }
 
     /// <summary>
-    ///     This method removes every per-IP bucket and every subnet window whose own client (or
-    ///     subnet) has been silent for longer than <see cref="DnsRateLimitOptions.TrackedClientExpiry" />
-    ///     -- the same staleness threshold governs both, since neither has its own dedicated
-    ///     configuration knob and the two dictionaries otherwise share nothing.
+    ///     This method removes every per-IP bucket and subnet window whose client or subnet has
+    ///     been silent for longer than <see cref="DnsRateLimitOptions.TrackedClientExpiry" />. Both
+    ///     use that one setting; there is no separate expiry for subnets.
     /// </summary>
     public void Sweep()
     {

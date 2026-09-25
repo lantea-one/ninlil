@@ -2,14 +2,14 @@ using System.Net;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Server.Core.AccessControl;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.RateLimiting.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IDnsAccessControlEngine" />, granting a
-///     capability to exactly the addresses a test configures -- so
-///     <see cref="TokenBucketDnsRateLimiter" />'s own real bypass-check widening can be exercised
-///     deterministically, without needing the real cache/repository/event-bus machinery
-///     <c>Ninlil.Dns.Server.AccessControl.Tests</c> already covers directly.
+///     This class is a fake <see cref="IDnsAccessControlEngine" /> that grants one capability to
+///     the addresses a test lists with <see cref="Grant" />. It lets the tests exercise the
+///     bypass check in <see cref="TokenBucketDnsRateLimiter" /> without the rule cache,
+///     repository and event bus, which <c>Ninlil.Dns.Server.AccessControl.Tests</c> covers.
 /// </summary>
 public sealed class FakeDnsAccessControlEngine : IDnsAccessControlEngine
 {

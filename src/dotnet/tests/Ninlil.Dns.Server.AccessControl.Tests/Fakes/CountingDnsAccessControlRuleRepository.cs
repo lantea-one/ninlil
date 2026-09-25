@@ -2,16 +2,13 @@ using System.Linq.Expressions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.AccessControl.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IDnsAccessControlRuleRepository" />, backed by
-///     a plain in-memory list, with an <see cref="Interlocked" />-counted
-///     <see cref="ListEnabledAsyncCallCount" /> -- the same "fake repository with a read counter
-///     standing in for a real database" shape the original throwaway spike used to prove
-///     <see cref="DnsAccessControlRuleCache" />'s hot-path read behavior, now committed as a real
-///     test double so that proof can be re-run as a permanent, automated test rather than a
-///     one-off console run.
+///     This class is an in-memory <see cref="IDnsAccessControlRuleRepository" /> that counts calls
+///     to <see cref="ListEnabledAsync" /> in <see cref="ListEnabledAsyncCallCount" />. The tests use
+///     the count to show when <see cref="DnsAccessControlRuleCache" /> reads the repository.
 /// </summary>
 public sealed class CountingDnsAccessControlRuleRepository : IDnsAccessControlRuleRepository
 {
@@ -20,17 +17,15 @@ public sealed class CountingDnsAccessControlRuleRepository : IDnsAccessControlRu
     private int _listEnabledAsyncCallCount;
 
     /// <summary>
-    ///     This property contains how many times <see cref="ListEnabledAsync" /> has actually
-    ///     been called -- the one call <see cref="DnsAccessControlRuleCache" /> is allowed to make
-    ///     per load/reload, and the metric these tests assert never advances on an ordinary
-    ///     capability check.
+    ///     This property contains how many times <see cref="ListEnabledAsync" /> has been called.
+    ///     <see cref="DnsAccessControlRuleCache" /> calls it once per load or reload, and never
+    ///     during a capability check.
     /// </summary>
     public int ListEnabledAsyncCallCount => _listEnabledAsyncCallCount;
 
     /// <summary>
-    ///     This method seeds a rule directly into this fake's backing list, bypassing
-    ///     <see cref="AddAsync" /> -- used by a test to set up state before the cache's own
-    ///     initial load, without that seeding itself counting as an application-level write.
+    ///     This method adds a rule to the backing list. It does the same as <see cref="AddAsync" />
+    ///     but reads as test setup rather than an application write.
     /// </summary>
     public void Seed(DnsAccessControlRuleEntity rule) => _rules.Add(rule);
 

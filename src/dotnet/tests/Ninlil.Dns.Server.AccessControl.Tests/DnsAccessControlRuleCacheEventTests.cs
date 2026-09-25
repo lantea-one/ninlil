@@ -14,14 +14,13 @@ using Ninlil.Dns.Server.Core.Extension;
 namespace Ninlil.Dns.Server.AccessControl.Tests;
 
 /// <summary>
-///     This class proves, against the real <see cref="DnsAccessControlRuleCache" />,
-///     <see cref="DnsAccessControlEngine" />, and event bus (<see cref="IDnsServerEventPublisher" />/
-///     <see cref="DnsServerEventDispatcher" />/<see cref="DnsAccessControlRuleChangedEventSubscriber" />)
-///     -- not a mock, not the throwaway spike that first proved this design out -- the exact claim
-///     that spike made informally: once warm, capability resolution
-///     performs zero synchronous database I/O, and a rule change is reflected only after a real, published
-///     <see cref="DnsAccessControlRuleChangedEvent" /> triggers a single whole-set reload, never a
-///     per-lookup read.
+///     This class tests <see cref="DnsAccessControlRuleCache" /> and
+///     <see cref="DnsAccessControlEngine" /> together with the event bus
+///     (<see cref="IDnsServerEventPublisher" />, <see cref="DnsServerEventDispatcher" /> and
+///     <see cref="DnsAccessControlRuleChangedEventSubscriber" />) in a generic host, with a
+///     counting fake repository in place of the database. It checks that, once loaded,
+///     capability checks never read the repository, and that a published
+///     <see cref="DnsAccessControlRuleChangedEvent" /> causes one whole-set reload.
 /// </summary>
 public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
 {
@@ -37,18 +36,15 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
-        // A fake repository, not a real database, backs this test -- the same substitution
-        // the original throwaway spike made, so ListEnabledAsyncCallCount can prove exactly how
-        // many times the cache actually reads from it.
+        // A counting fake stands in for the database, so ListEnabledAsyncCallCount shows how
+        // many times the cache reads it.
         builder.Services.AddSingleton<IDnsAccessControlRuleRepository>(_repository);
 
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerAccessControl();
 
-        // Seeded before the host starts, so DnsAccessControlRuleCache.StartAsync's own initial
-        // load (run synchronously as part of _host.StartAsync(), the same guarantee
-        // SignedZoneCacheEventTests documents for an ordinary IHostedService) picks it up as call
-        // #1.
+        // Seeded before the host starts, so the cache's initial load in StartAsync (awaited by
+        // _host.StartAsync()) picks these rules up as read number 1.
         _repository.Seed(
             new DnsAccessControlRuleEntity
             {
@@ -95,7 +91,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
         IDnsAccessControlEngine engine =
             _host.Services.GetRequiredService<IDnsAccessControlEngine>();
 
-        // A real, matching grant.
+        // A matching grant.
         for (int i = 0; i < 10_000; i++)
             Assert.True(
                 await engine.HasCapabilityAsync(
@@ -104,7 +100,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
                 )
             );
 
-        // A real, non-matching client.
+        // A client no enabled rule matches.
         for (int i = 0; i < 10_000; i++)
             Assert.False(
                 await engine.HasCapabilityAsync(
@@ -113,8 +109,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
                 )
             );
 
-        // A client matching a disabled rule's own network is treated exactly as if that rule did
-        // not exist at all -- DnsAccessControlRuleEntity.IsDisabled's own documented contract.
+        // A client in a disabled rule's network is treated as if the rule did not exist.
         for (int i = 0; i < 10_000; i++)
             Assert.False(
                 await engine.HasCapabilityAsync(
@@ -123,8 +118,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
                 )
             );
 
-        // 30,000 real capability checks against the real cache/engine, and the fake repository
-        // was still only ever read once -- the initial load.
+        // 30,000 checks later, the repository has still been read only once: the initial load.
         Assert.Equal(1, _repository.ListEnabledAsyncCallCount);
     }
 
@@ -137,7 +131,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
         IDnsAccessControlEngine engine =
             _host.Services.GetRequiredService<IDnsAccessControlEngine>();
 
-        // Not yet granted -- this rule does not exist in the cache's own snapshot yet.
+        // Not granted yet: the rule is not in the cache's snapshot.
         Assert.False(
             await engine.HasCapabilityAsync(
                 ExemptAddress,
@@ -158,15 +152,13 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
             }
         );
 
-        // A real publish through the real event bus -- not a direct method call into the cache.
+        // Publish through the event bus rather than calling the cache directly.
         IDnsServerEventPublisher publisher =
             _host.Services.GetRequiredService<IDnsServerEventPublisher>();
         publisher.Publish(new DnsAccessControlRuleChangedEvent(DateTimeOffset.UtcNow, newRuleId));
 
-        // DnsServerEventDispatcher delivers off the caller's own call stack, so this test polls
-        // for the effect rather than asserting it immediately -- the same idiom
-        // CloudDnsZoneSyncFailureEventTests/AcmeCertificateRenewalServiceEventTests already use
-        // for an equivalent asynchronously-delivered event.
+        // DnsServerEventDispatcher delivers events in the background, so poll for the effect
+        // instead of asserting it immediately.
         bool granted = false;
         for (int attempt = 0; attempt < 100 && !granted; attempt++)
         {
@@ -181,8 +173,7 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
 
         Assert.True(granted);
 
-        // Exactly one reload happened -- the whole set was re-read once, not once per rule and
-        // not once per lookup.
+        // One reload: the whole set was read once, not once per rule or per lookup.
         Assert.Equal(2, _repository.ListEnabledAsyncCallCount);
 
         // Further lookups after the reload still cost nothing extra.

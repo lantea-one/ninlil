@@ -9,10 +9,10 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 namespace Ninlil.Dns.Server.AccessControl.Tests;
 
 /// <summary>
-///     This class proves <see cref="DnsAccessControlRuleRepository" /> actually round-trips a
-///     <see cref="DnsAccessControlRuleEntity" /> against a real SQLite database -- not just "the
-///     code compiles against <see cref="EntityFrameworkRepositoryBase{TEntity}" />'s own generic
-///     shape."
+///     This class tests that <see cref="DnsAccessControlRuleRepository" /> (built on
+///     <see cref="EntityFrameworkRepositoryBase{TEntity}" />) stores, reads, updates and removes a
+///     <see cref="DnsAccessControlRuleEntity" />, and that <c>ListEnabledAsync</c> skips disabled
+///     rules. Each test uses a temporary SQLite database file.
 /// </summary>
 public sealed class DnsAccessControlRuleRepositoryTests : IDisposable
 {
@@ -62,9 +62,8 @@ public sealed class DnsAccessControlRuleRepositoryTests : IDisposable
         );
         await _context.SaveChangesAsync();
 
-        // A fresh context, standing in for a fresh scope/request, confirms this was actually
-        // written to the database rather than merely still tracked in memory by the same context
-        // instance that wrote it.
+        // A second context, standing in for a new request, confirms the rule was written to the
+        // database and is not just tracked in memory by the context that added it.
         DbContextOptionsBuilder<NinlilDnsContext> freshOptionsBuilder = new();
         freshOptionsBuilder.UseNinlilDnsSqlite($"Data Source={_databasePath}");
         await using NinlilDnsContext freshContext = new(freshOptionsBuilder.Options);

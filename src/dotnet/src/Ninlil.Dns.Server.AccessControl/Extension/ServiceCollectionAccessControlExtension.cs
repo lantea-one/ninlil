@@ -7,17 +7,16 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.AccessControl.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's Phase 5o-10 real per-client/network access-control engine.
+///     This class provides our <see cref="IServiceCollection" /> extension for wiring up the
+///     per-network access-control engine (recursion access and rate-limit bypass rules).
 /// </summary>
 public static class ServiceCollectionAccessControlExtension
 {
     /// <summary>
-    ///     This method registers the access-control rule cache, its own change-driven
-    ///     invalidation subscriber, and the engine that answers every real capability check from
-    ///     it -- mirroring exactly how <c>ServiceCollectionFilteringExtension</c> registers
-    ///     <c>DnsFilterEngine</c> and how <c>ServiceCollectionAuthoritativeExtension</c> registers
-    ///     <c>AuthoritativeZoneCache</c>/<c>ZoneChangedEventSubscriber</c>.
+    ///     This method registers the access-control rule cache, the event subscriber that reloads
+    ///     it when a rule changes, and the engine that answers capability checks from it. The
+    ///     cache and subscriber are registered the same way as <c>AuthoritativeZoneCache</c> and
+    ///     <c>ZoneChangedEventSubscriber</c>.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
@@ -25,27 +24,22 @@ public static class ServiceCollectionAccessControlExtension
         this IServiceCollection instance
     )
     {
-        // DnsAccessControlRuleCache is registered once, as a singleton, under both its concrete
-        // type (which DnsAccessControlEngine and DnsAccessControlRuleChangedEventSubscriber
-        // depend on directly) and IHostedService (so the host starts it, triggering its initial
-        // full load) -- the exact same "one singleton, two registrations" shape
-        // AuthoritativeZoneCache already uses.
+        // One singleton, registered under its concrete type (which DnsAccessControlEngine and
+        // DnsAccessControlRuleChangedEventSubscriber depend on) and as IHostedService (so the
+        // host starts it and runs the initial load), as AuthoritativeZoneCache is.
         instance.AddSingleton<DnsAccessControlRuleCache>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<DnsAccessControlRuleCache>()
         );
 
-        // Singleton, not scoped: RecursiveQueryResolver and TokenBucketDnsRateLimiter (both
-        // themselves singletons) take IDnsAccessControlEngine as a direct constructor dependency,
-        // so a scoped registration here would be an invalid captive dependency. The engine itself
-        // never opens a repository directly -- it only ever reads DnsAccessControlRuleCache's
-        // already-warm in-memory snapshot.
+        // Singleton, not scoped: RecursiveQueryResolver and TokenBucketDnsRateLimiter are
+        // singletons that take IDnsAccessControlEngine in their constructors, so a scoped
+        // registration would be a captive dependency. The engine never opens a repository; it
+        // reads only the cache's in-memory snapshot.
         instance.AddSingleton<IDnsAccessControlEngine, DnsAccessControlEngine>();
 
-        // Registered against DnsAccessControlRuleCache's own singleton instance too, the same
-        // "scoped subscriber over a singleton dependency" shape ZoneChangedEventSubscriber uses,
-        // since DnsServerEventDispatcher always resolves subscribers through a fresh scope per
-        // event regardless of what they themselves depend on.
+        // Scoped, because DnsServerEventDispatcher resolves subscribers in a fresh scope per
+        // event; it still receives the singleton cache, as ZoneChangedEventSubscriber does.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsAccessControlRuleChangedEvent>,
             DnsAccessControlRuleChangedEventSubscriber
