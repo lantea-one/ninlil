@@ -4,19 +4,18 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Presets;
 
 /// <summary>
-///     This record describes a single subscribed block/allow list a preset attaches to the
-///     default client group -- <see cref="PresetFilterListApplier" />'s own unit of work,
-///     matching the exact shape <c>DnsFilterListEntity</c> and
-///     <c>DnsFilterListExternalRefreshService</c>'s own subscribed-list refresh mechanism
-///     already expect.
+///     This record describes one subscribed block or allow list that a preset attaches to the
+///     default client group. <see cref="PresetFilterListApplier" /> turns it into a
+///     <c>DnsFilterListEntity</c>, which <c>DnsFilterListExternalRefreshService</c> then fetches
+///     and refreshes like any other subscribed list.
 /// </summary>
 /// <param name="Name">
 ///     A stable, preset-owned name (for example <c>"Ninlil Preset: Protective Threat Feed"</c>)
 ///     used both as the persisted <c>DnsFilterListEntity.Name</c> and as the idempotency key
 ///     <see cref="PresetFilterListApplier" /> matches on when a preset is applied more than once.
 /// </param>
-/// <param name="Kind">The kind of list this is -- every preset-owned list is a domain block list.</param>
-/// <param name="Action">Whether this list's own entries are blocked or allowed.</param>
+/// <param name="Kind">The kind of list; every built-in preset list is a domain list.</param>
+/// <param name="Action">Whether the list's entries are blocked or allowed.</param>
 /// <param name="SubscriptionUrl">The URL this list's entries are fetched from (hosts-file, bare-domain or adblock syntax).</param>
 /// <param name="RefreshInterval">How often the subscribed URL should be refetched.</param>
 public sealed record PresetFilterListSubscription(

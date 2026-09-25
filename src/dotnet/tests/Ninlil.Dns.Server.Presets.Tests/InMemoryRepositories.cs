@@ -5,6 +5,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets.Tests;
 
+/// <summary>
+///     This class is a list-backed <see cref="IDnsFilterListRepository" /> for the preset tests.
+///     <see cref="Update" /> does nothing: the stored entity is the same instance the caller
+///     changed.
+/// </summary>
 public sealed class InMemoryDnsFilterListRepository : IDnsFilterListRepository
 {
     public readonly List<DnsFilterListEntity> Items = [];
@@ -50,6 +55,9 @@ public sealed class InMemoryDnsFilterListRepository : IDnsFilterListRepository
         Task.FromResult(Items.Count);
 }
 
+/// <summary>
+///     This class is a list-backed <see cref="IDnsClientGroupRepository" /> for the preset tests.
+/// </summary>
 public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
 {
     public readonly List<DnsClientGroupEntity> Items = [];
@@ -98,6 +106,10 @@ public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
         Task.FromResult(Items.Count);
 }
 
+/// <summary>
+///     This class is a list-backed <see cref="IDnsClientGroupListAssignmentRepository" /> for the
+///     preset tests.
+/// </summary>
 public sealed class InMemoryDnsClientGroupListAssignmentRepository
     : IDnsClientGroupListAssignmentRepository
 {
@@ -157,6 +169,10 @@ public sealed class InMemoryDnsClientGroupListAssignmentRepository
     ) => Task.FromResult(Items.Count(item => item.ClientGroupId == clientGroupId));
 }
 
+/// <summary>
+///     This class is an <see cref="IUnitOfWork" /> that saves nothing and counts
+///     <see cref="SaveChangesAsync" /> calls, so tests can check how often changes are committed.
+/// </summary>
 public sealed class InMemoryUnitOfWork : IUnitOfWork
 {
     public int SaveChangesCallCount { get; private set; }

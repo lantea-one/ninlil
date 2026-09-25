@@ -4,41 +4,39 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Presets;
 
 /// <summary>
-///     This class contains every built-in <see cref="PresetDefinition" />, drawn from real
-///     community/operational DNS-hardening conventions rather than an arbitrary, invented naming
-///     scheme.
+///     This class contains the built-in <see cref="PresetDefinition" /> values, named after
+///     established DNS-hardening and filtering terms. <c>PresetsController</c> lists them and
+///     applies one through <see cref="PresetApplier" />.
 ///     <para>
-///         Layering: <see cref="Open" /> is a strict subset of <see cref="Baseline" />, which is
-///         a strict subset of <see cref="Protective" />, which is a strict subset of
-///         <see cref="Family" />. <see cref="Fips" /> is its own, independent crypto-policy axis
-///         -- it starts from <see cref="Baseline" />'s own hardening posture but swaps in its own
-///         stricter crypto/DNSCrypt/TLS choices instead of adding a blocklist; it is deliberately
-///         not layered on <see cref="Protective" />/<see cref="Family" />.
+///         Layering: <see cref="Protective" /> is <see cref="Baseline" /> plus a threat list,
+///         and <see cref="Family" /> is <see cref="Protective" /> plus a content list.
+///         <see cref="Open" /> turns off what the others turn on and clears the crypto
+///         restrictions <see cref="Fips" /> sets. <see cref="Fips" /> is a separate crypto-policy
+///         preset: it hardens like <see cref="Baseline" />, more strictly, and restricts
+///         DNSSEC, TLS and DNSCrypt instead of adding block lists, so it does not build on
+///         <see cref="Protective" /> or <see cref="Family" />.
 ///     </para>
 /// </summary>
 public static class DnsServerPresetCatalog
 {
     /// <summary>
-    ///     This constant contains how often a preset's own subscribed block list is refetched --
-    ///     shared by every preset that subscribes to one, since neither <see cref="Protective" />
-    ///     nor <see cref="Family" /> has a reason to refresh on a different schedule.
+    ///     This field contains how often a preset's subscribed block lists are fetched again.
+    ///     <see cref="Protective" /> and <see cref="Family" /> share it.
     /// </summary>
     private static readonly TimeSpan SubscribedListRefreshInterval = TimeSpan.FromHours(24);
 
     /// <summary>
-    ///     This preset removes every hardening this catalog's other presets can apply -- rate
-    ///     limiting off, filtering off, DNS Cookies supported but not required, no DNSSEC
-    ///     algorithm or TLS protocol restriction. It is today's own un-hardened defaults, kept as
-    ///     its own explicit, selectable preset (rather than folded away as "simply never apply a
-    ///     preset") so an operator who applied <see cref="Family" /> or <see cref="Fips" />
-    ///     earlier can bulk-*revert* to this in one action, per the confirmed
-    ///     "overwrite-then-editable" preset semantics.
+    ///     This preset turns off the hardening the other presets apply: rate limiting off,
+    ///     filtering off, DNS Cookies supported but not required, and no DNSSEC algorithm or TLS
+    ///     protocol restriction. These match the shipped defaults. It exists as a preset so an
+    ///     operator who applied <see cref="Family" /> or <see cref="Fips" /> can revert in one
+    ///     action. It leaves the rate-limit rates, the UDP amplification cap and DNSSEC
+    ///     validation as they are.
     ///     <para>
-    ///         Deliberately does <em>not</em> touch <c>DnsServer:Protocol:DnsCrypt:Enable</c>:
-    ///         that toggle governs a whole new network listener, a capability decision
-    ///         independent of hardening posture (see invariant #6), not a restriction this
-    ///         preset needs to remove -- only <see cref="Fips" /> disables it, and only this
-    ///         preset resets the crypto-restriction knobs <see cref="Fips" /> itself touches.
+    ///         It does not touch <c>DnsServer:Protocol:DnsCrypt:Enable</c>. That switch turns a
+    ///         network listener on or off, which is a capability choice rather than a
+    ///         restriction, so reverting hardening must not turn it on. Only <see cref="Fips" />
+    ///         sets it.
     ///     </para>
     /// </summary>
     public static readonly PresetDefinition Open = new(
@@ -69,14 +67,12 @@ public static class DnsServerPresetCatalog
     );
 
     /// <summary>
-    ///     This preset applies the unified, unbranded best-practice posture RIPE-823 ("DNS
-    ///     Resolver Recommendations"), the ICANN-affiliated KINDNS "Private Resolver Operators'
-    ///     Implementation Guidelines," and NIST SP 800-81 Rev. 3 all converge on: DNSSEC
-    ///     validation on (already this project's own default), moderate rate limiting, DNS
-    ///     Cookies supported but not required, and the UDP amplification cap at its own defaults
-    ///     -- no content or threat filtering of any kind. None of those three
-    ///     sources define a named tier themselves; "Baseline" is this project's own name for
-    ///     "apply the currently recommended protocol/transport hardening."
+    ///     This preset applies the resolver hardening that RIPE-823 ("DNS Resolver
+    ///     Recommendations"), the ICANN-affiliated KINDNS "Private Resolver Operators'
+    ///     Implementation Guidelines" and NIST SP 800-81 Rev. 3 agree on: DNSSEC validation on
+    ///     (also the default), moderate rate limiting, DNS Cookies supported but not required,
+    ///     and the UDP amplification cap at its default values. It does no content or threat
+    ///     filtering. None of those sources names a tier; "Baseline" is Ninlil's name for it.
     /// </summary>
     public static readonly PresetDefinition Baseline = new(
         "Baseline",
@@ -100,15 +96,13 @@ public static class DnsServerPresetCatalog
     );
 
     /// <summary>
-    ///     This preset is named after CISA/NSA's own "Protective DNS" (PDNS) term of art for a
-    ///     resolver that blocks known-malicious domains via threat-intelligence feeds.
-    ///     <see cref="Baseline" />'s own settings, plus block/allow-list filtering turned on
-    ///     with a security-only threat blocklist attached to the default client group -- source:
-    ///     HaGeZi's "TIF" (Threat Intelligence Feeds) medium tier, in its "Wildcard Domains"
-    ///     (bare-domain-per-line) format, which <c>DnsFilterListParser</c> reads as bare domains
-    ///     even though it carries no <c>0.0.0.0</c> address prefix at all. Deliberately
-    ///     blocks nothing else (no ads, no content) -- the same scope discipline Quad9 itself
-    ///     holds to.
+    ///     This preset is named after the CISA/NSA "Protective DNS" (PDNS) term for a resolver
+    ///     that blocks known-malicious domains using threat-intelligence feeds. It is
+    ///     <see cref="Baseline" /> plus filtering turned on, with a security-only threat list
+    ///     attached to the default client group: HaGeZi's "TIF" (Threat Intelligence Feeds)
+    ///     medium tier in its "Wildcard Domains" format, one bare domain per line, which
+    ///     <c>DnsFilterListParser</c> reads as domains. It blocks no ads or content, the same
+    ///     scope as Quad9.
     /// </summary>
     public static readonly PresetDefinition Protective = new(
         "Protective",
@@ -129,12 +123,12 @@ public static class DnsServerPresetCatalog
     );
 
     /// <summary>
-    ///     This preset is named after the real, established "Family Filter"/"FamilyShield" term
-    ///     CleanBrowsing and OpenDNS both already use for this exact category.
-    ///     <see cref="Protective" />'s own settings (including its threat blocklist), plus an
-    ///     adult/explicit-content blocklist on the same default client group -- source:
-    ///     StevenBlack's <c>fakenews-gambling-porn</c> hosts variant, a genuine
-    ///     <c>0.0.0.0 domain</c>-per-line hosts file.
+    ///     This preset is named after the "Family Filter" and "FamilyShield" terms CleanBrowsing
+    ///     and OpenDNS use for this category. It is <see cref="Protective" />, threat list
+    ///     included, plus StevenBlack's <c>fakenews-gambling-porn</c> hosts file (one
+    ///     <c>0.0.0.0 domain</c> per line) on the same default client group. That file is
+    ///     StevenBlack's unified ad and malware list extended with fake-news, gambling and adult
+    ///     domains, so it blocks more than adult content.
     /// </summary>
     public static readonly PresetDefinition Family = new(
         "Family",
@@ -153,25 +147,22 @@ public static class DnsServerPresetCatalog
     );
 
     /// <summary>
-    ///     This preset restricts Ninlil's own configuration surface to policy choices
-    ///     commonly associated with FIPS 140 compliance: DNSSEC key generation restricted to
-    ///     RSA (SHA-256) and ECDSA P-256/P-384 -- excluding Ed25519/Ed448 (not FIPS-approved
-    ///     until FIPS 186-5, and BouncyCastle's implementation is not a validated module
-    ///     regardless) and DSA; DNSCrypt disabled entirely (neither Sodium nor BouncyCastle are
-    ///     FIPS-validated modules); TLS-based transports restricted to TLS 1.2+; strict rate
-    ///     limiting; DNS Cookies required.
+    ///     This preset limits Ninlil's configuration to policy choices commonly associated with
+    ///     FIPS 140: DNSSEC algorithms restricted to RSA/SHA-256 and ECDSA P-256/P-384, which
+    ///     excludes Ed25519 and Ed448 (not FIPS-approved before FIPS 186-5, and the BouncyCastle
+    ///     implementation is not a validated module either way) and DSA; DNSCrypt off (neither
+    ///     Sodium nor BouncyCastle is a FIPS-validated module); the TLS transports limited to
+    ///     TLS 1.2 and 1.3; strict rate limiting; DNS Cookies required.
     ///     <para>
-    ///         <strong>Important disclaimer, kept prominent wherever this preset is
-    ///         documented</strong>: applying this preset does <em>not</em>, and cannot, make this
-    ///         software a FIPS 140-3 <em>validated cryptographic module</em> -- that requires a
-    ///         formal NIST CMVP validation of the actual crypto implementation, which nothing
-    ///         this project depends on has. Never let this preset's name imply a compliance
-    ///         guarantee it can't back up.
+    ///         <strong>Disclaimer, to keep wherever this preset is documented</strong>: applying
+    ///         it does not and cannot make Ninlil a FIPS 140-3 <em>validated cryptographic
+    ///         module</em>. That needs a NIST CMVP validation of the crypto implementation, which
+    ///         none of Ninlil's dependencies has. The preset's name must never suggest a
+    ///         compliance guarantee.
     ///     </para>
     ///     <para>
-    ///         Its own independent crypto-policy axis, not layered on <see cref="Protective" />/
-    ///         <see cref="Family" />'s content-filtering axis -- see <see cref="DnsServerPresetCatalog" />'s
-    ///         own doc comment.
+    ///         It is a crypto-policy preset, not layered on <see cref="Protective" /> or
+    ///         <see cref="Family" /> (see <see cref="DnsServerPresetCatalog" />).
     ///     </para>
     /// </summary>
     public static readonly PresetDefinition Fips = new(
@@ -212,9 +203,9 @@ public static class DnsServerPresetCatalog
     [Open, Baseline, Protective, Family, Fips];
 
     /// <summary>
-    ///     This method looks up a built-in preset by its own name, case-insensitively.
+    ///     This method looks up a built-in preset by name, ignoring case.
     /// </summary>
-    /// <param name="name">The preset's own name, for example <c>"Family"</c>.</param>
+    /// <param name="name">The preset's name, for example <c>"Family"</c>.</param>
     /// <param name="preset">The matching preset, if one was found.</param>
     public static bool TryGetByName(string name, out PresetDefinition preset)
     {

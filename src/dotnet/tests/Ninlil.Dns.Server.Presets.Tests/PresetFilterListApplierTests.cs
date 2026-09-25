@@ -3,6 +3,11 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets.Tests;
 
+/// <summary>
+///     This class tests <see cref="PresetFilterListApplier" /> with the in-memory repositories in
+///     <c>InMemoryRepositories.cs</c>: default-group creation and reuse, list and assignment
+///     creation, and that applying a preset again updates instead of duplicating.
+/// </summary>
 public class PresetFilterListApplierTests
 {
     private sealed class Fixture

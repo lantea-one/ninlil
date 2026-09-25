@@ -1,6 +1,11 @@
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets.Tests;
 
+/// <summary>
+///     This class checks the built-in presets in <see cref="DnsServerPresetCatalog" />: name
+///     lookup, the layering of Baseline, Protective and Family, and the shape of their
+///     filter-list subscriptions. It inspects the definitions only; nothing is applied.
+/// </summary>
 public class DnsServerPresetCatalogTests
 {
     [Fact]
@@ -91,9 +96,8 @@ public class DnsServerPresetCatalogTests
     [Fact]
     public void EveryPresetsOwnSubscriptionListHasUniqueNames()
     {
-        // Family deliberately reuses Protective's own subscription (same stable name, same
-        // list) as part of its own layering -- uniqueness only needs to hold *within* a single
-        // preset's own subscription list, not across every preset in the catalog.
+        // Family reuses Protective's subscription (same name, same list), so names only need to
+        // be unique within one preset, not across the catalog.
         foreach (PresetDefinition preset in DnsServerPresetCatalog.All)
         {
             List<string> names = [.. preset.FilterListSubscriptions.Select(s => s.Name)];

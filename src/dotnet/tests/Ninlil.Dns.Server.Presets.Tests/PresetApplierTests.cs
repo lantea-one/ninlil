@@ -3,6 +3,10 @@ using System.Text.Json.Nodes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets.Tests;
 
+/// <summary>
+///     This class tests <see cref="PresetApplier" /> end to end against a JSON file in a
+///     temporary directory and the in-memory repositories in <c>InMemoryRepositories.cs</c>.
+/// </summary>
 public sealed class PresetApplierTests : IDisposable
 {
     private readonly string _tempDirectory = Directory

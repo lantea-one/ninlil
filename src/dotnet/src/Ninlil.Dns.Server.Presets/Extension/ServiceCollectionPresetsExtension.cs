@@ -11,10 +11,10 @@ public static class ServiceCollectionPresetsExtension
 {
     /// <summary>
     ///     This method registers <see cref="PresetFilterListApplier" /> and
-    ///     <see cref="PresetApplier" />. The composition root is still expected to have already
-    ///     registered <c>IDnsClientGroupRepository</c>, <c>IDnsFilterListRepository</c>,
-    ///     <c>IDnsClientGroupListAssignmentRepository</c>, and <c>IUnitOfWork</c> implementations
-    ///     -- the same repositories <c>Server.Filtering</c> already depends on.
+    ///     <see cref="PresetApplier" />. The composition root must also register
+    ///     <c>IDnsClientGroupRepository</c>, <c>IDnsFilterListRepository</c>,
+    ///     <c>IDnsClientGroupListAssignmentRepository</c> and <c>IUnitOfWork</c>, the same
+    ///     repositories <c>Server.Filtering</c> uses.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

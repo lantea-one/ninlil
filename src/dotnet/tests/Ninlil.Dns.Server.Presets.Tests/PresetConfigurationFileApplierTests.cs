@@ -3,6 +3,10 @@ using System.Text.Json.Nodes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets.Tests;
 
+/// <summary>
+///     This class tests <see cref="PresetConfigurationFileApplier" /> by writing presets and
+///     setting lists to a JSON file in a temporary directory and parsing the file back.
+/// </summary>
 public sealed class PresetConfigurationFileApplierTests : IDisposable
 {
     private readonly string _tempDirectory = Directory
@@ -54,7 +58,7 @@ public sealed class PresetConfigurationFileApplierTests : IDisposable
 
         Assert.Equal(42, root["DnsServer"]["Recursive"]["MaxReferralDepth"].GetValue<int>());
         Assert.Equal("keep-me", root["SomeOtherApp"]["Value"].GetValue<string>());
-        // Baseline's own settings were still applied alongside the untouched ones.
+        // Baseline's settings were applied as well.
         Assert.True(root["DnsServer"]["RateLimiting"]["Enable"].GetValue<bool>());
     }
 
@@ -104,11 +108,8 @@ public sealed class PresetConfigurationFileApplierTests : IDisposable
     [Fact]
     public async Task ApplyingASettingWhoseValueIsAListOfStructuredObjectsWritesARealJsonArrayOfObjects()
     {
-        // A plain list of scalars (a list of algorithm names, for example) was always supported --
-        // this proves the same is true of a list of structured objects (a Router Advertisement's
-        // own advertised routes, for example), each one serialized generically rather than via
-        // JsonValue.Create's own narrower "known scalar CLR type" support, which throws on an
-        // arbitrary reference type at runtime.
+        // A list of objects (such as Router Advertisement routes) must be written as an array of
+        // JSON objects; JsonValue.Create would throw for these element types.
         await PresetConfigurationFileApplier.ApplyAsync(
             [
                 new PresetConfigurationSetting(

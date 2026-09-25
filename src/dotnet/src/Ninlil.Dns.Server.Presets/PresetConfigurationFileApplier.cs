@@ -7,18 +7,18 @@ using System.Text.Json.Nodes;
 namespace Ninlil.Dns.Server.Presets;
 
 /// <summary>
-///     This class merges a <see cref="PresetDefinition" />'s own <see cref="PresetConfigurationSetting" />
-///     values into a JSON configuration file on disk. Only the specific section/key leaves a
-///     preset actually names are overwritten -- an unrelated setting already in the file, in the
-///     same section or a different one, is left exactly as it was, per the confirmed
-///     "overwrite-then-editable" preset semantics.
+///     This class merges <see cref="PresetConfigurationSetting" /> values into a JSON
+///     configuration file on disk. Only the named section/key pairs are overwritten; every other
+///     setting in the file, in the same section or another, is kept. Presets use it through
+///     <see cref="PresetApplier" />, and the runtime settings controllers in <c>Ninlil.Web</c> and
+///     the cluster settings sync use the settings-list overload directly.
 /// </summary>
 public static class PresetConfigurationFileApplier
 {
     /// <summary>
-    ///     This method applies <paramref name="preset" />'s own <see cref="PresetDefinition.ConfigurationSettings" />
-    ///     to the JSON file at <paramref name="configurationFilePath" />, creating the file (and
-    ///     its own containing directory) if it does not already exist.
+    ///     This method applies the <see cref="PresetDefinition.ConfigurationSettings" /> of
+    ///     <paramref name="preset" /> to the JSON file at <paramref name="configurationFilePath" />,
+    ///     creating the file and its directory if they do not exist.
     /// </summary>
     /// <param name="preset">The preset whose configuration settings should be applied.</param>
     /// <param name="configurationFilePath">The JSON configuration file to read from and write back to.</param>
@@ -26,14 +26,11 @@ public static class PresetConfigurationFileApplier
         ApplyAsync(preset.ConfigurationSettings, configurationFilePath);
 
     /// <summary>
-    ///     This method applies an arbitrary list of configuration leaves to the JSON file at
-    ///     <paramref name="configurationFilePath" />, creating the file (and its own containing
-    ///     directory) if it does not already exist -- the same atomic merge
-    ///     <see cref="ApplyAsync(PresetDefinition,string)" /> itself delegates to, exposed directly
-    ///     so a caller with no <see cref="PresetDefinition" /> of its own (for example, a REST
-    ///     endpoint merging a handful of individually-supplied settings) can reuse the exact same
-    ///     merge/atomic-write logic instead of duplicating it, per <see cref="PresetConfigurationSetting" />'s
-    ///     own doc comment.
+    ///     This method applies a list of configuration values to the JSON file at
+    ///     <paramref name="configurationFilePath" />, creating the file and its directory if they
+    ///     do not exist. <see cref="ApplyAsync(PresetDefinition,string)" /> delegates here, and
+    ///     callers without a preset, such as the runtime settings controllers, call it directly
+    ///     so they share the same merge and atomic write.
     /// </summary>
     /// <param name="settings">Every configuration leaf to overwrite.</param>
     /// <param name="configurationFilePath">The JSON configuration file to read from and write back to.</param>
@@ -42,13 +39,8 @@ public static class PresetConfigurationFileApplier
         string configurationFilePath
     )
     {
-        // What/why: the existing file is read once, in full, before any leaf is touched -- how:
-        // every setting is then merged into that same in-memory root one leaf at a time
-        // (NavigateToSection creates a missing section on demand rather than requiring the file
-        // to already have it), so only the specific section/key pairs a preset actually names are
-        // ever overwritten -- everything else already in the file, whether in one of these same
-        // sections or a completely different one, is carried through to the final write
-        // untouched, per this class's own "overwrite-then-editable" doc comment above.
+        // The whole file is read once and each setting is merged into it, creating missing
+        // sections on the way, so everything the settings do not name is written back as it was.
         JsonObject root = await ReadExistingRootAsync(configurationFilePath);
 
         foreach (PresetConfigurationSetting setting in settings)
@@ -101,16 +93,13 @@ public static class PresetConfigurationFileApplier
     }
 
     /// <summary>
-    ///     This method converts a single setting's own value into the <see cref="JsonNode" />
-    ///     it should be written as -- a plain scalar for a <see langword="bool" />/number/
-    ///     <see langword="string" />, a JSON array for anything else enumerable (a list of
-    ///     algorithm names, or a list of structured objects such as a Router Advertisement's own
-    ///     advertised routes, for example), since <see langword="string" /> itself is enumerable
-    ///     and must be checked for first, or a JSON object for anything else -- a structured POCO
-    ///     one array element (or, in principle, a whole setting) can itself be, serialized
-    ///     generically via <see cref="JsonSerializer" /> rather than <c>JsonValue.Create(object)</c>'s
-    ///     own narrower "known scalar CLR type" support, which throws on an arbitrary reference
-    ///     type at runtime.
+    ///     This method converts a setting's value into the <see cref="JsonNode" /> it is written
+    ///     as. A <see langword="string" /> or <see langword="bool" /> becomes a scalar. Any other
+    ///     enumerable (a list of algorithm names, or of objects such as Router Advertisement
+    ///     routes) becomes a JSON array, converted element by element; <see langword="string" />
+    ///     is itself enumerable, so it is matched first. Anything else, numbers and objects
+    ///     included, goes through <see cref="JsonSerializer" />, because
+    ///     <c>JsonValue.Create(object)</c> throws for types it does not know.
     /// </summary>
     private static JsonNode ToJsonNode(object value) =>
         value switch
@@ -123,10 +112,9 @@ public static class PresetConfigurationFileApplier
         };
 
     /// <summary>
-    ///     This method writes the merged configuration back to disk atomically: a temp file in
-    ///     the same directory, written in full, then moved over the real path -- so a reader
-    ///     never observes a half-written file, and a crash mid-write never corrupts the
-    ///     previously-valid one.
+    ///     This method writes the merged configuration to a temporary file in the same directory
+    ///     and then moves it over the target path, so a reader never sees a half-written file and
+    ///     a failed write leaves the previous file in place.
     /// </summary>
     private static async Task WriteAtomicallyAsync(string configurationFilePath, JsonObject root)
     {
