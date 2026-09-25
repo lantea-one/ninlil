@@ -5,17 +5,19 @@ using Ninlil.Dns.Server.Core.Events;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.ActiveMq.Tests;
 
+/// <summary>
+///     This class tests <see cref="ActiveMqDnsServerEventBrokerTransport" /> without a broker,
+///     pointing it at an unreachable address to check that publishing never waits for the
+///     first connection.
+/// </summary>
 public class ActiveMqDnsServerEventBrokerTransportTests
 {
     [Fact]
     public async Task PublishAsyncFailsFastRatherThanBlockingWhenNeverYetConnected()
     {
-        // 203.0.113.1 is RFC 5737 TEST-NET-3, guaranteed unreachable -- this asserts the real
-        // bug this project's own real-container smoke test found and fixed: connection.Start()
-        // blocks indefinitely (confirmed against a real broker container) until a connection
-        // ever succeeds, so PublishAsync must never itself wait on that; it should throw
-        // immediately by checking whether the background connect attempt has already
-        // succeeded, rather than ever blocking the caller.
+        // 203.0.113.1 is in RFC 5737 TEST-NET-3, so nothing answers. connection.Start() blocks
+        // until the broker has been reachable once; PublishAsync must throw at once instead of
+        // waiting on the background connect.
         ActiveMqEventBrokerOptions options = new()
         {
             HostName = "203.0.113.1",

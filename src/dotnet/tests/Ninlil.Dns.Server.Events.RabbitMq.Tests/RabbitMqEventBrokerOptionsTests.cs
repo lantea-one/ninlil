@@ -1,6 +1,9 @@
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.RabbitMq.Tests;
 
+/// <summary>
+///     This class checks the defaults of <see cref="RabbitMqEventBrokerOptions" />.
+/// </summary>
 public class RabbitMqEventBrokerOptionsTests
 {
     [Fact]

@@ -11,32 +11,23 @@ namespace Ninlil.Dns.Server.Events.ActiveMq;
 
 /// <summary>
 ///     This class implements <see cref="IDnsServerEventBrokerTransport" /> over ActiveMQ
-///     "Classic" (OpenWire): every connected Ninlil instance publishes to, and subscribes
-///     to, one shared topic (<see cref="ActiveMqEventBrokerOptions.TopicName" />) -- a topic,
-///     not a queue, so every instance (including the one that published a given event) receives
-///     its own copy, matching the broadcast semantics
-///     <see cref="IDnsServerEventBrokerTransport" />'s own doc comment requires.
+///     "Classic" (OpenWire). Every connected Ninlil instance publishes to and subscribes to one
+///     shared topic (<see cref="ActiveMqEventBrokerOptions.TopicName" />). A topic, unlike a
+///     queue, gives every instance, including the publisher, a copy of each event, which is the
+///     broadcast behavior <see cref="IDnsServerEventBrokerTransport" /> requires.
 ///     <para>
-///         The NMS client's own <c>failover:</c> transport (<see cref="BuildFailoverUri" />)
-///         reconnects with exponential backoff on its own and keeps an already-established
-///         connection/session/consumer/producer transparently usable across a later broker
-///         restart -- confirmed by this project's own real-container smoke test. What it does
-///         <em>not</em> do safely is bound the very first connection attempt: this project's own
-///         smoke test found that <c>Connection.Start()</c> blocks synchronously, forever, until
-///         the broker becomes reachable at least once, regardless of the <c>failover:</c> URI's
-///         own <c>startupMaxReconnectAttempts</c> setting (which stops the library's internal
-///         retry loop but never wakes the thread already blocked waiting on it -- a real gap in
-///         the client library, not this project's own logic). The fix here is the same shape
-///         <c>Server.Events.RabbitMq</c> already uses: the actual connect call runs on its own
-///         dedicated background task, started once and left running for this transport's whole
-///         lifetime, while <see cref="PublishAsync" /> only ever checks whether that task has
-///         already succeeded -- it never itself blocks waiting for a connection, so a caller
-///         gets the same immediate "drop and log" outcome
-///         <see cref="Server.Core.Events.DnsServerEventPublisher" /> already expects, the
-///         deliberate middle ground this project settled on.
+///         The NMS client's <c>failover:</c> transport (<see cref="BuildFailoverUri" />)
+///         reconnects with exponential backoff and keeps an established connection, session,
+///         consumer and producer usable across a broker restart. It does not bound the first
+///         connection attempt: <c>Connection.Start()</c> blocks until the broker has been
+///         reachable once. So the connect call runs on a background task, started once and kept
+///         for the transport's lifetime, the same approach as <c>Server.Events.RabbitMq</c>.
+///         <see cref="PublishAsync" /> never waits for it; it only checks whether a connection
+///         exists and throws if not, which <see cref="Server.Core.Events.DnsServerEventPublisher" />
+///         logs before dropping the event.
 ///     </para>
 /// </summary>
-/// <param name="options">This transport's own configured connection and topology settings.</param>
+/// <param name="options">The connection and topology settings.</param>
 /// <param name="logger">The logger this transport records connection/publish failures to.</param>
 public sealed class ActiveMqDnsServerEventBrokerTransport(
     IOptions<ActiveMqEventBrokerOptions> options,
@@ -70,9 +61,9 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
         );
 
     /// <summary>
-    ///     This method starts (once, idempotently) the single background task that connects to
-    ///     the broker -- safe to call repeatedly from either <see cref="PublishAsync" /> or
-    ///     <see cref="StartConsumingAsync" />; only the first call actually starts it.
+    ///     This method starts the background task that connects to the broker. Both
+    ///     <see cref="PublishAsync" /> and <see cref="StartConsumingAsync" /> call it; only the
+    ///     first call starts the task, and later calls return the same one.
     /// </summary>
     private Task EnsureConnectTaskStarted()
     {
@@ -95,9 +86,8 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
                     "The ActiveMQ event broker connection reported an error; the failover transport will retry automatically."
                 );
 
-            // This blocks -- potentially forever, if the broker never becomes reachable -- which
-            // is exactly why Connect() only ever runs inside the dedicated background task
-            // EnsureConnectTaskStarted() owns, never on a caller's own thread.
+            // This blocks until the broker is reachable, possibly forever, which is why Connect()
+            // runs only on the background task EnsureConnectTaskStarted() starts.
             connection.Start();
 
             ISession publishSession = connection.CreateSession(AcknowledgementMode.AutoAcknowledge);
@@ -119,10 +109,9 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
         }
         catch (Exception exception)
         {
-            // Reached only for a failure the failover transport itself does not retry (for
-            // example, bad credentials) -- a genuine network-level outage is retried
-            // indefinitely, with backoff, inside connection.Start() above and never reaches
-            // this catch block at all.
+            // Reached only for a failure the failover transport does not retry, such as bad
+            // credentials. A network outage is retried with backoff inside connection.Start()
+            // and never gets here.
             logger.LogError(
                 exception,
                 "Failed to connect to the ActiveMQ event broker at {HostName}:{Port}; this transport instance will remain unavailable until restarted.",
@@ -157,10 +146,9 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
         IBytesMessage message = session.CreateBytesMessage();
         message.WriteBytes(body);
 
-        // Once a connection has been established at least once, a later, brief interruption is
-        // bounded by the failover: URI's own "timeout" parameter (PublishTimeout) rather than
-        // blocking indefinitely -- matching the same "drop and log" outcome the not-yet-ever-
-        // connected case above reaches by checking _publishProducer directly instead.
+        // Once connected, a send during a later interruption waits at most the failover: URI's
+        // "timeout" parameter (PublishTimeout) and then throws, so the event is dropped and
+        // logged, as in the never-connected case above.
         producer.Send(message);
 
         return Task.CompletedTask;
@@ -188,8 +176,8 @@ public sealed class ActiveMqDnsServerEventBrokerTransport(
 
         if (connection is null)
         {
-            // Connect() already logged why -- an unrecoverable failure (not a retried network
-            // outage), so this consumer simply has nothing to consume from.
+            // Connect() failed in a way the failover transport does not retry and has logged
+            // why, so there is nothing to consume from.
             return;
         }
 

@@ -9,6 +9,10 @@ using Ninlil.Dns.Server.Events.ActiveMq.Extension;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.ActiveMq.Tests;
 
+/// <summary>
+///     This class tests <see cref="ServiceCollectionActiveMqEventsExtension" /> by building a
+///     service provider and resolving the transport and its options; no broker is contacted.
+/// </summary>
 public class ServiceCollectionActiveMqEventsExtensionTests
 {
     [Fact]

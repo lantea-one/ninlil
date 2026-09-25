@@ -11,25 +11,21 @@ using JsonSerializer = Ninlil.Common.Serializer.JsonSerializer;
 namespace Ninlil.Dns.Server.Events.RabbitMq;
 
 /// <summary>
-///     This class implements <see cref="IDnsServerEventBrokerTransport" /> over RabbitMQ: every
-///     connected Ninlil instance publishes to, and consumes from, one shared fanout exchange
-///     (<see cref="RabbitMqEventBrokerOptions.ExchangeName" />) via its own exclusive,
-///     auto-delete queue, giving every instance -- including the one that published a given
-///     event -- a copy of it, matching the broadcast semantics
-///     <see cref="IDnsServerEventBrokerTransport" />'s own doc comment requires.
+///     This class implements <see cref="IDnsServerEventBrokerTransport" /> over RabbitMQ. Every
+///     connected Ninlil instance publishes to one shared fanout exchange
+///     (<see cref="RabbitMqEventBrokerOptions.ExchangeName" />) and consumes from it through an
+///     exclusive, auto-delete queue of its own, so every instance, including the publisher,
+///     gets a copy of each event, as <see cref="IDnsServerEventBrokerTransport" /> requires.
 ///     <para>
-///         Connection management runs its own background loop
-///         (<see cref="MaintainConnectionAsync" />) that reconnects automatically, with
-///         exponential backoff, whenever the broker connection is lost -- so a restarted broker
-///         is picked back up with no operator action. This is deliberately the only resilience
-///         this class offers: an event published while disconnected is not buffered or
-///         replayed, it simply fails <see cref="PublishAsync" /> immediately (caught and logged
-///         by <see cref="DnsServerEventPublisher" />, the same "drop and log" posture the
-///         in-memory transport already has under overload) -- the deliberate middle ground
-///         between "some failover" and "not overly complex" this project settled on.
+///         A background loop (<see cref="MaintainConnectionAsync" />) connects and reconnects
+///         with exponential backoff whenever the connection is lost, so a restarted broker is
+///         picked up again without operator action. That is the only resilience: an event
+///         published while disconnected is not buffered or replayed. <see cref="PublishAsync" />
+///         throws at once, and <see cref="DnsServerEventPublisher" /> logs and drops the event,
+///         as the in-memory transport drops events when its queue is full.
 ///     </para>
 /// </summary>
-/// <param name="options">This transport's own configured connection and topology settings.</param>
+/// <param name="options">The connection and topology settings.</param>
 /// <param name="logger">The logger this transport records connection/publish failures to.</param>
 public sealed class RabbitMqDnsServerEventBrokerTransport(
     IOptions<RabbitMqEventBrokerOptions> options,
@@ -55,9 +51,9 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
     }
 
     /// <summary>
-    ///     This method starts (once) the background connection-maintenance loop and blocks
-    ///     until the first connection attempt has either succeeded or failed, so a caller's own
-    ///     first publish/consume attempt is not racing an initial, never-yet-started connection.
+    ///     This method starts the background connection loop on its first call and does nothing
+    ///     on later calls. It returns at once without waiting for a connection, so a publish made
+    ///     before the first connection completes fails and the event is dropped.
     /// </summary>
     private Task EnsureConnectionLoopStartedAsync()
     {
@@ -67,15 +63,12 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
         return Task.CompletedTask;
     }
 
-    // What: this is the whole lifetime of the connection -- connect, publish the topology,
-    // then sit idle until that connection is lost or shutdown is requested, at which point the
-    // loop goes right back to the top and tries again. Why: RabbitMQ.Client's own connection
-    // object gives no built-in reconnect-with-backoff behavior the way the sibling ActiveMQ
-    // transport's failover: URI does, so this transport has to drive its own retry loop by hand.
-    // How: delay starts at InitialReconnectDelay and doubles after every failed attempt, capped
-    // at MaxReconnectDelay, then resets back to InitialReconnectDelay as soon as a connection
-    // actually succeeds -- classic exponential backoff, so a broker that is merely restarting is
-    // retried quickly while one that is genuinely down for longer is not hammered indefinitely.
+    // Connects, declares the exchange, then waits until the connection is lost or shutdown is
+    // requested, and starts again. RabbitMQ.Client's automatic recovery does not cover the first
+    // connection and retries at a fixed interval, so this loop does the connecting and
+    // reconnecting. The delay starts at InitialReconnectDelay, doubles after each failed attempt
+    // up to MaxReconnectDelay, and resets after a successful connection, so a restarting broker
+    // is retried quickly and one that stays down is not hammered.
     private async Task MaintainConnectionAsync(CancellationToken stoppingToken)
     {
         TimeSpan delay = _options.InitialReconnectDelay;
@@ -130,8 +123,8 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
 
                 delay = _options.InitialReconnectDelay;
 
-                // Wait here, doing nothing else, until this connection is lost or we're asked
-                // to stop -- ConnectionShutdownAsync (above) is what wakes this back up.
+                // Wait until the connection is lost (ConnectionShutdownAsync above) or shutdown is
+                // requested.
                 await Task.WhenAny(
                     connectionLost.Task,
                     Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken)
@@ -233,15 +226,10 @@ public sealed class RabbitMqDnsServerEventBrokerTransport(
 
             try
             {
-                // Disposed via this using declaration whenever this iteration ends for any
-                // reason -- cancellation (a restart of the owning BrokerEventConsumerService),
-                // a lost connection, or an unexpected exception -- unlike the sibling ActiveMQ
-                // transport's own equivalent finally block, this channel was previously never
-                // closed on a clean stop; RabbitMQ kept its exclusive queue and consumer
-                // registration alive on the still-open shared connection, so a restart left the
-                // old, orphaned consumer still delivering every event a second time (once per
-                // still-open channel) straight into the very same onEventReceived callback a
-                // freshly started consumer also now delivers to.
+                // The channel must be disposed whenever this iteration ends (cancellation, a
+                // lost connection or an exception). Otherwise its exclusive queue and consumer
+                // stay alive on the shared connection, and after BrokerEventConsumerService
+                // restarts, the old consumer delivers every event a second time.
                 await using IChannel consumeChannel = await connection.CreateChannelAsync(
                     cancellationToken: stoppingToken
                 );

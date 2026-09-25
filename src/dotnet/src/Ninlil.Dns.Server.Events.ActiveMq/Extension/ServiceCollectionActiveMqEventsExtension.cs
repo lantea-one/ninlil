@@ -13,13 +13,12 @@ public static class ServiceCollectionActiveMqEventsExtension
 {
     /// <summary>
     ///     This method registers <see cref="IDnsServerEventBrokerTransport" />, backed by
-    ///     <see cref="ActiveMqDnsServerEventBrokerTransport" />. A composition root only needs
-    ///     to call this when it actually wants
-    ///     <c>DnsServer:Events:Transport</c> set to <see cref="Common.Enum.EventTransportEnum.ActiveMq" />
-    ///     available -- a composition root that never calls this method (or never references
-    ///     this project at all) leaves <see cref="Server.Core.Events.DnsServerEventPublisher" />'s
-    ///     own optional <c>brokerTransport</c> constructor parameter unresolved, which is exactly
-    ///     equivalent to staying on the default in-memory transport.
+    ///     <see cref="ActiveMqDnsServerEventBrokerTransport" />. <c>Ninlil.Web</c> calls it only
+    ///     when <c>DnsServer:Events:Transport</c> is
+    ///     <see cref="Common.Enum.EventTransportEnum.ActiveMq" />. Without it, the optional
+    ///     <c>brokerTransport</c> parameter of
+    ///     <see cref="Server.Core.Events.DnsServerEventPublisher" /> stays unresolved and events
+    ///     use the in-memory transport.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read ActiveMQ settings from.</param>

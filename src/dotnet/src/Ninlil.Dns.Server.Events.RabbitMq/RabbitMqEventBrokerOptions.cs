@@ -3,10 +3,9 @@ namespace Ninlil.Dns.Server.Events.RabbitMq;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Events:RabbitMq</c> section of the application's
-///     configuration and controls <see cref="RabbitMqDnsServerEventBrokerTransport" />'s own
-///     connection and topology settings. Only consulted at all once
-///     <c>DnsServer:Events:Transport</c> (<see cref="Common.Enum.EventTransportEnum.RabbitMq" />)
-///     actually selects this transport.
+///     configuration and holds the connection and topology settings of
+///     <see cref="RabbitMqDnsServerEventBrokerTransport" />. It is read only when
+///     <c>DnsServer:Events:Transport</c> is <see cref="Common.Enum.EventTransportEnum.RabbitMq" />.
 /// </summary>
 public sealed class RabbitMqEventBrokerOptions
 {
@@ -16,12 +15,12 @@ public sealed class RabbitMqEventBrokerOptions
     public const string SectionName = "DnsServer:Events:RabbitMq";
 
     /// <summary>
-    ///     This property contains the RabbitMQ broker's own host name or address.
+    ///     This property contains the RabbitMQ broker's host name or address.
     /// </summary>
     public string HostName { get; set; } = "localhost";
 
     /// <summary>
-    ///     This property contains the RabbitMQ broker's own AMQP port.
+    ///     This property contains the RabbitMQ broker's AMQP port.
     /// </summary>
     public int Port { get; set; } = 5672;
 
@@ -41,11 +40,10 @@ public sealed class RabbitMqEventBrokerOptions
     public string VirtualHost { get; set; } = "/";
 
     /// <summary>
-    ///     This property contains the name of the shared fanout exchange every connected
-    ///     Ninlil instance publishes to and consumes from -- fanout, not a work-queue
-    ///     topology, so that every instance (including the publisher itself) receives every
-    ///     event, matching <see cref="Server.Core.Events.Broker.IDnsServerEventBrokerTransport" />'s
-    ///     own broadcast-semantics contract.
+    ///     This property contains the name of the shared fanout exchange every connected Ninlil
+    ///     instance publishes to and consumes from. A fanout exchange, unlike a work queue, gives
+    ///     every instance, including the publisher, every event, as
+    ///     <see cref="Server.Core.Events.Broker.IDnsServerEventBrokerTransport" /> requires.
     /// </summary>
     public string ExchangeName { get; set; } = "ninlil-dns-events";
 
@@ -57,9 +55,9 @@ public sealed class RabbitMqEventBrokerOptions
 
     /// <summary>
     ///     This property contains the longest this transport ever waits between reconnect
-    ///     attempts -- the reconnect delay doubles after each failed attempt, starting from
-    ///     <see cref="InitialReconnectDelay" />, up to this ceiling, so a prolonged broker
-    ///     outage does not result in a tight retry loop.
+    ///     attempts. The delay starts at <see cref="InitialReconnectDelay" /> and doubles after
+    ///     each failed attempt up to this ceiling, so a long outage is not retried in a tight
+    ///     loop.
     /// </summary>
     public TimeSpan MaxReconnectDelay { get; set; } = TimeSpan.FromSeconds(30);
 }

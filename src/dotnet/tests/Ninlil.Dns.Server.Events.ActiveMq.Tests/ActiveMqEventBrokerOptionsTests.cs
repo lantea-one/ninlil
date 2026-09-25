@@ -1,6 +1,9 @@
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.ActiveMq.Tests;
 
+/// <summary>
+///     This class checks the defaults of <see cref="ActiveMqEventBrokerOptions" />.
+/// </summary>
 public class ActiveMqEventBrokerOptionsTests
 {
     [Fact]

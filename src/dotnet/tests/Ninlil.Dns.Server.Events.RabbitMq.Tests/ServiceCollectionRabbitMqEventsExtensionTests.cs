@@ -9,6 +9,10 @@ using Ninlil.Dns.Server.Events.RabbitMq.Extension;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.RabbitMq.Tests;
 
+/// <summary>
+///     This class tests <see cref="ServiceCollectionRabbitMqEventsExtension" /> by building a
+///     service provider and resolving the transport and its options; no broker is contacted.
+/// </summary>
 public class ServiceCollectionRabbitMqEventsExtensionTests
 {
     [Fact]
