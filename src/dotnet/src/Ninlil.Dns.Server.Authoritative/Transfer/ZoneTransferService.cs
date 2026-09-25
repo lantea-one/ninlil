@@ -15,27 +15,23 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class implements <see cref="IZoneTransferService" />, serving full (AXFR) and
-///     incremental (IXFR) zone transfers straight out of <see cref="AuthoritativeZoneCache" />'s
-///     own in-memory copy and <see cref="IZoneChangeJournalRepository" />'s change history. A
-///     DNSSEC-signed zone's own RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY/generated-DS content is served
-///     alongside it too, read fresh from <see cref="SignedZoneCache" /> every time -- the same
-///     already-computed signed view <see cref="Resolution.AuthoritativeQueryResolver" /> reads for
-///     an ordinary DNSSEC-OK query answer, never computed or signed here, matching this project's
-///     deliberate stance against ever signing live, per query or per transfer.
+///     This class implements <see cref="IZoneTransferService" />. It serves AXFR and IXFR from
+///     <see cref="AuthoritativeZoneCache" /> and the change journal
+///     (<see cref="IZoneChangeJournalRepository" />), after checking transport, TSIG and zone
+///     name. For a signed zone it adds the DNSKEY, RRSIG, NSEC or NSEC3, NSEC3PARAM and generated
+///     DS records from <see cref="SignedZoneCache" />; nothing is signed here. Records marked
+///     <c>ExcludeFromSync</c> are left out. Every response message is TSIG-signed, chained as RFC
+///     8945 §5.3.1 describes.
 /// </summary>
 /// <param name="zoneCache">The cache this service transfers zones out of.</param>
 /// <param name="signedZoneCache">
-///     The cache this service reads a DNSSEC-signed zone's own RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY/
-///     generated-DS content out of.
+///     The cache the DNSSEC records of signed zones are read from.
 /// </param>
 /// <param name="journalRepository">The repository IXFR's incremental diffs are read from.</param>
 /// <param name="tsigService">The service used to verify the request and sign each response.</param>
 /// <param name="options">
-///     This service's own configuration, such as message chunk size -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single transfer this (scoped) service serves, so a configuration write reaches
-///     the very next AXFR/IXFR with no restart.
+///     The records-per-message setting, read through <see cref="IOptionsMonitor{TOptions}" /> on
+///     every transfer.
 /// </param>
 public class ZoneTransferService(
     AuthoritativeZoneCache zoneCache,
@@ -76,10 +72,8 @@ public class ZoneTransferService(
 
         if (soaRecords.Count == 0)
         {
-            // A properly-provisioned zone always has exactly one SOA record at its apex; this
-            // should never actually happen, but a zone transfer cannot be meaningfully served
-            // without one, so fail safely rather than serve a response that violates RFC 5936's
-            // own structure.
+            // A zone without an SOA cannot be transferred (RFC 5936 needs it at both ends); this
+            // should not happen.
             yield return ErrorResponse(request, DnsResponseCodeEnum.ServerFailure);
             yield break;
         }
@@ -100,10 +94,8 @@ public class ZoneTransferService(
                 ),
         ];
 
-        // A DNSSEC-signed zone's own RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY/generated-DS content
-        // never lives in AuthoritativeZoneCache at all -- see SignedZoneCache's own doc comment
-        // -- so an AXFR that never looked here would otherwise serve a secondary only the
-        // unsigned base records, exactly the gap this method exists to close.
+        // DNSSEC records are not in AuthoritativeZoneCache, so add them from SignedZoneCache or
+        // the secondary would get only unsigned data.
         if (
             zone.Zone.IsDnssecSigned
             && signedZoneCache.GetSignedData(zone.Zone.Id) is { } signedData
@@ -120,18 +112,13 @@ public class ZoneTransferService(
 
         chunks[0].Insert(0, soaWireRecord);
 
-        // Per RFC 5936 §2.2, a transfer spanning more than one message must end with the same
-        // SOA record it began with, so the client can tell the sequence is complete; a
-        // single-message transfer already conveys that just by the TCP response ending.
+        // The closing SOA is added only when the answer spans several messages; a single-message
+        // answer ends with the connection. RFC 5936 §2.2 expects the closing SOA in every AXFR.
         if (chunks.Count > 1)
             chunks[^1].Add(soaWireRecord);
 
-        // RFC 8945 §5.3.1: the first message in a multi-message answer sequence chains from the
-        // original request's own MAC (already verified above, via AuthorizeAsync); every later
-        // message chains from whichever message before it most recently carried a TSIG. This
-        // project always signs every message in the sequence -- never skipping one, the more
-        // thorough of the two RFC-permitted choices -- so priorMac alone (with no accompanying
-        // unsigned-message bytes) is always the right "prior MAC" input for the next message.
+        // RFC 8945 §5.3.1: the first message chains from the request MAC and each later one from
+        // the previous message's MAC. Every message is signed, so no unsigned bytes are ever added.
         byte[] priorMac = null;
 
         foreach (List<DnsResourceRecord> chunk in chunks)
@@ -176,8 +163,7 @@ public class ZoneTransferService(
             yield break;
         }
 
-        // RFC 1995 §3: the client's own current serial travels as an SOA record in the request's
-        // Authority section, not anywhere the query's Question section can carry a number.
+        // RFC 1995 §3: the client's serial arrives as an SOA in the Authority section.
         DnsResourceRecord clientSoaWireRecord = request.AuthorityRecords.FirstOrDefault(record =>
             record.Type == DnsResourceRecordTypeEnum.Soa
         );
@@ -221,11 +207,9 @@ public class ZoneTransferService(
 
         if (clientSerial >= serverSerial)
         {
-            // The client is already current -- or, per RFC 1995, claims a serial we've never
-            // reached ourselves, in which case there is equally nothing newer to send. Either
-            // way, a single message carrying just the current SOA says so -- an ordinary,
-            // single-message answer, which RFC 8945 §5.3.1 signs identically to a sequence's own
-            // first message (chained from the request's own MAC per §5.3).
+            // The client is current (or claims a newer serial): answer with the current SOA alone, a
+            // single-message answer signed from the request MAC. The comparison is a plain integer
+            // comparison, not RFC 1982 serial arithmetic.
             yield return await tsigService.SignResponseAsync(
                 BuildMessage(request, question, [currentSoaWireRecord]),
                 tsigResult.Key.Name,
@@ -236,17 +220,13 @@ public class ZoneTransferService(
             yield break;
         }
 
-        // A DNSSEC-signed zone's own signed content is read fresh here, once, rather than inside
-        // either branch below -- both need to know whether the zone is signed at all before
-        // deciding whether a true incremental replay is even attempted (see
-        // journalCoversRequestedRange's own remarks immediately below), and both branches append
-        // this exact same content once that decision is made.
+        // Read the signed content once; it decides whether IXFR can be incremental and is added to
+        // a full answer.
         SignedZoneData signedData = zone.Zone.IsDnssecSigned
             ? signedZoneCache.GetSignedData(zone.Zone.Id)
             : null;
 
-        // A signed zone's journal history is never consulted for a true incremental replay at
-        // all -- only an unsigned zone's ever is -- skipping the lookup entirely for a signed one.
+        // A signed zone never gets an incremental answer, so skip the journal.
         IReadOnlyList<ZoneChangeJournalEntryEntity> journalEntries = signedData is null
             ? await journalRepository.ListSinceSerialAsync(
                 zone.Zone.Id,
@@ -256,17 +236,9 @@ public class ZoneTransferService(
             : [];
 
         bool journalCoversRequestedRange =
-            // A DNSSEC-signed zone's own RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY content is never
-            // journaled at the byte level at all: this project's signing design recomputes every
-            // signature from scratch on every pass -- a fresh inception/expiration window even
-            // for an RRset whose own data never changed, on an ordinary record edit exactly as
-            // much as on IZoneUpdateService.BumpSerialForDnssecResignAsync's own proactive
-            // re-sign -- so there is no historical "old vs new" signed content ever kept to
-            // replay incrementally in the first place. A signed zone's IXFR is therefore always
-            // served as a full transfer instead (the else branch immediately below), exactly the
-            // same "AXFR in IXFR's clothing" fallback RFC 1995 §4 already permits any conformant
-            // server to take unconditionally -- the only genuinely correct choice this project's
-            // own architecture leaves for a signed zone specifically.
+            // Signed zones always get a full transfer: every signing pass recomputes all RRSIGs, so no
+            // signed diff is journaled. RFC 1995 §4 allows answering IXFR with a full transfer.
+            // Otherwise the journal must cover the client's serial to the current one without gaps.
             signedData is null
             && journalEntries.Count > 0
             && journalEntries[0].OldSerial == clientSerial
@@ -279,10 +251,8 @@ public class ZoneTransferService(
         {
             foreach (ZoneChangeJournalEntryEntity entry in journalEntries)
             {
-                // The other SOA fields (primary name server, mailbox, refresh/retry/expire, and
-                // the negative-caching minimum) are assumed unchanged across this history -- a
-                // reasonable, deliberate simplification, since ZoneUpdateService never touches
-                // them; only Serial itself ever moves between journal entries it produces.
+                // The other SOA fields are taken from the current SOA. ZoneUpdateService only changes the
+                // serial, and SOA edits are not journaled (see ZoneUpdateService.ApplyRecordEditAsync).
                 recordSequence.Add(
                     BuildHistoricalSoaWireRecord(
                         currentSoaData,
@@ -305,10 +275,8 @@ public class ZoneTransferService(
         }
         else
         {
-            // No usable history covers the client's claimed serial (too old, never journaled, or
-            // a broken chain); fall back to a full transfer, in AXFR shape. The client tells this
-            // isn't an incremental diff because the record right after the leading SOA here is
-            // not itself another SOA with an older serial.
+            // No usable history (too old, not journaled, or a gap): send a full transfer. The client
+            // recognizes it because the record after the first SOA is not an older SOA.
             recordSequence.AddRange(
                 zone.GetAllRecords()
                     .Where(record =>
@@ -320,11 +288,8 @@ public class ZoneTransferService(
             );
         }
 
-        // Appended once, after either branch above, rather than duplicated inside each -- a true
-        // incremental replay above never runs at all for a signed zone (journalCoversRequestedRange
-        // is unconditionally false whenever signedData is not null), so this only ever actually
-        // adds anything in the full-transfer branch, but reads identically regardless of which one
-        // ran.
+        // Only the full-transfer branch can run for a signed zone, so this adds the signed records
+        // to a full answer.
         if (signedData is not null)
             recordSequence.AddRange(FlattenSignedZoneContent(signedData));
 
@@ -336,8 +301,7 @@ public class ZoneTransferService(
         if (chunks.Count > 1)
             chunks[^1].Add(currentSoaWireRecord);
 
-        // See the identical comment in CreateAxfrResponseAsync -- the same RFC 8945 §5.3.1
-        // chaining applies here.
+        // Chained as in CreateAxfrResponseAsync.
         byte[] priorMac = null;
 
         foreach (List<DnsResourceRecord> chunk in chunks)
@@ -359,14 +323,10 @@ public class ZoneTransferService(
     }
 
     /// <summary>
-    ///     This method signs one message within a multi-message answer sequence, per RFC 8945
-    ///     §5.3.1: the sequence's first message (<paramref name="priorMac" /> still
-    ///     <see langword="null" />) chains from the original request's own MAC via
-    ///     <see cref="ITsigService.SignResponseAsync" />; every later message chains from the
-    ///     message immediately before it via <see cref="ITsigService.SignContinuationAsync" />.
-    ///     Shared by <see cref="CreateAxfrResponseAsync" /> and <see cref="CreateIxfrResponseAsync" />,
-    ///     which otherwise differ only in how <paramref name="message" />'s own record content was
-    ///     assembled.
+    ///     This method signs one message of an answer sequence (RFC 8945 §5.3.1): the first
+    ///     (<paramref name="priorMac" /> is <see langword="null" />) with
+    ///     <see cref="ITsigService.SignResponseAsync" /> from the request MAC, later ones with
+    ///     <see cref="ITsigService.SignContinuationAsync" /> from the previous message's MAC.
     /// </summary>
     private Task<DnsMessage> SignSequenceMessageAsync(
         DnsMessage message,
@@ -387,15 +347,12 @@ public class ZoneTransferService(
             );
 
     /// <summary>
-    ///     This method performs the checks both <see cref="CreateAxfrResponseAsync" /> and
-    ///     <see cref="CreateIxfrResponseAsync" /> share before serving anything: the request
-    ///     arrived over TCP, carries a TSIG record that verifies, and names a zone this server
-    ///     hosts exactly.
+    ///     This method runs the checks AXFR and IXFR share: the request came over TCP, TLS or QUIC,
+    ///     carries a TSIG that verifies, and names a hosted zone's apex.
     /// </summary>
     /// <returns>
-    ///     The matched zone and TSIG result on success, with a <see langword="null" /> error
-    ///     message; or a <see langword="null" /> zone and TSIG result alongside the single
-    ///     message the caller should yield and stop on failure.
+    ///     On success, the zone and TSIG result with a <see langword="null" /> error; on failure,
+    ///     <see langword="null" /> zone and result and the one message to yield.
     /// </returns>
     private async Task<(
         CachedZone Zone,
@@ -408,14 +365,9 @@ public class ZoneTransferService(
         CancellationToken stoppingToken
     )
     {
-        // RFC 5936 §4.3.5 restricts AXFR to TCP; RFC 1995 does not say the same of IXFR in as
-        // many words, but this project applies the same restriction to both, deliberately, to
-        // avoid also having to implement IXFR-over-UDP's own truncate-and-retry-over-TCP
-        // semantics (RFC 1995 §3) for what would otherwise be an uncommon path in practice. Tls
-        // and Quic are also accepted here: RFC 9103 XFR-over-TLS and this project's own QUIC
-        // analogue both still carry the exact same reliable, ordered, TCP-shaped stream framing
-        // underneath (a TLS session over TCP; a dedicated QUIC stream) -- only Udp is actually
-        // excluded.
+        // RFC 5936 §4.2 limits AXFR to TCP. IXFR is limited too, so its UDP truncate-and-retry
+        // (RFC 1995 §3) need not be implemented. TLS (RFC 9103) and QUIC are stream transports
+        // and are accepted; only UDP is refused.
         if (
             context.Protocol
             is not (
@@ -426,8 +378,7 @@ public class ZoneTransferService(
         )
             return (null, null, ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
-        // A zone transfer always requires TSIG, per this project's design decision -- there is
-        // no IP-allowlist-only fallback.
+        // Zone transfers always require TSIG; there is no address-based allowance.
         if (request.Tsig is null)
             return (null, null, ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
@@ -441,9 +392,7 @@ public class ZoneTransferService(
         if (!tsigResult.IsValid)
             return (null, null, ErrorResponse(request, tsigResult.Error));
 
-        // A zone transfer is always requested against a zone's own apex name exactly -- unlike
-        // an ordinary query, which may ask about any name under a hosted zone, transferring a
-        // name that merely falls under a zone rather than naming it outright makes no sense.
+        // A transfer must name the zone apex, not a name inside the zone.
         CachedZone zone = zoneCache.FindZone(question.Name);
 
         return zone is null || zone.ApexName != question.Name
@@ -471,13 +420,9 @@ public class ZoneTransferService(
         };
 
     /// <summary>
-    ///     This method builds the single message a rejected transfer request is answered with.
-    ///     Deliberately left unsigned even when a valid key was already found (for example, a
-    ///     wrong zone name) -- RFC 8945 §5.2.2 disallows signing a response back at all when the
-    ///     key itself is unrecognized, and simply never signing an error response is a safe,
-    ///     conservative default that can never fall on the wrong side of that rule. The question
-    ///     section is always echoed back too, matching <see cref="BuildMessage" />'s own
-    ///     already-correct behavior.
+    ///     This method builds the reply to a rejected transfer, echoing the question. It is never
+    ///     signed, which also satisfies the RFC 8945 §5.2 rule against signing with an unknown
+    ///     key.
     /// </summary>
     private static DnsMessage ErrorResponse(DnsMessage request, DnsResponseCodeEnum responseCode) =>
         new()
@@ -490,9 +435,8 @@ public class ZoneTransferService(
         };
 
     /// <summary>
-    ///     This method reconstructs an SOA record as it existed at an earlier serial, for the
-    ///     "old" and "new" bookends RFC 1995 §4 requires around each difference sequence, given
-    ///     only the current SOA's other fields and the historical serial itself.
+    ///     This method builds the SOA at an earlier serial for the bookends RFC 1995 §4 puts around
+    ///     each difference sequence, from the current SOA's other fields.
     /// </summary>
     private static DnsResourceRecord BuildHistoricalSoaWireRecord(
         SoaRecordData currentSoaData,
@@ -521,9 +465,8 @@ public class ZoneTransferService(
     private static List<DnsResourceRecord> DecodeRecordSnapshot(string json) =>
         [
             .. (Ninlil.Common.Serializer.JsonSerializer.Deserialize<List<RecordEntity>>(json) ?? [])
-                // A journal entry can legitimately carry an ExcludeFromSync record (it was a
-                // real local write, and BootstrapZoneAsync/ApplyChangesAsync must still journal
-                // it), but it must never be replayed to an external IXFR client.
+                // The journal can hold ExcludeFromSync records (they are local writes), but they are never
+                // sent to an IXFR client.
                 .Where(record => !record.ExcludeFromSync)
                 .Select(record =>
                     RecordEntityCodec.ToWireRecord(record, DnsName.Parse(record.Name))
@@ -531,9 +474,8 @@ public class ZoneTransferService(
         ];
 
     /// <summary>
-    ///     This method checks that a sequence of journal entries forms one unbroken chain --
-    ///     each entry's old serial matching the previous entry's new serial -- rather than
-    ///     skipping over a gap a pruned or missing entry left behind.
+    ///     This method checks that journal entries form an unbroken chain, each old serial equal to
+    ///     the previous new serial, with no gap from a pruned entry.
     /// </summary>
     private static bool IsContiguousChain(IReadOnlyList<ZoneChangeJournalEntryEntity> entries)
     {
@@ -545,14 +487,9 @@ public class ZoneTransferService(
     }
 
     /// <summary>
-    ///     This method flattens a zone's complete, currently cached signed content -- see
-    ///     <see cref="SignedZoneCache" /> -- into one list suitable for appending to a full zone
-    ///     transfer (an AXFR, or an IXFR that falls back to one): every active key's own DNSKEY
-    ///     record, the complete NSEC or NSEC3 denial-of-existence chain (plus its own NSEC3PARAM
-    ///     record, when applicable), every delegation's generated DS record, and every one of
-    ///     those RRsets' own covering RRSIG(s) -- exactly the same signed content
-    ///     <see cref="Resolution.AuthoritativeQueryResolver" /> already reads for an ordinary
-    ///     DNSSEC-OK query answer, never computed or signed here.
+    ///     This method lists a zone's signed content from <see cref="SignedZoneCache" /> for a full
+    ///     transfer: the DNSKEY records, the NSEC or NSEC3 chain and NSEC3PARAM, generated DS
+    ///     records, and the RRSIGs over all of them.
     /// </summary>
     private static List<DnsResourceRecord> FlattenSignedZoneContent(SignedZoneData signedData)
     {

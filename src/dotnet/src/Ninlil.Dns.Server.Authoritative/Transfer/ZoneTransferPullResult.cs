@@ -5,10 +5,9 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class represents one difference sequence within an RFC 1995 IXFR pull's response: the
-///     records removed and added to move the zone from <see cref="OldSerial" /> to
-///     <see cref="NewSerial" />, mirroring exactly what <see cref="ZoneChangeJournalEntryEntity" />
-///     already records on the serving side.
+///     This record is one difference sequence in an RFC 1995 IXFR response: the records removed
+///     and added to take the zone from <see cref="OldSerial" /> to <see cref="NewSerial" />. It
+///     matches what <see cref="ZoneChangeJournalEntryEntity" /> records on the serving side.
 /// </summary>
 /// <param name="OldSerial">The serial this step starts from.</param>
 /// <param name="Removed">The records this step removes.</param>
@@ -22,10 +21,9 @@ public sealed record ZoneTransferDiffStep(
 );
 
 /// <summary>
-///     This class carries the outcome of asking <see cref="IZoneTransferClient" /> to pull a
-///     transfer: either it failed, for a reason a caller can log, or it succeeded, as either a
-///     full record set (AXFR, or an IXFR request the primary chose to answer as one) or an
-///     ordered sequence of incremental steps (a real IXFR diff).
+///     This class carries the result of an <see cref="IZoneTransferClient" /> pull: a failure
+///     with a reason to log, "already current", a full record set (AXFR, or an IXFR the primary
+///     answered in full) or an ordered list of IXFR difference steps.
 /// </summary>
 public sealed class ZoneTransferPullResult
 {
@@ -47,9 +45,8 @@ public sealed class ZoneTransferPullResult
     public bool IsIncremental { get; }
 
     /// <summary>
-    ///     This property indicates whether the primary reported that this server was already
-    ///     current -- in which case both <see cref="FullRecordSet" /> and
-    ///     <see cref="DiffSteps" /> are empty, and there is nothing to apply.
+    ///     This property indicates whether the primary reported this server already current; then
+    ///     <see cref="FullRecordSet" /> and <see cref="DiffSteps" /> are empty.
     /// </summary>
     public bool IsAlreadyCurrent { get; }
 
@@ -59,8 +56,8 @@ public sealed class ZoneTransferPullResult
     public uint FinalSerial { get; }
 
     /// <summary>
-    ///     This property contains every record the zone should end up with, including its own
-    ///     SOA record, when <see cref="IsIncremental" /> is <see langword="false" />.
+    ///     This property contains every record the zone should end up with, including its SOA,
+    ///     when <see cref="IsIncremental" /> is <see langword="false" />.
     /// </summary>
     public IReadOnlyList<DnsResourceRecord> FullRecordSet { get; }
 
@@ -71,8 +68,8 @@ public sealed class ZoneTransferPullResult
     public IReadOnlyList<ZoneTransferDiffStep> DiffSteps { get; }
 
     /// <summary>
-    ///     This constructor is private; construct an instance through <see cref="Failure" />,
-    ///     <see cref="AlreadyCurrent" />, <see cref="Full" />, or <see cref="Incremental" /> instead.
+    ///     This constructor is private; use <see cref="Failure" />, <see cref="AlreadyCurrent" />,
+    ///     <see cref="Full" /> or <see cref="Incremental" />.
     /// </summary>
     private ZoneTransferPullResult(
         bool succeeded,
@@ -115,7 +112,7 @@ public sealed class ZoneTransferPullResult
     ) => new(true, null, false, false, finalSerial, records, []);
 
     /// <summary>
-    ///     This method builds the result for a real incremental diff.
+    ///     This method builds the result for an incremental diff.
     /// </summary>
     public static ZoneTransferPullResult Incremental(
         uint finalSerial,

@@ -6,12 +6,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13j proof that <c>ClientGroupsController</c>'s own
-///     group listing no longer materializes every group into memory before slicing a page out of
-///     it, mirroring <see cref="ZoneRepositorySearchTests" />'s own Phase 13g proof for the same
-///     shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>ClientGroupsController</c>'s listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class ClientGroupRepositorySearchTests : IAsyncLifetime
 {
@@ -22,7 +20,7 @@ public sealed class ClientGroupRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five client groups with names deliberately out of alphabetical
+    ///     This method seeds five client groups with names out of alphabetical
     ///     creation order, so a passing ordering assertion can only be explained by a real
     ///     <c>ORDER BY</c> translated at the database, not by creation/insertion order happening
     ///     to already match.
@@ -87,7 +85,7 @@ public sealed class ClientGroupRepositorySearchTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IDnsClientGroupRepository>();
 
         // Page size 2 over 5 groups: page 0 gets alpha/bravo, page 1 gets charlie/delta, page 2
-        // gets only echo (the final, partial page) -- proving skip/take are genuinely applied at
+        // gets only echo (the final, partial page) -- proving skip/take are applied at
         // the database, not merely accepted and ignored.
         IReadOnlyList<DnsClientGroupEntity> firstPage = await repository.SearchAsync(
             skip: 0,

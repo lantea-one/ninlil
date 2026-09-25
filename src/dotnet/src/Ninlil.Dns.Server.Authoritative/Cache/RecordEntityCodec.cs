@@ -6,20 +6,18 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Server.Authoritative.Cache;
 
 /// <summary>
-///     This class converts a stored <see cref="RecordEntity" /> into its wire form, shared by
-///     everything in this project that needs to serve stored records back out over the wire --
-///     <see cref="Resolution.AuthoritativeQueryResolver" /> for ordinary query answers, and a
-///     zone transfer for a complete zone dump.
+///     This class converts between stored <see cref="RecordEntity" /> rows (record data as
+///     JSON) and wire records (RDATA). The resolver, zone transfer, signing and the transfer
+///     pull all use it.
 /// </summary>
 public static class RecordEntityCodec
 {
     /// <summary>
-    ///     This method decodes each of a set of stored records into its wire form, all sharing
-    ///     one owner name.
+    ///     This method converts stored records that share one owner name into wire records.
     /// </summary>
     /// <param name="records">The stored records to convert.</param>
-    /// <param name="ownerName">The owner name every one of <paramref name="records" /> shares.</param>
-    /// <returns>The converted records. A record with no registered codec is silently skipped.</returns>
+    /// <param name="ownerName">The owner name to give every converted record.</param>
+    /// <returns>The converted records. A record whose type has no codec is skipped.</returns>
     public static List<DnsResourceRecord> ToWireRecords(
         IReadOnlyList<RecordEntity> records,
         DnsName ownerName
@@ -31,19 +29,15 @@ public static class RecordEntityCodec
         ];
 
     /// <summary>
-    ///     This method converts a single stored record into its wire form, decoding its stored
-    ///     JSON data into the strongly-typed model its record type's codec expects and
-    ///     re-encoding that model as RDATA. A record whose type has no registered codec (a
-    ///     DNSSEC-signing-related type, for example, not currently implemented) is
-    ///     skipped rather than served malformed or left to throw partway through building a
-    ///     response.
+    ///     This method converts one stored record to wire form: its JSON data is read into the
+    ///     typed model for its type and written as RDATA. A type with no registered codec returns
+    ///     <see langword="null" /> rather than a malformed record or an exception.
     /// </summary>
     /// <param name="record">The stored record to convert.</param>
     /// <param name="ownerName">
-    ///     The owner name to give the converted record. Not always simply
-    ///     <c><see cref="DnsName" />.Parse(<paramref name="record" />.Name)</c> -- a wildcard
-    ///     record's own stored name is literally <c>*.example.com</c>, but the record it answers
-    ///     for must be served back under whichever concrete name was actually queried.
+    ///     The owner name to give the converted record. It differs from the stored name for a
+    ///     wildcard record, which is stored as <c>*.example.com</c> but served under the queried
+    ///     name.
     /// </param>
     /// <returns>
     ///     The converted record, or <see langword="null" /> if no codec is registered for
@@ -64,16 +58,15 @@ public static class RecordEntityCodec
     }
 
     /// <summary>
-    ///     This method converts a record exactly as it arrived on the wire -- from a pulled zone
-    ///     transfer, for example -- into a <see cref="RecordEntity" /> ready to be stored, doing
-    ///     the reverse of <see cref="ToWireRecord" />: decoding the RDATA into its strongly-typed
-    ///     model and re-encoding that model as JSON.
+    ///     This method converts a wire record (from a zone transfer, for example) into a
+    ///     <see cref="RecordEntity" /> to store, the reverse of <see cref="ToWireRecord" />: the
+    ///     RDATA is read into its typed model and written as JSON.
     /// </summary>
     /// <param name="record">The wire-form record to convert.</param>
     /// <param name="zoneId">The identifier of the zone this record belongs to.</param>
     /// <returns>
-    ///     The converted, not-yet-persisted entity (a fresh <see cref="EntityBase.Id" /> is
-    ///     assigned), or <see langword="null" /> if no codec is registered for
+    ///     The new, unsaved entity (with a new <see cref="EntityBase.Id" />), or
+    ///     <see langword="null" /> if no codec is registered for
     ///     <paramref name="record" />'s type.
     /// </returns>
     public static RecordEntity FromWireRecord(DnsResourceRecord record, Guid zoneId)
@@ -89,14 +82,9 @@ public static class RecordEntityCodec
             Type = record.Type,
             Class = record.Class,
             TimeToLiveSeconds = record.TimeToLive,
-            // Serialize(Type, object) is called explicitly here, rather than the single-argument
-            // Serialize(object) overload, because codec.Read's static return type is the empty
-            // marker interface IDnsRecordData: passing it to the single-argument overload would
-            // resolve to the generic Serialize<TSource>(TSource) instead (an exact-type-match
-            // generic instantiation beats a same-arity overload that only fits via an implicit
-            // reference conversion), serializing based on IDnsRecordData's own (nonexistent)
-            // properties rather than the value's real runtime type -- silently producing "{}"
-            // and losing the record's actual data entirely.
+            // Pass the runtime type explicitly. codec.Read returns the empty marker interface
+            // IDnsRecordData, so the one-argument overload would bind to the generic
+            // Serialize<IDnsRecordData> and write "{}", losing the data.
             DataJson = Ninlil.Common.Serializer.JsonSerializer.Serialize(
                 codec.DataType,
                 codec.Read(record.Data)
@@ -106,9 +94,8 @@ public static class RecordEntityCodec
     }
 
     /// <summary>
-    ///     This method decodes a stored record's own JSON data into its strongly-typed model,
-    ///     used where code needs to inspect a record's *meaning* -- an NS record's nameserver, a
-    ///     CNAME's target, a SOA's negative-caching minimum -- rather than just serve it as-is.
+    ///     This method reads a stored record's JSON data into its typed model, for code that needs
+    ///     a value from it (an NS name, a CNAME target, the SOA minimum).
     /// </summary>
     /// <param name="record">The stored record to decode.</param>
     /// <returns>

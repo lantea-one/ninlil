@@ -10,41 +10,29 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class is the periodic half of the cluster's own "close the loop" design: on a
-///     fixed interval (<see cref="CatalogSyncOptions.AddressReconcileInterval" />), it re-derives
-///     every catalog-managed zone's own <c>NotifyAddresses</c>/<c>PrimaryServerAddresses</c> from
-///     this node's own currently-healthy cluster peers, so a peer joining, leaving, or recovering
-///     from an outage after a zone's own membership was already set up is reflected automatically
-///     -- <see cref="CatalogZoneMembershipService" /> only merges the address set once, at the
-///     moment a zone actually joins a catalog; this service is what keeps that merge from going
-///     stale for the rest of the zone's life.
+///     This hosted service, every <see cref="CatalogSyncOptions.AddressReconcileInterval" />, adds
+///     the addresses of this node's healthy cluster peers to the address lists of catalog-managed
+///     zones, so peers that join or recover later are included.
+///     <see cref="CatalogZoneMembershipService" /> merges the addresses only once, when a zone joins
+///     a catalog; this keeps them current afterwards.
 ///     <para>
-///         Three, and only three, kinds of zone are ever touched here: a
-///         <see cref="ZoneTypeEnum.Catalog" /> zone's own <c>NotifyAddresses</c> (so every future
-///         member addition/removal reaches every peer); a catalog *member*'s own
-///         <see cref="ZoneTypeEnum.Primary" />/<see cref="ZoneTypeEnum.CloudPrimary" />
-///         <c>NotifyAddresses</c> (so its own content changes reach every peer directly, not only
-///         through the catalog's own slower propagation); and an auto-provisioned
-///         <see cref="ZoneTypeEnum.Secondary" /> member's own <c>PrimaryServerAddresses</c> (so it
-///         keeps trying every currently-known peer, not just whichever ones existed when it was
-///         first auto-provisioned). A <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone's own
-///         <c>PrimaryServerAddresses</c> is deliberately never touched here -- that one address
-///         (which node this catalog is actually transferred from) remains the one piece of
-///         catalog-related configuration an operator still sets up once, by hand, the same way
-///         bootstrapping any ordinary secondary zone's own primary always has.
+///     It touches three kinds of zone: a <see cref="ZoneTypeEnum.Catalog" /> zone's
+///     <c>NotifyAddresses</c> (so member changes reach every peer); a catalog member's
+///     <c>NotifyAddresses</c> when it is <see cref="ZoneTypeEnum.Primary" /> or
+///     <see cref="ZoneTypeEnum.CloudPrimary" /> (so its changes reach peers directly); and an
+///     auto-provisioned <see cref="ZoneTypeEnum.Secondary" /> member's
+///     <c>PrimaryServerAddresses</c> (so it can pull from any current peer). A
+///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone's <c>PrimaryServerAddresses</c> is left
+///     alone: which node the catalog comes from is set by hand, as for any secondary.
 ///     </para>
 ///     <para>
-///         Every merge is additive-only, exactly like <see cref="CatalogZoneMembershipService" />'s
-///         own -- a peer that stops being healthy, or is removed from the cluster outright, is
-///         never scrubbed from an address list this service already added it to. This is a real,
-///         accepted limitation, not an oversight: distinguishing
-///         a peer-contributed address from an operator's own manually-added one is not something
-///         <see cref="ZoneEntity.NotifyAddresses" />' plain string list can express without a
-///         provenance field this class deliberately does not add.
+///     Merges only add. A peer that becomes unhealthy or leaves the cluster is never removed
+///     from a list, because a plain string list cannot tell a peer-added address from one an
+///     operator added.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to create a fresh scope for each reconciliation round.</param>
-/// <param name="options">This service's own configuration, read fresh on every round.</param>
+/// <param name="scopeFactory">The factory used to create a scope for each round.</param>
+/// <param name="options">The interval, read on every round.</param>
 /// <param name="logger">The logger a failed round is recorded to.</param>
 public class CatalogClusterAddressSyncService(
     IServiceScopeFactory scopeFactory,
@@ -74,9 +62,8 @@ public class CatalogClusterAddressSyncService(
     }
 
     /// <summary>
-    ///     This method waits for the timer's next tick, translating a cancelled wait's own
-    ///     <see cref="OperationCanceledException" /> into a clean <see langword="false" /> so the
-    ///     caller's <see langword="while" /> loop exits normally on shutdown.
+    ///     This method waits for the next tick and returns <see langword="false" /> instead of
+    ///     throwing when cancelled, so the loop ends cleanly on shutdown.
     /// </summary>
     private static async Task<bool> WaitForNextTickAsync(
         PeriodicTimer timer,
@@ -94,7 +81,7 @@ public class CatalogClusterAddressSyncService(
     }
 
     /// <summary>
-    ///     This method runs a single reconciliation pass across every zone this node hosts.
+    ///     This method runs one pass over every zone this node hosts.
     /// </summary>
     private async Task RunOneRoundAsync(CancellationToken stoppingToken)
     {
@@ -108,9 +95,8 @@ public class CatalogClusterAddressSyncService(
         IReadOnlyList<string> peerAddresses =
             await peerAddressResolver.ResolveHealthyPeerAddressesAsync(stoppingToken);
 
-        // Nothing to reconcile against yet -- either clustering is not enabled at all, or every
-        // known peer is currently unreachable; either way, leave every zone's own address list
-        // exactly as it already is rather than clearing anything.
+        // No peer addresses (clustering off, or every peer unreachable): leave every list as it
+        // is rather than clearing anything.
         if (peerAddresses.Count == 0)
             return;
 
@@ -166,9 +152,9 @@ public class CatalogClusterAddressSyncService(
     }
 
     /// <summary>
-    ///     This method additively merges every peer address into an existing address list.
+    ///     This method adds any missing peer addresses to an address list.
     /// </summary>
-    /// <returns><see langword="true" /> if the list actually gained a new address.</returns>
+    /// <returns>Whether any address was added.</returns>
     private static bool MergeInto(
         List<string> current,
         IReadOnlyList<string> peerAddresses,

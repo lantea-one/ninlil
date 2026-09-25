@@ -10,12 +10,10 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="Route53DnsProvider" /> against a real, Kestrel-hosted,
-///     hand-built minimal REST-XML fake standing in for Amazon Route 53's own documented API --
-///     there is no live AWS account to verify against. The fake does not validate SigV4
-///     authorization headers (the real <see cref="Amazon.Route53.AmazonRoute53Client" /> still
-///     computes and sends them regardless; this fake simply does not check them), matching the
-///     original throwaway smoke test's own approach that first proved this fake server design out.
+///     This class tests <see cref="Route53DnsProvider" /> against a Kestrel-hosted, minimal REST-XML
+///     fake of the Route 53 API. The <see cref="Amazon.Route53.AmazonRoute53Client" /> still signs
+///     requests with SigV4, but the fake does not check the signatures. There is no test against a
+///     live AWS account.
 /// </summary>
 public sealed class Route53DnsProviderTests : IAsyncLifetime
 {

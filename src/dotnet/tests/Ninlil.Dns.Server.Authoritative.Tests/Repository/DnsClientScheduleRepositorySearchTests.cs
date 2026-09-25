@@ -7,10 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientScheduleRepository" />'s
-///     real, pushed-down <c>SearchByClientIdAsync</c>/<c>CountByClientIdAsync</c> pagination
-///     against a real SQLite-backed database, mirroring <see cref="ClientGroupRepositorySearchTests" />'s
-///     own precedent for the same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientScheduleRepository" /> (<c>SearchByClientIdAsync</c>, <c>CountByClientIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as the client schedule endpoint's listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class DnsClientScheduleRepositorySearchTests : IAsyncLifetime
 {
@@ -41,7 +41,7 @@ public sealed class DnsClientScheduleRepositorySearchTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IDnsClientScheduleRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        // Seed the owning client first, in the exact same scope/unit of work, so both rows
+        // Seed the owning client first, in the same scope/unit of work, so both rows
         // commit together.
         Guid ownerClientId = await SeedClientAsync(scope.ServiceProvider);
 

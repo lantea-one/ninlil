@@ -22,16 +22,11 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class is the regression coverage for the backend gap audit's finding 4:
-///     <see cref="SignedZoneCache" /> previously only ever DNSSEC-signed <see cref="ZoneTypeEnum.Primary" />
-///     zones, silently skipping <see cref="ZoneTypeEnum.CloudPrimary" /> ones even though this
-///     instance is equally the authoritative source of a CloudPrimary zone's content -- nothing
-///     signs it upstream first, unlike a Secondary/CloudSecondary zone whose signed content
-///     (RRSIGs included) always arrives pre-signed via NOTIFY/AXFR. Mirrors
-///     <see cref="SignedZoneCacheEventTests" />'s own real-host, real-key setup exactly, just
-///     against a <see cref="ZoneTypeEnum.CloudPrimary" /> zone instead of a
-///     <see cref="ZoneTypeEnum.Primary" /> one, so it proves the fix against the real
-///     <see cref="IZoneSigningService" /> pipeline rather than a stubbed-out one.
+///     This class checks that <see cref="SignedZoneCache" /> signs
+///     <see cref="ZoneTypeEnum.CloudPrimary" /> zones as well as <see cref="ZoneTypeEnum.Primary" />
+///     ones, since this server is the source of a CloudPrimary zone's content. It uses the same
+///     setup as <see cref="SignedZoneCacheEventTests" />: a host with a temporary SQLite database,
+///     a generated key and the real <see cref="IZoneSigningService" />.
 /// </summary>
 public sealed class SignedZoneCacheCloudPrimaryTests : IAsyncLifetime
 {
@@ -51,7 +46,7 @@ public sealed class SignedZoneCacheCloudPrimaryTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // Overrides AddNinlilDnsServerCore's own real IDnsServerEventPublisher registration --
+        // Overrides AddNinlilDnsServerCore's real IDnsServerEventPublisher registration --
         // this test only cares about capturing what gets published directly.
         _publisher = new RecordingEventPublisher();
         builder.Services.AddSingleton<IDnsServerEventPublisher>(_publisher);
@@ -119,7 +114,7 @@ public sealed class SignedZoneCacheCloudPrimaryTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
-        // A real, freshly generated key -- SignedZoneCache's own StartAsync (triggered by
+        // A real, freshly generated key -- SignedZoneCache's StartAsync (triggered by
         // _host.StartAsync() below) needs at least one active key of each role to actually
         // produce a signed result rather than logging a failure and skipping the zone.
         await keyManagement.GenerateKeyAsync(
@@ -146,12 +141,8 @@ public sealed class SignedZoneCacheCloudPrimaryTests : IAsyncLifetime
     [Fact]
     public async Task StartingTheHostSignsACloudPrimaryZoneAndPublishesTheResigningCompletedEvent()
     {
-        // Before the fix, SignedZoneCache.StartAsync's zone-type filter only ever matched
-        // ZoneTypeEnum.Primary, so a CloudPrimary zone -- this instance's own authoritative
-        // source for content it pushes out to a cloud connector -- would silently never be
-        // signed at all, with no error anywhere. This proves the fix by asserting the same
-        // real-signing, real-event-publishing behavior SignedZoneCacheEventTests already proves
-        // for a Primary zone, here against a CloudPrimary one instead.
+        // StartAsync must sign CloudPrimary zones; a zone type missing from its filter is silently
+        // never signed. Same checks as SignedZoneCacheEventTests for a Primary zone.
         await _host.StartAsync();
 
         DnssecZoneResigningCompletedEvent signedEvent = Assert.Single(
@@ -173,10 +164,8 @@ public sealed class SignedZoneCacheCloudPrimaryTests : IAsyncLifetime
 
         SignedZoneCache cache = _host.Services.GetRequiredService<SignedZoneCache>();
 
-        // Before the fix, ReloadZoneAsync's own zone-type check independently only matched
-        // ZoneTypeEnum.Primary too -- a reload of an unchanged CloudPrimary zone would have
-        // fallen into the else-branch removal path and evicted it from the cache entirely, even
-        // though nothing about the zone actually became ineligible.
+        // ReloadZoneAsync has its own type check; a CloudPrimary zone must stay cached rather than
+        // be removed as ineligible.
         await cache.ReloadZoneAsync(_zoneId);
 
         Assert.NotNull(cache.GetSignedData(_zoneId));

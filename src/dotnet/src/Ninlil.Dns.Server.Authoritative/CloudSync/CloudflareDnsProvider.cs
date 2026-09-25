@@ -7,21 +7,18 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This class implements <see cref="ICloudDnsProvider" /> against Cloudflare's documented v4
-///     REST API (<c>https://api.cloudflare.com/client/v4</c>). <paramref name="httpClient" />'s
-///     own <see cref="HttpClient.BaseAddress" /> is left unset by this class deliberately: the
-///     real Cloudflare API is the default (see <c>ServiceCollectionAuthoritativeExtension</c>'s
-///     own <c>AddHttpClient</c> registration), and this class's own smoke test overrides it to
-///     point at a fake HTTP server standing in for Cloudflare's own documented contract instead
-///     -- there is no live Cloudflare account to verify against.
+///     This class implements <see cref="ICloudDnsProvider" /> with Cloudflare's v4 REST API
+///     (<c>https://api.cloudflare.com/client/v4</c>). It does not set
+///     <see cref="HttpClient.BaseAddress" />: <c>ServiceCollectionAuthoritativeExtension</c> sets the
+///     real address when registering the client, and tests point it at a fake server that follows
+///     Cloudflare's documented contract. It has not been tested against a live account.
 /// </summary>
 /// <param name="httpClient">The client every request is sent through.</param>
 public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProvider
 {
     /// <summary>
-    ///     This constant contains Cloudflare's own real API base address, used whenever this
-    ///     class's caller has not overridden <c>httpClient</c>'s own base address
-    ///     (as this class's smoke test does, to point at a fake server instead).
+    ///     This constant contains Cloudflare's API base address, which the HTTP client registration
+    ///     uses; tests replace it with a fake server.
     /// </summary>
     public const string DefaultBaseAddress = "https://api.cloudflare.com/client/v4/";
 
@@ -63,9 +60,7 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
 
                 DnsResourceRecord wireRecord = type switch
                 {
-                    // Cloudflare represents SRV/CAA as a nested "data" object of independent
-                    // fields rather than one plain "content" string -- see this class's own
-                    // doc comment.
+                    // Cloudflare puts SRV and CAA fields in a nested "data" object instead of "content".
                     DnsResourceRecordTypeEnum.Srv => CloudDnsRecordMapper.ToSrvWireRecord(
                         record.Name,
                         (ushort)(record.Data?.Priority ?? 0),
@@ -108,10 +103,8 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
         CancellationToken stoppingToken = default
     )
     {
-        // Cloudflare's own "content" field is server-computed (readOnly) for SRV/CAA -- those
-        // two publish their own value entirely through the nested "data" object instead, built
-        // directly from the wire record's own structured fields rather than the generic
-        // single-content-value path the other five supported types share.
+        // For SRV and CAA, Cloudflare computes "content" itself (read-only), so send the fields in
+        // "data" instead.
         string content = null;
         int? mxPreference = null;
         CloudflareRecordData data = null;
@@ -185,8 +178,8 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     }
 
     /// <summary>
-    ///     This method attaches Cloudflare's own bearer-token authorization header, from the
-    ///     credential set's own <c>ApiToken</c> field.
+    ///     This method attaches Cloudflare's bearer-token authorization header, from the
+    ///     credential set's <c>ApiToken</c> field.
     /// </summary>
     private static void ApplyAuthorization(
         HttpRequestMessage request,
@@ -205,16 +198,16 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     }
 
     /// <summary>
-    ///     This method parses Cloudflare's own record type string (for example, <c>"A"</c>) into
+    ///     This method parses Cloudflare's record type string (for example, <c>"A"</c>) into
     ///     <see cref="DnsResourceRecordTypeEnum" />.
     /// </summary>
     private static bool TryParseType(string typeName, out DnsResourceRecordTypeEnum type) =>
         System.Enum.TryParse(typeName, ignoreCase: true, out type);
 
     /// <summary>
-    ///     This method converts Cloudflare's own raw CAA <c>data.flags</c> octet (0-255, per RFC
-    ///     8659 §4) into the single Critical bit <see cref="Ninlil.Dns.Common.Wire.Records.CaaRecordData" />
-    ///     models -- the only bit that RFC currently assigns.
+    ///     This method converts Cloudflare's CAA <c>data.flags</c> value (0-255, RFC 8659 §4) to the
+    ///     Critical bit <see cref="Ninlil.Dns.Common.Wire.Records.CaaRecordData" /> models, the only bit
+    ///     RFC 8659 assigns.
     /// </summary>
     private static bool CaaFlagsToIsCritical(int? flags) => ((flags ?? 0) & 0x80) != 0;
 
@@ -224,11 +217,11 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     private static int CaaIsCriticalToFlags(bool isCritical) => isCritical ? 0x80 : 0;
 
     /// <summary>
-    ///     This record models the envelope Cloudflare's own <c>GET /dns_records</c> endpoint
+    ///     This record models the envelope Cloudflare's <c>GET /dns_records</c> endpoint
     ///     wraps its paged record list in.
     /// </summary>
-    /// <param name="Result">This page's own records.</param>
-    /// <param name="ResultInfo">This page's own pagination metadata.</param>
+    /// <param name="Result">This page's records.</param>
+    /// <param name="ResultInfo">This page's pagination metadata.</param>
     private sealed record CloudflareListResponse(
         [property: JsonPropertyName("result")] List<CloudflareRecord> Result,
         [property: JsonPropertyName("result_info")] CloudflareResultInfo ResultInfo
@@ -245,16 +238,16 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     );
 
     /// <summary>
-    ///     This record models a single record as Cloudflare's own API represents it.
+    ///     This record models a single record as Cloudflare's API represents it.
     /// </summary>
-    /// <param name="Id">Cloudflare's own opaque identifier for this record.</param>
-    /// <param name="Type">The record's type, as Cloudflare's own type name (for example, <c>"A"</c>).</param>
+    /// <param name="Id">Cloudflare's opaque identifier for this record.</param>
+    /// <param name="Type">The record's type, as Cloudflare's type name (for example, <c>"A"</c>).</param>
     /// <param name="Name">The record's owner name.</param>
-    /// <param name="Content">The record's own single value.</param>
+    /// <param name="Content">The record's single value.</param>
     /// <param name="Ttl">The record's time-to-live, in seconds.</param>
-    /// <param name="Priority">An MX record's own preference value; <see langword="null" /> for every other type.</param>
+    /// <param name="Priority">An MX record's preference value; <see langword="null" /> for every other type.</param>
     /// <param name="Data">
-    ///     An SRV or CAA record's own structured fields; <see langword="null" /> for every other
+    ///     An SRV or CAA record's structured fields; <see langword="null" /> for every other
     ///     type, which instead carries its single value in <see cref="Content" />.
     /// </param>
     private sealed record CloudflareRecord(
@@ -268,18 +261,16 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
     );
 
     /// <summary>
-    ///     This record models Cloudflare's own nested <c>data</c> object, which carries an SRV or
-    ///     CAA record's own independent RDATA fields -- Cloudflare represents both types this way
-    ///     rather than through the flat <c>content</c>/<c>priority</c> fields every other
-    ///     supported type uses.
+    ///     This record models Cloudflare's nested <c>data</c> object, which holds the fields of an SRV
+    ///     or CAA record; other types use the flat <c>content</c> and <c>priority</c> fields.
     /// </summary>
-    /// <param name="Priority">An SRV record's own priority.</param>
-    /// <param name="Weight">An SRV record's own weight.</param>
-    /// <param name="Port">An SRV record's own port.</param>
-    /// <param name="Target">An SRV record's own target host.</param>
-    /// <param name="Flags">A CAA record's own raw flags octet (0-255, per RFC 8659 §4).</param>
-    /// <param name="Tag">A CAA record's own tag (for example, <c>issue</c>).</param>
-    /// <param name="Value">A CAA record's own policy value.</param>
+    /// <param name="Priority">An SRV record's priority.</param>
+    /// <param name="Weight">An SRV record's weight.</param>
+    /// <param name="Port">An SRV record's port.</param>
+    /// <param name="Target">An SRV record's target host.</param>
+    /// <param name="Flags">A CAA record's raw flags octet (0-255, per RFC 8659 §4).</param>
+    /// <param name="Tag">A CAA record's tag (for example, <c>issue</c>).</param>
+    /// <param name="Value">A CAA record's policy value.</param>
     private sealed record CloudflareRecordData(
         [property: JsonPropertyName("priority")] int? Priority,
         [property: JsonPropertyName("weight")] int? Weight,
@@ -292,19 +283,18 @@ public sealed class CloudflareDnsProvider(HttpClient httpClient) : ICloudDnsProv
 
     /// <summary>
     ///     This record models the request body <see cref="CreateRecordAsync" /> posts to
-    ///     Cloudflare's own <c>POST /dns_records</c> endpoint.
+    ///     Cloudflare's <c>POST /dns_records</c> endpoint.
     /// </summary>
-    /// <param name="Type">The record's type, as Cloudflare's own type name (for example, <c>"A"</c>).</param>
+    /// <param name="Type">The record's type, as Cloudflare's type name (for example, <c>"A"</c>).</param>
     /// <param name="Name">The record's owner name.</param>
     /// <param name="Content">
-    ///     The record's own single value; left <see langword="null" /> for SRV/CAA, whose own
-    ///     value is carried entirely through <see cref="Data" /> instead (Cloudflare computes
-    ///     <c>content</c> itself for those two types).
+    ///     The record's value; <see langword="null" /> for SRV and CAA, which use <see cref="Data" />
+    ///     (Cloudflare computes <c>content</c> for them).
     /// </param>
     /// <param name="Ttl">The record's time-to-live, in seconds.</param>
-    /// <param name="Priority">An MX record's own preference value; <see langword="null" /> for every other type.</param>
+    /// <param name="Priority">An MX record's preference value; <see langword="null" /> for every other type.</param>
     /// <param name="Data">
-    ///     An SRV or CAA record's own structured fields; <see langword="null" /> for every other type.
+    ///     An SRV or CAA record's structured fields; <see langword="null" /> for every other type.
     /// </param>
     private sealed record CloudflareCreateRequest(
         [property: JsonPropertyName("type")] string Type,

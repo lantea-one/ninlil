@@ -2,10 +2,9 @@
 namespace Ninlil.Dns.Server.Authoritative.Notify;
 
 /// <summary>
-///     This interface lets something outside the secondary-zone refresh scheduler itself --
-///     concretely, <see cref="NotifyQueryResolver" />, once it has validated an inbound NOTIFY --
-///     ask it to check a specific zone right away, rather than waiting for that zone's own
-///     refresh timer to come around on its own.
+///     This interface lets <see cref="NotifyQueryResolver" />, after accepting a NOTIFY, ask the
+///     secondary refresh scheduler (<c>Refresh.SecondaryZoneRefreshService</c>) to check a zone
+///     now instead of waiting for its refresh timer.
 /// </summary>
 public interface ISecondaryZoneRefreshTrigger
 {

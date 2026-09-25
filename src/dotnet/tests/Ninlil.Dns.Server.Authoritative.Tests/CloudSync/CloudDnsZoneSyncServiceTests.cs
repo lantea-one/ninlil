@@ -25,15 +25,12 @@ using Ninlil.Dns.Server.Core.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="CloudDnsZoneSyncService" />'s end-to-end reconciliation, in
-///     both directions, against real Kestrel-hosted fake HTTP servers standing in for
-///     Cloudflare (push/<see cref="ZoneTypeEnum.CloudPrimary" />) and DigitalOcean
-///     (pull/<see cref="ZoneTypeEnum.CloudSecondary" />). It also serves as the regression test
-///     for a real bug this project found and fixed: <see cref="AuthoritativeZoneCache" />'s own
-///     zone-loading and reload filters used to only match <see cref="ZoneTypeEnum.Primary" />/
-///     <see cref="ZoneTypeEnum.Secondary" />, silently leaving every cloud-synced zone invisible
-///     to <see cref="AuthoritativeQueryResolver" /> even while this exact service kept
-///     syncing its records into the database.
+///     This class tests <see cref="CloudDnsZoneSyncService" /> end to end in both directions,
+///     against Kestrel-hosted fake servers for Cloudflare (push, <see cref="ZoneTypeEnum.CloudPrimary" />)
+///     and DigitalOcean (pull, <see cref="ZoneTypeEnum.CloudSecondary" />), with the EF Core
+///     repositories on a temporary SQLite database. It also checks that
+///     <see cref="AuthoritativeZoneCache" /> loads cloud zones, so
+///     <see cref="AuthoritativeQueryResolver" /> answers from the synced records.
 /// </summary>
 public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
 {
@@ -293,7 +290,7 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
                 }
             );
 
-        // The push zone's own local content: its own SOA (never synced, per ICloudDnsProvider's
+        // The push zone's local content: its SOA (never synced, per ICloudDnsProvider's
         // own scoping), one record that must be pushed to Cloudflare (missing there today), and
         // one ExcludeFromSync record that must never be pushed at all.
         await AddRecordAsync(
@@ -324,8 +321,8 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
             excludeFromSync: true
         );
 
-        // The pull zone's own local content: its own SOA (needed so ApplyChangesAsync has
-        // something to advance -- see CloudDnsZoneSyncService.SyncZoneAsync's own bootstrap
+        // The pull zone's local content: its SOA (needed so ApplyChangesAsync has
+        // something to advance -- see CloudDnsZoneSyncService.SyncZoneAsync's bootstrap
         // note), one stale local record the remote no longer has (must be removed), and one
         // ExcludeFromSync record the remote also doesn't have but which must survive regardless.
         await AddRecordAsync(
@@ -366,17 +363,14 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
 
         await syncService.StartAsync(CancellationToken.None);
 
-        // SyncDueZonesAsync runs synchronously inside ExecuteAsync before its first Task.Delay,
-        // but BackgroundService still schedules that continuation rather than running it fully
-        // synchronously before StartAsync returns (the same real, empirically-confirmed
-        // scheduling gap already documented for DnscryptCertificateRotationService) -- poll for
-        // the expected side effect instead of assuming it has already happened.
+        // BackgroundService.StartAsync returns before ExecuteAsync has run its first pass (as for
+        // DnscryptCertificateRotationService), so poll for the result instead of assuming it.
         for (int attempt = 0; attempt < 40 && _cloudflareCreateRequests.Count == 0; attempt++)
             await Task.Delay(50);
 
         // Give the pull-direction ApplyChangesAsync + its DnsZoneChangedEvent + the cache reload
-        // it triggers a moment to actually land, on top of the create-request signal above. A
-        // caller that knows what "landed" looks like waits for exactly that instead (bounded),
+        // it triggers a moment to land, on top of the create-request signal above. A
+        // caller that knows what "landed" looks like waits for that instead (bounded),
         // since stopping the service any earlier would cancel a pass still in progress on a busy
         // machine.
         if (completed is null)
@@ -455,12 +449,10 @@ public sealed class CloudDnsZoneSyncServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     Regression test for the real bug this project found while building ACME: both
-    ///     <see cref="AuthoritativeZoneCache.StartAsync" /> and its reload path used to only
-    ///     match <see cref="ZoneTypeEnum.Primary" />/<see cref="ZoneTypeEnum.Secondary" />, so a
-    ///     <see cref="ZoneTypeEnum.CloudPrimary" />/<see cref="ZoneTypeEnum.CloudSecondary" />
-    ///     zone was never actually loaded into the cache that answers real queries, even while
-    ///     this exact sync service kept its records correctly up to date in the database.
+    ///     This test checks that <see cref="AuthoritativeZoneCache" /> loads
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" /> and <see cref="ZoneTypeEnum.CloudSecondary" /> zones at
+    ///     startup, so their synced records are answered; a type missing from the cache's filter would
+    ///     be synced but never served.
     /// </summary>
     [Fact]
     public void BothCloudZoneTypesAreLoadedIntoTheCacheAtStartup()

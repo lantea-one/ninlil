@@ -7,26 +7,24 @@ using Ninlil.Dns.Server.Dnssec;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class builds the NSEC/NSEC3 records (plus their own covering RRSIGs) RFC 4035 §3.1.3
-///     and RFC 5155 §7.2 require alongside a negative response, a wildcard-synthesized positive
-///     answer, or an insecure delegation referral -- the query-time counterpart to
-///     <see cref="ZoneSigningService" />'s offline chain construction.
+///     This class picks the NSEC or NSEC3 records, with their RRSIGs, that RFC 4035 §3.1.3 and
+///     RFC 5155 §7.2 require with a negative answer, a wildcard answer or an insecure
+///     referral. <see cref="Resolution.AuthoritativeQueryResolver" /> calls it at query time.
 ///     <para>
-///         Every proof here is built from whichever chain <see cref="SignedZoneData.DenialOfExistenceRecords" />
-///         already holds; nothing is computed or signed live, matching this project's own
-///         deliberate stance against ever signing per query. NSEC3's own salted, iterated hash still has to be computed for
-///         a name that is *not* already in the chain -- the closest encloser's synthetic wildcard
-///         name, for example -- but that is a pure, deterministic hash lookup, not a signature.
+///         The records come from the chain <see cref="ZoneSigningService" /> already built
+///         (<see cref="SignedZoneData.DenialOfExistenceRecords" />); nothing is signed per query.
+///         For NSEC3, names not in the chain (such as the next closer name) are hashed at query
+///         time to find the covering record. Lookups scan the chain linearly.
 ///     </para>
 /// </summary>
 public static class DenialOfExistenceProofBuilder
 {
     /// <summary>
-    ///     This method builds the proof that an existing name lacks the queried type (NODATA):
-    ///     the single NSEC or NSEC3 record whose own owner name matches exactly, plus its RRSIG.
+    ///     This method builds the NODATA proof (the name exists but lacks the type): the NSEC or
+    ///     NSEC3 record for that name, with its RRSIG.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's own database record, for its NSEC3 hash parameters.</param>
+    /// <param name="zone">The zone's database record, for its NSEC3 hash parameters.</param>
     /// <param name="queryName">The name that exists but lacks the queried type.</param>
     /// <returns>The proof records, or an empty list if the matching record was not found.</returns>
     public static List<DnsResourceRecord> BuildNoDataProof(
@@ -36,13 +34,12 @@ public static class DenialOfExistenceProofBuilder
     ) => WithSignature(signed, FindExactMatch(signed, zone, queryName), CoveringType(zone));
 
     /// <summary>
-    ///     This method builds the full non-existence proof RFC 4035 §3.1.3.2/RFC 5155 §7.2.2
-    ///     require for an NXDOMAIN response: proof that the queried name itself does not exist
-    ///     (via its closest encloser and the "next closer" name below it), and proof that no
-    ///     wildcard beneath that closest encloser could have matched either.
+    ///     This method builds the NXDOMAIN proof (RFC 4035 §3.1.3.2, RFC 5155 §7.2.2): that the
+    ///     name does not exist (through its closest encloser and the next closer name) and that no
+    ///     wildcard at the closest encloser could have matched.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's own database record.</param>
+    /// <param name="zone">The zone's database record.</param>
     /// <param name="apexName">The zone's apex name.</param>
     /// <param name="queryName">The name that does not exist.</param>
     /// <returns>The proof records, deduplicated.</returns>
@@ -68,13 +65,12 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method builds the proof RFC 4035 §3.1.3.3 requires alongside a wildcard-synthesized
-    ///     positive answer: that no exact (non-wildcard) match exists for the originally queried
-    ///     name. Unlike <see cref="BuildNxDomainProof" />, this does *not* also need to disprove a
-    ///     wildcard's existence, since a wildcard is exactly what matched.
+    ///     This method builds the proof that goes with a wildcard answer (RFC 4035 §3.1.3.3): that
+    ///     no exact match exists for the queried name. Unlike <see cref="BuildNxDomainProof" />, it
+    ///     does not deny the wildcard, since the wildcard matched.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's own database record.</param>
+    /// <param name="zone">The zone's database record.</param>
     /// <param name="apexName">The zone's apex name.</param>
     /// <param name="queryName">The originally queried name, before wildcard expansion.</param>
     /// <returns>The proof records, deduplicated.</returns>
@@ -86,14 +82,13 @@ public static class DenialOfExistenceProofBuilder
     ) => Deduplicate(BuildCoveringProof(signed, zone, apexName, queryName));
 
     /// <summary>
-    ///     This method builds the proof RFC 4035 §3.1.4 requires alongside an *insecure*
-    ///     delegation referral: the delegation point's own NSEC/NSEC3 record (whose type bitmap
-    ///     lacks DS), plus its RRSIG. Returns an empty list for a *secure* delegation, where the
-    ///     DS RRset's own RRSIG is already proof enough and RFC 4035 does not require this too.
+    ///     This method builds the proof that goes with an insecure referral (RFC 4035 §3.1.4): the
+    ///     delegation point's NSEC or NSEC3 record, whose bitmap lacks DS, with its RRSIG. For a
+    ///     secure delegation it returns an empty list, since the signed DS is sent instead.
     /// </summary>
     /// <param name="signed">The zone's signed content.</param>
-    /// <param name="zone">The zone's own database record.</param>
-    /// <param name="delegationPoint">The delegation's own owner name.</param>
+    /// <param name="zone">The zone's database record.</param>
+    /// <param name="delegationPoint">The delegation point's name.</param>
     /// <returns>The proof records, or an empty list for a secure delegation.</returns>
     public static List<DnsResourceRecord> BuildInsecureDelegationProof(
         SignedZoneData signed,
@@ -112,10 +107,9 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method builds the "no exact/closer match" half of a proof: for NSEC, the single
-    ///     record covering <paramref name="name" /> directly; for NSEC3, the closest encloser
-    ///     proof (a match on the closest encloser's own hash, plus a covering record for the
-    ///     "next closer" name one label below it).
+    ///     This method builds the "no exact match" part of a proof: for NSEC, the record covering
+    ///     <paramref name="name" />; for NSEC3, the closest encloser proof (the record matching the
+    ///     closest encloser's hash, plus the record covering the next closer name).
     /// </summary>
     private static List<DnsResourceRecord> BuildCoveringProof(
         SignedZoneData signed,
@@ -149,9 +143,8 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method finds the record whose owner name matches a name exactly -- for NSEC, a
-    ///     direct name comparison; for NSEC3, a hash comparison, since the record's own owner
-    ///     name is the hashed form, not <paramref name="name" /> itself.
+    ///     This method finds the chain record for a name: by owner name for NSEC, by hash for NSEC3
+    ///     (whose owner names are hashes).
     /// </summary>
     private static DnsResourceRecord FindExactMatch(
         SignedZoneData signed,
@@ -163,9 +156,9 @@ public static class DenialOfExistenceProofBuilder
             : signed.DenialOfExistenceRecords.FirstOrDefault(record => record.Name == name);
 
     /// <summary>
-    ///     This method finds the NSEC record covering a name in canonical order: the record whose
-    ///     own owner name is the greatest one that still sorts at or before <paramref name="name" />,
-    ///     wrapping to the chain's last record when nothing does.
+    ///     This method finds the NSEC record covering a name: the last record whose owner sorts at
+    ///     or before <paramref name="name" /> in canonical order, or the chain's last record when
+    ///     none does.
     /// </summary>
     private static DnsResourceRecord FindCoveringNsec(SignedZoneData signed, DnsName name)
     {
@@ -179,9 +172,8 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method finds the NSEC3 record covering a hash, the same "wraps to the last
-    ///     record" rule as <see cref="FindCoveringNsec" /> but ordered by hash value instead of
-    ///     canonical name order.
+    ///     This method finds the NSEC3 record covering a name's hash, with the same rule as
+    ///     <see cref="FindCoveringNsec" /> but in hash order.
     /// </summary>
     private static DnsResourceRecord FindCoveringNsec3(
         SignedZoneData signed,
@@ -200,7 +192,7 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method finds the NSEC3 record whose own hash matches a name's hash exactly.
+    ///     This method finds the NSEC3 record whose hash equals the name's hash.
     /// </summary>
     private static DnsResourceRecord FindExactNsec3(
         SignedZoneData signed,
@@ -213,8 +205,7 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method computes a name's RFC 5155 §5 hash under a zone's own configured
-    ///     algorithm, iteration count, and salt.
+    ///     This method computes a name's RFC 5155 §5 hash with the zone's iterations and salt.
     /// </summary>
     private static byte[] HashFor(ZoneEntity zone, DnsName name) =>
         Nsec3Hasher.ComputeHash(
@@ -225,12 +216,10 @@ public static class DenialOfExistenceProofBuilder
         );
 
     /// <summary>
-    ///     This method finds both a name's closest encloser and the "next closer name" --
-    ///     RFC 5155 §7.2.1's term for the one name, one label longer than the closest encloser,
-    ///     lying on the path down to <paramref name="name" />, which itself does not exist (that
-    ///     is exactly what makes the encloser above it the *closest* one). Membership is tested
-    ///     mode-aware -- via <see cref="FindExactMatch" /> -- since testing a plain candidate name
-    ///     against NSEC3's own *hashed* owner names directly would never match.
+    ///     This method finds the closest encloser (the nearest existing ancestor, or the apex) and
+    ///     the next closer name (RFC 5155 §7.2.1: the name one label longer, on the way to
+    ///     <paramref name="name" />, which does not exist). Existence is tested with
+    ///     <see cref="FindExactMatch" />, so it works for NSEC3's hashed names too.
     /// </summary>
     private static (DnsName ClosestEncloser, DnsName NextCloser) FindClosestEncloserAndNextCloser(
         SignedZoneData signed,
@@ -253,8 +242,7 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method builds the synthetic wildcard name that would answer under a given
-    ///     encloser -- <c>*.encloser</c>.
+    ///     This method builds the wildcard name <c>*.encloser</c>.
     /// </summary>
     private static DnsName WildcardNameFor(DnsName encloser) =>
         new([
@@ -263,9 +251,8 @@ public static class DenialOfExistenceProofBuilder
         ]);
 
     /// <summary>
-    ///     This method attaches a denial-of-existence record's own covering RRSIG(s) to it, or
-    ///     returns an empty list if the record itself was not found (an empty, unsigned zone,
-    ///     most likely, which should never happen for a zone that reached this code path at all).
+    ///     This method returns a chain record together with its RRSIGs, or an empty list when the
+    ///     record was not found (which should not happen in a signed zone).
     /// </summary>
     private static List<DnsResourceRecord> WithSignature(
         SignedZoneData signed,
@@ -283,9 +270,9 @@ public static class DenialOfExistenceProofBuilder
     }
 
     /// <summary>
-    ///     This method removes duplicate records (by owner name, type, and RDATA) from a proof --
-    ///     the closest-encloser proof and the wildcard non-existence proof can legitimately
-    ///     resolve to the very same record.
+    ///     This method removes repeated records from a proof, since the closest encloser proof and
+    ///     the wildcard proof can pick the same record. The records come from the same chain, so
+    ///     duplicates are the same instances.
     /// </summary>
     private static List<DnsResourceRecord> Deduplicate(IEnumerable<DnsResourceRecord> records) =>
         [.. records.Distinct()];
@@ -299,8 +286,8 @@ public static class DenialOfExistenceProofBuilder
             : DnsResourceRecordTypeEnum.Nsec;
 
     /// <summary>
-    ///     This method compares two byte sequences by unsigned value, most significant byte
-    ///     first -- the same order <see cref="ZoneSigningService" /> sorts an NSEC3 chain by.
+    ///     This method compares byte sequences as unsigned values, most significant byte first, the
+    ///     order <see cref="ZoneSigningService" /> sorts the NSEC3 chain in.
     /// </summary>
     private static int CompareBytes(byte[] x, byte[] y)
     {

@@ -9,25 +9,20 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This class implements <see cref="ICloudDnsProvider" /> against Amazon Route 53, through
-///     the official AWS SDK's own <see cref="AmazonRoute53Client" /> rather than hand-rolling AWS
-///     SigV4 request signing -- Apache-2.0 licensed, so it carries none of this project's own
-///     clean-room restrictions (those apply only to Technitium/dnsmasq, see <c>NOTICE.md</c>).
+///     This class implements <see cref="ICloudDnsProvider" /> for Amazon Route 53 with the AWS
+///     SDK's <see cref="AmazonRoute53Client" />, which handles SigV4 signing. The SDK is Apache-2.0
+///     licensed; the clean-room rules in <c>NOTICE.md</c> concern Technitium and dnsmasq only.
 ///     <para>
-///         Route 53 represents every supported record type's own value as one plain string, but
-///         that string's own shape differs by type in ways <see cref="CloudDnsRecordMapper" />
-///         does not itself model (an MX record's priority is packed into the same string as its
-///         exchange rather than a separate field; a TXT record's value is wrapped in literal
-///         double quotes; an SRV record packs four space-separated fields into one string; a CAA
-///         record packs its flags/tag/quoted-value the same way) -- handled here instead, in
-///         <see cref="ToRoute53Value" />/<see cref="ParseRoute53Record" /> (and, for the six
-///         simpler types, <see cref="FromRoute53Value" />).
+///     Route 53 stores each value as one string whose format depends on the type: MX packs the
+///     preference with the exchange, TXT is quoted, and SRV and CAA pack several space-separated
+///     fields. <see cref="ToRoute53Value" />, <see cref="ParseRoute53Record" /> and
+///     <see cref="FromRoute53Value" /> handle these formats. Each record set is treated as one
+///     record (see <see cref="ListRecordsAsync" />).
 ///     </para>
 ///     <para>
-///         A credential set's own <c>ServiceUrl</c> field, if present, overrides the real AWS
-///         endpoint -- used only by this class's own smoke test, to point at a fake HTTP server
-///         standing in for Route 53's documented contract instead; there is no live AWS account
-///         to verify against.
+///     A <c>ServiceUrl</c> credential field replaces the AWS endpoint; tests use it to point at a
+///     fake server that follows Route 53's documented contract. It has not been tested against a
+///     live AWS account.
 ///     </para>
 /// </summary>
 public sealed class Route53DnsProvider : ICloudDnsProvider
@@ -54,9 +49,7 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
                 stoppingToken
             );
 
-            // The AWS SDK can deserialize an empty/no-match result's collection properties as
-            // null rather than an empty list, so this is null-guarded rather than trusted to
-            // always be enumerable.
+            // The SDK can return null instead of an empty list, so guard against it.
             foreach (ResourceRecordSet recordSet in response.ResourceRecordSets ?? [])
             {
                 if (
@@ -65,11 +58,8 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
                 )
                     continue;
 
-                // Route 53 can carry more than one value under the same name/type; this pass
-                // publishes at most one wire record per Route 53 record set, taking the first
-                // value -- a genuine, documented simplification, since neither
-                // CloudDnsRecordMapper nor DnsResourceRecord model a multi-value record set as
-                // anything other than several independent records.
+                // A Route 53 record set can hold several values; only the first is read, so a set with more
+                // values appears as one record.
                 string rawValue = recordSet.ResourceRecords.FirstOrDefault()?.Value;
 
                 if (rawValue is null)
@@ -82,9 +72,8 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
                     (uint)(recordSet.TTL ?? 0)
                 );
 
-                // Route 53 has no separate opaque per-record identifier the way Cloudflare and
-                // DigitalOcean do; a record set's own name+type together already uniquely
-                // identify it within a hosted zone, so that pair stands in for one here.
+                // Route 53 has no record ID; name and type identify a record set within a hosted zone, so
+                // they are used as the ID.
                 records.Add(
                     new CloudDnsProviderRecord($"{recordSet.Name}|{recordSet.Type}", wireRecord)
                 );
@@ -182,9 +171,8 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     }
 
     /// <summary>
-    ///     This method builds a client authenticated against a credential set's own
-    ///     <c>AccessKeyId</c>/<c>SecretAccessKey</c> fields, optionally redirected at a fake
-    ///     endpoint via that same credential set's own <c>ServiceUrl</c> field.
+    ///     This method builds a client from the credentials' <c>AccessKeyId</c> and
+    ///     <c>SecretAccessKey</c>, sent to <c>ServiceUrl</c> instead of AWS when that field is set.
     /// </summary>
     private static AmazonRoute53Client CreateClient(IReadOnlyDictionary<string, string> credentials)
     {
@@ -211,16 +199,14 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     }
 
     /// <summary>
-    ///     This method parses Route 53's own record type string into <see cref="DnsResourceRecordTypeEnum" />.
+    ///     This method parses Route 53's record type string into <see cref="DnsResourceRecordTypeEnum" />.
     /// </summary>
     private static bool TryParseType(RRType rrType, out DnsResourceRecordTypeEnum type) =>
         System.Enum.TryParse(rrType.Value, ignoreCase: true, out type);
 
     /// <summary>
-    ///     This method builds Route 53's own single-string representation of a record's value,
-    ///     dispatching to <see cref="BuildSrvValue" />/<see cref="BuildCaaValue" /> for the two
-    ///     record types that need more than the plain content/priority pair every other
-    ///     supported type shares.
+    ///     This method builds Route 53's value string for a record, using <see cref="BuildSrvValue" />
+    ///     and <see cref="BuildCaaValue" /> for SRV and CAA.
     /// </summary>
     private static string ToRoute53Value(DnsResourceRecord record)
     {
@@ -238,16 +224,15 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
             DnsResourceRecordTypeEnum.Cname or DnsResourceRecordTypeEnum.NS => EnsureTrailingDot(
                 content
             ),
-            // Route 53 represents a TXT record's value as an RFC 1035 <character-string>,
-            // literally wrapped in double quotes, within the already-plain-string Value field.
+            // Route 53 stores a TXT value as an RFC 1035 character-string in double quotes.
             DnsResourceRecordTypeEnum.Txt => $"\"{content}\"",
             _ => content,
         };
     }
 
     /// <summary>
-    ///     This method builds Route 53's own documented SRV value string: four space-separated
-    ///     fields -- priority, weight, port, and target -- for example <c>10 5 80 hostname.example.com</c>.
+    ///     This method builds Route 53's SRV value: priority, weight, port and target separated by
+    ///     spaces, for example <c>10 5 80 hostname.example.com</c>.
     /// </summary>
     private static string BuildSrvValue(DnsResourceRecord record)
     {
@@ -258,8 +243,7 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     }
 
     /// <summary>
-    ///     This method builds Route 53's own documented CAA value string: the raw flags octet,
-    ///     the tag, and the value enclosed in double quotes -- for example
+    ///     This method builds Route 53's CAA value: flags, tag and the quoted value, for example
     ///     <c>0 issue "ca.example.net"</c>.
     /// </summary>
     private static string BuildCaaValue(DnsResourceRecord record)
@@ -272,8 +256,8 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     }
 
     /// <summary>
-    ///     This method reverses <see cref="ToRoute53Value" /> for the six plain-content record
-    ///     types it covers -- SRV/CAA are instead reversed directly by <see cref="ParseRoute53Record" />.
+    ///     This method reverses <see cref="ToRoute53Value" /> for the six single-value types; SRV and
+    ///     CAA are parsed in <see cref="ParseRoute53Record" />.
     /// </summary>
     private static (string Content, ushort MxPreference) FromRoute53Value(
         DnsResourceRecordTypeEnum type,
@@ -301,15 +285,13 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     }
 
     /// <summary>
-    ///     This method parses a record set's own raw Route 53 <c>Value</c> string back into a
-    ///     full <see cref="DnsResourceRecord" />, dispatching SRV/CAA to their own dedicated
-    ///     <see cref="CloudDnsRecordMapper" /> constructors rather than the shared
-    ///     <see cref="CloudDnsRecordMapper.ToWireRecord" /> path <see cref="FromRoute53Value" />'s
-    ///     own six plain-content types use.
+    ///     This method parses a record set's <c>Value</c> string into a <see cref="DnsResourceRecord" />,
+    ///     using the SRV and CAA mapper methods for those types and <see cref="FromRoute53Value" /> for
+    ///     the rest.
     /// </summary>
     /// <param name="type">The record's type.</param>
     /// <param name="name">The record's owner name.</param>
-    /// <param name="rawValue">The record set's own first <c>Value</c> string.</param>
+    /// <param name="rawValue">The record set's first <c>Value</c> string.</param>
     /// <param name="ttl">The record's time-to-live, in seconds.</param>
     private static DnsResourceRecord ParseRoute53Record(
         DnsResourceRecordTypeEnum type,
@@ -320,7 +302,7 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
     {
         if (type == DnsResourceRecordTypeEnum.Srv)
         {
-            // "<priority> <weight> <port> <target>", per Route 53's own documented SRV format.
+            // "<priority> <weight> <port> <target>", per Route 53's documented SRV format.
             string[] parts = rawValue.Split(' ', 4);
             return CloudDnsRecordMapper.ToSrvWireRecord(
                 name,
@@ -334,9 +316,8 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
 
         if (type == DnsResourceRecordTypeEnum.Caa)
         {
-            // "<flags> <tag> \"<value>\"" -- split into exactly 3 parts so a value containing
-            // its own embedded spaces (a real, valid CAA value, e.g.
-            // "ca.example.net; account=123456") is not itself split apart.
+            // "<flags> <tag> \"<value>\"": split into at most 3 parts so spaces inside the value
+            // (such as "ca.example.net; account=123456") are kept.
             string[] parts = rawValue.Split(' ', 3);
             string quotedValue = parts[2];
             string value =
@@ -359,7 +340,7 @@ public sealed class Route53DnsProvider : ICloudDnsProvider
 
     /// <summary>
     ///     This method appends a trailing dot to a domain-name-valued content string, matching
-    ///     Route 53's own documented convention, unless it already has one.
+    ///     Route 53's documented convention, unless it already has one.
     /// </summary>
     private static string EnsureTrailingDot(string name) => name.EndsWith('.') ? name : name + ".";
 }

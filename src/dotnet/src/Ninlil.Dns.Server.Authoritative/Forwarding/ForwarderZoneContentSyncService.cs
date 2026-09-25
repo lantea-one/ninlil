@@ -11,34 +11,26 @@ using Ninlil.Dns.Server.Core.Forwarding;
 namespace Ninlil.Dns.Server.Authoritative.Forwarding;
 
 /// <summary>
-///     This class gives a <see cref="ZoneTypeEnum.Forwarder" /> zone real, versioned,
-///     AXFR/IXFR-transferable wire content for the first time: a synthetic SOA record, and one
-///     <see cref="DnsResourceRecordTypeEnum.Txt" /> record per configured
-///     <see cref="ZoneEntity.ForwarderAddresses" /> entry, both at the zone's own apex --
-///     reconciled through <see cref="IZoneUpdateService" /> (the one path this project's own zone
-///     content ever changes through) whenever <see cref="Core.Events.DnsZoneChangedEvent" />
-///     reports the zone's own metadata changed, via <see cref="ForwarderZoneContentSyncEventSubscriber" />.
+///     This class gives a <see cref="ZoneTypeEnum.Forwarder" /> zone records that can be
+///     transferred: a synthetic SOA and one TXT record per
+///     <see cref="ZoneEntity.ForwarderAddresses" /> entry, at the apex. It reconciles them through
+///     <see cref="IZoneUpdateService" /> when <see cref="ForwarderZoneContentSyncEventSubscriber" />
+///     reports a zone change. A SecondaryForwarder zone pulls these records by AXFR/IXFR.
 ///     <para>
-///         This is deliberately the *only* place a <see cref="ZoneTypeEnum.Forwarder" /> zone's
-///         own <see cref="RecordEntity" /> rows are written at all -- mirroring
-///         <c>Ptr.PtrSyncService</c>'s own "reconcile only records this feature itself created"
-///         discipline, every managed TXT record here carries
-///         <see cref="RecordManagedByFeatureEnum.ForwarderAddress" /> so a future reconciliation
-///         pass never mistakes (or touches) a record an operator might have added to this zone by
-///         hand through the ordinary <c>RecordsController</c>.
+///     This is the only code that writes records to a Forwarder zone. Its TXT records carry
+///     <see cref="RecordManagedByFeatureEnum.ForwarderAddress" />, and like <c>Ptr.PtrSyncService</c>
+///     it only changes records it created, never ones an operator added through
+///     <c>RecordsController</c>.
 ///     </para>
 ///     <para>
-///         Never runs for a <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone -- that zone
-///         type's own apex content arrives entirely through
-///         <c>Refresh.SecondaryZoneRefreshService</c>'s own AXFR/IXFR pull from its configured
-///         <see cref="ZoneTypeEnum.Forwarder" /> primary, exactly like an ordinary
-///         <see cref="ZoneTypeEnum.Secondary" /> zone's own record content; this service would
-///         otherwise fight that pull for ownership of the same records.
+///     It does not run for <see cref="ZoneTypeEnum.SecondaryForwarder" /> zones, whose records come
+///     from the transfer pull in <c>Refresh.SecondaryZoneRefreshService</c>; writing them here would
+///     fight the pull.
 ///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository used to look up the zone being reconciled.</param>
-/// <param name="recordRepository">This service's own existing-record lookups run against this repository.</param>
-/// <param name="zoneUpdateService">The service every bootstrap/add/remove is actually applied through.</param>
+/// <param name="recordRepository">The repository existing records are read from.</param>
+/// <param name="zoneUpdateService">The service every bootstrap, add and remove goes through.</param>
 public class ForwarderZoneContentSyncService(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
@@ -46,9 +38,7 @@ public class ForwarderZoneContentSyncService(
 )
 {
     /// <summary>
-    ///     This constant contains the time-to-live, in seconds, this service's own synthetic SOA
-    ///     and TXT records are given -- matching <c>Ptr.PtrSyncService</c>'s own default TTL for
-    ///     an infrequently-changing, feature-managed record.
+    ///     This constant contains the TTL, in seconds, of the synthetic SOA and TXT records.
     /// </summary>
     private const uint RecordTimeToLiveSeconds = 3600;
 
@@ -58,15 +48,10 @@ public class ForwarderZoneContentSyncService(
     private const uint DefaultSoaMinimumTtlSeconds = 3600;
 
     /// <summary>
-    ///     This method reconciles a single zone's own apex SOA/TXT content against its current
-    ///     <see cref="ZoneEntity.ForwarderAddresses" /> -- the entry point
-    ///     <see cref="ForwarderZoneContentSyncEventSubscriber" /> calls in response to
-    ///     <see cref="Core.Events.DnsZoneChangedEvent" />. A no-op for any zone this feature does
-    ///     not own the content of (anything other than <see cref="ZoneTypeEnum.Forwarder" />), and
-    ///     a no-op once the zone's own stored TXT records already match its configured addresses
-    ///     -- so this can safely run again on every unrelated zone-metadata change too, the same
-    ///     "cheap, idempotent no-op once already in sync" property every other
-    ///     <see cref="Core.Events.DnsZoneChangedEvent" /> subscriber in this project relies on.
+    ///     This method makes one zone's apex SOA and TXT records match its
+    ///     <see cref="ZoneEntity.ForwarderAddresses" />. It does nothing for zones other than
+    ///     <see cref="ZoneTypeEnum.Forwarder" />, or when the records already match, so running it on
+    ///     every zone change is harmless.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to reconcile.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -103,12 +88,9 @@ public class ForwarderZoneContentSyncService(
             }
             catch (InvalidOperationException)
             {
-                // Raced with something else that gave this zone records between the read above
-                // and this write (most plausibly a concurrent reconcile of the same zone, or an
-                // operator writing a record through RecordsController in between) -- the next
-                // DnsZoneChangedEvent this zone's own write just published retries reconciliation
-                // against whatever now actually exists, rather than this call failing loudly for
-                // what is, in practice, a harmless timing race.
+                // Something (a concurrent reconcile, an operator's record write) gave the zone records
+                // since the read. That write published DnsZoneChangedEvent, which runs this again against
+                // the current state, so ignore the race.
             }
 
             return;
@@ -170,10 +152,8 @@ public class ForwarderZoneContentSyncService(
     }
 
     /// <summary>
-    ///     This method builds a fresh synthetic SOA record for a brand-new Forwarder zone's own
-    ///     apex, the same "auto-populated, then operator-editable exactly like any other record"
-    ///     shape <c>Ptr.PtrSyncService.BuildDefaultSoaRecord</c> already establishes for an
-    ///     auto-created reverse zone.
+    ///     This method builds the synthetic SOA for a new Forwarder zone, like
+    ///     <c>Ptr.PtrSyncService.BuildDefaultSoaRecord</c>; the operator can edit it afterwards.
     /// </summary>
     private static RecordEntity BuildSoaRecord(ZoneEntity zone) =>
         new()
@@ -200,10 +180,8 @@ public class ForwarderZoneContentSyncService(
         };
 
     /// <summary>
-    ///     This method builds a single desired TXT record, encoding one
-    ///     <see cref="ZoneEntity.ForwarderAddresses" /> entry via
-    ///     <see cref="ForwarderAddressTxtCodec" /> and marking it with this feature's own
-    ///     provenance marker.
+    ///     This method builds one TXT record encoding a <see cref="ZoneEntity.ForwarderAddresses" />
+    ///     entry with <see cref="ForwarderAddressTxtCodec" />, marked as managed by this feature.
     /// </summary>
     private static RecordEntity BuildTxtRecord(ZoneEntity zone, int index, string address) =>
         new()

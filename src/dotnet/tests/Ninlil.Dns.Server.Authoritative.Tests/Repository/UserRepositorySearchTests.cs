@@ -6,17 +6,13 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.UserRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13j proof that <c>UsersController</c>'s own account
-///     listing no longer materializes every account into memory before slicing a page out of it,
-///     mirroring <see cref="ZoneRepositorySearchTests" />'s own Phase 13g proof for the same
-///     shape. This test uses <see cref="RepositorySearchTestHost" /> directly -- the same real
-///     EF Core dependency injection graph <c>AddNinlilDnsEntityFrameworkCore</c> registers
-///     <see cref="IUserRepository" /> into -- rather than <c>Ninlil.Dns.Identity.Tests</c>'s own
-///     test host, since <see cref="IUserRepository" /> lives, and is exercised here, entirely at
-///     the storage layer: no <c>UserManager&lt;TUser&gt;</c>/Identity orchestration is involved in
-///     proving a real <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> query.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.UserRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>UsersController</c>'s listing needs, rather
+///     than in memory. It tests
+///     <see cref="IUserRepository" /> directly with the EF Core registration, not through
+///     <c>UserManager&lt;TUser&gt;</c> or <c>Ninlil.Dns.Identity.Tests</c>'s host, because paging is
+///     a storage concern.
 /// </summary>
 public sealed class UserRepositorySearchTests : IAsyncLifetime
 {
@@ -27,10 +23,10 @@ public sealed class UserRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five user accounts with sign-in names deliberately out of
+    ///     This method seeds five user accounts with sign-in names out of
     ///     alphabetical creation order, so a passing ordering assertion can only be explained by a
     ///     real <c>ORDER BY</c> translated at the database, not by creation/insertion order
-    ///     happening to already match.
+    ///     already matching.
     /// </summary>
     private async Task SeedAsync()
     {
@@ -80,7 +76,7 @@ public sealed class UserRepositorySearchTests : IAsyncLifetime
         IUserRepository repository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
 
         // Page size 2 over 5 users: page 0 gets alpha/bravo, page 1 gets charlie/delta, page 2
-        // gets only echo (the final, partial page) -- proving skip/take are genuinely applied at
+        // gets only echo (the final, partial page) -- proving skip/take are applied at
         // the database, not merely accepted and ignored.
         IReadOnlyList<UserEntity> firstPage = await repository.SearchAsync(skip: 0, take: 2);
         IReadOnlyList<UserEntity> secondPage = await repository.SearchAsync(skip: 2, take: 2);

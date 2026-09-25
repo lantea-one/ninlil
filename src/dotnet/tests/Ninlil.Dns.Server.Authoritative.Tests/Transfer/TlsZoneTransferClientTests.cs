@@ -14,13 +14,10 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class proves <see cref="TlsZoneTransferClient" /> actually completes a real TLS
-///     handshake and correctly hands off to the shared pull logic
-///     <see cref="ZoneTransferPullCodecTests" /> already covers thoroughly via
-///     <see cref="TcpZoneTransferClient" /> -- so this class only needs to prove the one thing
-///     genuinely specific to this transport (the handshake itself succeeds and the resulting
-///     stream carries real transfer traffic), not re-prove every framing/shape-detection case a
-///     second time.
+///     This class checks that <see cref="TlsZoneTransferClient" /> completes a TLS handshake with a
+///     loopback listener and carries a transfer over it. The framing and result shapes are covered
+///     by <see cref="ZoneTransferPullCodecTests" /> through <see cref="TcpZoneTransferClient" />, so
+///     they are not repeated here.
 /// </summary>
 public class TlsZoneTransferClientTests
 {
@@ -78,9 +75,9 @@ public class TlsZoneTransferClientTests
 
     /// <summary>
     ///     This method generates a throwaway, in-memory self-signed certificate for the fake
-    ///     primary's own TLS side -- <see cref="ZoneTransferClientOptions.ValidateServerCertificate" />
+    ///     primary's TLS side -- <see cref="ZoneTransferClientOptions.ValidateServerCertificate" />
     ///     is set <see langword="false" /> on the client side below rather than trying to get this
-    ///     test process to actually trust it, the same documented escape hatch a real homelab
+    ///     test process to trust it, the same documented escape hatch a real homelab
     ///     operator would use for an untrusted primary.
     /// </summary>
     private static X509Certificate2 CreateSelfSignedCertificate()
@@ -200,9 +197,9 @@ public class TlsZoneTransferClientTests
         {
             using TcpClient accepted = await listener.AcceptTcpClientAsync(cts.Token);
             // Read whatever the client sends (the TLS ClientHello) and never respond -- the
-            // client's own handshake will time out or fail to parse a response. A partial read is
-            // fine and expected here; this is deliberately just draining the socket, not framing a
-            // real message the way the codec's own ReadExactlyAsync must.
+            // client's handshake will time out or fail to parse a response. A partial read is
+            // fine and expected here; this is just draining the socket, not framing a
+            // real message the way the codec's ReadExactlyAsync must.
 #pragma warning disable CA2022
             await accepted.GetStream().ReadAsync(new byte[1024], cts.Token);
 #pragma warning restore CA2022

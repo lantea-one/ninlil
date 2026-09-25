@@ -28,26 +28,16 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class covers Phase 16b: a <see cref="ZoneTypeEnum.Secondary" /> zone's own
-///     AXFR-transferred RRSIG/NSEC/DNSKEY content actually reaches <see cref="SignedZoneCache" />
-///     and, through it, <see cref="AuthoritativeQueryResolver" />'s own DNSSEC-OK answer path --
-///     closing a real gap: before this fix, a
-///     validating resolver querying a secondary of a signed zone directly, with the DNSSEC OK bit
-///     set, never received the covering RRSIG alongside an ordinary answer at all, even though the
-///     RRSIG had landed correctly as its own independently queryable <see cref="RecordEntity" />
-///     row. Two genuinely separate hosts, each with its own SQLite database, stand in for two real,
-///     independent server processes -- the same shape <see cref="Transfer.ZoneTransferServiceDnssecTests" />
-///     already establishes for this project's own permanent (non-smoke-test) zone-transfer
-///     coverage, extended here to actually consume the transferred content on a second, genuinely
-///     separate instance rather than only inspecting the primary's own AXFR response shape.
+///     This class checks that the DNSSEC records a <see cref="ZoneTypeEnum.Secondary" /> zone
+///     receives by AXFR reach <see cref="SignedZoneCache" />, so
+///     <see cref="AuthoritativeQueryResolver" /> returns RRSIGs to DNSSEC OK queries at the
+///     secondary. It uses two hosts, each with its own SQLite database, as primary and secondary.
 ///     <para>
-///         The "transfer" itself is a real AXFR built by the primary's own real
-///         <see cref="ZoneTransferService" /> (TSIG-signed, freshly computed by the real
-///         <see cref="IZoneSigningService" /> against real, freshly generated DNSSEC keys) whose
-///         resulting wire records are then written into the secondary's own database through
-///         <see cref="IZoneUpdateService.BootstrapZoneAsync" /> -- the exact same call
-///         <see cref="Refresh.SecondaryZoneRefreshService" />'s own initial-pull path makes, so
-///         this test exercises the real cache-population hook rather than a test-only substitute.
+///         The primary's <see cref="ZoneTransferService" /> builds a TSIG-signed AXFR of a zone
+///         signed by <see cref="IZoneSigningService" /> with newly generated keys, and the records are
+///         written to the secondary with <see cref="IZoneUpdateService.BootstrapZoneAsync" />, the
+///         call <see cref="Refresh.SecondaryZoneRefreshService" /> makes on a first pull, so the real
+///         cache update path runs.
 ///     </para>
 /// </summary>
 public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
@@ -82,7 +72,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
 
         // SignedZoneCache.StartAsync (an IHostedService) runs its initial full sign
         // synchronously, so the primary is already signed and ready to serve a real AXFR by the
-        // time this returns -- mirroring ZoneTransferServiceDnssecTests' own setup.
+        // time this returns -- mirroring ZoneTransferServiceDnssecTests' setup.
         await _primaryHost.StartAsync();
     }
 
@@ -107,8 +97,8 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
 
     /// <summary>
     ///     This test covers the "already on disk at boot" path (<see cref="SignedZoneCache.StartAsync" />):
-    ///     the secondary's own database already holds a prior AXFR's transferred signed content
-    ///     before the process (here, <see cref="_secondaryHost" />) ever starts, exactly the shape
+    ///     the secondary's database already holds a prior AXFR's transferred signed content
+    ///     before the process (here, <see cref="_secondaryHost" />) ever starts, the shape
     ///     a real restart of an already-synced secondary would see.
     /// </summary>
     [Fact]
@@ -132,12 +122,12 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
 
     /// <summary>
     ///     This test covers the live, event-driven path: the secondary starts with the zone
-    ///     already configured as signed but genuinely empty (its very first transfer has not
+    ///     already configured as signed but empty (its very first transfer has not
     ///     completed yet), and only picks up the transferred content afterward -- through the
     ///     real, unmodified <c>DnsZoneChangedEvent</c> pipeline
     ///     (<see cref="IZoneUpdateService.BootstrapZoneAsync" /> publishes it,
     ///     <see cref="SignedZoneChangedEventSubscriber" /> reacts to it), not a direct method call
-    ///     -- proving the actual production hook, delivered asynchronously exactly as a real
+    ///     -- proving the actual production hook, delivered asynchronously as a real
     ///     transfer completing while the process is already running would deliver it.
     /// </summary>
     [Fact]
@@ -159,8 +149,8 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
         // The event this bootstrap just published is delivered off a background channel
         // (DnsServerEventDispatcher/DnsServerEventPublisher), so it is not necessarily visible
         // the instant BootstrapZoneAsync returns -- poll with a bounded retry, the same pattern
-        // this project's own CloudDnsZoneSyncFailureEventTests already establishes for a
-        // genuinely asynchronous event delivery.
+        // this project's CloudDnsZoneSyncFailureEventTests already establishes for a
+        // asynchronous event delivery.
         SignedZoneData signedData = null;
 
         for (int attempt = 0; attempt < 100 && signedData is null; attempt++)
@@ -180,7 +170,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
     /// <summary>
     ///     This method builds a fully wired host (Core/TSIG/DNSSEC/Authoritative), backed by its
     ///     own dedicated SQLite database -- one call for the primary, one for the secondary,
-    ///     standing in for two genuinely independent server processes.
+    ///     standing in for two independent server processes.
     /// </summary>
     private static IHost BuildHost(string databasePath)
     {
@@ -307,10 +297,10 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method seeds the secondary host with only its own <see cref="ZoneEntity" /> row --
-    ///     no records at all yet, matching a real secondary's own configuration existing before
+    ///     This method seeds the secondary host with only its <see cref="ZoneEntity" /> row --
+    ///     no records at all yet, matching a real secondary's configuration existing before
     ///     its first successful transfer. Its DNSSEC-relevant settings (<c>IsDnssecSigned</c>,
-    ///     <c>DenialOfExistenceMode</c>) deliberately mirror the primary's own, the same way an
+    ///     <c>DenialOfExistenceMode</c>) mirror the primary's own, the same way an
     ///     operator configuring a real secondary of a signed zone is expected to.
     /// </summary>
     private async Task SeedSecondaryZoneOnlyAsync()
@@ -323,7 +313,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        // PrimaryServerAddresses is deliberately left empty -- this test drives the "transfer"
+        // PrimaryServerAddresses is left empty -- this test drives the "transfer"
         // itself (BootstrapSecondaryRecordsAsync below), so SecondaryZoneRefreshService's own
         // background poll loop (also registered on this host, unconditionally) has nothing to
         // reach and simply logs "no configured primary server addresses" rather than attempting
@@ -392,7 +382,7 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
             allRecords.AddRange(message.Answers);
         }
 
-        // Sanity-check the transfer itself actually carried signed content, so a failure in the
+        // Sanity-check the transfer itself carried signed content, so a failure in the
         // assertions below can never be mistaken for "the primary never signed anything" instead
         // of the real thing this test exists to prove.
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.DnsKey);
@@ -402,9 +392,9 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method writes a transfer's own records into the secondary's own database through
-    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" /> -- the exact same call
-    ///     <see cref="Refresh.SecondaryZoneRefreshService" />'s own initial-pull path makes, so
+    ///     This method writes a transfer's records into the secondary's database through
+    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" /> -- the same call
+    ///     <see cref="Refresh.SecondaryZoneRefreshService" />'s initial-pull path makes, so
     ///     this test exercises the real production write path rather than a test-only shortcut.
     /// </summary>
     private async Task BootstrapSecondaryRecordsAsync(
@@ -426,10 +416,8 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method issues a real, in-process DNSSEC-OK query against the secondary's own
-    ///     <see cref="AuthoritativeQueryResolver" /> for the ordinary A record the transfer
-    ///     carried, and asserts the answer comes back with its own covering RRSIG attached --
-    ///     the exact behavior this whole Phase 16b fix exists to restore.
+    ///     This method sends a DNSSEC OK query for the transferred A record to the secondary's
+    ///     <see cref="AuthoritativeQueryResolver" /> and asserts the answer includes its RRSIG.
     /// </summary>
     private async Task AssertResolverServesTheRrsigAsync()
     {
@@ -470,9 +458,8 @@ public sealed class SecondaryZoneDnssecTransferCacheTests : IAsyncLifetime
             record => record.Type == DnsResourceRecordTypeEnum.A
         );
 
-        // This is the actual bug: before Phase 16b, a secondary zone's own signed content was
-        // never attached to an ordinary answer at all, since SignedZoneCache.GetSignedData(zoneId)
-        // was only ever populated for a Primary/CloudPrimary zone.
+        // The RRSIG must be attached, which needs SignedZoneCache to hold the secondary zone's
+        // transferred signed data.
         DnsResourceRecord rrsig = Assert.Single(
             resolution.Response.Answers,
             record => record.Type == DnsResourceRecordTypeEnum.RrSig

@@ -15,30 +15,20 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Journal;
 
 /// <summary>
-///     This class covers <see cref="ZoneWriteSerializer" />'s own reason for existing: two
-///     genuinely concurrent calls into <see cref="IZoneUpdateService" /> for the <em>same</em>
-///     zone (a REST record creation racing a same-second follow-up request, a double form submit,
-///     a batch import firing several adds at once) must never interleave their own
-///     read-current-state-then-write-new-state sequence with each other. Before this class'
-///     own <see cref="IZoneWriteSerializer" /> dependency existed, <see cref="ZoneUpdateService" />
-///     read a zone's current record set and SOA serial with no concurrency control at all, so two
-///     concurrent callers could each act on the same now-stale snapshot -- one call could
-///     conclude a brand-new zone still had no records and attempt to bootstrap it a second time,
-///     and two concurrent record additions could each compute the same "current serial plus one"
-///     and silently overwrite one another's SOA update, leaving the serial advanced by only one
-///     increment for two real content changes -- a genuine RFC 1035 correctness violation, since
-///     the serial must actually reflect every real change to a zone's content.
+///     This class checks that <see cref="ZoneWriteSerializer" /> keeps concurrent
+///     <see cref="IZoneUpdateService" /> calls for the same zone (a double submit, a batch import)
+///     from interleaving, using the EF Core repositories on a temporary SQLite database. Without
+///     it, two calls can read the same state: a new zone could be bootstrapped twice, or two
+///     additions could both write "serial plus one" and advance the serial once for two changes.
 ///     <para>
-///         Each test below was confirmed to fail reliably against the pre-fix code (no per-zone
-///         serialization) before <see cref="ZoneWriteSerializer" /> existed, and passes reliably
-///         with it in place -- run repeatedly in this class' own internal iteration loops rather
-///         than relying on a single pass, since a race condition can otherwise pass by luck.
+///         Each test repeats its race many times, because a race can pass by luck once. The tests
+///         fail without per-zone serialization.
 ///     </para>
 /// </summary>
 public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
 {
     /// <summary>
-    ///     This field contains the path to this test's own throwaway SQLite database file,
+    ///     This field contains the path to this test's throwaway SQLite database file,
     ///     created fresh per test class instance and deleted again in <see cref="DisposeAsync" />.
     /// </summary>
     private readonly string _databasePath = Path.Combine(
@@ -48,9 +38,9 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
 
     /// <summary>
     ///     This field contains the host every test below resolves its own, independent DI scopes
-    ///     from -- deliberately shared across every concurrent "request" a test simulates, since
-    ///     <see cref="IZoneWriteSerializer" /> is only actually exercised when every caller
-    ///     resolves the exact same singleton instance of it, the same way every real request in a
+    ///     from shared across every concurrent "request" a test simulates, since
+    ///     <see cref="IZoneWriteSerializer" /> is only exercised when every caller
+    ///     resolves the same singleton instance of it, the same way every real request in a
     ///     running server would.
     /// </summary>
     private IHost _host;
@@ -86,11 +76,11 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
 
     /// <summary>
     ///     This test simulates two <see cref="IZoneUpdateService.BootstrapZoneAsync" /> calls for
-    ///     the very same brand-new zone fired concurrently (a double form submit, or a client
-    ///     retry that did not actually fail the first time). Before per-zone serialization
+    ///     the same brand-new zone fired concurrently (a double form submit, or a client
+    ///     retry that did not fail the first time). Before per-zone serialization
     ///     existed, both calls could observe zero existing records before either committed, race
-    ///     each other's own "does this zone already have records" check and its own insert, and
-    ///     -- depending on exactly how far each got before the other's write landed -- leave the
+    ///     each other's "does this zone already have records" check and its insert, and
+    ///     -- depending on how far each got before the other's write landed -- leave the
     ///     zone with two SOA records instead of the single one RFC 1035 requires. This runs the
     ///     scenario across many independent zones in a loop, since the exact interleaving needed
     ///     to trigger the bug is timing-dependent and does not reproduce on every single attempt.
@@ -137,7 +127,7 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
                     }
                     catch (InvalidOperationException)
                     {
-                        // Expected for exactly one of the two -- verified below via the actual
+                        // Expected for one of the two -- verified below via the actual
                         // record count, not just the fact that something threw.
                     }
                 })
@@ -170,7 +160,7 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
     ///     or two record-creation form submits close together -- neither of which is the bootstrap
     ///     path; both go straight to <see cref="IZoneUpdateService.ApplyChangesAsync" />. Before
     ///     per-zone serialization existed, both calls could read the same "current" SOA serial
-    ///     before either committed its own increment, and the second write to land would silently
+    ///     before either committed its increment, and the second write to land would silently
     ///     overwrite the first's, leaving the serial advanced by only one increment despite two
     ///     real content changes having happened -- a lost update, and a real RFC 1035 correctness
     ///     violation, even though both records themselves were still correctly inserted.
@@ -222,7 +212,7 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
         );
 
         // Both A records must exist (the two ApplyChangesAsync calls must not have clobbered each
-        // other's own insert), and the serial must have advanced by exactly 2 from its bootstrap
+        // other's insert), and the serial must have advanced by 2 from its bootstrap
         // value of 1 -- one bump per real content change -- not by 1, which is what a lost update
         // from two concurrent read-then-write SOA increments would leave behind.
         Assert.Equal(3, allRecords.Count); // SOA + 2 A records.
@@ -231,8 +221,8 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
 
     /// <summary>
     ///     This method bootstraps <paramref name="zoneId" /> with a fresh SOA record, resolving
-    ///     its own independent DI scope first -- mirroring how a real HTTP request resolves an
-    ///     independent scope per call, which is exactly the condition needed for
+    ///     its independent DI scope first -- mirroring how a real HTTP request resolves an
+    ///     independent scope per call, which is the condition needed for
     ///     <see cref="IZoneWriteSerializer" /> to be meaningfully exercised (a shared scope would
     ///     share a single <see cref="Data.EntityFrameworkCore.NinlilDnsContext" /> and mask the
     ///     underlying race entirely).
@@ -248,7 +238,7 @@ public sealed class ZoneUpdateServiceConcurrencyTests : IAsyncLifetime
 
     /// <summary>
     ///     This method applies a single A-record addition to <paramref name="zoneId" /> through
-    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />, resolving its own independent DI
+    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />, resolving its independent DI
     ///     scope first for the same reason <see cref="BootstrapZoneWithSoaAsync" /> does.
     /// </summary>
     private Task ApplyOneRecordChangeAsync(

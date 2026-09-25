@@ -8,12 +8,11 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Server.Authoritative.Notify;
 
 /// <summary>
-///     This class implements <see cref="IDnsQueryResolver" /> for inbound RFC 1996 NOTIFY
-///     messages -- the receiving half of the outbound NOTIFY sending
-///     <see cref="ZoneNotifyEventSubscriber" /> already does. Unlike an ordinary query, a NOTIFY
-///     always fits the single request/response shape <see cref="IDnsQueryResolver" /> expects,
-///     so this needs none of <see cref="Transfer.IZoneTransferService" />'s separate,
-///     multi-message contract.
+///     This class is the <see cref="IDnsQueryResolver" /> for inbound RFC 1996 NOTIFY messages,
+///     the receiving side of <see cref="ZoneNotifyEventSubscriber" />. It is the first resolver
+///     in the chain and declines anything that is not a NOTIFY. A NOTIFY is accepted only for
+///     the apex of a secondary zone and only from one of its configured primary addresses; it
+///     then triggers an immediate refresh.
 /// </summary>
 /// <param name="zoneCache">The cache used to find the zone a NOTIFY names.</param>
 /// <param name="refreshTrigger">
@@ -43,15 +42,10 @@ public class NotifyQueryResolver(
         DnsQuestion question = request.Questions[0];
         CachedZone zone = zoneCache.FindZone(question.Name);
 
-        // RFC 1996 only makes sense for a name this server hosts as somebody else's secondary --
-        // a NOTIFY about a name it doesn't host at all, or about its own primary zone (which has
-        // no "primary server" of its own to validate the sender against), is refused.
-        // SecondaryCatalog and SecondaryForwarder are included alongside Secondary: an RFC 9432
-        // catalog zone is, per its own spec text, "a regular DNS zone", and a SecondaryForwarder
-        // zone's own apex SOA/TXT content (see Forwarding.ForwarderZoneContentSyncService) is,
-        // from this resolver's own point of view, an ordinary AXFR/IXFR-transferable zone like
-        // any other -- both consume exactly the same RFC 1996 NOTIFY / AXFR-IXFR-pull machinery
-        // any other secondary does, so it must be listed here explicitly or NOTIFY silently ignores it.
+        // NOTIFY applies only to zones this server holds as a secondary; others have no
+        // primary to check the sender against and are refused. SecondaryCatalog (an ordinary
+        // zone under RFC 9432) and SecondaryForwarder (its apex records are transferred like
+        // any zone) use the same NOTIFY and pull machinery, so they are listed too.
         if (
             zone is null
             || zone.ApexName != question.Name
@@ -76,8 +70,8 @@ public class NotifyQueryResolver(
                 DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused))
             );
 
-        // Per RFC 1996 §3.11, acknowledging a NOTIFY is a promise to "go to work" and check
-        // whether the zone actually changed -- it says nothing about whether it did.
+        // RFC 1996 §3.11: acknowledging a NOTIFY only promises to check the zone, not that it
+        // changed.
         refreshTrigger.RequestImmediateRefresh(zone.Zone.Id);
 
         DnsMessage acknowledgement = new()
@@ -93,9 +87,8 @@ public class NotifyQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the single message a rejected NOTIFY is answered with, echoing the
-    ///     question section back the same way <see cref="TryResolveAsync" />'s own acknowledgement
-    ///     already does.
+    ///     This method builds the reply to a rejected NOTIFY, echoing the question like the
+    ///     acknowledgement does.
     /// </summary>
     private static DnsMessage ErrorResponse(DnsMessage request, DnsResponseCodeEnum responseCode) =>
         new()

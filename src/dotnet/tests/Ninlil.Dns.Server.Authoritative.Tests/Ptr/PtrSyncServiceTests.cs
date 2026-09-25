@@ -22,11 +22,9 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Ptr;
 
 /// <summary>
-///     This class covers <see cref="PtrSyncService" /> -- the PTR/reverse-zone sync engine --
-///     against a real, SQLite-backed <see cref="IZoneUpdateService" />/repository
-///     stack, the same verification shape
-///     <c>Ninlil.Dns.Server.Acme.Tests.Caa.CaaRecordReconciliationServiceTests</c> already
-///     uses for this project's own equivalent reconciliation service.
+///     This class tests <see cref="PtrSyncService" /> against <see cref="IZoneUpdateService" /> and the
+///     EF Core repositories on a temporary SQLite database, as
+///     <c>Ninlil.Dns.Server.Acme.Tests.Caa.CaaRecordReconciliationServiceTests</c> does for CAA.
 /// </summary>
 public sealed class PtrSyncServiceTests : IAsyncLifetime
 {
@@ -72,10 +70,10 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
 
     /// <summary>
     ///     This method builds a real <see cref="PtrSyncService" /> against a fresh
-    ///     dependency-injection scope's own repositories, so every test observes writes made by
+    ///     dependency-injection scope's repositories, so every test observes writes made by
     ///     a previous call the same way a fresh <c>DnsZoneChangedEvent</c>-triggered sync would --
-    ///     mirroring <c>CaaRecordReconciliationServiceTests.CreateService</c>'s own reasoning
-    ///     exactly (see that class's own doc comment on why a fresh instance per call matters,
+    ///     mirroring <c>CaaRecordReconciliationServiceTests.CreateService</c>'s reasoning
+    ///     (see that class's doc comment on why a fresh instance per call matters,
     ///     the "EF Core identity-map staleness across scopes" shape).
     /// </summary>
     private PtrSyncService CreateService(bool defaultEnabled = false)
@@ -204,7 +202,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         );
         Assert.Equal("host1.ptr-add.example.com.", data.Target.ToString());
 
-        // The reverse zone itself must have been bootstrapped with its own SOA too.
+        // The reverse zone itself must have been bootstrapped with its SOA too.
         IReadOnlyList<RecordEntity> soaRecords = await _recordRepository.FindByNameAsync(
             reverseZone.Id,
             "2.0.192.in-addr.arpa",
@@ -217,7 +215,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
     public async Task ReconcileReusesAnAlreadyExistingLocalPrimaryReverseZoneRatherThanDuplicatingIt()
     {
         // Pre-create the reverse zone (as if a previous PTR sync run, or an operator, already
-        // created it) with its own SOA, before this forward zone is ever reconciled.
+        // created it) with its SOA, before this forward zone is ever reconciled.
         Guid preexistingReverseZoneId = await SeedForwardZoneAsync(
             "2.0.192.in-addr.arpa",
             ZoneTypeEnum.Primary
@@ -412,7 +410,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
                     typeof(PtrRecordData),
                     new PtrRecordData(DnsName.Parse("manually-added.example.net"))
                 ),
-                // ManagedByFeature is deliberately left null -- an operator-authored record.
+                // ManagedByFeature is left null -- an operator-authored record.
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }
         );
@@ -430,7 +428,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         );
         Assert.Equal("manually-added.example.net.", operatorData.Target.ToString());
 
-        // ... and this feature's own managed record was still added alongside it.
+        // ... and this feature's managed record was still added alongside it.
         IReadOnlyList<RecordEntity> managedRecords = await _recordRepository.FindByNameAsync(
             reverseZoneId,
             "40.2.0.192.in-addr.arpa",
@@ -476,8 +474,8 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
         Guid zoneId = await SeedForwardZoneAsync("ptr-off.example.com", ZoneTypeEnum.Primary);
         await AddARecordAsync(zoneId, "host1.ptr-off.example.com", IPAddress.Parse("192.0.2.50"));
 
-        // CreateService()'s own default parameter already matches PtrSyncOptions' real default
-        // (DefaultEnabled = false) -- this exercises exactly that real, off-by-default posture.
+        // CreateService()'s default parameter already matches PtrSyncOptions' real default
+        // (DefaultEnabled = false) -- this exercises that real, off-by-default posture.
         await CreateService().ReconcileZoneAsync(zoneId);
 
         Assert.Null(await _zoneRepository.FindByNameAsync("2.0.192.in-addr.arpa"));
@@ -743,7 +741,7 @@ public sealed class PtrSyncServiceTests : IAsyncLifetime
     /// <summary>
     ///     This class stands in for the real, channel-backed <c>DnsServerEventPublisher</c> --
     ///     this test suite exercises <see cref="PtrSyncService" /> directly rather than through
-    ///     the event bus, so <see cref="IZoneUpdateService" />'s own dependency on
+    ///     the event bus, so <see cref="IZoneUpdateService" />'s dependency on
     ///     <see cref="IDnsServerEventPublisher" /> only needs a registration that does not throw.
     /// </summary>
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher

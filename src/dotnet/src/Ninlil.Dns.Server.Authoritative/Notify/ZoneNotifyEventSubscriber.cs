@@ -12,22 +12,17 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Notify;
 
 /// <summary>
-///     This class sends an RFC 1996 NOTIFY to every one of a zone's configured secondaries
-///     whenever <see cref="DnsZoneChangedEvent" /> reports that it changed.
+///     This class sends an RFC 1996 NOTIFY to each of a zone's configured secondaries when a
+///     <see cref="DnsZoneChangedEvent" /> arrives.
 ///     <para>
-///         Sending, and every retry, happens in a detached background task rather than being
-///         awaited directly from <see cref="HandleAsync" />: <see cref="DnsServerEventDispatcher" />
-///         processes events one at a time, and a secondary that is slow or unreachable could
-///         otherwise stall every other subscriber's handling of every other event -- including,
-///         for a completely unrelated zone, <see cref="ZoneChangedEventSubscriber" />'s own cache
-///         reload -- for as long as this server keeps retrying. This is also why the background
-///         task opens its own dependency injection scope rather than using the constructor's:
-///         the dispatcher disposes the scope <see cref="HandleAsync" /> was invoked in as soon as
-///         every subscriber's own <see cref="System.Threading.Tasks.ValueTask" /> completes, which
-///         happens well before the detached work here is done.
+///         The sending and retries run in a detached task instead of being awaited in
+///         <see cref="HandleAsync" />. <see cref="DnsServerEventDispatcher" /> handles events one
+///         at a time, so a slow or unreachable secondary would otherwise hold up every other
+///         event, including cache reloads for other zones. The task creates its DI scope
+///         because the dispatcher disposes the handler's scope as soon as it returns.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh set of scoped services.</param>
+/// <param name="scopeFactory">The factory used to create the detached task's scope.</param>
 /// <param name="logger">The logger this subscriber records delivery failures to.</param>
 public class ZoneNotifyEventSubscriber(
     IServiceScopeFactory scopeFactory,
@@ -42,8 +37,7 @@ public class ZoneNotifyEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work: loading the zone's current SOA and configured
-    ///     secondaries, then notifying each of them.
+    ///     This method loads the zone's SOA and secondaries and notifies each of them.
     /// </summary>
     private async Task NotifySecondariesAsync(
         DnsZoneChangedEvent domainEvent,
@@ -94,10 +88,8 @@ public class ZoneNotifyEventSubscriber(
                     continue;
                 }
 
-                // Per RFC 1996 §3.7, a NOTIFY carries the AA bit -- an assertion by the primary
-                // that it is genuinely authoritative for the zone -- and, as a hint, the current
-                // SOA the secondary can compare against before deciding whether to bother
-                // pulling a transfer at all.
+                // RFC 1996 §3.7: a NOTIFY sets AA and may carry the current SOA as a hint, so
+                // the secondary can skip a transfer if it is already current.
                 DnsMessage notifyMessage = new()
                 {
                     Id = (ushort)Random.Shared.Next(ushort.MaxValue + 1),

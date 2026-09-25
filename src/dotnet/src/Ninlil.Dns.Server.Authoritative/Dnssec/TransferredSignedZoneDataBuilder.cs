@@ -9,51 +9,32 @@ using Ninlil.Dns.Server.Dnssec;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class builds a secondary-flavor zone's own <see cref="SignedZoneData" /> straight out
-///     of whatever RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY/DS <see cref="RecordEntity" /> rows a real
-///     zone transfer already wrote for it -- the "hold what arrived, don't sign it" counterpart to
-///     <see cref="ZoneSigningService" />'s own from-scratch signing pass for a Primary/CloudPrimary
-///     zone. This class never touches a <see cref="DnssecKeyEntity" /> or any private key material
-///     at all, and never computes a single signature: every one of these records was already
-///     computed and signed by whichever server actually owns this zone's private keys, and arrived
-///     here exactly as transferred -- authenticated only by the TSIG-protected AXFR/IXFR channel
-///     that carried it, never independently re-verified cryptographically, record by record, on
-///     top of that.
+///     This class builds a secondary zone's <see cref="SignedZoneData" /> from the RRSIG, NSEC,
+///     NSEC3, NSEC3PARAM, DNSKEY and DS <see cref="RecordEntity" /> rows a zone transfer stored:
+///     the counterpart of <see cref="ZoneSigningService" /> for zones this server does not sign.
+///     It uses no keys and computes no signatures. The records are served as received; they
+///     are protected only by the transfer's TSIG, and their signatures are not verified here.
 ///     <para>
-///         This is purely a read-and-reshape step: every record it looks at was already validated
-///         as *received correctly* by the TSIG check the transfer itself performed, and every
-///         piece of ordering this class computes (the NSEC/NSEC3 chain's own canonical/hash order,
-///         the RRSIG-to-covered-RRset grouping) is a deterministic function of that content, not a
-///         new fact being invented -- a real zone transfer offers no guarantee that record order
-///         on the wire (and, in turn, in storage) still matches the chain order a validator's own
-///         "find the record covering this name" walk needs, so this class re-derives that order
-///         itself exactly the way <see cref="ZoneSigningService" /> originally computed it, rather
-///         than trusting whatever order storage happens to return records in.
+///         Storage does not keep the transfer's record order, so the NSEC chain is re-sorted into
+///         canonical order and the NSEC3 chain into hash order, as
+///         <see cref="DenialOfExistenceProofBuilder" /> expects, and RRSIGs are grouped by the
+///         RRset they cover.
 ///     </para>
 /// </summary>
 public static class TransferredSignedZoneDataBuilder
 {
     /// <summary>
-    ///     This method builds a zone's <see cref="SignedZoneData" /> from its currently stored
-    ///     records, or returns <see langword="null" /> when nothing has actually arrived for it
-    ///     yet -- a freshly marked-signed secondary zone, before its very first transfer has
-    ///     completed, most commonly.
+    ///     This method builds a zone's <see cref="SignedZoneData" /> from its stored records.
     /// </summary>
-    /// <param name="apexName">The zone's own apex name.</param>
+    /// <param name="apexName">The zone's apex name.</param>
     /// <param name="storedRecords">Every record currently stored for the zone.</param>
     /// <returns>
-    ///     The zone's transferred signed content, or <see langword="null" /> when no DNSKEY
-    ///     record has arrived for it at all -- the same "nothing to serve yet" bar
-    ///     <see cref="ZoneSigningService.SignZoneAsync" /> enforces for a Primary/CloudPrimary
-    ///     zone with no active key, applied here to a secondary zone's own transferred content
-    ///     instead.
+    ///     The zone's transferred signed content, or <see langword="null" /> when no enabled DNSKEY
+    ///     record is stored (usually before the first transfer completes).
     /// </returns>
     public static SignedZoneData Build(DnsName apexName, IReadOnlyList<RecordEntity> storedRecords)
     {
-        // A disabled record was never actually served (nor, by the same logic the ordinary
-        // record path already applies, ever meant to take part in what this zone is really
-        // publishing) -- excluded here for the same reason ZoneSigningService excludes one from
-        // its own signing pass.
+        // Disabled records are not served, so leave them out, as ZoneSigningService does.
         List<RecordEntity> activeRecords = [.. storedRecords.Where(record => !record.IsDisabled)];
 
         List<RecordEntity> dnsKeyEntities =
@@ -61,10 +42,7 @@ public static class TransferredSignedZoneDataBuilder
             .. activeRecords.Where(record => record.Type == DnsResourceRecordTypeEnum.DnsKey),
         ];
 
-        // No DNSKEY has arrived at all yet -- either this zone's very first transfer has not
-        // completed, or it was only just marked signed and nothing has been pulled since. There
-        // is nothing to serve; the caller leaves whatever this cache already held for this zone
-        // untouched rather than replacing it with an empty, useless entry.
+        // No DNSKEY yet: nothing to serve. The caller keeps whatever it had cached.
         if (dnsKeyEntities.Count == 0)
             return null;
 
@@ -77,14 +55,9 @@ public static class TransferredSignedZoneDataBuilder
                 .Where(record => record is not null),
         ];
 
-        // Every RRSIG, grouped by the (owner name, covered type) pair of the RRset it actually
-        // signs -- read directly off each record's own decoded TypeCovered field, exactly the
-        // same key SignedZoneData.GetSignatures looks records up by. The single shared signature
-        // expiration this whole pass tracks is the earliest one found among them, mirroring
-        // ZoneSigningService's own "one shared expiration per pass" shape closely enough to be a
-        // meaningful "this transferred content is due for a fresher pull soon" signal, even
-        // though nothing here actually schedules a re-sign off of it the way it does for a
-        // locally-signed zone.
+        // Group RRSIGs by (owner name, TypeCovered), the key SignedZoneData.GetSignatures uses.
+        // The earliest expiration becomes SignatureExpiresAtUtc; nothing re-signs a secondary
+        // zone from it.
         Dictionary<
             (DnsName Name, DnsResourceRecordTypeEnum Type),
             List<DnsResourceRecord>
@@ -127,10 +100,8 @@ public static class TransferredSignedZoneDataBuilder
                 earliestSignatureExpiresAtUtc = thisExpiration;
         }
 
-        // The NSEC chain, re-sorted into canonical name order -- the same order
-        // ZoneSigningService.BuildNsecChain originally produced it in, needed by
-        // DenialOfExistenceProofBuilder's own descending "greatest record still <= target, wrap
-        // to the end" walk to actually find the right covering record.
+        // The NSEC chain in canonical order, which DenialOfExistenceProofBuilder's covering
+        // search needs.
         List<DnsResourceRecord> nsecRecords =
         [
             .. activeRecords
@@ -145,10 +116,8 @@ public static class TransferredSignedZoneDataBuilder
                 ),
         ];
 
-        // The NSEC3 chain, re-sorted into hash order -- the same order
-        // ZoneSigningService.BuildNsec3Chain originally produced it in, computed by decoding each
-        // record's own owner name back into its raw hash (Nsec3Hasher.ExtractHashFromOwnerName)
-        // rather than recomputing the hash from scratch, since the owner name already carries it.
+        // The NSEC3 chain in hash order, taking each hash from the owner name
+        // (Nsec3Hasher.ExtractHashFromOwnerName).
         List<DnsResourceRecord> nsec3Records =
         [
             .. activeRecords
@@ -163,8 +132,7 @@ public static class TransferredSignedZoneDataBuilder
                 ),
         ];
 
-        // A zone uses exactly one denial-of-existence mode at a time, so at most one of these two
-        // lists is ever non-empty -- whichever one is, becomes this zone's own chain.
+        // A zone uses one mode, so at most one list is non-empty; NSEC wins if both are.
         List<DnsResourceRecord> denialOfExistenceRecords =
             nsecRecords.Count > 0 ? nsecRecords : nsec3Records;
 
@@ -175,10 +143,8 @@ public static class TransferredSignedZoneDataBuilder
             ? null
             : RecordEntityCodec.ToWireRecord(nsec3ParamEntity, apexName);
 
-        // Every DS record this zone itself carries for one of its own delegations -- generated by
-        // whichever server actually signs this zone, transferred here exactly like any other
-        // ordinary RRset, and grouped by delegation name the same way
-        // SignedZoneData.GeneratedDsRecordsByDelegationName already expects.
+        // DS records for the zone's delegations, as transferred, grouped by delegation name
+        // for SignedZoneData.GeneratedDsRecordsByDelegationName.
         Dictionary<DnsName, IReadOnlyList<DnsResourceRecord>> generatedDsRecordsByDelegationName =
             activeRecords
                 .Where(record => record.Type == DnsResourceRecordTypeEnum.DS)
@@ -205,23 +171,19 @@ public static class TransferredSignedZoneDataBuilder
             denialOfExistenceRecords,
             nsec3ParamRecord,
             generatedDsRecordsByDelegationName,
-            // A zone with a DNSKEY but genuinely no RRSIG at all would be a malformed transfer
-            // that should never actually happen in practice -- "now" is a safe, conservative
-            // fallback that reads as "already due for a fresher pull" rather than throwing.
+            // A DNSKEY with no RRSIGs means a malformed transfer; use "now" rather than throw.
             earliestSignatureExpiresAtUtc ?? DateTimeOffset.UtcNow
         );
     }
 
     /// <summary>
-    ///     This class compares two byte sequences by unsigned value, most significant byte first
-    ///     -- the same order <see cref="ZoneSigningService" /> sorts its own NSEC3 chain by, and
-    ///     the order an NSEC3 owner name's own embedded hash must be re-sorted into here for the
-    ///     same chain-walk logic to find the right covering record.
+    ///     This class compares byte sequences as unsigned values, most significant byte first, the
+    ///     order of the NSEC3 chain.
     /// </summary>
     private sealed class ByteSequenceComparer : IComparer<byte[]>
     {
         /// <summary>
-        ///     This property contains the single shared instance of this stateless comparer.
+        ///     This field contains the shared instance.
         /// </summary>
         public static readonly ByteSequenceComparer Instance = new();
 

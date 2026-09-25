@@ -21,18 +21,12 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class covers <see cref="ZoneSigningService" />'s own private
-///     <c>ComputeDelegationDsRecordsAsync</c> method and its
-///     real-time dependency on a delegation's own currently-canonical Key-Signing Key -- the
-///     "CAA/DS-adjacent automation" a locally hosted KSK Double-Signature rollover builds directly
-///     on: whichever KSK currently holds <see cref="DnssecKeyLifecycleStateEnum.Active" /> is
-///     exactly the one KSK the parent zone's own next sign publishes a DS record for, with no
-///     operator action needed at all, as long as both zones are hosted on this same server. Proven
-///     here fast and deterministically, by manipulating a child zone's own key states directly and
-///     re-signing the parent zone on demand, rather than waiting out
-///     <see cref="DnssecKeyRolloverBackgroundService" />'s own real timers -- those are already
-///     proven live, end to end, by <see cref="DnssecKeyRolloverKskDoubleSignatureLiveTests" />
-///     for the genuinely external-parent case that same automation cannot reach.
+///     This class tests how the DS records <see cref="ZoneSigningService" /> generates
+///     (<c>ComputeDelegationDsRecordsAsync</c>) follow a local child zone's KSK: the parent
+///     publishes a DS for whichever child KSK is <see cref="DnssecKeyLifecycleStateEnum.Active" />.
+///     It changes the child's key states directly and re-signs the parent, instead of waiting for
+///     <see cref="DnssecKeyRolloverBackgroundService" />; the timed flow is covered by
+///     <see cref="DnssecKeyRolloverKskDoubleSignatureLiveTests" /> for an external parent.
 /// </summary>
 public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
 {
@@ -194,7 +188,7 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
         );
 
         // Two real KSKs for the child -- as if a Double-Signature rollover were already mid-flight,
-        // constructed directly rather than waiting on DnssecKeyRolloverBackgroundService's own real
+        // constructed directly rather than waiting on DnssecKeyRolloverBackgroundService's real
         // timers (proven separately, live, by DnssecKeyRolloverKskDoubleSignatureLiveTests).
         _firstChildKsk = await keyManagement.GenerateKeyAsync(
             _childZoneId,
@@ -211,7 +205,7 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
             seedScope.ServiceProvider.GetRequiredService<IDnssecKeyRepository>();
 
         // _firstChildKsk stays Active (the ordinary, already-generated state); _secondChildKsk
-        // starts the rollover's own DoubleSignature state, exactly what StartRolloverAsync itself
+        // starts the rollover's DoubleSignature state, what StartRolloverAsync itself
         // would have produced.
         _secondChildKsk.LifecycleState = DnssecKeyLifecycleStateEnum.DoubleSignature;
         childKeyRepository.Update(_secondChildKsk);
@@ -248,8 +242,8 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
         );
 
         // Exactly one DS, naming the currently-Active KSK -- not both, even though both are
-        // genuinely co-signing the child's own DNSKEY RRset right now -- matching RFC 6781 §4.1.2
-        // Figure 4's own single-DS-at-a-time Double-Signature shape.
+        // co-signing the child's DNSKEY RRset right now -- matching RFC 6781 §4.1.2
+        // Figure 4's single-DS-at-a-time Double-Signature shape.
         DsRecordData dsDataBeforeCutover = Assert.Single(
             dsBeforeCutover.Select(record =>
                 (DsRecordData)
@@ -258,14 +252,10 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
         );
         Assert.Equal(_firstChildKsk.KeyTag, dsDataBeforeCutover.KeyTag);
 
-        // Simulate the real cutover DnssecKeyRolloverBackgroundService itself performs once the
-        // incoming key's own pre-roll wait (and, for a genuinely external parent, an operator's
-        // own confirmation) is satisfied. Re-fetched fresh within this scope's own DbContext first
-        // -- SignZoneAsync above already loaded and tracked these same rows in this very scope, so
-        // reusing the InitializeAsync-scope instances directly would collide with EF Core's own
-        // identity map (the same cross-scope staleness trap this project's own bug catalog already
-        // documents, encountered here in the opposite direction: stale detached instances, not a
-        // stale tracked one).
+        // Do the cutover DnssecKeyRolloverBackgroundService makes once the wait (and, for an
+        // external parent, the operator confirmation) is over. Load the keys again in this scope:
+        // SignZoneAsync already tracks these rows here, so updating the instances from the
+        // InitializeAsync scope would clash with EF Core's identity map.
         DnssecKeyEntity firstChildKskInThisScope = await keyRepository.GetByIdAsync(
             _firstChildKsk.Id
         );
@@ -295,7 +285,7 @@ public sealed class ZoneSigningServiceDelegationDsCutoverTests : IAsyncLifetime
             )
         );
 
-        // The parent's own next sign follows the cutover automatically -- the real DS now names
+        // The parent's next sign follows the cutover automatically -- the real DS now names
         // the second key, with no operator action of any kind, since both zones are hosted here.
         Assert.Equal(_secondChildKsk.KeyTag, dsDataAfterCutover.KeyTag);
         Assert.NotEqual(dsDataBeforeCutover.KeyTag, dsDataAfterCutover.KeyTag);

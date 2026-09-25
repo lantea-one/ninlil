@@ -7,13 +7,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.RecordRepository" />'s
-///     real, pushed-down <c>SearchByZoneIdAsync</c>/<c>CountByZoneIdAsync</c> pagination against
-///     a real SQLite-backed database -- the Phase 13g proof that <c>RecordsController</c>'s own
-///     per-zone record listing no longer materializes an entire zone's records into memory
-///     before slicing a page out of it, and that the zone-scoping filter itself is applied
-///     correctly alongside paging (a second, unrelated zone's own records must never leak into
-///     another zone's page).
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.RecordRepository" /> (<c>SearchByZoneIdAsync</c>, <c>CountByZoneIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>RecordsController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks that another zone's records never appear.
 /// </summary>
 public sealed class RecordRepositorySearchTests : IAsyncLifetime
 {
@@ -26,8 +24,8 @@ public sealed class RecordRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds one zone with five A records at deliberately out-of-order owner
-    ///     names, plus a second, unrelated zone with its own record -- so both the real
+    ///     This method seeds one zone with five A records at out-of-order owner
+    ///     names, plus a second, unrelated zone with its record -- so both the real
     ///     <c>ORDER BY</c> translation and the zone-scoping <c>WHERE</c> clause are exercised
     ///     against the same database.
     /// </summary>

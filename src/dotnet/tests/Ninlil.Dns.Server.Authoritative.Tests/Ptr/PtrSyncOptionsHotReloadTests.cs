@@ -21,26 +21,20 @@ using Ninlil.Dns.Server.Presets;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Ptr;
 
 /// <summary>
-///     This class proves, against the real .NET configuration/options binding pipeline, a real
-///     reload-on-change JSON configuration file, and a real, SQLite-backed
-///     <see cref="IZoneUpdateService" />/repository stack -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- that a write
-///     reaching <see cref="PtrSyncOptions.DefaultEnabled" /> via
-///     <see cref="PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.PtrSyncSettingsController.Patch</c> itself calls) is
-///     honored by the <b>same, already-constructed</b> <see cref="PtrSyncService" /> instance on
-///     its very next <see cref="PtrSyncService.ReconcileZoneAsync" /> call, with no restart. Before
-///     this fix, <see cref="PtrSyncService" /> read <see cref="PtrSyncOptions" /> via the usual,
-///     snapshotted <see cref="IOptions{TOptions}" />, computed once and cached for the life of the
-///     process -- a write reaching the configuration file would never have been observed at all,
-///     the same shape this project's other options-bound classes each already found and fixed for
-///     their own options class.
+///     This class checks that a change to <see cref="PtrSyncOptions.DefaultEnabled" /> written
+///     through <see cref="PresetConfigurationFileApplier" /> (what
+///     <c>Ninlil.Web.Controllers.PtrSyncSettingsController.Patch</c> calls) into a reload-on-change
+///     JSON file is used by the same <see cref="PtrSyncService" /> instance on its next
+///     <see cref="PtrSyncService.ReconcileZoneAsync" />, without a restart. It uses the EF Core
+///     repositories on a temporary SQLite database. <see cref="PtrSyncService" /> must read the
+///     options through <see cref="IOptionsMonitor{TOptions}" />; an <see cref="IOptions{TOptions}" />
+///     value is cached for the life of the process.
 /// </summary>
 public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
 {
     /// <summary>
     ///     This class stands in for the real, channel-backed <c>DnsServerEventPublisher</c> --
-    ///     the same minimal double <c>PtrSyncServiceTests</c>' own identically-named, independently
+    ///     the same minimal double <c>PtrSyncServiceTests</c>' identically-named, independently
     ///     duplicated fake already establishes: this test exercises <see cref="PtrSyncService" />
     ///     directly rather than through the event bus, so <see cref="IZoneUpdateService" />'s own
     ///     dependency on <see cref="IDnsServerEventPublisher" /> only needs a registration that
@@ -70,9 +64,8 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
-        // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider -- the
-        // exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-        // appsettings.json in a real deployment.
+        // A reload-on-change JSON file source, the same kind the web host uses for its
+        // configuration files.
         builder.Configuration.AddJsonFile(_configurationPath, optional: true, reloadOnChange: true);
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
 
@@ -175,11 +168,11 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
             IOptionsMonitor<PtrSyncOptions>
         >();
 
-        // Before any write, the file does not exist yet -- this class's own compiled-in default:
+        // Before any write, the file does not exist yet -- this class's compiled-in default:
         // off.
         Assert.False(monitor.CurrentValue.DefaultEnabled);
 
-        // Constructed once, against a fresh dependency-injection scope's own repositories --
+        // Constructed once, against a fresh dependency-injection scope's repositories --
         // never rebuilt for the rest of this test.
         IServiceScope scope = _host.Services.CreateScope();
         PtrSyncService service = new(
@@ -197,7 +190,7 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
         TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
         using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-        // The exact same write mechanism PtrSyncSettingsController.Patch itself calls.
+        // The same write PtrSyncSettingsController.Patch makes.
         await PresetConfigurationFileApplier.ApplyAsync(
             [
                 new PresetConfigurationSetting(
@@ -209,17 +202,14 @@ public sealed class PtrSyncOptionsHotReloadTests : IAsyncLifetime
             _configurationPath
         );
 
-        // .NET's own JSON configuration provider debounces file-change notifications by a few
-        // hundred milliseconds -- this waits for that real reload to actually happen rather than
-        // asserting against a fixed delay.
+        // The JSON provider debounces file-change notifications, so wait for the reload event
+        // rather than a fixed delay.
         Task completed = await Task.WhenAny(reloaded.Task, Task.Delay(TimeSpan.FromSeconds(10)));
         Assert.Same(reloaded.Task, completed);
         Assert.True(monitor.CurrentValue.DefaultEnabled);
 
-        // The identical service instance, constructed before the write, now genuinely reconciles
-        // the reverse zone into existence -- proof the global default's own gate was actually
-        // re-evaluated rather than the service simply always answering the same way regardless of
-        // configuration.
+        // The same instance, built before the write, now creates the reverse zone, so the default
+        // is re-read per call.
         await service.ReconcileZoneAsync(zoneId);
 
         ZoneEntity reverseZone = await _zoneRepository.FindByNameAsync("2.0.192.in-addr.arpa");

@@ -4,34 +4,29 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Server.Authoritative.Journal;
 
 /// <summary>
-///     This interface is the one path this project expects a zone's record content to ever
-///     change through -- bumping the zone's own SOA serial and recording the change in
-///     <see cref="Data.Abstractions.Repository.IZoneChangeJournalRepository" /> atomically,
-///     alongside the actual record changes, rather than something a caller (the dynamic update
-///     handler, or the REST API) does by hand against
-///     <see cref="Data.Abstractions.Repository.IRecordRepository" /> directly and might forget a
-///     step of.
+///     This interface is the path every change to a zone's records should go through. In one
+///     save it changes the records, advances the SOA serial and writes a journal entry to
+///     <see cref="Data.Abstractions.Repository.IZoneChangeJournalRepository" /> (which IXFR
+///     reads), then publishes <see cref="Core.Events.DnsZoneChangedEvent" />. Callers such as the
+///     REST API, dynamic update and zone transfer pulls use it rather than writing to
+///     <see cref="Data.Abstractions.Repository.IRecordRepository" /> and risking a missed step.
 /// </summary>
 public interface IZoneUpdateService
 {
     /// <summary>
-    ///     This method applies a set of record additions and removals to a zone as a single,
-    ///     atomic change: the zone's SOA serial is advanced, a journal entry recording exactly
-    ///     what changed is written, and, once persisted, <see cref="Core.Events.DnsZoneChangedEvent" />
-    ///     is published so <see cref="Cache.AuthoritativeZoneCache" /> picks the change up.
+    ///     This method applies record additions and removals as one change: the SOA serial is
+    ///     advanced, a journal entry records what changed, and after saving
+    ///     <see cref="Core.Events.DnsZoneChangedEvent" /> is published so the caches reload.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to change.</param>
     /// <param name="recordsToAdd">The records to add. May be empty.</param>
     /// <param name="recordsToRemove">
-    ///     The records to remove -- the actual tracked entity instances, not copies, since
-    ///     removing a detached copy would not affect the database.
+    ///     The records to remove. They must be the tracked entity instances; removing a detached
+    ///     copy would not affect the database.
     /// </param>
     /// <param name="explicitNewSerial">
-    ///     The serial to advance to, or <see langword="null" /> to simply increment the current
-    ///     one by one -- the right default when this server itself is the source of truth for
-    ///     the change. A secondary zone applying a transfer pulled from its primary instead
-    ///     supplies the primary's own new serial here, adopting it exactly rather than computing
-    ///     one independently, since the two must always agree.
+    ///     The new serial, or <see langword="null" /> to add one to the current serial. A secondary
+    ///     applying a transfer passes the primary's serial so the two stay equal.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <exception cref="InvalidOperationException">
@@ -47,19 +42,18 @@ public interface IZoneUpdateService
     );
 
     /// <summary>
-    ///     This method provisions a zone's very first set of records -- the one case
-    ///     <see cref="ApplyChangesAsync" /> cannot handle, since it requires an existing SOA
-    ///     record to advance and a brand-new zone has none yet. Used when a secondary zone
-    ///     completes its first-ever pull from its primary.
+    ///     This method stores a zone's first set of records, which <see cref="ApplyChangesAsync" />
+    ///     cannot do because it needs an existing SOA to advance. Used, for example, when a
+    ///     secondary completes its first pull.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to provision.</param>
     /// <param name="records">
-    ///     Every record the zone should start with, including its own SOA record.
+    ///     Every record the zone starts with, including its SOA record.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="zoneId" /> does not name an existing zone, that zone
-    ///     already has records of its own, or <paramref name="records" /> carries no SOA record.
+    ///     already has records, or <paramref name="records" /> has no SOA record.
     /// </exception>
     Task BootstrapZoneAsync(
         Guid zoneId,
@@ -68,23 +62,16 @@ public interface IZoneUpdateService
     );
 
     /// <summary>
-    ///     This method edits a single existing record in place -- the one path a caller (the REST
-    ///     API's own record PUT/PATCH endpoints, most immediately) uses to change a record's
-    ///     fields without changing its own identity. Unlike expressing an edit as a
-    ///     <see cref="ApplyChangesAsync" /> remove-then-add pair with a fresh
-    ///     <see cref="EntityBase.Id" />, this keeps the record's own <c>Id</c> stable (an
-    ///     ordinary REST client expects a resource's identity to survive its own PUT/PATCH), while
-    ///     still journaling an accurate before/after snapshot of exactly what changed -- the same
-    ///     snapshot <see cref="Data.Abstractions.Repository.IZoneChangeJournalRepository" />'s own
-    ///     IXFR consumer (<see cref="Transfer.ZoneTransferService" />) needs, which an in-place
-    ///     mutation with no snapshot at all would otherwise leave inaccurate (a bumped serial with
-    ///     no corresponding recorded delta).
+    ///     This method edits one record in place, as the REST record PUT and PATCH endpoints do.
+    ///     Unlike a remove-and-add through <see cref="ApplyChangesAsync" />, it keeps the record's
+    ///     <see cref="EntityBase.Id" />, which REST clients expect to survive an edit. It still
+    ///     journals the before and after versions, which IXFR in
+    ///     <see cref="Transfer.ZoneTransferService" /> needs.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone the record belongs to.</param>
     /// <param name="recordId">The identifier of the record to edit.</param>
     /// <param name="applyEdit">
-    ///     A callback that mutates the record's own tracked instance directly -- called after
-    ///     this method has already captured a pre-edit snapshot for the journal.
+    ///     A callback that changes the tracked record, called after the pre-edit snapshot is taken.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <exception cref="InvalidOperationException">
@@ -100,26 +87,16 @@ public interface IZoneUpdateService
     );
 
     /// <summary>
-    ///     This method advances a zone's own SOA serial with no accompanying record content
-    ///     change at all -- the one path <see cref="Dnssec.SignedZoneCache" />'s own
-    ///     schedule-driven proactive re-sign (see <see cref="Dnssec.DnssecResigningBackgroundService" />)
-    ///     uses to tell a secondary a genuine content change happened, even though nothing about
-    ///     this zone's own stored <see cref="RecordEntity" /> rows changed at all: real-world DNS
-    ///     convention treats a re-sign as a real change (fresh RRSIGs a secondary must notice),
-    ///     matching this project's own confirmed decision. Never call this for an ordinary content
-    ///     change -- use <see cref="ApplyChangesAsync" /> or <see cref="ApplyRecordEditAsync" />
-    ///     instead, both of which journal a real, replayable before/after diff.
+    ///     This method advances a zone's SOA serial without changing any records. The scheduled
+    ///     re-sign (<see cref="Dnssec.SignedZoneCache.ResignForScheduledExpiryAsync" />) uses it,
+    ///     because new RRSIGs are a change secondaries must notice. Do not use it for record
+    ///     changes; <see cref="ApplyChangesAsync" /> and <see cref="ApplyRecordEditAsync" />
+    ///     journal a replayable diff.
     ///     <para>
-    ///         The resulting journal entry's own Added/Removed content is deliberately left
-    ///         empty, the same <c>"[]"</c> sentinel <see cref="BootstrapZoneAsync" /> already uses
-    ///         for "no meaningful content list" -- this project's DNSSEC signing design
-    ///         recomputes every RRSIG from scratch on every pass (a fresh inception/expiration
-    ///         window even for an RRset whose own data never changed), so there is no meaningful
-    ///         byte-level "old vs new" signed content to journal for a true incremental replay.
-    ///         <see cref="Transfer.ZoneTransferService" /> recognizes a signed zone for exactly
-    ///         this reason and always serves its own IXFR as a full transfer instead, carrying
-    ///         this zone's complete, current signed content fresh from
-    ///         <see cref="Dnssec.SignedZoneCache" /> every time.
+    ///         The journal entry's added and removed lists are empty (<c>"[]"</c>, as for
+    ///         <see cref="BootstrapZoneAsync" />): every re-sign recomputes all RRSIGs, so there is
+    ///         no useful diff. <see cref="Transfer.ZoneTransferService" /> therefore always answers
+    ///         IXFR for a signed zone with a full transfer.
     ///     </para>
     /// </summary>
     /// <param name="zoneId">The identifier of the zone whose serial to advance.</param>

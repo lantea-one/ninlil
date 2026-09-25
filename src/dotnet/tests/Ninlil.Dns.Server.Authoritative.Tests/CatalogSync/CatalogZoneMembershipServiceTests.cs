@@ -19,10 +19,9 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CatalogSync;
 
 /// <summary>
-///     This class covers <see cref="CatalogZoneMembershipService" /> -- the RFC 9432 producer-side
-///     surface -- against a real, SQLite-backed repository stack, mirroring
-///     <c>PtrSyncServiceTests</c>'s own verification shape for this project's other
-///     zone-reconciliation service.
+///     This class tests <see cref="CatalogZoneMembershipService" />, the RFC 9432 producer, against
+///     the EF Core repositories on a temporary SQLite database: joining and leaving, the records
+///     written, and the NotifyAddresses merge.
 /// </summary>
 public sealed class CatalogZoneMembershipServiceTests : IAsyncLifetime
 {
@@ -70,7 +69,7 @@ public sealed class CatalogZoneMembershipServiceTests : IAsyncLifetime
 
     /// <summary>
     ///     This method builds a real <see cref="CatalogZoneMembershipService" /> against a fresh
-    ///     scope's own repositories -- the same "fresh instance per call" reasoning
+    ///     scope's repositories -- the same "fresh instance per call" reasoning
     ///     <c>PtrSyncServiceTests.CreateService</c> already documents.
     /// </summary>
     private CatalogZoneMembershipService CreateService()
@@ -91,9 +90,9 @@ public sealed class CatalogZoneMembershipServiceTests : IAsyncLifetime
     /// <summary>
     ///     This method reads a zone back through a brand-new scope's own, freshly-created
     ///     repository -- required, since EF Core's identity map is per scope, whenever a test wants to observe a
-    ///     write <see cref="CreateService" />'s own separate scope just made: reusing this
-    ///     fixture's own long-lived <c>_zoneRepository</c> field instead would silently return
-    ///     that field's own stale, already-tracked identity-map copy of the same row.
+    ///     write <see cref="CreateService" />'s separate scope just made: reusing this
+    ///     fixture's long-lived <c>_zoneRepository</c> field instead would silently return
+    ///     that field's stale, already-tracked identity-map copy of the same row.
     /// </summary>
     private async Task<ZoneEntity> GetZoneFreshAsync(Guid zoneId)
     {
@@ -104,7 +103,7 @@ public sealed class CatalogZoneMembershipServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method lists a zone's own records back through a brand-new scope, for the same
+    ///     This method lists a zone's records back through a brand-new scope, for the same
     ///     reason <see cref="GetZoneFreshAsync" /> does.
     /// </summary>
     private async Task<IReadOnlyList<RecordEntity>> FindRecordsFreshAsync(
@@ -387,7 +386,7 @@ public sealed class CatalogZoneMembershipServiceTests : IAsyncLifetime
         Assert.Null(memberZone.MemberOfCatalogZoneId);
 
         // The version record itself stays -- the catalog zone can still have other members, and
-        // even with none left, RFC 9432 says nothing about ever removing its own schema record.
+        // even with none left, RFC 9432 says nothing about ever removing its schema record.
         IReadOnlyList<RecordEntity> versionRecords = await _recordRepository.FindByNameAsync(
             catalogZoneId,
             "version.catalog.invalid",

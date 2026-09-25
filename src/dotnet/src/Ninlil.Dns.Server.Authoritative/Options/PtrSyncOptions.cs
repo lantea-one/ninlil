@@ -5,12 +5,11 @@ namespace Ninlil.Dns.Server.Authoritative.Options;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Authoritative:PtrSync</c> section of the
-///     application's configuration and controls the PTR/reverse-zone sync feature's own
-///     global defaults -- mirroring a <see cref="Common.Enum.ZoneTypeEnum.Primary" />/
-///     <see cref="Common.Enum.ZoneTypeEnum.CloudPrimary" /> zone's own A/AAAA record set into the
-///     enclosing <c>in-addr.arpa</c>/<c>ip6.arpa</c> reverse zone whenever that forward record set
-///     changes. Every setting here is a *default*, overridable per zone via the matching
-///     <c>ZoneEntity</c> field -- this class supplies the value only when a zone's own field is
+///     application's configuration and holds the global defaults for PTR sync, which mirrors a
+///     <see cref="Common.Enum.ZoneTypeEnum.Primary" /> or
+///     <see cref="Common.Enum.ZoneTypeEnum.CloudPrimary" /> zone's A/AAAA records into the matching
+///     <c>in-addr.arpa</c> or <c>ip6.arpa</c> reverse zone (<see cref="Ptr.PtrSyncService" />).
+///     Each value applies only when the zone's matching <c>ZoneEntity</c> field is
 ///     <see langword="null" />.
 /// </summary>
 public class PtrSyncOptions
@@ -21,48 +20,31 @@ public class PtrSyncOptions
     public const string SectionName = "DnsServer:Authoritative:PtrSync";
 
     /// <summary>
-    ///     This property contains the global default for whether a zone's A/AAAA record set is
-    ///     automatically mirrored into a reverse zone, used whenever a zone's own
-    ///     <c>ZoneEntity.AutoManagePtrRecords</c> is <see langword="null" />. Defaults
-    ///     <see langword="false" /> -- deliberately different from
-    ///     <c>Server.Acme.CaaAutoManagementOptions.DefaultEnabled</c>'s own on-by-default posture,
-    ///     and matching this project's usual "capability-expanding toggles default off" posture
-    ///     instead: unlike CAA reconciliation (which only ever
-    ///     acts on a zone that already opted into ACME), enabling this feature can create a
-    ///     brand-new zone (the reverse zone itself) and write records into it -- a real, visible
-    ///     new capability an operator must opt into explicitly, not a pure correctness/
-    ///     availability improvement in service of a choice already made.
+    ///     This property contains the default for whether a zone's A/AAAA records are mirrored
+    ///     into a reverse zone, used when <c>ZoneEntity.AutoManagePtrRecords</c> is
+    ///     <see langword="null" />. Off by default, unlike CAA management, because it can create a
+    ///     new reverse zone and write records into it, which an operator should opt into.
     /// </summary>
     public bool DefaultEnabled { get; set; }
 
     /// <summary>
-    ///     This property contains the global default IPv4 reverse-zone grouping granularity, in
-    ///     bits, used whenever a zone's own <c>ZoneEntity.PtrIpv4PrefixLength</c> is
-    ///     <see langword="null" />. Defaults to <c>24</c> -- the conventional octet boundary this
-    ///     feature always used before RFC 2317 classless delegation support existed, so an
-    ///     upgrade with no explicit configuration change behaves identically to before. A value
-    ///     from <c>25</c> through <c>30</c> switches every zone that inherits this default to RFC
-    ///     2317's own classless <c>"{start}/{prefix}"</c> zone-naming convention instead (see
-    ///     <see cref="ReverseZoneNameCalculator" />), with the octet-aligned <c>/24</c> parent zone
-    ///     automatically gaining the CNAME delegation glue RFC 2317 §4 describes. Validated at the
-    ///     REST write boundary (<c>PtrSyncSettingsController.Patch</c>) to stay within
-    ///     <c>24</c>-<c>30</c> inclusive -- a coarser grouping would span more than one octet
-    ///     (unsupported), and <c>31</c>/<c>32</c> would leave a delegated block too small to hold a
-    ///     usable host range.
+    ///     This property contains the default IPv4 reverse zone size, in prefix bits, used when
+    ///     <c>ZoneEntity.PtrIpv4PrefixLength</c> is <see langword="null" />. The default, 24, gives
+    ///     one zone per octet boundary. Values 25 to 30 use RFC 2317 classless zones named
+    ///     <c>"{start}/{prefix}"</c> (see <see cref="ReverseZoneNameCalculator" />), and the
+    ///     enclosing /24 zone gets the CNAME records RFC 2317 §4 describes.
+    ///     <c>PtrSyncSettingsController.Patch</c> accepts only 24 to 30: shorter prefixes would
+    ///     span more than one octet, and /31 or /32 leave too few hosts.
     /// </summary>
     public int DefaultIpv4ReverseZonePrefixBits { get; set; } =
         ReverseZoneNameCalculator.DefaultIpv4ReverseZonePrefixBits;
 
     /// <summary>
-    ///     This property contains the global default IPv6 reverse-zone grouping granularity, in
-    ///     bits, used whenever a zone's own <c>ZoneEntity.PtrIpv6PrefixLength</c> is
-    ///     <see langword="null" />. Defaults to <c>64</c> -- see
-    ///     <see cref="ReverseZoneNameCalculator.DefaultIpv6ReverseZonePrefixBits" />'s own doc
-    ///     comment for why that particular granularity was chosen. Validated at the REST write
-    ///     boundary (<c>PtrSyncSettingsController.Patch</c>) to be a multiple of <c>4</c> (every
-    ///     <c>ip6.arpa</c> label is exactly one hex nibble, per RFC 3596 -- only a multiple-of-4
-    ///     bit count is even expressible as a whole number of labels) between <c>16</c> and
-    ///     <c>124</c> inclusive.
+    ///     This property contains the default IPv6 reverse zone size, in prefix bits, used when
+    ///     <c>ZoneEntity.PtrIpv6PrefixLength</c> is <see langword="null" />. The default is 64 (see
+    ///     <see cref="ReverseZoneNameCalculator.DefaultIpv6ReverseZonePrefixBits" />).
+    ///     <c>PtrSyncSettingsController.Patch</c> accepts multiples of 4 from 16 to 124, since each
+    ///     <c>ip6.arpa</c> label is one hex nibble (RFC 3596).
     /// </summary>
     public int DefaultIpv6ReverseZonePrefixBits { get; set; } =
         ReverseZoneNameCalculator.DefaultIpv6ReverseZonePrefixBits;

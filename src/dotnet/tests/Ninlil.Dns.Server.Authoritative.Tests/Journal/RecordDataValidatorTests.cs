@@ -8,14 +8,9 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Journal;
 
 /// <summary>
-///     This class covers <see cref="RecordDataValidator" /> directly -- the record-type/
-///     codec-level validation logic <c>Ninlil.Web.Controllers.RecordsController</c>
-///     calls into for its own <c>data</c> field, now converted to
-///     throw this project's own custom exception hierarchy directly, since neither of this
-///     class's two methods has any caller outside a REST-facing write path -- unlike
-///     <see cref="IZoneUpdateService" /> itself, this class shares no code with any
-///     DNS-protocol-triggered write path, so there is no shared error-signaling behavior to
-///     preserve here.
+///     This class tests <see cref="RecordDataValidator" /> directly: which record types and
+///     <c>data</c> shapes <c>RecordsController</c> accepts, and the
+///     <see cref="Ninlil.Dns.Common.Exceptions.ValidationException" /> it throws otherwise.
 /// </summary>
 public sealed class RecordDataValidatorTests
 {

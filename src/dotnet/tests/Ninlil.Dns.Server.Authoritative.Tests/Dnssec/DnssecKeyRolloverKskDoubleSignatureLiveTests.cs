@@ -22,18 +22,12 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class runs a real, live, wall-clock RFC 6781 §4.1.2 (Figure 4) Double-Signature
-///     Key-Signing-Key rollover end to end, for the genuinely externally delegated case -- no
-///     locally hosted parent zone exists in this test's own database, so
-///     <see cref="DnssecKeyRolloverBackgroundService" />'s own real scheduled loop can never
-///     auto-generate a replacement DS record the way it would for a delegation this same server
-///     also hosts. Proves two things a real operator actually depends on: the safety gate itself
-///     (the incoming KSK never becomes canonical, no matter how long its own pre-roll wait has
-///     elapsed, until an operator explicitly confirms the parent's own DS record was really
-///     updated), and, once that confirmation is given, that both KSKs genuinely co-sign the zone's
-///     own DNSKEY RRset throughout the transition -- verified live, cryptographically, against
-///     whatever DNSKEY RRset is actually live at each moment, the same real proof this project's
-///     own ZSK Pre-Publish rollover test already establishes for the other rollover scheme.
+///     This class runs an RFC 6781 §4.1.2 Double-Signature KSK rollover end to end with the real
+///     <see cref="DnssecKeyRolloverBackgroundService" /> loop on a host with a temporary SQLite
+///     database and short timers, for a zone whose parent is not hosted here. It checks that the
+///     incoming KSK is never promoted, however long it waits, until an operator confirms the
+///     parent's DS, and that after confirmation both KSKs sign the DNSKEY RRset throughout,
+///     verifying signatures against the DNSKEY RRset live at each step.
 /// </summary>
 public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetime
 {
@@ -87,9 +81,8 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
 
         _zoneId = Guid.NewGuid();
 
-        // No parent zone is ever seeded here at all -- this zone's own delegation is genuinely
-        // external, exactly the case DnssecKeyRolloverBackgroundService cannot safely automate on
-        // its own.
+        // No parent zone is created, so the delegation is external and the rollover needs operator
+        // confirmation.
         await zoneRepository.AddAsync(
             new ZoneEntity
             {
@@ -198,7 +191,7 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
         Assert.Equal(3, afterPublish.DnsKeyRecords.Count); // ZSK + old KSK + new KSK
 
         // Both KSKs already co-sign the DNSKEY RRset from the very first moment the new one
-        // exists -- RFC 6781 §4.1.2's own Figure 4 shows both RRSIGs present starting at its own
+        // exists -- RFC 6781 §4.1.2's Figure 4 shows both RRSIGs present starting at its own
         // "new DNSKEY" stage, unlike a ZSK's Pre-Publish incoming key, which signs nothing yet.
         Assert.Equal(
             2,
@@ -213,9 +206,9 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
             )
         );
 
-        // Wait well past the incoming key's own pre-roll wait (DNSKEY RRset TTL + propagation
+        // Wait well past the incoming key's pre-roll wait (DNSKEY RRset TTL + propagation
         // delay) with no operator confirmation given at all -- the real safety gate this scheme
-        // needs for a genuinely external parent: DnssecKeyRolloverBackgroundService must never
+        // needs for a external parent: DnssecKeyRolloverBackgroundService must never
         // promote it regardless of how long that wait has elapsed on its own.
         await Task.Delay(RecordTtl + PropagationDelay + TimeSpan.FromSeconds(1));
 
@@ -234,7 +227,7 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
         }
 
         // The one manual step a real operator (or DnssecKeysController.ConfirmParentDsUpdated)
-        // performs once they have actually updated the DS record at their real registrar.
+        // performs once they have updated the DS record at their real registrar.
         await using (AsyncServiceScope confirmScope = _host.Services.CreateAsyncScope())
         {
             IDnssecKeyManagementService keyManagement =
@@ -266,7 +259,7 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
             );
 
             // The real, live, continuously polled proof: the DNSKEY RRset itself must always
-            // verify against its own currently-live key set, at every single point this test
+            // verify against its currently-live key set, at every single point this test
             // happens to look, throughout the whole transition.
             Assert.True(
                 RrsetSignatureVerifier.TryVerify(
@@ -291,8 +284,8 @@ public sealed class DnssecKeyRolloverKskDoubleSignatureLiveTests : IAsyncLifetim
             newKeyPromoted = newKsk.LifecycleState == DnssecKeyLifecycleStateEnum.Active;
             cacheWithdrewOldKey = current.DnsKeyRecords.Count == 2;
 
-            // Until the old key is actually removed, both KSKs must still be co-signing the
-            // DNSKEY RRset -- exactly RFC 6781 §4.1.2's own guarantee that a resolver holding
+            // Until the old key is removed, both KSKs must still be co-signing the
+            // DNSKEY RRset -- RFC 6781 §4.1.2's guarantee that a resolver holding
             // either key as its trust anchor stays validated throughout.
             if (!oldKeyRemoved)
                 Assert.Equal(2, dnsKeySignatures.Count);

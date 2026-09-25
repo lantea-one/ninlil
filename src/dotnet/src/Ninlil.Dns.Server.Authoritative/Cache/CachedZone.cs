@@ -7,16 +7,16 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Server.Authoritative.Cache;
 
 /// <summary>
-///     This class holds one zone's records in memory, indexed for the lookups
-///     <see cref="Resolution.AuthoritativeQueryResolver" /> needs on every query: an exact name
-///     match, a wildcard match, and a delegation (zone-cut) check. It is rebuilt in full whenever
-///     the zone changes, rather than updated incrementally -- a zone rarely has more than a few
-///     thousand records, so rebuilding is cheap, and it keeps this class simple.
+///     This class holds one zone's enabled records in memory, indexed for the lookups
+///     <see cref="Resolution.AuthoritativeQueryResolver" /> makes on every query: exact name,
+///     wildcard and delegation (zone cut). <see cref="AuthoritativeZoneCache" /> rebuilds it in
+///     full whenever the zone changes; zones are small enough that a rebuild is cheap, and it
+///     keeps this class simple.
 /// </summary>
 public sealed class CachedZone
 {
     /// <summary>
-    ///     This property contains this zone's own database record.
+    ///     This property contains the zone's database record.
     /// </summary>
     public ZoneEntity Zone { get; }
 
@@ -26,15 +26,14 @@ public sealed class CachedZone
     public DnsName ApexName { get; }
 
     /// <summary>
-    ///     This property indexes every enabled record by its exact owner name.
+    ///     This field indexes every enabled record by its owner name.
     /// </summary>
     private readonly Dictionary<DnsName, List<RecordEntity>> _recordsByName;
 
     /// <summary>
-    ///     This property tracks, per (name, type) pair with more than one record, how many times
-    ///     that record set has been served, so <see cref="GetRecords" /> can rotate which record
-    ///     comes first each time -- the round-robin load-balancing convention most authoritative
-    ///     servers apply by default.
+    ///     This field counts, per (name, type) with more than one record, how often the set was
+    ///     served, so <see cref="GetRecords" /> can rotate which record comes first (round-robin,
+    ///     as most authoritative servers do).
     /// </summary>
     private readonly ConcurrentDictionary<
         (DnsName Name, DnsResourceRecordTypeEnum Type),
@@ -58,14 +57,14 @@ public sealed class CachedZone
     }
 
     /// <summary>
-    ///     This method looks up whether any ancestor of <paramref name="name" />, up to but not
-    ///     including this zone's own apex, delegates a subzone elsewhere by way of NS records --
-    ///     the RFC 1035 §4.3.2 "zone cut" a query below a delegation must be referred across,
-    ///     rather than answered directly.
+    ///     This method finds a delegation (NS records at <paramref name="name" /> or an ancestor,
+    ///     below the apex) that the query must be referred across rather than answered (the
+    ///     RFC 1035 §4.3.2 zone cut). It checks from <paramref name="name" /> upward and returns
+    ///     the first NS set found, which is the deepest one if several are nested.
     /// </summary>
     /// <param name="name">The name to check for an enclosing delegation.</param>
     /// <returns>
-    ///     The delegation point's own name and its NS records, or <see langword="null" /> if
+    ///     The delegation point's name and its NS records, or <see langword="null" /> if
     ///     <paramref name="name" /> is not delegated away from this zone.
     /// </returns>
     public (
@@ -73,10 +72,8 @@ public sealed class CachedZone
         IReadOnlyList<RecordEntity> NameServers
     )? FindEnclosingDelegation(DnsName name)
     {
-        // Walk upward starting from name itself -- the name being queried for can be exactly the
-        // delegation point -- up to, but excluding, this zone's own apex. The apex is excluded
-        // deliberately: its own NS records simply list who is authoritative for *this* zone, not
-        // a delegation of it to somewhere else, and every zone has them.
+        // Start at name itself, which may be the delegation point, and stop below the apex: the
+        // apex NS records name this zone's servers, not a delegation.
         for (int start = 0; start < name.Labels.Count - ApexName.Labels.Count; start++)
         {
             DnsName ancestor = new([.. name.Labels.Skip(start)]);
@@ -120,31 +117,26 @@ public sealed class CachedZone
     }
 
     /// <summary>
-    ///     This method lists every enabled record in the zone, at every name, with no rotation
-    ///     and no type filtering -- used for a full zone transfer (AXFR), which must serve a
-    ///     complete, exact, deterministic snapshot rather than the load-balanced view
-    ///     <see cref="GetRecords" /> gives an ordinary query.
+    ///     This method lists every enabled record in the zone without rotation or filtering, for
+    ///     a full zone transfer (AXFR), which needs the complete set rather than the rotated view
+    ///     of <see cref="GetRecords" />.
     /// </summary>
     /// <returns>Every enabled record stored in the zone.</returns>
     public IEnumerable<RecordEntity> GetAllRecords() => _recordsByName.Values.SelectMany(x => x);
 
     /// <summary>
-    ///     This method checks whether any enabled record at all exists at an exact owner name,
-    ///     regardless of type -- used to distinguish an empty non-terminal (RFC 1035/RFC 2308: a
-    ///     name that exists, just not with any records of its own) from a name that does not
-    ///     exist.
+    ///     This method checks whether any enabled record exists at an owner name, of any type.
     /// </summary>
     /// <param name="name">The exact owner name to check.</param>
     /// <returns>A <see langword="bool" /> indicating whether the name exists in this zone.</returns>
     public bool NameExists(DnsName name) => _recordsByName.ContainsKey(name);
 
     /// <summary>
-    ///     This method checks whether <paramref name="name" /> is an "empty non-terminal" per RFC
-    ///     1035 §3.1 / RFC 2308 §5: a name with no records of its own, but that still exists in
-    ///     the zone's namespace because some other stored name is a descendant of it (for
-    ///     example, <c>b.example.com</c> exists this way if only <c>a.b.example.com</c> has
-    ///     records). Such a name must answer NODATA, not NXDOMAIN, and must not have a wildcard
-    ///     synthesized for it -- a wildcard only ever covers a name that does not exist at all.
+    ///     This method checks whether any stored name is below <paramref name="name" />, which
+    ///     makes a name with no records of its an empty non-terminal (for example
+    ///     <c>b.example.com</c> when only <c>a.b.example.com</c> has records). Such a name answers
+    ///     NODATA, not NXDOMAIN, and no wildcard is synthesized for it. It scans every name in the
+    ///     zone.
     /// </summary>
     /// <param name="name">The exact owner name to check.</param>
     /// <returns>
@@ -160,9 +152,11 @@ public sealed class CachedZone
             );
 
     /// <summary>
-    ///     This method looks up a wildcard record set that would answer for
-    ///     <paramref name="name" />, per RFC 1035 §4.3.3: the closest wildcard at or above
-    ///     <paramref name="name" />'s immediate parent, at or below this zone's apex.
+    ///     This method looks for wildcard records that could answer for <paramref name="name" />
+    ///     (RFC 1035 §4.3.3): it tries <c>*.parent</c> for each ancestor from the immediate parent
+    ///     up to the apex and returns the first match. With <paramref name="type" /> set, it
+    ///     returns the first wildcard that has that type. It does not stop at the closest
+    ///     existing ancestor (the RFC 4592 closest encloser).
     /// </summary>
     /// <param name="name">The name being queried for, which itself has no exact match.</param>
     /// <param name="type">

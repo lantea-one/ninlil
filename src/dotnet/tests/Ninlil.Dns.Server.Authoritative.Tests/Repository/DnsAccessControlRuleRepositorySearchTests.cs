@@ -7,12 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsAccessControlRuleRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13i proof that <c>DnsAccessControlRulesController</c>'s
-///     own rule listing no longer materializes every rule into memory before slicing a page out
-///     of it, mirroring <see cref="TsigKeyRepositorySearchTests" />'s own Phase 13h proof for the
-///     same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsAccessControlRuleRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>DnsAccessControlRulesController</c>'s listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class DnsAccessControlRuleRepositorySearchTests : IAsyncLifetime
 {
@@ -23,9 +21,9 @@ public sealed class DnsAccessControlRuleRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five rules with names deliberately out of alphabetical creation
-    ///     order, so a passing ordering assertion can only be explained by a real <c>ORDER BY</c>
-    ///     translated at the database, not by creation/insertion order happening to already match.
+    ///     This method seeds five rules with names out of alphabetical creation
+    ///     order, so a passing ordering assertion can only be explained by an <c>ORDER BY</c>
+    ///     translated at the database, not by creation/insertion order already matching.
     /// </summary>
     private async Task SeedAsync()
     {

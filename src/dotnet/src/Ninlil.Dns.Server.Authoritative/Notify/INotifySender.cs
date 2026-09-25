@@ -5,12 +5,11 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.Notify;
 
 /// <summary>
-///     This interface sends a single RFC 1996 NOTIFY message to a secondary server and waits
-///     for its acknowledgement, retrying on its own terms per <see cref="NotifyOptions" />. This
-///     is a real network client, not something a caller needs a live listening transport to
-///     exercise -- unlike serving queries, initiating a NOTIFY is inherently this server acting
-///     as a client, so it needs nothing beyond an outbound socket, independent of any inbound
-///     transport such as <c>Ninlil.Dns.Protocol.Plain</c>.
+///     This interface sends one RFC 1996 NOTIFY to a secondary and waits for the
+///     acknowledgement, retrying as <see cref="NotifyOptions" /> says. Here the server acts as a
+///     client, so it needs only an outbound socket, not an inbound transport.
+///     <see cref="ZoneNotifyEventSubscriber" /> uses it; the implementation is
+///     <see cref="UdpNotifySender" />.
 /// </summary>
 public interface INotifySender
 {
@@ -22,8 +21,7 @@ public interface INotifySender
     /// <param name="notifyMessage">The NOTIFY message to send, unchanged on every attempt.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     A <see langword="bool" /> indicating whether a matching acknowledgement was received
-    ///     before every attempt was exhausted.
+    ///     Whether a matching acknowledgement arrived before the attempts ran out.
     /// </returns>
     Task<bool> SendAsync(
         IPAddress secondaryAddress,

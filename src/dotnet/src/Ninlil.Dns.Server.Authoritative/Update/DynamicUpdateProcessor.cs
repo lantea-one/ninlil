@@ -7,12 +7,11 @@ using Ninlil.Dns.Server.Authoritative.Cache;
 namespace Ninlil.Dns.Server.Authoritative.Update;
 
 /// <summary>
-///     This class implements the pure logic behind RFC 2136 dynamic update -- prerequisite
-///     checking, update-section validation, and diff computation -- kept separate from
-///     <see cref="DynamicUpdateQueryResolver" /> so it needs nothing beyond plain data to test.
-///     RFC 2136 reuses the ordinary message format under different names for its middle two
-///     sections: what it calls the Prerequisite section is <see cref="DnsMessage.Answers" />, and
-///     what it calls the Update section is <see cref="DnsMessage.AuthorityRecords" />.
+///     This class holds the logic of RFC 2136 dynamic update (prerequisite checks, update
+///     prescan and computing the record diff) apart from <see cref="DynamicUpdateQueryResolver" />,
+///     so it can be tested with plain data. RFC 2136's Prerequisite section is
+///     <see cref="DnsMessage.Answers" /> and its Update section is
+///     <see cref="DnsMessage.AuthorityRecords" />. Names are not checked to lie inside the zone.
 /// </summary>
 public static class DynamicUpdateProcessor
 {
@@ -23,8 +22,8 @@ public static class DynamicUpdateProcessor
     /// <param name="prerequisites">The prerequisite section (the request's Answer section).</param>
     /// <param name="currentRecords">The zone's current records, before any update is applied.</param>
     /// <returns>
-    ///     <see cref="DnsResponseCodeEnum.NoError" /> if every prerequisite is satisfied, or the
-    ///     specific RFC 2136 response code identifying which kind of prerequisite failed first.
+    ///     <see cref="DnsResponseCodeEnum.NoError" /> if every prerequisite holds, otherwise the
+    ///     RFC 2136 response code for the first one that fails.
     /// </returns>
     public static DnsResponseCodeEnum CheckPrerequisites(
         IReadOnlyList<DnsResourceRecord> prerequisites,
@@ -33,9 +32,8 @@ public static class DynamicUpdateProcessor
     {
         List<DnsResourceRecord> currentWire = ToWireRecords(currentRecords);
 
-        // Value-dependent prerequisites sharing the same owner name and type are grouped: per
-        // RFC 2136 §2.4.2, the zone's RRset for that name and type must contain *exactly* the
-        // union of the listed records, not merely include them among others.
+        // Value-dependent prerequisites are grouped by name and type: RFC 2136 §2.4.2 requires
+        // the zone's RRset to equal the listed records, not just contain them.
         Dictionary<
             (DnsName Name, DnsResourceRecordTypeEnum Type),
             List<DnsResourceRecord>
@@ -117,11 +115,11 @@ public static class DynamicUpdateProcessor
     }
 
     /// <summary>
-    ///     This method checks that every update RR is shaped like one of RFC 2136 §2.5's four
-    ///     recognized operations, per the prescan §3.3 describes.
+    ///     This method checks that each update RR has the shape of one of the four RFC 2136 §2.5
+    ///     operations (the §3.4.1 prescan).
     /// </summary>
     /// <param name="updates">The update section (the request's Authority section).</param>
-    /// <param name="zoneClass">The zone's own class -- in practice, always <see cref="DnsClassEnum.Internet" />.</param>
+    /// <param name="zoneClass">The zone's class, in practice <see cref="DnsClassEnum.Internet" />.</param>
     public static bool IsUpdateSectionValid(
         IReadOnlyList<DnsResourceRecord> updates,
         DnsClassEnum zoneClass
@@ -134,7 +132,7 @@ public static class DynamicUpdateProcessor
 
             if (update.Class == DnsClassEnum.Any)
             {
-                // Delete an RRset, or every RRset at a name -- both carry no RDATA and no TTL.
+                // Delete an RRset, or every RRset at a name: no RDATA and TTL 0.
                 if (update.TimeToLive != 0 || update.Data.Length != 0)
                     return false;
 
@@ -143,7 +141,7 @@ public static class DynamicUpdateProcessor
 
             if (update.Class == DnsClassEnum.None)
             {
-                // Delete one specific RR -- no TTL, but it does carry the RDATA to match.
+                // Delete one RR: TTL 0, with the RDATA to match.
                 if (update.TimeToLive != 0)
                     return false;
 
@@ -157,14 +155,14 @@ public static class DynamicUpdateProcessor
     }
 
     /// <summary>
-    ///     This method applies an update section, in order, against a working copy of the zone's
-    ///     current records, then reports the net difference against the original -- the actual
-    ///     write <see cref="Journal.IZoneUpdateService.ApplyChangesAsync" /> should perform.
+    ///     This method applies the update section in order to a working copy of the zone's records
+    ///     and returns the net difference, which the caller passes to
+    ///     <see cref="Journal.IZoneUpdateService.ApplyChangesAsync" />.
     /// </summary>
     /// <param name="updates">The update section (the request's Authority section).</param>
     /// <param name="currentRecords">The zone's current records, before any update is applied.</param>
     /// <param name="zoneId">The identifier of the zone being updated.</param>
-    /// <param name="zoneApexName">The zone's own apex name.</param>
+    /// <param name="zoneApexName">The zone's apex name.</param>
     /// <returns>
     ///     The records to add and remove to realize the update section's net effect.
     /// </returns>
@@ -186,18 +184,15 @@ public static class DynamicUpdateProcessor
 
         foreach (DnsResourceRecord update in updates)
         {
-            // SOA is managed exclusively by IZoneUpdateService itself, which advances the
-            // existing SOA row's own serial as part of applying whatever this diff computes;
-            // letting an update add or remove SOA rows directly here would conflict with that
-            // and could leave the zone with zero or two SOA records. RFC 2136 clients essentially
-            // never try to touch the SOA directly in practice; this is a deliberate no-op for it.
+            // SOA updates are ignored. IZoneUpdateService advances the SOA serial itself, and
+            // adding or removing SOA rows here could leave zero or two SOA records.
             if (update.Type == DnsResourceRecordTypeEnum.Soa)
                 continue;
 
             if (update.Type == DnsResourceRecordTypeEnum.Any && update.Class == DnsClassEnum.Any)
             {
-                // Delete every RRset at this name -- except SOA/NS at the zone's own apex, per
-                // RFC 2136 §2.5.3.
+                // Delete every RRset at this name, except SOA and NS at the apex (RFC 2136
+                // §3.4.2.3).
                 bool isApex = update.Name == zoneApexName;
 
                 working.RemoveAll(pair =>
@@ -225,9 +220,8 @@ public static class DynamicUpdateProcessor
             }
             else
             {
-                // Add to an RRset. A CNAME is exclusive -- RFC 2136 §3.4.2.2 -- so adding a
-                // second one at a name that already has one is a no-op, the same as adding an
-                // exact duplicate of an already-present record of any other type.
+                // Add to an RRset. A second CNAME at a name is ignored, as is an exact duplicate.
+                // A CNAME next to other data is not rejected.
                 bool cnameAlreadyExists =
                     update.Type == DnsResourceRecordTypeEnum.Cname
                     && working.Any(pair =>
@@ -263,21 +257,17 @@ public static class DynamicUpdateProcessor
     }
 
     /// <summary>
-    ///     This method compares two records the same way RFC 2136's specific-value matching
-    ///     does: by owner name, type, and RDATA -- deliberately ignoring both TTL and CLASS.
-    ///     TTL is ignored because a delete RR is always sent with TTL 0 regardless of the stored
-    ///     record's real TTL. CLASS is ignored for the same reason: RFC 2136 repurposes it as an
-    ///     operation marker (<see cref="DnsClassEnum.Any" />/<see cref="DnsClassEnum.None" />) on
-    ///     a delete or value-independent prerequisite RR, not as a description of the actual
-    ///     record's class (which, for every record this project stores, is always
-    ///     <see cref="DnsClassEnum.Internet" /> regardless). Comparing CLASS directly would mean
-    ///     a delete-by-value RR (CLASS NONE) could never match anything at all.
+    ///     This method compares two records as RFC 2136 value matching does: by owner name, type
+    ///     and RDATA, ignoring TTL and CLASS. A delete RR has TTL 0, and RFC 2136 uses CLASS as an
+    ///     operation marker (<see cref="DnsClassEnum.Any" />, <see cref="DnsClassEnum.None" />),
+    ///     while stored records are always <see cref="DnsClassEnum.Internet" />; comparing CLASS
+    ///     would stop a delete by value (CLASS NONE) from matching anything.
     /// </summary>
     private static bool RecordContentEquals(DnsResourceRecord a, DnsResourceRecord b) =>
         a.Name == b.Name && a.Type == b.Type && a.Data.AsSpan().SequenceEqual(b.Data);
 
     /// <summary>
-    ///     This method converts a set of stored records into wire form for comparison purposes.
+    ///     This method converts stored records to wire form for comparison.
     /// </summary>
     private static List<DnsResourceRecord> ToWireRecords(IReadOnlyList<RecordEntity> records) =>
         [

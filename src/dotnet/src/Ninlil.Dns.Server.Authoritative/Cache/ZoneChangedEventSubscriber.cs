@@ -4,10 +4,9 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Cache;
 
 /// <summary>
-///     This class keeps <see cref="AuthoritativeZoneCache" /> in sync with the database: whenever
-///     something -- the REST API, a pulled zone transfer, dynamic update -- publishes a
-///     <see cref="DnsZoneChangedEvent" />, this reloads just that one zone rather than the whole
-///     cache.
+///     This class keeps <see cref="AuthoritativeZoneCache" /> in step with the database: on each
+///     <see cref="DnsZoneChangedEvent" /> (from the REST API, a zone transfer, a dynamic update
+///     and so on) it reloads that one zone.
 /// </summary>
 /// <param name="zoneCache">The cache to keep in sync.</param>
 public class ZoneChangedEventSubscriber(AuthoritativeZoneCache zoneCache)

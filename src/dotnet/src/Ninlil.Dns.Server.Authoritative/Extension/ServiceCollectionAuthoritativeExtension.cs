@@ -21,24 +21,18 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Server.Authoritative.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's authoritative DNS engine: the in-memory zone cache, its
-///     <see cref="IDnsQueryResolver" /> implementation, and the subscriber that keeps the cache
-///     in sync with the database.
+///     This class provides the <see cref="IServiceCollection" /> extension that registers the
+///     authoritative engine: the zone and signed-zone caches, the NOTIFY, dynamic update and
+///     authoritative resolvers, zone transfer (serving and pulling), secondary refresh, DNSSEC
+///     signing and rollover, cloud sync, PTR sync, forwarder zone content and catalog zones.
 /// </summary>
 public static class ServiceCollectionAuthoritativeExtension
 {
     /// <summary>
-    ///     This method registers everything <c>Ninlil.Dns.Server.Authoritative</c> needs. The
-    ///     composition root is still expected to have already called
-    ///     <c>Ninlil.Dns.Server.Core.Extension.ServiceCollectionServerCoreExtension.AddNinlilDnsServerCore</c>
-    ///     -- and to register this resolver before any recursive resolver, so a hosted zone is
-    ///     always answered authoritatively even when recursion is also enabled -- along with
-    ///     whichever <see cref="Ninlil.Dns.Data.Abstractions.Repository.IZoneRepository" /> and
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IRecordRepository" /> implementation
-    ///     the application is configured to use, plus
-    ///     <c>Ninlil.Dns.Server.Tsig.Extension.ServiceCollectionTsigExtension.AddNinlilDnsServerTsig</c>,
-    ///     since <see cref="IZoneTransferService" /> depends on it.
+    ///     This method registers everything <c>Ninlil.Dns.Server.Authoritative</c> needs. The caller
+    ///     must also call <c>AddNinlilDnsServerCore</c>, <c>AddNinlilDnsServerTsig</c> and
+    ///     <c>AddNinlilDnsServerDnssec</c>, register the repositories, and call this before registering
+    ///     the forwarding and recursive resolvers, so hosted zones are answered authoritatively first.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read authoritative settings from.</param>
@@ -72,18 +66,15 @@ public static class ServiceCollectionAuthoritativeExtension
             configuration.GetSection(CatalogSyncOptions.SectionName)
         );
 
-        // AuthoritativeZoneCache is registered once, as a singleton, under both its concrete type
-        // (which ZoneChangedEventSubscriber and AuthoritativeQueryResolver depend on directly)
-        // and IHostedService (so the host starts it, triggering its initial full load).
+        // One AuthoritativeZoneCache instance, used directly by the subscriber and resolver and
+        // started by the host as an IHostedService (which loads every zone).
         instance.AddSingleton<AuthoritativeZoneCache>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<AuthoritativeZoneCache>()
         );
 
-        // SecondaryZoneRefreshService is likewise registered once, as a singleton, under its
-        // concrete type, IHostedService (so the host runs its poll loop), and
-        // ISecondaryZoneRefreshTrigger (so NotifyQueryResolver can ask it to check a zone right
-        // away, without depending on the whole background-service machinery itself).
+        // One SecondaryZoneRefreshService instance: the concrete type, the hosted service that runs
+        // the poll loop, and ISecondaryZoneRefreshTrigger for NotifyQueryResolver.
         instance.AddSingleton<SecondaryZoneRefreshService>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<SecondaryZoneRefreshService>()
@@ -92,15 +83,12 @@ public static class ServiceCollectionAuthoritativeExtension
             provider.GetRequiredService<SecondaryZoneRefreshService>()
         );
 
-        // NotifyQueryResolver is registered before AuthoritativeQueryResolver purely to signal
-        // intent -- a NOTIFY's Opcode never matches an ordinary query, so the two can never
-        // actually compete for the same request regardless of registration order.
+        // The resolvers run in this order. NOTIFY and UPDATE messages have their own opcodes, so
+        // their resolvers never take ordinary queries.
         instance.AddSingleton<IDnsQueryResolver, NotifyQueryResolver>();
 
-        // DynamicUpdateQueryResolver is registered singleton too, on the same terms as
-        // NotifyQueryResolver above: its own scoped dependencies (TSIG, repositories,
-        // IZoneUpdateService) are reached through IServiceScopeFactory per call, not through the
-        // constructor, so nothing scoped ever gets captured by this singleton dispatcher chain.
+        // The resolvers are singletons; DynamicUpdateQueryResolver reaches its scoped dependencies
+        // (TSIG, repositories, IZoneUpdateService) through IServiceScopeFactory per call.
         instance.AddSingleton<IDnsQueryResolver, DynamicUpdateQueryResolver>();
         instance.AddSingleton<IDnsQueryResolver, AuthoritativeQueryResolver>();
         instance.AddScoped<
@@ -108,86 +96,63 @@ public static class ServiceCollectionAuthoritativeExtension
             ZoneChangedEventSubscriber
         >();
 
-        // Scoped, rather than singleton, since it depends on ITsigService, which is itself
-        // scoped (it depends on the scoped ITsigKeyRepository).
+        // Scoped, because ITsigService is scoped (through ITsigKeyRepository).
         instance.AddScoped<IZoneTransferService, ZoneTransferService>();
 
-        // Three implementations, one per ZoneTransferTransportEnum value, all registered against
-        // the same interface -- SecondaryZoneRefreshService resolves the full IEnumerable<T> of
-        // them and selects the one whose own Transport matches a zone's own
-        // ZoneEntity.TransferTransport, mirroring ForwarderQueryResolver's/
-        // ForwarderHealthTracker's own _clientsByProtocol dictionary shape for upstream forwarder
-        // clients.
+        // One IZoneTransferClient per ZoneTransferTransportEnum value; SecondaryZoneRefreshService
+        // picks the one matching ZoneEntity.TransferTransport.
         instance.AddScoped<IZoneTransferClient, TcpZoneTransferClient>();
         instance.AddScoped<IZoneTransferClient, TlsZoneTransferClient>();
 
-        // QuicZoneTransferClient carries its own SupportedOSPlatform("linux"/"macos"/"windows")
-        // scope (it uses System.Net.Quic.QuicConnection/QuicStream directly) -- exactly this
-        // project's own three RuntimeIdentifiers families (Directory.Build.props), so registering
-        // it here is safe on every platform this solution actually builds or ships for. Suppressed
-        // locally, at this one real call site, rather than attributing the whole of this method
-        // (which registers plenty of platform-agnostic pieces too) or every caller transitively.
+        // QuicZoneTransferClient is marked for Linux, macOS and Windows (System.Net.Quic), the only
+        // runtime families this solution builds for (Directory.Build.props), so the platform warning
+        // is suppressed here rather than on the whole method.
 #pragma warning disable CA1416
         instance.AddScoped<IZoneTransferClient, QuicZoneTransferClient>();
 #pragma warning restore CA1416
 
-        // Singleton -- every one of ZoneUpdateService's own per-zone locks must be shared across
-        // every DI scope in the whole process (every HTTP request, every background dynamic-
-        // update/transfer/cloud-sync/CAA-PTR task), or two concurrent changes to the same zone
-        // from two different scopes would each get their own, mutually-oblivious lock instance
-        // and never actually serialize against each other at all.
+        // Singleton: every scope (requests and background tasks) must share the same per-zone locks,
+        // or changes from different scopes would not be serialized.
         instance.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
 
-        // Scoped for the same reason: it depends on the scoped repositories and unit of work
-        // the persistence layer registers.
+        // Scoped, because it uses the scoped repositories and unit of work.
         instance.AddScoped<IZoneUpdateService, ZoneUpdateService>();
 
-        // INotifySender has no scoped dependencies of its own, but is registered scoped anyway
-        // to stay consistent with everything else here.
+        // INotifySender has no scoped dependencies but is scoped like the rest.
         instance.AddScoped<INotifySender, UdpNotifySender>();
 
-        // A second subscriber for the same event type as ZoneChangedEventSubscriber above --
-        // IDnsServerEventSubscriber<DnsZoneChangedEvent> is resolved as a collection by
-        // DnsServerEventDispatcher, so both run independently for every zone change.
+        // DnsZoneChangedEvent has several subscribers; the dispatcher calls them in registration
+        // order.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             ZoneNotifyEventSubscriber
         >();
 
-        // Scoped for the same reason as IZoneTransferService/IZoneUpdateService above: it
-        // depends on the scoped repositories and IDnssecKeyManagementService.
+        // Scoped, because it uses the scoped repositories and IDnssecKeyManagementService.
         instance.AddScoped<IZoneSigningService, ZoneSigningService>();
 
-        // SignedZoneCache follows the exact same triple-registration pattern as
-        // AuthoritativeZoneCache above: a singleton, reached directly by
-        // SignedZoneChangedEventSubscriber and DnssecResigningBackgroundService, and also
-        // registered as IHostedService so the host starts it, triggering its initial full sign.
+        // One SignedZoneCache instance, used directly by its subscriber and the DNSSEC background
+        // services, and started by the host (which signs or loads every signed zone).
         instance.AddSingleton<SignedZoneCache>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<SignedZoneCache>()
         );
 
-        // A third subscriber for DnsZoneChangedEvent, alongside the cache-reload and NOTIFY ones
-        // above -- re-signing a changed zone is its own independent concern from either of those.
+        // Re-sign a zone when it changes.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             SignedZoneChangedEventSubscriber
         >();
 
-        // The proactive re-signing loop is a plain BackgroundService with no other interface any
-        // other component needs to reach it through, unlike SecondaryZoneRefreshService's
-        // trigger interface -- nothing ever needs to ask it to check a zone immediately.
+        // Re-signs zones before their signatures expire.
         instance.AddHostedService<DnssecResigningBackgroundService>();
 
-        // The RFC 6781 key-rollover walker is likewise a plain BackgroundService -- a rollover is
-        // always started explicitly, through IDnssecKeyManagementService.StartRolloverAsync, never
-        // by this service itself, so nothing needs a trigger interface to reach it through either.
+        // Advances RFC 6781 key rollovers; an operator starts them through
+        // IDnssecKeyManagementService.StartRolloverAsync.
         instance.AddHostedService<DnssecKeyRolloverBackgroundService>();
 
-        // CloudCredentialProtector is a singleton -- IDataProtectionProvider itself is one, and
-        // this wraps it with no other state. CloudDnsZoneSyncService reaches every scoped
-        // repository it needs through IServiceScopeFactory per zone, per tick, the same pattern
-        // SecondaryZoneRefreshService and TcpDnsListener's AXFR handling already use.
+        // CloudCredentialProtector only wraps the singleton IDataProtectionProvider. The HTTP
+        // providers get their base addresses here. CloudDnsZoneSyncService creates a scope per zone.
         instance.AddSingleton<CloudCredentialProtector>();
         instance.AddHttpClient<ICloudDnsProvider, CloudflareDnsProvider>(client =>
             client.BaseAddress = new Uri(CloudflareDnsProvider.DefaultBaseAddress)
@@ -198,65 +163,44 @@ public static class ServiceCollectionAuthoritativeExtension
         instance.AddSingleton<ICloudDnsProvider, Route53DnsProvider>();
         instance.AddHostedService<CloudDnsZoneSyncService>();
 
-        // PtrSyncService lives directly in this project -- unlike
-        // CaaRecordReconciliationService, PtrSyncOptions has no cross-project placement
-        // constraint forcing it elsewhere. Scoped for the same reason as IZoneUpdateService
-        // above: it depends on the scoped repositories and unit of work the persistence layer
-        // registers.
+        // Scoped, because it uses the scoped repositories and unit of work.
         instance.AddScoped<PtrSyncService>();
 
-        // A fourth subscriber for DnsZoneChangedEvent, alongside cache-reload, NOTIFY, and
-        // DNSSEC re-sign above -- syncing a changed zone's implied PTR records is its own
-        // independent concern from any of those.
+        // Sync PTR records when a zone changes.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             PtrSyncEventSubscriber
         >();
 
-        // ForwarderZoneContentSyncService reconciles a ZoneTypeEnum.Forwarder zone's own
-        // synthetic apex SOA/TXT content -- Phase 16c's own real, versioned wire content for what
-        // used to be a Forwarder zone's own record-free metadata shell. Scoped for the same
-        // reason as IZoneUpdateService/PtrSyncService above.
+        // Keeps a Forwarder zone's synthetic apex SOA and TXT records in step with its
+        // ForwarderAddresses. Scoped, like the other services using repositories.
         instance.AddScoped<ForwarderZoneContentSyncService>();
 
-        // A sixth subscriber for DnsZoneChangedEvent, alongside cache-reload, NOTIFY, DNSSEC
-        // re-sign, and PTR sync above -- syncing a Forwarder zone's own apex content is its own
-        // independent concern from any of those.
+        // Sync a Forwarder zone's apex records when the zone changes.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             ForwarderZoneContentSyncEventSubscriber
         >();
 
-        // ClusterPeerAddressResolver is scoped -- it depends on the scoped
-        // IClusterNodeRepository -- and is shared by CatalogZoneMembershipService,
-        // CatalogZoneAutoProvisioningService, and CatalogClusterAddressSyncService (which reaches
-        // it through its own per-round scope, the same way every other periodic hosted service
-        // here reaches its own scoped dependencies).
+        // Scoped, because IClusterNodeRepository is. Used by the catalog membership,
+        // auto-provisioning and address sync services (the last through its per-round scope).
         instance.AddScoped<ClusterPeerAddressResolver>();
 
-        // CatalogZoneMembershipService is the RFC 9432 producer-side surface
-        // ZonesController's new catalog-membership actions call directly; scoped for the same
-        // reason as IZoneUpdateService/PtrSyncService above.
+        // The RFC 9432 producer, called by ZonesController's catalog membership actions.
         instance.AddScoped<CatalogZoneMembershipService>();
 
-        // CatalogZoneAutoProvisioningService is the consumer-side counterpart, reached only
-        // through its own event subscriber below -- never directly by a controller.
+        // The RFC 9432 consumer, used only through its event subscriber.
         instance.AddScoped<CatalogZoneAutoProvisioningService>();
 
-        // A fifth subscriber for DnsZoneChangedEvent, alongside cache-reload, NOTIFY, DNSSEC
-        // re-sign, and PTR sync above -- auto-provisioning a SecondaryCatalog zone's own member
-        // zones is its own independent concern from any of those.
+        // Provision catalog member zones when a SecondaryCatalog zone changes.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             CatalogZoneAutoProvisioningEventSubscriber
         >();
 
-        // The periodic address-reconciliation loop is a plain BackgroundService with no other
-        // interface any other component needs to reach it through, the same shape
-        // DnssecResigningBackgroundService already follows.
+        // Keeps catalog zones' address lists in step with the cluster peers.
         instance.AddHostedService<CatalogClusterAddressSyncService>();
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

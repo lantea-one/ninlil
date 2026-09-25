@@ -21,18 +21,10 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class covers <see cref="ZoneSigningService" />'s own private
-///     <c>BuildNsec3Chain</c> method and its RFC 5155 §6/§7.1 Opt-Out handling. Before this fix,
-///     every generated <see cref="Nsec3RecordData" />'s own <see cref="Nsec3RecordData.IsOptOut" />
-///     flag was hardcoded <see langword="false" />, regardless of whether the zone actually
-///     contained an insecure (non-DS) delegation -- this proves the real fix both ways: a zone
-///     with a genuine insecure delegation gets the flag set on every NSEC3 record it generates
-///     (RFC 5155 §7.1 step 2's own "if Opt-Out is being used, set the Opt-Out bit to one" applies
-///     zone-wide, not per-record), and a zone with none at all keeps every flag clear. Both cases
-///     are also proven from the *validator* side, via the real
-///     <see cref="DenialOfExistenceValidator.VerifyOptOut" /> this project's own recursive resolver
-///     actually calls -- confirming the fix is not merely "the bit looks right," but that a real
-///     validator genuinely accepts it as proof an unproven insecure delegation may exist.
+///     This class tests the NSEC3 Opt-Out flag set by <see cref="ZoneSigningService" />
+///     (<c>BuildNsec3Chain</c>, RFC 5155 §7.1): a zone with an insecure delegation has the flag on
+///     every NSEC3 record, and a zone without one has it clear. Both cases are also checked with
+///     <see cref="DenialOfExistenceValidator.VerifyOptOut" />, which the recursive resolver uses.
 /// </summary>
 public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
 {
@@ -115,8 +107,8 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
             }
         );
 
-        // An ordinary, fully-signed record -- present in both this test's zones, so a genuinely
-        // insecure delegation elsewhere is the only real variable between them.
+        // An ordinary signed record in both zones, so the insecure delegation is the only
+        // difference between them.
         await recordRepository.AddAsync(
             new RecordEntity
             {
@@ -133,9 +125,8 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
             }
         );
 
-        // A real insecure delegation: an NS record at a non-apex name with no locally hosted,
-        // DNSSEC-signed child zone behind it, so ComputeDelegationDsRecordsAsync generates no DS
-        // for it at all -- exactly the condition this fix keys off.
+        // An insecure delegation: NS at a non-apex name with no local signed child, so
+        // ComputeDelegationDsRecordsAsync generates no DS for it, which turns on Opt-Out.
         await recordRepository.AddAsync(
             new RecordEntity
             {
@@ -201,23 +192,16 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
                 ),
         ];
 
-        // A real NSEC3 chain: the apex, "www", and the insecure delegation itself all need their
-        // own record.
+        // The chain covers at least the apex, "www" and the insecure delegation.
         Assert.True(nsec3Records.Count >= 3);
 
-        // Before the fix, every one of these was hardcoded false -- now every single one must be
-        // set, since this zone genuinely has an insecure delegation and RFC 5155 §7.1 step 2's
-        // own construction algorithm sets the bit zone-wide once Opt-Out applies at all.
+        // The zone has an insecure delegation, so RFC 5155 §7.1 sets Opt-Out on every record.
         Assert.All(nsec3Records, entry => Assert.True(entry.Data.IsOptOut));
 
-        // The real validator side, case 1: this zone's own signing pass never actually omits an
-        // insecure delegation's own NSEC3 record (RFC 5155 §7.1 step 2 makes that omission
-        // optional, "MAY be excluded" -- this project always includes it), so the delegation's own
-        // insecurity is genuinely proven the way RFC 5155 §6's own third paragraph describes for
-        // exactly this case: "the delegation is proven insecure by the lack of a DS bit in the
-        // type map" of its own, explicitly present, NSEC3 record -- VerifyNoDataNsec3, the same
-        // method DnssecValidator.VerifyAbsenceOfDs calls first, before ever falling back to
-        // VerifyOptOut.
+        // Validator, case 1: the signer keeps the insecure delegation's NSEC3 record (RFC 5155 §7.1
+        // allows omitting it), so the delegation is proven insecure by the missing DS bit in that
+        // record (RFC 5155 §6), through VerifyNoDataNsec3, which DnssecValidator.VerifyAbsenceOfDs
+        // tries before VerifyOptOut.
         Assert.True(
             DenialOfExistenceValidator.VerifyNoDataNsec3(
                 DnsName.Parse(InsecureDelegationName),
@@ -226,16 +210,10 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
             )
         );
 
-        // The real validator side, case 2: proves the Opt-Out flag this fix now sets is not just
-        // present but genuinely interoperable -- if this zone's signing pass *had* chosen to omit
-        // the delegation's own explicit record (RFC 5155 §6's other, more common real-world case,
-        // this project's own genuine signing choice not to do so notwithstanding), the very same
-        // NSEC3 chain this pass actually produced would still let a real validator prove the
-        // delegation may be insecure, purely from its neighboring Opt-Out record's own covering
-        // range. Simulated here by actually removing the delegation's own record and rewiring its
-        // predecessor's own NextHashedOwnerName to skip directly to its successor -- exactly what
-        // a signing pass that chose to omit it would itself have produced -- rather than just
-        // deleting the entry and leaving a dangling pointer, which would prove nothing real.
+        // Validator, case 2: had the signer omitted the delegation's record (the other case in RFC
+        // 5155 §6), the Opt-Out flag on the covering record must still let a validator accept the
+        // delegation as possibly insecure. Simulate the omission by removing the record and pointing
+        // its predecessor's next hash at its successor, as a signer omitting it would have done.
         int delegationIndex = nsec3Records.FindIndex(entry =>
             Nsec3Hasher
                 .ExtractHashFromOwnerName(entry.Owner)
@@ -307,8 +285,7 @@ public sealed class ZoneSigningServiceNsec3OptOutTests : IAsyncLifetime
     [Fact]
     public async Task AZoneWithNoInsecureDelegationLeavesOptOutClearOnEveryNsec3Record()
     {
-        // A second zone, this time with no delegation at all -- the fix's own "else" branch: no
-        // insecure delegation exists, so Opt-Out never applies and every flag stays clear.
+        // A zone with no delegation: Opt-Out does not apply and every flag stays clear.
         await using AsyncServiceScope seedScope = _host.Services.CreateAsyncScope();
         IZoneRepository zoneRepository =
             seedScope.ServiceProvider.GetRequiredService<IZoneRepository>();

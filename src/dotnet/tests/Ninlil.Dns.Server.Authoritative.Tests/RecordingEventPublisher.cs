@@ -4,11 +4,8 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Tests;
 
 /// <summary>
-///     This class captures every event published to it, in order, instead of actually
-///     dispatching them anywhere -- the same small fake
-///     <c>Ninlil.Dns.Server.Recursive.Tests.Fakes.RecordingEventPublisher</c> already
-///     establishes for a different test project, reused here rather than shared across assemblies
-///     since it is a trivial, self-contained type.
+///     This class records every event published to it, in order, instead of dispatching it, so a
+///     test can assert on what was published. The same small fake exists in other test projects.
 /// </summary>
 public sealed class RecordingEventPublisher : IDnsServerEventPublisher
 {

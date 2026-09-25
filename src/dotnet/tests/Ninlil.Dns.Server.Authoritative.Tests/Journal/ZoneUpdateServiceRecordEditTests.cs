@@ -15,13 +15,10 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Journal;
 
 /// <summary>
-///     This class covers <see cref="IZoneUpdateService.ApplyRecordEditAsync" /> -- the path
-///     the record PUT/PATCH REST endpoints edit a record's content through. Unlike
-///     <see cref="IZoneUpdateService.ApplyChangesAsync" />'s own remove-then-add shape, this keeps
-///     a record's <see cref="EntityBase.Id" /> stable across an edit while still journaling an
-///     accurate before/after snapshot -- both properties this test asserts directly, since a
-///     regression in either would be invisible to a build or a superficial "it didn't throw"
-///     check.
+///     This class tests <see cref="IZoneUpdateService.ApplyRecordEditAsync" />, used by the record
+///     PUT and PATCH endpoints, against the EF Core repositories on a temporary SQLite database:
+///     the record keeps its <see cref="EntityBase.Id" />, the journal records the before and after
+///     versions, and an edit of the SOA itself is kept.
 /// </summary>
 public sealed class ZoneUpdateServiceRecordEditTests : IAsyncLifetime
 {
@@ -116,9 +113,9 @@ public sealed class ZoneUpdateServiceRecordEditTests : IAsyncLifetime
         Assert.Equal(100L, entry.OldSerial);
         Assert.Equal(101L, entry.NewSerial);
 
-        // The journal's own before/after snapshot must reflect the record's real content change
+        // The journal's before/after snapshot must reflect the record's real content change
         // -- not an empty diff with only the serial bump to show for it, which would leave
-        // ZoneTransferService's own IXFR responder unable to serve an accurate incremental
+        // ZoneTransferService's IXFR responder unable to serve an accurate incremental
         // transfer across this exact change.
         Assert.Contains("192.0.2.1", entry.RemovedRecordsJson);
         Assert.Contains("192.0.2.2", entry.AddedRecordsJson);
@@ -140,16 +137,12 @@ public sealed class ZoneUpdateServiceRecordEditTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test covers the real stale-copy race EF Core's identity map allows across scopes, applied
-    ///     to <see cref="IZoneUpdateService.ApplyRecordEditAsync" /> editing a zone's own SOA
-    ///     record directly (the exact path <c>RecordsController.Replace</c>/<c>Patch</c> already
-    ///     document as the supported way to edit an existing SOA record): before this fix, the
-    ///     edit's own field change was silently discarded -- FinalizeChangeAsync recomputed the
-    ///     persisted content from a separately loaded, edit-blind copy of the same row -- and the
-    ///     SOA record itself was incorrectly journaled as ordinary added/removed diff content
-    ///     (which would have shown up as an extra pair of SOA records inside a later IXFR's own
-    ///     difference sequence, where a validator expects exactly the two bookends and nothing
-    ///     more).
+    ///     This test edits the zone's SOA record itself through
+    ///     <see cref="IZoneUpdateService.ApplyRecordEditAsync" />, which
+    ///     <c>RecordsController.Replace</c> and <c>Patch</c> support. The edit must be saved even though
+    ///     the SOA row is loaded twice (see ZoneUpdateService), and the SOA must not be journaled as
+    ///     added/removed content, which would put extra SOA records inside an IXFR difference
+    ///     sequence.
     /// </summary>
     [Fact]
     public async Task ApplyRecordEditAsync_EditingTheSoaRecordItselfPersistsTheEditAndJournalsNoContent()

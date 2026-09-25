@@ -22,21 +22,14 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class runs a real, live, wall-clock RFC 6781 §4.1.1.1 Pre-Publish Zone-Signing-Key
-///     rollover end to end -- <see cref="DnssecKeyRolloverBackgroundService" />'s own real
-///     scheduled loop, ticking against a real host and a real EF Core SQLite database, driven by
-///     genuinely compressed timers (a couple of real seconds, not the days/weeks a real-world
-///     rollover would actually take) rather than a mocked clock. At every single point across the
-///     whole rollover, the zone's own currently-live signed answer for an ordinary A record is
-///     re-verified, cryptographically, against whatever DNSKEY RRset is live at that exact moment
-///     -- via <see cref="RrsetSignatureVerifier.TryVerify" />, the same primitive
-///     <see cref="Ninlil.Dns.Server.Recursive.Validation.DnssecValidator" /> itself calls -- proving
-///     this server never actually serves a signature a real validator would reject, at any instant
-///     during the transition. The specific pre-publish overlap this scheme exists to guarantee is
-///     also proven directly: a signature captured from *before* the new key was even generated
-///     keeps verifying against every later DNSKEY RRset snapshot for as long as the old key
-///     remains published, and only stops once it is genuinely, finally withdrawn -- the exact
-///     boundary RFC 6781 itself draws.
+///     This class runs an RFC 6781 §4.1.1.1 Pre-Publish ZSK rollover end to end with the real
+///     <see cref="DnssecKeyRolloverBackgroundService" /> loop on a host with a temporary SQLite
+///     database, using timers shortened to seconds instead of a fake clock. At each step it
+///     verifies the signed answer for an A record against the DNSKEY RRset live at that moment with
+///     <see cref="RrsetSignatureVerifier.TryVerify" />, which
+///     <see cref="Ninlil.Dns.Server.Recursive.Validation.DnssecValidator" /> also uses. It also checks
+///     that a signature made before the rollover keeps verifying while the old key stays
+///     published, and stops only once the key is removed.
 /// </summary>
 public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
 {
@@ -44,11 +37,11 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
     private const string RecordName = $"www.{ZoneName}";
 
     /// <summary>
-    ///     Every timed wait this test's own zone drives (the DNSKEY RRset TTL/max zone TTL via the
+    ///     Every timed wait this test's zone drives (the DNSKEY RRset TTL/max zone TTL via the
     ///     SOA/A record TTLs below, and <see cref="DnssecKeyRolloverOptions.PropagationDelay" />)
-    ///     is measured in real seconds, deliberately short enough for a real rollover's own two
+    ///     is measured in real seconds, short enough for a real rollover's two
     ///     wait windows to complete inside an ordinary test timeout, while still being long enough
-    ///     to genuinely separate "before," "during," and "after" in wall-clock time rather than
+    ///     to separate "before," "during," and "after" in wall-clock time rather than
     ///     collapsing into a single tick.
     /// </summary>
     private static readonly TimeSpan RecordTtl = TimeSpan.FromSeconds(2);
@@ -166,9 +159,9 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
             DnssecAlgorithmEnum.Ed25519
         );
 
-        // Runs SignedZoneCache's and DnssecKeyRolloverBackgroundService's own initial startup --
-        // the rollover background service starts polling immediately, on its own now-compressed
-        // schedule, exactly as it would in a real, running instance of this project.
+        // Runs SignedZoneCache's and DnssecKeyRolloverBackgroundService's initial startup --
+        // the rollover background service starts polling immediately, on its now-compressed
+        // schedule, as it would in a real, running instance of this project.
         await _host.StartAsync();
     }
 
@@ -219,10 +212,10 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
             )
         );
 
-        // A resolver's own cached copy of the pre-rollover answer -- captured once, right before
+        // A resolver's cached copy of the pre-rollover answer -- captured once, right before
         // the rollover starts, and never refreshed for the rest of this test. Pre-Publish's whole
         // purpose is to keep this exact signature verifiable against every later DNSKEY RRset,
-        // right up until this specific key is finally, genuinely withdrawn.
+        // right up until this specific key is finally, withdrawn.
         IReadOnlyList<DnsResourceRecord> signatureCapturedBeforeRollover = initial.GetSignatures(
             DnsName.Parse(RecordName),
             DnsResourceRecordTypeEnum.A
@@ -234,7 +227,7 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
                 startScope.ServiceProvider.GetRequiredService<IDnssecKeyManagementService>();
 
             // The one manual step a real operator (or DnssecKeysController.Roll) performs --
-            // everything after this is DnssecKeyRolloverBackgroundService's own automated walk.
+            // everything after this is DnssecKeyRolloverBackgroundService's automated walk.
             await keyManagement.StartRolloverAsync(_zoneId, _originalZskId);
         }
 
@@ -243,7 +236,7 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
         SignedZoneData afterPublish = signedZoneCache.GetSignedData(_zoneId);
         Assert.Equal(3, afterPublish.DnsKeyRecords.Count); // old ZSK (still signing) + new ZSK (published only) + KSK
 
-        // The newly published key does not sign yet -- the A rrset's own RRSIG set must be
+        // The newly published key does not sign yet -- the A rrset's RRSIG set must be
         // unchanged from before the rollover even started.
         Assert.Equal(
             signatureCapturedBeforeRollover.Count,
@@ -256,10 +249,10 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
         bool cacheWithdrewOldKey = false;
 
         // The real, live, continuously-polled proof: for as long as this rollover is in flight,
-        // the zone's own currently-live answer must verify against whatever DNSKEY RRset is
+        // the zone's currently-live answer must verify against whatever DNSKEY RRset is
         // currently live, at every single point this test happens to look -- and the pre-rollover
-        // signature captured above must keep verifying too, for as long as its own key remains
-        // published (RFC 6781's own "old RRSIGs are still verifiable" guarantee, checked live
+        // signature captured above must keep verifying too, for as long as its key remains
+        // published (RFC 6781's "old RRSIGs are still verifiable" guarantee, checked live
         // rather than assumed). The background service saves the new lifecycle states before it
         // reloads the signed zone, so the database can report the rollover finished a moment
         // before the cache serves it; the loop waits for both.
@@ -332,8 +325,8 @@ public sealed class DnssecKeyRolloverZskPrePublishLiveTests : IAsyncLifetime
         SignedZoneData final = signedZoneCache.GetSignedData(_zoneId);
         Assert.Equal(2, final.DnsKeyRecords.Count); // new ZSK + KSK only, old ZSK fully withdrawn
 
-        // The pre-rollover signature's own key is genuinely gone now -- it correctly stops
-        // verifying, the real, expected end state a resolver's own cache TTL would have already
+        // The pre-rollover signature's key is gone now -- it correctly stops
+        // verifying, the real, expected end state a resolver's cache TTL would have already
         // caught up to in the wild by this point.
         Assert.False(
             RrsetSignatureVerifier.TryVerify(

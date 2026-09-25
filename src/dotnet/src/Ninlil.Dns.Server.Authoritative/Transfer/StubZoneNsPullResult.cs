@@ -5,13 +5,10 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class carries the outcome of asking <see cref="StubZoneNsPuller" /> to learn a
-///     delegation's NS records: either it failed, for a reason a caller can log, or it succeeded
-///     with the NS records (and any accompanying address glue) the primary returned. Deliberately
-///     separate from <see cref="ZoneTransferPullResult" /> -- a <see cref="ZoneTypeEnum.Stub" />
-///     zone has no serial of its own to track and never distinguishes a full transfer from an
-///     incremental one, so that type's own richer shape (already-current/full/incremental) would
-///     not actually fit this simpler exchange.
+///     This class carries the result of <see cref="StubZoneNsPuller" />: a failure with a reason
+///     to log, or the NS records and any A/AAAA glue the primary returned. It is separate from
+///     <see cref="ZoneTransferPullResult" /> because a <see cref="ZoneTypeEnum.Stub" /> zone
+///     tracks no serial and has no full or incremental transfer.
 /// </summary>
 public sealed class StubZoneNsPullResult
 {
@@ -27,15 +24,13 @@ public sealed class StubZoneNsPullResult
     public string FailureReason { get; }
 
     /// <summary>
-    ///     This property contains the NS records the primary returned, plus any A/AAAA glue it
-    ///     also provided for those name servers -- empty when <see cref="Succeeded" /> is
-    ///     <see langword="false" />.
+    ///     This property contains the NS records the primary returned plus any A/AAAA glue, or
+    ///     an empty list on failure.
     /// </summary>
     public IReadOnlyList<DnsResourceRecord> Records { get; }
 
     /// <summary>
-    ///     This constructor is private; construct an instance through <see cref="Failure" /> or
-    ///     <see cref="Success" /> instead.
+    ///     This constructor is private; use <see cref="Failure" /> or <see cref="Success" />.
     /// </summary>
     private StubZoneNsPullResult(
         bool succeeded,

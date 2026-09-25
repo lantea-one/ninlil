@@ -17,15 +17,9 @@ using Ninlil.Dns.Server.Core.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="CloudDnsZoneSyncFailedEvent" />, confirming it actually
-///     fires from <see cref="CloudDnsZoneSyncService" />'s own real
-///     trigger point -- the same per-zone <c>catch</c> block
-///     <see cref="CloudDnsZoneSyncServiceTests" /> already covers for its own, different
-///     assertions, now also publishing an event. Deliberately a small, standalone fixture rather
-///     than an addition to that larger file: only one failing zone is needed here, driven by a
-///     real network failure (a Cloudflare-shaped provider pointed at a closed loopback port, so
-///     <c>ListRecordsAsync</c>'s own HTTP call fails immediately with a real connection-refused
-///     error) rather than the two fake HTTP servers that file's own push/pull scenarios need.
+///     This class checks that <see cref="CloudDnsZoneSyncService" /> publishes
+///     <see cref="CloudDnsZoneSyncFailedEvent" /> when a zone fails to sync. The failure is real: a
+///     Cloudflare-style provider pointed at a closed loopback port, so the HTTP call is refused.
 /// </summary>
 public sealed class CloudDnsZoneSyncFailureEventTests : IAsyncLifetime
 {
@@ -45,7 +39,7 @@ public sealed class CloudDnsZoneSyncFailureEventTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // Overrides AddNinlilDnsServerCore's own real IDnsServerEventPublisher registration --
+        // Overrides AddNinlilDnsServerCore's real IDnsServerEventPublisher registration --
         // this test only cares about capturing what gets published directly.
         _publisher = new RecordingEventPublisher();
         builder.Services.AddSingleton<IDnsServerEventPublisher>(_publisher);
@@ -61,10 +55,10 @@ public sealed class CloudDnsZoneSyncFailureEventTests : IAsyncLifetime
             provider.GetRequiredService<AuthoritativeZoneCache>()
         );
 
-        // A closed loopback port -- CloudflareDnsProvider's own ListRecordsAsync HTTP call fails
+        // A closed loopback port -- CloudflareDnsProvider's ListRecordsAsync HTTP call fails
         // immediately with a real connection-refused error, the same fast/deterministic-failure
         // technique AcmeCertificateRenewalServiceEventTests already establishes for a different
-        // subsystem's own new failure event.
+        // subsystem's new failure event.
         builder.Services.AddSingleton<ICloudDnsProvider>(
             new CloudflareDnsProvider(
                 new HttpClient { BaseAddress = new Uri("http://127.0.0.1:1/") }

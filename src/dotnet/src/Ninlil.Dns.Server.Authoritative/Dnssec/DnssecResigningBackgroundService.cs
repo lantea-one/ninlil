@@ -6,26 +6,18 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class proactively re-signs a zone before its signatures actually expire, even when
-///     nothing about the zone's own data has changed at all -- the other half of the offline
-///     signing design that <see cref="SignedZoneChangedEventSubscriber" /> alone cannot cover, since a
-///     signature's own validity period runs out on the calendar regardless of whether
-///     <c>DnsZoneChangedEvent</c> ever fires again.
+///     This hosted service re-signs each locally signed zone
+///     (<see cref="SignedZoneCache.CachedZoneIds" />) when its signatures are within
+///     <see cref="ZoneSigningOptions.RefreshBeforeExpiration" /> of expiring. Signatures expire
+///     even when a zone never changes, which <see cref="SignedZoneChangedEventSubscriber" /> alone
+///     would not handle. It checks every <see cref="ZoneSigningOptions.PollInterval" />.
 /// </summary>
 /// <param name="signedZoneCache">The cache this service checks and refreshes.</param>
 /// <param name="options">
-///     This service's own polling and refresh-threshold configuration, read fresh
-///     (<see cref="IOptionsMonitor{TOptions}.CurrentValue" />) on every loop iteration rather than
-///     snapshotted once. This service is a singleton hosted service whose <see cref="ExecuteAsync" />
-///     loop already re-reads <c>options.Value</c> on every iteration -- but the plain
-///     <see cref="IOptions{TOptions}" /> that expression read from is itself computed once, lazily,
-///     and cached for the life of the process regardless of how many times <c>.Value</c> is
-///     accessed, so a configuration-file write changing <see cref="ZoneSigningOptions.PollInterval" />/
-///     <see cref="ZoneSigningOptions.RefreshBeforeExpiration" /> would never actually have been
-///     observed by this already-running loop at all, despite superficially looking like it
-///     would be -- the same <see cref="IOptions{TOptions}" />-vs-<see cref="IOptionsMonitor{TOptions}" />
-///     staleness trap several other hot-reloadable options classes in this codebase guard
-///     against the same way.
+///     The poll interval and refresh threshold, read through
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> on every iteration.
+///     <see cref="IOptions{TOptions}.Value" /> would return the startup value forever, however
+///     often it is read.
 /// </param>
 /// <param name="logger">The logger this service records re-signing activity to.</param>
 public class DnssecResigningBackgroundService(
@@ -56,19 +48,13 @@ public class DnssecResigningBackgroundService(
 
                 try
                 {
-                    // ResignForScheduledExpiryAsync -- not the plain ReloadZoneAsync every other
-                    // caller in this project uses -- since this specific call site is the one
-                    // genuine "nothing about this zone's own data changed, only the calendar did"
-                    // trigger: it also bumps the zone's own SOA serial first, so a secondary that
-                    // already believes itself current notices a fresh signature actually exists
-                    // to pull, per this project's own confirmed decision that a re-sign is a real
-                    // content change.
+                    // Not ReloadZoneAsync: nothing changed but the date, so the serial must be
+                    // bumped for secondaries to fetch the new signatures.
                     await signedZoneCache.ResignForScheduledExpiryAsync(zoneId, stoppingToken);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    // A single zone's signing failure (a key that was deleted out from under it,
-                    // for example) must not take down the loop checking every other zone.
+                    // One zone's failure (a deleted key, say) must not stop the loop.
                     logger.LogError(
                         exception,
                         "Failed to proactively re-sign zone '{ZoneId}' before its signatures expired.",
@@ -83,7 +69,7 @@ public class DnssecResigningBackgroundService(
             }
             catch (OperationCanceledException)
             {
-                // Expected on shutdown -- the loop condition above ends the loop cleanly.
+                // Expected on shutdown; the loop condition ends the loop.
             }
         }
     }

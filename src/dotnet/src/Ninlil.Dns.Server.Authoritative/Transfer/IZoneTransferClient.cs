@@ -6,27 +6,18 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This interface is the client-side mirror of <see cref="IZoneTransferService" />: instead
-///     of serving AXFR/IXFR out, it pulls one in from another server's primary copy of a zone.
-///     Like <see cref="Notify.INotifySender" />, this is a real network client that needs nothing
-///     beyond outbound sockets, independent of any inbound transport such as
-///     <c>Ninlil.Dns.Protocol.Plain</c>, since initiating a pull is inherently this server acting
-///     as a client, not a listener.
+///     This interface is the client side of <see cref="IZoneTransferService" />: it pulls a
+///     zone by AXFR or IXFR from a primary. It needs only outbound sockets.
 ///     <para>
-///         Every implementation is registered in DI against this same interface (see
-///         <c>ServiceCollectionAuthoritativeExtension</c>), one per <see cref="Transport" /> value
-///         -- <c>SecondaryZoneRefreshService</c> resolves the full <see cref="IEnumerable{T}" />
-///         of them and selects the one whose <see cref="Transport" /> matches a zone's own
-///         <c>ZoneEntity.TransferTransport</c>, the same "resolve every registered implementation
-///         and pick by an enum key" shape <c>ForwarderQueryResolver</c>'s/
-///         <c>ForwarderHealthTracker</c>'s own <c>_clientsByProtocol</c> dictionaries already
-///         establish for upstream forwarder clients.
+///         There is one implementation per <see cref="Transport" /> (TCP, TLS, QUIC), all
+///         registered under this interface. <c>SecondaryZoneRefreshService</c> picks the one
+///         matching the zone's <c>ZoneEntity.TransferTransport</c>.
 ///     </para>
 /// </summary>
 public interface IZoneTransferClient
 {
     /// <summary>
-    ///     This property contains which wire transport this implementation pulls a transfer over.
+    ///     This property contains the transport this implementation pulls over.
     /// </summary>
     ZoneTransferTransportEnum Transport { get; }
 
@@ -54,14 +45,12 @@ public interface IZoneTransferClient
     /// <param name="primaryAddress">The primary to pull from.</param>
     /// <param name="zoneName">The zone to pull.</param>
     /// <param name="currentSerial">
-    ///     This server's own current serial for the zone, requesting an incremental transfer
-    ///     (IXFR); or <see langword="null" />, when the zone has no local copy at all yet,
-    ///     requesting a full one (AXFR) instead.
+    ///     This server's current serial for the zone, to request IXFR; or <see langword="null" />
+    ///     when there is no local copy yet, to request AXFR.
     /// </param>
     /// <param name="tsigKeyName">
-    ///     The pre-shared key to sign the request with, and to require every response to verify
-    ///     against; or <see langword="null" /> to send the request unsigned and accept an
-    ///     unsigned response.
+    ///     The key to sign the request with and to verify every response against; or
+    ///     <see langword="null" /> to send it unsigned and accept an unsigned response.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The outcome of the pull.</returns>

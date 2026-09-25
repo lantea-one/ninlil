@@ -6,11 +6,10 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Ptr;
 
 /// <summary>
-///     This class covers <see cref="ReverseZoneNameCalculator" /> against known-good vectors --
-///     the IPv4 case against RFC 1035 §3.5's own conventional octet-boundary example, and the
-///     IPv6 case against the well-known <c>2001:db8::/32</c> documentation prefix (RFC 3849),
-///     whose own <c>/64</c> reverse zone name (<c>0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa</c>) is
-///     independently verifiable against any real-world <c>ip6.arpa</c> reference.
+///     This class tests <see cref="ReverseZoneNameCalculator" /> against known values: IPv4 against
+///     the RFC 1035 §3.5 octet-boundary form, RFC 2317 classless names, and IPv6 against the
+///     <c>2001:db8::/32</c> documentation prefix (RFC 3849), whose /64 reverse zone
+///     (<c>0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa</c>) can be checked independently.
 /// </summary>
 public sealed class ReverseZoneNameCalculatorTests
 {
@@ -92,7 +91,7 @@ public sealed class ReverseZoneNameCalculatorTests
 
     /// <summary>
     ///     This test checks the upper half of the same <c>/24</c>, which starts at <c>.128</c>,
-    ///     not <c>.0</c> -- confirming the block's own start octet is actually computed from the
+    ///     not <c>.0</c> -- confirming the block's start octet is computed from the
     ///     address, not hardcoded to zero.
     /// </summary>
     [Fact]
@@ -149,7 +148,7 @@ public sealed class ReverseZoneNameCalculatorTests
             ipv6PrefixBits: 48
         );
 
-        // A /48 zone has 12 nibbles, four fewer labels than the default /64's own 16.
+        // A /48 zone has 12 nibbles, four fewer labels than the default /64's 16.
         Assert.Equal("0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa", zoneName);
     }
 

@@ -14,49 +14,34 @@ using Ninlil.Dns.Server.Authoritative.Options;
 namespace Ninlil.Dns.Server.Authoritative.Ptr;
 
 /// <summary>
-///     This class is the actual PTR/reverse-zone sync engine: it computes the desired PTR
-///     record set implied by a <see cref="ZoneTypeEnum.Primary" />/
-///     <see cref="ZoneTypeEnum.CloudPrimary" /> forward zone's own current, enabled A/AAAA
-///     records, auto-creates the enclosing reverse zone the first time it is needed (never a
-///     second, conflicting copy of one that already exists), and reconciles that reverse zone's
-///     actual stored PTR records to match -- touching only records this feature created itself
-///     (<see cref="RecordEntity.ManagedByFeature" /> == <see cref="RecordManagedByFeatureEnum.Ptr" />),
-///     never an operator-added PTR record.
+///     This class does PTR sync: from a <see cref="ZoneTypeEnum.Primary" /> or
+///     <see cref="ZoneTypeEnum.CloudPrimary" /> forward zone's enabled A/AAAA records it computes
+///     the PTR records they imply, creates the reverse zone when needed (never a second copy of an
+///     existing one), and makes the reverse zone's managed PTR records match. It only touches
+///     records it created (<see cref="RecordEntity.ManagedByFeature" /> ==
+///     <see cref="RecordManagedByFeatureEnum.Ptr" />), never operator-added ones. Changes go through
+///     <see cref="IZoneUpdateService" />.
 ///     <para>
-///         When a forward zone's own IPv4 grouping granularity (<see cref="ZoneEntity.PtrIpv4PrefixLength" />,
-///         falling back to <see cref="PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits" />) is set
-///         finer than the conventional <c>/24</c> octet boundary, this class also maintains RFC
-///         2317 §4's own classless-delegation glue: the octet-aligned <c>/24</c> parent zone gains
-///         a CNAME record, at the same owner name an ordinary (non-classless) PTR record would
-///         have used, pointing at the classless child zone's own owner name for that address --
-///         reusing <see cref="RecordManagedByFeatureEnum.Ptr" /> as this glue record's own
-///         provenance marker too (a CNAME record with that marker is unambiguous -- an ordinary
-///         PTR-sync PTR record is never itself a CNAME), rather than adding a second enum value
-///         for what is still, functionally, this same feature's own output.
+///     When the zone's IPv4 prefix length (<see cref="ZoneEntity.PtrIpv4PrefixLength" />, else
+///     <see cref="PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits" />) is longer than 24, it also
+///     maintains the RFC 2317 §4 CNAMEs: the /24 zone gets a CNAME, at the name an ordinary PTR
+///     would have, pointing to the PTR in the classless zone. These CNAMEs also carry
+///     <see cref="RecordManagedByFeatureEnum.Ptr" />; the record type tells them apart from PTRs.
 ///     </para>
 ///     <para>
-///         This class lives directly in <c>Ninlil.Dns.Server.Authoritative</c>, not a
-///         separate project the way <c>CaaRecordReconciliationService</c> lives in
-///         <c>Server.Acme</c> -- unlike that class, <see cref="PtrSyncOptions" /> has no
-///         cross-project placement constraint at all (it depends on nothing outside
-///         <c>Server.Authoritative</c>/<c>Data.Abstractions</c> already available here), so there
-///         is no circular-project-reference risk to design around.
+///     It lives in this project, unlike <c>CaaRecordReconciliationService</c> in
+///     <c>Server.Acme</c>, because it needs nothing from outside <c>Server.Authoritative</c> and
+///     <c>Data.Abstractions</c>.
 ///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository used to look up and create zones.</param>
-/// <param name="recordRepository">This service's own record lookups run against this repository.</param>
-/// <param name="zoneUpdateService">The service every add/remove is actually applied through.</param>
-/// <param name="unitOfWork">The unit of work a newly auto-created reverse zone's own metadata is committed through.</param>
+/// <param name="recordRepository">The repository records are read from.</param>
+/// <param name="zoneUpdateService">The service every add and remove goes through.</param>
+/// <param name="unitOfWork">The unit of work a newly created reverse zone is saved through.</param>
 /// <param name="options">
-///     The global default settings this service falls back to when a zone has not overridden
-///     them, read fresh (<see cref="IOptionsMonitor{TOptions}.CurrentValue" />) on every call
-///     rather than snapshotted once -- this service is registered scoped, but the plain
-///     <see cref="IOptions{TOptions}" /> a scoped registration would otherwise receive is itself
-///     backed by a singleton whose <c>.Value</c> is computed once and cached for the life of the
-///     process, so a configuration-file write would never have been observed at all without this;
-///     the same <see cref="IOptions{TOptions}" />-vs-<see cref="IOptionsMonitor{TOptions}" />
-///     staleness trap several other hot-reloadable options classes in this codebase guard against
-///     the same way.
+///     The global defaults used when a zone sets no value, read through
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> on every call.
+///     <see cref="IOptions{TOptions}" /> would keep the startup value, even in a scoped service.
 /// </param>
 /// <param name="logger">The logger this service records skip/reconcile decisions to.</param>
 public class PtrSyncService(
@@ -69,9 +54,8 @@ public class PtrSyncService(
 )
 {
     /// <summary>
-    ///     This constant contains the time-to-live, in seconds, every PTR/delegation-CNAME record
-    ///     this service creates is given, matching this project's own default TTL for most other
-    ///     infrequently-changing record types.
+    ///     This constant contains the TTL, in seconds, of every PTR and delegation CNAME this service
+    ///     creates.
     /// </summary>
     private const uint PtrRecordTimeToLiveSeconds = 3600;
 
@@ -81,37 +65,29 @@ public class PtrSyncService(
     private const uint DefaultSoaMinimumTtlSeconds = 3600;
 
     /// <summary>
-    ///     This method determines whether a zone's own <see cref="ZoneEntity.Type" /> is one this
-    ///     feature ever syncs PTR records for at all -- <see cref="ZoneTypeEnum.Primary" /> or
-    ///     <see cref="ZoneTypeEnum.CloudPrimary" />, the two zone types this server is itself the
-    ///     source of truth for. Also used, unchanged, to decide whether an *existing* zone found
-    ///     at a computed reverse zone name is safe to reuse (a <c>Primary</c>/<c>CloudPrimary</c>
-    ///     zone this server already owns the content of) or must be left alone (any other zone
-    ///     type -- delegated elsewhere, or otherwise not this server's own to write into).
-    ///     Deliberately implemented as its own explicit, named, single-purpose check, exactly
-    ///     mirroring <c>CaaRecordReconciliationService.IsEligibleZoneType</c> -- a
-    ///     <c>Primary or Secondary</c> condition written inline at each call site is easy to leave
-    ///     behind when a new zone type is added, which is the mistake this method prevents.
+    ///     This method reports whether a zone type is eligible: <see cref="ZoneTypeEnum.Primary" /> or
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" />, the types this server is the source for. It
+    ///     decides both which forward zones are synced and whether an existing zone at a reverse zone
+    ///     name may be written to. Keeping it in one method, as
+    ///     <c>CaaRecordReconciliationService.IsEligibleZoneType</c> does, avoids missing a call site
+    ///     when zone types are added.
     /// </summary>
     /// <param name="zoneType">The zone type to check.</param>
     /// <returns>
-    ///     <see langword="true" /> if <paramref name="zoneType" /> is eligible, <see langword="false" />
-    ///     otherwise.
+    ///     Whether <paramref name="zoneType" /> is eligible.
     /// </returns>
     public static bool IsEligibleZoneType(ZoneTypeEnum zoneType) =>
         zoneType == ZoneTypeEnum.Primary || zoneType == ZoneTypeEnum.CloudPrimary;
 
     /// <summary>
-    ///     This method reconciles every reverse zone (and, for a classless IPv4 grouping, every
-    ///     delegating parent zone) a single forward zone's own current A/AAAA record set implies --
-    ///     the entry point both <see cref="PtrSyncEventSubscriber" /> (in response to
-    ///     <c>DnsZoneChangedEvent</c>, discarding the returned result) and
-    ///     <c>Ninlil.Web</c>'s own <c>ZonesController.ReconcilePtr</c> (an on-demand
-    ///     <c>POST /api/zones/{id}/reconcile-ptr</c>, reporting the result to the caller) use.
+    ///     This method reconciles every reverse zone (and, for classless IPv4, every /24 zone
+    ///     carrying CNAMEs) implied by one forward zone's A/AAAA records.
+    ///     <see cref="PtrSyncEventSubscriber" /> calls it on zone changes and discards the result;
+    ///     <c>ZonesController.ReconcilePtr</c> (<c>POST /api/zones/{id}/reconcile-ptr</c>) returns it.
     /// </summary>
     /// <param name="forwardZoneId">The identifier of the forward zone to sync PTR records from.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>What this pass actually did, or why it did nothing at all.</returns>
+    /// <returns>What the pass did, or why it did nothing.</returns>
     public async Task<PtrReconciliationResult> ReconcileZoneAsync(
         Guid forwardZoneId,
         CancellationToken stoppingToken = default
@@ -154,11 +130,9 @@ public class PtrSyncService(
             stoppingToken
         );
 
-        // The desired PTR entries this forward zone's own current, enabled A/AAAA records imply,
-        // grouped by the reverse zone name each one belongs to -- a single forward zone can span
-        // more than one reverse zone if its own records span more than one grouping prefix. A
-        // classless (>24-bit) IPv4 grouping additionally implies a desired RFC 2317 §4 delegation
-        // CNAME in the octet-aligned /24 parent zone, grouped the same way.
+        // The PTR entries the forward zone's enabled A/AAAA records imply, grouped by reverse zone
+        // (one forward zone can span several). Classless IPv4 also implies RFC 2317 CNAMEs in the /24
+        // zone, grouped the same way.
         Dictionary<
             string,
             List<(string OwnerName, string TargetName)>
@@ -208,14 +182,9 @@ public class PtrSyncService(
                 );
         }
 
-        // Every PTR record anywhere that this feature previously created on this forward zone's
-        // behalf -- found by its own decoded target belonging to this forward zone, not by which
-        // reverse zone happens to hold it, since a reverse zone can in principle hold managed PTR
-        // records contributed by more than one forward zone. This is what lets a reverse zone
-        // that _used to_ have desired entries but no longer does (every A/AAAA record for that
-        // prefix was removed, disabled, or changed) still get its now-stale managed records
-        // cleaned up, even though it no longer appears in desiredPtrByReverseZoneName at all this
-        // pass.
+        // Every managed PTR whose target is in this forward zone, wherever it is stored (a reverse
+        // zone can hold PTRs for several forward zones). This finds stale PTRs in reverse zones that
+        // no longer have any desired entries.
         IReadOnlyList<RecordEntity> allManagedPtrRecords = await recordRepository.ListAsync(
             record =>
                 record.Type == DnsResourceRecordTypeEnum.Ptr
@@ -230,12 +199,9 @@ public class PtrSyncService(
             ),
         ];
 
-        // A managed delegation CNAME's own target is a reverse-zone owner name, not this forward
-        // zone's own name -- so "belongs to this forward zone" is determined instead by whether
-        // its target matches a PTR owner name this forward zone either currently desires this
-        // pass, or has previously had this service manage on its behalf (covering the case where
-        // the forward zone's own grouping granularity just changed, and a stale classless PTR
-        // record -- and its stale delegation CNAME alongside it -- both need cleaning up).
+        // A managed CNAME's target is a reverse zone name, so it belongs to this forward zone if its
+        // target is a PTR name this zone wants now or had managed before (which covers a change of
+        // prefix length leaving a stale classless PTR and CNAME).
         HashSet<string> childOwnerNamesRelevantToThisForwardZone = new(
             StringComparer.OrdinalIgnoreCase
         );
@@ -270,8 +236,8 @@ public class PtrSyncService(
         int totalRemoved = 0;
         HashSet<Guid> touchedZoneIds = [];
 
-        // Reconcile every reverse zone's own PTR records first, so a classless child zone's real
-        // PTR data exists before its delegating parent CNAME is written alongside it.
+        // Reconcile PTRs first, so a classless zone's PTR exists before the /24 CNAME pointing to
+        // it.
         HashSet<Guid> reconciledPtrZoneIds = [];
         foreach (
             (
@@ -324,11 +290,9 @@ public class PtrSyncService(
             totalRemoved += removed;
         }
 
-        // Then reconcile every classless delegation CNAME, in each delegating parent zone --
-        // symmetric to the PTR reconciliation immediately above, including its own stale-zone
-        // cleanup for a parent zone that no longer has any desired delegation CNAME this pass
-        // (the forward zone's own grouping granularity changed back to the octet-aligned default,
-        // or every address in that classless block was removed).
+        // Then reconcile the CNAMEs in each /24 zone, the same way, including clean-up in zones
+        // that no longer need any (the prefix went back to 24, or the block's addresses were
+        // removed).
         HashSet<Guid> reconciledCnameZoneIds = [];
         foreach (
             (
@@ -391,8 +355,7 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method adds a single desired entry to a reverse/parent-zone-name-keyed map,
-    ///     creating that zone name's own entry list the first time it is needed.
+    ///     This method adds a desired entry to a map keyed by zone name.
     /// </summary>
     private static void AddEntry(
         Dictionary<string, List<(string OwnerName, string TargetName)>> entriesByZoneName,
@@ -413,8 +376,7 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method determines whether a stored PTR record's own decoded target belongs to a
-    ///     forward zone -- either the zone's own apex, or a name underneath it.
+    ///     This method checks whether a PTR's target is the forward zone's apex or below it.
     /// </summary>
     private static bool TargetBelongsToForwardZone(RecordEntity ptrRecord, string forwardZoneName)
     {
@@ -427,31 +389,25 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method does the actual work for a single reverse or delegating-parent zone:
-    ///     finding or auto-creating it (skipping, log-only, if a zone already exists at that name
-    ///     but is not one this server owns the content of), diffing its own currently-managed
-    ///     records (PTR or delegation CNAME, per <paramref name="buildRecord" />) against the
-    ///     desired set, and applying the difference. Shared between this class's own PTR
-    ///     reconciliation and its RFC 2317 delegation-CNAME reconciliation -- the two are
-    ///     otherwise structurally identical (auto-create, diff, apply, tolerate a not-yet-signed
-    ///     zone), differing only in which record type/builder they work with.
+    ///     This method reconciles one reverse or /24 zone: it finds or creates the zone (skipping,
+    ///     with a log entry, if a zone of another type exists at that name), compares its managed
+    ///     records (PTR or CNAME, per <paramref name="buildRecord" />) with the desired set, and applies
+    ///     the difference. PTR and CNAME reconciliation share it.
     /// </summary>
     /// <param name="zoneName">
-    ///     The zone's own name, or <see langword="null" /> when <paramref name="explicitZoneId" />
-    ///     is supplied instead (the "clean up a now-stale zone" pass, which already knows the
-    ///     zone's id from a previously-managed record and has no fresh desired entries to compute
-    ///     a name from).
+    ///     The zone's name, or <see langword="null" /> when <paramref name="explicitZoneId" /> is given
+    ///     instead (the clean-up pass for a zone found through a previously managed record).
     /// </param>
-    /// <param name="explicitZoneId">The zone's own identifier, when already known, in place of looking it up by <paramref name="zoneName" />.</param>
+    /// <param name="explicitZoneId">The zone's ID when already known, instead of looking it up by <paramref name="zoneName" />.</param>
     /// <param name="desiredEntries">The entries this zone should contain for this forward zone.</param>
     /// <param name="existingManagedCandidates">
-    ///     Every record, in any zone, of this record type that this feature previously created on
-    ///     this forward zone's behalf -- filtered down to this specific zone inside this method.
+    ///     Every managed record of this type for this forward zone, in any zone; filtered to this
+    ///     zone here.
     /// </param>
     /// <param name="buildRecord">Builds a new record of the right type for a single desired entry.</param>
-    /// <param name="recordKindForLogging">A short, human-readable label for this record kind, used only in log messages.</param>
+    /// <param name="recordKindForLogging">A short label for the record kind, for log messages.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The zone's own identifier (or <see langword="null" /> if skipped), plus how many records were added/removed.</returns>
+    /// <returns>The zone's ID (or <see langword="null" /> if skipped) and how many records were added and removed.</returns>
     private async Task<(Guid? ZoneId, int Added, int Removed)> ReconcileZoneRecordEntriesAsync(
         string zoneName,
         Guid? explicitZoneId,
@@ -468,9 +424,8 @@ public class PtrSyncService(
 
         if (zone is null)
         {
-            // Nothing to create for zero desired entries -- this only happens for the
-            // "clean up a stale zone" pass finding the zone itself already gone (an operator
-            // deleted it directly), which needs no action at all.
+            // No desired entries and no zone: the clean-up pass found the zone already deleted, so
+            // there is nothing to do.
             if (desiredEntries.Count == 0)
                 return (null, 0, 0);
 
@@ -496,10 +451,8 @@ public class PtrSyncService(
 
         if (!IsEligibleZoneType(zone.Type))
         {
-            // The zone this address's record belongs in already exists locally, but under a zone
-            // type this server does not own the content of (Secondary/CloudSecondary/Stub/
-            // Forwarder/...) -- it is delegated or synced from elsewhere. Never create a
-            // conflicting second copy, and never write into it.
+            // A zone of another type (Secondary, CloudSecondary, Stub, Forwarder, ...) exists at this
+            // name; its content comes from elsewhere, so do not write into it or create a second one.
             logger.LogInformation(
                 "Zone '{ZoneName}' already exists locally as {ZoneType}; skipping {RecordKind} sync "
                     + "for it rather than creating a conflicting second copy or writing into a zone "
@@ -561,9 +514,8 @@ public class PtrSyncService(
         }
         catch (InvalidOperationException exception)
         {
-            // A zone with no SOA record yet cannot have its serial bumped -- the zone's own
-            // future bootstrap re-fires DnsZoneChangedEvent and gives this service another
-            // chance.
+            // A zone with no SOA yet cannot be changed; its bootstrap publishes DnsZoneChangedEvent and
+            // triggers another pass.
             logger.LogDebug(
                 exception,
                 "Could not sync {RecordKind} records for zone '{ZoneName}' yet -- it may not have "
@@ -578,25 +530,21 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method builds the case-insensitive owner/target key a managed record and a
-    ///     desired entry are matched by.
+    ///     This method builds the case-insensitive owner and target key used to match records with
+    ///     desired entries.
     /// </summary>
     private static (string Owner, string Target) KeyOf(string ownerName, string targetName) =>
         (NormalizeName(ownerName), NormalizeName(targetName));
 
     /// <summary>
-    ///     This method lowercases and trims the trailing dot from a DNS name, for
-    ///     case-/trailing-dot-insensitive comparison.
+    ///     This method lowercases a name and trims the trailing dot, for comparison.
     /// </summary>
     private static string NormalizeName(string name) => name.TrimEnd('.').ToLowerInvariant();
 
     /// <summary>
-    ///     This method decodes a stored PTR or CNAME record's own target name, as a
-    ///     presentation-format string, or an empty string if it cannot be decoded (never matches
-    ///     any desired entry, so a record like this is always treated as no-longer-desired and
-    ///     removed). Both <see cref="PtrRecordData" /> and <see cref="CnameRecordData" /> wrap the
-    ///     same single <c>DnsName Target</c> shape, so one decode method covers both of this
-    ///     service's own managed record types.
+    ///     This method decodes a stored PTR or CNAME record's target, or returns an empty string if it
+    ///     cannot be decoded, so such a record never matches and is removed. Both record types hold a
+    ///     single <c>DnsName Target</c>.
     /// </summary>
     private static string DecodeTarget(RecordEntity record) =>
         RecordEntityCodec.DecodeTypedData(record) switch
@@ -607,10 +555,8 @@ public class PtrSyncService(
         };
 
     /// <summary>
-    ///     This method creates a brand-new reverse/delegating-parent zone's own metadata shell --
-    ///     as <see cref="ZoneTypeEnum.Primary" />, matching this server's own role for a zone it
-    ///     is originating PTR/delegation data for -- committing it immediately so
-    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" /> can find it by id right after.
+    ///     This method creates a new reverse or /24 zone as <see cref="ZoneTypeEnum.Primary" /> and
+    ///     saves it at once, so <see cref="IZoneUpdateService.BootstrapZoneAsync" /> can find it by ID.
     /// </summary>
     private async Task<ZoneEntity> CreateReverseZoneAsync(
         string reverseZoneName,
@@ -632,15 +578,10 @@ public class PtrSyncService(
     }
 
     /// <summary>
-    ///     This method builds a brand-new reverse/delegating-parent zone's own first SOA record.
-    ///     No setting anywhere in this project names a "default nameserver hostname" this could
-    ///     reuse (a forward zone's own SOA is always operator-supplied, through
-    ///     <c>RecordsController</c>), so this generates a minimal, self-referential placeholder
-    ///     instead -- naming the zone's own apex as its primary name server and a generic
-    ///     <c>hostmaster</c> mailbox at that same apex -- which an operator can edit afterward
-    ///     through the ordinary <c>RecordsController</c> PUT/PATCH endpoints exactly like any
-    ///     other record, the same way <c>ZonesController.Create</c> leaves a REST-created zone
-    ///     with no records at all for its own caller to fill in.
+    ///     This method builds the first SOA record for a new reverse or /24 zone. There is no default
+    ///     name server setting, so it uses the zone apex as the primary name server and
+    ///     <c>hostmaster</c> at the apex as the mailbox; the operator can edit it like any record. No
+    ///     NS records are created.
     /// </summary>
     private static RecordEntity BuildDefaultSoaRecord(ZoneEntity zone) =>
         new()
@@ -667,8 +608,7 @@ public class PtrSyncService(
         };
 
     /// <summary>
-    ///     This method builds a single desired PTR record, marked with this feature's own
-    ///     provenance marker.
+    ///     This method builds one desired PTR record, marked as managed by PTR sync.
     /// </summary>
     private static RecordEntity BuildPtrRecord(
         Guid reverseZoneId,
@@ -691,11 +631,8 @@ public class PtrSyncService(
         };
 
     /// <summary>
-    ///     This method builds a single desired RFC 2317 §4 delegation CNAME, in the octet-aligned
-    ///     <c>/24</c> parent zone, pointing at the classless child zone's own owner name for the
-    ///     same address -- marked with this same feature's own provenance marker (see this
-    ///     class's own doc comment for why a CNAME reuses <see cref="RecordManagedByFeatureEnum.Ptr" />
-    ///     rather than a dedicated enum value).
+    ///     This method builds one RFC 2317 §4 CNAME in the /24 zone, pointing to the address's PTR
+    ///     name in the classless zone, marked as managed by PTR sync (see the class summary).
     /// </summary>
     private static RecordEntity BuildDelegationCnameRecord(
         Guid parentZoneId,

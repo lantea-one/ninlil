@@ -11,21 +11,16 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class implements <see cref="IZoneTransferClient" />'s RFC 9103 XFR-over-TLS variant:
-///     the same AXFR/IXFR exchange <see cref="TcpZoneTransferClient" /> performs, carried inside a
-///     client-side TLS session instead of a bare TCP one, so a network observer between this
-///     server and the primary cannot see the transferred zone content. TSIG remains the actual
-///     authentication layer, unchanged -- this only adds transport confidentiality on top, per
-///     this feature's own scope (see <c>ZoneEntity.TransferTransport</c>'s own doc comment).
-///     <see cref="QuerySoaSerialAsync" />'s own lightweight SOA probe deliberately still goes out
-///     over plain UDP, unencrypted, the same reasoning <see cref="ZoneTransferPullCodec.QuerySoaSerialOverUdpAsync" />'s
-///     own doc comment gives.
+///     This class implements <see cref="IZoneTransferClient" /> with RFC 9103 zone transfer over
+///     TLS: the exchange <see cref="TcpZoneTransferClient" /> performs, inside TLS, so an observer
+///     cannot read the zone. TSIG still does the authentication; TLS adds confidentiality. The
+///     SOA check (<see cref="QuerySoaSerialAsync" />) still goes over plain UDP (see
+///     <see cref="ZoneTransferPullCodec.QuerySoaSerialOverUdpAsync" />).
 /// </summary>
 /// <param name="tsigService">The service used to sign requests and verify responses.</param>
 /// <param name="options">
-///     This client's own configuration, such as timeouts and whether to validate the primary's own
-///     certificate -- bound via <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via
-///     <c>options.CurrentValue</c>, on every single pull this (scoped) client attempts.
+///     The port, timeouts and certificate check, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> on every pull.
 /// </param>
 public class TlsZoneTransferClient(
     ITsigService tsigService,
@@ -66,8 +61,7 @@ public class TlsZoneTransferClient(
         if (!string.IsNullOrEmpty(tsigKeyName))
             query = await tsigService.SignAsync(query, tsigKeyName, query.Id, stoppingToken);
 
-        // Captured before the query is serialized -- see TcpZoneTransferClient's own identical
-        // comment for why this must be the exact MAC the first response message chains from.
+        // The request MAC the first response chains from (see TcpZoneTransferClient).
         byte[] requestMac = query.Tsig?.Mac;
         byte[] queryBytes = DnsMessageWriter.Write(query);
 
@@ -101,10 +95,7 @@ public class TlsZoneTransferClient(
         await using SslStream sslStream = new(
             tcpClient.GetStream(),
             leaveInnerStreamOpen: false,
-            // ValidateServerCertificate defaults true (real, OS-trust-store validation); an
-            // operator can set it false only for a homelab primary presenting a certificate this
-            // secondary has no other way to trust -- see ZoneTransferClientOptions's own doc
-            // comment on ValidateServerCertificate for the full reasoning.
+            // See ZoneTransferClientOptions.ValidateServerCertificate.
             options.CurrentValue.ValidateServerCertificate
                 ? null
                 : (_, _, _, _) => true

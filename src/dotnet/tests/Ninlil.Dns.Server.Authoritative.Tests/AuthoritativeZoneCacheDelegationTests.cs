@@ -14,14 +14,10 @@ using Ninlil.Dns.Server.Authoritative.Cache;
 namespace Ninlil.Dns.Server.Authoritative.Tests;
 
 /// <summary>
-///     This class is a regression test for a real gap: when this server hosts *both* a parent
-///     zone and its delegated child as two
-///     separate local zones, an NS or DS query at the delegation point used to resolve into the
-///     child zone's own data (which has neither) instead of ever reaching the parent's real
-///     answer -- <see cref="AuthoritativeZoneCache.FindZone" />'s "longest suffix wins" rule had
-///     no notion that NS/DS at a delegation point belong to the *parent* even when a same-named
-///     zone is also separately hosted. Fixed by making <see cref="AuthoritativeZoneCache.FindZone" />
-///     type-aware for exactly those two types.
+///     This class tests <see cref="AuthoritativeZoneCache.FindZone" /> when this server hosts both
+///     a parent zone and its delegated child: an NS or DS query at the delegation point must go to
+///     the parent, which has those records, not to the child. Other query types still go to the
+///     longest matching zone.
 /// </summary>
 public sealed class AuthoritativeZoneCacheDelegationTests : IAsyncLifetime
 {
@@ -128,7 +124,7 @@ public sealed class AuthoritativeZoneCacheDelegationTests : IAsyncLifetime
             DnsResourceRecordTypeEnum.A,
             new ARecordData(System.Net.IPAddress.Parse("192.0.2.10"))
         );
-        // The delegation itself: the parent's own NS records naming the child.
+        // The delegation itself: the parent's NS records naming the child.
         await AddRecordAsync(
             _parentZoneId,
             "child.example.com",

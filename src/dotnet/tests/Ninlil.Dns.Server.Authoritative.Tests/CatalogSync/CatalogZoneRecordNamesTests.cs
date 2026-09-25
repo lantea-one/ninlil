@@ -8,8 +8,8 @@ using Ninlil.Dns.Server.Authoritative.CatalogSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CatalogSync;
 
 /// <summary>
-///     This class covers <see cref="CatalogZoneRecordNames" /> -- the RFC 9432 well-known
-///     owner-name builder/parser -- with no database involved at all.
+///     This class tests <see cref="CatalogZoneRecordNames" />, which builds and parses the RFC 9432
+///     owner names; no database is involved.
 /// </summary>
 public sealed class CatalogZoneRecordNamesTests
 {
@@ -86,7 +86,7 @@ public sealed class CatalogZoneRecordNamesTests
     public void TryGetMemberZoneNameRejectsAGroupSubEntryDespiteBeingAPtrRecordUnderTheSameContainer()
     {
         string uniqueLabel = CatalogZoneRecordNames.ComputeUniqueLabel("example.com");
-        // RFC 9432's own "group." qualifier sub-entry -- one extra label ahead of <unique-N>,
+        // RFC 9432's "group." qualifier sub-entry -- one extra label ahead of <unique-N>,
         // still a PTR record, still nested under "zones.$CATZ", but never a genuine member entry.
         RecordEntity groupRecord = BuildPtrRecord(
             $"group.{uniqueLabel}.zones.catalog.invalid",

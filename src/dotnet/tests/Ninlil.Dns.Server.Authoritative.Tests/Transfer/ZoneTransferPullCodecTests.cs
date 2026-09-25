@@ -11,14 +11,10 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class tests the RFC 1035 §4.2.2 stream-framing and full/incremental/already-current
-///     shape-detection logic every <see cref="IZoneTransferClient" /> implementation shares via
-///     <c>ZoneTransferPullCodec</c> -- exercised entirely through <see cref="TcpZoneTransferClient" />'s
-///     own public <see cref="TcpZoneTransferClient.PullAsync" />, the simplest (plain, no TLS
-///     handshake needed) of the three transports that share this logic, against a real loopback
-///     TCP listener standing in for a primary. This is also this project's first real end-to-end
-///     coverage of <see cref="TcpZoneTransferClient.PullAsync" /> itself -- it had none before this
-///     class, even prior to <see cref="ZoneTransferPullCodec" />'s own extraction.
+///     This class tests the RFC 1035 §4.2.2 framing and the full, incremental and already-current
+///     result detection that the <see cref="IZoneTransferClient" />s share through
+///     <c>ZoneTransferPullCodec</c>. It goes through <see cref="TcpZoneTransferClient.PullAsync" />, the
+///     plain TCP transport, against a loopback TCP listener acting as the primary.
 /// </summary>
 public class ZoneTransferPullCodecTests
 {
@@ -78,7 +74,7 @@ public class ZoneTransferPullCodecTests
     ///     This method builds a real <see cref="TcpZoneTransferClient" /> targeting
     ///     <paramref name="primaryPort" /> -- <see cref="TcpZoneTransferClient.PullAsync" /> has no
     ///     port parameter of its own; it always reads <see cref="ZoneTransferClientOptions.PrimaryPort" />
-    ///     fresh off this client's own options, exactly the way a real deployment's config file
+    ///     fresh off this client's options, the way a real deployment's config file
     ///     would drive it.
     /// </summary>
     private static TcpZoneTransferClient CreateClient(
@@ -122,13 +118,13 @@ public class ZoneTransferPullCodecTests
         );
 
     /// <summary>
-    ///     This method starts a real loopback TCP listener, accepts exactly one connection, reads
+    ///     This method starts a real loopback TCP listener, accepts one connection, reads
     ///     the framed query <see cref="TcpZoneTransferClient" /> sends (discarded -- these tests
     ///     only care about the response side), and writes back <paramref name="answers" /> as a
     ///     single, real, RFC 1035 §4.2.2-framed transfer response message. Single-message only --
     ///     see the multi-message overload below for a scenario that needs a genuine completion
-    ///     bookend SOA, which this project's own server never emits in a single-message response
-    ///     (<c>ZoneTransferService</c>'s own producer gates that append on <c>chunks.Count &gt; 1</c>).
+    ///     bookend SOA, which this project's server never emits in a single-message response
+    ///     (<c>ZoneTransferService</c>'s producer gates that append on <c>chunks.Count &gt; 1</c>).
     /// </summary>
     private static Task<int> StartFakePrimaryAsync(
         List<DnsResourceRecord> answers,
@@ -136,13 +132,13 @@ public class ZoneTransferPullCodecTests
     ) => StartFakePrimaryAsync([answers], stoppingToken);
 
     /// <summary>
-    ///     This method starts a real loopback TCP listener, accepts exactly one connection, reads
+    ///     This method starts a real loopback TCP listener, accepts one connection, reads
     ///     the framed query <see cref="TcpZoneTransferClient" /> sends (discarded -- these tests
     ///     only care about the response side), and writes back each entry of
-    ///     <paramref name="messages" /> as its own separate, real, RFC 1035 §4.2.2-framed transfer
+    ///     <paramref name="messages" /> as its separate, real, RFC 1035 §4.2.2-framed transfer
     ///     response message -- a genuine multi-TCP-message transfer, needed to exercise
-    ///     <c>ZoneTransferPullCodec.BuildResult</c>'s own <c>wasMultiMessage</c>-gated bookend-SOA
-    ///     stripping realistically (see that parameter's own doc comment for why a single combined
+    ///     <c>ZoneTransferPullCodec.BuildResult</c>'s <c>wasMultiMessage</c>-gated bookend-SOA
+    ///     stripping realistically (see that parameter's doc comment for why a single combined
     ///     write, however many records it logically contains, cannot stand in for this).
     /// </summary>
     private static async Task<int> StartFakePrimaryAsync(
@@ -198,9 +194,9 @@ public class ZoneTransferPullCodecTests
     {
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
-        // Two real TCP messages, not one -- this project's own server never emits a completion
-        // bookend SOA in a single-message response (see StartFakePrimaryAsync's own doc comment),
-        // so genuinely exercising the stripping logic needs a real multi-message transfer.
+        // Two real TCP messages, not one -- this project's server never emits a completion
+        // bookend SOA in a single-message response (see StartFakePrimaryAsync's doc comment),
+        // so exercising the stripping logic needs a real multi-message transfer.
         int port = await StartFakePrimaryAsync(
             [
                 [
@@ -222,7 +218,7 @@ public class ZoneTransferPullCodecTests
         Assert.Equal((uint)10, result.FinalSerial);
 
         // 3, not 4: the duplicate trailing bookend SOA is stripped, but the meaningful leading
-        // SOA is retained -- FullRecordSet documents itself as including the zone's own SOA.
+        // SOA is retained -- FullRecordSet documents itself as including the zone's SOA.
         Assert.Equal(3, result.FullRecordSet.Count);
         Assert.Equal(DnsResourceRecordTypeEnum.Soa, result.FullRecordSet[0].Type);
     }
@@ -232,7 +228,7 @@ public class ZoneTransferPullCodecTests
     {
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
-        // Two real TCP messages, not one -- see the AXFR test above's own comment for why.
+        // Two real TCP messages, not one -- see the AXFR test above's comment for why.
         int port = await StartFakePrimaryAsync(
             [
                 [
@@ -297,7 +293,7 @@ public class ZoneTransferPullCodecTests
 
         // A real loopback port nothing is listening on: bind, read the port, then immediately
         // close, guaranteeing the connect attempt below is refused rather than racing a real
-        // primary's own bind.
+        // primary's bind.
         using TcpListener probe = new(IPAddress.Loopback, 0);
         probe.Start();
         int unusedPort = ((IPEndPoint)probe.LocalEndpoint).Port;

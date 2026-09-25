@@ -7,10 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.ZoneRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13g proof that <c>ZonesController</c>'s own zone
-///     listing no longer materializes every zone into memory before slicing a page out of it.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.ZoneRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>ZonesController</c>'s listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class ZoneRepositorySearchTests : IAsyncLifetime
 {
@@ -21,9 +21,9 @@ public sealed class ZoneRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five zones with names deliberately out of alphabetical creation
-    ///     order, so a passing ordering assertion can only be explained by a real <c>ORDER BY</c>
-    ///     translated at the database, not by creation/insertion order happening to already match.
+    ///     This method seeds five zones with names out of alphabetical creation
+    ///     order, so a passing ordering assertion can only be explained by an <c>ORDER BY</c>
+    ///     translated at the database, not by creation/insertion order already matching.
     /// </summary>
     private async Task SeedAsync()
     {
@@ -86,7 +86,7 @@ public sealed class ZoneRepositorySearchTests : IAsyncLifetime
         IZoneRepository repository = scope.ServiceProvider.GetRequiredService<IZoneRepository>();
 
         // Page size 2 over 5 zones: page 0 gets alpha/bravo, page 1 gets charlie/delta, page 2
-        // gets only echo (the final, partial page) -- proving skip/take are genuinely applied at
+        // gets only echo (the final, partial page) -- proving skip/take are applied at
         // the database, not merely accepted and ignored.
         IReadOnlyList<ZoneEntity> firstPage = await repository.SearchAsync(skip: 0, take: 2);
         IReadOnlyList<ZoneEntity> secondPage = await repository.SearchAsync(skip: 2, take: 2);

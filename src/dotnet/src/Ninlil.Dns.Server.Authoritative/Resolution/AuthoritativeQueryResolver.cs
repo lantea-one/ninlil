@@ -12,30 +12,27 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Server.Authoritative.Resolution;
 
 /// <summary>
-///     This class is Ninlil's authoritative engine: it implements
-///     <see cref="IDnsQueryResolver" /> by checking whether the query falls under a zone this
-///     server hosts (via <see cref="AuthoritativeZoneCache" />) and, if so, fully answering it --
-///     an exact match, a wildcard, a delegation referral, or a properly-formed negative response
-///     -- rather than declining. A query for a name this server does not host at all is declined
-///     (<see cref="DnsQueryResolution.NotHandled" />), letting <see cref="IDnsQueryDispatcher" />
-///     offer it to the recursive engine instead.
+///     This class is the authoritative engine, the <see cref="IDnsQueryResolver" /> that answers
+///     from hosted zones. It finds the zone for the query name in
+///     <see cref="AuthoritativeZoneCache" /> and answers fully: an exact match, a CNAME (followed
+///     one hop inside the zone), a wildcard, a referral, or a negative answer with the SOA. A
+///     name in no hosted zone is declined (<see cref="DnsQueryResolution.NotHandled" />) so the
+///     dispatcher offers it to the forwarding and recursive resolvers. It also answers CHAOS
+///     <c>version.bind</c>-style queries when enabled.
 ///     <para>
-///         When the querying client set EDNS(0)'s "DNSSEC OK" bit and the zone is signed, this
-///         class also attaches whichever RRSIG/NSEC/NSEC3/DNSKEY/DS content
-///         <see cref="Dnssec.SignedZoneCache" /> already holds for it -- never computing or
-///         signing anything live, matching this project's deliberate stance against ever signing
-///         per query (see <see cref="ZoneSigningService" />).
+///         When the client sets the EDNS DNSSEC OK bit and the zone is signed, the RRSIG, NSEC,
+///         NSEC3, DNSKEY and DS records are taken from <see cref="Dnssec.SignedZoneCache" />.
+///         Nothing is signed per query; signing happens ahead of time in
+///         <see cref="ZoneSigningService" />.
 ///     </para>
 /// </summary>
 /// <param name="zoneCache">The in-memory zone cache this resolver answers from.</param>
 /// <param name="signedZoneCache">The in-memory signed-content cache this resolver answers DNSSEC data from.</param>
 /// <param name="options">
-///     This engine's own configuration, such as CHAOS query support. Bound via
-///     <see cref="IOptionsMonitor{TOptions}" />, not the older, snapshotted
-///     <see cref="IOptions{TOptions}" /> -- this resolver is registered as a singleton, so a write
-///     <c>Ninlil.Web.Controllers.BrandingSettingsController.Patch</c> merges into the
-///     configuration file must be read fresh on every CHAOS-class query this resolver answers, or
-///     it would never be observed by this already-running instance at all.
+///     The CHAOS query settings. Read through <see cref="IOptionsMonitor{TOptions}" /> on each
+///     query, so a change made through <c>BrandingSettingsController</c> applies without a
+///     restart; <see cref="IOptions{TOptions}" /> would keep the startup value in this
+///     singleton.
 /// </param>
 public class AuthoritativeQueryResolver(
     AuthoritativeZoneCache zoneCache,
@@ -60,25 +57,14 @@ public class AuthoritativeQueryResolver(
 
         CachedZone zone = zoneCache.FindZone(question.Name, question.Type);
 
-        // A ZoneTypeEnum.Forwarder/SecondaryForwarder zone's own cache-resident content is its
-        // synthetic SOA and per-address TXT records at its apex -- real, versioned wire content
-        // that exists purely so Transfer.ZoneTransferService's own AXFR/IXFR path (which reads
-        // straight out of AuthoritativeZoneCache, bypassing this resolver's own dispatch entirely
-        // -- see TcpDnsListener/DnsOverTlsListener/DnsOverQuicListener, which all intercept an
-        // Axfr/Ixfr question type before it ever reaches IDnsQueryDispatcher) has something real
-        // to serve, and so a secondary's own freshness pre-check (an ordinary, unsigned SOA query
-        // Refresh.SecondaryZoneRefreshService always sends before attempting a real, TSIG-gated
-        // AXFR/IXFR pull -- see ZoneTransferPullCodec.QuerySoaSerialOverUdpAsync) has a real
-        // answer to check the zone's own current serial against. Every *other* ordinary query for
-        // a name under a Forwarder zone -- including its own apex TXT records, and any name other
-        // than the exact apex -- must still fall through to Server.Forwarding's own
-        // ForwarderQueryResolver exactly as it always has: answering an ordinary query for this
-        // zone's own TXT content here would expose its configured upstream forwarder addresses to
-        // any unauthenticated querying client, unlike AXFR/IXFR, which this project's own
-        // ZoneTransferService always requires a valid TSIG signature for. An ordinary SOA answer
-        // carries no such sensitive content -- a bare serial and generic-per-zone timing/contact
-        // fields, the same information a public DNS zone's own SOA record always exposes by
-        // design -- so this one narrow exception is safe.
+        // A Forwarder or SecondaryForwarder zone holds only a synthetic SOA and TXT records at
+        // its apex. They exist for zone transfer (ZoneTransferService reads the cache directly;
+        // the TCP, TLS and QUIC listeners route AXFR/IXFR there without the dispatcher) and for
+        // a secondary's SOA serial check (ZoneTransferPullCodec.QuerySoaSerialOverUdpAsync).
+        // Only the apex SOA is answered here. Every other query goes on to
+        // ForwarderQueryResolver: answering the TXT records would reveal the upstream forwarder
+        // addresses to anyone, while zone transfers require TSIG. The SOA reveals nothing
+        // sensitive.
         if (
             zone is { Zone.Type: ZoneTypeEnum.Forwarder or ZoneTypeEnum.SecondaryForwarder }
             && (question.Type != DnsResourceRecordTypeEnum.Soa || question.Name != zone.ApexName)
@@ -93,9 +79,10 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method answers the traditional CHAOS-class <c>version.bind</c>/<c>version.server</c>/
-    ///     <c>hostname.bind</c>/<c>id.server</c> TXT queries used to fingerprint a name server,
-    ///     when <see cref="AuthoritativeServerOptions.EnableChaosVersionQueries" /> allows it.
+    ///     This method answers the CHAOS-class TXT queries <c>version.bind</c>,
+    ///     <c>version.server</c>, <c>hostname.bind</c> and <c>id.server</c> when
+    ///     <see cref="AuthoritativeServerOptions.EnableChaosVersionQueries" /> is on. Other CHAOS
+    ///     queries are declined.
     /// </summary>
     private DnsQueryResolution TryResolveChaosQuery(DnsMessage request, DnsQuestion question)
     {
@@ -135,9 +122,9 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method answers a query once a hosting zone has already been found, covering every
-    ///     shape of authoritative answer: a delegation referral, an exact or wildcard match, a
-    ///     CNAME chased one hop within the same zone, or a properly-formed negative response.
+    ///     This method answers a query inside a zone already found: a referral, a DS or DNSKEY
+    ///     answer, an ANY answer, an exact match, a CNAME followed one hop within the zone, a
+    ///     wildcard match, or a negative answer.
     /// </summary>
     private DnsMessage ResolveWithinZone(DnsMessage request, DnsQuestion question, CachedZone zone)
     {
@@ -146,12 +133,10 @@ public class AuthoritativeQueryResolver(
             ? signedZoneCache.GetSignedData(zone.Zone.Id)
             : null;
 
-        // A delegation between the zone's apex and the queried name means this zone is not
-        // authoritative below that point; refer the client to the child zone's own servers
-        // instead of answering (or failing to answer) from this zone's own data. Two exceptions:
-        // an NS query landing exactly on the delegation point (those NS records genuinely live
-        // in this zone), and a DS query landing exactly there too -- RFC 4035 §2.7/RFC 3658 both
-        // treat a DS RRset as belonging to the *parent*, not something a referral can answer.
+        // Below a delegation this zone is not authoritative, so refer the client to the child's
+        // servers. Two exceptions at the delegation point itself: an NS query (those NS records
+        // are in this zone), and a DS query, since the DS RRset belongs to the parent (RFC 4035
+        // §2.7).
         if (zone.FindEnclosingDelegation(question.Name) is { } delegation)
         {
             if (delegation.DelegationPoint == question.Name)
@@ -181,10 +166,7 @@ public class AuthoritativeQueryResolver(
             );
         }
 
-        // DNSKEY is never stored as an ordinary RecordEntity -- it only ever exists as
-        // SignedZoneCache's own generated content -- so it needs its own path rather than
-        // falling through to the ordinary exact-match lookup below, which would otherwise
-        // (correctly, but for the wrong reason) treat every DNSKEY query as NODATA.
+        // DNSKEY records are not RecordEntity rows; they exist only in SignedZoneCache.
         if (
             question.Type == DnsResourceRecordTypeEnum.DnsKey
             && question.Name == zone.ApexName
@@ -208,9 +190,8 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        // No record of the requested type exists at this exact name; if a CNAME exists there
-        // instead, this server answers with the alias and, if the target stays within this same
-        // zone, chases it one hop further before handing the response back.
+        // No record of the requested type here; answer with a CNAME if there is one, followed
+        // one hop when the target is in this zone.
         IReadOnlyList<RecordEntity> cnameMatches = zone.GetRecords(
             question.Name,
             DnsResourceRecordTypeEnum.Cname
@@ -226,10 +207,8 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        // The name itself exists -- either it owns records of some other type, or it is an
-        // "empty non-terminal" that exists only because a name below it has records -- so this
-        // is NODATA, not NXDOMAIN, and no wildcard may be synthesized for it: a wildcard only
-        // ever covers a name that does not exist at all.
+        // The name exists (records of another type, or an empty non-terminal), so this is
+        // NODATA. A wildcard only covers names that do not exist.
         if (zone.NameExists(question.Name) || zone.HasDescendantRecords(question.Name))
             return BuildNegativeResponse(
                 request,
@@ -255,8 +234,7 @@ public class AuthoritativeQueryResolver(
                 signedData
             );
 
-        // Even without an exact type match, a wildcard covering this name for a *different* type
-        // still means the name itself exists (NODATA), not NXDOMAIN.
+        // A wildcard with other types still makes the name exist: NODATA, not NXDOMAIN.
         bool nameCoveredByAnyWildcard = zone.GetWildcardRecords(question.Name).Count > 0;
 
         return BuildNegativeResponse(
@@ -270,12 +248,10 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds a delegation referral: no answer, the delegated subzone's NS
-    ///     records in the Authority section, and, for any of those name servers that live inside
-    ///     this same zone, their addresses as glue in the Additional section. When DNSSEC applies,
-    ///     the Authority section also gets either the delegation's signed DS RRset (a secure
-    ///     delegation) or the NSEC/NSEC3 proof that no DS exists at all (an insecure one) --
-    ///     never both, per RFC 4035 §3.1.4.
+    ///     This method builds a referral: no answer, the child's NS records in the Authority
+    ///     section, and A/AAAA glue from this zone for name servers inside it. With DNSSEC, the
+    ///     Authority section also gets the signed DS RRset (secure delegation) or the NSEC/NSEC3
+    ///     proof that there is no DS (insecure delegation), per RFC 4035 §3.1.4.
     /// </summary>
     private DnsMessage BuildDelegationResponse(
         DnsMessage request,
@@ -342,8 +318,8 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds a normal, positive answer from a set of matched records, attaching
-    ///     each record's own covering RRSIG(s) when DNSSEC applies.
+    ///     This method builds a positive answer from matched records, with their RRSIGs when
+    ///     DNSSEC applies.
     /// </summary>
     private DnsMessage BuildAnswerResponse(
         DnsMessage request,
@@ -371,13 +347,11 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the answer for a name matched only by a wildcard, per RFC 1035
-    ///     §4.3.3's expansion rule: the served owner name is the name actually queried for, not
-    ///     the literal wildcard the data is stored under. When DNSSEC applies, this also attaches
-    ///     the RRSIG RFC 4035 §3.1.3 describes -- itself rewritten to that same served owner name
-    ///     even though its Labels field (computed at signing time, unchanged here) still reflects
-    ///     the shorter, literal wildcard name, exactly the mismatch a validator uses to detect
-    ///     wildcard synthesis occurred -- plus the proof that no closer, non-wildcard match exists.
+    ///     This method builds an answer synthesized from a wildcard (RFC 1035 §4.3.3): the records
+    ///     are served under the queried name, not the <c>*</c> name they are stored under. With
+    ///     DNSSEC, the wildcard's RRSIGs are served under the queried name too (RFC 4035 §3.1.3).
+    ///     Their Labels field still counts the wildcard name, which is how a validator detects
+    ///     the expansion. The proof that no closer match exists is added to the Authority section.
     /// </summary>
     private DnsMessage BuildWildcardAnswerResponse(
         DnsMessage request,
@@ -414,9 +388,9 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the answer for a zone apex's own DNSKEY RRset, served straight out
-    ///     of <see cref="SignedZoneCache" /> since it is never stored as an ordinary
-    ///     <see cref="RecordEntity" /> at all.
+    ///     This method builds the answer for the apex DNSKEY RRset from
+    ///     <see cref="SignedZoneCache" />, since DNSKEY records are not stored as
+    ///     <see cref="RecordEntity" /> rows.
     /// </summary>
     private DnsMessage BuildDnsKeyResponse(
         DnsMessage request,
@@ -437,9 +411,10 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the answer for a DS query landing exactly on a delegation point --
-    ///     the one record type at that name this zone itself is authoritative for, per RFC 4035
-    ///     §2.7, answered directly rather than referred the way every other type there is.
+    ///     This method answers a DS query at a delegation point. DS is the one type at that name
+    ///     the parent is authoritative for (RFC 4035 §2.7), so it is answered instead of referred.
+    ///     Only DS records generated for child zones this server signs are known; otherwise the
+    ///     answer is NODATA.
     /// </summary>
     private DnsMessage BuildDsResponse(
         DnsMessage request,
@@ -475,9 +450,8 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the answer for a name whose only match is a CNAME, following it one
-    ///     hop further when the target stays inside the same zone, attaching each hop's own
-    ///     covering RRSIG(s) when DNSSEC applies.
+    ///     This method builds the answer for a name that has a CNAME, adding the target's records
+    ///     (one hop only) when the target is in the same zone, with RRSIGs when DNSSEC applies.
     /// </summary>
     private DnsMessage BuildCnameChaseResponse(
         DnsMessage request,
@@ -525,11 +499,10 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the modern, minimal response RFC 8482 recommends for an ANY query,
-    ///     rather than the full, and far more abuse-prone, record set a naive implementation
-    ///     would return. The synthesized HINFO record has no real signature of its own to attach
-    ///     -- it does not exist in the zone at all -- so DNSSEC only applies here to the negative
-    ///     response fallback below, not to the minimal answer itself.
+    ///     This method builds the minimal RFC 8482 answer to an ANY query, a synthesized HINFO
+    ///     record, instead of every record at the name, which would make ANY useful for
+    ///     amplification. The HINFO record is not in the zone and has no signature, so DNSSEC only
+    ///     applies to the NXDOMAIN case.
     /// </summary>
     private DnsMessage BuildAnyQueryResponse(
         DnsMessage request,
@@ -572,12 +545,11 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds an RFC 2308-compliant negative response: no answer, and the zone's
-    ///     own SOA record in the Authority section (its time-to-live capped at the SOA's own
-    ///     negative-caching minimum), so a resolver knows how long it may cache the non-existence
-    ///     it just learned about. When DNSSEC applies, the Authority section also gets the SOA's
-    ///     own RRSIG and the RFC 4035 §3.1.3.1/§3.1.3.2 denial-of-existence proof -- a single
-    ///     record for NODATA, or the full closest-encloser-plus-wildcard proof for NXDOMAIN.
+    ///     This method builds an RFC 2308 negative response: no answer, and the zone's SOA in the
+    ///     Authority section with its TTL capped at the SOA minimum, which tells resolvers how
+    ///     long to cache the negative answer. With DNSSEC, the SOA's RRSIG and the denial of
+    ///     existence proof (RFC 4035 §3.1.3) are added: the NODATA proof, or the closest encloser
+    ///     and wildcard proof for NXDOMAIN.
     /// </summary>
     private DnsMessage BuildNegativeResponse(
         DnsMessage request,
@@ -643,16 +615,11 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method builds the header every response from this resolver shares: the query's
-    ///     identifier and recursion-desired flag copied across, marked as a response, this
-    ///     server's own recursive-availability left for the dispatcher to decide. A request that
-    ///     carried EDNS(0) gets an OPT pseudo-record echoed back, its own DNSSEC OK bit mirrored,
-    ///     so a validating client can confirm this server actually understood the request rather
-    ///     than silently ignoring it. The question section is always echoed back too -- RFC 1035
-    ///     never technically mandates it, but every real resolver relies on it to correlate a
-    ///     response with the query that produced it, and its absence is exactly the kind of thing
-    ///     that goes unnoticed by a check that only looks at the answer content rather than the
-    ///     full wire response.
+    ///     This method builds the response header: the query's ID, opcode, RD and CD flags and
+    ///     question section, with AA as given. RA is left unset. A request with EDNS gets an OPT
+    ///     record back with its DNSSEC OK bit mirrored, so a validating client can tell the
+    ///     server understood it. The question is echoed because clients use it to match the
+    ///     response to their query.
     /// </summary>
     private static DnsMessage CreateAnswerHeader(DnsMessage request, bool isAuthoritative)
     {
@@ -680,9 +647,8 @@ public class AuthoritativeQueryResolver(
     }
 
     /// <summary>
-    ///     This method checks whether a name falls inside a zone -- either the zone's own apex,
-    ///     or a descendant of it -- used to decide whether a CNAME target or an NS record's
-    ///     nameserver can be resolved further using this same zone's own data.
+    ///     This method checks whether a name is the zone's apex or below it, to decide whether a
+    ///     CNAME target or a name server can be looked up in this zone's data.
     /// </summary>
     private static bool IsWithinZone(DnsName name, CachedZone zone)
     {
@@ -702,22 +668,18 @@ public class AuthoritativeQueryResolver(
     ) => RecordEntityCodec.ToWireRecords(records, ownerName);
 
     /// <summary>
-    ///     This method decodes a stored record's own JSON data into its strongly-typed model,
-    ///     used where a resolver needs to inspect a record's *meaning* -- an NS record's
-    ///     nameserver, a CNAME's target, a SOA's negative-caching minimum -- rather than just
-    ///     serve it as-is. Returns <see langword="null" /> for a record type with no registered
-    ///     codec.
+    ///     This method decodes a stored record's data into its typed model, for when the resolver
+    ///     needs a value from it (an NS name, a CNAME target, the SOA minimum). It returns
+    ///     <see langword="null" /> for a type with no registered codec.
     /// </summary>
     private static IDnsRecordData DecodeTypedData(RecordEntity record) =>
         RecordEntityCodec.DecodeTypedData(record);
 
     /// <summary>
-    ///     This method appends a signed RRset's own covering RRSIG(s) to a response section,
-    ///     rewriting each one's owner name to whatever name the RRset itself is actually being
-    ///     served under -- identical to <paramref name="signatureLookupName" /> for an ordinary
-    ///     exact match, but different for a wildcard-synthesized answer, where the RRSIG was
-    ///     computed under the literal wildcard name yet must be served under the name the client
-    ///     actually queried for.
+    ///     This method appends the RRSIGs covering an RRset to a response section, with their owner
+    ///     name set to the name the RRset is served under. That equals
+    ///     <paramref name="signatureLookupName" /> for an exact match; for a wildcard answer the
+    ///     RRSIG is stored under the <c>*</c> name but served under the queried name.
     /// </summary>
     private static void AppendRewrittenSignatures(
         List<DnsResourceRecord> target,

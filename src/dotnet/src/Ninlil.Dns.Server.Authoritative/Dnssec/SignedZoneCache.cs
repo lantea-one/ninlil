@@ -13,27 +13,23 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class holds every signed zone's current <see cref="SignedZoneData" /> in memory --
-///     the DNSSEC counterpart to <see cref="Cache.AuthoritativeZoneCache" />, computed once by
-///     <see cref="IZoneSigningService" /> and served from here thereafter, matching this project's
-///     deliberate stance against ever signing live, per query. Kept as its own cache, entirely separate
-///     from <see cref="Cache.AuthoritativeZoneCache" />'s ordinary zone data, since a signed
-///     RRset's RRSIG/NSEC/NSEC3/DNSKEY content is generated, not operator-edited, and re-signing
-///     it should never be conflated with an ordinary record change going through
-///     <see cref="Journal.IZoneUpdateService" />.
+///     This class holds every signed zone's <see cref="SignedZoneData" /> in memory, next to
+///     <see cref="Cache.AuthoritativeZoneCache" />'s record data. Primary and CloudPrimary zones
+///     are signed here with <see cref="IZoneSigningService" />; Secondary, SecondaryCatalog and
+///     CloudSecondary zones have their transferred DNSSEC records read back from storage (see
+///     <see cref="TransferredSignedZoneDataBuilder" />). The resolver and zone transfer read it
+///     through <see cref="GetSignedData" />. It loads every zone at startup, and reloads a zone on
+///     <see cref="DnsZoneChangedEvent" /> (<see cref="SignedZoneChangedEventSubscriber" />), on
+///     the re-signing schedule and on key rollover steps.
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to reach the repositories and signing service this cache loads through,
-///     in a scope of its own so it never holds a database context open longer than a single sign.
+///     The factory used to reach the repositories and signing service, one scope per load so no
+///     database context is held longer than one zone.
 /// </param>
 /// <param name="logger">The logger this cache records a single zone's signing failure to.</param>
 /// <param name="eventPublisher">
-///     The publisher this cache raises <see cref="DnssecZoneResigningCompletedEvent" /> through
-///     after every successful (re-)sign -- optional, defaulting to <see langword="null" />, the
-///     same pattern every other optional cross-cutting dependency in this project's constructors
-///     already follows (see <c>DnsQueryProcessingPipeline</c>'s own <c>filterEngine</c>/
-///     <c>rateLimiter</c> parameters), so every pre-existing caller/test that does not supply one
-///     keeps compiling and behaving unchanged.
+///     The publisher for <see cref="DnssecZoneResigningCompletedEvent" />, raised after each
+///     successful local signing. With <see langword="null" />, nothing is published.
 /// </param>
 public sealed class SignedZoneCache(
     IServiceScopeFactory scopeFactory,
@@ -42,30 +38,19 @@ public sealed class SignedZoneCache(
 ) : IHostedService
 {
     /// <summary>
-    ///     This property contains every currently cached, locally computed signed zone, keyed by
-    ///     its identifier -- a Primary/CloudPrimary zone this instance itself signs from its own
-    ///     key material (see <see cref="TrySignAndStoreAsync" />). This is the one set
-    ///     <see cref="CachedZoneIds" /> exposes, and therefore the only one
-    ///     <see cref="DnssecResigningBackgroundService" />'s own proactive re-sign loop ever
-    ///     walks -- see <see cref="_transferredSignedZonesByZoneId" />'s own doc comment for why a
-    ///     secondary zone's held content is kept in a dictionary of its own instead.
+    ///     This field contains the zones signed here (Primary and CloudPrimary), keyed by ID. Only
+    ///     these appear in <see cref="CachedZoneIds" />, which the re-signing and key rollover
+    ///     services walk.
     /// </summary>
     private readonly ConcurrentDictionary<Guid, SignedZoneData> _signedZonesByZoneId = new();
 
     /// <summary>
-    ///     This property contains every currently cached signed zone whose own RRSIG/NSEC/NSEC3/
-    ///     NSEC3PARAM/DNSKEY/DS content was never computed by this instance at all, but arrived
-    ///     pre-signed via a real zone transfer (Secondary/SecondaryCatalog/CloudSecondary) and is
-    ///     held here exactly as received -- see <see cref="TransferredSignedZoneDataBuilder" /> for
-    ///     what "held" actually means. Deliberately a second dictionary rather than folded into
-    ///     <see cref="_signedZonesByZoneId" />: <see cref="CachedZoneIds" /> (and, through it,
-    ///     <see cref="DnssecResigningBackgroundService" />'s own proactive resign-then-bump-serial
-    ///     loop) must never walk a secondary zone at all -- this instance holds no private key
-    ///     material to re-sign it with, and bumping its own SOA serial would be an unauthorized
-    ///     write to a zone this server does not own the master copy of.
-    ///     <see cref="GetSignedData" /> is the one place both dictionaries are actually merged, so
-    ///     <see cref="Resolution.AuthoritativeQueryResolver" />/<see cref="Transfer.ZoneTransferService" />
-    ///     need not know or care which one actually holds a given zone's entry.
+    ///     This field contains secondary zones whose DNSSEC records arrived signed by a zone
+    ///     transfer (Secondary, SecondaryCatalog, CloudSecondary), rebuilt by
+    ///     <see cref="TransferredSignedZoneDataBuilder" />. They are kept apart so
+    ///     <see cref="CachedZoneIds" /> never lists them: this server has no keys to re-sign them
+    ///     and must not bump the serial of a zone it does not own. <see cref="GetSignedData" />
+    ///     reads both dictionaries.
     /// </summary>
     private readonly ConcurrentDictionary<Guid, SignedZoneData> _transferredSignedZonesByZoneId =
         new();
@@ -77,15 +62,9 @@ public sealed class SignedZoneCache(
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
 
-        // Local signing exists to produce RRSIGs for content this instance itself authors and
-        // serves. A classic Primary zone is the obvious case; a CloudPrimary zone is the same
-        // case in substance -- this instance is still the authoritative source pushed out to the
-        // cloud connector, and nothing signs it upstream first. A Secondary/CloudSecondary zone
-        // is deliberately excluded here: its signed content (RRSIGs included) always arrives
-        // pre-signed via NOTIFY/AXFR from whatever is actually authoritative, so this cache
-        // signing it too would both be redundant and risk producing signatures that disagree
-        // with the real primary's own -- see the loop immediately below for how a zone like that
-        // is actually handled instead.
+        // Sign zones this server is the source for: Primary, and CloudPrimary (pushed to the
+        // cloud provider from here). Secondary zones arrive already signed by their primary and
+        // are loaded by the second loop below.
         IReadOnlyList<ZoneEntity> signedZones = await zoneRepository.ListAsync(
             zone =>
                 !zone.IsDisabled
@@ -94,25 +73,16 @@ public sealed class SignedZoneCache(
             cancellationToken
         );
 
-        // One misconfigured zone (marked signed but with no active key yet, for example) must
-        // not prevent every other signed zone from loading at all -- the same reasoning
-        // DnssecResigningBackgroundService's own per-zone try/catch already follows.
+        // TrySignAndStoreAsync logs failures, so one bad zone (signed but with no key, for
+        // example) does not stop the others.
         foreach (ZoneEntity zone in signedZones)
             await TrySignAndStoreAsync(zone.Id, zone.Name, cancellationToken);
 
-        // A signed secondary zone already sitting on disk at boot -- its own AXFR/IXFR-transferred
-        // RRSIG/NSEC/NSEC3/NSEC3PARAM/DNSKEY content already committed by an earlier process run --
-        // must have that content loaded into this cache too, not only ever picked up the next time
-        // a live transfer happens to complete. Left undone, a validating client querying it would
-        // go right back to receiving no RRSIG at all for the entire interval between this restart
-        // and whenever that zone's next scheduled refresh happens to land.
+        // Load signed secondary zones already in storage, or they would serve no RRSIGs until
+        // their next transfer.
         //
-        // The zone-type check here is written out as a literal three-way comparison rather than a
-        // call to IsTransferredSignedZoneType, deliberately -- EF Core's LINQ provider cannot
-        // translate an arbitrary static C# method call into SQL, exactly the same real,
-        // one-time-discovered trap AuthoritativeZoneCache.StartAsync's own doc comment already
-        // records; a version calling that helper directly inside this predicate throws
-        // InvalidOperationException at query time, not compile time.
+        // The type check is spelled out instead of calling IsTransferredSignedZoneType because
+        // EF Core cannot translate a C# method call to SQL and throws at query time.
         IReadOnlyList<ZoneEntity> transferredSignedZones = await zoneRepository.ListAsync(
             zone =>
                 !zone.IsDisabled
@@ -133,16 +103,15 @@ public sealed class SignedZoneCache(
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
-    ///     This method looks up a zone's currently cached signed content -- whichever of this
-    ///     cache's two dictionaries actually holds it, a locally-signed Primary/CloudPrimary zone
-    ///     or a secondary-flavor zone's own held, transferred content; the caller (
-    ///     <see cref="Resolution.AuthoritativeQueryResolver" />/<see cref="Transfer.ZoneTransferService" />)
-    ///     never needs to know or care which.
+    ///     This method returns a zone's signed content from either dictionary, so
+    ///     <see cref="Resolution.AuthoritativeQueryResolver" /> and
+    ///     <see cref="Transfer.ZoneTransferService" /> do not need to know which kind of zone it
+    ///     is.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to look up.</param>
     /// <returns>
-    ///     The zone's signed content, or <see langword="null" /> if the zone is not signed, or
-    ///     has not been signed (or, for a secondary-flavor zone, transferred) yet.
+    ///     The zone's signed content, or <see langword="null" /> if the zone is not signed or has
+    ///     not been signed (or, for a secondary, transferred) yet.
     /// </returns>
     public SignedZoneData GetSignedData(Guid zoneId) =>
         _signedZonesByZoneId.TryGetValue(zoneId, out SignedZoneData signedData)
@@ -150,20 +119,16 @@ public sealed class SignedZoneCache(
             : _transferredSignedZonesByZoneId.GetValueOrDefault(zoneId);
 
     /// <summary>
-    ///     This property contains the identifiers of every zone currently held in this cache,
-    ///     used by <see cref="DnssecResigningBackgroundService" /> to know which zones to check
-    ///     for an approaching signature expiration.
+    ///     This property contains the IDs of the zones signed here (not the transferred ones).
+    ///     <see cref="DnssecResigningBackgroundService" /> and
+    ///     <see cref="DnssecKeyRolloverBackgroundService" /> walk it.
     /// </summary>
     public IReadOnlyCollection<Guid> CachedZoneIds => [.. _signedZonesByZoneId.Keys];
 
     /// <summary>
-    ///     This method reloads a single zone's signed content -- re-signing it locally
-    ///     (Primary/CloudPrimary) or re-reading its already-transferred content back out of
-    ///     storage (a secondary-flavor zone, right after
-    ///     <see cref="SignedZoneChangedEventSubscriber" /> reacts to the very
-    ///     <c>DnsZoneChangedEvent</c> a completed AXFR/IXFR pull just published) -- removing it
-    ///     from this cache entirely if it no longer qualifies for either (deleted, disabled,
-    ///     changed to an ineligible type, or no longer marked signed).
+    ///     This method reloads one zone: it re-signs a Primary or CloudPrimary zone, or re-reads a
+    ///     secondary's transferred DNSSEC records (as after a completed AXFR/IXFR). A zone that no
+    ///     longer qualifies (deleted, disabled, another type, or not signed) is removed.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to reload.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -184,9 +149,7 @@ public sealed class SignedZoneCache(
             }
         )
         {
-            // A zone cannot be both locally-signed and secondary-flavor at once -- clear the
-            // other dictionary's entry too, in case this zone's own type just changed away from
-            // one and into the other since it was last cached.
+            // The zone's type may have changed, so drop any entry in the other dictionary.
             _transferredSignedZonesByZoneId.TryRemove(zoneId, out _);
             await TrySignAndStoreAsync(zoneId, zone.Name, stoppingToken);
         }
@@ -208,17 +171,12 @@ public sealed class SignedZoneCache(
     }
 
     /// <summary>
-    ///     This method performs a schedule-driven, proactive re-sign for a zone whose signatures
-    ///     are approaching expiry -- called only by
-    ///     <see cref="DnssecResigningBackgroundService" />, never in reaction to an ordinary
-    ///     record change (<see cref="SignedZoneChangedEventSubscriber" />'s own
-    ///     <see cref="ReloadZoneAsync" /> call already covers that case, and must never also bump
-    ///     the serial itself, since the record change that triggered it already did). Real-world
-    ///     DNS convention treats a re-sign as a genuine content change -- a secondary's stale
-    ///     RRSIGs are exactly as wrong as a stale record -- so this bumps the zone's own SOA
-    ///     serial through <see cref="IZoneUpdateService.BumpSerialForDnssecResignAsync" /> before
-    ///     re-signing, matching this project's own confirmed decision that a resign is a real
-    ///     change a secondary must notice.
+    ///     This method re-signs a zone whose signatures are close to expiring.
+    ///     <see cref="DnssecResigningBackgroundService" /> calls it. New RRSIGs are a content change
+    ///     secondaries must pick up, so it first bumps the SOA serial through
+    ///     <see cref="IZoneUpdateService.BumpSerialForDnssecResignAsync" />. Re-signing after a
+    ///     record change goes through <see cref="ReloadZoneAsync" /> instead, which does not bump
+    ///     the serial because the change already did.
     /// </summary>
     /// <param name="zoneId">The identifier of the zone to re-sign.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -238,10 +196,8 @@ public sealed class SignedZoneCache(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // The zone may have been deleted, disabled, or unmarked-signed since it was last
-                // cached -- ReloadZoneAsync below still runs regardless, to clear this cache
-                // entry the same way it already would for any other now-ineligible zone; only
-                // the serial bump itself is skipped.
+                // The zone may have been deleted, disabled or unsigned since it was cached.
+                // ReloadZoneAsync below still runs and removes it if so.
                 logger.LogWarning(
                     exception,
                     "Could not bump the SOA serial while proactively re-signing zone '{ZoneId}'; re-checking its eligibility instead.",
@@ -250,23 +206,16 @@ public sealed class SignedZoneCache(
             }
         }
 
-        // Re-sign explicitly, right away, rather than relying solely on the DnsZoneChangedEvent
-        // the bump above just published -- this project's events are delivered asynchronously off
-        // a background channel (see DnsServerEventPublisher), so waiting on that alone would leave
-        // this cache serving stale signatures for an indeterminate interval after the serial has
-        // already moved. SignedZoneChangedEventSubscriber's own reaction to that same event
-        // re-signs this zone all over again shortly afterward regardless -- a harmless, idempotent
-        // duplicate of the explicit reload this method already performs, cheap purely local CPU
-        // work, the same tradeoff this class's own constructor doc comment already accepts for
-        // every other resign path.
+        // Re-sign now instead of waiting for the DnsZoneChangedEvent the bump published, which
+        // is delivered later in the background; until then the new serial would be served with
+        // old signatures. The event still triggers a second, harmless re-sign.
         await ReloadZoneAsync(zoneId, stoppingToken);
     }
 
     /// <summary>
-    ///     This method signs a single zone and stores the result, replacing whatever this cache
-    ///     currently holds for it. A failure (most commonly a signed zone with no active key yet)
-    ///     is logged rather than thrown, so it cannot take down the loop signing every other zone
-    ///     -- the previously cached signed data, if any, is left untouched rather than cleared.
+    ///     This method signs one zone, stores the result and publishes
+    ///     <see cref="DnssecZoneResigningCompletedEvent" />. A failure (usually a signed zone with
+    ///     no key) is logged, not thrown, and the previous signed data is kept.
     /// </summary>
     private async Task TrySignAndStoreAsync(
         Guid zoneId,
@@ -284,9 +233,7 @@ public sealed class SignedZoneCache(
 
             _signedZonesByZoneId[zoneId] = signedData;
 
-            // Publish only after a genuinely successful sign -- never from the catch block below,
-            // and never for a zone this check skipped entirely (see ReloadZoneAsync's own
-            // else-branch removal path).
+            // Published only after a successful sign.
             eventPublisher?.Publish(
                 new DnssecZoneResigningCompletedEvent(
                     DateTimeOffset.UtcNow,
@@ -303,18 +250,12 @@ public sealed class SignedZoneCache(
     }
 
     /// <summary>
-    ///     This method loads a single secondary-flavor zone's own already-transferred DNSSEC
-    ///     content straight out of storage and caches it, replacing whatever this cache currently
-    ///     holds for it -- the secondary-side counterpart to <see cref="TrySignAndStoreAsync" />.
-    ///     Never signs anything, and never touches a <see cref="DnssecKeyEntity" /> or any private
-    ///     key material at all; see <see cref="TransferredSignedZoneDataBuilder" /> for what
-    ///     "load" actually means here. A failure is logged rather than thrown, exactly like
-    ///     <see cref="TrySignAndStoreAsync" />'s own failure handling, so one zone's own storage or
-    ///     decode problem cannot take down every other zone this loop is loading. Deliberately
-    ///     never publishes <see cref="DnssecZoneResigningCompletedEvent" /> the way
-    ///     <see cref="TrySignAndStoreAsync" /> does -- that event's own name and meaning ("this
-    ///     instance just resigned this zone") would be actively wrong for a zone this instance
-    ///     never signs at all.
+    ///     This method reads a secondary zone's transferred DNSSEC records from storage, rebuilds
+    ///     them with <see cref="TransferredSignedZoneDataBuilder" /> and caches the result: the
+    ///     secondary counterpart of <see cref="TrySignAndStoreAsync" />. It never signs or uses a
+    ///     key. Failures are logged, not thrown. It publishes no
+    ///     <see cref="DnssecZoneResigningCompletedEvent" />, since this server did not sign the
+    ///     zone.
     /// </summary>
     private async Task TryLoadTransferredSignedDataAsync(
         Guid zoneId,
@@ -338,11 +279,8 @@ public sealed class SignedZoneCache(
                 storedRecords
             );
 
-            // No DNSSEC content has actually arrived for this zone yet (a signed secondary,
-            // freshly configured, before its very first transfer completes) -- leave whatever
-            // this cache already held for it untouched, the same "log/skip, don't clear" shape
-            // TrySignAndStoreAsync's own failure handling above already follows; ReloadZoneAsync's
-            // own else-branch is what actually clears a genuinely ineligible zone's entry.
+            // Null means no DNSSEC records have arrived yet (before the first transfer), so keep
+            // what is cached. ReloadZoneAsync removes zones that no longer qualify.
             if (signedData is not null)
                 _transferredSignedZonesByZoneId[zoneId] = signedData;
         }
@@ -357,18 +295,11 @@ public sealed class SignedZoneCache(
     }
 
     /// <summary>
-    ///     This method reports whether a zone's own type is one whose signed DNSSEC content this
-    ///     cache loads by reading it back from already-transferred <see cref="RecordEntity" />
-    ///     rows, rather than by computing it locally -- every answerable secondary-flavor
-    ///     <see cref="ZoneTypeEnum" /> value <see cref="Cache.AuthoritativeZoneCache" /> itself
-    ///     also answers from (see that class's own <c>IsAnswerableZoneType</c>), minus the two
-    ///     locally-signed, primary-flavor ones <see cref="TrySignAndStoreAsync" /> already covers.
-    ///     <see cref="ZoneTypeEnum.CloudSecondary" /> is included here for the same
-    ///     future-proofing reason it is included in <c>IsAnswerableZoneType</c>, even though this
-    ///     project's cloud connectors do not currently transfer any DNSSEC-specific record type at
-    ///     all (see <c>CloudDnsRecordMapper</c>'s own 8-type list) -- a zone of this type simply
-    ///     never has any DNSKEY rows for <see cref="TransferredSignedZoneDataBuilder.Build" /> to
-    ///     find, so loading it is a safe no-op today.
+    ///     This method reports whether a zone type's DNSSEC content is read from transferred
+    ///     <see cref="RecordEntity" /> rows rather than signed here: the secondary types
+    ///     <see cref="Cache.AuthoritativeZoneCache" /> answers from. CloudSecondary is included
+    ///     although the cloud connectors import no DNSSEC record types (see
+    ///     <c>CloudDnsRecordMapper</c>), so for it loading finds no DNSKEY and does nothing.
     /// </summary>
     private static bool IsTransferredSignedZoneType(ZoneTypeEnum zoneType) =>
         zoneType

@@ -10,29 +10,24 @@ using Ninlil.Dns.Server.Authoritative.Journal;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class is the producer side of RFC 9432 (DNS Catalog Zones): it lets a
-///     <see cref="ZoneTypeEnum.Primary" />/<see cref="ZoneTypeEnum.CloudPrimary" /> zone this
-///     server originates join or leave a <see cref="ZoneTypeEnum.Catalog" /> zone it also
-///     originates, keeping that catalog zone's own well-known records
-///     (<see cref="CatalogZoneRecordNames" />) -- and, per the cluster's own "close the loop"
-///     design, both zones' own <see cref="ZoneEntity.NotifyAddresses" /> -- in sync with the
-///     change. Every actual record write goes through the same <see cref="IZoneUpdateService" />
-///     every other content change in this project does, so the resulting catalog zone content
-///     transfers to a <see cref="ZoneTypeEnum.SecondaryCatalog" /> peer via the exact same
-///     NOTIFY/AXFR/IXFR/TSIG machinery any other secondary zone already uses -- nothing about the
-///     catalog zone's own wire transport is new.
+///     This class is the RFC 9432 (DNS Catalog Zones) producer: it adds a
+///     <see cref="ZoneTypeEnum.Primary" /> or <see cref="ZoneTypeEnum.CloudPrimary" /> zone to, or
+///     removes it from, a <see cref="ZoneTypeEnum.Catalog" /> zone on this server, writing the
+///     catalog records (<see cref="CatalogZoneRecordNames" />) and adding cluster peer addresses to
+///     both zones' <see cref="ZoneEntity.NotifyAddresses" />. Record writes go through
+///     <see cref="IZoneUpdateService" />, so the catalog reaches a
+///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> peer by the usual NOTIFY and AXFR/IXFR with TSIG.
 ///     <para>
-///         Deliberately scoped to only the RFC 9432 §5 <c>&lt;unique-N&gt;.zones.$CATZ</c> member
-///         PTR entry and the §3 <c>version.$CATZ</c> schema record -- the optional §6 "coo"
-///         (change of ownership) and "group"/custom-property records the same spec defines are
-///         not produced or consumed here -- this is a deliberate, documented scope cut rather than an oversight.
+///     Only the RFC 9432 §5 member PTR (<c>&lt;unique-N&gt;.zones.$CATZ</c>) and the §3
+///     <c>version.$CATZ</c> record are produced; the <c>coo</c> and <c>group</c> properties are not
+///     supported.
 ///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository used to look up the catalog and member zones.</param>
-/// <param name="recordRepository">The repository used to find a catalog zone's own existing well-known records.</param>
-/// <param name="zoneUpdateService">The service every catalog zone record write is actually applied through.</param>
-/// <param name="unitOfWork">The unit of work a zone's own metadata (its catalog membership, its NotifyAddresses) is committed through.</param>
-/// <param name="peerAddressResolver">The resolver used to derive NotifyAddresses from this node's own known-healthy cluster peers.</param>
+/// <param name="recordRepository">The repository used to find a catalog zone's existing records.</param>
+/// <param name="zoneUpdateService">The service every catalog record write goes through.</param>
+/// <param name="unitOfWork">The unit of work zone fields (catalog membership, NotifyAddresses) are saved through.</param>
+/// <param name="peerAddressResolver">The resolver for the addresses of healthy cluster peers.</param>
 public class CatalogZoneMembershipService(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
@@ -42,34 +37,27 @@ public class CatalogZoneMembershipService(
 )
 {
     /// <summary>
-    ///     This constant contains the time-to-live, in seconds, every catalog record this service
-    ///     creates is given. RFC 9432 §3 says a catalog record's TTL "has no meaning ... and
-    ///     SHOULD be ignored" by a consumer; <c>0</c> makes that as plain as the spec's own
-    ///     examples do, rather than implying a real caching lifetime that does not exist.
+    ///     This constant contains the TTL of catalog records: 0, since RFC 9432 §3 says the TTL has
+    ///     no meaning and consumers should ignore it.
     /// </summary>
     private const uint CatalogRecordTimeToLiveSeconds = 0;
 
     /// <summary>
-    ///     This method determines whether a zone's own type is eligible to join a catalog --
-    ///     <see cref="ZoneTypeEnum.Primary" /> or <see cref="ZoneTypeEnum.CloudPrimary" />, the
-    ///     two types this server is itself the source of truth for. The same
-    ///     <c>Primary</c>/<c>CloudPrimary</c>-eligibility shape <c>PtrSyncService</c>'s own
-    ///     <c>IsEligibleZoneType</c> and <c>CaaRecordReconciliationService</c>'s own
-    ///     <c>IsEligibleZoneType</c> already establish, named identically here on purpose.
+    ///     This method reports whether a zone type may join a catalog: <see cref="ZoneTypeEnum.Primary" />
+    ///     or <see cref="ZoneTypeEnum.CloudPrimary" />, the types this server is the source for, as in
+    ///     <c>PtrSyncService.IsEligibleZoneType</c>.
     /// </summary>
     public static bool IsEligibleMemberZoneType(ZoneTypeEnum zoneType) =>
         zoneType == ZoneTypeEnum.Primary || zoneType == ZoneTypeEnum.CloudPrimary;
 
     /// <summary>
-    ///     This method lists the member zone names a catalog zone -- either the
-    ///     <see cref="ZoneTypeEnum.Catalog" /> original or a <see cref="ZoneTypeEnum.SecondaryCatalog" />
-    ///     copy of it -- currently enumerates, parsed live from its own stored PTR records. This
-    ///     is what a REST caller (and, in turn, the Angular zone page) uses to actually see a
-    ///     catalog's own current membership.
+    ///     This method lists the member zone names in a <see cref="ZoneTypeEnum.Catalog" /> or
+    ///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone, parsed from its stored PTR records. The REST
+    ///     API and the zone page use it.
     /// </summary>
     /// <param name="catalogZoneId">The identifier of the catalog (or secondary-catalog) zone to list.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>Every member zone name the catalog currently lists, ordered alphabetically.</returns>
+    /// <returns>The member zone names, in alphabetical order.</returns>
     public async Task<IReadOnlyList<string>> ListMembersAsync(
         Guid catalogZoneId,
         CancellationToken stoppingToken = default
@@ -108,13 +96,10 @@ public class CatalogZoneMembershipService(
     }
 
     /// <summary>
-    ///     This method adds a zone this server originates as a member of a catalog zone this
-    ///     server also originates: writing (or, if this is the catalog's very first member,
-    ///     first creating) its own well-known RFC 9432 records, and merging every currently
-    ///     healthy cluster peer's own address into both zones' <see cref="ZoneEntity.NotifyAddresses" />
-    ///     -- so a future content change to either one reaches every peer with no operator having
-    ///     to maintain either list by hand. Idempotent: calling this again for a zone already a
-    ///     member of the same catalog is a harmless no-op.
+    ///     This method adds a zone to a catalog on this server: it writes the RFC 9432 records
+    ///     (creating the version record with the first member) and adds healthy cluster peers to both
+    ///     zones' <see cref="ZoneEntity.NotifyAddresses" />, so later changes to either reach every peer.
+    ///     Adding a zone that is already a member of the same catalog does nothing.
     /// </summary>
     /// <param name="memberZoneId">The identifier of the zone joining the catalog.</param>
     /// <param name="catalogZoneId">The identifier of the catalog zone to join.</param>
@@ -157,11 +142,9 @@ public class CatalogZoneMembershipService(
                     + $"('{existingCatalogZoneId}'); remove it from that one first."
             );
 
-        // Every merge below is committed *before* the catalog zone's own content actually
-        // changes -- ZoneNotifyEventSubscriber reads the zone fresh, from a detached background
-        // task, the moment ApplyChangesAsync publishes DnsZoneChangedEvent below; if the address
-        // merge instead happened afterward, that background task could race it and send the very
-        // first NOTIFY this membership produces to a stale, pre-merge address list.
+        // Save the address merge before changing the catalog content: ApplyChangesAsync publishes
+        // DnsZoneChangedEvent, and ZoneNotifyEventSubscriber then reads the zone in the background,
+        // so the first NOTIFY must already see the merged addresses.
         IReadOnlyList<string> peerAddresses =
             await peerAddressResolver.ResolveHealthyPeerAddressesAsync(stoppingToken);
 
@@ -212,10 +195,8 @@ public class CatalogZoneMembershipService(
     }
 
     /// <summary>
-    ///     This method removes a zone's own membership in whichever catalog zone it currently
-    ///     belongs to, deleting its member PTR record from that catalog zone's own content.
-    ///     Idempotent: calling this for a zone that is not currently a member of anything is a
-    ///     harmless no-op.
+    ///     This method removes a zone from its catalog and deletes its member PTR record. For a zone
+    ///     in no catalog it does nothing.
     /// </summary>
     /// <param name="memberZoneId">The identifier of the zone leaving its catalog.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -235,10 +216,8 @@ public class CatalogZoneMembershipService(
         zoneRepository.Update(memberZone);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // The catalog zone itself may already have been deleted (an operator can delete a
-        // Catalog zone without first removing every member from it) -- nothing left to remove a
-        // PTR record from in that case; clearing the member zone's own field above is already
-        // everything this method owes it.
+        // The catalog zone may already be deleted (members need not be removed first); then
+        // clearing the member's field is all there is to do.
         if (catalogZone is null)
             return;
 
@@ -270,17 +249,14 @@ public class CatalogZoneMembershipService(
         }
         catch (InvalidOperationException)
         {
-            // The catalog zone has no SOA record to advance -- this should not normally happen
-            // for a zone that was able to gain a member in the first place, but if it does,
-            // there is nothing further this method can do about it.
+            // The catalog zone has no SOA, so it cannot be changed; this should not happen for a zone
+            // that gained a member.
         }
     }
 
     /// <summary>
-    ///     This method ensures a catalog zone's own RFC 9432 §3 schema-version TXT record exists,
-    ///     adding it to <paramref name="recordsToAdd" /> the first time a member is ever added --
-    ///     idempotent, exactly like <see cref="Ptr.PtrSyncService" />'s own reconciliation, so
-    ///     calling it again once the record already exists is a harmless no-op.
+    ///     This method adds the RFC 9432 §3 version TXT record to <paramref name="recordsToAdd" /> if
+    ///     the catalog does not have it yet.
     /// </summary>
     private async Task EnsureVersionRecordAsync(
         ZoneEntity catalogZone,
@@ -320,7 +296,7 @@ public class CatalogZoneMembershipService(
     }
 
     /// <summary>
-    ///     This method builds a single member's own PTR record.
+    ///     This method builds a member's PTR record.
     /// </summary>
     private static RecordEntity BuildMemberPtrRecord(
         ZoneEntity catalogZone,
@@ -344,13 +320,11 @@ public class CatalogZoneMembershipService(
         };
 
     /// <summary>
-    ///     This method merges every address in <paramref name="peerAddresses" /> into a zone's
-    ///     own <see cref="ZoneEntity.NotifyAddresses" />, in place -- additively only, exactly
-    ///     mirroring this project's existing "no auto-cleanup when disabled" precedent (CAA/PTR
-    ///     auto-management): an address a peer stopped being healthy for, or that an operator
-    ///     added by hand for a reason this mechanism knows nothing about, is never removed here.
+    ///     This method adds any missing <paramref name="peerAddresses" /> to a zone's
+    ///     <see cref="ZoneEntity.NotifyAddresses" />. It never removes addresses, since it cannot tell a
+    ///     peer's from one an operator added.
     /// </summary>
-    /// <returns><see langword="true" /> if the zone's own list actually changed.</returns>
+    /// <returns>Whether the list changed.</returns>
     private static bool MergeNotifyAddresses(ZoneEntity zone, IReadOnlyList<string> peerAddresses)
     {
         if (peerAddresses.Count == 0)

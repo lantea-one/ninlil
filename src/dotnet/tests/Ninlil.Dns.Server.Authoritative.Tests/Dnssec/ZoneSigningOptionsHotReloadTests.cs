@@ -24,21 +24,12 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class proves, against a real, already-running <see cref="SignedZoneCache" /> singleton
-///     and a real <see cref="ZoneSigningOptions" /> configuration-file write -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- that
-///     <see cref="ZoneSigningService" />'s own <see cref="ZoneSigningOptions.SignatureValidityPeriod" />
-///     takes effect on the very next re-sign with no restart. Before this fix,
-///     <see cref="ZoneSigningService" /> read <see cref="ZoneSigningOptions" /> via the usual,
-///     snapshotted <see cref="IOptions{TOptions}" />, computed once and cached for the life of the
-///     process -- a write reaching the configuration file would never have been observed at all,
-///     even though <see cref="ZoneSigningService" /> is registered scoped and
-///     <see cref="SignedZoneCache.ReloadZoneAsync" /> already constructs a brand-new scope (and
-///     therefore a brand-new <see cref="ZoneSigningService" /> instance) on every single call --
-///     the real, non-obvious finding here (see
-///     <c>Ninlil.Web.Controllers.ZoneSigningSettingsController</c>'s own doc comment) is
-///     that even a *fresh instance per call* does not help when the value it
-///     reads through is itself a process-wide-cached <see cref="IOptions{TOptions}" />.
+///     This class checks that a change to <see cref="ZoneSigningOptions.SignatureValidityPeriod" />
+///     written to the configuration file reaches the next re-sign of a running
+///     <see cref="SignedZoneCache" />, without a restart. <see cref="ZoneSigningService" /> must read
+///     the options through <see cref="IOptionsMonitor{TOptions}" />: although it is created in a new
+///     scope for every sign, an <see cref="IOptions{TOptions}" /> value is cached for the life of the
+///     process (see <c>Ninlil.Web.Controllers.ZoneSigningSettingsController</c>).
 /// </summary>
 public sealed class ZoneSigningOptionsHotReloadTests : IAsyncLifetime
 {
@@ -59,9 +50,8 @@ public sealed class ZoneSigningOptionsHotReloadTests : IAsyncLifetime
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
 
-        // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider -- the
-        // exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-        // appsettings.json in a real deployment.
+        // A reload-on-change JSON file source, the same kind the web host uses for its
+        // configuration files.
         builder.Configuration.AddJsonFile(_configurationPath, optional: true, reloadOnChange: true);
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
 
@@ -158,7 +148,7 @@ public sealed class ZoneSigningOptionsHotReloadTests : IAsyncLifetime
     public async Task AWriteThroughPresetConfigurationFileApplier_ChangesTheVeryNextReSignsExpiryWithNoRestart()
     {
         // SignedZoneCache.StartAsync runs the initial full sign synchronously as part of the
-        // host's own startup, using this project's own compiled-in default: 30 days.
+        // host's startup, using this project's compiled-in default: 30 days.
         await _host.StartAsync();
 
         SignedZoneCache cache = _host.Services.GetRequiredService<SignedZoneCache>();
@@ -174,8 +164,8 @@ public sealed class ZoneSigningOptionsHotReloadTests : IAsyncLifetime
         TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
         using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-        // The exact same write mechanism ZoneSigningSettingsController.Patch itself calls --
-        // shortening validity from the compiled-in 30 days down to 7.
+        // The same write ZoneSigningSettingsController.Patch makes, cutting validity from 30 days
+        // to 7.
         await PresetConfigurationFileApplier.ApplyAsync(
             [
                 new PresetConfigurationSetting(
@@ -187,17 +177,14 @@ public sealed class ZoneSigningOptionsHotReloadTests : IAsyncLifetime
             _configurationPath
         );
 
-        // .NET's own JSON configuration provider debounces file-change notifications by a few
-        // hundred milliseconds -- this waits for that real reload to actually happen rather than
-        // asserting against a fixed delay.
+        // The JSON provider debounces file-change notifications, so wait for the reload event
+        // rather than a fixed delay.
         Task completed = await Task.WhenAny(reloaded.Task, Task.Delay(TimeSpan.FromSeconds(10)));
         Assert.Same(reloaded.Task, completed);
         Assert.Equal(TimeSpan.FromDays(7), monitor.CurrentValue.SignatureValidityPeriod);
 
-        // Re-signing now (SignedZoneCache constructs a brand-new scope, and therefore a brand-new
-        // ZoneSigningService instance, for every ReloadZoneAsync call -- proving the fix must work
-        // even though the class itself is never reused, only the configuration source is) must
-        // reflect the new 7-day validity period, not the original 30-day one.
+        // ReloadZoneAsync creates a new scope and ZoneSigningService per call, so only the options
+        // source carries the change; the new sign must use the 7-day validity, not 30 days.
         await cache.ReloadZoneAsync(_zoneId);
 
         SignedZoneData after = cache.GetSignedData(_zoneId);

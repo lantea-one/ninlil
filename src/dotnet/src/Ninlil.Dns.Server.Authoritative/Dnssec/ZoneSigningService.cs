@@ -12,26 +12,24 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class implements <see cref="IZoneSigningService" />: the offline signing pipeline
-///     that reads a zone's stored records fresh from the database and computes every piece of
-///     DNSSEC content RFC 4034/5155 require for it -- the DNSKEY RRset, an RRSIG over every
-///     signed RRset, the zone's complete NSEC or NSEC3 chain, and any DS records this zone must
-///     generate for its own delegations to other, signed zones this same server also hosts.
+///     This class implements <see cref="IZoneSigningService" />. It reads a zone's records and
+///     keys from storage and computes the DNSSEC content RFC 4034 and RFC 5155 require: the
+///     DNSKEY RRset, an RRSIG over each authoritative RRset, the full NSEC or NSEC3 chain, and DS
+///     records for delegations to signed child zones this server also hosts.
+///     <para>
+///         At a delegation point only the generated DS RRset is signed; NS records and any other
+///         stored records there (including a hand-entered DS) are skipped. Names below a
+///         delegation point (glue) are signed and included in the chain like any other name.
+///     </para>
 /// </summary>
 /// <param name="zoneRepository">The repository this service reads zones from.</param>
-/// <param name="recordRepository">The repository this service reads a zone's own records from.</param>
+/// <param name="recordRepository">The repository this service reads a zone's records from.</param>
 /// <param name="keyRepository">The repository this service reads a zone's DNSSEC keys from.</param>
 /// <param name="keyManagement">The service this service decrypts a key's private key material through.</param>
 /// <param name="options">
-///     This service's own signature-timing configuration, read fresh
-///     (<see cref="IOptionsMonitor{TOptions}.CurrentValue" />) on every signing call rather than
-///     snapshotted once -- this service is registered scoped, but the plain
-///     <see cref="IOptions{TOptions}" /> a scoped registration would otherwise receive is itself
-///     backed by a singleton whose <c>.Value</c> is computed once and cached for the life of the
-///     process, so a configuration-file write would never have been observed at all without this
-///     -- the same <see cref="IOptions{TOptions}" />-vs-<see cref="IOptionsMonitor{TOptions}" />
-///     staleness trap several other hot-reloadable options classes in this codebase guard against
-///     the same way.
+///     The signature timing settings, read through <see cref="IOptionsMonitor{TOptions}.CurrentValue" />
+///     on every signing call. <see cref="IOptions{TOptions}" /> caches its value for the life of
+///     the process, even for a scoped service, and would miss configuration changes.
 /// </param>
 public class ZoneSigningService(
     IZoneRepository zoneRepository,
@@ -42,10 +40,8 @@ public class ZoneSigningService(
 ) : IZoneSigningService
 {
     /// <summary>
-    ///     This constant contains the DS digest algorithm this service always generates for a
-    ///     delegation -- SHA-256, per IANA's "Delegation Signer (DS) Resource Record (RR) Type
-    ///     Digest Algorithms" registry, RFC 8624's mandatory-to-implement choice, chosen over the
-    ///     legacy SHA-1 option this project could equally well produce.
+    ///     This constant contains the DS digest type used for generated DS records: 2 (SHA-256),
+    ///     which RFC 8624 makes mandatory to implement.
     /// </summary>
     private const byte DsDigestType = 2;
 
@@ -66,13 +62,9 @@ public class ZoneSigningService(
 
         DnsName apexName = DnsName.Parse(zone.Name);
 
-        // "Published" here means every key still on the zone's own DNSKEY RRset at all -- every
-        // DnssecKeyLifecycleStateEnum value except Removed, which is the one state RFC 6781 itself
-        // describes as full withdrawal ("DNSKEY removal"). This deliberately includes a key that
-        // is not currently signing anything (Published, mid pre-roll wait; or Retired, kept
-        // published only so an already-cached signature it produced can still be verified) --
-        // excluding either from this DNSKEY RRset would defeat the entire point of RFC 6781's own
-        // rollover choreography.
+        // Every key except Removed goes in the DNSKEY RRset, including keys that do not sign:
+        // Published (waiting to take over) and Retired (kept so cached signatures still
+        // verify). RFC 6781 rollovers depend on both being published.
         List<DnssecKeyEntity> activeKeys =
         [
             .. (await keyRepository.ListByZoneIdAsync(zoneId, stoppingToken)).Where(key =>
@@ -85,9 +77,7 @@ public class ZoneSigningService(
                 $"Zone '{zone.Name}' is marked signed but has no active DNSSEC key."
             );
 
-        // A key actually *signs* something only in Active or DoubleSignature -- Published (not
-        // trusted enough yet) and Retired (stepping down, kept published only for verification
-        // continuity) never produce a new signature, per this enumeration's own doc comment.
+        // Only Active and DoubleSignature keys sign.
         static bool Signs(DnssecKeyEntity key) =>
             key.LifecycleState
                 is DnssecKeyLifecycleStateEnum.Active
@@ -98,10 +88,9 @@ public class ZoneSigningService(
             .. activeKeys.Where(key => key.Role == DnssecKeyRoleEnum.Ksk && Signs(key)),
         ];
 
-        // A ZSK signs every ordinary RRset; a KSK signs only the DNSKEY RRset, per RFC 6781's
-        // conventional split. When a zone has generated only a KSK (a minimal, non-idiomatic but
-        // valid configuration), that same key signs ordinary data too, rather than leaving the
-        // zone marked signed with nothing in it actually verifiable.
+        // ZSKs sign ordinary RRsets and KSKs sign the DNSKEY RRset (the usual RFC 6781 split).
+        // With no signing ZSK, the KSK signs everything; with no signing KSK, the ZSKs sign the
+        // DNSKEY RRset.
         List<DnssecKeyEntity> ordinarySigners =
         [
             .. activeKeys.Where(key => key.Role == DnssecKeyRoleEnum.Zsk && Signs(key)),
@@ -121,9 +110,8 @@ public class ZoneSigningService(
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
 
-        // A delegation point is any non-apex name carrying an NS record -- the parent zone's own
-        // NS records at its own apex describe who is authoritative for *this* zone, not a
-        // delegation of it elsewhere, so the apex itself is deliberately excluded.
+        // A delegation point is any non-apex name with NS records; the apex NS records name
+        // this zone's servers.
         HashSet<DnsName> delegationPoints =
         [
             .. recordsByName
@@ -147,7 +135,7 @@ public class ZoneSigningService(
             IReadOnlyList<DnsResourceRecord>
         > rrsigs = [];
 
-        // The DNSKEY RRset itself.
+        // The DNSKEY RRset, with the SOA's TTL (3600 if there is no SOA).
         uint dnsKeyTtl = storedRecords
             .Where(record => record.Type == DnsResourceRecordTypeEnum.Soa)
             .Select(record => record.TimeToLiveSeconds)
@@ -175,7 +163,7 @@ public class ZoneSigningService(
             rrsigs
         );
 
-        // Every ordinary RRset, plus each delegation's generated DS RRset.
+        // Every ordinary RRset, plus the generated DS RRset at each delegation point.
         foreach ((DnsName name, List<RecordEntity> recordsAtName) in recordsByName)
         {
             bool isDelegation = delegationPoints.Contains(name);
@@ -186,11 +174,9 @@ public class ZoneSigningService(
                     .Distinct()
             )
             {
-                // The SOA is always at the apex and is already covered by the ordinary path
-                // below like any other type; NS at a delegation point is the child's own
-                // authoritative data, never signed by the parent (RFC 4035 §2.2), and any glue
-                // stored alongside it belongs to the child too, so nothing else at a delegation
-                // point is eligible either.
+                // NS at a delegation point is the child's data and is not signed by the parent
+                // (RFC 4035 §2.2). Every other stored type there is skipped too, including a
+                // stored DS record; only the generated DS below is signed.
                 if (isDelegation)
                     continue;
 
@@ -280,10 +266,9 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method computes the DS records this zone must generate for each delegation that
-    ///     points at another zone this same server also hosts and has itself signed -- the one
-    ///     piece of a child's chain of trust that only its parent zone can publish, since the DS
-    ///     record's whole purpose is to be found *outside* the zone it vouches for.
+    ///     This method generates DS records for each delegation whose child zone this server hosts
+    ///     and signs. The parent must publish the DS, since it is how a validator finds the child's
+    ///     key from outside the child. Delegations to other zones get no DS.
     /// </summary>
     private async Task<
         Dictionary<DnsName, List<DnsResourceRecord>>
@@ -309,15 +294,11 @@ public class ZoneSigningService(
                 stoppingToken
             );
 
-            // Exactly one DS per delegation, naming whichever KSK is currently canonical
-            // (LifecycleState.Active) -- RFC 6781 §4.1.2/Figure 4's own Double-Signature KSK
-            // rollover keeps a single DS record at the parent throughout, swapped atomically at
-            // the "DS change" stage, rather than publishing a DS for both keys of a rollover pair
-            // simultaneously. A KSK still in DoubleSignature (either a rollover's own incoming key,
-            // not yet promoted, or its outgoing predecessor, already displaced) deliberately gets
-            // no DS of its own here -- DnssecKeyRolloverBackgroundService is the one path that
-            // actually promotes a KSK to Active, and does so only once this delegation's own DS
-            // has had time to propagate.
+            // One DS per Active KSK of the child. In a Double-Signature KSK rollover (RFC 6781
+            // §4.1.2) the parent swaps the DS at the "DS change" stage rather than publishing
+            // both, so a KSK in DoubleSignature (incoming or outgoing) gets no DS here.
+            // DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active, which moves
+            // the DS to it.
             List<DnsResourceRecord> dsRecords =
             [
                 .. childKeys
@@ -360,10 +341,9 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method signs a single RRset with every one of a set of keys, adding the result to
-    ///     <paramref name="rrsigs" /> under the RRset's own (name, type) key. An RRset with no
-    ///     records, or a set of signers with none actually registered in
-    ///     <see cref="DnssecAlgorithmRegistry" />, produces no signatures at all.
+    ///     This method signs one RRset with each signing key and stores the RRSIGs in
+    ///     <paramref name="rrsigs" /> under the RRset's (name, type). An empty RRset, or keys whose
+    ///     algorithms are not in <see cref="DnssecAlgorithmRegistry" />, produce no signatures.
     /// </summary>
     private void SignRrset(
         DnsName apexName,
@@ -448,18 +428,16 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method checks whether a name's own leftmost label is literally the wildcard
-    ///     label, per RFC 4034 §3.1.3's rule that an RRSIG's Labels field must not count it.
+    ///     This method checks whether a name's leftmost label is <c>*</c>, which an RRSIG's Labels
+    ///     field must not count (RFC 4034 §3.1.3).
     /// </summary>
     private static bool IsWildcardOwner(DnsName name) =>
         name.Labels.Count > 0 && name.Labels[0] is [(byte)'*'];
 
     /// <summary>
-    ///     This method builds every owner name that needs its own NSEC or NSEC3 record: every
-    ///     name that actually has stored records, plus every ancestor of one of those names, up
-    ///     to but excluding the zone apex, that has no records of its own -- an "empty
-    ///     non-terminal" per RFC 1035 §3.1/RFC 2308 §5, which still needs a signed denial-of-
-    ///     existence record proving it has no data even though it is not itself nonexistent.
+    ///     This method lists every owner name that needs an NSEC or NSEC3 record: each name with
+    ///     records, plus each ancestor between it and the apex (empty non-terminals, which exist
+    ///     but have no data and still need a denial record). The apex is included.
     /// </summary>
     private static List<DnsName> ComputeSignableOwnerNames(
         DnsName apexName,
@@ -476,10 +454,8 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method computes the set of record types a signed name's own NSEC/NSEC3 type
-    ///     bitmap should list, excluding a delegation point's unsigned NS/glue data down to just
-    ///     NS itself (still listed as *present*, even though it carries no RRSIG of its own), per
-    ///     RFC 4035 §2.2.
+    ///     This method lists the types for a name's NSEC or NSEC3 type bitmap. At a delegation point
+    ///     only NS is listed (RFC 4035 §2.2), plus DS when one was generated.
     /// </summary>
     private static List<DnsResourceRecordTypeEnum> ComputePresentTypes(
         DnsName name,
@@ -506,10 +482,8 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method builds a zone's complete NSEC chain per RFC 4034 §4: one record per
-    ///     signable owner name, in canonical order, each naming the very next one -- wrapping
-    ///     back to the first at the end, per §4.1.1's "circular list" rule -- and each signed the
-    ///     same way any other RRset is.
+    ///     This method builds the zone's NSEC chain (RFC 4034 §4): one record per owner name in
+    ///     canonical order, each naming the next and the last naming the first, each signed.
     /// </summary>
     private List<DnsResourceRecord> BuildNsecChain(
         DnsName apexName,
@@ -541,9 +515,7 @@ public class ZoneSigningService(
             DnsName name = ordered[i];
             DnsName next = ordered[(i + 1) % ordered.Count];
 
-            // RFC 4035 §2.3 requires every NSEC record's own type, and its own covering RRSIG,
-            // to appear in its type bitmap unconditionally -- unlike every other type there,
-            // neither depends on anything else actually being signed at this name.
+            // RFC 4035 §2.3: every NSEC bitmap lists NSEC and RRSIG.
             List<DnsResourceRecordTypeEnum> types =
             [
                 .. ComputePresentTypes(name, recordsByName, delegationPoints, generatedDs),
@@ -580,13 +552,10 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method builds a zone's complete NSEC3 chain per RFC 5155 §7.1: one record per
-    ///     signable owner name's salted, iterated hash, in ascending hash order, each naming the
-    ///     very next hash -- wrapping back to the first at the end, the same as the plain NSEC
-    ///     chain does with plain names. Every generated record's own Opt-Out flag (RFC 5155
-    ///     §3.1.2.1) is set together, zone-wide, whenever this zone has at least one insecure
-    ///     delegation -- see this method's own <c>useOptOut</c> local for why that is a whole-zone
-    ///     decision, not a per-record one.
+    ///     This method builds the zone's NSEC3 chain (RFC 5155 §7.1): one record per owner name's
+    ///     hash, in hash order, each naming the next hash and the last naming the first, plus the
+    ///     NSEC3PARAM record. The Opt-Out flag is set on every record when the zone has any
+    ///     delegation without a DS (see <c>useOptOut</c>). Insecure delegations stay in the chain.
     /// </summary>
     private (List<DnsResourceRecord> Records, DnsResourceRecord Nsec3ParamRecord) BuildNsec3Chain(
         ZoneEntity zone,
@@ -610,20 +579,10 @@ public class ZoneSigningService(
             ? []
             : Convert.FromHexString(zone.Nsec3SaltHex);
 
-        // RFC 5155 §6/§7.1: Opt-Out is a whole-zone signing decision, not a per-record one -- once
-        // a zone actually contains at least one insecure (non-DS) delegation, §7.1 step 2's own
-        // construction algorithm sets the Opt-Out bit on *every* NSEC3 RR the zone generates
-        // ("If Opt-Out is being used, set the Opt-Out bit to one"), not only the ones adjacent to
-        // an unsigned delegation -- this is what lets a delegation's insecure/secure status change
-        // later without having to recompute or re-sign the rest of the NSEC3 chain. A delegation
-        // point counts as insecure here exactly when this signing pass generated no DS record for
-        // it (see ComputeDelegationDsRecordsAsync): either it is a real, non-DS-protected
-        // delegation to a zone this server does not itself sign, or it delegates to a local child
-        // zone that is not itself DNSSEC-signed -- in both cases, this zone's own signing pass has
-        // no DS to vouch for it, which is precisely the condition Opt-Out exists to accommodate. A
-        // zone with no delegations at all, or whose every delegation is already DS-covered, needs
-        // no Opt-Out and keeps every NSEC3 RR's flag clear, per §3.1.2.1's own "Opt-Out flag clear
-        // means this record covers zero unsigned delegations" definition.
+        // RFC 5155 §7.1: Opt-Out applies to the whole zone. If any delegation has no generated
+        // DS (a child not hosted and signed here), every NSEC3 record gets the flag. With no
+        // insecure delegations the flag stays clear, which per §3.1.2.1 means no record covers
+        // an unsigned delegation.
         bool useOptOut = delegationPoints.Any(delegationPoint =>
             !generatedDs.ContainsKey(delegationPoint)
         );
@@ -646,10 +605,9 @@ public class ZoneSigningService(
             byte[] nextHash = ordered[(i + 1) % ordered.Count].Hash;
             DnsName hashedOwnerName = Nsec3Hasher.ToOwnerName(hash, apexName);
 
-            // Per RFC 5155 §7.1, an empty non-terminal's NSEC3 record carries an empty type
-            // bitmap -- its RRSIG (which the NSEC3 record itself still needs) is computed for
-            // the NSEC3 RRset at the *hashed* owner name, entirely independent of whatever RRSIG
-            // marker would otherwise appear at the original, unhashed name.
+            // RFC 5155 §7.1: an empty non-terminal gets an empty bitmap. The NSEC3 record's own
+            // RRSIG is at the hashed name and does not affect the bitmap. For other names RRSIG
+            // is added, including insecure delegation points.
             List<DnsResourceRecordTypeEnum> presentTypes = ComputePresentTypes(
                 original,
                 recordsByName,
@@ -717,9 +675,8 @@ public class ZoneSigningService(
     }
 
     /// <summary>
-    ///     This method encodes a stored key's DNSKEY RDATA -- the Zone Key flag always set (every
-    ///     key this project generates is a zone key), and the Secure Entry Point flag set if,
-    ///     and only if, the key is a <see cref="DnssecKeyRoleEnum.Ksk" />.
+    ///     This method encodes a stored key's DNSKEY RDATA with the Zone Key flag set and the
+    ///     Secure Entry Point flag set only for a <see cref="DnssecKeyRoleEnum.Ksk" />.
     /// </summary>
     private static byte[] EncodeDnsKeyRdata(DnssecKeyEntity key) =>
         DnsRecordDataCodecRegistry.Encode(
@@ -733,13 +690,13 @@ public class ZoneSigningService(
         );
 
     /// <summary>
-    ///     This class compares two byte sequences by unsigned value, most significant byte first
-    ///     -- the order RFC 5155's hash chain sorts by.
+    ///     This class compares byte sequences as unsigned values, most significant byte first, the
+    ///     order of the RFC 5155 hash chain.
     /// </summary>
     private sealed class ByteSequenceComparer : IComparer<byte[]>
     {
         /// <summary>
-        ///     This property contains the single shared instance of this stateless comparer.
+        ///     This field contains the shared instance.
         /// </summary>
         public static readonly ByteSequenceComparer Instance = new();
 

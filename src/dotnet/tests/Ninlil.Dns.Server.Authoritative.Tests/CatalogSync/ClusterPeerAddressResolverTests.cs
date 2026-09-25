@@ -12,8 +12,8 @@ using Ninlil.Dns.Server.Authoritative.CatalogSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CatalogSync;
 
 /// <summary>
-///     This class covers <see cref="ClusterPeerAddressResolver" /> against a real, SQLite-backed
-///     <see cref="IClusterNodeRepository" />.
+///     This class tests <see cref="ClusterPeerAddressResolver" /> against the EF Core
+///     <see cref="IClusterNodeRepository" /> on a temporary SQLite database.
 /// </summary>
 public sealed class ClusterPeerAddressResolverTests : IAsyncLifetime
 {

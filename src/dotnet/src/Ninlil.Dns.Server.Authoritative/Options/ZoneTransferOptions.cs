@@ -3,7 +3,8 @@ namespace Ninlil.Dns.Server.Authoritative.Options;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Authoritative:ZoneTransfer</c> section of the
-///     application's configuration and controls how this server serves zone transfers out.
+///     application's configuration and controls how <see cref="Transfer.ZoneTransferService" />
+///     serves outgoing zone transfers.
 /// </summary>
 public class ZoneTransferOptions
 {
@@ -13,12 +14,10 @@ public class ZoneTransferOptions
     public const string SectionName = "DnsServer:Authoritative:ZoneTransfer";
 
     /// <summary>
-    ///     This property contains how many resource records a single AXFR/IXFR response message
-    ///     may carry before this server starts a new one. A zone transfer response is not
-    ///     chunked by an exact byte budget -- that would mean speculatively re-serializing each
-    ///     candidate message just to measure it -- but by this simpler, still effective record
-    ///     count, which keeps every message comfortably inside a TCP DNS message's practical size
-    ///     limits for any realistic mix of record types.
+    ///     This property contains how many records one AXFR/IXFR response message carries before
+    ///     a new message starts. Messages are split by record count rather than bytes, which would
+    ///     need each message serialized to measure it. 100 keeps typical records well under the
+    ///     65,535-byte TCP message limit, though a set of very large records could exceed it.
     /// </summary>
     public int RecordsPerMessage { get; set; } = 100;
 }

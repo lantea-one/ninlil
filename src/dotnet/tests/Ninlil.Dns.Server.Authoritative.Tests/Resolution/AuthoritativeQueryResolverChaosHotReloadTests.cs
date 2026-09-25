@@ -16,25 +16,13 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Resolution;
 
 /// <summary>
-///     This class proves, against the real .NET configuration/options binding pipeline and a real
-///     reload-on-change JSON configuration file -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- that a write
-///     reaching <see cref="AuthoritativeServerOptions" /> via
-///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.BrandingSettingsController.Patch</c> itself calls) is
-///     honored by the <b>same, already-constructed</b> <see cref="AuthoritativeQueryResolver" />
-///     instance on its very next CHAOS-class query, with no restart.
-///     <para>
-///         Before this fix, <see cref="AuthoritativeQueryResolver" /> -- registered
-///         as a singleton, per <c>ServiceCollectionAuthoritativeExtension</c> -- read
-///         <see cref="AuthoritativeServerOptions" /> via the usual, snapshotted
-///         <see cref="IOptions{TOptions}" />, computed once and cached for the life of the process
-///         -- a write reaching the configuration file would never have been observed by an
-///         already-running instance at all, the same functional gap this project's other
-///         options-bound classes each already found and fixed in their own turn. Fixed by
-///         converting the resolver's own constructor parameter to
-///         <see cref="IOptionsMonitor{TOptions}" />.
-///     </para>
+///     This class checks that a change to <see cref="AuthoritativeServerOptions" /> written through
+///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (what
+///     <c>Ninlil.Web.Controllers.BrandingSettingsController.Patch</c> calls) into a reload-on-change
+///     JSON file is used by the same, singleton <see cref="AuthoritativeQueryResolver" /> on its next
+///     CHAOS query, without a restart. The resolver must read the options through
+///     <see cref="IOptionsMonitor{TOptions}" />; an <see cref="IOptions{TOptions}" /> value is cached
+///     for the life of the process.
 /// </summary>
 public sealed class AuthoritativeQueryResolverChaosHotReloadTests
 {
@@ -48,9 +36,8 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the same kind the web host uses for its
+            // configuration files.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -65,7 +52,7 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
                 IOptionsMonitor<AuthoritativeServerOptions>
             >();
 
-            // Before any write, CHAOS queries are off -- this class's own compiled-in default.
+            // Before any write, CHAOS queries are off -- this class's compiled-in default.
             Assert.False(monitor.CurrentValue.EnableChaosVersionQueries);
 
             // AuthoritativeZoneCache/SignedZoneCache need only an IServiceScopeFactory (and, for
@@ -112,7 +99,7 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
             TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-            // The exact same write mechanism BrandingSettingsController.Patch itself calls.
+            // The same write BrandingSettingsController.Patch makes.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -129,9 +116,8 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
+            // The JSON provider debounces file-change notifications, so wait for the reload event
+            // rather than a fixed delay.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
@@ -139,9 +125,8 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
             Assert.Same(reloaded.Task, completed);
             Assert.True(monitor.CurrentValue.EnableChaosVersionQueries);
 
-            // The identical resolver instance, constructed before the write, now genuinely
-            // answers CHAOS queries -- proof the value was actually re-read on this call rather
-            // than captured once at construction.
+            // The same resolver, built before the write, now answers CHAOS queries, so the options are
+            // re-read per query.
             DnsQueryResolution afterHostname = await resolver.TryResolveAsync(
                 BuildChaosQuery(DnsResourceRecordTypeEnum.Txt)
             );
@@ -162,7 +147,7 @@ public sealed class AuthoritativeQueryResolverChaosHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }

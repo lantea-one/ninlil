@@ -6,13 +6,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupNetworkRepository" />'s
-///     real, pushed-down <c>SearchByGroupIdAsync</c>/<c>CountByGroupIdAsync</c> pagination against
-///     a real SQLite-backed database -- the Phase 13j proof that
-///     <c>ClientGroupNetworksController</c>'s own network listing no longer materializes every
-///     network into memory before slicing a page out of it, and that a second group's own
-///     networks never leak into another group's page, mirroring
-///     <see cref="DnssecKeyRepositorySearchTests" />'s own Phase 13h proof for the same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupNetworkRepository" /> (<c>SearchByGroupIdAsync</c>, <c>CountByGroupIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>ClientGroupNetworksController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks that another group's networks never appear.
 /// </summary>
 public sealed class ClientGroupNetworkRepositorySearchTests : IAsyncLifetime
 {
@@ -23,9 +21,9 @@ public sealed class ClientGroupNetworkRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds one target group's five networks, deliberately out of CIDR creation
-    ///     order, plus one extra network on an entirely different group, so a passing
-    ///     group-scoping assertion can only be explained by a real, translated
+    ///     This method seeds one target group's five networks, out of CIDR creation
+    ///     order, plus one extra network on a different group, so a passing
+    ///     group-scoping assertion can only be explained by a translated
     ///     <c>WHERE ClientGroupId = ...</c> clause, not by the target group simply happening to be
     ///     the only group with any networks at all.
     /// </summary>

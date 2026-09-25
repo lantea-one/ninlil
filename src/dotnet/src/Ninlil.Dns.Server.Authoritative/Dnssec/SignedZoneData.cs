@@ -5,37 +5,35 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
-///     This class holds one zone's complete DNSSEC-signed content, computed once by
-///     <see cref="ZoneSigningService" /> and served from cache (<see cref="SignedZoneCache" />)
-///     thereafter, matching this project's deliberate stance against ever signing live, per query.
+///     This class holds one zone's DNSSEC content: DNSKEYs, RRSIGs, the NSEC or NSEC3 chain and
+///     generated DS records. <see cref="ZoneSigningService" /> computes it for zones signed here,
+///     and <see cref="TransferredSignedZoneDataBuilder" /> rebuilds it from the signed records
+///     a secondary zone received by transfer. <see cref="SignedZoneCache" /> holds it and the
+///     resolver serves from it.
 /// </summary>
-/// <param name="dnsKeyRecords">Every active key's own <see cref="Common.Wire.Records.DnsKeyRecordData" /> record, at the zone apex.</param>
+/// <param name="dnsKeyRecords">The apex DNSKEY records: one per key that is not <c>Removed</c>.</param>
 /// <param name="rrsigsByCoveredRrset">
-///     Every computed signature, keyed by the owner name and type of the RRset it covers. More
-///     than one signature can cover the same RRset when more than one active key of the
-///     relevant role exists at once (an overlapping key rollover, most commonly).
+///     Every signature, keyed by the owner name and type of the RRset it covers. An RRset has
+///     several when more than one key of the role is signing, as during a rollover.
 /// </param>
 /// <param name="denialOfExistenceRecords">
-///     The zone's complete NSEC or NSEC3 chain, already in the order a validator's own
-///     canonical-order (NSEC) or hash-order (NSEC3) walk expects.
+///     The zone's complete NSEC chain in canonical order, or NSEC3 chain in hash order.
 /// </param>
 /// <param name="nsec3ParamRecord">
-///     The zone's own <see cref="Common.Wire.Records.Nsec3ParamRecordData" /> record, or
+///     The zone's <see cref="Common.Wire.Records.Nsec3ParamRecordData" /> record, or
 ///     <see langword="null" /> when the zone uses <see cref="DnssecDenialOfExistenceModeEnum.Nsec" />
 ///     instead.
 /// </param>
 /// <param name="generatedDsRecordsByDelegationName">
-///     The <see cref="Common.Wire.Records.DsRecordData" /> records this zone generated for its
-///     own delegations to other, signed zones this same server also hosts -- the one piece of a
-///     child's chain of trust that only its parent, not the child itself, can ever publish.
+///     The <see cref="Common.Wire.Records.DsRecordData" /> records generated for delegations to
+///     signed child zones this server also hosts, keyed by delegation point. The parent
+///     publishes the DS, not the child.
 /// </param>
 /// <param name="signatureExpiresAtUtc">
-///     The point every signature computed in this pass expires at -- a single, shared value,
-///     since every signature <see cref="ZoneSigningService" /> computes in one pass shares one
-///     <see cref="Common.Wire.Records.RrSigRecordData.SignatureExpiration" />. Used by
-///     <see cref="DnssecResigningBackgroundService" /> to decide when this zone is due for a
-///     proactive re-sign, without needing to decode every signature in the zone just to find the
-///     earliest one.
+///     When the signatures expire. Every signature from one signing pass shares the same
+///     <see cref="Common.Wire.Records.RrSigRecordData.SignatureExpiration" />, so one value
+///     tells <see cref="DnssecResigningBackgroundService" /> when the zone is due, without
+///     decoding every RRSIG.
 /// </param>
 public sealed class SignedZoneData(
     IReadOnlyList<DnsResourceRecord> dnsKeyRecords,
@@ -53,7 +51,7 @@ public sealed class SignedZoneData(
 )
 {
     /// <summary>
-    ///     This property contains every active key's own DNSKEY record, at the zone apex.
+    ///     This property contains the apex DNSKEY records.
     /// </summary>
     public IReadOnlyList<DnsResourceRecord> DnsKeyRecords { get; } = dnsKeyRecords;
 
@@ -73,14 +71,14 @@ public sealed class SignedZoneData(
         denialOfExistenceRecords;
 
     /// <summary>
-    ///     This property contains the zone's own NSEC3PARAM record, or <see langword="null" />
+    ///     This property contains the zone's NSEC3PARAM record, or <see langword="null" />
     ///     when the zone uses NSEC instead.
     /// </summary>
     public DnsResourceRecord Nsec3ParamRecord { get; } = nsec3ParamRecord;
 
     /// <summary>
-    ///     This property contains the DS records this zone generated for its own delegations to
-    ///     other, signed zones this same server also hosts.
+    ///     This property contains the DS records generated for delegations to signed child zones
+    ///     this server hosts, keyed by delegation point.
     /// </summary>
     public IReadOnlyDictionary<
         DnsName,
@@ -88,7 +86,7 @@ public sealed class SignedZoneData(
     > GeneratedDsRecordsByDelegationName { get; } = generatedDsRecordsByDelegationName;
 
     /// <summary>
-    ///     This property contains the point every signature in this pass expires at.
+    ///     This property contains when the signatures from this pass expire.
     /// </summary>
     public DateTimeOffset SignatureExpiresAtUtc { get; } = signatureExpiresAtUtc;
 

@@ -6,20 +6,13 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsRewriteRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13i proof that <c>DnsRewritesController</c>'s own
-///     rewrite listing no longer materializes every rewrite into memory before slicing a page out
-///     of it, and that the real domain-then-creation-time ordering <c>DnsRewritesController</c>
-///     already applied in-memory survives the move to a real <c>ORDER BY</c>, mirroring
-///     <see cref="DnsForwarderRepositorySearchTests" />'s own Phase 13h two-key ordering proof for
-///     the same shape. This class's own passing runs are also the live proof that
-///     <c>DnsRewriteConfiguration</c>'s new <c>CreatedAtUtc</c>-as-UTC-ticks conversion actually
-///     fixes the exact SQLite <c>ORDER BY</c>-over-<c>DateTimeOffset</c> failure Phase 13h's own
-///     <c>DnssecKeyRepositorySearchTests</c> first caught for the identical shape of problem --
-///     without that conversion, this class's own tests fail with a real
-///     <see cref="System.NotSupportedException" /> from SQLite's own EF Core provider, not merely
-///     an assertion mismatch.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsRewriteRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>DnsRewritesController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks the domain-then-creation-time ordering. SQLite can only sort <c>CreatedAtUtc</c>
+///     because <c>DnsRewriteConfiguration</c> stores it as UTC ticks; without that conversion these
+///     tests throw <see cref="System.NotSupportedException" />.
 /// </summary>
 public sealed class DnsRewriteRepositorySearchTests : IAsyncLifetime
 {
@@ -32,8 +25,8 @@ public sealed class DnsRewriteRepositorySearchTests : IAsyncLifetime
     /// <summary>
     ///     This method seeds five rewrites with a deliberate mix of <c>Domain</c> ties (broken by
     ///     <c>CreatedAtUtc</c>) and out-of-order creation, so a passing ordering assertion can
-    ///     only be explained by a real, translated two-key <c>ORDER BY</c>, not by creation order
-    ///     or a single sort key happening to already match.
+    ///     only be explained by a translated two-key <c>ORDER BY</c>, not by creation order
+    ///     or a single sort key already matching.
     /// </summary>
     private async Task SeedAsync()
     {

@@ -10,15 +10,12 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class tests <see cref="QuicZoneTransferClient" />. Its success path shares the exact
-///     same, already-thoroughly-covered <c>ZoneTransferPullOverStream</c> logic
-///     <see cref="ZoneTransferPullCodecTests" />/<see cref="TlsZoneTransferClientTests" /> already
-///     prove, differing only in how the connection itself is established -- and this environment,
-///     like every other QUIC-dependent test in this project (see <c>DnsOverQuicListenerTests</c>'s
-///     own identical caveat), cannot actually exercise a real QUIC handshake without
-///     <c>libmsquic</c> installed. This class only proves the one thing genuinely both testable and
-///     meaningful here: a real, deterministic <see cref="QuicConnection.IsSupported" />-gated
-///     failure, not an unhandled exception, when this platform cannot do QUIC at all.
+///     This class tests <see cref="QuicZoneTransferClient" />. Its pull logic is the shared
+///     <c>ZoneTransferPullOverStream</c> covered by <see cref="ZoneTransferPullCodecTests" /> and
+///     <see cref="TlsZoneTransferClientTests" />, and a QUIC handshake needs <c>libmsquic</c>, which
+///     the test environment may lack (as for <c>DnsOverQuicListenerTests</c>). So it checks only
+///     that an unsupported platform (<see cref="QuicConnection.IsSupported" /> false) gives a clean
+///     failure result rather than an exception.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]

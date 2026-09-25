@@ -7,35 +7,28 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This class converts between the plain name/content/TTL(/priority) shape every one of the
-///     three supported cloud providers' REST APIs models a simple record as, and Ninlil's
-///     own <see cref="DnsResourceRecord" /> wire model -- shared by every <see cref="ICloudDnsProvider" />
-///     implementation so each one's own HTTP/SDK client code stays focused on its provider's own
-///     transport shape, not record-type mapping. <see cref="ToWireRecord" />/<see cref="FromWireRecord" />
-///     cover the six record types every provider represents as one plain value (A, AAAA, CNAME,
-///     MX, NS, TXT); SRV and CAA each carry several independent fields with no single "content"
-///     value to genericize, so they instead get their own dedicated pairs --
-///     <see cref="ToSrvWireRecord" />/<see cref="FromSrvWireRecord" /> and
-///     <see cref="ToCaaWireRecord" />/<see cref="FromCaaWireRecord" />.
+///     This class converts between the name, content, TTL and priority fields the providers' APIs
+///     use and Ninlil's <see cref="DnsResourceRecord" />, for every <see cref="ICloudDnsProvider" />.
+///     <see cref="ToWireRecord" /> and <see cref="FromWireRecord" /> cover the single-value types
+///     (A, AAAA, CNAME, MX, NS, TXT); SRV and CAA have several fields and their methods.
 /// </summary>
 public static class CloudDnsRecordMapper
 {
     /// <summary>
-    ///     This method builds a <see cref="DnsResourceRecord" /> from a provider's own plain
-    ///     record fields.
+    ///     This method builds a <see cref="DnsResourceRecord" /> from a provider's plain record
+    ///     fields.
     /// </summary>
     /// <param name="type">The record's type.</param>
     /// <param name="name">The record's owner name, in presentation form, with or without a trailing dot.</param>
     /// <param name="content">
-    ///     The record's own single value: an address for A/AAAA, a target name for CNAME/NS/MX,
-    ///     or free text for TXT.
+    ///     The record's value: an address for A/AAAA, a target name for CNAME/NS/MX, or text for
+    ///     TXT.
     /// </param>
     /// <param name="timeToLiveSeconds">The record's time-to-live, in seconds.</param>
-    /// <param name="mxPreference">An MX record's own preference value; ignored for every other type.</param>
+    /// <param name="mxPreference">The MX preference; ignored for other types.</param>
     /// <exception cref="NotSupportedException">
-    ///     Thrown when <paramref name="type" /> is not one of the six plain-content record types
-    ///     this method covers -- SRV and CAA are both real <see cref="CloudDnsSyncSupportedRecordTypes.Types" />
-    ///     members, but need <see cref="ToSrvWireRecord" />/<see cref="ToCaaWireRecord" /> instead.
+    ///     Thrown when <paramref name="type" /> is not one of the six single-value types; SRV and CAA
+    ///     use <see cref="ToSrvWireRecord" /> and <see cref="ToCaaWireRecord" />.
     /// </exception>
     public static DnsResourceRecord ToWireRecord(
         DnsResourceRecordTypeEnum type,
@@ -75,11 +68,10 @@ public static class CloudDnsRecordMapper
     ///     This method reads a <see cref="DnsResourceRecord" /> back out into the plain
     ///     content/priority fields <see cref="ToWireRecord" /> built it from.
     /// </summary>
-    /// <returns>The record's own single value, and an MX record's preference (0 for every other type).</returns>
+    /// <returns>The record's value, and the MX preference (0 for other types).</returns>
     /// <exception cref="NotSupportedException">
-    ///     Thrown when <paramref name="record" />'s own type is not one of the six plain-content
-    ///     record types this method covers (SRV/CAA need <see cref="FromSrvWireRecord" />/
-    ///     <see cref="FromCaaWireRecord" /> instead), or its RDATA could not be decoded at all.
+    ///     Thrown when the record is not one of the six single-value types, or its RDATA cannot be
+    ///     decoded.
     /// </exception>
     public static (string Content, ushort MxPreference) FromWireRecord(DnsResourceRecord record)
     {
@@ -104,20 +96,15 @@ public static class CloudDnsRecordMapper
     }
 
     /// <summary>
-    ///     This method builds a <see cref="DnsResourceRecordTypeEnum.Srv" /> <see cref="DnsResourceRecord" />
-    ///     (RFC 2782) from a provider's own structured SRV fields -- SRV has no single plain-content
-    ///     value the way <see cref="ToWireRecord" /> models the other supported types (its priority,
-    ///     weight, port, and target are all independent RDATA fields), so it gets its own dedicated
-    ///     pair alongside <see cref="FromSrvWireRecord" /> rather than sharing that generic path.
+    ///     This method builds an SRV <see cref="DnsResourceRecord" /> (RFC 2782) from a provider's
+    ///     priority, weight, port and target fields.
     /// </summary>
     /// <param name="name">The record's owner name, in presentation form, with or without a trailing dot.</param>
     /// <param name="priority">
-    ///     A lower value is preferred over a higher one when more than one SRV record exists for
-    ///     the same service.
+    ///     The priority; lower values are preferred.
     /// </param>
     /// <param name="weight">
-    ///     Among records sharing the same <paramref name="priority" />, a client should prefer one
-    ///     at random, weighted proportionally to this value.
+    ///     The weight for choosing among records of equal priority.
     /// </param>
     /// <param name="port">The TCP or UDP port the service listens on.</param>
     /// <param name="target">The host providing the service, in presentation form.</param>
@@ -145,13 +132,13 @@ public static class CloudDnsRecordMapper
     }
 
     /// <summary>
-    ///     This method reads a <see cref="DnsResourceRecordTypeEnum.Srv" /> <see cref="DnsResourceRecord" />
-    ///     back out into the structured fields <see cref="ToSrvWireRecord" /> built it from.
+    ///     This method reads an SRV <see cref="DnsResourceRecord" /> into the fields
+    ///     <see cref="ToSrvWireRecord" /> takes.
     /// </summary>
     /// <param name="record">The record to read; must be of type <see cref="DnsResourceRecordTypeEnum.Srv" />.</param>
-    /// <returns>The record's own priority, weight, port, and target (without a trailing dot).</returns>
+    /// <returns>The priority, weight, port and target (without a trailing dot).</returns>
     /// <exception cref="NotSupportedException">
-    ///     Thrown when <paramref name="record" />'s own RDATA could not be decoded at all.
+    ///     Thrown when the record's RDATA cannot be decoded.
     /// </exception>
     public static (ushort Priority, ushort Weight, ushort Port, string Target) FromSrvWireRecord(
         DnsResourceRecord record
@@ -167,21 +154,17 @@ public static class CloudDnsRecordMapper
     }
 
     /// <summary>
-    ///     This method builds a <see cref="DnsResourceRecordTypeEnum.Caa" /> <see cref="DnsResourceRecord" />
-    ///     (RFC 8659) from a provider's own structured CAA fields -- see <see cref="ToSrvWireRecord" />'s
-    ///     own doc comment for why CAA needs its own dedicated pair rather than sharing
-    ///     <see cref="ToWireRecord" />'s generic single-content-value path.
+    ///     This method builds a CAA <see cref="DnsResourceRecord" /> (RFC 8659) from a provider's flag,
+    ///     tag and value fields.
     /// </summary>
     /// <param name="name">The record's owner name, in presentation form, with or without a trailing dot.</param>
     /// <param name="isCritical">
-    ///     Whether a certificate authority that does not recognize <paramref name="tag" /> must
-    ///     refuse to issue a certificate, rather than ignoring this record.
+    ///     Whether a CA that does not understand <paramref name="tag" /> must refuse to issue.
     /// </param>
     /// <param name="tag">
-    ///     What kind of policy this record expresses -- commonly <c>issue</c>, <c>issuewild</c>,
-    ///     or <c>iodef</c>.
+    ///     The property tag, usually <c>issue</c>, <c>issuewild</c> or <c>iodef</c>.
     /// </param>
-    /// <param name="value">The policy value itself -- for an <c>issue</c> tag, the permitted issuer's domain name.</param>
+    /// <param name="value">The property value; for <c>issue</c>, the permitted CA's domain.</param>
     /// <param name="timeToLiveSeconds">The record's time-to-live, in seconds.</param>
     public static DnsResourceRecord ToCaaWireRecord(
         string name,
@@ -205,13 +188,13 @@ public static class CloudDnsRecordMapper
     }
 
     /// <summary>
-    ///     This method reads a <see cref="DnsResourceRecordTypeEnum.Caa" /> <see cref="DnsResourceRecord" />
-    ///     back out into the structured fields <see cref="ToCaaWireRecord" /> built it from.
+    ///     This method reads a CAA <see cref="DnsResourceRecord" /> into the fields
+    ///     <see cref="ToCaaWireRecord" /> takes.
     /// </summary>
     /// <param name="record">The record to read; must be of type <see cref="DnsResourceRecordTypeEnum.Caa" />.</param>
-    /// <returns>The record's own criticality flag, tag, and value.</returns>
+    /// <returns>The critical flag, tag and value.</returns>
     /// <exception cref="NotSupportedException">
-    ///     Thrown when <paramref name="record" />'s own RDATA could not be decoded at all.
+    ///     Thrown when the record's RDATA cannot be decoded.
     /// </exception>
     public static (bool IsCritical, string Tag, string Value) FromCaaWireRecord(
         DnsResourceRecord record
@@ -227,9 +210,8 @@ public static class CloudDnsRecordMapper
     }
 
     /// <summary>
-    ///     This method converts a <see cref="DnsName" /> to presentation form without its own
-    ///     always-present trailing dot, matching how every provider's REST API expects a target
-    ///     name to look, and how <c>RecordEntity.Name</c> itself is stored.
+    ///     This method converts a <see cref="DnsName" /> to presentation form without the trailing dot,
+    ///     as the providers expect and as <c>RecordEntity.Name</c> is stored.
     /// </summary>
     private static string TrimTrailingDot(DnsName name) => name.ToString().TrimEnd('.');
 }

@@ -13,23 +13,21 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This class keeps every <see cref="ZoneTypeEnum.CloudPrimary" />/<see cref="ZoneTypeEnum.CloudSecondary" />
-///     zone in sync with its configured cloud DNS provider -- the REST-polling analogue of
-///     <c>SecondaryZoneRefreshService</c>'s own AXFR/IXFR refresh loop, reconciling by record
-///     content (the same technique that service's own full-transfer branch uses) rather than by
-///     any provider-assigned record ID, since three different providers have three different,
-///     mutually incompatible ID schemes.
+///     This hosted service keeps each <see cref="ZoneTypeEnum.CloudPrimary" /> and
+///     <see cref="ZoneTypeEnum.CloudSecondary" /> zone in step with its cloud DNS provider, on the
+///     zone's <see cref="ZoneEntity.CloudSyncInterval" />. CloudPrimary zones push local records to
+///     the provider; CloudSecondary zones pull the provider's records in through
+///     <see cref="IZoneUpdateService" />. Records are matched by content, like the full-transfer
+///     branch of <c>SecondaryZoneRefreshService</c>, because each provider has its record IDs.
+///     The SOA, apex NS and ExcludeFromSync records are never synced.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach every scoped repository this service needs, once per zone, per tick.</param>
+/// <param name="scopeFactory">The factory used to create a scope per zone sync.</param>
 /// <param name="providers">Every registered <see cref="ICloudDnsProvider" /> implementation.</param>
-/// <param name="protector">The protector used to decrypt a zone's own credential set.</param>
+/// <param name="protector">The protector used to decrypt a zone's credentials.</param>
 /// <param name="logger">The logger this service records per-zone sync failures to.</param>
 /// <param name="eventPublisher">
-///     The publisher this service raises <see cref="CloudDnsZoneSyncFailedEvent" /> through for
-///     a single zone's own sync failure -- optional, defaulting to <see langword="null" />, the
-///     same pattern <c>SignedZoneCache</c>'s/<c>AcmeCertificateRenewalService</c>'s own new
-///     <c>eventPublisher</c> parameters follow, so every pre-existing caller/test keeps
-///     compiling and behaving unchanged.
+///     The publisher for <see cref="CloudDnsZoneSyncFailedEvent" /> when a zone fails to sync.
+///     With <see langword="null" />, nothing is published.
 /// </param>
 public sealed class CloudDnsZoneSyncService(
     IServiceScopeFactory scopeFactory,
@@ -40,17 +38,14 @@ public sealed class CloudDnsZoneSyncService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This constant contains how often this service wakes up to check whether any zone is
-    ///     actually due for a sync -- independent of, and shorter than, any single zone's own
-    ///     <see cref="ZoneEntity.CloudSyncInterval" />, so a zone configured with a short
-    ///     interval is not left waiting behind one configured with a much longer one.
+    ///     This field contains how often the service checks for zones due a sync. It is shorter than
+    ///     any zone's <see cref="ZoneEntity.CloudSyncInterval" />, so short intervals are honoured.
     /// </summary>
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    ///     This property tracks, per zone, when this service last attempted a sync -- kept in
-    ///     memory only; a restart simply syncs every zone again immediately, which is harmless
-    ///     since this reconciliation is idempotent.
+    ///     This field records when each zone was last synced, in memory only; after a restart every
+    ///     zone syncs at once, which is harmless because syncing is idempotent.
     /// </summary>
     private readonly Dictionary<Guid, DateTimeOffset> _lastSyncedAtUtc = [];
 
@@ -69,9 +64,7 @@ public sealed class CloudDnsZoneSyncService(
             }
             catch (Exception exception)
             {
-                // One failed tick (a transient failure reaching every zone's repository, for
-                // example) must never take this whole background service down -- there is
-                // always another tick TickInterval later.
+                // A failed tick must not stop the service; the next tick tries again.
                 logger.LogWarning(exception, "A cloud DNS sync tick failed unexpectedly.");
             }
 
@@ -87,8 +80,7 @@ public sealed class CloudDnsZoneSyncService(
     }
 
     /// <summary>
-    ///     This method finds every enabled cloud-synced zone that is actually due, and syncs
-    ///     each in turn.
+    ///     This method syncs every enabled cloud zone that is due, one at a time.
     /// </summary>
     private async Task SyncDueZonesAsync(CancellationToken stoppingToken)
     {
@@ -125,8 +117,8 @@ public sealed class CloudDnsZoneSyncService(
             }
             catch (Exception exception)
             {
-                // A single zone's own sync failure (an expired token, a provider outage, a
-                // misconfigured zone ID) must never block every other zone's own sync.
+                // One zone's failure (an expired token, an outage, a wrong zone ID) must not block the
+                // others.
                 logger.LogWarning(
                     exception,
                     "Cloud DNS sync failed for zone '{ZoneName}'.",
@@ -146,9 +138,8 @@ public sealed class CloudDnsZoneSyncService(
     }
 
     /// <summary>
-    ///     This method reconciles a single zone against its configured cloud provider: pushing
-    ///     local changes out for <see cref="ZoneTypeEnum.CloudPrimary" />, or pulling the
-    ///     provider's own changes in for <see cref="ZoneTypeEnum.CloudSecondary" />.
+    ///     This method syncs one zone with its provider: pushing for
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" />, pulling for <see cref="ZoneTypeEnum.CloudSecondary" />.
     /// </summary>
     private async Task SyncZoneAsync(ZoneEntity zone, CancellationToken stoppingToken)
     {
@@ -217,13 +208,9 @@ public sealed class CloudDnsZoneSyncService(
 
         if (localRecords.Count == 0 && zone.Type == ZoneTypeEnum.CloudSecondary)
         {
-            // Unlike an RFC 5936 AXFR (which transfers the SOA itself, letting
-            // SecondaryZoneRefreshService bootstrap a brand-new secondary zone from nothing),
-            // this reconciliation deliberately never touches SOA/apex-NS records (see the type
-            // scoping note on ICloudDnsProvider) -- so a CloudSecondary zone needs its own
-            // locally-seeded SOA record before there is anywhere for ApplyChangesAsync to record
-            // a serial bump against. Skip, with a clear message, rather than let
-            // ApplyChangesAsync throw its own less specific "no SOA record" exception.
+            // Unlike AXFR, this sync never transfers the SOA, so a CloudSecondary zone needs a local SOA
+            // before ApplyChangesAsync can bump its serial. Skip with a clear message instead of letting
+            // ApplyChangesAsync throw a vaguer error.
             logger.LogWarning(
                 "Zone '{ZoneName}' is a new CloudSecondary zone with no local records yet -- seed it with its own SOA record before cloud sync can populate the rest.",
                 zone.Name
@@ -231,11 +218,9 @@ public sealed class CloudDnsZoneSyncService(
             return;
         }
 
-        // The zone's own apex SOA/NS records are managed by whichever side owns the zone's own
-        // delegation (the registrar, for a cloud provider; ApplyChangesAsync itself, locally) --
-        // neither is ever something this reconciliation should create, delete, or even consider,
-        // the same way a real cloud provider's own console does not let an operator edit them.
-        // ExcludeFromSync records are, by definition, never part of this either.
+        // The apex SOA and NS records belong to each side (the registrar or provider there,
+        // ApplyChangesAsync here), so they are never created or deleted by the sync, and neither
+        // are ExcludeFromSync records.
         List<(RecordEntity Entity, DnsResourceRecord Wire)> syncableLocal =
         [
             .. localRecords
@@ -284,7 +269,7 @@ public sealed class CloudDnsZoneSyncService(
     }
 
     /// <summary>
-    ///     This method pushes this server's own local changes out to the provider, for a
+    ///     This method pushes local changes to the provider, for a
     ///     <see cref="ZoneTypeEnum.CloudPrimary" /> zone.
     /// </summary>
     private static async Task PushLocalChangesAsync(
@@ -321,7 +306,7 @@ public sealed class CloudDnsZoneSyncService(
     }
 
     /// <summary>
-    ///     This method pulls the provider's own changes into local storage, for a
+    ///     This method pulls the provider's changes into local storage, for a
     ///     <see cref="ZoneTypeEnum.CloudSecondary" /> zone.
     /// </summary>
     private static async Task PullRemoteChangesAsync(

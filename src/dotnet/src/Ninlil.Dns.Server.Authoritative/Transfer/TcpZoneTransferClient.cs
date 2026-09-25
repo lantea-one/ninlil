@@ -9,19 +9,16 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class implements <see cref="IZoneTransferClient" />: a plain SOA query over UDP for
-///     <see cref="QuerySoaSerialAsync" />, and an RFC 1035 §4.2.2-framed AXFR/IXFR pull over plain
-///     TCP for <see cref="PullAsync" />. The confidentiality-adding counterparts,
-///     <see cref="TlsZoneTransferClient" />/<see cref="QuicZoneTransferClient" />, share this
-///     class's own wire-protocol logic via <see cref="ZoneTransferPullCodec" />, differing only in
-///     how the underlying connection itself is established.
+///     This class implements <see cref="IZoneTransferClient" /> over plain TCP: an SOA query over
+///     UDP for <see cref="QuerySoaSerialAsync" />, and an AXFR/IXFR pull with RFC 1035 §4.2.2
+///     length framing for <see cref="PullAsync" />. <see cref="TlsZoneTransferClient" /> and
+///     <see cref="QuicZoneTransferClient" /> share the protocol logic through
+///     <see cref="ZoneTransferPullCodec" /> and differ only in the connection.
 /// </summary>
 /// <param name="tsigService">The service used to sign requests and verify responses.</param>
 /// <param name="options">
-///     This client's own configuration, such as timeouts -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single pull this (scoped) client attempts, so a configuration write reaches the
-///     very next SOA query or transfer with no restart.
+///     The port and timeouts, read through <see cref="IOptionsMonitor{TOptions}" /> on every SOA
+///     query and pull, so changes apply without a restart.
 /// </param>
 public class TcpZoneTransferClient(
     ITsigService tsigService,
@@ -62,9 +59,8 @@ public class TcpZoneTransferClient(
         if (!string.IsNullOrEmpty(tsigKeyName))
             query = await tsigService.SignAsync(query, tsigKeyName, query.Id, stoppingToken);
 
-        // Captured before the query is serialized -- the first response message's own TSIG must
-        // verify against this exact MAC per RFC 8945 §5.3, chaining the response back to the
-        // specific request that produced it.
+        // Keep the request MAC: the first response's TSIG must verify against it (RFC 8945
+        // §5.3).
         byte[] requestMac = query.Tsig?.Mac;
         byte[] queryBytes = DnsMessageWriter.Write(query);
 

@@ -18,13 +18,11 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CatalogSync;
 
 /// <summary>
-///     This class covers <see cref="CatalogZoneAutoProvisioningService" /> -- the RFC 9432
-///     consumer-side diff/provision/de-provision engine -- against a real, SQLite-backed
-///     repository stack. Member PTR records are seeded directly into a
-///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone (standing in for content a real AXFR/IXFR
-///     pull would have written), rather than routed through
-///     <see cref="CatalogZoneMembershipService" />, since that service's own producer-side
-///     <c>JoinAsync</c> only ever targets a <see cref="ZoneTypeEnum.Catalog" /> original.
+///     This class tests <see cref="CatalogZoneAutoProvisioningService" />, the RFC 9432 consumer,
+///     against the EF Core repositories on a temporary SQLite database. Member PTR records are
+///     written straight into a <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone, as a transfer
+///     would, because <see cref="CatalogZoneMembershipService" /> only writes to
+///     <see cref="ZoneTypeEnum.Catalog" /> zones.
 /// </summary>
 public sealed class CatalogZoneAutoProvisioningServiceTests : IAsyncLifetime
 {
@@ -199,7 +197,7 @@ public sealed class CatalogZoneAutoProvisioningServiceTests : IAsyncLifetime
         Assert.Equal(ZoneTypeEnum.Secondary, provisioned.Type);
         Assert.Equal(catalogZoneId, provisioned.MemberOfCatalogZoneId);
         Assert.Contains("192.0.2.1", provisioned.PrimaryServerAddresses);
-        // Inherits the catalog zone's own TSIG key and transfer transport -- no separate,
+        // Inherits the catalog zone's TSIG key and transfer transport -- no separate,
         // per-member-zone provisioning an operator would otherwise have to do by hand.
         Assert.Equal("cluster-key", provisioned.TsigKeyName);
         Assert.Equal(ZoneTransferTransportEnum.Tls, provisioned.TransferTransport);
@@ -220,7 +218,7 @@ public sealed class CatalogZoneAutoProvisioningServiceTests : IAsyncLifetime
         Assert.NotNull(provisioned);
 
         // The catalog no longer lists it -- remove the member PTR record, as a real IXFR/AXFR
-        // diff replacing the catalog zone's own content would.
+        // diff replacing the catalog zone's content would.
         RecordEntity memberRecord = Assert.Single(
             await _recordRepository.ListByZoneIdAsync(catalogZoneId)
         );
@@ -313,7 +311,7 @@ public sealed class CatalogZoneAutoProvisioningServiceTests : IAsyncLifetime
     /// <summary>
     ///     This class stands in for the real <c>SecondaryZoneRefreshService</c>, recording every
     ///     zone identifier <see cref="ISecondaryZoneRefreshTrigger.RequestImmediateRefresh" /> was
-    ///     called with instead of actually scheduling a pull.
+    ///     called with instead of scheduling a pull.
     /// </summary>
     private sealed class RecordingRefreshTrigger : ISecondaryZoneRefreshTrigger
     {

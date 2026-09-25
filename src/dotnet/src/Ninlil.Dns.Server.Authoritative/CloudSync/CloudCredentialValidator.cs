@@ -5,27 +5,22 @@ using Ninlil.Dns.Common.Exceptions;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This class checks that a cloud DNS provider credential set's own secret-material fields
-///     match what its declared <see cref="CloudDnsProviderTypeEnum" /> actually requires --
-///     mirroring, but deliberately not reusing, the checks each <see cref="ICloudDnsProvider" />
-///     implementation performs for itself at sync time, so a caller managing a credential set
-///     through the REST API gets an immediate, specific rejection rather than only discovering a
-///     misconfigured credential set once <see cref="CloudDnsZoneSyncService" /> next tries to use
-///     it.
+///     This class checks that a credential set has the fields its
+///     <see cref="CloudDnsProviderTypeEnum" /> needs. Each <see cref="ICloudDnsProvider" /> checks
+///     again at sync time; checking here lets the REST API reject a bad set at once instead of
+///     <see cref="CloudDnsZoneSyncService" /> failing later.
 /// </summary>
 public static class CloudCredentialValidator
 {
     /// <summary>
-    ///     This method throws a <see cref="ValidationException" /> naming exactly which field is
-    ///     missing or empty for the given provider type, or does nothing at all when every field
-    ///     that provider type requires is present and non-empty.
+    ///     This method throws a <see cref="ValidationException" /> naming the missing or empty field,
+    ///     or returns when every required field is present.
     /// </summary>
-    /// <param name="providerType">The declared cloud DNS provider a credential set is for.</param>
-    /// <param name="credentials">The credential set's own field-value pairs to validate.</param>
+    /// <param name="providerType">The provider the credential set is for.</param>
+    /// <param name="credentials">The credential fields to validate.</param>
     /// <exception cref="ValidationException">
-    ///     Thrown when <paramref name="credentials" /> is empty, is missing a field
-    ///     <paramref name="providerType" /> requires, or <paramref name="providerType" /> itself
-    ///     is not one this project implements a cloud DNS connector for.
+    ///     Thrown when <paramref name="credentials" /> is empty or lacks a required field, or
+    ///     <paramref name="providerType" /> has no connector.
     /// </exception>
     public static void ValidateOrThrow(
         CloudDnsProviderTypeEnum providerType,
@@ -50,8 +45,7 @@ public static class CloudCredentialValidator
                     );
                 return;
 
-            // Route 53 instead authenticates an AWS access key ID paired with its own secret
-            // access key, mirroring AWS's own SigV4 credential shape.
+            // Route 53 needs an AWS access key ID and secret access key (SigV4).
             case CloudDnsProviderTypeEnum.Route53:
                 if (
                     !credentials.TryGetValue("AccessKeyId", out string accessKeyId)

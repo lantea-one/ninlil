@@ -13,10 +13,9 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="CloudflareDnsProvider" /> against a real, Kestrel-hosted fake
-///     HTTP server standing in for Cloudflare's own documented v4 REST contract -- there is no
-///     live Cloudflare account to verify against, so this is this project's own documented
-///     verification boundary for this piece.
+///     This class tests <see cref="CloudflareDnsProvider" /> against a Kestrel-hosted fake server
+///     that follows Cloudflare's documented v4 REST contract. There is no test against a live
+///     Cloudflare account.
 /// </summary>
 public sealed class CloudflareDnsProviderTests : IAsyncLifetime
 {
@@ -53,10 +52,10 @@ public sealed class CloudflareDnsProviderTests : IAsyncLifetime
                                 id = "cf-record-2",
                                 type = "SRV",
                                 name = "_sip._tcp.example.com",
-                                // Cloudflare's own real "content" value for SRV/CAA is
+                                // Cloudflare's real "content" value for SRV/CAA is
                                 // server-computed and formatted for display only -- the real
-                                // structured fields this class actually maps arrive through
-                                // "data" below, exactly as Cloudflare's own published schema
+                                // structured fields this class maps arrive through
+                                // "data" below, as Cloudflare's published schema
                                 // documents.
                                 content = "10 IN SRV 5 5060 sipserver.example.com.",
                                 ttl = 300,
@@ -138,7 +137,7 @@ public sealed class CloudflareDnsProviderTests : IAsyncLifetime
             "zone-1"
         );
 
-        // A/SRV/CAA are all supported; the fake server's own PTR record is not, and must be
+        // A/SRV/CAA are all supported; the fake server's PTR record is not, and must be
         // silently skipped rather than causing a failure.
         Assert.Equal(3, records.Count);
         Assert.Contains(records, r => r.Record.Type == DnsResourceRecordTypeEnum.A);

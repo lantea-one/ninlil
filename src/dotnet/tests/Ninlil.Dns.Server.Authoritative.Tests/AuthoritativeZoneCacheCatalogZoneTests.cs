@@ -13,16 +13,12 @@ using Ninlil.Dns.Server.Authoritative.Cache;
 namespace Ninlil.Dns.Server.Authoritative.Tests;
 
 /// <summary>
-///     This class is a regression proof for a known bug class ("any time a new answerable
-///     ZoneTypeEnum value is added, check AuthoritativeZoneCache's own zone-type filter"), exactly
-///     the shape of bug
-///     <see cref="ZoneTypeEnum.Catalog" />/<see cref="ZoneTypeEnum.SecondaryCatalog" /> could have
-///     silently repeated -- both types are genuinely answerable/transferable zones now (RFC 9432
-///     describes a catalog zone as "a regular DNS zone"), and this proves, against a real
-///     SQLite-backed repository stack (not just a code read), that both
+///     This class checks, against the EF Core repositories on a temporary SQLite database, that
 ///     <see cref="AuthoritativeZoneCache.StartAsync" /> and
-///     <see cref="AuthoritativeZoneCache.ReloadZoneAsync" /> genuinely load and reload them, while
-///     a genuinely still-out-of-scope type (<see cref="ZoneTypeEnum.Stub" />) remains excluded.
+///     <see cref="AuthoritativeZoneCache.ReloadZoneAsync" /> load <see cref="ZoneTypeEnum.Catalog" />
+///     and <see cref="ZoneTypeEnum.SecondaryCatalog" /> zones (ordinary zones under RFC 9432) and
+///     leave <see cref="ZoneTypeEnum.Stub" /> out. A zone type missing from the cache's filter is
+///     silently never loaded, so each answerable type needs a test like this.
 /// </summary>
 public sealed class AuthoritativeZoneCacheCatalogZoneTests : IAsyncLifetime
 {

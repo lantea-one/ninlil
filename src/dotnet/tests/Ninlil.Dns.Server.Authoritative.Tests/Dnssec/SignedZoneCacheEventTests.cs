@@ -23,12 +23,10 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
-///     This class covers <see cref="DnssecZoneResigningCompletedEvent" />, confirming it actually
-///     fires from <see cref="SignedZoneCache" />'s own real trigger point
-///     -- a genuinely successful sign, computed by the real <see cref="IZoneSigningService" />
-///     against a real, freshly generated DNSSEC key, not a stubbed-out signing result. This is
-///     this project's first permanent test of <see cref="SignedZoneCache" /> itself; every prior
-///     verification of it was a smoke test only.
+///     This class checks that <see cref="SignedZoneCache" /> publishes
+///     <see cref="DnssecZoneResigningCompletedEvent" /> after a successful sign by the real
+///     <see cref="IZoneSigningService" /> with a generated key, on a host with a temporary SQLite
+///     database.
 /// </summary>
 public sealed class SignedZoneCacheEventTests : IAsyncLifetime
 {
@@ -48,7 +46,7 @@ public sealed class SignedZoneCacheEventTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // Overrides AddNinlilDnsServerCore's own real IDnsServerEventPublisher registration --
+        // Overrides AddNinlilDnsServerCore's real IDnsServerEventPublisher registration --
         // this test only cares about capturing what gets published directly.
         _publisher = new RecordingEventPublisher();
         builder.Services.AddSingleton<IDnsServerEventPublisher>(_publisher);
@@ -116,7 +114,7 @@ public sealed class SignedZoneCacheEventTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
-        // A real, freshly generated key -- SignedZoneCache's own StartAsync (triggered by
+        // A real, freshly generated key -- SignedZoneCache's StartAsync (triggered by
         // _host.StartAsync() below) needs at least one active key of each role to actually
         // produce a signed result rather than logging a failure and skipping the zone.
         await keyManagement.GenerateKeyAsync(
@@ -144,9 +142,9 @@ public sealed class SignedZoneCacheEventTests : IAsyncLifetime
     public async Task StartingTheHostSignsTheZoneAndPublishesTheResigningCompletedEvent()
     {
         // SignedZoneCache.StartAsync (an IHostedService) runs the initial full sign
-        // synchronously as part of the host's own startup, unlike a BackgroundService's
+        // synchronously as part of the host's startup, unlike a BackgroundService's
         // ExecuteAsync -- so, unlike CloudDnsZoneSyncServiceTests'/
-        // AcmeCertificateRenewalServiceEventTests' own polling loops, the event is guaranteed to
+        // AcmeCertificateRenewalServiceEventTests' polling loops, the event is guaranteed to
         // already be published by the time _host.StartAsync() returns.
         await _host.StartAsync();
 
@@ -159,13 +157,10 @@ public sealed class SignedZoneCacheEventTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test covers <see cref="SignedZoneCache.ResignForScheduledExpiryAsync" /> -- the
-    ///     path <see cref="DnssecResigningBackgroundService" /> takes for a genuinely proactive,
-    ///     schedule-driven re-sign, confirming it both bumps this zone's own persisted SOA serial
-    ///     (per this project's own confirmed decision that a resign is a real content change a
-    ///     secondary must notice) and still re-signs and re-publishes
-    ///     <see cref="DnssecZoneResigningCompletedEvent" /> exactly as an ordinary
-    ///     <see cref="SignedZoneCache.ReloadZoneAsync" /> call already would.
+    ///     This test covers <see cref="SignedZoneCache.ResignForScheduledExpiryAsync" />, the path
+    ///     <see cref="DnssecResigningBackgroundService" /> uses: it must bump the zone's stored SOA serial
+    ///     (new signatures are a change secondaries must see) and still re-sign and publish
+    ///     <see cref="DnssecZoneResigningCompletedEvent" /> like <see cref="SignedZoneCache.ReloadZoneAsync" />.
     /// </summary>
     [Fact]
     public async Task ResignForScheduledExpiryAsyncBumpsTheSoaSerialAndStillPublishesTheResigningCompletedEvent()
@@ -188,8 +183,8 @@ public sealed class SignedZoneCacheEventTests : IAsyncLifetime
             RecordEntityCodec.DecodeTypedData(soaRecords[0])
         );
 
-        // The seeded SOA's own serial started at 1 (see InitializeAsync above); a schedule-driven
-        // resign must advance it exactly the same way an ordinary content change would.
+        // The seeded SOA's serial started at 1 (see InitializeAsync above); a schedule-driven
+        // resign must advance it the same way an ordinary content change would.
         Assert.Equal(2u, soaData.Serial);
 
         DnssecZoneResigningCompletedEvent signedEvent = Assert.Single(

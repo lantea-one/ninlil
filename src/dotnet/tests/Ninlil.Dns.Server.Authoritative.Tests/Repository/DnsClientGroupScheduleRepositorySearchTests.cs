@@ -7,11 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupScheduleRepository" />'s
-///     real, pushed-down <c>SearchByClientGroupIdAsync</c>/<c>CountByClientGroupIdAsync</c>
-///     pagination against a real SQLite-backed database, mirroring
-///     <see cref="DnsClientScheduleRepositorySearchTests" />'s own identical precedent, scoped by
-///     client group instead of client.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupScheduleRepository" /> (<c>SearchByClientGroupIdAsync</c>, <c>CountByClientGroupIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as the client group schedule endpoint's listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class DnsClientGroupScheduleRepositorySearchTests : IAsyncLifetime
 {

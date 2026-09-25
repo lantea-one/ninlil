@@ -7,33 +7,22 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Server.Authoritative.Journal;
 
 /// <summary>
-///     This class validates a record's own type-specific data against that type's registered
-///     <see cref="IDnsRecordDataCodec" />, and re-serializes it into the same canonical JSON form
-///     <see cref="Cache.RecordEntityCodec" /> itself produces for a wire-format record --
-///     applied here to REST-supplied JSON instead. This operates entirely on
-///     <see cref="Ninlil.Common.Serializer.JsonSerializer" />'s own JSON-to-CLR-object
-///     deserialization of a codec's <see cref="IDnsRecordDataCodec.DataType" />, a completely
-///     separate code path from <see cref="IDnsRecordDataCodec.Read(System.ReadOnlySpan{byte})" />/
-///     <see cref="IDnsRecordDataCodec.Write" />, which decode and encode a record's RDATA to and
-///     from its raw wire bytes -- the genuinely hot path every DNS query answer, zone transfer,
-///     and dynamic update shares, and which this class never touches. This class's own two
-///     methods are called only from a REST-facing write path (<c>RecordsController</c>, most
-///     immediately), so a validation failure here is always safe to report as this project's own
-///     custom exception hierarchy directly, with no shared DNS-protocol caller whose own error
-///     signaling this could disturb.
+///     This class validates record data supplied as JSON through the REST API against its type's
+///     <see cref="IDnsRecordDataCodec.DataType" />, and returns it in the same canonical JSON form
+///     <see cref="Cache.RecordEntityCodec" /> stores. It works on JSON only and never touches the
+///     RDATA wire codecs. Only REST write paths (<c>RecordsController</c> and similar) call it, so
+///     it throws <see cref="ValidationException" /> for bad input.
 /// </summary>
 public static class RecordDataValidator
 {
     /// <summary>
-    ///     This method validates and canonicalizes a record's data supplied as a
-    ///     <see cref="JsonElement" /> -- the shape a REST request body's own <c>data</c> field
-    ///     naturally arrives as once ASP.NET Core's model binder has already parsed the request.
+    ///     This method validates and canonicalizes record data given as a
+    ///     <see cref="JsonElement" />, as a REST request body's <c>data</c> field arrives.
     /// </summary>
     /// <param name="type">The record type <paramref name="data" /> is declared to hold data for.</param>
-    /// <param name="data">The record's data, exactly as supplied by the caller.</param>
+    /// <param name="data">The record's data as supplied.</param>
     /// <returns>
-    ///     The canonicalized JSON form of <paramref name="data" />, in the same PascalCase shape
-    ///     every other internal consumer of a record's stored data already produces.
+    ///     The canonical (PascalCase) JSON form of <paramref name="data" />, as stored.
     /// </returns>
     /// <exception cref="ValidationException">
     ///     Thrown when <paramref name="type" /> has no registered codec, <paramref name="data" />
@@ -46,17 +35,14 @@ public static class RecordDataValidator
         );
 
     /// <summary>
-    ///     This method is the raw-JSON-text-accepting core of <see cref="EncodeDataOrThrow" />,
-    ///     split out so a caller re-validating an already-stored record's own <c>DataJson</c>
-    ///     against a newly-chosen type (a record's own <c>PATCH</c> changing <c>type</c> without
-    ///     also supplying a new <c>data</c>, most immediately) can call it directly without
-    ///     round-tripping already-serialized JSON text through a <see cref="JsonElement" /> first.
+    ///     This method is <see cref="EncodeDataOrThrow" /> for raw JSON text, for re-validating a
+    ///     stored record's <c>DataJson</c> against a new type (a <c>PATCH</c> that changes
+    ///     <c>type</c> but not <c>data</c>).
     /// </summary>
     /// <param name="type">The record type <paramref name="json" /> is declared to hold data for.</param>
     /// <param name="json">The record's data, as raw JSON text.</param>
     /// <returns>
-    ///     The canonicalized JSON form of <paramref name="json" />, in the same PascalCase shape
-    ///     every other internal consumer of a record's stored data already produces.
+    ///     The canonical (PascalCase) JSON form of <paramref name="json" />, as stored.
     /// </returns>
     /// <exception cref="ValidationException">
     ///     Thrown when <paramref name="type" /> has no registered codec, <paramref name="json" />

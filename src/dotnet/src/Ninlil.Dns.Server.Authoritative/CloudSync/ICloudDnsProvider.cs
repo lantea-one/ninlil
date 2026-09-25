@@ -5,26 +5,16 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.CloudSync;
 
 /// <summary>
-///     This interface is implemented once per cloud DNS provider Ninlil can sync a
-///     <see cref="Data.Abstractions.Entity.ZoneEntity" /> against
-///     (<c>CloudflareDnsProvider</c>/<c>Route53DnsProvider</c>/<c>DigitalOceanDnsProvider</c>),
-///     hiding that provider's own REST API shape behind one small, uniform contract
-///     <see cref="CloudDnsZoneSyncService" /> reconciles against, the cloud-provider analogue of
-///     how <see cref="Transfer.IZoneTransferClient" /> hides AXFR/IXFR's own wire protocol.
+///     This interface is implemented once per cloud DNS provider a zone can sync with
+///     (<c>CloudflareDnsProvider</c>, <c>Route53DnsProvider</c>, <c>DigitalOceanDnsProvider</c>). It
+///     hides each provider's REST API behind the small contract <see cref="CloudDnsZoneSyncService" />
+///     uses.
 ///     <para>
-///         Scoped to the record types every one of the three providers' documented REST APIs can
-///         represent (see <see cref="CloudDnsSyncSupportedRecordTypes.Types" />): the six simple
-///         name/TTL/single-value types -- A, AAAA, CNAME, MX, NS, TXT -- mapped generically by
-///         <see cref="CloudDnsRecordMapper.ToWireRecord" />/<see cref="CloudDnsRecordMapper.FromWireRecord" />,
-///         plus SRV and CAA, each of which needs its own structured, multi-field mapping per
-///         provider (Cloudflare's own nested <c>data</c> object, DigitalOcean's own flat
-///         <c>priority</c>/<c>port</c>/<c>weight</c>/<c>flags</c>/<c>tag</c> fields, Route 53's
-///         own space-separated single-string <c>Value</c> convention) rather than one shared
-///         generic path -- see <see cref="CloudDnsRecordMapper.ToSrvWireRecord" />/
-///         <see cref="CloudDnsRecordMapper.FromSrvWireRecord" /> and
-///         <see cref="CloudDnsRecordMapper.ToCaaWireRecord" />/
-///         <see cref="CloudDnsRecordMapper.FromCaaWireRecord" />, and each provider's own
-///         implementation of this interface for the wire-format detail.
+///     Only the record types all three providers support are synced
+///     (<see cref="CloudDnsSyncSupportedRecordTypes.Types" />): A, AAAA, CNAME, MX, NS and TXT,
+///     mapped by <see cref="CloudDnsRecordMapper.ToWireRecord" /> and
+///     <see cref="CloudDnsRecordMapper.FromWireRecord" />, plus SRV and CAA, which each provider
+///     represents differently and which have their mapper methods.
 ///     </para>
 /// </summary>
 public interface ICloudDnsProvider
@@ -37,10 +27,10 @@ public interface ICloudDnsProvider
     /// <summary>
     ///     This method lists every currently published record for a zone.
     /// </summary>
-    /// <param name="credentials">This provider's own decrypted credential fields.</param>
+    /// <param name="credentials">The decrypted credential fields.</param>
     /// <param name="providerZoneId">
-    ///     The zone's own identifier at this provider (a Cloudflare zone ID, a Route 53 hosted
-    ///     zone ID, or a DigitalOcean domain name).
+    ///     The zone's ID at the provider (a Cloudflare zone ID, a Route 53 hosted zone ID, or a
+    ///     DigitalOcean domain name).
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task<IReadOnlyList<CloudDnsProviderRecord>> ListRecordsAsync(
@@ -50,12 +40,11 @@ public interface ICloudDnsProvider
     );
 
     /// <summary>
-    ///     This method publishes a new record. A record whose content has changed is deleted
-    ///     and recreated by the caller, rather than updated in place -- simpler, and avoids
-    ///     needing to persist a local-record-to-provider-record-id mapping anywhere.
+    ///     This method publishes a new record. The caller replaces a changed record by deleting and
+    ///     re-creating it, so no mapping of local records to provider IDs has to be stored.
     /// </summary>
-    /// <param name="credentials">This provider's own decrypted credential fields.</param>
-    /// <param name="providerZoneId">The zone's own identifier at this provider.</param>
+    /// <param name="credentials">The decrypted credential fields.</param>
+    /// <param name="providerZoneId">The zone's ID at the provider.</param>
     /// <param name="record">The record to publish.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task CreateRecordAsync(
@@ -68,8 +57,8 @@ public interface ICloudDnsProvider
     /// <summary>
     ///     This method removes a previously published record.
     /// </summary>
-    /// <param name="credentials">This provider's own decrypted credential fields.</param>
-    /// <param name="providerZoneId">The zone's own identifier at this provider.</param>
+    /// <param name="credentials">The decrypted credential fields.</param>
+    /// <param name="providerZoneId">The zone's ID at the provider.</param>
     /// <param name="existingRecord">The record to remove, as returned by <see cref="ListRecordsAsync" />.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     Task DeleteRecordAsync(
@@ -81,8 +70,8 @@ public interface ICloudDnsProvider
 }
 
 /// <summary>
-///     This class contains the fixed set of record types every <see cref="ICloudDnsProvider" />
-///     implementation supports -- see the scoping note on <see cref="ICloudDnsProvider" /> itself.
+///     This class lists the record types every <see cref="ICloudDnsProvider" /> supports; see
+///     <see cref="ICloudDnsProvider" />.
 /// </summary>
 public static class CloudDnsSyncSupportedRecordTypes
 {

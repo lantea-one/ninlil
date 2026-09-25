@@ -13,21 +13,15 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class proves, against real loopback UDP sockets and a real reload-on-change JSON
-///     configuration file -- not merely <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read
-///     in isolation -- that a write reaching <see cref="ZoneTransferClientOptions" /> via
-///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.ZoneTransferClientSettingsController.Patch</c> itself
-///     calls) changes which port <see cref="TcpZoneTransferClient.QuerySoaSerialAsync" /> targets
-///     on its very next attempt, with no restart. Before this fix,
-///     <see cref="TcpZoneTransferClient" /> read <see cref="ZoneTransferClientOptions" /> via the
-///     usual, snapshotted <see cref="IOptions{TOptions}" />, computed once and cached for the life
-///     of the process -- a write reaching the configuration file would never have been observed at
-///     all, the same shape this project's other options-bound classes each already found and
-///     fixed for their own options
-///     class. <see cref="TcpZoneTransferClient.PullAsync" />'s own <c>ConnectTimeout</c>/
-///     <c>ReadTimeout</c> read the exact same <c>options.CurrentValue</c> pattern, so proving
-///     <c>PrimaryPort</c> here (used by both methods) stands for the whole class.
+///     This class checks, with loopback UDP sockets, that a change to
+///     <see cref="ZoneTransferClientOptions" /> written through
+///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (what
+///     <c>Ninlil.Web.Controllers.ZoneTransferClientSettingsController.Patch</c> calls) into a
+///     reload-on-change JSON file changes the port the next
+///     <see cref="TcpZoneTransferClient.QuerySoaSerialAsync" /> uses, without a restart.
+///     <see cref="TcpZoneTransferClient.PullAsync" /> reads its port and timeouts the same way, so
+///     this one check stands for both methods. An <see cref="IOptions{TOptions}" /> value would be
+///     cached for the life of the process.
 /// </summary>
 public sealed class TcpZoneTransferClientHotReloadTests
 {
@@ -96,9 +90,8 @@ public sealed class TcpZoneTransferClientHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the same kind the web host uses for its
+            // configuration files.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -142,8 +135,8 @@ public sealed class TcpZoneTransferClientHotReloadTests
             await RespondWithSoaAsync(firstPrimary, 42);
             Assert.Equal((uint)42, await firstQueryTask);
 
-            // The exact same write mechanism ZoneTransferClientSettingsController.Patch itself
-            // calls, this time pointing PrimaryPort at the second loopback listener instead.
+            // The same write ZoneTransferClientSettingsController.Patch makes, pointing PrimaryPort at
+            // the second listener.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -155,15 +148,12 @@ public sealed class TcpZoneTransferClientHotReloadTests
                 path
             );
 
-            // Polls the actual settled value directly rather than trusting a single OnChange
-            // firing to mean the reload is fully applied -- a second write to the same monitor
-            // within one test can otherwise race a stray/delayed notification left over from the
-            // first write against this one, observed directly as a real, reproducible flake.
+            // Poll the value itself rather than trusting one OnChange: a late notification from the
+            // first write can fire first and made this test flaky.
             await WaitForReloadAsync(monitor, () => monitor.CurrentValue.PrimaryPort == secondPort);
 
-            // The identical client instance, constructed before the write, now genuinely targets
-            // the second listener -- proof the port was actually re-read rather than captured
-            // once at construction.
+            // The same client, built before the write, now uses the second listener, so the port is
+            // re-read per call.
             Task<uint?> secondQueryTask = client.QuerySoaSerialAsync(
                 IPAddress.Loopback,
                 zoneName,
@@ -180,15 +170,14 @@ public sealed class TcpZoneTransferClientHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }
 
     /// <summary>
-    ///     This method waits for a real configuration reload to actually happen (.NET's own JSON
-    ///     configuration provider debounces file-change notifications by a few hundred
-    ///     milliseconds) rather than asserting against a fixed delay.
+    ///     The JSON provider debounces file-change notifications, so wait for the reload event
+    ///     rather than a fixed delay.
     /// </summary>
     private static async Task WaitForReloadAsync(
         IOptionsMonitor<ZoneTransferClientOptions> monitor,

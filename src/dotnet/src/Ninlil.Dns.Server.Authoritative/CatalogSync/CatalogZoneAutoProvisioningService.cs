@@ -9,44 +9,34 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class is the actual RFC 9432 (DNS Catalog Zones) consumer-side auto-provisioning
-///     engine: whenever a <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone's own content changes
-///     (via an ordinary AXFR/IXFR pull -- see <see cref="Refresh.SecondaryZoneRefreshService" />),
-///     it diffs the catalog's own current member list against whatever this node has already
-///     auto-provisioned on that catalog's behalf, creating a real, ordinary
-///     <see cref="ZoneTypeEnum.Secondary" /> zone for a newly-listed member and removing a
-///     previously-provisioned one the catalog no longer lists.
+///     This class is the RFC 9432 (DNS Catalog Zones) consumer. When a
+///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone changes (after a transfer pull by
+///     <see cref="Refresh.SecondaryZoneRefreshService" />), it compares the catalog's member list with
+///     the zones already provisioned for it: it creates a <see cref="ZoneTypeEnum.Secondary" /> zone
+///     for each new member and deletes members no longer listed.
 ///     <para>
-///         This is the "close the loop" piece connecting the cluster's own peer registry to real
-///         zone propagation: a newly auto-provisioned zone's own
-///         <see cref="ZoneEntity.PrimaryServerAddresses" /> is derived from
-///         <see cref="ClusterPeerAddressResolver" />, not left blank for an operator to fill in,
-///         and it inherits the catalog zone's own <see cref="ZoneEntity.TsigKeyName" /> -- the
-///         one trust relationship this node already had to have provisioned to pull the catalog
-///         zone itself, reused rather than requiring a second, per-member-zone key an operator
-///         would otherwise have to hand-provision on both sides for every single member.
+///     A new member zone's <see cref="ZoneEntity.PrimaryServerAddresses" /> come from
+///     <see cref="ClusterPeerAddressResolver" />, and it inherits the catalog zone's
+///     <see cref="ZoneEntity.TsigKeyName" />, the key already used to pull the catalog, so no
+///     per-member key has to be set up.
 ///     </para>
 ///     <para>
-///         Deliberately conservative about a name collision: if a locally-provisioned zone
-///         already exists with the exact name a catalog wants to add, but that zone's own
-///         <see cref="ZoneEntity.MemberOfCatalogZoneId" /> does not match this catalog (an
-///         operator's own, unrelated zone, or one this same node already auto-provisioned on
-///         behalf of a *different* catalog), this service never overwrites or deletes it --
-///         only ever touching a zone whose own field already marks it as this catalog's.
+///     If a zone with a member's name already exists but its
+///     <see cref="ZoneEntity.MemberOfCatalogZoneId" /> is not this catalog (an operator's zone, or a
+///     member of another catalog), it is never changed or deleted.
 ///     </para>
 /// </summary>
-/// <param name="zoneRepository">The repository used to read the catalog zone and its own currently-provisioned members.</param>
-/// <param name="recordRepository">The repository used to remove a de-provisioned zone's own records.</param>
+/// <param name="zoneRepository">The repository used to read the catalog zone and its provisioned members.</param>
+/// <param name="recordRepository">The repository used to delete a removed member's records.</param>
 /// <param name="unitOfWork">The unit of work every zone create/delete here is committed through.</param>
 /// <param name="eventPublisher">
-///     The publisher a removed zone's own change is reported through, so
-///     <c>AuthoritativeZoneCache</c> evicts it -- mirroring <c>ZonesController.Delete</c>'s own
-///     final step exactly.
+///     The publisher used to report a removed zone, so <c>AuthoritativeZoneCache</c> drops it, as
+///     <c>ZonesController.Delete</c> does.
 /// </param>
-/// <param name="membershipService">The service this class reuses to parse a catalog zone's own current member list.</param>
-/// <param name="peerAddressResolver">The resolver used to derive a newly-provisioned zone's own primary server addresses.</param>
-/// <param name="refreshTrigger">The scheduler told to pull a newly-provisioned zone's own content immediately.</param>
-/// <param name="logger">The logger this service records provisioning/de-provisioning decisions to.</param>
+/// <param name="membershipService">The service used to read a catalog zone's member list.</param>
+/// <param name="peerAddressResolver">The resolver used for a new member's primary server addresses.</param>
+/// <param name="refreshTrigger">The scheduler told to pull a new member at once.</param>
+/// <param name="logger">The logger provisioning decisions are recorded to.</param>
 public class CatalogZoneAutoProvisioningService(
     IZoneRepository zoneRepository,
     IRecordRepository recordRepository,
@@ -59,12 +49,10 @@ public class CatalogZoneAutoProvisioningService(
 )
 {
     /// <summary>
-    ///     This method reconciles a single <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone's own
-    ///     current member list against what this node has already auto-provisioned for it -- the
-    ///     entry point <see cref="CatalogZoneAutoProvisioningEventSubscriber" /> uses in response
-    ///     to a <see cref="DnsZoneChangedEvent" />. A no-op for any other zone type, including the
-    ///     <see cref="ZoneTypeEnum.Catalog" /> original itself -- that side's own membership is
-    ///     managed directly, by an operator, through <see cref="CatalogZoneMembershipService" />.
+    ///     This method reconciles one <see cref="ZoneTypeEnum.SecondaryCatalog" /> zone's member list
+    ///     with the zones provisioned for it. <see cref="CatalogZoneAutoProvisioningEventSubscriber" />
+    ///     calls it. It does nothing for other zone types, including a <see cref="ZoneTypeEnum.Catalog" />
+    ///     zone, whose membership is managed through <see cref="CatalogZoneMembershipService" />.
     /// </summary>
     /// <param name="zoneId">The identifier of the changed zone.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -117,10 +105,8 @@ public class CatalogZoneAutoProvisioningService(
     }
 
     /// <summary>
-    ///     This method auto-provisions a single newly-listed member zone as an ordinary
-    ///     <see cref="ZoneTypeEnum.Secondary" /> zone, skipping it (log-only) rather than creating
-    ///     a conflicting duplicate if a same-named zone this catalog does not itself own already
-    ///     exists locally.
+    ///     This method creates a new member as a <see cref="ZoneTypeEnum.Secondary" /> zone, or skips
+    ///     it (with a log entry) when a zone of that name exists that this catalog does not own.
     /// </summary>
     private async Task ProvisionOneAsync(
         ZoneEntity catalogZone,
@@ -169,16 +155,13 @@ public class CatalogZoneAutoProvisioningService(
             peerAddresses.Count
         );
 
-        // The freshly-created zone has no records of its own yet -- ask
-        // SecondaryZoneRefreshService to pull it right away rather than waiting for its own next
-        // scheduled poll, the same immediacy an inbound NOTIFY already gets.
+        // The new zone has no records yet, so pull it now, as after a NOTIFY.
         refreshTrigger.RequestImmediateRefresh(newZone.Id);
     }
 
     /// <summary>
-    ///     This method removes a single previously-auto-provisioned member zone the catalog no
-    ///     longer lists -- its own records, then the zone itself, exactly mirroring
-    ///     <c>ZonesController.Delete</c>'s own cleanup.
+    ///     This method deletes a member the catalog no longer lists: its records, then the zone, as
+    ///     <c>ZonesController.Delete</c> does.
     /// </summary>
     private async Task DeprovisionOneAsync(
         ZoneEntity catalogZone,
@@ -197,8 +180,7 @@ public class CatalogZoneAutoProvisioningService(
         zoneRepository.Remove(staleZone);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // AuthoritativeZoneCache's own ReloadZoneAsync evicts a zone it can no longer find, the
-        // same as any other zone deletion.
+        // AuthoritativeZoneCache.ReloadZoneAsync drops a zone it can no longer find.
         eventPublisher.Publish(
             new DnsZoneChangedEvent(DateTimeOffset.UtcNow, staleZone.Id, staleZone.Name)
         );

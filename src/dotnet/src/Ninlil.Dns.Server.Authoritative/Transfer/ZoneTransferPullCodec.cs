@@ -10,31 +10,23 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class holds the wire-protocol logic every <see cref="IZoneTransferClient" />
-///     implementation shares regardless of which transport actually carries the bytes (plain TCP,
-///     TLS, or QUIC): building an AXFR/IXFR query, RFC 1035 §4.2.2's own 2-octet length-prefixed
-///     message framing over any <see cref="Stream" />-shaped connection (a <see cref="NetworkStream" />,
-///     an <see cref="System.Net.Security.SslStream" />, and a <see cref="System.Net.Quic.QuicStream" /> are all,
-///     conveniently, real <see cref="Stream" /> subclasses), and interpreting a fully-reassembled
-///     transfer response. Extracted from <see cref="TcpZoneTransferClient" />'s own original,
-///     single-transport implementation once <see cref="TlsZoneTransferClient" />/
-///     <see cref="QuicZoneTransferClient" /> needed the exact same logic around a differently
-///     established connection.
+///     This class holds the protocol logic the <see cref="IZoneTransferClient" />s share, whatever
+///     carries the bytes (TCP, TLS or QUIC): building the AXFR/IXFR query, RFC 1035 §4.2.2
+///     two-octet length framing over any <see cref="Stream" /> (<see cref="NetworkStream" />,
+///     <see cref="System.Net.Security.SslStream" /> and <see cref="System.Net.Quic.QuicStream" /> are
+///     all streams), the UDP SOA check, and interpreting the reassembled answer.
 /// </summary>
 internal static class ZoneTransferPullCodec
 {
     /// <summary>
-    ///     This method generates a fresh, random message identifier.
+    ///     This method generates a random message ID.
     /// </summary>
     public static ushort NewMessageId() => (ushort)Random.Shared.Next(ushort.MaxValue + 1);
 
     /// <summary>
-    ///     This method queries a primary's current SOA serial over plain UDP -- shared, unchanged,
-    ///     by every <see cref="IZoneTransferClient" /> implementation regardless of which
-    ///     transport it actually pulls a transfer over: a single, lightweight SOA lookup has no
-    ///     real confidentiality need of its own, so this deliberately never encrypts, even for
-    ///     <see cref="TlsZoneTransferClient" />/<see cref="QuicZoneTransferClient" />. The
-    ///     transfer pull itself -- the actual zone content -- is what those two transports protect.
+    ///     This method queries a primary's current SOA serial over plain UDP. Every client uses it,
+    ///     including the TLS and QUIC ones: the serial is not sensitive, while the zone content the
+    ///     pull carries is.
     /// </summary>
     public static async Task<uint?> QuerySoaSerialOverUdpAsync(
         IPAddress primaryAddress,
@@ -118,10 +110,9 @@ internal static class ZoneTransferPullCodec
         };
 
         if (currentSerial is { } serial)
-            // RFC 1995 §3: the client's own current serial travels as an SOA record in the
-            // Authority section. Only the Serial field is meaningful to a correctly-implemented
-            // primary; the rest are never inspected, but SoaRecordData has no fewer fields to
-            // give it.
+            // RFC 1995 §3: the client's serial goes as an SOA in the Authority section. Only the
+            // serial matters to the primary; the other fields are filled in because SoaRecordData
+            // needs them.
             query.AuthorityRecords.Add(
                 new DnsResourceRecord(
                     zoneName,
@@ -139,29 +130,17 @@ internal static class ZoneTransferPullCodec
     }
 
     /// <summary>
-    ///     This method interprets a transfer's fully-reassembled answer sequence, per the same
-    ///     shape-detection rule <see cref="ZoneTransferService" /> itself uses to produce one: an
-    ///     incremental diff's leading SOA is immediately followed by another, older SOA, where a
-    ///     full transfer's is not.
+    ///     This method interprets the reassembled answer records, using the same rule
+    ///     <see cref="ZoneTransferService" /> produces them by: in an incremental answer the leading
+    ///     SOA is followed by another, older SOA; in a full one it is not.
     /// </summary>
     /// <param name="flatAnswers">Every answer record from every response message, in order, flattened into one list.</param>
-    /// <param name="requestedSerial">The serial this client's own pull request carried, if any (an IXFR).</param>
+    /// <param name="requestedSerial">The serial this client's pull request carried, if any (an IXFR).</param>
     /// <param name="wasMultiMessage">
-    ///     Whether the transfer this sequence came from actually spanned more than one TCP-framed
-    ///     response message -- <em>only</em> then does <see cref="ZoneTransferService" />'s own
-    ///     producer ever append a genuinely redundant closing-SOA bookend
-    ///     (<c>CreateAxfrResponseAsync</c>/<c>CreateIxfrResponseAsync</c> both gate that append on
-    ///     <c>chunks.Count &gt; 1</c>) for this method to strip. A real, previously-undiscovered
-    ///     bug this parameter fixes: for a genuinely single-message IXFR response whose own last
-    ///     diff step happens to remove something with nothing added afterward, that step's own
-    ///     legitimate closing "new serial" SOA is -- by construction -- byte-for-byte identical to
-    ///     the leading current-SOA record (both are simply "the SOA at the zone's current serial"),
-    ///     so content equality alone could not tell a real multi-message bookend apart from an
-    ///     entirely ordinary, single-message diff structure; stripping it unconditionally corrupted
-    ///     that structure into a malformed diff with no closing SOA at all. Found only by this
-    ///     project's own real two-process catalog-zone smoke test pulling a real single-step,
-    ///     removal-only IXFR -- no unit/integration test run before it ever exercised a real
-    ///     multi-TCP-message transfer to notice the difference.
+    ///     Whether the answer spanned more than one message. Only then does
+    ///     <see cref="ZoneTransferService" /> add a closing SOA to strip. In a single-message IXFR whose
+    ///     last step only removes records, the step's closing SOA equals the leading SOA, so equality
+    ///     alone cannot tell it from a closing bookend; stripping it there would break the diff.
     /// </param>
     public static ZoneTransferPullResult BuildResult(
         List<DnsResourceRecord> flatAnswers,
@@ -184,10 +163,8 @@ internal static class ZoneTransferPullCodec
 
         uint finalSerial = leadingSoaData.Serial;
 
-        // A multi-message transfer's very last record repeats the leading SOA as a completion
-        // bookend; strip it so it isn't mistaken for a real, second copy of the zone's own SOA.
-        // Gated on wasMultiMessage -- see this method's own parameter doc for why checking content
-        // equality alone is not enough.
+        // A multi-message answer ends with a repeat of the leading SOA; strip it. Only for
+        // multi-message answers (see wasMultiMessage).
         if (
             wasMultiMessage
             && flatAnswers.Count > 1
@@ -271,8 +248,7 @@ internal static class ZoneTransferPullCodec
     }
 
     /// <summary>
-    ///     This method writes a single, length-prefixed DNS message, per RFC 1035 §4.2.2, to any
-    ///     stream-shaped connection.
+    ///     This method writes one length-prefixed DNS message (RFC 1035 §4.2.2) to a stream.
     /// </summary>
     public static async Task WriteFramedMessageAsync(
         Stream stream,
@@ -288,11 +264,11 @@ internal static class ZoneTransferPullCodec
     }
 
     /// <summary>
-    ///     This method reads a single, length-prefixed DNS message.
+    ///     This method reads one length-prefixed DNS message.
     /// </summary>
     /// <returns>
-    ///     The message's bytes, or <see langword="null" /> if the connection was closed before
-    ///     any more data arrived -- the ordinary way a transfer response ends.
+    ///     The message bytes, or <see langword="null" /> if the connection closed before the next
+    ///     message, which is how the pull detects the end of a transfer.
     /// </returns>
     /// <exception cref="TimeoutException">Thrown when no data arrives within <paramref name="readTimeout" />.</exception>
     /// <exception cref="IOException">
@@ -351,9 +327,8 @@ internal static class ZoneTransferPullCodec
     /// <param name="stream">The connection to read from.</param>
     /// <param name="buffer">The buffer to fill completely.</param>
     /// <param name="allowGracefulEmptyClose">
-    ///     Whether a connection closing before even the first byte arrives is expected and should
-    ///     report <see langword="false" /> rather than throwing -- true only when reading a new
-    ///     message's length prefix, where that is exactly how a transfer is meant to end.
+    ///     Whether a close before the first byte returns <see langword="false" /> instead of
+    ///     throwing. True only when reading a length prefix, where a close ends the transfer.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public static async Task<bool> ReadExactAsync(

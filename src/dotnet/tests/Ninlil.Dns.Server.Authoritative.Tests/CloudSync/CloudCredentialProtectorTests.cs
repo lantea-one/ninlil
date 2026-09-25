@@ -6,12 +6,10 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="CloudCredentialProtector" />'s own encrypt/decrypt round
-///     trip, using a single shared <see cref="IDataProtectionProvider" /> instance the way a
-///     real, persistent Data Protection key ring would behave -- deliberately not two separate
-///     <see cref="EphemeralDataProtectionProvider" /> instances, since each one generates its own
-///     fresh random key -- a known <c>EphemeralDataProtectionProvider</c> gotcha that applies
-///     project-wide.
+///     This class tests the encrypt and decrypt round trip of <see cref="CloudCredentialProtector" />.
+///     It uses one shared <see cref="IDataProtectionProvider" />, as a persistent key ring would;
+///     two <see cref="EphemeralDataProtectionProvider" /> instances would each have a different
+///     random key and could not read each other's output.
 /// </summary>
 public sealed class CloudCredentialProtectorTests
 {

@@ -6,20 +6,13 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupListAssignmentRepository" />'s
-///     real, pushed-down <c>SearchByGroupIdAsync</c>/<c>CountByGroupIdAsync</c> pagination against
-///     a real SQLite-backed database -- the Phase 13j proof that
-///     <c>ClientGroupListAssignmentsController</c>'s own assignment listing no longer materializes
-///     every assignment into memory before slicing a page out of it, and that a second group's own
-///     assignments never leak into another group's page, mirroring
-///     <see cref="DnssecKeyRepositorySearchTests" />'s own Phase 13h proof for the same shape. This
-///     entity orders by <see cref="EntityBase.CreatedAtUtc" /> -- a raw <see cref="DateTimeOffset" />
-///     column SQLite's own EF Core provider has never supported translating an <c>ORDER BY</c>
-///     over, fixed for this entity the same way <c>DnssecKeyConfiguration</c>/
-///     <c>DnsRewriteConfiguration</c> already fixed it for their own <c>CreatedAtUtc</c> columns
-///     (see <c>DnsClientGroupListAssignmentConfiguration</c>'s own <c>HasConversion</c> to UTC
-///     ticks) -- without that conversion, every test below would fail with a real
-///     <see cref="NotSupportedException" />, not merely an assertion mismatch.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientGroupListAssignmentRepository" /> (<c>SearchByGroupIdAsync</c>, <c>CountByGroupIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>ClientGroupListAssignmentsController</c>'s listing needs, rather
+///     than in memory. It also checks that another group's
+///     assignments never appear. The entity is ordered by <see cref="EntityBase.CreatedAtUtc" />,
+///     which SQLite can only sort because <c>DnsClientGroupListAssignmentConfiguration</c> stores it as
+///     UTC ticks; without that conversion these tests throw <see cref="NotSupportedException" />.
 /// </summary>
 public sealed class ClientGroupListAssignmentRepositorySearchTests : IAsyncLifetime
 {
@@ -30,9 +23,9 @@ public sealed class ClientGroupListAssignmentRepositorySearchTests : IAsyncLifet
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds one target group's five list assignments, deliberately out of
-    ///     creation-time order, plus one extra assignment on an entirely different group, so a
-    ///     passing group-scoping assertion can only be explained by a real, translated
+    ///     This method seeds one target group's five list assignments, out of
+    ///     creation-time order, plus one extra assignment on a different group, so a
+    ///     passing group-scoping assertion can only be explained by a translated
     ///     <c>WHERE ClientGroupId = ...</c> clause, not by the target group simply happening to be
     ///     the only group with any assignments at all.
     /// </summary>
@@ -92,8 +85,8 @@ public sealed class ClientGroupListAssignmentRepositorySearchTests : IAsyncLifet
 
         // Ordered by creation time ascending -- the offsets seeded out of order above (40, 10,
         // 30, 0, 20 minutes past a shared base time) must sort back to 0, 10, 20, 30, 40, a
-        // result only explainable by a real, translated ORDER BY over the converted UTC-ticks
-        // column, not by seed/insertion order happening to already match.
+        // result only explainable by a translated ORDER BY over the converted UTC-ticks
+        // column, not by seed/insertion order already matching.
         for (int i = 1; i < results.Count; i++)
             Assert.True(results[i - 1].CreatedAtUtc < results[i].CreatedAtUtc);
     }

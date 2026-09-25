@@ -21,28 +21,23 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Refresh;
 
 /// <summary>
-///     This class implements the secondary-zone half of RFC 1035 §4.3.5 / RFC 1996: for every
-///     zone this server hosts as <see cref="ZoneTypeEnum.Secondary" />, periodically (per that
-///     zone's own SOA Refresh interval) or immediately (on request, from a validated NOTIFY)
-///     checks the configured primary's serial and pulls a transfer if it is ahead.
+///     This hosted service keeps secondary zones current (RFC 1035 §4.3.5, RFC 1996). For each
+///     Secondary, SecondaryCatalog, SecondaryForwarder and Stub zone, on its SOA Refresh interval
+///     or at once after a NOTIFY (<see cref="ISecondaryZoneRefreshTrigger" />), it asks the
+///     primaries for their serial and pulls an AXFR/IXFR through the zone's
+///     <see cref="IZoneTransferClient" /> when a primary is ahead, applying it through
+///     <see cref="IZoneUpdateService" />. Stub zones get an NS query instead. The SOA Expire field
+///     is not used.
 ///     <para>
-///         Scheduling state (when each zone is next due) is kept in memory only, not persisted:
-///         a restart simply means every secondary zone is checked again right away, which is
-///         always safe -- at worst, a redundant "you are already current" round trip -- never
-///         incorrect.
+///         When each zone is next due is kept in memory only; after a restart every zone is checked
+///         at once, which at worst costs one "already current" round trip.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh set of scoped services per check.</param>
+/// <param name="scopeFactory">The factory used to create a scope per check.</param>
 /// <param name="options">
-///     This service's own configuration, such as polling granularity -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single loop iteration. This class is a singleton hosted service whose own
-///     <see cref="ExecuteAsync" /> runs its loop body once per process; before this fix, reading
-///     it via the plain, snapshotted <see cref="IOptions{TOptions}" /> looked like it should
-///     hot-reload -- the loop body already re-read the property on every iteration -- but never
-///     actually did, since <see cref="IOptions{TOptions}.Value" /> is computed once and cached
-///     for the life of the process, the same shape already found and fixed for
-///     <c>DnssecResigningBackgroundService</c>.
+///     The poll interval and retry delay, read through <see cref="IOptionsMonitor{TOptions}" /> on
+///     every iteration; <see cref="IOptions{TOptions}.Value" /> would keep the startup value in
+///     this singleton.
 /// </param>
 /// <param name="logger">The logger this service records refresh failures to.</param>
 public sealed class SecondaryZoneRefreshService(
@@ -52,17 +47,13 @@ public sealed class SecondaryZoneRefreshService(
 ) : BackgroundService, ISecondaryZoneRefreshTrigger
 {
     /// <summary>
-    ///     This property tracks, per zone, when it is next due to be checked. A zone with no
-    ///     entry yet is treated as due immediately.
+    ///     This field records when each zone is next due. A zone with no entry is due now.
     /// </summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _nextCheckAtUtc = new();
 
     /// <summary>
-    ///     This property is what actually makes "immediately" in <see cref="RequestImmediateRefresh" />
-    ///     mean something: without it, marking a zone due would only take effect once
-    ///     <see cref="ExecuteAsync" />'s own sleep between polls happened to elapse on its own,
-    ///     which could be as long as <see cref="SecondaryZoneRefreshOptions.PollInterval" /> --
-    ///     the opposite of "immediately" for the whole point a NOTIFY exists.
+    ///     This field lets <see cref="RequestImmediateRefresh" /> wake the loop at once instead of
+    ///     after up to <see cref="SecondaryZoneRefreshOptions.PollInterval" />.
     /// </summary>
     private readonly SemaphoreSlim _wakeSignal = new(0, 1);
 
@@ -71,8 +62,7 @@ public sealed class SecondaryZoneRefreshService(
     {
         _nextCheckAtUtc[zoneId] = DateTimeOffset.MinValue;
 
-        // Only release if nothing is already pending -- a request arriving while an earlier one
-        // hasn't been consumed yet has nothing more to add; both just mean "wake up".
+        // Release only if no wake-up is pending; a second request adds nothing.
         if (_wakeSignal.CurrentCount == 0)
         {
             try
@@ -81,8 +71,7 @@ public sealed class SecondaryZoneRefreshService(
             }
             catch (SemaphoreFullException)
             {
-                // Lost a race with another concurrent request already releasing it; the
-                // outcome -- the loop wakes up -- is identical either way.
+                // Another request released it first; the loop wakes up either way.
             }
         }
     }
@@ -103,9 +92,8 @@ public sealed class SecondaryZoneRefreshService(
 
             try
             {
-                // Waking up either because PollInterval elapsed on its own, or because
-                // RequestImmediateRefresh signaled it early, are handled identically: either
-                // way, loop back around and let CheckDueZonesAsync decide what is actually due.
+                // Woken by the interval or by RequestImmediateRefresh: either way,
+                // CheckDueZonesAsync decides what is due.
                 await _wakeSignal.WaitAsync(options.CurrentValue.PollInterval, stoppingToken);
             }
             catch (OperationCanceledException)
@@ -124,19 +112,11 @@ public sealed class SecondaryZoneRefreshService(
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
 
-        // SecondaryCatalog is polled/pulled through this exact same loop as an ordinary
-        // Secondary zone -- an RFC 9432 catalog zone is, per its own spec text, "a regular DNS
-        // zone", and this project extends rather than replaces this machinery for it.
-        // SecondaryForwarder is included the same way: its own apex SOA/TXT content (a
-        // ZoneTypeEnum.Forwarder primary's own encoded ForwarderAddresses, see
-        // Forwarding.ForwarderZoneContentSyncService) is, from this loop's own point of view, an
-        // ordinary AXFR/IXFR-transferable zone like any other -- only RefreshZoneAsync's own
-        // post-pull step (decoding those TXT records back into this zone's own ForwarderAddresses)
-        // is genuinely specific to it. Stub is included too, refreshed via a genuinely different,
-        // NS-only exchange (RefreshZoneAsync's own dedicated branch) rather than a full AXFR/IXFR
-        // pull. This filter is exactly the shape of place a new
-        // answerable (or, for Stub, periodically refreshable) zone type is easy to leave out of by
-        // mistake.
+        // SecondaryCatalog zones (ordinary zones under RFC 9432) and SecondaryForwarder zones
+        // (their apex records are transferred like any zone; see
+        // Forwarding.ForwarderZoneContentSyncService) are pulled like Secondary zones. Stub zones
+        // use an NS query instead (RefreshStubZoneAsync). A new refreshable zone type must be added
+        // here.
         IReadOnlyList<ZoneEntity> secondaryZones = await zoneRepository.ListAsync(
             zone =>
                 !zone.IsDisabled
@@ -156,9 +136,8 @@ public sealed class SecondaryZoneRefreshService(
             if (_nextCheckAtUtc.GetOrAdd(zone.Id, DateTimeOffset.MinValue) > now)
                 continue;
 
-            // Reschedule to the default retry interval up front, in case this check throws or
-            // finds nothing better to reschedule from; RefreshZoneAsync overwrites this with a
-            // more accurate time whenever it actually learns one.
+            // Schedule the default retry first, in case the check throws; RefreshZoneAsync replaces it
+            // when it learns a better time.
             _nextCheckAtUtc[zone.Id] = now + options.CurrentValue.DefaultRetryInterval;
 
             try
@@ -177,11 +156,9 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method checks a single zone against each of its configured primaries, in order,
-    ///     until one answers, pulling and applying a transfer if the primary is ahead -- or, for a
-    ///     <see cref="ZoneTypeEnum.Stub" /> zone, delegating entirely to
-    ///     <see cref="RefreshStubZoneAsync" /> instead, since that zone type's own refresh is a
-    ///     genuinely different NS-only exchange rather than an AXFR/IXFR pull.
+    ///     This method checks a zone against its primaries in order until one answers, and pulls and
+    ///     applies a transfer if that primary is ahead. Stub zones go to
+    ///     <see cref="RefreshStubZoneAsync" />.
     /// </summary>
     private async Task RefreshZoneAsync(
         ZoneEntity zone,
@@ -204,10 +181,7 @@ public sealed class SecondaryZoneRefreshService(
             return;
         }
 
-        // Selects the one registered IZoneTransferClient whose own Transport matches this zone's
-        // configured preference (ZoneEntity.TransferTransport) -- see
-        // ServiceCollectionAuthoritativeExtension's own doc comment for why three
-        // implementations share this one interface.
+        // Pick the IZoneTransferClient whose Transport matches ZoneEntity.TransferTransport.
         IZoneTransferClient transferClient = services
             .GetRequiredService<IEnumerable<IZoneTransferClient>>()
             .First(client => client.Transport == zone.TransferTransport);
@@ -280,12 +254,8 @@ public sealed class SecondaryZoneRefreshService(
                 stoppingToken
             );
 
-            // A SecondaryForwarder zone's own "content", from Server.Forwarding's own point of
-            // view, is not the TXT records themselves but the ForwarderAddresses list they
-            // encode -- decode the zone's own freshly-pulled apex TXT records back into it now
-            // that ApplyPullResultAsync has landed them as ordinary RecordEntity rows, exactly
-            // the same generic AXFR/IXFR record content an ordinary Secondary zone would have
-            // received. A no-op for every other zone type.
+            // For a SecondaryForwarder zone, decode the pulled apex TXT records back into
+            // ForwarderAddresses, which is what Server.Forwarding uses. Does nothing for other types.
             await SyncForwarderAddressesFromRecordsAsync(
                 zone,
                 recordRepository,
@@ -299,15 +269,11 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method decodes a <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone's own
-    ///     currently-stored apex TXT records (via <see cref="ForwarderAddressTxtCodec" />) back
-    ///     into its own <see cref="ZoneEntity.ForwarderAddresses" />, restoring each entry's own
-    ///     original list position from the index every encoded TXT record carries -- a TXT RRset
-    ///     carries no ordering guarantee of its own, but this project's own default forwarder
-    ///     failover strategy depends on list order to mean "priority". A no-op for any other zone
-    ///     type, and a no-op once the decoded set already matches what is already stored, so this
-    ///     never writes (or bumps <c>ZoneEntity.UpdatedAtUtc</c> for) a poll that pulled no real
-    ///     change.
+    ///     This method decodes a <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone's stored apex TXT
+    ///     records (<see cref="ForwarderAddressTxtCodec" />) into its
+    ///     <see cref="ZoneEntity.ForwarderAddresses" />, in the order the encoded indexes give, since list
+    ///     order is failover priority. It does nothing for other types, or when the list is unchanged,
+    ///     so a poll with no change writes nothing.
     /// </summary>
     private static async Task SyncForwarderAddressesFromRecordsAsync(
         ZoneEntity zone,
@@ -357,10 +323,8 @@ public sealed class SecondaryZoneRefreshService(
         zone.ForwarderAddresses = newAddresses;
         zone.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        // Written directly against IZoneRepository, not through IZoneUpdateService -- there is no
-        // record content to journal here (that already happened inside ApplyPullResultAsync,
-        // whose own DnsZoneChangedEvent already reports this zone as changed); this is purely
-        // this ZoneEntity's own metadata field catching up to content that already landed.
+        // Written through IZoneRepository, not IZoneUpdateService: the records were already
+        // journaled by ApplyPullResultAsync; this only updates the zone's field.
         IZoneRepository zoneRepository = services.GetRequiredService<IZoneRepository>();
         IUnitOfWork unitOfWork = services.GetRequiredService<IUnitOfWork>();
         zoneRepository.Update(zone);
@@ -368,14 +332,9 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method refreshes a <see cref="ZoneTypeEnum.Stub" /> zone: learning its
-    ///     delegation's current NS records (and any address glue the primary also provides) via
-    ///     <see cref="StubZoneNsPuller" />, then wholesale-replacing whatever this server
-    ///     previously learned with the freshly-pulled set. A stub zone has no SOA or serial of its
-    ///     own to diff against -- unlike an ordinary secondary zone's incremental journal replay,
-    ///     this is the same "no diff/versioning needed, just refresh the whole set" pattern
-    ///     <c>DnsFilterListExternalRefreshService</c> already establishes for a periodically
-    ///     refreshed, subscribed set.
+    ///     This method refreshes a <see cref="ZoneTypeEnum.Stub" /> zone: it fetches the NS records
+    ///     and any glue with <see cref="StubZoneNsPuller" /> and replaces the stored set. A stub zone
+    ///     has no SOA or serial, so there is no diff; the whole set is replaced when it changed.
     /// </summary>
     private async Task RefreshStubZoneAsync(
         ZoneEntity zone,
@@ -449,14 +408,12 @@ public sealed class SecondaryZoneRefreshService(
                 ),
             ];
 
-            // Nothing actually changed since the last successful refresh -- skip the write (and
-            // the DnsZoneChangedEvent publish below, which webhook subscribers among others react
-            // to) entirely, rather than churning storage and firing events on every single poll.
+            // Nothing changed: skip the write and the DnsZoneChangedEvent, so polls do not churn
+            // storage or fire webhooks.
             if (existingWireRecords.SetEquals(pullResult.Records))
             {
-                // This zone's next check was already pre-scheduled to DefaultRetryInterval by
-                // CheckDueZonesAsync, and a stub zone has no SOA-driven Refresh interval of its
-                // own to reschedule from instead -- nothing more to do here.
+                // The next check is already set to DefaultRetryInterval; a stub zone has no SOA Refresh to
+                // use instead.
                 return;
             }
 
@@ -480,9 +437,8 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method applies a successful pull to local storage: bootstrapping a brand-new
-    ///     zone, replaying an incremental diff step by step, or reconciling a full record set
-    ///     against what is already stored.
+    ///     This method applies a successful pull: it bootstraps a new zone, replays an incremental
+    ///     diff step by step, or reconciles a full record set with what is stored.
     /// </summary>
     private async Task ApplyPullResultAsync(
         ZoneEntity zone,
@@ -527,10 +483,8 @@ public sealed class SecondaryZoneRefreshService(
                 IReadOnlyList<RecordEntity> currentRecords =
                     await recordRepository.ListByZoneIdAsync(zone.Id, stoppingToken);
 
-                // A record the operator has marked ExcludeFromSync is local-only by definition,
-                // and never appeared in whatever the primary sent that produced this step -- but
-                // if one happens to coincide by name/type/data with something the primary really
-                // did remove, it must still never be deleted here.
+                // An ExcludeFromSync record is local-only and never removed here, even if it matches a
+                // record the primary removed.
                 List<RecordEntity> toRemove =
                 [
                     .. step
@@ -561,9 +515,8 @@ public sealed class SecondaryZoneRefreshService(
                 stoppingToken
             );
 
-            // The SOA record itself is excluded from this diff -- ApplyChangesAsync already
-            // advances the zone's existing SOA row to explicitNewSerial on its own, so treating
-            // the incoming SOA as just another record to reconcile would insert a duplicate one.
+            // Leave the SOA out of the diff: ApplyChangesAsync sets the existing SOA to
+            // explicitNewSerial, and adding the incoming SOA would duplicate it.
             List<(RecordEntity Entity, DnsResourceRecord Wire)> currentNonSoa =
             [
                 .. currentRecords
@@ -584,9 +537,8 @@ public sealed class SecondaryZoneRefreshService(
             HashSet<DnsResourceRecord> incomingSet = [.. incomingNonSoa];
             HashSet<DnsResourceRecord> currentSet = [.. currentNonSoa.Select(pair => pair.Wire)];
 
-            // Every ExcludeFromSync record is local-only, so it will always look "missing from
-            // the primary's own full record set" by this diff's own logic -- excluded here so
-            // that never gets mistaken for something the primary actually deleted.
+            // ExcludeFromSync records are local-only and always missing from the primary's set, so do
+            // not treat them as deleted.
             List<RecordEntity> toRemove =
             [
                 .. currentNonSoa
@@ -613,8 +565,8 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method reads the zone's own current SOA serial, or <see langword="null" /> if it
-    ///     has no local copy at all yet.
+    ///     This method reads the zone's current SOA serial, or <see langword="null" /> if there is
+    ///     no local copy yet.
     /// </summary>
     private static async Task<uint?> ReadLocalSerialAsync(
         ZoneEntity zone,
@@ -637,7 +589,7 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method schedules the zone's next check, per its own SOA Refresh interval.
+    ///     This method schedules the zone's next check from its SOA Refresh interval.
     /// </summary>
     private async Task RescheduleFromLocalSoaAsync(
         ZoneEntity zone,
@@ -663,8 +615,8 @@ public sealed class SecondaryZoneRefreshService(
     }
 
     /// <summary>
-    ///     This method finds the stored record a wire-form record (named for removal in an
-    ///     incremental diff) actually corresponds to.
+    ///     This method finds the stored record matching a wire record that an incremental diff
+    ///     removes.
     /// </summary>
     private static RecordEntity FindMatchingLocalRecord(
         IReadOnlyList<RecordEntity> currentRecords,

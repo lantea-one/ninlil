@@ -7,12 +7,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientRepository" />/
-///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientAddressRepository" />'s
-///     real round trip, the <c>GetByClientIdentifierAsync</c> join across both tables, and real,
-///     pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real SQLite-backed
-///     database -- the same proof shape <see cref="ClientGroupRepositorySearchTests" /> already
-///     establishes for the closest sibling entity.
+///     This class tests <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientRepository" /> and
+///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsClientAddressRepository" /> against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): a save and load round trip,
+///     the <c>GetByClientIdentifierAsync</c> join across both tables, and database-side paging with
+///     <c>SearchAsync</c> and <c>CountAsync</c>.
 /// </summary>
 public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
 {
@@ -63,7 +62,7 @@ public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
             await unitOfWork.SaveChangesAsync();
         }
 
-        // Read back from a fresh scope, so the assertions prove a real round trip through SQLite
+        // Read back from a fresh scope, so the assertions prove a round trip through SQLite
         // rather than merely returning the same tracked in-memory instance just written.
         await using AsyncServiceScope readScope = _testHost.Host.Services.CreateAsyncScope();
         IDnsClientRepository readRepository =
@@ -101,9 +100,9 @@ public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
                 writeScope.ServiceProvider.GetRequiredService<IDnsClientAddressRepository>();
             IUnitOfWork unitOfWork = writeScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            // Two devices each have one address sharing the exact same raw identifier text but
+            // Two devices each have one address sharing the same raw identifier text but
             // belonging to two different, disjoint identifier spaces -- proving
-            // (ClientIdentifier, ProtocolVersion) is what actually disambiguates a lookup, not
+            // (ClientIdentifier, ProtocolVersion) is what disambiguates a lookup, not
             // ClientIdentifier alone.
             Guid ipv4ClientId = Guid.NewGuid();
             Guid ipv6ClientId = Guid.NewGuid();
@@ -184,12 +183,12 @@ public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method seeds five clients, each with its own single address, with a deliberately
+    ///     This method seeds five clients, each with its single address, with a deliberately
     ///     increasing <c>CreatedAtUtc</c> so a passing ordering assertion can only be explained by
-    ///     a real <c>ORDER BY</c> translated at the database, not by insertion order happening to
+    ///     an <c>ORDER BY</c> translated at the database, not by insertion order happening to
     ///     already match.
     /// </summary>
-    /// <returns>The five seeded clients' own identifiers, in the order they should be returned.</returns>
+    /// <returns>The five seeded clients' identifiers, in the order they should be returned.</returns>
     private async Task<Guid[]> SeedAsync()
     {
         await using AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope();
@@ -232,7 +231,7 @@ public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
             );
 
             // Each client is created a tick later than the last, so CreatedAtUtc ordering is
-            // unambiguous and genuinely different from the seed order above.
+            // unambiguous and different from the seed order above.
             createdAtUtc = createdAtUtc.AddSeconds(1);
         }
 
@@ -365,7 +364,7 @@ public sealed class DnsClientRepositorySearchTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method seeds four devices with deliberately different presence histories, relative
+    ///     This method seeds four devices with different presence histories, relative
     ///     to a fixed <paramref name="now" />: a dual-stack device whose newer sighting is on its
     ///     second address, a device seen long ago, a device never seen at all, and a device seen
     ///     recently -- created in that order, so every ordering below differs from creation order.

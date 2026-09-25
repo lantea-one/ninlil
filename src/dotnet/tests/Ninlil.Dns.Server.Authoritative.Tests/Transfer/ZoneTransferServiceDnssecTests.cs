@@ -26,15 +26,10 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class covers <see cref="ZoneTransferService" />'s own DNSSEC-signed-content handling
-///     -- confirming a real, freshly generated DNSSEC key's own DNSKEY/RRSIG/NSEC content
-///     genuinely reaches both a full (AXFR) and incremental (IXFR) transfer response, and that an
-///     IXFR request against a signed zone is always served as a full transfer, never a true
-///     incremental replay (see <see cref="ZoneTransferService.CreateIxfrResponseAsync" />'s own
-///     remarks for why this project's signing design makes that the only correct choice). This is
-///     this project's first direct, unit-level coverage of <see cref="ZoneTransferService" />
-///     itself -- every prior verification of its AXFR/IXFR response building was a real two-process
-///     smoke test only.
+///     This class tests how <see cref="ZoneTransferService" /> handles a signed zone, on a host with a
+///     temporary SQLite database and a generated key: the DNSKEY, RRSIG and NSEC records appear in
+///     AXFR and IXFR answers, and IXFR for a signed zone is always a full transfer (see
+///     <see cref="ZoneTransferService.CreateIxfrResponseAsync" />).
 /// </summary>
 public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
 {
@@ -138,8 +133,8 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
-        // A real, freshly generated key of each role -- SignedZoneCache's own StartAsync
-        // (triggered by _host.StartAsync() below) needs at least one to actually produce a
+        // A real, freshly generated key of each role -- SignedZoneCache's StartAsync
+        // (triggered by _host.StartAsync() below) needs at least one to produce a
         // signed result rather than logging a failure and leaving this zone out of its cache.
         await keyManagement.GenerateKeyAsync(
             _zoneId,
@@ -153,7 +148,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
         );
 
         // A real TSIG key -- ZoneTransferService.AuthorizeAsync always requires one, regardless
-        // of this zone's own configuration.
+        // of this zone's configuration.
         IDataProtector protector = dataProtectionProvider.CreateProtector(
             "Ninlil.Dns.Server.Tsig.SharedSecret"
         );
@@ -174,7 +169,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
-        // Runs AuthoritativeZoneCache's and SignedZoneCache's own initial full load/sign
+        // Runs AuthoritativeZoneCache's and SignedZoneCache's initial full load/sign
         // synchronously, so both are already warm by the time this method returns.
         await _host.StartAsync();
     }
@@ -190,8 +185,8 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
 
     /// <summary>
     ///     This method builds a real, TSIG-signed transfer request and re-parses it back into
-    ///     wire form -- mirroring what a real transport does, so the TSIG record's own starting
-    ///     offset is known the same way <see cref="ZoneTransferService" />'s own request
+    ///     wire form -- mirroring what a real transport does, so the TSIG record's starting
+    ///     offset is known the same way <see cref="ZoneTransferService" />'s request
     ///     authorization check expects.
     /// </summary>
     private async Task<DnsQueryContext> BuildSignedRequestAsync(
@@ -253,8 +248,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.A);
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.Soa);
 
-        // ...alongside every kind of signed content this zone's own signing pass produces --
-        // before this fix, an AXFR of a signed zone carried none of these at all.
+        // ...with every kind of signed record the signing pass produces.
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.DnsKey);
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.RrSig);
         Assert.Contains(allRecords, record => record.Type == DnsResourceRecordTypeEnum.Nsec);
@@ -264,7 +258,7 @@ public sealed class ZoneTransferServiceDnssecTests : IAsyncLifetime
     public async Task IxfrForASignedZoneAlwaysServesAFullTransferIncludingSignedContent()
     {
         // The client claims a much older serial than the zone's real current one (100) -- a
-        // range an unsigned zone's own journal history would ordinarily be eligible to replay
+        // range an unsigned zone's journal history would ordinarily be eligible to replay
         // incrementally, used here specifically to prove a signed zone never takes that path.
         DnsResourceRecord clientSoa = new(
             DnsName.Parse(ZoneName),

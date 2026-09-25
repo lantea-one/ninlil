@@ -8,15 +8,13 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Authoritative.Notify;
 
 /// <summary>
-///     This class implements <see cref="INotifySender" /> over plain UDP, per RFC 1996's own
-///     convention -- a NOTIFY and its acknowledgement are always small enough to need nothing
-///     more.
+///     This class implements <see cref="INotifySender" /> over UDP, the RFC 1996 transport; a
+///     NOTIFY and its acknowledgement are small. All attempts share one socket.
 /// </summary>
 /// <param name="options">
-///     This sender's own configuration, such as retry count and timeout -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single <see cref="SendAsync" /> call, so a configuration write reaches the very
-///     next NOTIFY this (scoped) sender attempts, with no restart.
+///     The retry count, timeout, delay and port, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> on every <see cref="SendAsync" /> call so changes
+///     apply without a restart.
 /// </param>
 public class UdpNotifySender(IOptionsMonitor<NotifyOptions> options) : INotifySender
 {
@@ -57,7 +55,7 @@ public class UdpNotifySender(IOptionsMonitor<NotifyOptions> options) : INotifySe
     }
 
     /// <summary>
-    ///     This method performs a single send-and-await-acknowledgement attempt.
+    ///     This method makes one attempt: send, then wait for a matching acknowledgement.
     /// </summary>
     private async Task<bool> TrySendOnceAsync(
         UdpClient client,
@@ -77,10 +75,8 @@ public class UdpNotifySender(IOptionsMonitor<NotifyOptions> options) : INotifySe
 
         try
         {
-            // A secondary that is slow to answer, unreachable, or sends back something that
-            // doesn't parse or doesn't match this NOTIFY is all treated the same way: this
-            // attempt did not get acknowledged, so the caller should retry rather than fail
-            // outright on the first hiccup.
+            // A timeout, an unreachable secondary or a reply that does not parse or match all
+            // count as "not acknowledged", so the caller retries.
             UdpReceiveResult result = await client.ReceiveAsync(linkedCts.Token);
             DnsMessage response = DnsMessageReader.Read(result.Buffer);
 

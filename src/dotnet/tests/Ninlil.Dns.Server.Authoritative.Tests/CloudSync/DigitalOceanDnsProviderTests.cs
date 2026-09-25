@@ -11,9 +11,9 @@ using Ninlil.Dns.Server.Authoritative.CloudSync;
 namespace Ninlil.Dns.Server.Authoritative.Tests.CloudSync;
 
 /// <summary>
-///     This class covers <see cref="DigitalOceanDnsProvider" /> against a real, Kestrel-hosted
-///     fake HTTP server standing in for DigitalOcean's own documented v2 REST contract -- there
-///     is no live DigitalOcean account to verify against.
+///     This class tests <see cref="DigitalOceanDnsProvider" /> against a Kestrel-hosted fake server
+///     that follows DigitalOcean's documented v2 REST contract. There is no test against a live
+///     account.
 /// </summary>
 public sealed class DigitalOceanDnsProviderTests : IAsyncLifetime
 {
@@ -67,9 +67,9 @@ public sealed class DigitalOceanDnsProviderTests : IAsyncLifetime
                                 id = 1003,
                                 type = "SRV",
                                 name = "_sip._tcp",
-                                // DigitalOcean's own SRV "data" carries only the target; its
-                                // priority/weight/port live in their own dedicated top-level
-                                // fields instead, per DigitalOcean's own published schema.
+                                // DigitalOcean's SRV "data" carries only the target; its
+                                // priority/weight/port live in their dedicated top-level
+                                // fields instead, per DigitalOcean's published schema.
                                 data = "sipserver.example.com.",
                                 ttl = 300,
                                 priority = (int?)10,

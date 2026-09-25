@@ -6,27 +6,20 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class keeps a <c>SecondaryCatalog</c> zone's own auto-provisioned member zones synced
-///     whenever <see cref="DnsZoneChangedEvent" /> reports that it changed -- every catalog zone
-///     content change already funnels through <c>IZoneUpdateService</c> (an AXFR/IXFR secondary
-///     refresh applying a fresh transfer is the one real trigger this ever fires for in
-///     practice), which already publishes this same event, so a single subscriber to it is
-///     sufficient. Also fires, harmlessly, on every other zone's own content change -- see
-///     <see cref="CatalogZoneAutoProvisioningService.ReconcileZoneAsync" />'s own immediate,
-///     cheap no-op for any zone that is not itself a <c>SecondaryCatalog</c>.
+///     This class runs <see cref="CatalogZoneAutoProvisioningService" /> on each
+///     <see cref="DnsZoneChangedEvent" />, so the member zones of a <c>SecondaryCatalog</c> zone
+///     follow its content. In practice the trigger is a transfer pull of the catalog zone through
+///     <c>IZoneUpdateService</c>. For other zones the service returns at once.
 ///     <para>
-///         Reconciliation runs in a detached background task, not awaited directly from
-///         <see cref="HandleAsync" />, mirroring <c>PtrSyncEventSubscriber</c>'s own reasoning
-///         exactly: this subscriber's own work involves real repository/database I/O (and, for a
-///         newly-discovered member, a further AXFR/IXFR pull once
-///         <c>ISecondaryZoneRefreshTrigger.RequestImmediateRefresh</c> fires), so it must never
-///         block <c>DnsServerEventDispatcher</c>'s one-event-at-a-time processing of every other
-///         subscriber for every other event.
+///     The work runs in a detached task, as in <c>PtrSyncEventSubscriber</c>, because it does
+///     database work (and triggers pulls of new members through
+///     <c>ISecondaryZoneRefreshTrigger.RequestImmediateRefresh</c>) and must not hold up
+///     <c>DnsServerEventDispatcher</c>, which handles one event at a time.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to reach a fresh, scoped <see cref="CatalogZoneAutoProvisioningService" />
-///     per event.
+///     The factory used to create a scope and <see cref="CatalogZoneAutoProvisioningService" /> per
+///     event.
 /// </param>
 /// <param name="logger">The logger this subscriber records reconciliation failures to.</param>
 public class CatalogZoneAutoProvisioningEventSubscriber(
@@ -42,10 +35,8 @@ public class CatalogZoneAutoProvisioningEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work: opening a fresh scope and delegating to
-    ///     <see cref="CatalogZoneAutoProvisioningService" />, with every exception (other than
-    ///     cancellation) caught and logged so one zone's own reconciliation failure never
-    ///     propagates back into <c>DnsServerEventDispatcher</c>.
+    ///     This method creates a scope and calls <see cref="CatalogZoneAutoProvisioningService" />,
+    ///     logging any exception except cancellation.
     /// </summary>
     private async Task ReconcileAsync(
         DnsZoneChangedEvent domainEvent,

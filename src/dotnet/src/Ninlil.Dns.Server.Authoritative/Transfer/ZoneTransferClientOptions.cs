@@ -3,8 +3,8 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Authoritative:ZoneTransferClient</c> section of the
-///     application's configuration and controls how <see cref="IZoneTransferClient" /> pulls
-///     transfers from a primary.
+///     application's configuration and controls how the <see cref="IZoneTransferClient" />s reach
+///     a primary: ports, timeouts and certificate checks. They read it on each pull.
 /// </summary>
 public class ZoneTransferClientOptions
 {
@@ -14,9 +14,8 @@ public class ZoneTransferClientOptions
     public const string SectionName = "DnsServer:Authoritative:ZoneTransferClient";
 
     /// <summary>
-    ///     This property contains the port a primary is assumed to listen on. Always 53 in
-    ///     practice; configurable purely so a test can point this at a loopback listener without
-    ///     needing the privileges binding port 53 itself would require.
+    ///     This property contains the primary's port for plain TCP and UDP. It is 53 in practice;
+    ///     tests change it to use an unprivileged port.
     /// </summary>
     public int PrimaryPort { get; set; } = 53;
 
@@ -37,32 +36,24 @@ public class ZoneTransferClientOptions
     public TimeSpan SoaQueryTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>
-    ///     This property contains the port a primary is assumed to listen for RFC 9103 XFR-over-TLS
-    ///     connections on. Defaults to 853 -- the same well-known port DNS-over-TLS (RFC 7858)
-    ///     already uses, since this project's own <c>Ninlil.Dns.Protocol.DnsOverTls</c> listener
-    ///     answers both a stub-resolver query and an AXFR/IXFR request on the same port.
+    ///     This property contains the primary's port for RFC 9103 zone transfer over TLS. The
+    ///     default, 853, is the DNS-over-TLS port (RFC 7858); Ninlil's DNS-over-TLS listener serves
+    ///     queries and transfers on it.
     /// </summary>
     public int PrimaryTlsPort { get; set; } = 853;
 
     /// <summary>
-    ///     This property contains the port a primary is assumed to listen for QUIC-carried
-    ///     zone-transfer connections on. Defaults to 853, the same well-known DNS-over-QUIC (RFC
-    ///     9250) port <see cref="PrimaryTlsPort" />'s own doc comment explains the reasoning for.
+    ///     This property contains the primary's port for zone transfer over QUIC. The default, 853,
+    ///     is the DNS-over-QUIC port (RFC 9250).
     /// </summary>
     public int PrimaryQuicPort { get; set; } = 853;
 
     /// <summary>
-    ///     This property controls whether an outbound TLS or QUIC zone-transfer pull validates the
-    ///     primary's own certificate against the normal OS trust store. Defaults to
-    ///     <see langword="true" /> (the safe default for any real deployment reachable by a
-    ///     publicly-trusted or internal CA-issued certificate); set to <see langword="false" />
-    ///     only for a homelab primary presenting a certificate this secondary has no other way to
-    ///     trust (for example, a self-signed one this project's own
-    ///     <c>ReloadableTlsCertificateProvider</c> auto-generates when no operator-supplied
-    ///     certificate is configured) -- TSIG (<see cref="ZoneTransferClientOptions" />'s own
-    ///     caller, <c>SecondaryZoneRefreshService</c>) still authenticates every transfer either
-    ///     way, so disabling certificate validation here trades away transport-level
-    ///     man-in-the-middle protection, not authentication of the zone content itself.
+    ///     This property controls whether a TLS or QUIC pull checks the primary's certificate
+    ///     against the operating system trust store. On by default. Turn it off only for a primary
+    ///     with a certificate the secondary cannot otherwise trust, such as Ninlil's auto-generated
+    ///     self-signed one. Then only TSIG, when a key is configured for the zone, protects the
+    ///     content; the connection itself can be intercepted.
     /// </summary>
     public bool ValidateServerCertificate { get; set; } = true;
 }

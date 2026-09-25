@@ -10,10 +10,9 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Transfer;
 
 /// <summary>
-///     This class tests <see cref="StubZoneNsPuller" /> -- the genuinely different, NS-only
-///     exchange a <see cref="ZoneTypeEnum.Stub" /> zone's own refresh uses instead of an ordinary
-///     AXFR/IXFR pull -- against a real loopback UDP (and, for the truncation-fallback case, TCP)
-///     listener standing in for a primary.
+///     This class tests <see cref="StubZoneNsPuller" />, the NS query a
+///     <see cref="ZoneTypeEnum.Stub" /> zone's refresh uses, against a loopback UDP listener (and a TCP
+///     listener for the truncation fallback) acting as the primary.
 /// </summary>
 public class StubZoneNsPullerTests
 {
@@ -94,7 +93,7 @@ public class StubZoneNsPullerTests
         );
 
     /// <summary>
-    ///     This method starts a real loopback UDP "primary": it receives exactly one query and
+    ///     This method starts a real loopback UDP "primary": it receives one query and
     ///     replies with a single, hand-built response, letting each test control every field that
     ///     matters (identifier, response code, truncation, answer/additional content) precisely.
     /// </summary>
@@ -104,7 +103,7 @@ public class StubZoneNsPullerTests
     )
     {
         // Deliberately not scoped with "using": this listener must stay alive for the rest of the
-        // test's run, well past this method's own return, so it cannot be disposed here -- the
+        // test's run, well past this method's return, so it cannot be disposed here -- the
         // background receive loop below (and, in one test, an explicit Dispose once that test is
         // done with it) owns its lifetime instead, the same shape ZoneTransferPullCodecTests's own
         // StartFakePrimaryAsync already establishes for its TcpListener.
@@ -185,12 +184,12 @@ public class StubZoneNsPullerTests
     {
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
-        // PullNsRecordsAsync's own TCP fallback reuses the exact same primaryPort number its
-        // initial UDP query targeted -- exactly like a real dual-stack primary answering both UDP
+        // PullNsRecordsAsync's TCP fallback reuses the same primaryPort number its
+        // initial UDP query targeted -- like a real dual-stack primary answering both UDP
         // and TCP on the same well-known port. UDP and TCP occupy independent port namespaces, so
-        // the same number can be (and here, deliberately is) bound by both a UdpClient and a
+        // the same number can be (and here, is) bound by both a UdpClient and a
         // TcpListener at once without conflicting; probed via a throwaway TCP bind first, mirroring
-        // ZoneTransferPullCodecTests's own identical "probe, read the port, then reuse the number"
+        // ZoneTransferPullCodecTests's identical "probe, read the port, then reuse the number"
         // pattern.
         using TcpListener portProbe = new(IPAddress.Loopback, 0);
         portProbe.Start();
@@ -315,7 +314,7 @@ public class StubZoneNsPullerTests
         int port = await StartFakeUdpPrimaryAsync(
             query => new DnsMessage
             {
-                // Deliberately wrong -- never the query's own id -- simulating a spoofed or
+                // Deliberately wrong -- never the query's id -- simulating a spoofed or
                 // stale response arriving on the same socket.
                 Id = unchecked((ushort)(query.Id + 1)),
                 IsResponse = true,
@@ -381,7 +380,7 @@ public class StubZoneNsPullerTests
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));
 
         // A real, bound-but-silent UDP socket standing in for "nobody answers" -- simpler and
-        // more portable across sandboxes than relying on a genuinely closed port's own ICMP
+        // more portable across sandboxes than relying on a closed port's ICMP
         // port-unreachable behavior, which differs across platforms/firewalls.
         using UdpClient silentSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
         int port = ((IPEndPoint)silentSocket.Client.LocalEndPoint).Port;

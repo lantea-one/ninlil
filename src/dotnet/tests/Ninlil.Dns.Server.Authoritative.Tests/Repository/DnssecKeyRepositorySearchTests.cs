@@ -7,12 +7,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnssecKeyRepository" />'s
-///     real, pushed-down <c>SearchByZoneIdAsync</c>/<c>CountByZoneIdAsync</c> pagination against
-///     a real SQLite-backed database -- the Phase 13h proof that <c>DnssecKeysController</c>'s
-///     own key listing no longer materializes every key into memory before slicing a page out of
-///     it, and that a second zone's own keys never leak into another zone's page, mirroring
-///     <see cref="ZoneRepositorySearchTests" />'s own Phase 13g proof for the same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnssecKeyRepository" /> (<c>SearchByZoneIdAsync</c>, <c>CountByZoneIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>DnssecKeysController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks that another zone's keys never appear.
 /// </summary>
 public sealed class DnssecKeyRepositorySearchTests : IAsyncLifetime
 {
@@ -24,8 +23,8 @@ public sealed class DnssecKeyRepositorySearchTests : IAsyncLifetime
 
     /// <summary>
     ///     This method seeds one target zone's five keys -- three ZSKs and two KSKs, deliberately
-    ///     out of role/creation order -- plus one extra key on an entirely different zone, so a
-    ///     passing zone-scoping assertion can only be explained by a real, translated
+    ///     out of role/creation order -- plus one extra key on a different zone, so a
+    ///     passing zone-scoping assertion can only be explained by a translated
     ///     <c>WHERE ZoneId = ...</c> clause, not by the target zone simply happening to be the
     ///     only zone with any keys at all.
     /// </summary>

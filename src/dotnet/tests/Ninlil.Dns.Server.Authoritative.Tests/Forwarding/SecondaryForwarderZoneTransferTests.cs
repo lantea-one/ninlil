@@ -27,17 +27,12 @@ using Xunit;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Forwarding;
 
 /// <summary>
-///     This class is Phase 16c's own real, live, two-host proof: a real
-///     <see cref="ZoneTypeEnum.Forwarder" /> zone (with two configured upstream addresses) on one
-///     real <see cref="IHost" />, apex SOA/TXT content built and reconciled by the real
-///     <see cref="ForwarderZoneContentSyncService" />, genuinely AXFR/IXFR-pulled over a real
-///     loopback TCP socket by a real <see cref="ZoneTypeEnum.SecondaryForwarder" /> zone on a
-///     second, entirely independent <see cref="IHost" /> (its own process-shaped composition
-///     root, its own SQLite database, its own <see cref="SecondaryZoneRefreshOptions" />-driven
-///     background poll) -- exactly the "real IHost + real transfer" shape
-///     <c>ZoneTransferServiceDnssecTests</c> already establishes for DNSSEC-signed AXFR/IXFR
-///     content, extended here to a second, independent host actually pulling rather than one host
-///     calling <see cref="IZoneTransferService" /> directly against itself.
+///     This class tests a <see cref="ZoneTypeEnum.Forwarder" /> zone with two upstream addresses on
+///     one host, whose apex SOA and TXT records <see cref="ForwarderZoneContentSyncService" />
+///     maintains, being pulled over loopback TCP by a <see cref="ZoneTypeEnum.SecondaryForwarder" />
+///     zone on a second host with its own SQLite database and
+///     <see cref="SecondaryZoneRefreshOptions" />-driven poll, and the forwarder addresses
+///     arriving.
 /// </summary>
 public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 {
@@ -73,7 +68,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         _primaryHost = BuildPrimaryHost(tcpPort);
         await SeedPrimaryAsync(rawTsigSecret);
 
-        // Starts AuthoritativeZoneCache's own initial load and TcpDnsListener's own real socket
+        // Starts AuthoritativeZoneCache's initial load and TcpDnsListener's real socket
         // bind, so the secondary host below has a real, already-listening primary to pull from
         // the moment it starts.
         await _primaryHost.StartAsync();
@@ -82,9 +77,9 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         _secondaryHost = BuildSecondaryHost(tcpPort);
         await SeedSecondaryAsync(rawTsigSecret);
 
-        // SecondaryZoneRefreshService's own ExecuteAsync checks every due zone once, immediately,
+        // SecondaryZoneRefreshService's ExecuteAsync checks every due zone once, immediately,
         // before its first poll-interval sleep -- a zone with no prior check recorded is always
-        // due, so starting this host alone triggers the real pull this class's own tests observe.
+        // due, so starting this host alone triggers the real pull this class's tests observe.
         await _secondaryHost.StartAsync();
     }
 
@@ -149,9 +144,9 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
             zone => zone.ForwarderAddresses.Count == ConfiguredForwarderAddresses.Count
         );
 
-        // Both the content and this project's own list *order* (this default failover strategy's
+        // Both the content and this project's list *order* (this default failover strategy's
         // own notion of priority) must survive the real TXT-encode/AXFR-transfer/TXT-decode round
-        // trip exactly -- proving ForwarderAddressTxtCodec's own index prefix genuinely did its
+        // trip -- proving ForwarderAddressTxtCodec's index prefix did its
         // job rather than relying on however the storage engine or wire transfer happened to order
         // the underlying TXT RRset.
         Assert.Equal(ConfiguredForwarderAddresses, secondaryZone.ForwarderAddresses);
@@ -160,7 +155,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     [Fact]
     public async Task AuthoritativeQueryResolverOnlyEverAnswersTheApexSoaForAForwarderZone()
     {
-        // Wait for the secondary's own pull to actually land first, so this test genuinely proves
+        // Wait for the secondary's pull to land first, so this test proves
         // the *steady-state* behavior rather than a race against a pull still in flight.
         await PollUntilAsync(
             async () =>
@@ -179,9 +174,9 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
             .OfType<AuthoritativeQueryResolver>()
             .Single();
 
-        // An ordinary A-record query under the Forwarder zone's own name is declined here, so
-        // IDnsQueryDispatcher still falls through to Server.Forwarding's own ForwarderQueryResolver
-        // exactly as it always has.
+        // An ordinary A-record query under the Forwarder zone's name is declined here, so
+        // IDnsQueryDispatcher still falls through to Server.Forwarding's ForwarderQueryResolver
+        // as it always has.
         DnsQueryResolution ordinaryQueryResolution = await resolver.TryResolveAsync(
             new DnsQueryContext(
                 BuildQuery($"www.{ZoneName}.", DnsResourceRecordTypeEnum.A),
@@ -191,7 +186,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
             )
         );
 
-        // A query for the zone's own apex TXT content itself (the very records that carry its
+        // A query for the zone's apex TXT content itself (the very records that carry its
         // configured forwarder addresses) is declined too -- that content is reachable only via
         // an authenticated AXFR/IXFR pull, never an ordinary, unauthenticated query.
         DnsQueryResolution apexTxtResolution = await resolver.TryResolveAsync(
@@ -204,7 +199,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         );
 
         // The one narrow exception: an ordinary SOA query at the exact apex *is* answered here --
-        // Refresh.SecondaryZoneRefreshService's own freshness pre-check (an ordinary, unsigned SOA
+        // Refresh.SecondaryZoneRefreshService's freshness pre-check (an ordinary, unsigned SOA
         // query sent before ever attempting a real, TSIG-gated AXFR/IXFR pull) depends on it, and
         // a bare SOA record carries no sensitive forwarder-address content to leak.
         DnsQueryResolution apexSoaResolution = await resolver.TryResolveAsync(
@@ -232,7 +227,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     /// <summary>
     ///     This method polls <paramref name="read" /> until <paramref name="isDone" /> is
     ///     satisfied or a generous timeout elapses, standing in for a real operator watching a
-    ///     background poll loop actually complete rather than asserting against a fixed, flaky
+    ///     background poll loop complete rather than asserting against a fixed, flaky
     ///     sleep.
     /// </summary>
     private static async Task<ZoneEntity> PollUntilAsync(
@@ -262,10 +257,10 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method waits for the primary host's own real <see cref="TcpDnsListener" /> to
-    ///     report it has actually bound its socket -- <see cref="BackgroundService.StartAsync" />
+    ///     This method waits for the primary host's real <see cref="TcpDnsListener" /> to
+    ///     report it has bound its socket -- <see cref="BackgroundService.StartAsync" />
     ///     (which <see cref="IHost.StartAsync" /> does await) only starts <see cref="TcpDnsListener.ExecuteAsync" />
-    ///     running in the background rather than waiting for its own first statements (the real
+    ///     running in the background rather than waiting for its first statements (the real
     ///     socket bind) to complete, so this closes that small window rather than leaving the
     ///     secondary host's very first pull attempt to race it.
     /// </summary>
@@ -286,8 +281,8 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
 
     /// <summary>
     ///     This method finds a free loopback TCP port by briefly binding one and releasing it --
-    ///     good enough for a single-process test run, the same technique this project's own test
-    ///     suite already trusts for <c>FakeUdpUpstream</c>'s own port selection.
+    ///     good enough for a single-process test run, the same technique this project's test
+    ///     suite already trusts for <c>FakeUdpUpstream</c>'s port selection.
     /// </summary>
     private static int GetFreeTcpPort()
     {
@@ -321,7 +316,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_secondaryDatabasePath}";
-        // Points this secondary's own IZoneTransferClient at the primary's real loopback TCP
+        // Points this secondary's IZoneTransferClient at the primary's real loopback TCP
         // port instead of the real, privileged, port-53 default -- ZoneTransferClientOptions.PrimaryPort's
         // own doc comment names this exact scenario as why it is configurable at all.
         builder.Configuration["DnsServer:Authoritative:ZoneTransferClient:PrimaryPort"] =
@@ -375,10 +370,10 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         await SeedTsigKeyAsync(scope.ServiceProvider, rawTsigSecret);
 
         // In real deployment this reconciliation happens automatically, off the event bus, the
-        // moment ZonesController publishes DnsZoneChangedEvent for this zone's own creation --
+        // moment ZonesController publishes DnsZoneChangedEvent for this zone's creation --
         // called directly here since this test seeds the zone straight through the repository,
-        // bypassing the REST layer entirely, exactly like ZoneTransferServiceDnssecTests already
-        // does for its own zone/record seeding.
+        // bypassing the REST layer entirely, like ZoneTransferServiceDnssecTests already
+        // does for its zone/record seeding.
         await syncService.ReconcileZoneAsync(_primaryZoneId);
     }
 
@@ -407,7 +402,7 @@ public sealed class SecondaryForwarderZoneTransferTests : IAsyncLifetime
         );
         await unitOfWork.SaveChangesAsync();
 
-        // The same TSIG key name and secret as the primary -- a real deployment's own operator
+        // The same TSIG key name and secret as the primary -- a real deployment's operator
         // configures both sides with the matching key by hand; each side still encrypts its own
         // copy of the shared secret at rest with its own, independent Data Protection key ring
         // (the ephemeral-protector gotcha only governs sharing one *protector instance* within one process,

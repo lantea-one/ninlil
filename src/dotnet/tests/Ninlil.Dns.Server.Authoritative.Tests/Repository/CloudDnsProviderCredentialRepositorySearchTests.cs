@@ -7,12 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.CloudDnsProviderCredentialRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13h proof that <c>CloudProviderCredentialsController</c>'s
-///     own credential listing no longer materializes every credential set into memory before
-///     slicing a page out of it, mirroring <see cref="ZoneRepositorySearchTests" />'s own
-///     Phase 13g proof for the same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.CloudDnsProviderCredentialRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>CloudProviderCredentialsController</c>'s listing needs, rather
+///     than in memory.
 /// </summary>
 public sealed class CloudDnsProviderCredentialRepositorySearchTests : IAsyncLifetime
 {
@@ -23,7 +21,7 @@ public sealed class CloudDnsProviderCredentialRepositorySearchTests : IAsyncLife
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five credential sets with names deliberately out of alphabetical
+    ///     This method seeds five credential sets with names out of alphabetical
     ///     creation order, so a passing ordering assertion can only be explained by a real
     ///     <c>ORDER BY</c> translated at the database, not by creation/insertion order happening
     ///     to already match.

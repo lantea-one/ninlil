@@ -3,9 +3,9 @@ namespace Ninlil.Dns.Server.Authoritative.Dnssec;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Authoritative:ZoneSigning</c> section of the
-///     application's configuration and controls the timing parameters
-///     <see cref="ZoneSigningService" /> signs with, and <see cref="DnssecResigningBackgroundService" />
-///     re-signs against.
+///     application's configuration and sets the signature timing used by
+///     <see cref="ZoneSigningService" /> and the re-signing schedule of
+///     <see cref="DnssecResigningBackgroundService" />. Both read it on each use.
 /// </summary>
 public class ZoneSigningOptions
 {
@@ -15,36 +15,30 @@ public class ZoneSigningOptions
     public const string SectionName = "DnsServer:Authoritative:ZoneSigning";
 
     /// <summary>
-    ///     This property contains how long a freshly computed signature remains valid -- the gap
-    ///     between an <see cref="Common.Wire.Records.RrSigRecordData.SignatureInception" /> and
-    ///     its own <see cref="Common.Wire.Records.RrSigRecordData.SignatureExpiration" />. 30 days
-    ///     is a common, conservative default across real-world DNSSEC deployments -- long enough
-    ///     that a brief signing-pipeline outage cannot expire a zone's signatures before anyone
-    ///     notices, short enough that a compromised or retired key cannot forge indefinitely long
-    ///     validity into the future.
+    ///     This property contains how long after signing a signature expires (measured from the
+    ///     signing time; the inception is backdated separately by <see cref="InceptionOffset" />).
+    ///     30 days is a common default: long enough that a short signing outage does not expire
+    ///     the zone, short enough that a stolen key's signatures do not stay valid for long.
     /// </summary>
     public TimeSpan SignatureValidityPeriod { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
-    ///     This property contains how far *before* the actual signing time a signature's
-    ///     <see cref="Common.Wire.Records.RrSigRecordData.SignatureInception" /> is deliberately
-    ///     backdated, tolerating a validator's own clock running slightly behind this server's.
+    ///     This property contains how far before the signing time a signature's
+    ///     <see cref="Common.Wire.Records.RrSigRecordData.SignatureInception" /> is set, so a
+    ///     validator whose clock runs slightly behind still accepts it.
     /// </summary>
     public TimeSpan InceptionOffset { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    ///     This property contains how long before a zone's *earliest*-expiring signature actually
-    ///     expires that <see cref="DnssecResigningBackgroundService" /> proactively re-signs it --
-    ///     needed because a zone's data can sit completely unchanged for the entire
-    ///     <see cref="SignatureValidityPeriod" />, yet its signatures still age out on their own
-    ///     regardless, independent of <c>DnsZoneChangedEvent</c> ever firing again.
+    ///     This property contains how long before its signatures expire a zone is re-signed by
+    ///     <see cref="DnssecResigningBackgroundService" />. A zone that never changes would
+    ///     otherwise let its signatures expire.
     /// </summary>
     public TimeSpan RefreshBeforeExpiration { get; set; } = TimeSpan.FromDays(5);
 
     /// <summary>
-    ///     This property contains how often <see cref="DnssecResigningBackgroundService" />'s
-    ///     background loop wakes up to check whether any signed zone is due for the proactive
-    ///     re-sign <see cref="RefreshBeforeExpiration" /> describes.
+    ///     This property contains how often <see cref="DnssecResigningBackgroundService" /> checks
+    ///     whether any zone is due for re-signing.
     /// </summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromHours(6);
 }

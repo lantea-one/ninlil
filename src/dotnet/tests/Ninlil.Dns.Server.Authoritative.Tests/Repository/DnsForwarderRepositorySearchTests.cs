@@ -6,14 +6,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsForwarderRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database -- the Phase 13h proof that <c>ForwardersController</c>'s own
-///     forwarder listing no longer materializes every forwarder into memory before slicing a
-///     page out of it, and that the real <c>SortOrder</c>-then-<c>Name</c> ordering
-///     <c>ForwardersController</c> already applied in-memory survives the move to a real
-///     <c>ORDER BY</c>, mirroring <see cref="ZoneRepositorySearchTests" />'s own Phase 13g proof
-///     for the same shape.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsForwarderRepository" /> (<c>SearchAsync</c>, <c>CountAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>ForwardersController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks the <c>SortOrder</c>-then-<c>Name</c> ordering.
 /// </summary>
 public sealed class DnsForwarderRepositorySearchTests : IAsyncLifetime
 {
@@ -26,8 +23,8 @@ public sealed class DnsForwarderRepositorySearchTests : IAsyncLifetime
     /// <summary>
     ///     This method seeds five forwarders with a deliberate mix of <c>SortOrder</c> ties
     ///     (broken by name) and out-of-order creation, so a passing ordering assertion can only
-    ///     be explained by a real, translated two-key <c>ORDER BY</c>, not by creation order or a
-    ///     single sort key happening to already match.
+    ///     be explained by a translated two-key <c>ORDER BY</c>, not by creation order or a
+    ///     single sort key already matching.
     /// </summary>
     private async Task SeedAsync()
     {

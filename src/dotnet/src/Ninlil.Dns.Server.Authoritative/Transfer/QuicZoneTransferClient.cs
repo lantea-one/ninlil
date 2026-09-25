@@ -12,22 +12,17 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Authoritative.Transfer;
 
 /// <summary>
-///     This class implements <see cref="IZoneTransferClient" />'s QUIC-carried variant -- the same
-///     transport-confidentiality benefit as <see cref="TlsZoneTransferClient" />, over QUIC
-///     instead of a TCP-then-TLS handshake, mirroring how <c>Ninlil.Dns.Protocol.DnsOverQuic</c>
-///     extends <c>Ninlil.Dns.Protocol.DnsOverTls</c>'s own reasoning for ordinary queries. RFC
-///     9250 itself only defines a stub-resolver query per dedicated bidirectional stream; this
-///     class applies that same one-stream-per-exchange shape to the whole multi-message AXFR/IXFR
-///     sequence instead, writing every response message onto the one stream the query itself
-///     opened. Needs <c>libmsquic</c>/OpenSSL as a native OS dependency, exactly like
-///     <c>DnsOverQuicListener</c> does -- see <see cref="PullAsync" />'s own
-///     <see cref="QuicConnection.IsSupported" /> check.
+///     This class implements <see cref="IZoneTransferClient" /> over QUIC (DNS-over-QUIC, RFC
+///     9250), giving the same confidentiality as <see cref="TlsZoneTransferClient" />. The query
+///     goes on one bidirectional stream and every response message comes back on it, as RFC
+///     9250 §4.2 allows for zone transfers. It needs the native <c>libmsquic</c> library, like
+///     <c>DnsOverQuicListener</c>; <see cref="PullAsync" /> checks
+///     <see cref="QuicConnection.IsSupported" />. The SOA check goes over plain UDP.
 /// </summary>
 /// <param name="tsigService">The service used to sign requests and verify responses.</param>
 /// <param name="options">
-///     This client's own configuration, such as timeouts and whether to validate the primary's own
-///     certificate -- bound via <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via
-///     <c>options.CurrentValue</c>, on every single pull this (scoped) client attempts.
+///     The port, timeouts and certificate check, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> on every pull.
 /// </param>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
@@ -38,8 +33,8 @@ public class QuicZoneTransferClient(
 ) : IZoneTransferClient
 {
     /// <summary>
-    ///     This constant contains RFC 9250 §7.1's registered ALPN token for DNS-over-QUIC, reused
-    ///     here since no dedicated ALPN token exists for zone-transfer-over-QUIC specifically.
+    ///     This constant contains the DNS-over-QUIC ALPN token from RFC 9250 §7.1, which zone
+    ///     transfers over QUIC also use.
     /// </summary>
     private static readonly SslApplicationProtocol DoqApplicationProtocol = new("doq");
 
@@ -82,8 +77,7 @@ public class QuicZoneTransferClient(
         if (!string.IsNullOrEmpty(tsigKeyName))
             query = await tsigService.SignAsync(query, tsigKeyName, query.Id, stoppingToken);
 
-        // Captured before the query is serialized -- see TcpZoneTransferClient's own identical
-        // comment for why this must be the exact MAC the first response message chains from.
+        // The request MAC the first response chains from (see TcpZoneTransferClient).
         byte[] requestMac = query.Tsig?.Mac;
         byte[] queryBytes = DnsMessageWriter.Write(query);
 
@@ -96,7 +90,7 @@ public class QuicZoneTransferClient(
             {
                 ApplicationProtocols = [DoqApplicationProtocol],
                 TargetHost = primaryAddress.ToString(),
-                // See TlsZoneTransferClient's own identical reasoning on ValidateServerCertificate.
+                // See ZoneTransferClientOptions.ValidateServerCertificate.
                 RemoteCertificateValidationCallback = options.CurrentValue.ValidateServerCertificate
                     ? null
                     : (_, _, _, _) => true,
@@ -134,10 +128,8 @@ public class QuicZoneTransferClient(
 
             await ZoneTransferPullOverStream.WriteQueryAsync(stream, queryBytes, stoppingToken);
 
-            // RFC 9250 §4.2.1: the client signals it is done sending by closing this stream's own
-            // write side -- sent here, between the query write and reading the response
-            // sequence, since this is a single-request-then-many-responses exchange (this client
-            // never sends a second query on the same stream).
+            // RFC 9250 §4.2: close the write side after the query to show nothing more will be
+            // sent, then read the responses.
             await stream.WriteAsync(
                 ReadOnlyMemory<byte>.Empty,
                 completeWrites: true,

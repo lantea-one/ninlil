@@ -8,36 +8,29 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class resolves the current set of DNS-facing IP addresses this node's own healthy
-///     cluster peers can be reached at -- the piece that lets catalog zone auto-sync (and any
-///     zone it auto-provisions) derive <c>ZoneEntity.NotifyAddresses</c>/
-///     <c>PrimaryServerAddresses</c> from <c>ClusterNodeEntity</c>'s own registry instead of an
-///     operator hand-maintaining either list.
+///     This class returns the IP addresses of this node's healthy cluster peers, so catalog sync
+///     (<see cref="CatalogClusterAddressSyncService" />) and auto-provisioned zones can fill in
+///     <c>ZoneEntity.NotifyAddresses</c> and <c>PrimaryServerAddresses</c> from the cluster registry
+///     instead of by hand.
 ///     <para>
-///         Deliberately reads only <see cref="IClusterNodeRepository" /> (already available
-///         wherever <c>Data.Abstractions</c> is, which this project already depends on) rather
-///         than anything from <c>Ninlil.Dns.Server.Cluster</c> itself -- this project has no
-///         reason to add a project reference to the cluster channel/heartbeat engine just to read
-///         the peer registry those already keep current.
+///     It reads only <see cref="IClusterNodeRepository" />, so this project does not need a
+///     reference to <c>Ninlil.Dns.Server.Cluster</c>.
 ///     </para>
 /// </summary>
 /// <param name="clusterNodeRepository">The repository this resolver reads peer rows from.</param>
-/// <param name="logger">The logger a peer whose own host name fails to resolve is recorded to.</param>
+/// <param name="logger">The logger a failed host name lookup is recorded to.</param>
 public class ClusterPeerAddressResolver(
     IClusterNodeRepository clusterNodeRepository,
     ILogger<ClusterPeerAddressResolver> logger
 )
 {
     /// <summary>
-    ///     This method resolves every currently <see cref="ClusterNodeStatusEnum.Healthy" />
-    ///     peer's own DNS-facing IP address. A peer whose <see cref="ClusterNodeEntity.Host" /> is
-    ///     already an IP literal resolves immediately; a hostname is resolved via ordinary DNS,
-    ///     with any single peer's own resolution failure logged and skipped rather than aborting
-    ///     the whole call -- this method must never throw just because one peer's own name
-    ///     currently fails to resolve.
+    ///     This method returns the address of every <see cref="ClusterNodeStatusEnum.Healthy" /> peer.
+    ///     An IP literal in <see cref="ClusterNodeEntity.Host" /> is used as is; a host name is looked
+    ///     up in DNS, and a failed lookup is logged and skipped rather than thrown.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>Every resolved peer address, deduplicated, in no particular order.</returns>
+    /// <returns>The peer addresses, without duplicates, in no particular order.</returns>
     public async Task<IReadOnlyList<string>> ResolveHealthyPeerAddressesAsync(
         CancellationToken stoppingToken = default
     )
@@ -60,10 +53,9 @@ public class ClusterPeerAddressResolver(
     }
 
     /// <summary>
-    ///     This method resolves a single peer's own <see cref="ClusterNodeEntity.Host" /> to an
-    ///     IP address literal, the shape every consumer of <c>ZoneEntity.NotifyAddresses</c>/
-    ///     <c>PrimaryServerAddresses</c> in this project expects (both are parsed via
-    ///     <c>IPAddress.TryParse</c>, never resolved as hostnames at query time).
+    ///     This method resolves a peer's <see cref="ClusterNodeEntity.Host" /> to an IP literal, the
+    ///     form <c>NotifyAddresses</c> and <c>PrimaryServerAddresses</c> need (they are parsed with
+    ///     <c>IPAddress.TryParse</c>, never looked up).
     /// </summary>
     private async Task<string> ResolveOneAsync(
         ClusterNodeEntity peer,
@@ -75,17 +67,13 @@ public class ClusterPeerAddressResolver(
 
         try
         {
-            // Fully qualified: this file's own namespace tree (Ninlil.Dns.*) would otherwise
-            // shadow System.Net.Dns's own short name.
+            // Fully qualified because Ninlil.Dns.* hides System.Net.Dns.
             IPAddress[] resolved = await System.Net.Dns.GetHostAddressesAsync(
                 peer.Host,
                 stoppingToken
             );
 
-            // Prefer an IPv4 result when both families are returned -- most homelab deployments
-            // this project targets still transfer zones over IPv4 by default, and picking one
-            // consistently avoids this resolver flip-flopping between two equally valid addresses
-            // on every call.
+            // Prefer IPv4 when both families are returned, so the result is stable from call to call.
             IPAddress chosen =
                 resolved.FirstOrDefault(address =>
                     address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
@@ -105,10 +93,7 @@ public class ClusterPeerAddressResolver(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // A single peer's own transient DNS-resolution hiccup must never take down the whole
-            // catalog/cluster address reconciliation pass -- the same fail-soft posture this
-            // project's rate limiter and heartbeat engine already apply to their own per-item
-            // failures.
+            // One peer's failed lookup must not stop the whole pass.
             logger.LogWarning(
                 exception,
                 "Could not resolve cluster peer '{PeerName}''s own host '{PeerHost}'.",

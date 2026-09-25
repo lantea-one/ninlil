@@ -6,17 +6,14 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Authoritative.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsFilterListEntryRepository" />'s
-///     real, pushed-down <c>SearchByListIdAsync</c>/<c>CountByListIdAsync</c> pagination against a
-///     real SQLite-backed database -- the Phase 13i proof that <c>FilterListEntriesController</c>'s
-///     own entry listing no longer materializes every entry into memory before slicing a page out
-///     of it, and that a second list's own entries never leak into another list's page, mirroring
-///     <see cref="DnssecKeyRepositorySearchTests" />'s own Phase 13h proof for the same shape. This
-///     is the one entity in this project's own pagination sweep that can genuinely reach a large
-///     row count (a subscribed external block list can carry tens of thousands of entries), so
-///     <see cref="SearchByListIdAsync_LargeEntrySet_PaginatesCorrectlyAcrossHundredsOfRows" /> seeds a
-///     genuinely larger row count than this project's other pagination-proof tests, to give the
-///     pagination proof real weight at this entity's own scale.
+///     This class tests the paging of <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsFilterListEntryRepository" /> (<c>SearchByListIdAsync</c>, <c>CountByListIdAsync</c>) against a
+///     temporary SQLite database (<see cref="RepositorySearchTestHost" />): the page is cut by the
+///     database with <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, as <c>FilterListEntriesController</c>'s listing needs, rather
+///     than in memory. It also
+///     checks that another list's entries never appear. A subscribed list can hold tens of
+///     thousands of entries, so
+///     <see cref="SearchByListIdAsync_LargeEntrySet_PaginatesCorrectlyAcrossHundredsOfRows" /> seeds
+///     several hundred rows.
 /// </summary>
 public sealed class DnsFilterListEntryRepositorySearchTests : IAsyncLifetime
 {
@@ -27,9 +24,9 @@ public sealed class DnsFilterListEntryRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds one target list's five entries -- deliberately out of alphabetical
-    ///     value order -- plus one extra entry on an entirely different list, so a passing
-    ///     list-scoping assertion can only be explained by a real, translated
+    ///     This method seeds one target list's five entries out of alphabetical
+    ///     value order -- plus one extra entry on a different list, so a passing
+    ///     list-scoping assertion can only be explained by a translated
     ///     <c>WHERE ListId = ...</c> clause, not by the target list simply happening to be the
     ///     only list with any entries at all.
     /// </summary>
@@ -165,17 +162,17 @@ public sealed class DnsFilterListEntryRepositorySearchTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test seeds 300 entries -- a scale genuinely representative of a real subscribed
+    ///     This test seeds 300 entries -- a scale representative of a real subscribed
     ///     external block list, far beyond this project's other pagination-proof tests' handful
-    ///     of rows -- deliberately in reverse-alphabetical insertion order, then walks every page
+    ///     of rows in reverse-alphabetical insertion order, then walks every page
     ///     of a small page size end to end, confirming every page is disjoint, every page (except
     ///     possibly the last) is full, the final page is the correct partial size, and the
     ///     concatenation of every page reproduces the full, correctly ordered set. A result this
-    ///     precise across 300 rows and many pages is only plausible from a real, translated
+    ///     precise across 300 rows and many pages is only plausible from a translated
     ///     <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> query served by the composite
     ///     <c>(ListId, Value)</c> index <c>DnsFilterListEntryConfiguration</c> establishes -- an
     ///     in-memory sort/skip/take would still produce a correct result, but this project's own
-    ///     stated purpose for this test is proving the query is genuinely pushed down and indexed,
+    ///     stated purpose for this test is proving the query is pushed down and indexed,
     ///     not merely correct by coincidence.
     /// </summary>
     [Fact]

@@ -10,50 +10,41 @@ using Ninlil.Dns.Server.Authoritative.Cache;
 namespace Ninlil.Dns.Server.Authoritative.CatalogSync;
 
 /// <summary>
-///     This class builds and parses the well-known record owner names RFC 9432 (DNS Catalog
-///     Zones) defines: the catalog's own schema-version TXT record, and each member zone's own
-///     PTR record under the catalog's <c>zones</c> container. Every name this class produces or
-///     recognizes is relative to a specific catalog zone's own apex name (RFC 9432's own
-///     <c>$CATZ</c> placeholder).
+///     This class builds and parses the owner names RFC 9432 (DNS Catalog Zones) defines: the
+///     <c>version</c> TXT record and each member's PTR record under <c>zones</c>. All names are
+///     relative to a catalog zone's apex (<c>$CATZ</c> in RFC 9432). Only these are supported, not
+///     the <c>group</c> or <c>coo</c> properties.
 /// </summary>
 public static class CatalogZoneRecordNames
 {
     /// <summary>
-    ///     This constant contains the schema version this project's own catalog zone producer and
-    ///     consumer both speak -- RFC 9432 §3's own "version" TXT record value. RFC 9432 is
-    ///     itself version 2 of the catalog zone schema (superseding the version-1 shape an earlier
-    ///     Internet-Draft revision described); this project implements only version 2.
+    ///     This constant contains the catalog schema version produced and accepted, the RFC 9432 §3
+    ///     <c>version</c> TXT value. RFC 9432 is schema version 2; version 1 is not supported.
     /// </summary>
     public const string SchemaVersion = "2";
 
     /// <summary>
-    ///     This method builds the owner name of a catalog zone's own schema-version TXT record --
-    ///     RFC 9432 §3's <c>version.$CATZ</c>.
+    ///     This method builds the owner name of the version TXT record, <c>version.$CATZ</c>
+    ///     (RFC 9432 §3).
     /// </summary>
-    /// <param name="catalogZoneName">The catalog zone's own fully-qualified name, without a trailing dot.</param>
+    /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     public static string VersionRecordOwnerName(string catalogZoneName) =>
         $"version.{catalogZoneName.TrimEnd('.')}";
 
     /// <summary>
-    ///     This method builds the owner-name suffix every member entry lives under -- RFC 9432
-    ///     §5's <c>zones.$CATZ</c> container.
+    ///     This method builds the name member entries live under, <c>zones.$CATZ</c> (RFC 9432 §5).
     /// </summary>
-    /// <param name="catalogZoneName">The catalog zone's own fully-qualified name, without a trailing dot.</param>
+    /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     public static string MembersContainerName(string catalogZoneName) =>
         $"zones.{catalogZoneName.TrimEnd('.')}";
 
     /// <summary>
-    ///     This method computes the unique label (RFC 9432 §5's <c>&lt;unique-N&gt;</c>) this
-    ///     project's own catalog producer assigns a member zone. RFC 9432 leaves the exact
-    ///     algorithm unspecified -- only that it "has a unique value" within the catalog -- so
-    ///     this project derives it deterministically as the lowercase hexadecimal SHA-1 digest of
-    ///     the member zone's own lowercase, trailing-dot-free name. Deriving it from the name
-    ///     itself, rather than a randomly generated and separately stored value, means a rename
-    ///     naturally produces a new label (the old one simply stops being emitted, and a new one
-    ///     appears) instead of needing its own persisted mapping -- a consumer's ordinary
-    ///     add/remove diff already handles that correctly on its own.
+    ///     This method computes a member's unique label (<c>&lt;unique-N&gt;</c>, RFC 9432 §5). RFC 9432
+    ///     leaves the algorithm open; this uses the lowercase hex SHA-1 of the member's lowercase name
+    ///     without a trailing dot. Deriving it from the name means no mapping is stored: a rename
+    ///     gives a new label, and consumers see a remove and an add.
     /// </summary>
-    /// <param name="memberZoneName">The member zone's own fully-qualified name, without a trailing dot.</param>
+    /// <param name="memberZoneName">The member zone's fully-qualified name, without a trailing dot.</param>
     public static string ComputeUniqueLabel(string memberZoneName)
     {
         byte[] digest = SHA1.HashData(
@@ -63,29 +54,26 @@ public static class CatalogZoneRecordNames
     }
 
     /// <summary>
-    ///     This method builds a single member's own PTR record owner name -- RFC 9432 §5's
-    ///     <c>&lt;unique-N&gt;.zones.$CATZ</c>.
+    ///     This method builds a member's PTR owner name, <c>&lt;unique-N&gt;.zones.$CATZ</c>
+    ///     (RFC 9432 §5).
     /// </summary>
-    /// <param name="catalogZoneName">The catalog zone's own fully-qualified name, without a trailing dot.</param>
-    /// <param name="uniqueLabel">The member's own unique label, from <see cref="ComputeUniqueLabel" />.</param>
+    /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
+    /// <param name="uniqueLabel">The member's unique label, from <see cref="ComputeUniqueLabel" />.</param>
     public static string MemberRecordOwnerName(string catalogZoneName, string uniqueLabel) =>
         $"{uniqueLabel}.{MembersContainerName(catalogZoneName)}";
 
     /// <summary>
-    ///     This method determines whether a single stored record is one catalog member's own PTR
-    ///     entry -- a PTR record whose owner name is exactly one label under
-    ///     <see cref="MembersContainerName" /> (as opposed to, for example, a <c>group.</c> or
-    ///     <c>coo.</c> two-label sub-entry RFC 9432 also defines under the same container, neither
-    ///     of which this project implements -- see this class's own remarks on scope), and
-    ///     decodes the member zone name it names.
+    ///     This method checks whether a stored record is a member entry (a PTR exactly one label under
+    ///     <see cref="MembersContainerName" />, not a two-label <c>group</c> or <c>coo</c> entry) and
+    ///     decodes the member zone name.
     /// </summary>
     /// <param name="record">The stored record to check.</param>
-    /// <param name="catalogZoneName">The catalog zone's own fully-qualified name, without a trailing dot.</param>
+    /// <param name="catalogZoneName">The catalog zone's fully-qualified name, without a trailing dot.</param>
     /// <param name="memberZoneName">
-    ///     The member zone's own name (without a trailing dot) if <paramref name="record" /> is a
-    ///     genuine member entry, otherwise <see langword="null" />.
+    ///     The member zone's name, without a trailing dot, if <paramref name="record" /> is a member
+    ///     entry; otherwise <see langword="null" />.
     /// </param>
-    /// <returns><see langword="true" /> if this is a genuine member entry, <see langword="false" /> otherwise.</returns>
+    /// <returns>Whether the record is a member entry.</returns>
     public static bool TryGetMemberZoneName(
         RecordEntity record,
         string catalogZoneName,
@@ -102,10 +90,8 @@ public static class CatalogZoneRecordNames
 
         DnsName container = DnsName.Parse(MembersContainerName(catalogZoneName));
 
-        // A genuine member entry has exactly one label -- <unique-N> -- ahead of "zones.$CATZ".
-        // A "group."/"coo." sub-entry has two (its own qualifier label, then <unique-N>), so this
-        // length check alone is what tells the two apart without needing to special-case either
-        // qualifier by name.
+        // A member entry has one label (<unique-N>) before "zones.$CATZ"; "group." and "coo."
+        // entries have two.
         if (ownerName.Labels.Count != container.Labels.Count + 1)
             return false;
 
