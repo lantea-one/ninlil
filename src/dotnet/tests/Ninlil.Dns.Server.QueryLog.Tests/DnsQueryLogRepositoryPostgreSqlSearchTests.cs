@@ -7,13 +7,12 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class proves <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" />'s
-///     domain-substring search matches case-insensitively against a real PostgreSQL server, not
-///     only against SQLite (which every other test in this project runs against). PostgreSQL's
-///     own <c>LIKE</c> operator is case-sensitive by default, unlike SQLite/MySQL/SqlServer's --
-///     so <see cref="DnsQueryLogRepositorySearchTests.SearchAsync_FilteredByDomainSubstring_MatchesCaseInsensitively" />
-///     passing against SQLite alone would never have caught a regression here. Requires a working
-///     Docker daemon (via Testcontainers); there is no fallback for an environment without one.
+///     This class tests that the domain-substring search in
+///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" /> is
+///     case-insensitive on PostgreSQL, using <see cref="QueryLogPostgreSqlTestHost" />. The other
+///     tests in this project use SQLite, whose <c>LIKE</c> ignores ASCII case, so
+///     <see cref="DnsQueryLogRepositorySearchTests.SearchAsync_FilteredByDomainSubstring_MatchesCaseInsensitively" />
+///     alone would not catch a PostgreSQL regression. It needs a working Docker daemon.
 /// </summary>
 public sealed class DnsQueryLogRepositoryPostgreSqlSearchTests : IAsyncLifetime
 {
@@ -31,9 +30,8 @@ public sealed class DnsQueryLogRepositoryPostgreSqlSearchTests : IAsyncLifetime
             scope.ServiceProvider.GetRequiredService<IDnsQueryLogRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        // Seed one entry whose queried name is mixed-case, and one unrelated entry that must
-        // never match, so a search that accidentally matched everything (or nothing) would still
-        // be caught.
+        // One mixed-case entry that should match and one that should not, so a search that
+        // matches everything (or nothing) fails.
         DnsQueryLogEntryEntity matchingEntry = new()
         {
             Id = Guid.NewGuid(),
@@ -62,11 +60,9 @@ public sealed class DnsQueryLogRepositoryPostgreSqlSearchTests : IAsyncLifetime
         await repository.AddAsync(nonMatchingEntry);
         await unitOfWork.SaveChangesAsync();
 
-        // The stored name is "www.Example.com" (capital E); the search term below is
-        // "EXAMPLE" (all caps) -- neither casing matches the other literally, so this only
-        // passes if the repository is genuinely matching case-insensitively against PostgreSQL,
-        // proving the EF.Functions.ILike branch is actually wired up and translating correctly
-        // rather than silently falling back to PostgreSQL's own case-sensitive EF.Functions.Like.
+        // The stored name is "www.Example.com" and the search term "EXAMPLE", so this passes
+        // only if the PostgreSQL branch uses EF.Functions.ILike rather than the case-sensitive
+        // EF.Functions.Like.
         IReadOnlyList<DnsQueryLogEntryEntity> results = await repository.SearchAsync(
             new DnsQueryLogSearchCriteria(DomainContains: "EXAMPLE"),
             skip: 0,

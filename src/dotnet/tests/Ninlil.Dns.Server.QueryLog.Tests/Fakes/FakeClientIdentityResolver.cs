@@ -5,12 +5,10 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.QueryLog.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IClientIdentityResolver" />: it answers a
-///     fixed, test-configured <see cref="ClientIdentityResolution" /> for one specific source
-///     address and <see langword="null" /> for every other, mirroring
-///     <c>Ninlil.Dns.Server.Filtering.Tests.Fakes.FakeClientIdentityResolver</c>'s own identical
-///     fake and <c>Ninlil.Dns.Server.Core.Tests.ClientIdentity.CompositeClientIdentityResolverTests</c>'s
-///     own original.
+///     This class is a fake <see cref="IClientIdentityResolver" />. It answers a fixed
+///     <see cref="ClientIdentityResolution" /> for one source address and
+///     <see langword="null" /> for any other, like the fake of the same name in
+///     <c>Ninlil.Dns.Server.Filtering.Tests</c>.
 /// </summary>
 public sealed class FakeClientIdentityResolver : IClientIdentityResolver
 {
@@ -18,10 +16,9 @@ public sealed class FakeClientIdentityResolver : IClientIdentityResolver
     private readonly ClientIdentityResolution _resolution;
 
     /// <summary>
-    ///     This constructor configures which single source address this fake resolves, and what
-    ///     it resolves that address to.
+    ///     This constructor configures the source address and what it resolves to.
     /// </summary>
-    /// <param name="matchAddress">The one source address this fake ever resolves.</param>
+    /// <param name="matchAddress">The only source address this fake resolves.</param>
     /// <param name="resolution">The resolution to answer for <paramref name="matchAddress" />.</param>
     public FakeClientIdentityResolver(IPAddress matchAddress, ClientIdentityResolution resolution)
     {

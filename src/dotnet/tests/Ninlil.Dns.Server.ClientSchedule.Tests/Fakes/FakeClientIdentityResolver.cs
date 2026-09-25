@@ -1,33 +1,31 @@
 using System.Net;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.ClientSchedule.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IClientIdentityResolver" />: it answers a
-///     fixed, test-configured <see cref="ClientIdentityResolution" /> for one or more specific
-///     source addresses and <see langword="null" /> for every other, mirroring
-///     <c>Ninlil.Dns.Server.Filtering.Tests.Fakes.FakeClientIdentityResolver</c>'s own identical
-///     fake.
+///     This class is a fake <see cref="IClientIdentityResolver" />. It answers a fixed
+///     <see cref="ClientIdentityResolution" /> for the source addresses a test configures and
+///     <see langword="null" /> for any other. It matches the fake of the same name in
+///     <c>Ninlil.Dns.Server.Filtering.Tests</c>.
 /// </summary>
 public sealed class FakeClientIdentityResolver : IClientIdentityResolver
 {
     private readonly Dictionary<IPAddress, ClientIdentityResolution> _resolutions;
 
     /// <summary>
-    ///     This constructor configures which single source address this fake resolves, and what
-    ///     it resolves that address to.
+    ///     This constructor configures one source address and what it resolves to.
     /// </summary>
-    /// <param name="matchAddress">The one source address this fake ever resolves.</param>
+    /// <param name="matchAddress">The only source address this fake resolves.</param>
     /// <param name="resolution">The resolution to answer for <paramref name="matchAddress" />.</param>
     public FakeClientIdentityResolver(IPAddress matchAddress, ClientIdentityResolution resolution)
         : this(new Dictionary<IPAddress, ClientIdentityResolution> { [matchAddress] = resolution })
     { }
 
     /// <summary>
-    ///     This constructor configures more than one address-to-resolution mapping at once --
-    ///     used by a test proving one client's own configuration has no bearing on a genuinely
-    ///     different, unrelated client resolved from a different source address.
+    ///     This constructor configures several addresses at once, for tests that check one
+    ///     client's settings do not affect another client.
     /// </summary>
     /// <param name="resolutions">Every source address this fake resolves, and what each resolves to.</param>
     public FakeClientIdentityResolver(

@@ -6,15 +6,18 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 // Define our namespace.
 namespace Ninlil.Dns.Server.ClientSchedule.Tests;
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientRepository" /> for the engine tests. Client
+///     identifiers are matched through <see cref="Addresses" />.
+/// </summary>
 public sealed class InMemoryDnsClientRepository : IDnsClientRepository
 {
     public readonly List<DnsClientEntity> Items = [];
 
     /// <summary>
-    ///     This field is this fake's own minimal stand-in for the real
-    ///     <c>DnsClientAddressEntity</c> table <see cref="GetByClientIdentifierAsync" /> joins
-    ///     through in production -- a test populates it (see each suite's own <c>AddClient</c>
-    ///     helper) alongside adding the owning <see cref="DnsClientEntity" /> to <see cref="Items" />.
+    ///     This field stands in for the <c>DnsClientAddressEntity</c> table that the production
+    ///     <see cref="GetByClientIdentifierAsync" /> joins through. The fixture's <c>AddClient</c>
+    ///     helper fills it next to adding the <see cref="DnsClientEntity" /> to <see cref="Items" />.
     /// </summary>
     public readonly List<(
         string ClientIdentifier,
@@ -62,8 +65,8 @@ public sealed class InMemoryDnsClientRepository : IDnsClientRepository
         );
     }
 
-    // This fake holds no address rows, so only the client-level filters are honored here; the
-    // presence filters and last-seen ordering are covered against the real repositories instead.
+    // Only the client-level filters are applied here; the presence filters and last-seen
+    // ordering are covered by the Entity Framework repository tests.
     public Task<IReadOnlyList<DnsClientEntity>> SearchAsync(
         DnsClientSearchCriteria criteria,
         int skip,
@@ -88,6 +91,9 @@ public sealed class InMemoryDnsClientRepository : IDnsClientRepository
         && (criteria?.CreatedSinceUtc is not { } since || item.CreatedAtUtc >= since);
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientGroupRepository" /> for the engine tests.
+/// </summary>
 public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
 {
     public readonly List<DnsClientGroupEntity> Items = [];
@@ -136,6 +142,10 @@ public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
         Task.FromResult(Items.Count);
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientScheduleRepository" /> for the engine
+///     tests.
+/// </summary>
 public sealed class InMemoryDnsClientScheduleRepository : IDnsClientScheduleRepository
 {
     public readonly List<DnsClientScheduleEntity> Items = [];
@@ -191,6 +201,10 @@ public sealed class InMemoryDnsClientScheduleRepository : IDnsClientScheduleRepo
     ) => Task.FromResult(Items.Count(item => item.ClientId == clientId));
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientGroupScheduleRepository" /> for the engine
+///     tests.
+/// </summary>
 public sealed class InMemoryDnsClientGroupScheduleRepository : IDnsClientGroupScheduleRepository
 {
     public readonly List<DnsClientGroupScheduleEntity> Items = [];

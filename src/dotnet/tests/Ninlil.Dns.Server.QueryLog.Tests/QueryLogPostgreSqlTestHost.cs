@@ -8,37 +8,30 @@ using Testcontainers.PostgreSql;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class builds a real, throwaway dependency injection host backed by a real PostgreSQL
-///     server running in a Testcontainers-managed Docker container, the same shape
-///     <see cref="QueryLogTestHost" /> provides for SQLite. It exists specifically so
-///     provider-specific behavior -- most notably, whether domain-substring search matches
-///     case-insensitively -- can be verified against PostgreSQL's own real query translation
-///     rather than only against SQLite's, since the two providers' default <c>LIKE</c>
-///     case-sensitivity genuinely differs (see
-///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" />'s
-///     own domain-substring matching for why that distinction matters). A test class using this
-///     host requires a working Docker daemon; there is no in-process fallback, since PostgreSQL
-///     has no embedded/serverless mode the way SQLite does.
+///     This class builds a host like <see cref="QueryLogTestHost" />, but backed by PostgreSQL in
+///     a Docker container managed by Testcontainers. It lets tests check provider-specific
+///     behavior, such as case-insensitive domain search, against PostgreSQL's query translation:
+///     <c>LIKE</c> is case-sensitive on PostgreSQL but not on SQLite (see the domain matching in
+///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" />). Tests
+///     using it need a working Docker daemon; there is no fallback.
 /// </summary>
 public sealed class QueryLogPostgreSqlTestHost : IAsyncDisposable
 {
-    // Published on a random free host port, never 5432 itself: the machine running the tests may
-    // well have its own PostgreSQL server listening there.
+    // Published on a random free host port rather than 5432, which a local PostgreSQL server may
+    // already be using.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .WithPortBinding(PostgreSqlBuilder.PostgreSqlPort, assignRandomHostPort: true)
         .Build();
 
     /// <summary>
-    ///     This property contains the real dependency injection container this test's own
-    ///     scopes are created against.
+    ///     This property contains the host whose services the tests create scopes from.
     /// </summary>
     public IHost Host { get; private set; }
 
     /// <summary>
-    ///     This method starts the real PostgreSQL container, then builds and starts the host
-    ///     against it, applying the entity model directly (via <c>EnsureCreatedAsync</c>) rather
-    ///     than the real relational migrations, the same shortcut <see cref="QueryLogTestHost" />
-    ///     itself already takes for SQLite.
+    ///     This method starts the PostgreSQL container, builds the host against it (it is not
+    ///     started) and creates the schema with <c>EnsureCreatedAsync</c>, as
+    ///     <see cref="QueryLogTestHost" /> does.
     /// </summary>
     public async Task InitializeAsync()
     {

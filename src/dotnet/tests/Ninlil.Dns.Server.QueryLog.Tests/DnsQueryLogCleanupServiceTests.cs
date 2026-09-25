@@ -9,10 +9,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsQueryLogCleanupService" />'s own single-sweep retention
-///     logic (<see cref="DnsQueryLogCleanupService.SweepAsync" />, driven directly rather than by
-///     waiting out a real <see cref="QueryLoggingOptions.CleanupInterval" />) against a real,
-///     SQLite-backed repository.
+///     This class tests the retention sweep of <see cref="DnsQueryLogCleanupService" />: the age
+///     bound, the count bound, both off, and running while logging is disabled. It calls
+///     <see cref="DnsQueryLogCleanupService.SweepAsync" /> directly, rather than waiting for
+///     <see cref="QueryLoggingOptions.CleanupInterval" />, against <see cref="QueryLogTestHost" />
+///     (SQLite).
 /// </summary>
 public sealed class DnsQueryLogCleanupServiceTests : IAsyncLifetime
 {
@@ -63,8 +64,8 @@ public sealed class DnsQueryLogCleanupServiceTests : IAsyncLifetime
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        // Five entries spread out over 40 days back; a 30-day retention window should remove
-        // whichever ones fall outside it.
+        // Five entries from 5 to 45 days old; a 30-day retention period removes the two older
+        // than that.
         await using (AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope())
         {
             IDnsQueryLogRepository repository =
@@ -155,9 +156,9 @@ public sealed class DnsQueryLogCleanupServiceTests : IAsyncLifetime
     [Fact]
     public async Task SweepAsync_RunsRegardlessOfWhetherLoggingItselfIsEnabled()
     {
-        // QueryLoggingOptions.Enable governs only whether DnsQueryLogSubscriber writes new
-        // entries -- SweepAsync itself has no Enable check of its own at all, so data left over
-        // from before logging was disabled still ages out on schedule.
+        // QueryLoggingOptions.Enable only controls whether DnsQueryLogSubscriber writes new
+        // entries. SweepAsync does not check it, so entries from before logging was disabled
+        // still age out.
         await SeedAsync(3, DateTimeOffset.UtcNow.AddDays(-100));
 
         DnsQueryLogCleanupService service = CreateService(

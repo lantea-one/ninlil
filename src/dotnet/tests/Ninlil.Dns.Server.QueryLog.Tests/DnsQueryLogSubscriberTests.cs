@@ -12,10 +12,11 @@ using Ninlil.Dns.Server.QueryLog.Tests.Fakes;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsQueryLogSubscriber" /> against a real, SQLite-backed
-///     repository stack -- confirming a real event is actually turned into a real, correctly
-///     mapped stored row, and, just as importantly, that disabling query logging genuinely
-///     results in zero new rows rather than merely fewer.
+///     This class tests <see cref="DnsQueryLogSubscriber" />: that an answered event becomes a
+///     correctly mapped row, that nothing is written when logging is disabled, what each privacy
+///     level stores, and when client identity is stored. The subscriber is constructed directly
+///     against <see cref="QueryLogTestHost" /> (SQLite), with a fixed options monitor and, where
+///     needed, a fake identity resolver.
 /// </summary>
 public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
 {
@@ -37,10 +38,9 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
     /// <summary>
-    ///     This method waits, briefly, for the subscriber's own detached background persistence
-    ///     task to finish -- <see cref="DnsQueryLogSubscriber.HandleAsync" /> itself only ever
-    ///     starts that task and returns immediately, per architectural invariant #3, so a test
-    ///     observing the write's own effect must give it a moment to actually land.
+    ///     This method polls for up to about a second until the log has entries.
+    ///     <see cref="DnsQueryLogSubscriber.HandleAsync" /> starts the write in the background and
+    ///     returns at once, so the test has to wait for it.
     /// </summary>
     private static async Task<IReadOnlyList<DnsQueryLogEntryEntity>> WaitForEntriesAsync(
         IServiceProvider services
@@ -106,10 +106,8 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
 
         await subscriber.HandleAsync(NewAnsweredEvent(), CancellationToken.None);
 
-        // A disabled subscriber returns without ever opening a scope at all, so there is no
-        // asynchronous write to wait out here -- a short, fixed delay is enough to prove nothing
-        // eventually shows up, which a poll-until-non-empty loop (as WaitForEntriesAsync uses for
-        // the enabled case) cannot itself express for a "nothing happens" assertion.
+        // A disabled subscriber starts no write. A poll-until-non-empty loop cannot show that
+        // nothing happens, so wait a fixed time and check the log is still empty.
         await Task.Delay(200);
 
         await using AsyncServiceScope scope = _testHost.Host.Services.CreateAsyncScope();
@@ -155,10 +153,9 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" /> genuinely never
-    ///     stores the queried domain name at all -- not merely omits it from a later read -- while
-    ///     every other field, including the client's own address and the queried type, is stored
-    ///     exactly as observed, so aggregate stats by type/response code remain meaningful.
+    ///     This test checks that <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" /> stores no
+    ///     queried name, while the other fields, including the client address and the queried
+    ///     type, are stored as received, so statistics by type and response code still work.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtDomainRedactedLevel_OmitsOnlyTheDomainName()
@@ -190,11 +187,9 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" /> stores an
-    ///     IPv4 client address truncated to its own containing /24 subnet (the last octet
-    ///     zeroed), never the real address, on top of redacting the domain name exactly like
-    ///     <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" /> already does -- each level is
-    ///     strictly more private than the one below it.
+    ///     This test checks that <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" /> stores an
+    ///     IPv4 client address truncated to its /24 (last octet zeroed), and also drops the domain
+    ///     name as <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" /> does.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4AddressToItsSubnet()
@@ -223,8 +218,8 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves the same truncation for an IPv6 client address: the trailing 64 bits
-    ///     (the last four groups) are zeroed, leaving only the /64 network prefix.
+    ///     This test checks the same truncation for an IPv6 client address: the last 64 bits (the
+    ///     last four groups) are zeroed, leaving the /64 prefix.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv6AddressToItsSubnet()
@@ -257,9 +252,9 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves <see cref="QueryLogPrivacyLevelEnum.FullyAnonymous" /> stores neither
-    ///     the client's own address (not even a truncated subnet) nor the queried domain name --
-    ///     only the fields aggregate counting needs.
+    ///     This test checks that <see cref="QueryLogPrivacyLevelEnum.FullyAnonymous" /> stores
+    ///     neither the client address (not even its subnet) nor the queried name, only the fields
+    ///     statistics need.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtFullyAnonymousLevel_PersistsNeitherClientNorDomain()
@@ -291,9 +286,9 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a query from a resolvable client genuinely gets its persistent
-    ///     identifier stamped onto the log entry, at this scale's own default (<see cref="QueryLogPrivacyLevelEnum.Full" />)
-    ///     level -- the identity-resolution half of this sub-phase's own core contract.
+    ///     This test checks that a query from a resolvable client gets its persistent identifier
+    ///     and protocol version stored, at the default
+    ///     <see cref="QueryLogPrivacyLevelEnum.Full" /> level.
     /// </summary>
     [Fact]
     public async Task HandleAsync_WithAResolvableClient_StampsClientIdentifierAndProtocolVersion()
@@ -325,9 +320,8 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves no resolver at all (the constructor's own default, exactly like every
-    ///     other test above this one in this class already constructs it) leaves both new fields
-    ///     null, with no error -- the "identity-resolution infrastructure isn't wired up" case.
+    ///     This test checks that without a resolver (the constructor default) both identity fields
+    ///     stay null, with no error.
     /// </summary>
     [Fact]
     public async Task HandleAsync_WithNoClientIdentityResolverConfigured_LeavesIdentityFieldsNull()
@@ -352,9 +346,8 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves a real resolver that simply has no mapping for this particular query's
-    ///     own source address (the ordinary "unknown device" case, distinct from no resolver being
-    ///     configured at all) also leaves both fields null, never an exception.
+    ///     This test checks that a resolver with no mapping for the source address (an unknown
+    ///     device, as opposed to no resolver) also leaves both fields null, with no error.
     /// </summary>
     [Fact]
     public async Task HandleAsync_WhenTheResolverCannotResolveThisAddress_LeavesIdentityFieldsNull()
@@ -385,10 +378,10 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves client identity is still stamped at <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" />
-    ///     -- the level immediately below the one that first suppresses it -- confirming the gate
-    ///     genuinely sits at <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" />, not one level
-    ///     earlier.
+    ///     This test checks that client identity is still stored at
+    ///     <see cref="QueryLogPrivacyLevelEnum.DomainRedacted" />, the level just below the one that
+    ///     drops it, so the cut-off is at <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" />
+    ///     and not one level earlier.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtDomainRedactedLevel_StillStampsClientIdentifier()
@@ -424,14 +417,11 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This is this sub-phase's own most important privacy-gating proof:
-    ///     <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" /> -- the exact level that already
-    ///     starts anonymizing <see cref="DnsQueryLogEntryEntity.ClientAddress" /> (truncating it to
-    ///     its own containing subnet, per <see cref="HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4AddressToItsSubnet" />
-    ///     above) -- also fully suppresses the new client identifier fields, even though a real,
-    ///     matching resolver is configured and would otherwise happily resolve this exact address.
-    ///     This proves suppression is a genuine privacy-level decision, not merely "happens to be
-    ///     null because no resolver was configured."
+    ///     This test checks that <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" />, the level
+    ///     that starts truncating <see cref="DnsQueryLogEntryEntity.ClientAddress" /> (see
+    ///     <see cref="HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4AddressToItsSubnet" />),
+    ///     drops the client identity fields even though a matching resolver is configured. The
+    ///     fields are null because of the privacy level, not a missing resolver.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtClientAnonymizedLevel_SuppressesClientIdentifierEvenWhenResolvable()
@@ -462,18 +452,16 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogEntryEntity entry = Assert.Single(entries);
-        // The address itself is still truncated (not dropped) at this level, per the existing
-        // ClientAnonymized coverage above -- but the identifier, which has no equivalent
-        // "truncated" middle ground, is fully suppressed.
+        // The address is truncated, not dropped, at this level, but the identifier has no
+        // truncated form, so it is dropped.
         Assert.Equal("198.51.100.0", entry.ClientAddress);
         Assert.Null(entry.ClientIdentifier);
         Assert.Null(entry.ClientProtocolVersion);
     }
 
     /// <summary>
-    ///     This test proves <see cref="QueryLogPrivacyLevelEnum.FullyAnonymous" /> -- strictly more
-    ///     private than <see cref="QueryLogPrivacyLevelEnum.ClientAnonymized" /> -- also continues
-    ///     to suppress client identity, exactly like it already suppresses the address itself.
+    ///     This test checks that <see cref="QueryLogPrivacyLevelEnum.FullyAnonymous" /> also drops
+    ///     client identity, as it drops the address.
     /// </summary>
     [Fact]
     public async Task HandleAsync_AtFullyAnonymousLevel_AlsoSuppressesClientIdentifier()

@@ -7,11 +7,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" />'s
-///     real, pushed-down search/count
-///     logic against a real SQLite-backed database -- every filter axis
-///     <see cref="DnsQueryLogSearchCriteria" /> exposes, plus the pagination and bulk-delete
-///     methods the REST search endpoint and the cleanup service each depend on.
+///     This class tests the search and count queries of
+///     <see cref="Ninlil.Dns.Data.EntityFrameworkCore.Repository.DnsQueryLogRepository" />, which
+///     run in the database: every filter in <see cref="DnsQueryLogSearchCriteria" />, pagination,
+///     and the bulk deletes used by <c>QueryLogController</c> and
+///     <see cref="DnsQueryLogCleanupService" />. It uses <see cref="QueryLogTestHost" /> (SQLite).
 /// </summary>
 public sealed class DnsQueryLogRepositorySearchTests : IAsyncLifetime
 {
@@ -22,11 +22,9 @@ public sealed class DnsQueryLogRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds the log with a small, deliberately varied set of entries -- two
-    ///     different client addresses, two different queried names (one a substring of the
-    ///     other), an A and an AAAA query, and both a successful and a failed response -- so a
-    ///     single seed can exercise every filter axis's own narrowing behavior against a shared,
-    ///     known baseline.
+    ///     This method seeds a small, varied set of entries: two client addresses, two queried
+    ///     names (one a substring of the other), A and AAAA queries, and a successful and a failed
+    ///     response, so each filter can be tested against the same baseline.
     /// </summary>
     private async Task SeedAsync()
     {
@@ -220,11 +218,10 @@ public sealed class DnsQueryLogRepositorySearchTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves <see cref="DnsQueryLogSearchCriteria.ClientIdentifier" />/
+    ///     This test checks that <see cref="DnsQueryLogSearchCriteria.ClientIdentifier" /> and
     ///     <see cref="DnsQueryLogSearchCriteria.ClientProtocolVersion" /> together narrow a search
-    ///     to only the entries this project's own write-time identity resolution attributed to one
-    ///     specific client -- the exact query <c>Ninlil.Web.Controllers.ClientActivityController</c>
-    ///     issues.
+    ///     to the entries attributed to one client when they were written, the query
+    ///     <c>Ninlil.Web.Controllers.ClientActivityController</c> makes.
     /// </summary>
     [Fact]
     public async Task SearchAsync_FilteredByClientIdentifier_ReturnsOnlyThatClientsEntries()

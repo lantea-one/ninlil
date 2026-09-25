@@ -10,52 +10,39 @@ using Ninlil.Dns.Server.Core.ClientSchedule;
 namespace Ninlil.Dns.Server.ClientSchedule;
 
 /// <summary>
-///     This class implements <see cref="IDnsClientScheduleEngine" />: resolves a query's own
-///     client identity, then checks -- in order -- that client's own instant pause, its resolved
-///     client group's own instant pause, that client's own direct time-of-day schedule, and its
-///     resolved client group's own schedule; any one of the four currently active blocks the
-///     query.
+///     This class implements <see cref="IDnsClientScheduleEngine" />, the parental-control check
+///     that <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> runs for
+///     each query (see that class). It resolves the query's client, then checks in order: the
+///     client's instant pause, its group's instant pause, the client's time-of-day schedules and
+///     its group's schedules. Any one that is active blocks the query.
 ///     <para>
-///         <strong>Instant pause and time-of-day scheduling share this one engine</strong> rather
-///         than each getting its own: both answer the identical question -- "is this client (or
-///         its group) currently in a temporary, fully-blocking state?" -- against the identical
-///         resolved client, so splitting them would only duplicate the resolution logic below for
-///         no real separation of concerns. Pause is checked first, strictly ahead of every
-///         schedule window, since it is this whole system's most decisive override: an active
-///         pause blocks a query regardless of what any schedule, filter list, or rewrite would
-///         otherwise decide, so there is no reason to ever evaluate a schedule window once a pause
-///         is already known to apply.
+///         <strong>Pause and schedules share one engine</strong> because both answer the same
+///         question ("is this client or its group in a blocking period now?") for the same
+///         resolved client. A pause is checked first: it overrides every schedule, filter list and
+///         rewrite, so there is no need to look at schedules once a pause applies.
 ///     </para>
 ///     <para>
-///         <strong>Client resolution</strong> mirrors
-///         <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>'s own resolution exactly: a
-///         query's source address is resolved via <see cref="IClientIdentityResolver" /> and
-///         looked up in <see cref="IDnsClientRepository" />; a disabled client resolves to
-///         nothing at all (contributes neither its own schedule nor its group's). This is a
-///         second, independent implementation of that same handful of lines rather than a shared
-///         extraction out of the already-shipped, already-tested <c>DnsFilterEngine</c> -- a
-///         deliberate choice to avoid risking a regression in that engine's own hot path just to
-///         save a small amount of duplicated resolution logic.
+///         <strong>Client resolution</strong> works as in
+///         <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>: the source address is resolved
+///         with <see cref="IClientIdentityResolver" /> and looked up in
+///         <see cref="IDnsClientRepository" />. A disabled client resolves to nothing, so neither
+///         its schedules nor its group's apply. The group's <c>IsDisabled</c> flag is not checked,
+///         since it only affects filter lists. The few lines of resolution are duplicated here
+///         rather than shared, to keep this engine independent of the filter engine's hot path.
 ///     </para>
 ///     <para>
-///         <strong>Both <see cref="IClientIdentityResolver" /> and the two repositories below are
-///         optional</strong>: the resolver is a constructor-injected, <see langword="null" />-
-///         defaulted parameter (this engine is registered as a DI singleton, so a
-///         constructor-injected <em>scoped</em> repository would be an invalid captive dependency);
-///         the two client-repository
-///         registrations are instead resolved per-check via <c>IServiceScopeFactory</c>, mirroring
-///         <c>DnsFilterEngine</c>'s own identical reasoning. Absent any of the three, this whole
-///         engine simply never blocks anything -- see <see cref="EvaluateAsync" />.
+///         <strong>Dependencies are optional.</strong> The resolver is a constructor parameter
+///         that defaults to <see langword="null" />; the repositories are scoped, so they are
+///         resolved per check through <c>IServiceScopeFactory</c> (the engine is a singleton). With
+///         no resolver or no client repository nothing is blocked; a missing group or schedule
+///         repository skips only that check.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach every scoped repository this engine needs, once per check.</param>
-/// <param name="logger">The logger this engine records nothing routine to today, kept for parity with every other engine's own constructor shape and future diagnostic use.</param>
+/// <param name="scopeFactory">The factory used to open a scope for the repositories on each check.</param>
+/// <param name="logger">The logger used to report a schedule time zone this host cannot resolve.</param>
 /// <param name="clientIdentityResolver">
-///     The optional resolver used to derive a query's own persistent client identifier from its
-///     source address. <see langword="null" /> (the default) means this engine never blocks
-///     anything -- the identical "cross-cutting infrastructure, singleton-safe, every pre-existing
-///     caller keeps compiling unchanged" shape <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" />'s
-///     own optional dependencies already establish.
+///     The optional resolver that turns a source address into a persistent client identifier.
+///     With <see langword="null" /> (the default) the engine never blocks anything.
 /// </param>
 public sealed class DnsClientScheduleEngine(
     IServiceScopeFactory scopeFactory,
@@ -80,10 +67,8 @@ public sealed class DnsClientScheduleEngine(
         if (client is null)
             return DnsClientScheduleDecision.Allowed;
 
-        // An instant pause is checked before anything else this engine evaluates -- see this
-        // class's own doc comment for why it always takes priority over a schedule window. A
-        // client's own pause is checked first; its resolved group's own pause (if any) is
-        // checked next, independently of whether the client itself is paused.
+        // Pauses come before schedules (see the class summary): the client's pause first, then
+        // its group's.
         if (IsCurrentlyPaused(client.PausedUntilUtc, nowUtc))
             return DnsClientScheduleDecision.Blocked(
                 $"client '{client.Id}' is instantly paused until {client.PausedUntilUtc:O}"
@@ -148,11 +133,10 @@ public sealed class DnsClientScheduleEngine(
     }
 
     /// <summary>
-    ///     This method checks whether an instant-pause timestamp is currently in effect -- shared
-    ///     by both the client-scoped and group-scoped checks in <see cref="EvaluateAsync" />. A
-    ///     <see langword="null" /> value, or one that has already passed, means "not paused"; no
-    ///     time-zone conversion is needed at all here, unlike a schedule window, since a pause is
-    ///     always expressed and compared directly in UTC.
+    ///     This method checks whether a pause timestamp is in effect, for both the client and the
+    ///     group check in <see cref="EvaluateAsync" />. A <see langword="null" /> or past value means
+    ///     not paused. Unlike a schedule window, a pause is stored and compared in UTC, so no time
+    ///     zone is involved.
     /// </summary>
     /// <param name="pausedUntilUtc">The stored pause timestamp, in UTC, or <see langword="null" />.</param>
     /// <param name="nowUtc">The current instant, in UTC, to compare against.</param>
@@ -160,12 +144,11 @@ public sealed class DnsClientScheduleEngine(
         pausedUntilUtc is { } until && until > nowUtc;
 
     /// <summary>
-    ///     This method checks a single schedule's own window against the current instant --
-    ///     shared by both the client-scoped and group-scoped loops in <see cref="EvaluateAsync" />
-    ///     via the two small overloads below, so the actual window math
-    ///     (<see cref="DnsScheduleWindowEvaluator.IsWithinBlockingWindow" />) and the
-    ///     "an unrecognized/invalid time zone id never blocks, it is only ever rejected up front
-    ///     at write time" defensive posture live in exactly one place.
+    ///     This method checks whether one schedule is enabled and its window covers the current
+    ///     instant. There is one overload per schedule entity type; both use
+    ///     <see cref="DnsScheduleWindowEvaluator.IsWithinBlockingWindow" /> for the window and
+    ///     <see cref="TryResolveTimeZone" />, so a time zone that cannot be resolved never
+    ///     blocks.
     /// </summary>
     private bool IsActive(
         bool isDisabled,
@@ -199,12 +182,10 @@ public sealed class DnsClientScheduleEngine(
         );
 
     /// <summary>
-    ///     This method resolves a stored time zone id, never throwing -- a schedule's own
-    ///     <c>TimeZoneId</c> is already validated as a real, recognized zone at write time (by
-    ///     whichever controller created/updated it), so a lookup failure here can only mean the
-    ///     underlying operating system's own time zone database changed after the row was saved;
-    ///     treated as "this schedule never blocks" rather than letting the whole query-answering
-    ///     path fail, logged once per occurrence for operator visibility.
+    ///     This method resolves a stored time zone id without throwing. The schedule controllers
+    ///     reject unknown ids on write, so a failure here means the host's time zone database no
+    ///     longer knows the id. The schedule is then treated as never active rather than failing
+    ///     the query, and a warning is logged on every check that hits it.
     /// </summary>
     private bool TryResolveTimeZone(string timeZoneId, out TimeZoneInfo timeZone)
     {
@@ -227,11 +208,10 @@ public sealed class DnsClientScheduleEngine(
     }
 
     /// <summary>
-    ///     This method resolves a query's own source address to its known, non-disabled
-    ///     <see cref="DnsClientEntity" /> registry row, mirroring
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>'s own identically shaped
-    ///     private helper -- see this class's own doc comment for why this is a second,
-    ///     independent implementation rather than a shared one.
+    ///     This method resolves a query's source address to its enabled
+    ///     <see cref="DnsClientEntity" />, or <see langword="null" />. It matches the helper in
+    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c> (see the class summary for why it is
+    ///     not shared).
     /// </summary>
     private async Task<DnsClientEntity> ResolveClientAsync(
         AsyncServiceScope scope,

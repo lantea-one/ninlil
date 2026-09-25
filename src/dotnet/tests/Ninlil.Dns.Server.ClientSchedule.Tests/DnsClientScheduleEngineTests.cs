@@ -11,6 +11,12 @@ using Ninlil.Dns.Server.Core.ClientSchedule;
 // Define our namespace.
 namespace Ninlil.Dns.Server.ClientSchedule.Tests;
 
+/// <summary>
+///     This class tests <see cref="DnsClientScheduleEngine" />: client and group schedules,
+///     disabled schedules and clients, client and group pauses, their order, and missing optional
+///     dependencies. The engine runs against in-memory repositories in a small service provider
+///     and a fake identity resolver; times are fixed instants evaluated in "Asia/Tokyo".
+/// </summary>
 public sealed class DnsClientScheduleEngineTests
 {
     private static readonly IPAddress ClientAddress = IPAddress.Parse("203.0.113.10");
@@ -19,13 +25,13 @@ public sealed class DnsClientScheduleEngineTests
         InternetProtocolVersionEnum.IPv4
     );
 
-    // A Monday 22:00 in "Asia/Tokyo" (UTC+9) -- deliberately not this sandbox's own local time
-    // zone, the same "genuinely different zone" proof DnsScheduleWindowEvaluatorTests establishes.
+    // Monday 22:00 in "Asia/Tokyo" (UTC+9), a zone other than the host's (see
+    // DnsScheduleWindowEvaluatorTests).
     private static readonly DateTimeOffset MondayNightTokyo = DateTimeOffset.Parse(
         "2026-09-14T13:00:00Z"
     );
 
-    // A Tuesday 12:00 in "Asia/Tokyo" -- well outside any of this file's own school-night windows.
+    // Tuesday 12:00 in "Asia/Tokyo", outside every school-night window in this file.
     private static readonly DateTimeOffset TuesdayMiddayTokyo = DateTimeOffset.Parse(
         "2026-09-15T03:00:00Z"
     );
@@ -39,14 +45,11 @@ public sealed class DnsClientScheduleEngineTests
         public readonly DnsClientScheduleEngine Engine;
 
         /// <param name="identityResolver">
-        ///     The resolver to inject, or <see langword="null" /> to prove the "no infrastructure
-        ///     at all" regression.
+        ///     The resolver to inject, or <see langword="null" /> to test the engine without one.
         /// </param>
         /// <param name="registerGroupRepository">
-        ///     Whether to register <see cref="IDnsClientGroupRepository" /> at all -- defaults to
-        ///     <see langword="true" />; set <see langword="false" /> to prove a group-pause check
-        ///     never crashes when that one dependency alone is absent (mirroring how the group
-        ///     schedule repository is already allowed to be absent above).
+        ///     Whether to register <see cref="IDnsClientGroupRepository" /> (the default). Pass
+        ///     <see langword="false" /> to test that the group pause check copes without it.
         /// </param>
         public Fixture(
             IClientIdentityResolver identityResolver = null,
@@ -236,11 +239,9 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves a client's own direct schedule and its group's own schedule are
-    ///     independently checked -- either one being active blocks the query, a union rather than
-    ///     one overriding the other. Here, only the group's own schedule is active (the client's
-    ///     own direct schedule covers a completely different, non-matching day), and the query is
-    ///     still blocked.
+    ///     This test checks that the client's schedules and its group's schedules are checked
+    ///     independently, so either one blocks; neither overrides the other. Here only the group's
+    ///     schedule is active (the client's covers another day), and the query is blocked.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_ClientAndGroupScheduleBothPresent_EitherOneBlocksIndependently()
@@ -249,8 +250,7 @@ public sealed class DnsClientScheduleEngineTests
         Fixture fixture = new(new FakeClientIdentityResolver(ClientAddress, Resolution));
         DnsClientEntity client = fixture.AddClient(groupId);
 
-        // The client's own direct schedule only ever covers Saturday -- never active on the
-        // Monday night this test evaluates against.
+        // The client's schedule covers only Saturday, so it is not active on Monday night.
         fixture.AddClientSchedule(
             client.Id,
             DnsScheduleDayOfWeekEnum.Saturday,
@@ -258,7 +258,7 @@ public sealed class DnsClientScheduleEngineTests
             new TimeOnly(7, 0)
         );
 
-        // The group's own schedule covers the school nights that do include Monday.
+        // The group's schedule covers school nights, which include Monday.
         fixture.AddGroupSchedule(groupId, SchoolNights(), new TimeOnly(21, 0), new TimeOnly(7, 0));
 
         DnsClientScheduleDecision decision = await fixture.Engine.EvaluateAsync(
@@ -314,10 +314,9 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves the engine never blocks anything at all when no
-    ///     <see cref="IClientIdentityResolver" /> was supplied -- the identical "cross-cutting
-    ///     infrastructure absent, whole path silently skipped" regression
-    ///     <c>Ninlil.Dns.Server.Filtering.Tests.DnsFilterEngineTests</c> already proves for
+    ///     This test checks that the engine blocks nothing when no
+    ///     <see cref="IClientIdentityResolver" /> is supplied, as
+    ///     <c>Ninlil.Dns.Server.Filtering.Tests.DnsFilterEngineTests</c> does for
     ///     <c>DnsFilterEngine</c>.
     /// </summary>
     [Fact]
@@ -341,9 +340,8 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves a client with a future <see cref="DnsClientEntity.PausedUntilUtc" /> is
-    ///     blocked regardless of any schedule state that would otherwise allow the query -- here,
-    ///     evaluated at a time no schedule of this client's own would ever block on its own.
+    ///     This test checks that a client with a future <see cref="DnsClientEntity.PausedUntilUtc" />
+    ///     is blocked although it has no schedule that would block.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_ClientWithFuturePause_ReturnsBlockedRegardlessOfSchedule()
@@ -388,8 +386,7 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves a group-level pause blocks every member -- the resolved client itself
-    ///     carries no pause of its own at all, only its group does.
+    ///     This test checks that a group pause blocks a member that has no pause of its own.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_ClientResolvedToPausedGroup_ReturnsBlocked()
@@ -408,9 +405,8 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves pausing one client does not affect a genuinely different, unrelated
-    ///     client -- two distinct client identifiers, resolved from two distinct source
-    ///     addresses, only the first one paused.
+    ///     This test checks that pausing one client does not affect another: two client
+    ///     identifiers, resolved from two source addresses, with only the first paused.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_PausingOneClient_DoesNotAffectAnUnrelatedClient()
@@ -460,10 +456,9 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves clearing a client's own <see cref="DnsClientEntity.PausedUntilUtc" />
-    ///     back to <see langword="null" /> (what <c>ClientsController.Resume</c> actually does)
-    ///     genuinely un-blocks the very next evaluation, immediately -- there is no cached/stale
-    ///     decision left behind anywhere in this engine.
+    ///     This test checks that clearing <see cref="DnsClientEntity.PausedUntilUtc" /> (what
+    ///     <c>ClientsController.Resume</c> does) unblocks the next evaluation at once: the engine
+    ///     caches no decision.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_ResumingAPausedClient_UnblocksImmediately()
@@ -477,7 +472,7 @@ public sealed class DnsClientScheduleEngineTests
         );
         Assert.True(pausedDecision.IsBlocked);
 
-        // Simulate ClientsController.Resume's own effect directly against the same tracked entity.
+        // Do what ClientsController.Resume does, on the same stored entity.
         client.PausedUntilUtc = null;
 
         DnsClientScheduleDecision resumedDecision = await fixture.Engine.EvaluateAsync(
@@ -488,10 +483,9 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves an active pause always wins over an active schedule that would
-    ///     otherwise also block the same query -- not load-bearing for the wire-level answer
-    ///     (both paths answer identically), but load-bearing for <see cref="DnsClientScheduleDecision.Reason" />,
-    ///     which this test uses to confirm the pause check genuinely ran first.
+    ///     This test checks that a pause is reported ahead of an active schedule. The DNS answer
+    ///     is the same either way; <see cref="DnsClientScheduleDecision.Reason" /> shows which
+    ///     check ran first.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_PauseAndScheduleBothActive_PauseReasonWins()
@@ -515,11 +509,9 @@ public sealed class DnsClientScheduleEngineTests
     }
 
     /// <summary>
-    ///     This test proves a group-pause check never crashes when
-    ///     <see cref="IDnsClientGroupRepository" /> alone is absent from dependency injection --
-    ///     the same optional-dependency discipline every other cross-cutting engine in this
-    ///     project already follows, mirroring <see cref="EvaluateAsync_NoIdentityResolver_NeverBlocksAnything" />
-    ///     for this one additional, independently optional dependency.
+    ///     This test checks that a client with a group is evaluated without error, and allowed,
+    ///     when <see cref="IDnsClientGroupRepository" /> is not registered: the group pause check
+    ///     is skipped. The client has no pause of its own here.
     /// </summary>
     [Fact]
     public async Task EvaluateAsync_NoGroupRepository_ClientPauseStillWorksAndGroupPauseIsSkipped()

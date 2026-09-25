@@ -8,20 +8,16 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.QueryLog;
 
 /// <summary>
-///     This class periodically prunes the persistent query log so that it can never grow
-///     unboundedly -- the exact denial-of-service concern this project's own "capability-
-///     expanding toggles default off" invariant normally guards against, still required here even
-///     though query logging itself is on by default. Two independent bounds are enforced on every
-///     sweep, in order: every entry older than <see cref="QueryLoggingOptions.RetentionPeriod" />
-///     is removed first, then, if the log still holds more than
-///     <see cref="QueryLoggingOptions.MaxRetainedEntries" /> entries, the oldest surplus entries
-///     are removed too. This sweep runs regardless of <see cref="QueryLoggingOptions.Enable" />,
-///     since disabling query logging stops new writes but says nothing about entries already on
-///     disk from before it was disabled -- those still need to age out on schedule rather than
-///     sitting there forever.
+///     This class prunes the query log every <see cref="QueryLoggingOptions.CleanupInterval" />
+///     so it cannot grow without bound, which would otherwise be a denial-of-service risk since
+///     logging is on by default. Each sweep applies two bounds in order: entries older than
+///     <see cref="QueryLoggingOptions.RetentionPeriod" /> are removed, then, if more than
+///     <see cref="QueryLoggingOptions.MaxRetainedEntries" /> remain, the oldest surplus is
+///     removed. The sweep runs even when <see cref="QueryLoggingOptions.Enable" /> is off, so
+///     entries written before logging was disabled still age out.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped repository per sweep.</param>
-/// <param name="options">This service's own configured retention bounds and sweep interval.</param>
+/// <param name="scopeFactory">The factory used to open a scope for the repository per sweep.</param>
+/// <param name="options">The retention bounds and sweep interval.</param>
 /// <param name="logger">The logger this service records the outcome of each sweep to.</param>
 public sealed class DnsQueryLogCleanupService(
     IServiceScopeFactory scopeFactory,
@@ -47,11 +43,9 @@ public sealed class DnsQueryLogCleanupService(
     }
 
     /// <summary>
-    ///     This method performs a single retention sweep against a fresh, scoped repository,
-    ///     applying the age bound first and the row-count bound second, and returns how many
-    ///     entries each bound actually removed -- exposed publicly so a caller (a test, or an
-    ///     operator-triggered manual sweep) can drive and observe one pass directly rather than
-    ///     waiting out a real <see cref="QueryLoggingOptions.CleanupInterval" />.
+    ///     This method runs one sweep: the age bound first, then the row-count bound. It is public
+    ///     so tests can run a sweep without waiting for
+    ///     <see cref="QueryLoggingOptions.CleanupInterval" />.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>How many entries were removed by the age bound and by the row-count bound.</returns>

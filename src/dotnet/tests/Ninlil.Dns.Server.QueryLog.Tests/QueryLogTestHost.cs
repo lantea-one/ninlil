@@ -7,9 +7,9 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 namespace Ninlil.Dns.Server.QueryLog.Tests;
 
 /// <summary>
-///     This class builds a real, throwaway SQLite-backed dependency injection host every test
-///     class in this project shares, so each one only needs to describe what it registers beyond
-///     the storage layer itself rather than repeating the same host-construction boilerplate.
+///     This class builds a host with the Entity Framework storage layer on a temporary SQLite
+///     database file, shared by the SQLite-based test classes in this project. The file is
+///     deleted on dispose.
 /// </summary>
 public sealed class QueryLogTestHost : IAsyncDisposable
 {
@@ -19,15 +19,13 @@ public sealed class QueryLogTestHost : IAsyncDisposable
     );
 
     /// <summary>
-    ///     This property contains the real dependency injection container this test's own
-    ///     scopes are created against.
+    ///     This property contains the host whose services the tests create scopes from.
     /// </summary>
     public IHost Host { get; private set; }
 
     /// <summary>
-    ///     This method builds and starts the host, applying the entity model directly (via
-    ///     <c>EnsureCreatedAsync</c>) rather than the real relational migrations, the same
-    ///     shortcut this project's own comparable write-path service tests already take.
+    ///     This method builds the host (it is not started) and creates the schema from the entity
+    ///     model with <c>EnsureCreatedAsync</c> rather than running the migrations.
     /// </summary>
     public async Task InitializeAsync()
     {

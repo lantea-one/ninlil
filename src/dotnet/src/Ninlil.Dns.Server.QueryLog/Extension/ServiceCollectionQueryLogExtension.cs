@@ -7,21 +7,17 @@ namespace Ninlil.Dns.Server.QueryLog.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's persistent query log.
+///     the query log (the subscriber that writes it and the service that prunes it).
 /// </summary>
 public static class ServiceCollectionQueryLogExtension
 {
     /// <summary>
-    ///     This method always binds <see cref="QueryLoggingOptions" /> and always registers
-    ///     <see cref="DnsQueryLogCleanupService" /> -- the cleanup sweep must keep running even
-    ///     while logging itself is turned off, so any data already on disk from before it was
-    ///     disabled still ages out on schedule. <see cref="DnsQueryLogSubscriber" /> is only
-    ///     registered when <see cref="QueryLoggingOptions.Enable" /> is <see langword="true" />,
-    ///     the same "only register the thing that does the work when the feature is actually on"
-    ///     pattern <c>Server.Rewrites</c>'s own extension already establishes for
-    ///     <c>IDnsRewriteEngine</c> -- the composition root is still expected to have already
-    ///     registered an <see cref="Ninlil.Dns.Data.Abstractions.Repository.IDnsQueryLogRepository" />
-    ///     implementation.
+    ///     This method binds <see cref="QueryLoggingOptions" /> and registers
+    ///     <see cref="DnsQueryLogCleanupService" />, which runs even while logging is off so
+    ///     existing entries still age out. <see cref="DnsQueryLogSubscriber" /> is registered only
+    ///     when <see cref="QueryLoggingOptions.Enable" /> is <see langword="true" /> at startup.
+    ///     The composition root must register an
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IDnsQueryLogRepository" />.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read query logging settings from.</param>

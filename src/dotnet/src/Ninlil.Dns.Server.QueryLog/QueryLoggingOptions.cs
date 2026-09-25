@@ -5,20 +5,17 @@ namespace Ninlil.Dns.Server.QueryLog;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:QueryLogging</c> section of the application's
-///     configuration and controls both <see cref="DnsQueryLogSubscriber" />'s own persistence
-///     behavior and <see cref="DnsQueryLogCleanupService" />'s own retention sweep.
+///     configuration and controls what <see cref="DnsQueryLogSubscriber" /> writes and how
+///     <see cref="DnsQueryLogCleanupService" /> prunes.
 ///     <para>
-///         <b><see cref="PrivacyLevel" /> is this class's one field read live, via
-///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, with no restart
-///         required</b> -- <see cref="DnsQueryLogSubscriber" /> re-reads it fresh for every query
-///         it persists. Every other field on this class (<see cref="Enable" />,
-///         <see cref="RetentionPeriod" />, <see cref="MaxRetainedEntries" />,
-///         <see cref="CleanupInterval" />) keeps this project's older, restart-required
-///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />-snapshotted posture --
-///         <c>Controllers.QueryLoggingSettingsController</c> reports which bucket a given
-///         <c>PATCH</c> touched, the same "mixed reload" shape
-///         <c>Controllers.RecursiveSettingsController</c> already establishes for a single
-///         options class with fields in both categories.
+///         <b><see cref="PrivacyLevel" /> takes effect without a restart</b>:
+///         <see cref="DnsQueryLogSubscriber" /> reads it through
+///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> for every query.
+///         The retention fields are read through
+///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> and need a restart, and
+///         so does turning <see cref="Enable" /> on (see <see cref="Enable" />).
+///         <c>QueryLoggingSettingsController</c> tells the caller whether a <c>PATCH</c> needs a
+///         restart.
 ///     </para>
 /// </summary>
 public sealed class QueryLoggingOptions
@@ -29,32 +26,27 @@ public sealed class QueryLoggingOptions
     public const string SectionName = "DnsServer:QueryLogging";
 
     /// <summary>
-    ///     This property controls whether an already-answered query is ever persisted to the
-    ///     query log at all. On by default -- a deliberate exception to this project's own usual
-    ///     "capability-expanding toggle defaults off" posture, prioritizing out-of-the-box parity
-    ///     with how every comparable DNS server (Pi-hole, AdGuard Home) already behaves by
-    ///     default. Turning this off stops new entries from being written, but never removes an
-    ///     entry already on disk -- <see cref="DnsQueryLogCleanupService" /> still runs regardless
-    ///     of this flag, so any data already logged before this was disabled still ages out on its
-    ///     own normal schedule instead of sitting there forever.
+    ///     This property controls whether answered queries are written to the query log. It is on
+    ///     by default, an exception to the usual rule that features which expand what the server
+    ///     does start off, to match what Pi-hole and AdGuard Home do. Turning it off stops new
+    ///     writes at once but keeps existing entries, which <see cref="DnsQueryLogCleanupService" />
+    ///     still ages out. Turning it on needs a restart when it was off at startup, since the
+    ///     subscriber is registered only if it is on then.
     /// </summary>
     public bool Enable { get; set; } = true;
 
     /// <summary>
     ///     This property contains how long a query log entry is kept before
-    ///     <see cref="DnsQueryLogCleanupService" /> removes it, regardless of how many entries
-    ///     currently exist. A zero or negative value disables age-based retention entirely,
-    ///     leaving <see cref="MaxRetainedEntries" /> as the only bound on the log's own growth.
+    ///     <see cref="DnsQueryLogCleanupService" /> removes it. A zero or negative value turns the
+    ///     age bound off, leaving <see cref="MaxRetainedEntries" /> as the only bound.
     /// </summary>
     public TimeSpan RetentionPeriod { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
-    ///     This property contains the largest number of entries the query log is ever allowed to
-    ///     hold, regardless of how recent they are -- a safety cap independent of
-    ///     <see cref="RetentionPeriod" />, since a server answering an unusually high query volume
-    ///     could otherwise still grow the log unboundedly within a single retention window. A
-    ///     value of zero or less disables this cap entirely, leaving <see cref="RetentionPeriod" />
-    ///     as the only bound.
+    ///     This property contains the most entries the query log keeps after a sweep, however
+    ///     recent. It is a cap separate from <see cref="RetentionPeriod" />, since a busy server
+    ///     could otherwise write a very large log within one retention period. Zero or less turns
+    ///     the cap off, leaving <see cref="RetentionPeriod" /> as the only bound.
     /// </summary>
     public int MaxRetainedEntries { get; set; } = 1_000_000;
 
@@ -65,13 +57,10 @@ public sealed class QueryLoggingOptions
     public TimeSpan CleanupInterval { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    ///     This property contains how much detail a newly-answered query is actually allowed to
-    ///     carry into storage -- applied by <see cref="DnsQueryLogSubscriber" /> at the moment an
-    ///     entry is written, never afterward. Defaults to <see cref="QueryLogPrivacyLevelEnum.Full" />,
-    ///     today's original, unchanged behavior: this is a new, additive privacy option an
-    ///     operator opts into, not a retroactive reduction of a feature that already ships
-    ///     <see cref="Enable" />d by default -- turning this dial up only ever happens because an
-    ///     operator explicitly chose to.
+    ///     This property contains how much detail about each query is stored.
+    ///     <see cref="DnsQueryLogSubscriber" /> applies it when it writes an entry, never later.
+    ///     The default is <see cref="QueryLogPrivacyLevelEnum.Full" />; an operator raises it to
+    ///     store less.
     /// </summary>
     public QueryLogPrivacyLevelEnum PrivacyLevel { get; set; } = QueryLogPrivacyLevelEnum.Full;
 }
