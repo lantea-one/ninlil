@@ -7,10 +7,10 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql;
 
 /// <summary>
-///     This class lets the <c>dotnet ef</c> command-line tool construct a
-///     <see cref="NinlilDnsContext" /> configured for PostgreSQL at design time, so that
-///     running <c>dotnet ef migrations add</c> from within this project only ever sees, and only
-///     ever scaffolds against, PostgreSQL's own migration history.
+///     This class lets the <c>dotnet ef</c> tool create a <see cref="NinlilDnsContext" />
+///     configured for PostgreSQL at design time, so <c>dotnet ef migrations add</c> run in
+///     this project works against the PostgreSQL migration history only. The connection string is
+///     a placeholder; generating a migration only needs the model, not a database.
 /// </summary>
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<NinlilDnsContext>
 {
@@ -19,8 +19,6 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<NinlilDnsC
     {
         DbContextOptionsBuilder<NinlilDnsContext> builder = new();
 
-        // Design-time migration generation only needs to know the model's shape, not a real
-        // database to write to.
         builder.UseNinlilDnsPostgreSql(
             "Host=localhost;Database=ninlil;Username=ninlil;Password=design-time"
         );

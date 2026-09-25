@@ -78,17 +78,14 @@ public class UserRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Look up the existing membership row.
         UserRoleEntity membership = await Context.UserRoles.FirstOrDefaultAsync(
             userRole => userRole.UserId == userId && userRole.RoleId == roleId,
             stoppingToken
         );
 
-        // There is nothing to remove if the user never held the role in the first place.
         if (membership is null)
             return;
 
-        // We're done, remove the membership row.
         Context.UserRoles.Remove(membership);
     }
 
@@ -116,15 +113,15 @@ public class UserRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Localize the requested claims so the query below isn't re-evaluated per row.
+        // Materialize the requested pairs once so the filter below does not re-enumerate them.
         (string ClaimType, string ClaimValue)[] requested = [.. claims];
 
-        // Look up every one of the user's claims that matches one of the requested pairs.
+        // Load the user's claims and match the pairs in memory, since a tuple list does not
+        // translate to SQL.
         List<UserClaimEntity> matches = await Context
             .UserClaims.Where(claim => claim.UserId == userId)
             .ToListAsync(stoppingToken);
 
-        // We're done, remove every match.
         Context.UserClaims.RemoveRange(
             matches.Where(claim =>
                 requested.Any(r =>
@@ -144,7 +141,6 @@ public class UserRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Look up every one of the user's claims that matches the claim being replaced.
         List<UserClaimEntity> matches = await Context
             .UserClaims.Where(claim =>
                 claim.UserId == userId
@@ -153,7 +149,6 @@ public class UserRepository(NinlilDnsContext context)
             )
             .ToListAsync(stoppingToken);
 
-        // We're done, overwrite each match with the replacement claim.
         foreach (UserClaimEntity claim in matches)
         {
             claim.ClaimType = newClaimType;

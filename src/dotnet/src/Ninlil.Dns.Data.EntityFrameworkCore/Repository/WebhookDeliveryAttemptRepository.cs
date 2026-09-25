@@ -8,10 +8,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 
 /// <summary>
 ///     This class implements <see cref="IWebhookDeliveryAttemptRepository" /> against
-///     <see cref="NinlilDnsContext" />, using Entity Framework Core's own
-///     <c>ExecuteDeleteAsync</c> query extension for the retention sweep -- the same
-///     "translated <c>DELETE ... WHERE ...</c>, never a materialize-then-discard" reasoning
-///     <see cref="DnsQueryLogRepository.DeleteOlderThanAsync" /> already establishes.
+///     <see cref="NinlilDnsContext" />. The retention sweep uses <c>ExecuteDeleteAsync</c>, a
+///     single <c>DELETE ... WHERE ...</c> without loading rows, as
+///     <see cref="DnsQueryLogRepository.DeleteOlderThanAsync" /> does.
 /// </summary>
 /// <param name="context">The database context to operate against.</param>
 public class WebhookDeliveryAttemptRepository(NinlilDnsContext context)

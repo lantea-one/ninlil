@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Conversion;
 
 /// <summary>
-///     This class tells Entity Framework Core's change tracker how to tell two
-///     <see cref="List{T}" /> of <see cref="string" /> values apart, and how to take an
-///     independent snapshot of one. Without this, a mutable collection property such as
-///     <c>ZoneEntity.PrimaryServerAddresses</c> would be compared by reference, so editing its
-///     contents in place would silently go undetected by <c>SaveChangesAsync</c>.
+///     This class tells the Entity Framework Core change tracker how to compare two
+///     <see cref="List{T}" /> of <see cref="string" /> values and how to snapshot one. It pairs
+///     with <see cref="JsonStringListValueConverter" />. Without it, a list property such as
+///     <c>ZoneEntity.PrimaryServerAddresses</c> would be compared by reference, and changes made
+///     to the list in place would not be saved.
 /// </summary>
 public class JsonStringListValueComparer()
     : ValueComparer<List<string>>(

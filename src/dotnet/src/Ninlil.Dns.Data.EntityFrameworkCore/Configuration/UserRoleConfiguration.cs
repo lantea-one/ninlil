@@ -17,13 +17,12 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRoleEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<UserRoleEntity> builder)
     {
-        // Map this entity onto the NinlilDnsUserRoles table.
         builder.ToTable("NinlilDnsUserRoles");
 
         // A user can only hold a given role once, so the pair forms the primary key.
         builder.HasKey(userRole => new { userRole.UserId, userRole.RoleId });
 
-        // Deleting a user or a role should clean up the membership rows that reference it.
+        // Deleting a user or a role deletes its memberships.
         builder
             .HasOne<UserEntity>()
             .WithMany()

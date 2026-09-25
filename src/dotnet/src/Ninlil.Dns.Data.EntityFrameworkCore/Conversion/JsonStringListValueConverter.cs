@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Conversion;
 
 /// <summary>
-///     This class lets a <see cref="List{T}" /> of <see cref="string" /> be stored in a single
-///     relational column by round-tripping it through JSON, since none of the four relational
-///     providers Ninlil supports offer a portable native array column type.
+///     This class stores a <see cref="List{T}" /> of <see cref="string" /> in one column as JSON,
+///     since the four relational providers have no common array column type.
+///     <see cref="JsonStringListValueComparer" /> lets the change tracker see edits to the list.
 /// </summary>
 public class JsonStringListValueConverter()
     : ValueConverter<List<string>, string>(

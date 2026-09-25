@@ -10,13 +10,12 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up the
-///     Entity Framework Core persistence layer: reading which relational provider to use from
-///     configuration, registering <see cref="NinlilDnsContext" /> against it, and registering
-///     every DNS repository this project implements. The DHCP repositories that also read from
-///     and write to this same shared context are registered separately, by
-///     <c>Ninlil.Dhcp.Data.EntityFrameworkCore.Extension.ServiceCollectionEntityFrameworkCoreExtension
-///     .AddNinlilDhcpEntityFrameworkCore</c>, which a caller must invoke after this method.
+///     This class provides our <see cref="IServiceCollection" /> extension for the Entity
+///     Framework Core storage: it reads the provider from configuration, registers
+///     <see cref="NinlilDnsContext" /> with it, and registers every DNS repository. The DHCP
+///     repositories use the same context but are registered by
+///     <c>Ninlil.Dhcp.Data.EntityFrameworkCore.Extension.ServiceCollectionEntityFrameworkCoreExtension.AddNinlilDhcpEntityFrameworkCore</c>,
+///     which must be called after this method.
 /// </summary>
 public static class ServiceCollectionEntityFrameworkCoreExtension
 {
@@ -33,39 +32,33 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
         IConfiguration configuration
     )
     {
-        // Bind the storage options, falling back to an all-defaults instance (SQLite, with no
-        // connection string configured) when the section is missing entirely.
+        // A missing section means the defaults: SQLite with no connection string.
         StorageOptions options =
             configuration.GetSection(StorageOptions.SectionName).Get<StorageOptions>()
             ?? new StorageOptions();
 
-        // When SQLite is selected and no connection string was configured, generate one
-        // automatically, so a fresh installation works without the operator writing any
-        // configuration at all.
+        // SQLite without a connection string gets a generated database file in a "data"
+        // directory next to the application, so a fresh installation works without
+        // configuration.
         if (
             options.Engine == StorageEngineEnum.Sqlite
             && string.IsNullOrWhiteSpace(options.ConnectionString)
         )
         {
-            // Store the generated database file in a "data" directory next to the application.
             string dataDirectory = Path.Combine(AppContext.BaseDirectory, "data");
 
-            // Ensure the data directory actually exists before SQLite tries to create a file in it.
             Directory.CreateDirectory(dataDirectory);
 
-            // Build the auto-generated connection string.
             options.ConnectionString =
                 $"Data Source={Path.Combine(dataDirectory, "ninlil-dns.sqlite3")}";
         }
 
-        // Register the resolved options themselves, in case another part of the application
-        // (for example, a health check) needs to know which engine and connection are in use.
+        // Registered so other code (a health check, for example) can see the engine and
+        // connection in use.
         instance.AddSingleton(options);
 
-        // Register the database context against whichever provider was resolved above.
         instance.AddDbContext<NinlilDnsContext>(builder => builder.UseNinlilDnsStorage(options));
 
-        // Register the unit of work and every repository this project implements.
         instance.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
         instance.AddScoped<IUserRepository, UserRepository>();
         instance.AddScoped<IRoleRepository, RoleRepository>();
@@ -111,7 +104,6 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
             ClusterSyncedSettingsStateRepository
         >();
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

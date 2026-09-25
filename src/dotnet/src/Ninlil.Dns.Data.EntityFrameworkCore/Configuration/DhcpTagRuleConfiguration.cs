@@ -16,10 +16,8 @@ public class DhcpTagRuleConfiguration : IEntityTypeConfiguration<DhcpTagRuleEnti
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DhcpTagRuleEntity> builder)
     {
-        // Map this entity onto the NinlilDhcpTagRules table.
         builder.ToTable("NinlilDhcpTagRules");
 
-        // The Id property is the primary key.
         builder.HasKey(rule => rule.Id);
 
         builder.Property(rule => rule.Name).HasMaxLength(256).IsRequired();
@@ -36,13 +34,11 @@ public class DhcpTagRuleConfiguration : IEntityTypeConfiguration<DhcpTagRuleEnti
             .HasMaxLength(16);
         builder.Property(rule => rule.UserClassMatchMode).HasConversion<string>().HasMaxLength(16);
 
-        // Mirrors RecordEntity.TimeToLiveSeconds's own uint-via-long conversion -- not every
-        // relational provider this project supports maps an unsigned column natively.
+        // Stored as a signed long because not every provider has unsigned columns.
         builder.Property(rule => rule.VendorClassEnterpriseNumber).HasConversion<long?>();
 
-        // A rule's own ScopeId is optional (null means globally eligible), so this is a nullable
-        // foreign key with no required navigation -- unlike DhcpReservationEntity/
-        // DhcpScopeCustomOptionEntity, which always belong to exactly one scope.
+        // ScopeId is optional (null means the rule applies to every scope), so this foreign key
+        // is nullable, unlike those of reservations and custom options.
         builder
             .HasOne<DhcpScopeEntity>()
             .WithMany()

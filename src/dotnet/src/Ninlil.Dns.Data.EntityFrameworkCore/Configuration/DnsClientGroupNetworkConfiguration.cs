@@ -18,17 +18,14 @@ public class DnsClientGroupNetworkConfiguration
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DnsClientGroupNetworkEntity> builder)
     {
-        // Map this entity onto the NinlilDnsClientGroupNetworks table.
         builder.ToTable("NinlilDnsClientGroupNetworks");
 
-        // The Id property is the primary key.
         builder.HasKey(network => network.Id);
 
-        // Every network belongs to exactly one client group, and the filtering engine always
-        // looks up a group's own networks together, so index the owning group.
+        // The filtering engine loads a group's rules together.
         builder.HasIndex(network => network.ClientGroupId);
 
-        // 64 characters comfortably fits the longest legal IPv6 CIDR notation.
+        // 64 characters fits the longest IPv6 CIDR notation.
         builder.Property(network => network.Cidr).HasMaxLength(64).IsRequired();
     }
 }

@@ -18,10 +18,8 @@ public class ClusterSyncedSettingsStateConfiguration
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<ClusterSyncedSettingsStateEntity> builder)
     {
-        // Map this entity onto the NinlilDnsClusterSyncedSettingsStates table.
         builder.ToTable("NinlilDnsClusterSyncedSettingsStates");
 
-        // The Id property is the primary key.
         builder.HasKey(state => state.Id);
 
         // Exactly one recorded state per settings section.

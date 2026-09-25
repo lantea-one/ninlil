@@ -7,15 +7,11 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 
 /// <summary>
 ///     This class implements <see cref="IDnsQueryLogRepository" /> against
-///     <see cref="NinlilDnsContext" />, using Entity Framework Core's own
-///     <c>ExecuteDeleteAsync</c> query extension for every bulk-delete method -- a genuine,
-///     translated <c>DELETE ... WHERE ...</c>
-///     statement, rather than loading each matching row into this repository's own change tracker
-///     only to immediately discard it, which would be both slower and a needless memory spike for
-///     a table that can hold millions of rows. Because of that, every delete here commits
-///     immediately against the database rather than being staged for
-///     <see cref="IUnitOfWork.SaveChangesAsync" /> the way this project's every other repository
-///     write is -- there is nothing left to stage once the statement has already run.
+///     <see cref="NinlilDnsContext" />. Every bulk delete uses <c>ExecuteDeleteAsync</c>, a single
+///     <c>DELETE ... WHERE ...</c> statement, instead of loading rows into the change tracker,
+///     which would be slow and use a lot of memory on a table of millions of rows. These deletes
+///     therefore take effect immediately, not at <see cref="IUnitOfWork.SaveChangesAsync" /> like
+///     other repository writes.
 /// </summary>
 /// <param name="context">The database context to operate against.</param>
 public class DnsQueryLogRepository(NinlilDnsContext context)
@@ -54,11 +50,9 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Only the identifiers of the entries to keep are loaded into memory -- bounded by
-        // maxRetainedEntries itself, never by the table's own total size -- then every entry not
-        // in that set is removed in one statement. If the table currently holds no more than
-        // maxRetainedEntries rows to begin with, every row's own identifier ends up in the "keep"
-        // set, and the delete below correctly removes nothing.
+        // Load only the identifiers to keep (at most maxRetainedEntries, whatever the table
+        // size), then delete everything else in one statement. If the table has no more rows
+        // than that, every row is kept and nothing is deleted.
         List<Guid> idsToKeep = await Set.OrderByDescending(entry => entry.OccurredAtUtc)
             .ThenByDescending(entry => entry.Id)
             .Take(maxRetainedEntries)
@@ -77,12 +71,10 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
         await Set.ExecuteDeleteAsync(stoppingToken);
 
     /// <summary>
-    ///     This method narrows a query by every filter <paramref name="criteria" /> specifies,
-    ///     shared between <see cref="SearchAsync" /> and <see cref="CountAsync" /> so the two can
-    ///     never drift out of sync with each other over what "matches" actually means. This is an
-    ///     instance method, not a static one, specifically so the domain-substring matching below
-    ///     can consult <see cref="EntityFrameworkRepositoryBase{TEntity}.Context" /> to find out
-    ///     which relational provider is active.
+    ///     This method applies the filters in <paramref name="criteria" />. <see cref="SearchAsync" />
+    ///     and <see cref="CountAsync" /> share it so they always agree on what matches. It is an
+    ///     instance method because the domain filter checks
+    ///     <see cref="EntityFrameworkRepositoryBase{TEntity}.Context" /> for the active provider.
     /// </summary>
     private IQueryable<DnsQueryLogEntryEntity> ApplyFilters(
         IQueryable<DnsQueryLogEntryEntity> query,
@@ -105,16 +97,10 @@ public class DnsQueryLogRepository(NinlilDnsContext context)
         {
             string pattern = $"%{criteria.DomainContains}%";
 
-            // Unlike SQLite/MySQL/SqlServer, PostgreSQL's own EF.Functions.Like translation is
-            // case-sensitive by default (it maps directly to PostgreSQL's own case-sensitive
-            // LIKE operator), so identical search input would otherwise return a different,
-            // narrower result set purely because PostgreSQL happens to be the active provider.
-            // Npgsql's EF.Functions.ILike translates to PostgreSQL's own case-insensitive ILIKE
-            // operator instead, matching every other provider's default LIKE behavior -- and the
-            // MongoDB repository's own case-insensitive regex search. ILike is PostgreSQL-only
-            // (it doesn't translate against any other provider's query pipeline), so it's used
-            // only when Npgsql is actually the active provider; every other provider keeps using
-            // plain EF.Functions.Like, which is already case-insensitive there.
+            // LIKE is case-insensitive by default on SQLite, MySQL and SQL Server but
+            // case-sensitive on PostgreSQL. ILike (ILIKE) makes PostgreSQL match the others and
+            // the case-insensitive MongoDB search. It only translates on Npgsql, so it is used
+            // only there.
             query = Context.Database.IsNpgsql()
                 ? query.Where(entry =>
                     entry.QueriedName != null && EF.Functions.ILike(entry.QueriedName, pattern)

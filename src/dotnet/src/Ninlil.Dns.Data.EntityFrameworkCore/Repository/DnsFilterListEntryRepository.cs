@@ -46,14 +46,13 @@ public class DnsFilterListEntryRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // A subscribed list's refresh is a wholesale swap-in, not an entry-by-entry diff: remove
-        // every entry the list currently has before adding back the freshly supplied set.
+        // A refresh swaps the whole set rather than diffing it: remove every current entry,
+        // then add the new ones.
         List<DnsFilterListEntryEntity> existing = await Set.Where(entry => entry.ListId == listId)
             .ToListAsync(stoppingToken);
         Set.RemoveRange(existing);
 
-        // Stamp every freshly added entry with the same creation timestamp, since they are all
-        // conceptually part of one refresh operation.
+        // Every new entry gets the same creation time, since they come from one refresh.
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         foreach (DnsFilterListReplacementEntry entry in entries)

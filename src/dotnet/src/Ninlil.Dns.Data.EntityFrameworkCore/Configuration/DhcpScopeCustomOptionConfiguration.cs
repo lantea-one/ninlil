@@ -19,33 +19,27 @@ public class DhcpScopeCustomOptionConfiguration
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DhcpScopeCustomOptionEntity> builder)
     {
-        // Map this entity onto the NinlilDhcpScopeCustomOptions table.
         builder.ToTable("NinlilDhcpScopeCustomOptions");
 
-        // The Id property is the primary key.
         builder.HasKey(customOption => customOption.Id);
 
         builder.Property(customOption => customOption.ValueHex).HasMaxLength(1024).IsRequired();
         builder.Property(customOption => customOption.Comments).HasMaxLength(4096);
 
-        // Stored as its own string name (matching DnsClientEntity.Origin's own established
-        // enum-as-string convention), with a real DB-level default of "Custom" -- today's only
-        // behavior -- so a row inserted through any path other than this project's own C# object
-        // initializer (a raw SQL insert, for example) still lands as Custom rather than an
-        // ambiguous NULL/zero value.
+        // The database default of "Custom" means a row inserted some other way (raw SQL, for
+        // example) still gets a valid value instead of NULL.
         builder
             .Property(customOption => customOption.ValueSource)
             .HasConversion<string>()
             .HasMaxLength(32)
             .HasDefaultValue(DhcpOptionValueSourceEnum.Custom);
 
-        // A scope may only configure one custom option per tag -- a second value for the same tag
-        // would be ambiguous about which one a client should actually receive.
+        // One value per tag per scope; a second would leave it unclear which the client gets.
         builder
             .HasIndex(customOption => new { customOption.ScopeId, customOption.OptionTag })
             .IsUnique();
 
-        // Deleting a scope should clean up the custom options that belong to it.
+        // Deleting a scope deletes its custom options.
         builder
             .HasOne<DhcpScopeEntity>()
             .WithMany()

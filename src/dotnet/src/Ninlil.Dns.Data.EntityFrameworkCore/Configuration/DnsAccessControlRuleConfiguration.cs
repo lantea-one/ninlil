@@ -8,10 +8,8 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Configuration;
 /// <summary>
 ///     This class maps <see cref="DnsAccessControlRuleEntity" /> onto the
 ///     <c>NinlilDnsAccessControlRules</c> table. <see cref="DnsAccessControlRuleEntity.Capabilities" />
-///     needs no explicit <c>HasConversion</c> call -- a <see cref="System.FlagsAttribute" /> enum
-///     maps to a plain <c>int</c> column under Entity Framework Core's own default convention, the
-///     same reason its own doc comment gives for why adding a third capability bit later needs no
-///     schema change on any relational provider.
+///     has no conversion: as a flags enum it is stored as an <c>int</c>, so a new capability bit
+///     needs no schema change.
 /// </summary>
 public class DnsAccessControlRuleConfiguration
     : IEntityTypeConfiguration<DnsAccessControlRuleEntity>

@@ -17,17 +17,14 @@ public class DnsFilterListConfiguration : IEntityTypeConfiguration<DnsFilterList
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DnsFilterListEntity> builder)
     {
-        // Map this entity onto the NinlilDnsFilterLists table.
         builder.ToTable("NinlilDnsFilterLists");
 
-        // The Id property is the primary key.
         builder.HasKey(list => list.Id);
 
-        // A list's name is required and unique, the same way a TSIG key's name must be unique.
+        // List names are unique.
         builder.Property(list => list.Name).HasMaxLength(255).IsRequired();
         builder.HasIndex(list => list.Name).IsUnique();
 
-        // Store each enum using its short, human-readable name rather than its numeric value.
         builder.Property(list => list.Kind).HasConversion<string>().HasMaxLength(32);
         builder.Property(list => list.Action).HasConversion<string>().HasMaxLength(32);
         builder.Property(list => list.Source).HasConversion<string>().HasMaxLength(32);

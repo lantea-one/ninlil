@@ -16,19 +16,16 @@ public class RoleConfiguration : IEntityTypeConfiguration<RoleEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<RoleEntity> builder)
     {
-        // Map this entity onto the NinlilDnsRoles table.
         builder.ToTable("NinlilDnsRoles");
 
-        // The Id property is the primary key.
         builder.HasKey(role => role.Id);
 
-        // A role's name is required, bounded in length, and unique.
+        // Role names are unique, compared through the normalized name.
         builder.Property(role => role.Name).HasMaxLength(256).IsRequired();
         builder.Property(role => role.NormalizedName).HasMaxLength(256).IsRequired();
         builder.HasIndex(role => role.NormalizedName).IsUnique();
 
-        // Null for every ordinary role -- see RoleEntity.ClusterConflictNote's own doc comment for
-        // when the cluster's own identity/RBAC federation mechanism sets this.
+        // Null for an ordinary role; see RoleEntity.ClusterConflictNote.
         builder.Property(role => role.ClusterConflictNote).HasMaxLength(1024);
     }
 }

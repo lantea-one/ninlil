@@ -6,21 +6,18 @@ using Ninlil.Dns.Data.Abstractions.Options;
 namespace Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 
 /// <summary>
-///     This class provides our <see cref="DbContextOptionsBuilder" /> extensions for selecting
-///     which relational provider <see cref="NinlilDnsContext" /> talks to. Each method wraps
-///     the provider's own <c>Use*</c> call so that callers depend only on Ninlil's own,
-///     stable method names rather than remembering which NuGet package backs each engine.
+///     This class provides our <see cref="DbContextOptionsBuilder" /> extensions for choosing the
+///     relational provider <see cref="NinlilDnsContext" /> uses. Each wraps the provider's
+///     <c>Use*</c> call, so callers depend on Ninlil method names rather than on which NuGet
+///     package backs each engine.
 ///     <para>
-///         Each method also points the provider at its own, separate migrations assembly (for
-///         example, <c>Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite</c>) rather than
-///         leaving migrations in the assembly this class itself lives in. Entity Framework
-///         Core's migration history is discovered per assembly, not per provider: if every
-///         provider's generated migrations lived alongside <see cref="NinlilDnsContext" />
-///         itself, applying migrations for any one provider would also see, and try to reconcile
-///         against, every other provider's history. Naming the assembly by its string name here,
-///         rather than referencing the migrations project directly, avoids a circular project
-///         reference, since those projects reference this one for <see cref="NinlilDnsContext" />
-///         itself.
+///         Each method also points the provider at its own migrations assembly (for example
+///         <c>Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite</c>). Entity Framework Core
+///         discovers migrations per assembly, not per provider, so if every provider's migrations
+///         lived next to <see cref="NinlilDnsContext" />, applying one provider's migrations would
+///         also see every other provider's history. The assembly is named by string because the
+///         migrations projects reference this one, and a project reference back would be
+///         circular.
 ///     </para>
 /// </summary>
 public static class DbContextOptionsBuilderExtension
@@ -65,9 +62,9 @@ public static class DbContextOptionsBuilderExtension
     /// <param name="instance">The current <see cref="DbContextOptionsBuilder" /> instance.</param>
     /// <param name="connectionString">The MySQL or MariaDB connection string.</param>
     /// <param name="serverVersion">
-    ///     Optional, the server's version. When omitted, Pomelo connects to the server once, up
-    ///     front, to detect it automatically; supply this explicitly to avoid that round trip
-    ///     (for example, while generating a migration with no live server available).
+    ///     Optional, the server's version. When omitted, Pomelo connects to the server once to detect
+    ///     it; pass it to avoid that round trip (for example when generating a migration without a
+    ///     running server).
     /// </param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="DbContextOptionsBuilder" />.</returns>
     public static DbContextOptionsBuilder UseNinlilDnsMySql(

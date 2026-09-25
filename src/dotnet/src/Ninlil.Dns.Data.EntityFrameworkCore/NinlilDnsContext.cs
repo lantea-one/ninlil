@@ -6,22 +6,50 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.EntityFrameworkCore;
 
 /// <summary>
-///     This class is the single Entity Framework Core model shared by every relational provider
-///     Ninlil supports, and by both this project's DNS entities and Ninlil.Dhcp's own DHCP
-///     scope/reservation/lease entities -- one shared storage-engine selection and one
-///     <c>IUnitOfWork</c> continue to serve the whole application rather than each protocol
-///     family standing up its own separate database connection and its own separate "save"
-///     boundary. DHCP's own entities are mapped here, in this project, rather than in
-///     <c>Ninlil.Dhcp.Data.EntityFrameworkCore</c> itself, purely because
-///     <see cref="OnModelCreating" /> only scans this assembly for
-///     <see cref="Microsoft.EntityFrameworkCore.IEntityTypeConfiguration{TEntity}" />
-///     implementations; the DHCP-specific repository implementations that actually read and
-///     write through this context still live in their own project, exactly as every DNS
-///     repository already does. This class does not know, and does not need to know, which
-///     provider is actually in use underneath it -- that choice is made once, at startup, by
-///     whichever <c>UseNinlilDns*</c> extension method (see
-///     <see cref="Extension.DbContextOptionsBuilderExtension" />) configured the
-///     <see cref="DbContextOptions" /> it was constructed with.
+///     This class is the one Entity Framework Core model shared by every relational provider, for
+///     both the DNS entities and the DHCP scope, reservation and lease entities. One storage
+///     choice and one <c>IUnitOfWork</c> serve the whole application instead of a database
+///     connection and save boundary per protocol. The DHCP entities are mapped in this assembly,
+///     not in <c>Ninlil.Dhcp.Data.EntityFrameworkCore</c>, because <see cref="OnModelCreating" />
+///     only scans this assembly for
+///     <see cref="Microsoft.EntityFrameworkCore.IEntityTypeConfiguration{TEntity}" /> classes; the
+///     DHCP repositories still live in their own project. The provider is chosen at startup by a
+///     <c>UseNinlilDns*</c> method of <see cref="Extension.DbContextOptionsBuilderExtension" />.
+///     <para>
+///         The configuration classes in <c>Configuration/</c> share these conventions:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             <description>
+///                 Enums are stored by name (<c>HasConversion&lt;string&gt;()</c>), so the table
+///                 contents read without the code. <see cref="System.FlagsAttribute" /> enums stay
+///                 integers.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 <see cref="List{T}" /> of <see cref="string" /> properties are stored as JSON
+///                 with <see cref="Conversion.JsonStringListValueConverter" /> and
+///                 <see cref="Conversion.JsonStringListValueComparer" />, since the providers have
+///                 no common array column type.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 A <see cref="DateTimeOffset" /> column that a query orders by or compares is
+///                 stored as UTC ticks (<see cref="long" />). The SQLite provider cannot translate
+///                 <c>ORDER BY</c> or comparisons over <see cref="DateTimeOffset" />, since its text
+///                 form does not compare correctly across offsets. The values are always UTC, so
+///                 nothing is lost and ordering works on every provider.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 Unsigned integers are stored as a wider signed type, since not every provider
+///                 has unsigned columns.
+///             </description>
+///         </item>
+///     </list>
 /// </summary>
 /// <param name="options">The configured options that select and connect to a provider.</param>
 public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbContext(options)
@@ -140,7 +168,7 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
     public DbSet<DnsFilterListEntity> DnsFilterLists => Set<DnsFilterListEntity>();
 
     /// <summary>
-    ///     This property contains every block/allow list's own entries.
+    ///     This property contains the entries of every block/allow list.
     /// </summary>
     public DbSet<DnsFilterListEntryEntity> DnsFilterListEntries => Set<DnsFilterListEntryEntity>();
 
@@ -155,42 +183,39 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
     public DbSet<DnsClientEntity> DnsClients => Set<DnsClientEntity>();
 
     /// <summary>
-    ///     This property contains every persistent identifier a known client device answers to --
-    ///     see <see cref="DnsClientEntity" />'s own doc comment for why a device's own
-    ///     identifier(s) live in this separate, one-to-many table rather than directly on it.
+    ///     This property contains every persistent identifier a known client device answers to; see
+    ///     <see cref="DnsClientAddressEntity" /> for why these are a separate table.
     /// </summary>
     public DbSet<DnsClientAddressEntity> DnsClientAddresses => Set<DnsClientAddressEntity>();
 
     /// <summary>
-    ///     This property contains every client group's own matched networks.
+    ///     This property contains the match rules of every client group.
     /// </summary>
     public DbSet<DnsClientGroupNetworkEntity> DnsClientGroupNetworks =>
         Set<DnsClientGroupNetworkEntity>();
 
     /// <summary>
-    ///     This property contains every client group's own assigned lists.
+    ///     This property contains the list assignments of every client group.
     /// </summary>
     public DbSet<DnsClientGroupListAssignmentEntity> DnsClientGroupListAssignments =>
         Set<DnsClientGroupListAssignmentEntity>();
 
     /// <summary>
-    ///     This property contains every individual known client's own directly assigned lists --
-    ///     unioned with whatever its own matched client group already contributes, see
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>.
+    ///     This property contains the lists assigned directly to known clients, which add to their
+    ///     group's lists (see <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>).
     /// </summary>
     public DbSet<DnsClientListAssignmentEntity> DnsClientListAssignments =>
         Set<DnsClientListAssignmentEntity>();
 
     /// <summary>
-    ///     This property contains every individual known client's own direct time-of-day
-    ///     parental-control schedule -- see
-    ///     <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>.
+    ///     This property contains the parental-control schedules assigned directly to known clients
+    ///     (see <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>).
     /// </summary>
     public DbSet<DnsClientScheduleEntity> DnsClientSchedules => Set<DnsClientScheduleEntity>();
 
     /// <summary>
-    ///     This property contains every client group's own time-of-day parental-control
-    ///     schedule -- see <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>.
+    ///     This property contains the parental-control schedules of client groups (see
+    ///     <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>).
     /// </summary>
     public DbSet<DnsClientGroupScheduleEntity> DnsClientGroupSchedules =>
         Set<DnsClientGroupScheduleEntity>();
@@ -218,7 +243,7 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
     public DbSet<DnsRewriteEntity> DnsRewrites => Set<DnsRewriteEntity>();
 
     /// <summary>
-    ///     This property contains every persisted, already-answered query log entry.
+    ///     This property contains every persisted query log entry.
     /// </summary>
     public DbSet<DnsQueryLogEntryEntity> DnsQueryLogEntries => Set<DnsQueryLogEntryEntity>();
 
@@ -229,38 +254,35 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
         Set<DnsAccessControlRuleEntity>();
 
     /// <summary>
-    ///     This property contains every operator-authored, permanent pin from a source IP
-    ///     address/network to a persistent client identifier -- see
-    ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c>.
+    ///     This property contains every static mapping from a source address or network to a
+    ///     client identifier (see
+    ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c>).
     /// </summary>
     public DbSet<DnsClientStaticAddressMappingEntity> DnsClientStaticAddressMappings =>
         Set<DnsClientStaticAddressMappingEntity>();
 
     /// <summary>
-    ///     This property contains every peer node this instance's own cluster membership
-    ///     registry knows about.
+    ///     This property contains every peer in the local cluster registry.
     /// </summary>
     public DbSet<ClusterNodeEntity> ClusterNodes => Set<ClusterNodeEntity>();
 
     /// <summary>
-    ///     This property contains the last-write-wins bookkeeping row, one per settings section,
-    ///     that the cluster's own config-sync mechanism keeps for every synced settings section.
+    ///     This property contains the last-write-wins state cluster config sync keeps, one row per
+    ///     synced settings section.
     /// </summary>
     public DbSet<ClusterSyncedSettingsStateEntity> ClusterSyncedSettingsStates =>
         Set<ClusterSyncedSettingsStateEntity>();
 
     /// <summary>
     ///     This method applies every <see cref="Microsoft.EntityFrameworkCore.IEntityTypeConfiguration{TEntity}" />
-    ///     found in this assembly, so that adding a new entity only ever requires adding its
-    ///     configuration class alongside it rather than also remembering to register it here.
+    ///     found in this assembly, so a new entity only needs its configuration class, not a
+    ///     registration here.
     /// </summary>
     /// <param name="modelBuilder">The model builder being configured.</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Apply every entity configuration declared in this assembly.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NinlilDnsContext).Assembly);
 
-        // Let the base class finish building the model.
         base.OnModelCreating(modelBuilder);
     }
 }

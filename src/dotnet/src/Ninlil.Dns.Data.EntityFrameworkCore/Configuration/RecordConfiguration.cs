@@ -16,37 +16,28 @@ public class RecordConfiguration : IEntityTypeConfiguration<RecordEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<RecordEntity> builder)
     {
-        // Map this entity onto the NinlilDnsRecords table.
         builder.ToTable("NinlilDnsRecords");
 
-        // The Id property is the primary key.
         builder.HasKey(record => record.Id);
 
         builder.Property(record => record.Name).HasMaxLength(255).IsRequired();
 
-        // Store the type and class using their short, human-readable names rather than their
-        // numeric values.
         builder.Property(record => record.Type).HasConversion<string>().HasMaxLength(32);
         builder.Property(record => record.Class).HasConversion<string>().HasMaxLength(16);
 
-        // Microsoft SQL Server has no native unsigned integer column type, unlike SQLite,
-        // PostgreSQL, and MySQL/MariaDB, all of which happily store a uint as-is. Storing it as a
-        // 64-bit signed integer instead keeps a single, portable column type across every
-        // provider without narrowing the 32-bit range a DNS TTL actually needs.
+        // Not every provider has an unsigned 32-bit column, so the TTL is stored as a signed
+        // 64-bit integer, which holds its whole range.
         builder.Property(record => record.TimeToLiveSeconds).HasConversion<long>();
 
         builder.Property(record => record.DataJson).IsRequired();
         builder.Property(record => record.Comments).HasMaxLength(4096);
 
-        // Store the provenance marker using its short, human-readable name rather than its
-        // numeric value, matching every other enum column on this entity.
         builder
             .Property(record => record.ManagedByFeature)
             .HasConversion<string>()
             .HasMaxLength(32);
 
-        // Answering a query means finding every record at a name (and often narrowing by type)
-        // within a zone, so index exactly that access pattern.
+        // Answering a query looks up the records at a name, often of one type, within a zone.
         builder.HasIndex(record => new
         {
             record.ZoneId,
@@ -54,7 +45,7 @@ public class RecordConfiguration : IEntityTypeConfiguration<RecordEntity>
             record.Type,
         });
 
-        // Deleting a zone should clean up the records that belong to it.
+        // Deleting a zone deletes its records.
         builder
             .HasOne<ZoneEntity>()
             .WithMany()

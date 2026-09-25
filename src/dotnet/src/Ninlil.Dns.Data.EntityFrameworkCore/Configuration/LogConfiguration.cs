@@ -16,20 +16,16 @@ public class LogConfiguration : IEntityTypeConfiguration<LogEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<LogEntity> builder)
     {
-        // Map this entity onto the NinlilDnsLogs table.
         builder.ToTable("NinlilDnsLogs");
 
-        // The Id property is the primary key.
         builder.HasKey(log => log.Id);
 
-        // Store the severity using its short, human-readable name rather than its numeric value.
         builder.Property(log => log.Severity).HasConversion<string>().HasMaxLength(32);
 
         builder.Property(log => log.Category).HasMaxLength(512);
         builder.Property(log => log.Message).IsRequired();
 
-        // The log viewer always searches by time first, then narrows by severity, so index both
-        // together in the order they are actually filtered.
+        // The log viewer filters by time first, then severity.
         builder.HasIndex(log => new { log.TimestampUtc, log.Severity });
     }
 }

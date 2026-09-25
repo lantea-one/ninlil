@@ -18,10 +18,8 @@ public class DnsClientGroupScheduleConfiguration
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DnsClientGroupScheduleEntity> builder)
     {
-        // Map this entity onto the NinlilDnsClientGroupSchedules table.
         builder.ToTable("NinlilDnsClientGroupSchedules");
 
-        // The Id property is the primary key.
         builder.HasKey(schedule => schedule.Id);
 
         // The schedule engine looks schedules up by their owning client group.
@@ -30,8 +28,7 @@ public class DnsClientGroupScheduleConfiguration
         builder.Property(schedule => schedule.TimeZoneId).HasMaxLength(128).IsRequired();
         builder.Property(schedule => schedule.Comments).HasMaxLength(4096);
 
-        // Stored as UTC ticks -- see DnsClientScheduleConfiguration.CreatedAtUtc's own doc
-        // comment for the identical reasoning.
+        // Stored as UTC ticks so it can be ordered on SQLite; see NinlilDnsContext.
         builder
             .Property(schedule => schedule.CreatedAtUtc)
             .HasConversion(

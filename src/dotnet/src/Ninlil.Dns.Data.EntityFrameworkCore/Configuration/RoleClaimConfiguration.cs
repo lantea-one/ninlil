@@ -17,20 +17,17 @@ public class RoleClaimConfiguration : IEntityTypeConfiguration<RoleClaimEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<RoleClaimEntity> builder)
     {
-        // Map this entity onto the NinlilDnsRoleClaims table.
         builder.ToTable("NinlilDnsRoleClaims");
 
-        // The Id property is the primary key.
         builder.HasKey(claim => claim.Id);
 
-        // A claim's type and value are both required.
         builder.Property(claim => claim.ClaimType).HasMaxLength(256).IsRequired();
         builder.Property(claim => claim.ClaimValue).HasMaxLength(1024).IsRequired();
 
-        // Every claim granted by a role is looked up together, so index the owning role.
+        // A role's claims are loaded together.
         builder.HasIndex(claim => claim.RoleId);
 
-        // Deleting a role should clean up the claims that reference it.
+        // Deleting a role deletes its claims.
         builder
             .HasOne<RoleEntity>()
             .WithMany()

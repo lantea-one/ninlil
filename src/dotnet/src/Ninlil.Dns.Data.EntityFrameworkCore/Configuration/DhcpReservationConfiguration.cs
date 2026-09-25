@@ -17,10 +17,8 @@ public class DhcpReservationConfiguration : IEntityTypeConfiguration<DhcpReserva
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DhcpReservationEntity> builder)
     {
-        // Map this entity onto the NinlilDhcpReservations table.
         builder.ToTable("NinlilDhcpReservations");
 
-        // The Id property is the primary key.
         builder.HasKey(reservation => reservation.Id);
 
         builder
@@ -31,9 +29,8 @@ public class DhcpReservationConfiguration : IEntityTypeConfiguration<DhcpReserva
         builder.Property(reservation => reservation.HostName).HasMaxLength(256);
         builder.Property(reservation => reservation.Comments).HasMaxLength(4096);
 
-        // A single client can only hold one reservation in a given scope, and a single address
-        // can only be reserved once in a given scope -- the same uniqueness shape LeaseConfiguration
-        // already establishes for an active lease.
+        // Within a scope, a client has at most one reservation and an address is reserved at
+        // most once.
         builder
             .HasIndex(reservation => new { reservation.ScopeId, reservation.ClientIdentifier })
             .IsUnique();
@@ -41,7 +38,7 @@ public class DhcpReservationConfiguration : IEntityTypeConfiguration<DhcpReserva
             .HasIndex(reservation => new { reservation.ScopeId, reservation.IpAddress })
             .IsUnique();
 
-        // Deleting a scope should clean up the reservations that belong to it.
+        // Deleting a scope deletes its reservations.
         builder
             .HasOne<DhcpScopeEntity>()
             .WithMany()

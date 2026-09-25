@@ -18,19 +18,14 @@ public class CloudDnsProviderCredentialConfiguration
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<CloudDnsProviderCredentialEntity> builder)
     {
-        // Map this entity onto the NinlilDnsCloudDnsProviderCredentials table.
         builder.ToTable("NinlilDnsCloudDnsProviderCredentials");
 
-        // The Id property is the primary key.
         builder.HasKey(credential => credential.Id);
 
-        // A credential set's name is required and unique -- an operator picks one, distinct
-        // name per credential set, the same way a TSIG key's name must be unique.
+        // Operators pick credential sets by name, so names are unique.
         builder.Property(credential => credential.Name).HasMaxLength(255).IsRequired();
         builder.HasIndex(credential => credential.Name).IsUnique();
 
-        // Store the provider type using its short, human-readable name rather than its numeric
-        // value.
         builder
             .Property(credential => credential.ProviderType)
             .HasConversion<string>()

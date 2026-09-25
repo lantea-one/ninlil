@@ -42,9 +42,9 @@ public class DnsClientRepository(NinlilDnsContext context)
         IQueryable<DnsClientEntity> filtered = Filter(criteria);
         IQueryable<DnsClientAddressEntity> addresses = Context.Set<DnsClientAddressEntity>();
 
-        // Each ordering puts its own "missing value" rows last with an explicit leading key rather
-        // than relying on how the provider sorts NULL, which differs between engines (PostgreSQL
-        // sorts NULL first in a descending order, SQLite/MySQL/SQL Server last).
+        // Each ordering puts rows with a missing value last through an explicit leading key,
+        // because engines sort NULL differently (PostgreSQL puts NULL first in a descending
+        // order, SQLite, MySQL and SQL Server last).
         IOrderedQueryable<DnsClientEntity> ordered = criteria.SortOrder switch
         {
             DnsClientSortOrderEnum.LastSeen => filtered
@@ -85,8 +85,8 @@ public class DnsClientRepository(NinlilDnsContext context)
 
     /// <summary>
     ///     This method applies the filters shared by <see cref="SearchAsync" /> and
-    ///     <see cref="CountAsync" /> as translated <c>WHERE</c> clauses; a presence filter becomes a
-    ///     correlated <c>EXISTS</c> over the client's own address rows.
+    ///     <see cref="CountAsync" /> as <c>WHERE</c> clauses; a presence filter becomes a correlated
+    ///     <c>EXISTS</c> over the client's address rows.
     /// </summary>
     private IQueryable<DnsClientEntity> Filter(DnsClientSearchCriteria criteria)
     {

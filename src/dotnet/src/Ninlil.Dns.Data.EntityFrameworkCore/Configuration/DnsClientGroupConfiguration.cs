@@ -17,14 +17,11 @@ public class DnsClientGroupConfiguration : IEntityTypeConfiguration<DnsClientGro
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DnsClientGroupEntity> builder)
     {
-        // Map this entity onto the NinlilDnsClientGroups table.
         builder.ToTable("NinlilDnsClientGroups");
 
-        // The Id property is the primary key.
         builder.HasKey(group => group.Id);
 
-        // A client group's name is required and unique, so an operator's group names stay
-        // unambiguous throughout the filtering engine's own configuration surface.
+        // Group names are unique so operators can tell groups apart.
         builder.Property(group => group.Name).HasMaxLength(255).IsRequired();
         builder.HasIndex(group => group.Name).IsUnique();
     }

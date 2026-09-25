@@ -26,18 +26,15 @@ public class LogRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Start narrowing from the time range and minimum severity, which every search applies.
         IQueryable<LogEntity> query = Set.Where(log =>
             log.TimestampUtc >= fromUtc
             && log.TimestampUtc <= toUtc
             && log.Severity >= minimumSeverity
         );
 
-        // Apply the category filter, if one was given.
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(log => log.Category == category);
 
-        // We're done, page the newest matches first and materialize them.
         return await query
             .OrderByDescending(log => log.TimestampUtc)
             .Skip(skip)

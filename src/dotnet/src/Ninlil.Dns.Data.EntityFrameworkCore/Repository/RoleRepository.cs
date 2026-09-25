@@ -52,9 +52,7 @@ public class RoleRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Look up every one of the role's claims that matches the requested pair. Nothing stops
-        // the exact same claim from having been granted more than once, so every match is
-        // removed rather than assuming there is exactly one.
+        // The same claim can have been granted more than once, so remove every match.
         List<RoleClaimEntity> matches = await Context
             .RoleClaims.Where(claim =>
                 claim.RoleId == roleId
@@ -63,7 +61,6 @@ public class RoleRepository(NinlilDnsContext context)
             )
             .ToListAsync(stoppingToken);
 
-        // We're done, remove every match.
         Context.RoleClaims.RemoveRange(matches);
     }
 

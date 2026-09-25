@@ -17,20 +17,17 @@ public class UserClaimConfiguration : IEntityTypeConfiguration<UserClaimEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<UserClaimEntity> builder)
     {
-        // Map this entity onto the NinlilDnsUserClaims table.
         builder.ToTable("NinlilDnsUserClaims");
 
-        // The Id property is the primary key.
         builder.HasKey(claim => claim.Id);
 
-        // A claim's type and value are both required.
         builder.Property(claim => claim.ClaimType).HasMaxLength(256).IsRequired();
         builder.Property(claim => claim.ClaimValue).HasMaxLength(1024).IsRequired();
 
-        // Every claim attached to a user is looked up together, so index the owning user.
+        // A user's claims are loaded together.
         builder.HasIndex(claim => claim.UserId);
 
-        // Deleting a user should clean up the claims that reference it.
+        // Deleting a user deletes their claims.
         builder
             .HasOne<UserEntity>()
             .WithMany()

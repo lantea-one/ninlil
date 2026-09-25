@@ -16,24 +16,21 @@ public class SessionConfiguration : IEntityTypeConfiguration<SessionEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<SessionEntity> builder)
     {
-        // Map this entity onto the NinlilDnsSessions table.
         builder.ToTable("NinlilDnsSessions");
 
-        // The Id property is the primary key.
         builder.HasKey(session => session.Id);
 
-        // The refresh token hash is required and must be unique so that redeeming one always
-        // resolves to exactly one session.
+        // The hash is unique so redeeming a refresh token always finds exactly one session.
         builder.Property(session => session.RefreshTokenHash).HasMaxLength(512).IsRequired();
         builder.HasIndex(session => session.RefreshTokenHash).IsUnique();
 
-        // Every session belonging to a user is listed together, so index the owning user.
+        // A user's sessions are listed together.
         builder.HasIndex(session => session.UserId);
 
         builder.Property(session => session.IpAddress).HasMaxLength(64);
         builder.Property(session => session.UserAgent).HasMaxLength(1024);
 
-        // Deleting a user should clean up the sessions that reference it.
+        // Deleting a user deletes their sessions.
         builder
             .HasOne<UserEntity>()
             .WithMany()

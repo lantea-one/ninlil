@@ -17,14 +17,11 @@ public class DnsForwarderConfiguration : IEntityTypeConfiguration<DnsForwarderEn
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<DnsForwarderEntity> builder)
     {
-        // Map this entity onto the NinlilDnsForwarders table.
         builder.ToTable("NinlilDnsForwarders");
 
-        // The Id property is the primary key.
         builder.HasKey(forwarder => forwarder.Id);
 
-        // A forwarder's name is required and unique, the same way a TSIG key's name must be
-        // unique.
+        // Forwarder names are unique.
         builder.Property(forwarder => forwarder.Name).HasMaxLength(255).IsRequired();
         builder.HasIndex(forwarder => forwarder.Name).IsUnique();
 

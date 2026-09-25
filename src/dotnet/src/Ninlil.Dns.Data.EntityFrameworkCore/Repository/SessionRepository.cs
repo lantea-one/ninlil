@@ -30,8 +30,6 @@ public class SessionRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // A session is active when it belongs to this user, has not been revoked, and has not
-        // yet expired.
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         return await Set.Where(session =>

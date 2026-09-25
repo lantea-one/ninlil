@@ -26,16 +26,13 @@ public class DnsClientStaticAddressMappingConfiguration
         builder.Property(mapping => mapping.ClientIdentifier).HasMaxLength(256).IsRequired();
         builder.Property(mapping => mapping.Comments).HasMaxLength(4096);
 
-        // Store the protocol version using its short, human-readable name rather than its
-        // underlying number, the same convention DnsClientConfiguration.ProtocolVersion already
-        // establishes for the identical enum.
         builder
             .Property(mapping => mapping.ProtocolVersion)
             .HasConversion<string>()
             .HasMaxLength(16);
 
-        // The resolver's own hot path scans every enabled mapping on each resolution attempt --
-        // this index lets that scan skip a disabled row without materializing it at all.
+        // The resolver loads the enabled mappings on each resolution; the index lets the query
+        // skip disabled rows.
         builder.HasIndex(mapping => mapping.IsDisabled);
     }
 }

@@ -29,16 +29,13 @@ public class RecordRepository(NinlilDnsContext context)
         CancellationToken stoppingToken = default
     )
     {
-        // Start narrowing from the zone and name, which every lookup applies.
         IQueryable<RecordEntity> query = Set.Where(record =>
             record.ZoneId == zoneId && record.Name == name
         );
 
-        // Apply the record type filter, if one was given.
         if (type is { } requestedType)
             query = query.Where(record => record.Type == requestedType);
 
-        // We're done, materialize and return the matching records.
         return await query.ToListAsync(stoppingToken);
     }
 

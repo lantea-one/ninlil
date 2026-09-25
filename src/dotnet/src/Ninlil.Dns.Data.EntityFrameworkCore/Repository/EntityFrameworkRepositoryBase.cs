@@ -8,9 +8,9 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 
 /// <summary>
 ///     This class implements <see cref="IRepository{TEntity}" /> once, generically, against
-///     <see cref="NinlilDnsContext" />. Every concrete Entity Framework Core repository in
-///     this project inherits from this class rather than re-implementing the same handful of
-///     CRUD operations against its own <see cref="DbSet{TEntity}" />.
+///     <see cref="NinlilDnsContext" />. Every Entity Framework Core repository in this project
+///     inherits from it instead of repeating the same CRUD operations. Writes are only staged;
+///     <see cref="EntityFrameworkUnitOfWork" /> saves them.
 /// </summary>
 /// <param name="context">The database context to operate against.</param>
 /// <typeparam name="TEntity">The type of entity this repository stores.</typeparam>
@@ -19,10 +19,9 @@ public abstract class EntityFrameworkRepositoryBase<TEntity>(NinlilDnsContext co
     where TEntity : EntityBase
 {
     /// <summary>
-    ///     This property contains the database context every method below operates against. It
-    ///     is exposed as <see langword="protected" /> rather than kept private so that a derived
-    ///     repository can reach the context's other <see cref="DbSet{TEntity}" /> properties when
-    ///     it needs a query that spans more than one entity type.
+    ///     This property contains the database context the repository operates against. It is
+    ///     <see langword="protected" /> so a derived repository can reach other
+    ///     <see cref="DbSet{TEntity}" /> properties for queries across entity types.
     /// </summary>
     protected NinlilDnsContext Context { get; } = context;
 
@@ -42,14 +41,11 @@ public abstract class EntityFrameworkRepositoryBase<TEntity>(NinlilDnsContext co
         CancellationToken stoppingToken = default
     )
     {
-        // Start from the full set, then narrow it down if a predicate was provided.
         IQueryable<TEntity> query = Set;
 
-        // Apply the predicate, if one was given.
         if (predicate is not null)
             query = query.Where(predicate);
 
-        // We're done, materialize and return the matching entities.
         return await query.ToListAsync(stoppingToken);
     }
 

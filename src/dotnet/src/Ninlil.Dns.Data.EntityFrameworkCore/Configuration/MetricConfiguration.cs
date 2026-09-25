@@ -16,17 +16,14 @@ public class MetricConfiguration : IEntityTypeConfiguration<MetricEntity>
     /// <param name="builder">The builder used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<MetricEntity> builder)
     {
-        // Map this entity onto the NinlilDnsMetrics table.
         builder.ToTable("NinlilDnsMetrics");
 
-        // The Id property is the primary key.
         builder.HasKey(metric => metric.Id);
 
         builder.Property(metric => metric.Category).HasMaxLength(128).IsRequired();
         builder.Property(metric => metric.Name).HasMaxLength(256).IsRequired();
 
-        // The dashboard always asks for one named metric across a time range, so index exactly
-        // that access pattern.
+        // The dashboard asks for one named metric over a time range.
         builder.HasIndex(metric => new
         {
             metric.Category,
