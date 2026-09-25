@@ -16,86 +16,56 @@ using Ninlil.Dns.Server.Core.Filtering;
 namespace Ninlil.Dns.Server.Filtering;
 
 /// <summary>
-///     This class implements <see cref="IDnsFilterEngine" />: resolves a client's own
-///     <see cref="DnsClientGroupEntity" /> membership, gathers every <see cref="DnsFilterListEntity" />
-///     assigned to that group (or the default group, if the client matches no other), and checks
-///     the relevant kind of entry against it.
+///     This class implements <see cref="IDnsFilterEngine" />: it works out which
+///     <see cref="DnsFilterListEntity" /> lists apply to a client and checks the client address,
+///     the queried name, or the answer (CNAME targets and A/AAAA addresses) against them.
+///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" /> calls it at
+///     several points in the query path (see that class). Lists, assignments and entries are
+///     read from the repositories on every check; nothing is cached except compiled patterns.
 ///     <para>
-///         <strong>Group resolution convention (not explicitly specified in the design
-///         decisions, chosen here):</strong> a client matching one or more non-default groups is
-///         filtered by the <em>union</em> of those groups' own assigned lists only -- the default
-///         group's own lists do not additionally apply on top. A client matching no explicit
-///         group falls back to the default group's own lists alone.
+///         <strong>Which lists apply.</strong> A client that matches one or more non-default
+///         <see cref="DnsClientGroupEntity" /> groups gets the union of those groups' lists; the
+///         default group's lists apply only when no group matches. A group matches by a CIDR
+///         row containing the client address, by a DNS-over-HTTPS ClientID row, or through the
+///         client registry: when an <see cref="IClientIdentityResolver" /> is available, the
+///         address is resolved to a client identifier and looked up in
+///         <see cref="IDnsClientRepository" />, and an enabled <see cref="DnsClientEntity" />
+///         adds its enabled <see cref="DnsClientEntity.ClientGroupId" /> group. That client's
+///         direct <see cref="DnsClientListAssignmentEntity" /> rows are added as well, whether or
+///         not it contributed a group (see <see cref="ResolveApplicableListsAsync" />). The
+///         resolver and the client repositories are optional; without them only CIDR and
+///         ClientID matching apply.
 ///     </para>
 ///     <para>
-///         <strong>Client-derived group membership (a third way into a group, alongside CIDR
-///         containment and DNS-over-HTTPS ClientID matching):</strong> when a
-///         <see cref="IClientIdentityResolver" /> is available, a query's own source address is
-///         resolved to its persistent client identifier and looked up in
-///         <see cref="IDnsClientRepository" />; a matching, non-disabled <see cref="DnsClientEntity" />
-///         whose own <see cref="DnsClientEntity.ClientGroupId" /> names a non-disabled group adds
-///         that group to the matched set -- <em>unioned</em> with whatever CIDR/ClientID matching
-///         already found, never a replacement for it, and never itself triggering the "no group
-///         matched, fall back to the default group" branch's own suppression once at least one
-///         group has matched by any means. The same resolved, non-disabled client's own direct
-///         <see cref="DnsClientListAssignmentEntity" /> rows are unioned into the final list set
-///         too, independently of whether it contributed a group match at all -- see
-///         <see cref="ResolveApplicableListsAsync" /> for the exact resolution order. Both
-///         <see cref="IClientIdentityResolver" /> and <see cref="IDnsClientRepository" />/
-///         <see cref="IDnsClientListAssignmentRepository" /> are optional: when unavailable (no
-///         DHCP/client-identity infrastructure wired up, or a test constructing this engine
-///         directly), this whole path is silently skipped and CIDR/DoH-ClientID resolution behaves
-///         exactly as it always has.
+///         <strong>Domain entries.</strong> A <see cref="DnsFilterEntryKindEnum.Domain" /> entry
+///         covers the name and every subdomain (<c>example.com</c> also matches
+///         <c>www.example.com</c>), the usual ad-blocker convention. A domain list may also hold
+///         <see cref="DnsFilterEntryKindEnum.Wildcard" /> globs and
+///         <see cref="DnsFilterEntryKindEnum.Regex" /> .NET regular expressions, matched against
+///         the full queried name. Globs are turned into anchored regexes, so one engine with one
+///         timeout handles both. Compiled patterns are cached in
+///         <see cref="_compiledPatternCache" />, shared by every query since the engine is a
+///         singleton. Every match runs with <see cref="RegexMatchTimeout" />, so a pathological
+///         pattern cannot stall query answering; a timeout counts as no match and is logged.
 ///     </para>
 ///     <para>
-///         <strong>Domain wildcard convention (not explicitly specified, chosen here):</strong> a
-///         <see cref="DnsFilterEntryKindEnum.Domain" />-kind entry covers itself and every
-///         subdomain -- an entry of <c>example.com</c> matches <c>example.com</c> and
-///         <c>www.example.com</c> alike, the common ad-blocker convention, rather than requiring
-///         a separate <c>*.example.com</c> wildcard entry for subdomains.
-///     </para>
-///     <para>
-///         <strong>Domain entry kinds</strong>: a <see cref="DnsFilterListEntryEntity" /> in a
-///         <see cref="DnsFilterListKindEnum.Domain" /> list may additionally be a
-///         <see cref="DnsFilterEntryKindEnum.Wildcard" /> shell-style glob or a
-///         <see cref="DnsFilterEntryKindEnum.Regex" /> .NET regular expression, matched against
-///         the queried name's own full presentation form -- the union of what Pi-hole (regex) and
-///         AdGuard Home (wildcard/extended syntax) each offer. A wildcard pattern is translated to
-///         an anchored regex internally rather than a second, bespoke matching engine, since .NET
-///         already ships a real regex engine with a real timeout mechanism this project needs for
-///         the regex kind regardless -- reusing it for wildcards too is strictly simpler than
-///         hand-rolling a second glob matcher with its own, separate worst-case-complexity story.
-///         Every compiled pattern is cached (<see cref="_compiledPatternCache" />), keyed by its
-///         own kind and literal value, so a query never pays a fresh <see cref="Regex" />
-///         compilation cost -- this engine is registered as a DI singleton
-///         (<c>ServiceCollectionFilteringExtension</c>), so the cache is shared across every
-///         query this whole server ever answers, not rebuilt per check.
-///         <strong>Regex/wildcard matching is always timeout-guarded</strong>
-///         (<see cref="RegexMatchTimeout" />, via <see cref="Regex" />'s own <c>matchTimeout</c>
-///         constructor parameter) -- a malformed or catastrophic-backtracking pattern can never
-///         stall query answering (architectural invariant #3); a timeout is treated exactly like
-///         "no match," logged once per occurrence, never thrown back into the caller.
+///         <strong>Exceptions and precedence.</strong> An adblock <c>@@</c> exception only cancels
+///         matches in its own list (see <see cref="ListCoversDomain" />). When a block list and an
+///         allow list both match, <see cref="DnsFilterOptions.Precedence" /> decides.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">The factory used to reach every scoped repository this engine needs, once per check.</param>
 /// <param name="options">
-///     This engine's own configured <see cref="DnsFilterOptions.Enable" /> gate, block-response
-///     mode, and list precedence -- read live via <see cref="IOptionsMonitor{TOptions}" /> rather
-///     than the older, snapshotted <see cref="IOptions{TOptions}" />, since this engine is now
-///     always registered as a DI singleton (<c>ServiceCollectionFilteringExtension</c>) regardless
-///     of <see cref="DnsFilterOptions.Enable" />'s own value at process startup -- a
-///     <c>FilteringSettingsController.Patch</c> write toggling it on or off must be observed on
-///     this same, already-constructed instance's very next check, with no restart.
+///     The <see cref="DnsFilterOptions.Enable" /> switch, block-response mode, precedence and
+///     CNAME-cloaking setting, read live through <see cref="IOptionsMonitor{TOptions}" /> rather
+///     than <see cref="IOptions{TOptions}" />, so a <c>FilteringSettingsController.Patch</c>
+///     applies to the next check without a restart.
 /// </param>
-/// <param name="logger">The logger this engine records a regex timeout/compile failure to.</param>
+/// <param name="logger">The logger this engine records regex timeouts and compile failures to.</param>
 /// <param name="clientIdentityResolver">
-///     The optional resolver used to derive a query's own persistent client identifier from its
-///     source address, for the client-derived group-membership/direct-list-assignment path this
-///     class's own doc comment describes -- cross-cutting infrastructure exactly like
-///     <see cref="Ninlil.Dns.Server.Core.Pipeline.DnsQueryProcessingPipeline" />'s own optional <c>IDnsRateLimiter</c>/
-///     <c>DnsCookieService</c>/<c>IDnsRewriteEngine</c> dependencies, so every existing
-///     caller/test constructing this engine without one keeps compiling and behaving unchanged.
-///     <see langword="null" /> (the default) skips that whole path.
+///     The optional resolver that maps a query's source address to a client identifier, for the
+///     client-registry path described in the class summary. <see langword="null" /> (the
+///     default) skips that path.
 /// </param>
 public sealed class DnsFilterEngine(
     IServiceScopeFactory scopeFactory,
@@ -105,15 +75,14 @@ public sealed class DnsFilterEngine(
 ) : IDnsFilterEngine
 {
     /// <summary>
-    ///     This constant bounds how long a single wildcard/regex-kind entry's own match attempt
-    ///     may run -- see this class's own doc comment for the full reasoning.
+    ///     This field bounds how long one wildcard or regex match may run (see the class summary).
     /// </summary>
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
-    ///     This field caches every wildcard/regex-kind entry's own compiled <see cref="Regex" />
-    ///     instance, keyed by its own kind and literal pattern value, so a query never pays a
-    ///     fresh compilation cost -- see this class's own doc comment for the full reasoning.
+    ///     This field caches each wildcard or regex entry's compiled <see cref="Regex" /> (or
+    ///     <see langword="null" /> if it failed to compile), keyed by kind and pattern text.
+    ///     Entries are never removed.
     /// </summary>
     private readonly ConcurrentDictionary<
         (DnsFilterEntryKindEnum Kind, string Pattern),
@@ -190,11 +159,10 @@ public sealed class DnsFilterEngine(
     /// <summary>
     ///     This method checks whether one list covers a name: some ordinary entry matches it and
     ///     none of the same list's exception entries (<see cref="DnsFilterListEntryEntity.IsException" />,
-    ///     an adblock-syntax <c>@@</c> rule) does. An exception only ever cancels its own list's
-    ///     match -- it is the list author saying "my broader rule was not meant to cover this
-    ///     name" -- so it is applied here, before precedence, rather than treated like a match
-    ///     against an operator's allow list, which would let one subscribed list silently
-    ///     unblock names another list blocks.
+    ///     an adblock <c>@@</c> rule) does. An exception is the list author saying "my broader rule
+    ///     does not cover this name", so it only cancels its own list's match, before precedence.
+    ///     Treating it like an allow list would let one subscribed list unblock names another
+    ///     list blocks.
     /// </summary>
     private bool ListCoversDomain(
         string queriedPresentation,
@@ -279,15 +247,13 @@ public sealed class DnsFilterEngine(
     ///     This method blocks CNAME cloaking: a tracker hidden behind a first-party name
     ///     (<c>metrics.shop.example</c> CNAME <c>shop.tracker.example</c>) is only visible in the
     ///     answer, never in the question, so the domain check before dispatch cannot see it.
-    ///     Every CNAME target in the answer -- anywhere in a multi-step chain -- is checked
-    ///     against the client's own domain lists exactly as if it had been queried directly: the
-    ///     same client/group scoping, the same list exceptions, and the same allow-list
+    ///     Every CNAME target in the answer, anywhere in a chain, is checked against the client's
+    ///     domain lists as if it had been queried: the same scoping, list exceptions and
     ///     precedence, so an allowed target is let through.
     ///     <para>
-    ///         When the name actually queried is itself on one of the client's allow lists, the
-    ///         chain is not checked at all: the operator explicitly allowed that name, and
-    ///         blocking it for where it happens to point would override that choice with no way
-    ///         to undo it short of also allowing the target.
+    ///         When the queried name is on one of the client's allow lists, the chain is not
+    ///         checked: the operator allowed that name, and blocking it for where it points would
+    ///         override that choice unless the target were allowed too.
     ///     </para>
     ///     <para>
     ///         Checking the targets is enough to cover the whole chain, since each later record
@@ -392,8 +358,8 @@ public sealed class DnsFilterEngine(
 
     /// <summary>
     ///     This method reads a CNAME record's target as a normalized name, or
-    ///     <see langword="null" /> when its data is malformed -- a bad record in someone else's
-    ///     answer must never make filtering throw (architectural invariant #3).
+    ///     <see langword="null" /> when its data is malformed, so a bad record in an upstream answer
+    ///     cannot make filtering throw.
     /// </summary>
     private static string TryReadCnameTarget(DnsResourceRecord record)
     {
@@ -432,11 +398,9 @@ public sealed class DnsFilterEngine(
             IsResponse = true,
             Opcode = request.Opcode,
             RecursionDesired = request.RecursionDesired,
-            // This check runs before either engine ever sees the query, so there is no way to
-            // know here whether recursion is actually enabled elsewhere in this server -- unlike
-            // mirroring the request's own RD bit (which would just echo the client's own ask,
-            // not this server's real capability), false is the one value that is never
-            // misleading about a query this method itself denied.
+            // This code cannot know whether recursion is available to this client, and echoing
+            // RD would only repeat the client's request, so false is the value that never
+            // misleads.
             RecursionAvailable = false,
             CheckingDisabled = request.CheckingDisabled,
             ResponseCode = canSinkhole ? DnsResponseCodeEnum.NoError : DnsResponseCodeEnum.NxDomain,
@@ -466,15 +430,12 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method resolves which lists, of a single kind, apply to a client -- every list
-    ///     assigned to every explicit, non-disabled group whose own networks contain the
-    ///     client's address, whose own <see cref="DnsClientGroupNetworkEntity.ClientId" /> label
-    ///     matches <paramref name="clientId" />, or whose own resolved <see cref="DnsClientEntity" />
-    ///     names it directly (see this class's own doc comment for the full client-derived
-    ///     resolution this third path adds); when none match by any of those three means, every
-    ///     list assigned to the default group. The resolved client's own direct
-    ///     <see cref="DnsClientListAssignmentEntity" /> rows, if any, are unioned into the final
-    ///     result independently of whether it contributed a group match at all.
+    ///     This method returns the enabled lists of one kind that apply to a client: every list
+    ///     assigned to each enabled non-default group whose networks contain the client address,
+    ///     whose <see cref="DnsClientGroupNetworkEntity.ClientId" /> label matches
+    ///     <paramref name="clientId" />, or that the resolved <see cref="DnsClientEntity" /> belongs
+    ///     to. When no group matches, the default group's lists apply. The resolved client's direct
+    ///     <see cref="DnsClientListAssignmentEntity" /> rows are always added.
     /// </summary>
     private async Task<IReadOnlyList<DnsFilterListEntity>> ResolveApplicableListsAsync(
         AsyncServiceScope scope,
@@ -505,10 +466,9 @@ public sealed class DnsFilterEngine(
             IReadOnlyList<DnsClientGroupNetworkEntity> networks =
                 await networkRepository.ListByGroupIdAsync(group.Id, stoppingToken);
 
-            // A group matches by either kind of row -- a Cidr row containing this client's own
-            // source address, or (only ever populated for a DNS-over-HTTPS client, see
-            // DnsClientGroupNetworkEntity.ClientId's own doc comment) a ClientId row whose label
-            // matches the ClientID this query's own URL path carried.
+            // A group matches by a Cidr row containing the source address, or by a ClientId row
+            // matching the ClientID from a DNS-over-HTTPS URL path (see
+            // DnsClientGroupNetworkEntity.ClientId).
             bool matchesNetwork = networks.Any(network =>
                 NetworkContains(network.Cidr, remoteAddress)
             );
@@ -520,11 +480,8 @@ public sealed class DnsFilterEngine(
                 matchedGroups.Add(group);
         }
 
-        // A third, independent way into a group: resolve the query's own source address to its
-        // persistent client identifier, look that identifier up in the known-client registry, and
-        // -- if it names a non-disabled group of its own -- union that group in too. This is
-        // additive only: it never replaces the CIDR/DoH-ClientID matching above, and a disabled
-        // client contributes neither this group match nor its own direct list assignments below.
+        // The client registry is a third way into a group, added to the matches above. A
+        // disabled client contributes neither its group nor its direct list assignments.
         DnsClientEntity resolvedClient = await ResolveClientAsync(
             scope,
             remoteAddress,
@@ -546,9 +503,7 @@ public sealed class DnsFilterEngine(
                 matchedGroups.Add(clientGroup);
         }
 
-        // Only fall back to the default group when nothing matched by any of the three means
-        // above -- a client-derived match (or a CIDR/DoH-ClientID one) means this client already
-        // has an explicit group, so the default group's own lists must not additionally apply.
+        // The default group applies only when no group matched by any of the three means.
         if (matchedGroups.Count == 0)
         {
             DnsClientGroupEntity defaultGroup = await groupRepository.GetDefaultAsync(
@@ -570,8 +525,7 @@ public sealed class DnsFilterEngine(
                 listIds.Add(assignment.ListId);
         }
 
-        // Union in the resolved client's own direct list assignments, if any -- independent of
-        // whether it contributed a group match above, per this class's own doc comment.
+        // The resolved client's direct list assignments apply whether or not it matched a group.
         if (resolvedClient is not null)
         {
             IDnsClientListAssignmentRepository clientListAssignmentRepository =
@@ -604,13 +558,10 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method resolves a query's own source address to its known, non-disabled
-    ///     <see cref="DnsClientEntity" /> registry row, if this engine has both the identity
-    ///     resolver and the client repository available to do so -- <see langword="null" /> the
-    ///     moment either is unavailable, the resolver has no mapping for this address, no matching
-    ///     row is registered, or the matching row is itself disabled (a disabled client
-    ///     contributes neither a client-derived group match nor its own direct list assignments,
-    ///     per this class's own doc comment).
+    ///     This method resolves a query's source address to its registered, enabled
+    ///     <see cref="DnsClientEntity" />. Returns <see langword="null" /> when the resolver or
+    ///     client repository is missing, the address has no mapping, no client is registered for
+    ///     it, or that client is disabled.
     /// </summary>
     private async Task<DnsClientEntity> ResolveClientAsync(
         AsyncServiceScope scope,
@@ -645,9 +596,10 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method checks a single IP address against every already-resolved network-kind
-    ///     (<see cref="DnsFilterListKindEnum.ClientSource" />/<see cref="DnsFilterListKindEnum.ResponseIp" />)
-    ///     list.
+    ///     This method checks one IP address against already-resolved network lists
+    ///     (<see cref="DnsFilterListKindEnum.ClientSource" /> or <see cref="DnsFilterListKindEnum.ResponseIp" />).
+    ///     Entries are compared as parsed; an IPv4-mapped IPv6 address does not match an IPv4
+    ///     entry.
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateNetworkListsAsync(
         AsyncServiceScope scope,
@@ -704,8 +656,7 @@ public sealed class DnsFilterEngine(
 
     /// <summary>
     ///     This method checks whether a <see cref="DnsClientGroupNetworkEntity.ClientId" />-kind
-    ///     row's own label matches a query's own DNS-over-HTTPS ClientID -- compared
-    ///     case-insensitively, the same convention the entity's own doc comment establishes.
+    ///     row's label matches a query's DNS-over-HTTPS ClientID, case-insensitively.
     /// </summary>
     private static bool MatchesClientId(string entryClientId, string queryClientId) =>
         !string.IsNullOrWhiteSpace(entryClientId)
@@ -713,7 +664,7 @@ public sealed class DnsFilterEngine(
 
     /// <summary>
     ///     This method checks whether a single entry covers a queried name, dispatching on the
-    ///     entry's own <see cref="DnsFilterListEntryEntity.Kind" />.
+    ///     entry's <see cref="DnsFilterListEntryEntity.Kind" />.
     /// </summary>
     private bool MatchesDomain(string queriedPresentation, DnsFilterListEntryEntity entry)
     {
@@ -747,19 +698,18 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method resolves (compiling and caching on first use, per <see cref="_compiledPatternCache" />)
-    ///     a wildcard/regex-kind entry's own pattern and matches it against the queried name,
-    ///     never letting a compile failure or a match timeout escape as an exception -- both are
-    ///     treated as "no match," logged once each time they occur.
+    ///     This method matches a wildcard or regex entry against the queried name, compiling and
+    ///     caching the pattern on first use (see <see cref="_compiledPatternCache" />). A compile
+    ///     failure or a match timeout counts as no match and is logged; neither throws.
     /// </summary>
-    /// <param name="kind">The entry's own kind, used only as part of the cache key.</param>
-    /// <param name="rawPattern">The entry's own, as-stored pattern text.</param>
+    /// <param name="kind">The entry's kind, used only as part of the cache key.</param>
+    /// <param name="rawPattern">The entry's pattern text as stored.</param>
     /// <param name="queriedPresentation">The already-normalized queried name to match against.</param>
     /// <param name="toRegexPattern">
-    ///     The function that turns <paramref name="rawPattern" /> into the actual regex pattern
-    ///     text to compile -- the identity function for a genuine <see cref="DnsFilterEntryKindEnum.Regex" />
-    ///     entry, or <see cref="BuildWildcardRegexPattern" /> for a
-    ///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> one.
+    ///     The function that turns <paramref name="rawPattern" /> into the regex to compile: the
+    ///     identity for a <see cref="DnsFilterEntryKindEnum.Regex" /> entry, or
+    ///     <see cref="BuildWildcardRegexPattern" /> for a <see cref="DnsFilterEntryKindEnum.Wildcard" />
+    ///     one.
     /// </param>
     private bool MatchesPattern(
         DnsFilterEntryKindEnum kind,
@@ -779,11 +729,9 @@ public sealed class DnsFilterEngine(
 
                 if (compiled is null)
                 {
-                    // Logged once (the GetOrAdd factory only ever runs on the first lookup for a
-                    // given (kind, pattern) key, and the null result is cached exactly like a
-                    // successful compile would be) -- expected only for a row written by some
-                    // path other than FilterListEntriesController's own compile-before-persist
-                    // validation, see this class's own doc comment.
+                    // The null result is cached, so this is normally logged once per pattern.
+                    // FilterListEntriesController compiles patterns before saving them, so this
+                    // is expected only for rows written some other way.
                     logger.LogWarning(
                         "A {Kind} filter list entry has a pattern that failed to compile; treating as a non-match. Pattern: {Pattern}",
                         key.Kind,
@@ -804,9 +752,7 @@ public sealed class DnsFilterEngine(
         }
         catch (RegexMatchTimeoutException)
         {
-            // A pathological/catastrophic-backtracking pattern must never be able to stall query
-            // answering -- treated exactly like "no match," never thrown back into
-            // DnsQueryProcessingPipeline (architectural invariant #3).
+            // A backtracking pattern must not stall or fail the query, so a timeout is no match.
             logger.LogWarning(
                 "A {Kind} filter list entry pattern timed out matching a query name; treating as a non-match. "
                     + "Pattern: {Pattern}",
@@ -819,11 +765,10 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method compiles a regex pattern with this engine's own shared timeout, returning
-    ///     <see langword="null" /> (logged) instead of throwing when the pattern is malformed --
-    ///     a defensive fallback for a row written by some path other than
-    ///     <c>FilterListEntriesController</c>'s own compile-before-persist validation (a direct
-    ///     repository call, an import tool), never expected to trigger for a REST-created entry.
+    ///     This method compiles a pattern case-insensitively with the engine's match timeout and
+    ///     returns <see langword="null" /> instead of throwing when the pattern is malformed.
+    ///     <c>FilterListEntriesController</c> and <c>FilterPatternPreviewController</c> also call
+    ///     it to validate patterns.
     /// </summary>
     public static Regex CompileOrNull(string pattern)
     {
@@ -842,10 +787,10 @@ public sealed class DnsFilterEngine(
     }
 
     /// <summary>
-    ///     This method translates a shell-style glob (<c>*</c> matches any run of zero or more
-    ///     characters, <c>?</c> matches exactly one character) into an anchored, case-insensitive
-    ///     regex pattern -- every other regex metacharacter in the glob is escaped literally
-    ///     first, so a wildcard entry's own author never has to think about regex syntax at all.
+    ///     This method turns a shell-style glob into an anchored regex pattern: <c>*</c> matches any
+    ///     run of characters (dots included), <c>?</c> matches one character, and everything else
+    ///     is escaped, so a wildcard author never needs regex syntax. Case is handled by
+    ///     <see cref="CompileOrNull" />.
     /// </summary>
     public static string BuildWildcardRegexPattern(string glob)
     {

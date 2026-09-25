@@ -10,24 +10,20 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Filtering;
 
 /// <summary>
-///     This class keeps every <see cref="DnsFilterListSourceEnum.Subscribed" /> list's own
-///     entries current by periodically refetching its <see cref="DnsFilterListEntity.SubscriptionUrl" />
-///     -- parsed by <see cref="DnsFilterListParser" /> (hosts-file, bare-domain and adblock
-///     syntax alike) -- the refresh analogue of <c>CloudDnsZoneSyncService</c>'s own
-///     REST-polling refresh loop, per-item due-checked against that list's own
-///     <see cref="DnsFilterListEntity.RefreshInterval" /> rather than one fixed interval for
-///     every list.
+///     This class keeps every enabled <see cref="DnsFilterListSourceEnum.Subscribed" /> list
+///     current. Once a minute, while filtering is enabled, it refetches each list whose
+///     <see cref="DnsFilterListEntity.RefreshInterval" /> has elapsed since the last successful
+///     fetch, parses it with <see cref="DnsFilterListParser" /> (hosts-file, bare-domain and
+///     adblock syntax) and replaces the list's entries. A list with no
+///     <see cref="DnsFilterListEntity.RefreshInterval" />, or never fetched, counts as due on
+///     every tick.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach every scoped repository this service needs, once per tick.</param>
-/// <param name="httpClientFactory">The factory used to fetch a list's own subscription URL.</param>
+/// <param name="scopeFactory">The factory used to reach the scoped repositories, once per tick and once per refreshed list.</param>
+/// <param name="httpClientFactory">The factory used to fetch a list's subscription URL.</param>
 /// <param name="options">
-///     This service's own <c>Enable</c> gate (shared with <see cref="DnsFilterEngine" />), read
-///     live via <see cref="IOptionsMonitor{TOptions}" /> -- checked fresh on every tick, not just
-///     once before this service's own loop starts, so a live <c>FilteringSettingsController.Patch</c>
-///     write turning filtering on genuinely resumes refreshing subscribed lists with no restart
-///     (the same per-iteration-check fix <c>TrustAnchorRolloverService.ExecuteAsync</c> already
-///     established for the identical "checked once before a loop that only ever runs once per
-///     process" shape).
+///     The <c>Enable</c> switch shared with <see cref="DnsFilterEngine" />. It is checked on
+///     every tick rather than once before the loop, so turning filtering on through
+///     <c>FilteringSettingsController.Patch</c> resumes refreshes without a restart.
 /// </param>
 /// <param name="logger">The logger this service records per-list fetch failures to.</param>
 public sealed class DnsFilterListExternalRefreshService(
@@ -38,9 +34,8 @@ public sealed class DnsFilterListExternalRefreshService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This constant contains how often this service wakes up to check whether any
-    ///     subscribed list is actually due for a refresh -- independent of, and shorter than,
-    ///     any single list's own <see cref="DnsFilterListEntity.RefreshInterval" />.
+    ///     This field contains how often this service checks whether any subscribed list is due.
+    ///     Each list's <see cref="DnsFilterListEntity.RefreshInterval" /> decides whether it is.
     /// </summary>
     private static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(1);
 
@@ -61,8 +56,7 @@ public sealed class DnsFilterListExternalRefreshService(
                 }
                 catch (Exception exception)
                 {
-                    // One failed tick must never take this whole background service down --
-                    // there is always another tick TickInterval later.
+                    // A failed tick must not stop the service; the next tick retries.
                     logger.LogWarning(
                         exception,
                         "A block/allow list refresh tick failed unexpectedly."
@@ -82,8 +76,8 @@ public sealed class DnsFilterListExternalRefreshService(
     }
 
     /// <summary>
-    ///     This method finds every enabled, subscribed list that is actually due, and refreshes
-    ///     each in turn.
+    ///     This method finds every enabled, subscribed list that is due and refreshes each in
+    ///     turn.
     /// </summary>
     private async Task RefreshDueListsAsync(CancellationToken stoppingToken)
     {
@@ -114,8 +108,8 @@ public sealed class DnsFilterListExternalRefreshService(
             }
             catch (Exception exception)
             {
-                // A single list's own fetch failure (the URL is unreachable, malformed, or
-                // returns an error) must never block every other list's own refresh.
+                // One list's failure (unreachable or malformed URL, an error status) must not stop
+                // the others. Its LastFetchedAtUtc is not updated, so it is retried next tick.
                 logger.LogWarning(
                     exception,
                     "Failed to refresh block/allow list '{ListName}' from '{Url}'.",
@@ -127,8 +121,8 @@ public sealed class DnsFilterListExternalRefreshService(
     }
 
     /// <summary>
-    ///     This method fetches and parses a single list's own subscription URL, and replaces its
-    ///     entries wholesale with the freshly parsed set.
+    ///     This method fetches and parses one list's subscription URL, replaces its entries with
+    ///     the parsed set and records the fetch time.
     /// </summary>
     private async Task RefreshListAsync(DnsFilterListEntity list, CancellationToken stoppingToken)
     {
@@ -164,9 +158,8 @@ public sealed class DnsFilterListExternalRefreshService(
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // The skipped count is worth surfacing: a list whose rules are mostly cosmetic or
-        // browser-only (an EasyList meant for a browser extension, say) otherwise looks like it
-        // refreshed fine while blocking far less than its line count suggests.
+        // The skipped count matters: a list of mostly cosmetic or browser-only rules (such as
+        // EasyList) would otherwise look fine while blocking far less than its size suggests.
         logger.LogInformation(
             "Refreshed block/allow list '{ListName}' ({Count} entries, {ExceptionCount} of them exceptions; {SkippedCount} unsupported rules skipped) from '{Url}'.",
             list.Name,

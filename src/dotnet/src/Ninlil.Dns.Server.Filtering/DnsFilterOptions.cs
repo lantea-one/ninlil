@@ -4,9 +4,9 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Filtering;
 
 /// <summary>
-///     This class binds to the <c>DnsServer:Filtering</c> section of the application's
-///     configuration and controls <see cref="DnsFilterEngine" />'s and
-///     <see cref="DnsFilterListExternalRefreshService" />'s own behavior.
+///     This class binds to the <c>DnsServer:Filtering</c> configuration section and controls
+///     <see cref="DnsFilterEngine" /> and <see cref="DnsFilterListExternalRefreshService" />. Both
+///     read it live, so <c>FilteringSettingsController</c> changes apply without a restart.
 /// </summary>
 public sealed class DnsFilterOptions
 {
@@ -16,9 +16,8 @@ public sealed class DnsFilterOptions
     public const string SectionName = "DnsServer:Filtering";
 
     /// <summary>
-    ///     This property controls whether block/allow-list filtering runs at all. Off by
-    ///     default, the same reasoning as every other transport's own <c>Enable</c> toggle -- a
-    ///     new capability an operator should opt into.
+    ///     This property controls whether block/allow-list filtering and subscribed-list refreshes
+    ///     run. It is off by default, so an operator opts in.
     /// </summary>
     public bool Enable { get; set; }
 
@@ -53,12 +52,11 @@ public sealed class DnsFilterOptions
         DnsFilterListPrecedenceEnum.AllowWins;
 
     /// <summary>
-    ///     This property controls whether an answer is also blocked when one of the CNAME
-    ///     targets in it matches the querying client's own domain block lists -- defeating
-    ///     "CNAME cloaking", where a tracker is served from a first-party name that merely
-    ///     aliases the tracker's own domain. On by default: a list that blocks a domain is
-    ///     meant to block it however it is reached, and the check only runs for answers that
-    ///     actually contain a CNAME.
+    ///     This property controls whether an answer is also blocked when one of its CNAME targets
+    ///     matches the client's domain block lists. This defeats "CNAME cloaking", where a tracker
+    ///     is served from a first-party name that aliases the tracker's domain. It is on by
+    ///     default: a blocked domain should stay blocked however it is reached, and the check only
+    ///     runs for answers that contain a CNAME.
     /// </summary>
     public bool BlockCnameCloaking { get; set; } = true;
 }

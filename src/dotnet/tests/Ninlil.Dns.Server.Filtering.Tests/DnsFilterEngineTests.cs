@@ -11,6 +11,14 @@ using Ninlil.Dns.Server.Filtering.Tests.Fakes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
+/// <summary>
+///     This class covers <see cref="DnsFilterEngine" />: which lists apply to a client (CIDR
+///     groups, the default group, the client registry and direct assignments), domain, wildcard
+///     and regex matching, allow/block precedence, client-source and response-IP lists, denied
+///     responses, regex safety, and the live <see cref="DnsFilterOptions.Enable" /> switch. Each
+///     test builds the engine over the in-memory repositories in a small service provider (see
+///     <see cref="Fixture" />). Exceptions and CNAME cloaking are in the other part of this class.
+/// </summary>
 public partial class DnsFilterEngineTests
 {
     private sealed class Fixture
@@ -27,16 +35,13 @@ public partial class DnsFilterEngineTests
         public readonly DnsFilterEngine Engine;
 
         /// <param name="identityResolver">
-        ///     The optional client identity resolver the engine under test is constructed with --
-        ///     <see langword="null" /> (the default) reproduces this engine's exact pre-client-
-        ///     identity-integration construction, the regression baseline every pre-existing test
-        ///     in this file already exercises.
+        ///     The optional client identity resolver to build the engine with.
+        ///     <see langword="null" /> (the default) leaves the client-registry path off.
         /// </param>
         /// <param name="registerClientRepositories">
-        ///     Whether <see cref="Clients" />/<see cref="ClientListAssignments" /> are registered
-        ///     in the engine's own DI container at all -- <see langword="false" /> proves the
-        ///     engine never even attempts to resolve either repository type when it has no
-        ///     identity resolver to pair them with.
+        ///     Whether <see cref="Clients" /> and <see cref="ClientListAssignments" /> are registered
+        ///     in the engine's service provider. <see langword="false" /> sets up a resolver
+        ///     without the client repositories.
         /// </param>
         public Fixture(
             IClientIdentityResolver identityResolver = null,
@@ -299,8 +304,8 @@ public partial class DnsFilterEngineTests
         DnsClientGroupEntity kidsGroup = fixture.AddGroup("kids", isDefault: false);
         fixture.AddNetwork(kidsGroup.Id, "192.168.1.0/24");
 
-        // The "kids" group has no lists of its own assigned -- since it matched explicitly, the
-        // default group's own block list must NOT also apply.
+        // The "kids" group has no lists, but since it matched, the default group's block list
+        // must not apply.
         Ninlil.Dns.Server.Core.Filtering.DnsFilterDecision decision =
             await fixture.Engine.EvaluateDomainAsync(
                 DnsName.Parse("blocked-in-default.example.com"),
@@ -536,10 +541,8 @@ public partial class DnsFilterEngineTests
     {
         Fixture fixture = new();
         DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
-        // "(" is not a well-formed regular expression -- this can only ever reach the engine via
-        // a row written by something other than FilterListEntriesController's own
-        // compile-before-persist validation (a direct repository call, an import tool), but the
-        // engine itself must still never throw for it.
+        // "(" is not a valid regex. FilterListEntriesController rejects it on write, but a row
+        // written another way must still not make the engine throw.
         DnsFilterListEntity blockList = fixture.AddListWithKindedEntry(
             "malformed-regex-block",
             DnsFilterListActionEnum.Block,
@@ -562,10 +565,8 @@ public partial class DnsFilterEngineTests
     {
         Fixture fixture = new();
         DnsClientGroupEntity defaultGroup = fixture.AddGroup("default", isDefault: true);
-        // (a+)+$ against a long run of "a" characters with no trailing match is the textbook
-        // catastrophic-backtracking regex -- without a real matchTimeout this would hang for an
-        // effectively unbounded amount of time (exponential in the input length) rather than
-        // ever completing.
+        // (a+)+$ against a run of "a" with a non-matching tail is the textbook
+        // catastrophic-backtracking regex: its run time grows exponentially with the input.
         DnsFilterListEntity blockList = fixture.AddListWithKindedEntry(
             "pathological-regex-block",
             DnsFilterListActionEnum.Block,
@@ -584,12 +585,7 @@ public partial class DnsFilterEngineTests
             );
         stopwatch.Stop();
 
-        // A real regression here would hang for seconds-to-minutes (the input above is
-        // deliberately short enough that an unguarded .NET regex engine still takes many seconds
-        // to exhaust its own backtracking, without hanging this test suite itself forever) --
-        // asserting a generous, but real, wall-clock ceiling well under that is what makes this a
-        // genuine regression test for the timeout wiring, not merely a coincidence of the boolean
-        // result alone.
+        // The time limit, not only the result, is what shows the match timeout is applied.
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected the timeout-guarded match to give up quickly; it took {stopwatch.Elapsed}."
@@ -598,15 +594,9 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test proves a structural invariant: <see cref="DnsFilterEngine" /> is
-    ///     constructed and consulted regardless of <see cref="DnsFilterOptions.Enable" />'s own
-    ///     value at construction time, with its own live check reading <c>IOptionsMonitor</c>'s
-    ///     <c>CurrentValue</c> fresh on every call -- so the *same, already-constructed* engine
-    ///     instance genuinely starts denying once <see cref="DnsFilterOptions.Enable" /> flips to
-    ///     <see langword="true" /> on the shared options object it was built against, with no
-    ///     restart and no new instance, mirroring
-    ///     <c>RecursiveOptionsHotReloadTests</c>'s own "same instance, before/after" proof shape
-    ///     for <c>RecursiveServerOptions</c>.
+    ///     This test checks that an engine built while <see cref="DnsFilterOptions.Enable" /> is
+    ///     off starts denying, without being rebuilt, once the flag turns on, because it reads
+    ///     <c>CurrentValue</c> on every call.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_WhenEnableFlipsLiveOnTheSharedOptionsObject_TheSameEngineInstanceStartsDenying()
@@ -623,9 +613,7 @@ public partial class DnsFilterEngineTests
         );
         fixture.AssignListToGroup(defaultGroup.Id, blockList.Id);
 
-        // Before: a real, matching block-list entry exists, but the engine is disabled, so the
-        // early-exit gate wins -- this is the "structural" half of the proof, distinguishing "no
-        // match" from "declined because disabled."
+        // A matching entry exists, so an allow here means "disabled", not "no match".
         Ninlil.Dns.Server.Core.Filtering.DnsFilterDecision before =
             await fixture.Engine.EvaluateDomainAsync(
                 DnsName.Parse("ads.example.com"),
@@ -635,8 +623,7 @@ public partial class DnsFilterEngineTests
 
         fixture.Options.Enable = true;
 
-        // After: the identical engine instance, with no reconstruction, now genuinely evaluates
-        // the same matching entry and denies it.
+        // The same instance now denies.
         Ninlil.Dns.Server.Core.Filtering.DnsFilterDecision after =
             await fixture.Engine.EvaluateDomainAsync(
                 DnsName.Parse("ads.example.com"),
@@ -646,10 +633,9 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test proves the new, third way into a group (15c): a query whose source address
-    ///     resolves to a known client with an explicit <see cref="DnsClientEntity.ClientGroupId" />
-    ///     gets that group's own filter lists applied even though no CIDR/DoH-ClientID network
-    ///     row would ever have matched it on its own.
+    ///     This test checks the client-registry way into a group: a query whose source address
+    ///     resolves to a client with a <see cref="DnsClientEntity.ClientGroupId" /> gets that
+    ///     group's lists even though no network row matches it.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_ClientResolvedToAGroupWithNoMatchingNetwork_UsesThatGroupsLists()
@@ -663,8 +649,7 @@ public partial class DnsFilterEngineTests
 
         fixture.AddGroup("default", isDefault: true);
         DnsClientGroupEntity kidsGroup = fixture.AddGroup("kids", isDefault: false);
-        // Deliberately no DnsClientGroupNetworkEntity row for "kids" at all -- the only way this
-        // group can ever match this query is via the client-derived path under test.
+        // No network row for "kids", so only the client registry can match it.
         DnsFilterListEntity kidsBlockList = fixture.AddList(
             "kids-block",
             DnsFilterListKindEnum.Domain,
@@ -685,10 +670,9 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test proves a resolved client's own direct <see cref="DnsClientListAssignmentEntity" />
-    ///     rows are unioned with whatever its matched group already contributes -- both the
-    ///     group's own block list and the client's own separately assigned block list must each
-    ///     independently deny a query matching only one of the two.
+    ///     This test checks that a resolved client's direct <see cref="DnsClientListAssignmentEntity" />
+    ///     rows are added to its group's lists: the group's block list and the client's own block
+    ///     list each deny a query that only they match.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_ClientsOwnDirectListAssignmentIsUnionedWithItsGroupsLists()
@@ -734,8 +718,8 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test proves a disabled client contributes neither a client-derived group match
-    ///     nor its own direct list assignments -- both would otherwise deny this query.
+    ///     This test checks that a disabled client contributes neither its group nor its direct
+    ///     list assignments, either of which would otherwise deny this query.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_DisabledClientContributesNothing()
@@ -786,10 +770,9 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test proves a client resolved to a <em>disabled</em> group contributes no group
-    ///     match -- but, unlike a disabled client (see
-    ///     <see cref="EvaluateDomainAsync_DisabledClientContributesNothing" />), its own direct
-    ///     list assignment is unaffected, since only the group itself is disabled here.
+    ///     This test checks that a client in a <em>disabled</em> group contributes no group match,
+    ///     but its direct list assignment still applies (unlike a disabled client, see
+    ///     <see cref="EvaluateDomainAsync_DisabledClientContributesNothing" />).
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_ClientResolvedToADisabledGroupContributesNoGroupMatchButStillContributesItsOwnDirectAssignment()
@@ -840,12 +823,10 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This is the explicit regression guarantee for 15c: with no
-    ///     <see cref="IClientIdentityResolver" /> wired up at all (the exact construction every
-    ///     pre-existing test in this file already uses), a matching <see cref="DnsClientEntity" />
-    ///     row that -- if the resolver existed -- would flip this query to denied is never even
-    ///     considered. CIDR-based group resolution alone continues to decide this query, byte for
-    ///     byte identical to this engine's behavior before this sub-phase.
+    ///     This test checks that without an <see cref="IClientIdentityResolver" />, a registered
+    ///     <see cref="DnsClientEntity" /> is never consulted: the client row would move the query
+    ///     into a group whose allow list lets it through, but the default group's block list
+    ///     decides.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_WithNoClientIdentityResolverWiredUp_ClientDerivedRegistryRowsAreNeverConsidered()
@@ -870,10 +851,8 @@ public partial class DnsFilterEngineTests
         );
         fixture.AssignListToGroup(defaultGroup.Id, defaultBlockList.Id);
 
-        // If a real IClientIdentityResolver/IDnsClientRepository pair were consulted, this row
-        // would resolve this exact address to the "kids" group -- flipping the decision to
-        // allowed via that group's own allow list. With no resolver wired up at all, this row
-        // must be completely inert.
+        // With a resolver, this row would put the address in "kids" and its allow list would
+        // win. Without one, the row must have no effect.
         fixture.AddClient("00:11:22:33:44:55", clientGroupId: kidsGroup.Id);
 
         Ninlil.Dns.Server.Core.Filtering.DnsFilterDecision decision =
@@ -886,13 +865,10 @@ public partial class DnsFilterEngineTests
     }
 
     /// <summary>
-    ///     This test covers the other absent-infrastructure shape: a real resolver is present and
-    ///     genuinely resolves this query's own address, but neither
-    ///     <c>IDnsClientRepository</c> nor <c>IDnsClientListAssignmentRepository</c>
-    ///     is registered in this engine's own DI container at all (the shape a deployment without
-    ///     the known-client registry's own storage wired up would have). The engine must not
-    ///     throw, and must fall back to ordinary CIDR/default-group resolution exactly as if the
-    ///     resolver did not exist either.
+    ///     This test checks that when a resolver resolves the address but neither
+    ///     <c>IDnsClientRepository</c> nor <c>IDnsClientListAssignmentRepository</c> is
+    ///     registered, the engine does not throw and falls back to network and default-group
+    ///     matching.
     /// </summary>
     [Fact]
     public async Task EvaluateDomainAsync_WithClientRepositoriesAbsentFromDi_FallsBackToOrdinaryResolutionWithoutThrowing()

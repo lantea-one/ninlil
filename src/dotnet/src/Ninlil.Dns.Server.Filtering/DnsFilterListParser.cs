@@ -29,6 +29,9 @@ public sealed record DnsFilterListParseResult(
 
 /// <summary>
 ///     This class turns the text of a subscribed block/allow list into entries.
+///     <see cref="DnsFilterListExternalRefreshService" /> calls it after each download. Every
+///     domain entry it produces is a plain <see cref="DnsFilterEntryKindEnum.Domain" /> entry;
+///     wildcard and regex rules are skipped.
 ///     <para>
 ///         A domain list may be written in any mix of three formats, line by line: hosts-file
 ///         lines (<c>0.0.0.0 ads.example</c>, <c>127.0.0.1 ads.example</c>,
@@ -37,15 +40,15 @@ public sealed record DnsFilterListParseResult(
 ///         AdGuard DNS filter and OISD's ABP variant are published in:
 ///     </para>
 ///     <list type="bullet">
-///         <item><c>||ads.example^</c> covers <c>ads.example</c> and every subdomain -- exactly what
-///         an ordinary <see cref="DnsFilterEntryKindEnum.Domain" /> entry already means, so it is
-///         stored as one.</item>
+///         <item><c>||ads.example^</c> covers <c>ads.example</c> and every subdomain, which is what
+///         an ordinary <see cref="DnsFilterEntryKindEnum.Domain" /> entry means, so it is stored as
+///         one.</item>
 ///         <item><c>@@||cdn.ads.example^</c> is an exception, stored with
 ///         <see cref="DnsFilterListReplacementEntry.IsException" /> set (see
 ///         <c>DnsFilterListEntryEntity.IsException</c> for why a flag and not a companion list).
 ///         In a list subscribed with the Allow action there is nothing for an exception to carve
 ///         out of, and such lists (allowlists published in adblock syntax) are written entirely in
-///         <c>@@</c> lines, so there an exception is simply stored as an ordinary allow entry.</item>
+///         <c>@@</c> lines, so there an exception is stored as an ordinary allow entry.</item>
 ///         <item><c>!</c> lines and <c>[Adblock Plus 2.0]</c>-style headers are comments, like
 ///         <c>#</c> lines in a hosts file.</item>
 ///     </list>
@@ -79,7 +82,7 @@ public static class DnsFilterListParser
 
     /// <summary>
     ///     This field contains the names every stock hosts file maps to the loopback or broadcast
-    ///     address for the machine's own use. They are boilerplate, not blocking rules, and
+    ///     address for local use. They are boilerplate, not blocking rules, and
     ///     blocking <c>localhost</c> would break local software, so they are dropped silently.
     /// </summary>
     private static readonly HashSet<string> HostsFileBoilerplateNames = new(
@@ -101,8 +104,8 @@ public static class DnsFilterListParser
 
     /// <summary>
     ///     This field converts internationalized names to their ASCII (punycode) form, which is
-    ///     what a query carries on the wire. STD3 rules are off so underscores, common in real
-    ///     tracker hostnames, are accepted.
+    ///     what a query carries on the wire. STD3 rules are off so underscores, common in tracker
+    ///     hostnames, are accepted.
     /// </summary>
     private static readonly IdnMapping Idn = new() { UseStd3AsciiRules = false };
 
@@ -123,12 +126,12 @@ public static class DnsFilterListParser
 
     /// <summary>
     ///     This method parses a domain list written in hosts, bare-domain or adblock syntax, or any
-    ///     mix of them -- see this class's own doc comment for exactly what is accepted.
+    ///     mix of them (see the class summary for what is accepted).
     /// </summary>
     /// <param name="content">The downloaded text.</param>
     /// <param name="treatExceptionsAsRules">
-    ///     Whether an <c>@@</c> line becomes an ordinary entry rather than an exception -- true for
-    ///     a list subscribed with the Allow action.
+    ///     Whether an <c>@@</c> line becomes an ordinary entry rather than an exception; true for a
+    ///     list subscribed with the Allow action.
     /// </param>
     public static DnsFilterListParseResult ParseDomainList(
         string content,
@@ -160,8 +163,8 @@ public static class DnsFilterListParser
             if (rule.Length == 0)
                 continue;
 
-            // Any '#' still left is part of the rule itself, which in adblock syntax only ever
-            // means an element-hiding (cosmetic) rule -- page styling, nothing DNS can do.
+            // Any '#' still left is part of the rule, which in adblock syntax means an
+            // element-hiding (cosmetic) rule: page styling, nothing DNS can do.
             if (rule.Contains('#'))
             {
                 skipped++;
@@ -286,8 +289,8 @@ public static class DnsFilterListParser
             .Where(line => line.Length > 0);
 
     /// <summary>
-    ///     This method recognizes a whole-line comment in either syntax -- <c>#</c> (hosts),
-    ///     <c>!</c> (adblock) -- and an adblock header such as <c>[Adblock Plus 2.0]</c>.
+    ///     This method recognizes a whole-line comment in either syntax (<c>#</c> for hosts,
+    ///     <c>!</c> for adblock) and an adblock header such as <c>[Adblock Plus 2.0]</c>.
     /// </summary>
     private static bool IsCommentOrHeader(string line) =>
         line.StartsWith('#')
@@ -411,8 +414,8 @@ public static class DnsFilterListParser
     }
 
     /// <summary>
-    ///     This method checks for one of the stock hosts-file names -- see
-    ///     <see cref="HostsFileBoilerplateNames" />.
+    ///     This method checks for one of the stock hosts-file names (see
+    ///     <see cref="HostsFileBoilerplateNames" />).
     /// </summary>
     private static bool IsHostsFileBoilerplate(string name) =>
         HostsFileBoilerplateNames.Contains(name.TrimEnd('.'));

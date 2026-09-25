@@ -4,10 +4,10 @@ using Ninlil.Dns.Server.Filtering.BlockedServices;
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
 /// <summary>
-///     This class covers <see cref="BlockedServiceCatalog" />'s own structural invariants -- every
-///     entry must have a stable, non-blank key, an <c>https://</c> subscription URL, and every key
-///     must be unique, so <c>Ninlil.Web.Controllers.BlockedServicesController</c>'s own
-///     key-based lookups can never be ambiguous.
+///     This class checks the shape of the static <see cref="BlockedServiceCatalog" /> data: unique
+///     keys (so <c>BlockedServicesController</c> lookups are unambiguous), filled-in names and
+///     descriptions, <c>https://</c> subscription URLs, and case-insensitive
+///     <see cref="BlockedServiceCatalog.FindByKey" />.
 /// </summary>
 public class BlockedServiceCatalogTests
 {

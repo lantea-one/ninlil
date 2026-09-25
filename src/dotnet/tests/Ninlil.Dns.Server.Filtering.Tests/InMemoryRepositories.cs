@@ -6,6 +6,12 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
+// In-memory repositories for the filtering tests. Each keeps its rows in a public Items list
+// (plus Addresses for clients) that tests fill directly; saves need no unit of work.
+
+/// <summary>
+///     This class is an in-memory <see cref="IDnsFilterListRepository" />.
+/// </summary>
 public sealed class InMemoryDnsFilterListRepository : IDnsFilterListRepository
 {
     public readonly List<DnsFilterListEntity> Items = [];
@@ -51,6 +57,10 @@ public sealed class InMemoryDnsFilterListRepository : IDnsFilterListRepository
         Task.FromResult(Items.Count);
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsFilterListEntryRepository" />, including the
+///     wholesale entry replacement the refresh service uses.
+/// </summary>
 public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRepository
 {
     public readonly List<DnsFilterListEntryEntity> Items = [];
@@ -123,6 +133,9 @@ public sealed class InMemoryDnsFilterListEntryRepository : IDnsFilterListEntryRe
     }
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientGroupRepository" />.
+/// </summary>
 public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
 {
     public readonly List<DnsClientGroupEntity> Items = [];
@@ -171,6 +184,9 @@ public sealed class InMemoryDnsClientGroupRepository : IDnsClientGroupRepository
         Task.FromResult(Items.Count);
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientGroupNetworkRepository" />.
+/// </summary>
 public sealed class InMemoryDnsClientGroupNetworkRepository : IDnsClientGroupNetworkRepository
 {
     public readonly List<DnsClientGroupNetworkEntity> Items = [];
@@ -229,6 +245,9 @@ public sealed class InMemoryDnsClientGroupNetworkRepository : IDnsClientGroupNet
     ) => Task.FromResult(Items.Count(item => item.ClientGroupId == clientGroupId));
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientGroupListAssignmentRepository" />.
+/// </summary>
 public sealed class InMemoryDnsClientGroupListAssignmentRepository
     : IDnsClientGroupListAssignmentRepository
 {
@@ -288,15 +307,18 @@ public sealed class InMemoryDnsClientGroupListAssignmentRepository
     ) => Task.FromResult(Items.Count(item => item.ClientGroupId == clientGroupId));
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientRepository" />, enough for the engine to
+///     resolve a client from its identifier.
+/// </summary>
 public sealed class InMemoryDnsClientRepository : IDnsClientRepository
 {
     public readonly List<DnsClientEntity> Items = [];
 
     /// <summary>
-    ///     This field is this fake's own minimal stand-in for the real
-    ///     <c>DnsClientAddressEntity</c> table <see cref="GetByClientIdentifierAsync" /> joins
-    ///     through in production -- a test populates it (see <c>Fixture.AddClient</c>) alongside
-    ///     adding the owning <see cref="DnsClientEntity" /> to <see cref="Items" />.
+    ///     This field stands in for the <c>DnsClientAddressEntity</c> table that
+    ///     <see cref="GetByClientIdentifierAsync" /> joins through in production. A test fills it
+    ///     (see <c>Fixture.AddClient</c>) along with adding the client to <see cref="Items" />.
     /// </summary>
     public readonly List<(
         string ClientIdentifier,
@@ -344,8 +366,8 @@ public sealed class InMemoryDnsClientRepository : IDnsClientRepository
         );
     }
 
-    // This fake holds no address rows, so only the client-level filters are honored here; the
-    // presence filters and last-seen ordering are covered against the real repositories instead.
+    // Only the client-level filters are honored here; presence filters and last-seen ordering
+    // are covered by the repository tests.
     public Task<IReadOnlyList<DnsClientEntity>> SearchAsync(
         DnsClientSearchCriteria criteria,
         int skip,
@@ -370,6 +392,9 @@ public sealed class InMemoryDnsClientRepository : IDnsClientRepository
         && (criteria?.CreatedSinceUtc is not { } since || item.CreatedAtUtc >= since);
 }
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsClientListAssignmentRepository" />.
+/// </summary>
 public sealed class InMemoryDnsClientListAssignmentRepository : IDnsClientListAssignmentRepository
 {
     public readonly List<DnsClientListAssignmentEntity> Items = [];
@@ -428,6 +453,10 @@ public sealed class InMemoryDnsClientListAssignmentRepository : IDnsClientListAs
     ) => Task.FromResult(Items.Count(item => item.ClientId == clientId));
 }
 
+/// <summary>
+///     This class is an <see cref="IUnitOfWork" /> that saves nothing, since the in-memory
+///     repositories apply changes immediately.
+/// </summary>
 public sealed class NoOpUnitOfWork : IUnitOfWork
 {
     public Task<int> SaveChangesAsync(CancellationToken stoppingToken = default) =>

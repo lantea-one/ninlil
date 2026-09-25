@@ -7,7 +7,8 @@ namespace Ninlil.Dns.Server.Filtering.Tests;
 /// <summary>
 ///     This class covers <see cref="DnsFilterListParser" /> line by line: every format a
 ///     subscribed domain list can be written in (hosts, bare domains, adblock syntax), mixes of
-///     them, and every kind of line it must skip -- and whether that skip is counted.
+///     them, network lists, and every kind of line it must skip, including whether the skip is
+///     counted. The parser is static, so each test parses a string directly.
 /// </summary>
 public class DnsFilterListParserTests
 {
@@ -47,7 +48,7 @@ public class DnsFilterListParserTests
     public void AdblockExceptionRule_InAnAllowList_BecomesAnOrdinaryEntry()
     {
         // An allowlist published in adblock syntax is written entirely in "@@" lines; in a list
-        // whose own action is already Allow there is nothing for an exception to carve out of.
+        // whose action is already Allow there is nothing for an exception to carve out of.
         DnsFilterListParseResult result = DnsFilterListParser.Parse(
             "@@||good.example^\n||also-good.example^",
             DnsFilterListKindEnum.Domain,

@@ -9,10 +9,9 @@ using Ninlil.Dns.Server.Core.Filtering;
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
 /// <summary>
-///     This part of <see cref="DnsFilterEngineTests" /> covers two things the engine learned
-///     together with adblock-syntax subscriptions: exception entries (<c>@@</c> rules), which
-///     cancel only their own list's match, and CNAME-cloaking protection, which checks every
-///     CNAME target in an answer against the client's own domain lists.
+///     This part of <see cref="DnsFilterEngineTests" /> covers exception entries (<c>@@</c>
+///     rules), which cancel only their own list's match, and CNAME-cloaking protection, which
+///     checks every CNAME target in an answer against the client's domain lists.
 /// </summary>
 public partial class DnsFilterEngineTests
 {
@@ -241,8 +240,8 @@ public partial class DnsFilterEngineTests
     [Fact]
     public async Task EvaluateResponseAsync_AnswerWithoutAnyCnameIsUnaffected()
     {
-        // The queried name itself is on the block list, but that is the domain check's job
-        // before dispatch -- this check only looks at CNAME targets.
+        // The queried name is on the block list, but that is the domain check's job before
+        // dispatch; this check only looks at CNAME targets.
         Fixture fixture = FixtureBlocking("www.shop.example");
 
         DnsFilterDecision decision = await fixture.Engine.EvaluateResponseAsync(

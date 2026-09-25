@@ -18,12 +18,13 @@ using Ninlil.Dns.Server.Filtering.Tests.Fakes;
 namespace Ninlil.Dns.Server.Filtering.Tests;
 
 /// <summary>
-///     This class proves an adblock-syntax subscription works end to end: the real
-///     <see cref="DnsFilterListExternalRefreshService" /> fetches a list from a real,
-///     Kestrel-hosted fake server over HTTP (the same "real, Kestrel-hosted fake server"
-///     convention <c>WebhookDeliveryServiceTests</c> established), stores what it parsed, and a
-///     real query sent through the real <see cref="DnsQueryProcessingPipeline" /> and
-///     <see cref="DnsFilterEngine" /> is then blocked or let through accordingly.
+///     This class tests adblock-syntax subscriptions end to end:
+///     <see cref="DnsFilterListExternalRefreshService" /> fetches a list over HTTP from a
+///     Kestrel server on a loopback port, stores the parsed entries in in-memory repositories,
+///     and a query sent through <see cref="DnsQueryProcessingPipeline" /> and
+///     <see cref="DnsFilterEngine" /> is then blocked or let through. It covers exceptions,
+///     skipped rules and their log line, allow lists in adblock syntax, and wholesale
+///     replacement on refresh.
 /// </summary>
 public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
 {
@@ -128,8 +129,8 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         }
 
         /// <summary>
-        ///     This method runs the real background service until its first tick has refreshed
-        ///     the list, then stops it -- the first tick runs immediately on start.
+        ///     This method runs the background service until its first tick, which runs
+        ///     immediately on start, has refreshed the list, then stops it.
         /// </summary>
         public async Task RefreshAsync(DnsFilterListEntity list)
         {
@@ -153,9 +154,9 @@ public sealed class DnsFilterListRefreshEndToEndTests : IAsyncLifetime
         }
 
         /// <summary>
-        ///     This method sends one real query through a real pipeline wired to the real
-        ///     filter engine, with a resolver that answers every query that reaches it, and
-        ///     returns the decoded response.
+        ///     This method sends one query through a pipeline wired to the filter engine, with a
+        ///     resolver that answers every query that reaches it, and returns the decoded
+        ///     response.
         /// </summary>
         public async Task<DnsMessage> QueryAsync(string name)
         {

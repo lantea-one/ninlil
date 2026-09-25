@@ -3,12 +3,10 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dns.Server.Filtering.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real, DI-built <see cref="IOptionsMonitor{TOptions}" />: it
-///     always reports the same, fixed <see cref="CurrentValue" /> and never actually fires
-///     <see cref="OnChange" />, which is all this project's own unit tests need to construct a
-///     <see cref="DnsFilterEngine" />/<see cref="DnsFilterListExternalRefreshService" /> against a
-///     fixed <c>DnsFilterOptions</c> value without spinning up the real configuration-reload
-///     machinery -- mirrors <c>Ninlil.Dns.Server.Forwarding.Tests</c>'s own identical fake.
+///     This class is a fixed <see cref="IOptionsMonitor{TOptions}" />: it always reports the same
+///     <see cref="CurrentValue" /> and never fires <see cref="OnChange" />. Tests use it to build a
+///     <see cref="DnsFilterEngine" /> or <see cref="DnsFilterListExternalRefreshService" /> with
+///     fixed <c>DnsFilterOptions</c>; mutating that object changes what the monitor reports.
 /// </summary>
 /// <param name="value">The fixed value this monitor always reports.</param>
 public sealed class StaticOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>

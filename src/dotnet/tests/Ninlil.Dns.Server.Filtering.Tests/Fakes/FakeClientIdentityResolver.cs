@@ -4,11 +4,9 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.Filtering.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real <see cref="IClientIdentityResolver" />: it answers a
-///     fixed, test-configured <see cref="ClientIdentityResolution" /> for one specific source
-///     address and <see langword="null" /> for every other, mirroring
-///     <c>Ninlil.Dns.Server.Core.Tests.ClientIdentity.CompositeClientIdentityResolverTests</c>'s
-///     own identical fake.
+///     This class is a fake <see cref="IClientIdentityResolver" />: it returns a configured
+///     <see cref="ClientIdentityResolution" /> for one source address and <see langword="null" />
+///     for any other.
 /// </summary>
 public sealed class FakeClientIdentityResolver : IClientIdentityResolver
 {
