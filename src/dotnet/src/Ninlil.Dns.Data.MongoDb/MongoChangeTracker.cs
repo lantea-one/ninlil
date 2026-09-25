@@ -2,15 +2,13 @@
 namespace Ninlil.Dns.Data.MongoDb;
 
 /// <summary>
-///     This class gives MongoDB the same "stage now, write later" behavior that Entity Framework
-///     Core's change tracker gives the relational providers. MongoDB itself has no such concept
-///     -- every driver call it exposes writes to the server immediately -- so the
-///     <c>Add</c>/<c>Update</c>/<c>Remove</c> methods on a Mongo repository do not touch the
-///     server at all; they hand this class a small function that performs the write, and this
-///     class holds onto it until <see cref="MongoUnitOfWork.SaveChangesAsync" /> asks it to run
-///     everything that was staged, in the order it was staged. This is registered with a scoped
-///     lifetime, so all of the repositories used to serve a single request share the same list of
-///     pending writes.
+///     This class gives MongoDB the "stage now, write later" behavior that the Entity Framework
+///     Core change tracker gives the relational providers. Every MongoDB driver call writes
+///     immediately, so a Mongo repository's <c>Add</c>, <c>Update</c> and <c>Remove</c> do not
+///     touch the server: they hand this class a function that performs the write, and
+///     <see cref="MongoUnitOfWork.SaveChangesAsync" /> later runs everything staged, in order.
+///     The writes are not wrapped in a transaction. It is registered as scoped, so all
+///     repositories serving one request share the same pending writes.
 /// </summary>
 public class MongoChangeTracker
 {
@@ -34,16 +32,13 @@ public class MongoChangeTracker
     /// <returns>The number of writes that were performed.</returns>
     public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
     {
-        // Take a snapshot of the pending operations and clear the list immediately, so that a
-        // write staged by one operation's own side effects does not get executed twice.
+        // Snapshot and clear the list first, so a write staged while flushing is not run twice.
         Func<CancellationToken, Task>[] operations = [.. _pendingOperations];
         _pendingOperations.Clear();
 
-        // Perform every staged write, in the order it was staged.
         foreach (Func<CancellationToken, Task> operation in operations)
             await operation(stoppingToken);
 
-        // We're done, report how many writes were performed.
         return operations.Length;
     }
 }

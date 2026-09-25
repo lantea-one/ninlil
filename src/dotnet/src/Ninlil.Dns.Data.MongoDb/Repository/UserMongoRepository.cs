@@ -50,16 +50,14 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Look up which role identifiers this user holds.
+        // No joins in a find: load the memberships, then the roles.
         List<UserRoleEntity> memberships = await context
             .UserRoles.Find(userRole => userRole.UserId == userId)
             .ToListAsync(stoppingToken);
 
-        // There is nothing more to look up if the user holds no roles at all.
         if (memberships.Count == 0)
             return [];
 
-        // We're done, look up and return the actual role documents.
         HashSet<Guid> roleIds = [.. memberships.Select(membership => membership.RoleId)];
         return await context
             .Roles.Find(role => roleIds.Contains(role.Id))
@@ -75,7 +73,6 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
     /// <inheritdoc />
     public Task AddToRoleAsync(Guid userId, Guid roleId, CancellationToken stoppingToken = default)
     {
-        // Stage the membership insert rather than performing it immediately.
         ChangeTracker.Stage(token =>
             context.UserRoles.InsertOneAsync(
                 new UserRoleEntity { UserId = userId, RoleId = roleId },
@@ -93,7 +90,6 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the membership removal rather than performing it immediately.
         ChangeTracker.Stage(token =>
             context.UserRoles.DeleteOneAsync(
                 userRole => userRole.UserId == userId && userRole.RoleId == roleId,
@@ -111,7 +107,6 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the inserts rather than performing them immediately.
         ChangeTracker.Stage(token =>
             context.UserClaims.InsertManyAsync(
                 claims.Select(claim => new UserClaimEntity
@@ -135,12 +130,10 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Localize the requested claims so the staged delegate doesn't capture a lazily
-        // re-evaluated enumerable.
+        // Materialize the requested pairs now so the staged delegate does not capture a lazy
+        // enumerable.
         (string ClaimType, string ClaimValue)[] requested = [.. claims];
 
-        // Stage the removal of every one of the user's claims that matches one of the requested
-        // pairs, rather than performing it immediately.
         ChangeTracker.Stage(token =>
             context.UserClaims.DeleteManyAsync(
                 claim =>
@@ -165,7 +158,6 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the update rather than performing it immediately.
         ChangeTracker.Stage(token =>
             context.UserClaims.UpdateManyAsync(
                 claim =>
@@ -189,18 +181,16 @@ public class UserMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Look up which user identifiers carry a matching claim.
+        // No joins in a find: load the matching claims, then the users.
         List<UserClaimEntity> matches = await context
             .UserClaims.Find(claim =>
                 claim.ClaimType == claimType && claim.ClaimValue == claimValue
             )
             .ToListAsync(stoppingToken);
 
-        // There is nothing more to look up if nobody carries the claim.
         if (matches.Count == 0)
             return [];
 
-        // We're done, look up and return the actual user documents.
         HashSet<Guid> userIds = [.. matches.Select(claim => claim.UserId)];
         return await Collection.Find(user => userIds.Contains(user.Id)).ToListAsync(stoppingToken);
     }

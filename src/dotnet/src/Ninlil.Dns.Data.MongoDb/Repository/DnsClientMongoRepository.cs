@@ -24,8 +24,8 @@ public class DnsClientMongoRepository(
         CancellationToken stoppingToken = default
     )
     {
-        // MongoDB has no server-side join -- resolve the owning device in two steps: find the
-        // address row naming this identifier, then look its own owning device up directly by id.
+        // A find has no join, so this takes two steps: find the address row for the
+        // identifier, then load its device by id.
         DnsClientAddressEntity address = await context
             .DnsClientAddresses.Find(candidate =>
                 candidate.ClientIdentifier == clientIdentifier
@@ -52,7 +52,7 @@ public class DnsClientMongoRepository(
         criteria ??= DnsClientSearchCriteria.All;
         FilterDefinition<DnsClientEntity> filter = await BuildFilterAsync(criteria, stoppingToken);
 
-        // Creation order needs nothing beyond the client document itself.
+        // Creation order needs only the client document.
         if (criteria.SortOrder == DnsClientSortOrderEnum.Created)
             return await Collection
                 .Find(filter)
@@ -62,9 +62,8 @@ public class DnsClientMongoRepository(
                 .Limit(take)
                 .ToListAsync(stoppingToken);
 
-        // The other two orderings need a computed sort key, so they run as an aggregation: match,
-        // derive the key, sort, page, then drop the helper fields before deserializing (extra
-        // elements are ignored by convention anyway, but they are never worth transferring).
+        // The other orderings need a computed sort key, so they run as an aggregation: match,
+        // add the key, sort, page, then drop the helper fields so they are not transferred.
         IAggregateFluent<BsonDocument> pipeline = Collection
             .Aggregate()
             .Match(filter)
@@ -73,12 +72,10 @@ public class DnsClientMongoRepository(
 
         if (criteria.SortOrder == DnsClientSortOrderEnum.LastSeen)
         {
-            // Join the client's own address rows and take their latest sighting. The driver
-            // stores a DateTimeOffset as a {DateTime, Ticks, Offset} sub-document, and every value
-            // this application writes is UTC, so the Ticks field alone orders sightings exactly --
-            // a plain number, rather than depending on how an aggregation expression compares two
-            // sub-documents. $max skips a missing/null sighting, leaving a never-seen client's
-            // key null.
+            // Join the client's address rows and take the latest sighting. The driver stores a
+            // DateTimeOffset as a {DateTime, Ticks, Offset} sub-document and every value written is
+            // UTC, so the Ticks number orders sightings without comparing sub-documents. $max skips
+            // missing sightings, so a never-seen client's key is null.
             BsonDocument lastSeenStage = new(
                 "$addFields",
                 new BsonDocument(
@@ -124,8 +121,8 @@ public class DnsClientMongoRepository(
                     )
                 );
 
-            // Seen clients first (an explicit key, rather than trusting where null sorts), newest
-            // sighting first within them.
+            // Seen clients first (an explicit key rather than relying on where null sorts), newest
+            // sighting first.
             sort = new BsonDocument
             {
                 { HasSortValueField, -1 },
@@ -144,9 +141,9 @@ public class DnsClientMongoRepository(
                 { "_id", 1 },
             };
 
-            // A missing, null, or empty display name all count as "no name" and sort last; the
-            // name itself sorts lower-cased, so the ordering is case-insensitive, and coalesced,
-            // so every unnamed client ties and creation order decides between them.
+            // A missing, null or empty display name counts as no name and sorts last. Names sort
+            // lower-cased (case-insensitive) and coalesced, so unnamed clients tie and creation
+            // order decides.
             pipeline = pipeline.AppendStage<BsonDocument>(
                 new BsonDocument(
                     "$addFields",
@@ -206,12 +203,11 @@ public class DnsClientMongoRepository(
 
     /// <summary>
     ///     This method builds the filter shared by <see cref="SearchAsync" /> and
-    ///     <see cref="CountAsync" />. A document written before <see cref="DnsClientEntity.IsFavorite" />
-    ///     existed simply lacks the field, so "not a favorite" is matched as "not equal to true"
-    ///     rather than "equal to false", which would silently skip every such document. MongoDB
-    ///     has no correlated subquery inside a plain find, so a presence filter first resolves the
-    ///     set of clients with an address seen since the cutoff (one distinct query over the
-    ///     address collection) and then matches client ids in, or not in, that set.
+    ///     <see cref="CountAsync" />. A document can lack <see cref="DnsClientEntity.IsFavorite" />,
+    ///     so "not a favorite" is matched as "not equal to true" rather than "equal to false", which
+    ///     would skip such documents. A find cannot run a correlated subquery, so a presence filter
+    ///     first collects the clients with an address seen since the cutoff (one distinct query on
+    ///     the address collection) and then matches client ids in, or not in, that set.
     /// </summary>
     private async Task<FilterDefinition<DnsClientEntity>> BuildFilterAsync(
         DnsClientSearchCriteria criteria,

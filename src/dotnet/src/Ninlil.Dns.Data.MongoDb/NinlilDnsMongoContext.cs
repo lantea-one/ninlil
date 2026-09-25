@@ -6,11 +6,10 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Data.MongoDb;
 
 /// <summary>
-///     This class is MongoDB's equivalent of <c>NinlilDnsContext</c> from the Entity Framework
-///     Core project: a single place that knows about every collection Ninlil stores data in,
-///     covering both DNS and DHCP alike (mirroring that project's own single shared model), named
-///     according to a <c>NinlilDns</c>/<c>NinlilDhcp</c>-prefixed convention that matches the
-///     relational table names.
+///     This class is the MongoDB counterpart of <c>NinlilDnsContext</c>: the one place that knows
+///     every collection Ninlil stores data in, for both DNS and DHCP. Collection names use the
+///     same <c>NinlilDns</c>/<c>NinlilDhcp</c> prefixes as the relational table names. Class maps
+///     are set up by <see cref="Configuration.MongoClassMapRegistrar" />.
 /// </summary>
 /// <param name="client">The MongoDB client connected to the server.</param>
 /// <param name="databaseName">The name of the database within that server to use.</param>
@@ -155,7 +154,7 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         Database.GetCollection<DnsFilterListEntity>("NinlilDnsFilterLists");
 
     /// <summary>
-    ///     This property contains every block/allow list's own entries.
+    ///     This property contains the entries of every block/allow list.
     /// </summary>
     public IMongoCollection<DnsFilterListEntryEntity> DnsFilterListEntries =>
         Database.GetCollection<DnsFilterListEntryEntity>("NinlilDnsFilterListEntries");
@@ -173,21 +172,20 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         Database.GetCollection<DnsClientEntity>("NinlilDnsClients");
 
     /// <summary>
-    ///     This property contains every persistent identifier a known client device answers to --
-    ///     see <see cref="DnsClientEntity" />'s own doc comment for why a device's own
-    ///     identifier(s) live in this separate, one-to-many collection rather than directly on it.
+    ///     This property contains every persistent identifier a known client device answers to; see
+    ///     <see cref="DnsClientAddressEntity" /> for why these are a separate collection.
     /// </summary>
     public IMongoCollection<DnsClientAddressEntity> DnsClientAddresses =>
         Database.GetCollection<DnsClientAddressEntity>("NinlilDnsClientAddresses");
 
     /// <summary>
-    ///     This property contains every client group's own matched networks.
+    ///     This property contains the match rules of every client group.
     /// </summary>
     public IMongoCollection<DnsClientGroupNetworkEntity> DnsClientGroupNetworks =>
         Database.GetCollection<DnsClientGroupNetworkEntity>("NinlilDnsClientGroupNetworks");
 
     /// <summary>
-    ///     This property contains every client group's own assigned lists.
+    ///     This property contains the list assignments of every client group.
     /// </summary>
     public IMongoCollection<DnsClientGroupListAssignmentEntity> DnsClientGroupListAssignments =>
         Database.GetCollection<DnsClientGroupListAssignmentEntity>(
@@ -195,23 +193,20 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         );
 
     /// <summary>
-    ///     This property contains every individual known client's own directly assigned lists --
-    ///     unioned with whatever its own matched client group already contributes, see
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>.
+    ///     This property contains the lists assigned directly to known clients, which add to their
+    ///     group's lists (see <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>).
     /// </summary>
     public IMongoCollection<DnsClientListAssignmentEntity> DnsClientListAssignments =>
         Database.GetCollection<DnsClientListAssignmentEntity>("NinlilDnsClientListAssignments");
 
     /// <summary>
-    ///     This property contains every individual known client's own direct time-of-day
-    ///     parental-control schedule.
+    ///     This property contains the parental-control schedules assigned directly to known clients.
     /// </summary>
     public IMongoCollection<DnsClientScheduleEntity> DnsClientSchedules =>
         Database.GetCollection<DnsClientScheduleEntity>("NinlilDnsClientSchedules");
 
     /// <summary>
-    ///     This property contains every client group's own time-of-day parental-control
-    ///     schedule.
+    ///     This property contains the parental-control schedules of client groups.
     /// </summary>
     public IMongoCollection<DnsClientGroupScheduleEntity> DnsClientGroupSchedules =>
         Database.GetCollection<DnsClientGroupScheduleEntity>("NinlilDnsClientGroupSchedules");
@@ -241,7 +236,7 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         Database.GetCollection<DnsRewriteEntity>("NinlilDnsRewrites");
 
     /// <summary>
-    ///     This property contains every persisted, already-answered query log entry.
+    ///     This property contains every persisted query log entry.
     /// </summary>
     public IMongoCollection<DnsQueryLogEntryEntity> DnsQueryLogEntries =>
         Database.GetCollection<DnsQueryLogEntryEntity>("NinlilDnsQueryLogEntries");
@@ -253,9 +248,9 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         Database.GetCollection<DnsAccessControlRuleEntity>("NinlilDnsAccessControlRules");
 
     /// <summary>
-    ///     This property contains every operator-authored, permanent pin from a source IP
-    ///     address/network to a persistent client identifier -- see
-    ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c>.
+    ///     This property contains every static mapping from a source address or network to a
+    ///     client identifier (see
+    ///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c>).
     /// </summary>
     public IMongoCollection<DnsClientStaticAddressMappingEntity> DnsClientStaticAddressMappings =>
         Database.GetCollection<DnsClientStaticAddressMappingEntity>(
@@ -263,15 +258,14 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         );
 
     /// <summary>
-    ///     This property contains every peer node this instance's own cluster membership
-    ///     registry knows about.
+    ///     This property contains every peer in the local cluster registry.
     /// </summary>
     public IMongoCollection<ClusterNodeEntity> ClusterNodes =>
         Database.GetCollection<ClusterNodeEntity>("NinlilDnsClusterNodes");
 
     /// <summary>
-    ///     This property contains the last-write-wins bookkeeping row, one per settings section,
-    ///     that the cluster's own config-sync mechanism keeps for every synced settings section.
+    ///     This property contains the last-write-wins state cluster config sync keeps, one document
+    ///     per synced settings section.
     /// </summary>
     public IMongoCollection<ClusterSyncedSettingsStateEntity> ClusterSyncedSettingsStates =>
         Database.GetCollection<ClusterSyncedSettingsStateEntity>(

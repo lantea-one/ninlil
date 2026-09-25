@@ -7,28 +7,25 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Data.MongoDb.Repository;
 
 /// <summary>
-///     This class implements <see cref="IDnsQueryLogRepository" /> against MongoDB, backing
-///     every filtered search with a real MongoDB filter document (never an in-memory scan of an
-///     already-fetched collection) and every bulk-delete method with a single
-///     <c>deleteMany</c> command.
+///     This class implements <see cref="IDnsQueryLogRepository" /> against MongoDB. Searches run
+///     as MongoDB filter documents, never in memory, and bulk deletes as a single
+///     <c>deleteMany</c>, which takes effect immediately rather than at save. It creates its
+///     indexes itself (see <see cref="EnsureIndexesFireAndForget" />).
 /// </summary>
 public class DnsQueryLogMongoRepository
     : MongoRepositoryBase<DnsQueryLogEntryEntity>,
         IDnsQueryLogRepository
 {
     /// <summary>
-    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so that only the very
-    ///     first repository instance constructed in this process actually issues the
-    ///     index-creation commands -- every collection index this repository relies on is
-    ///     created once, best effort, rather than re-attempted (and re-checked by the server as a
-    ///     no-op) on every single scoped repository resolution.
+    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so only the first instance in
+    ///     the process creates the indexes, instead of every scoped instance asking the server
+    ///     again.
     /// </summary>
     private static int _indexesEnsured;
 
     /// <summary>
-    ///     This constructor wires this repository onto its own collection and change tracker,
-    ///     then kicks off a best-effort, once-per-process attempt to ensure its own collection
-    ///     indexes exist.
+    ///     This constructor sets up the repository and, once per process, starts a best-effort
+    ///     creation of its indexes.
     /// </summary>
     /// <param name="context">The context to read collections from.</param>
     /// <param name="changeTracker">The change tracker to stage writes onto.</param>
@@ -91,9 +88,8 @@ public class DnsQueryLogMongoRepository
                 Builders<DnsQueryLogEntryEntity>.Sort.Descending(entry => entry.Id)
             );
 
-        // As with the relational implementation, only the identifiers of the entries to keep are
-        // loaded into memory, bounded by maxRetainedEntries rather than the collection's own
-        // total size.
+        // As in the relational implementation, only the identifiers to keep are loaded, at most
+        // maxRetainedEntries whatever the collection size.
         List<Guid> idsToKeep = await Collection
             .Find(FilterDefinition<DnsQueryLogEntryEntity>.Empty)
             .Sort(newestFirst)
@@ -122,8 +118,8 @@ public class DnsQueryLogMongoRepository
     }
 
     /// <summary>
-    ///     This method translates <paramref name="criteria" /> into a real MongoDB filter
-    ///     document, combined with a logical AND across every axis that is actually set.
+    ///     This method turns <paramref name="criteria" /> into a MongoDB filter document, ANDing
+    ///     every filter that is set. The domain filter is an escaped, case-insensitive regex.
     /// </summary>
     private static FilterDefinition<DnsQueryLogEntryEntity> BuildFilter(
         DnsQueryLogSearchCriteria criteria
@@ -170,11 +166,9 @@ public class DnsQueryLogMongoRepository
     }
 
     /// <summary>
-    ///     This method kicks off collection index creation exactly once per process, swallowing
-    ///     any failure -- a missing index degrades this repository's own query performance, it
-    ///     never makes a query incorrect, so a transient failure to create one here must never
-    ///     surface as a failure of whichever caller happened to trigger it via the first
-    ///     repository construction.
+    ///     This method starts index creation once per process and ignores any failure. A missing
+    ///     index only slows queries and never makes them wrong, so a failure must not break the
+    ///     caller whose request happened to construct the first repository.
     /// </summary>
     private void EnsureIndexesFireAndForget()
     {
@@ -217,7 +211,7 @@ public class DnsQueryLogMongoRepository
             }
             catch
             {
-                // Best effort only -- see this method's own doc comment.
+                // Best effort only; see the method summary.
             }
         });
     }

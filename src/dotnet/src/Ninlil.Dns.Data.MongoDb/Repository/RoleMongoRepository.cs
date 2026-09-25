@@ -37,7 +37,6 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the insert rather than performing it immediately.
         ChangeTracker.Stage(token =>
             context.RoleClaims.InsertOneAsync(
                 new RoleClaimEntity
@@ -62,9 +61,7 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the removal of every matching claim, rather than performing it immediately.
-        // Nothing stops the exact same claim from having been granted more than once, so every
-        // match is removed rather than assuming there is exactly one.
+        // The same claim can have been granted more than once, so remove every match.
         ChangeTracker.Stage(token =>
             context.RoleClaims.DeleteManyAsync(
                 claim =>
@@ -84,25 +81,21 @@ public class RoleMongoRepository(NinlilDnsMongoContext context, MongoChangeTrack
         CancellationToken stoppingToken = default
     )
     {
-        // Look up the role itself by its normalized name.
+        // No joins in a find: load the role, then its memberships, then the users.
         RoleEntity role = await Collection
             .Find(candidate => candidate.NormalizedName == normalizedRoleName)
             .FirstOrDefaultAsync(stoppingToken);
 
-        // There is nobody to list if the role does not exist.
         if (role is null)
             return [];
 
-        // Look up which user identifiers hold that role.
         List<UserRoleEntity> memberships = await context
             .UserRoles.Find(userRole => userRole.RoleId == role.Id)
             .ToListAsync(stoppingToken);
 
-        // There is nothing more to look up if nobody holds the role.
         if (memberships.Count == 0)
             return [];
 
-        // We're done, look up and return the actual user documents.
         HashSet<Guid> userIds = [.. memberships.Select(membership => membership.UserId)];
         return await context
             .Users.Find(user => userIds.Contains(user.Id))

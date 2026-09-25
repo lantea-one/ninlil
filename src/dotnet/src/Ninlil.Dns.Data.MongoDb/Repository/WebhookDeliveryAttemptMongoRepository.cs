@@ -7,28 +7,24 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Data.MongoDb.Repository;
 
 /// <summary>
-///     This class implements <see cref="IWebhookDeliveryAttemptRepository" /> against MongoDB,
-///     backing the retry sweep's own due-for-retry lookup and the retention sweep's own bulk
-///     delete with real MongoDB filter documents/commands, never an in-memory scan of an
-///     already-fetched collection -- mirroring <see cref="DnsQueryLogMongoRepository" />'s own
-///     established reasoning for a collection that can genuinely grow large.
+///     This class implements <see cref="IWebhookDeliveryAttemptRepository" /> against MongoDB.
+///     The due-for-retry lookup and the retention delete run as MongoDB filters and commands,
+///     never in memory, because the collection can grow large; like
+///     <see cref="DnsQueryLogMongoRepository" />, it creates its own indexes.
 /// </summary>
 public class WebhookDeliveryAttemptMongoRepository
     : MongoRepositoryBase<WebhookDeliveryAttemptEntity>,
         IWebhookDeliveryAttemptRepository
 {
     /// <summary>
-    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so that only the very
-    ///     first repository instance constructed in this process actually issues the
-    ///     index-creation commands, mirroring <see cref="DnsQueryLogMongoRepository" />'s own
-    ///     identical guard.
+    ///     This field guards <see cref="EnsureIndexesFireAndForget" /> so only the first instance in
+    ///     the process creates the indexes.
     /// </summary>
     private static int _indexesEnsured;
 
     /// <summary>
-    ///     This constructor wires this repository onto its own collection and change tracker,
-    ///     then kicks off a best-effort, once-per-process attempt to ensure its own collection
-    ///     indexes exist.
+    ///     This constructor sets up the repository and, once per process, starts a best-effort
+    ///     creation of its indexes.
     /// </summary>
     /// <param name="context">The context to read collections from.</param>
     /// <param name="changeTracker">The change tracker to stage writes onto.</param>
@@ -71,10 +67,8 @@ public class WebhookDeliveryAttemptMongoRepository
     }
 
     /// <summary>
-    ///     This method kicks off collection index creation exactly once per process, swallowing
-    ///     any failure -- a missing index degrades this repository's own query performance, it
-    ///     never makes a query incorrect, mirroring <see cref="DnsQueryLogMongoRepository" />'s
-    ///     own identical reasoning.
+    ///     This method starts index creation once per process and ignores any failure, since a
+    ///     missing index only slows queries.
     /// </summary>
     private void EnsureIndexesFireAndForget()
     {
@@ -107,7 +101,7 @@ public class WebhookDeliveryAttemptMongoRepository
             }
             catch
             {
-                // Best effort only -- see this method's own doc comment.
+                // Best effort only; see the method summary.
             }
         });
     }

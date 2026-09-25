@@ -7,10 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Data.MongoDb.Repository;
 
 /// <summary>
-///     This class implements <see cref="IRepository{TEntity}" /> once, generically, against a
-///     single MongoDB collection. Every concrete Mongo repository in this project inherits from
-///     this class rather than re-implementing the same handful of CRUD operations against its
-///     own <see cref="IMongoCollection{TEntity}" />.
+///     This class implements <see cref="IRepository{TEntity}" /> once, generically, against one
+///     MongoDB collection. Every Mongo repository inherits from it instead of repeating the CRUD
+///     operations. Writes are staged on <see cref="MongoChangeTracker" /> and run when the unit of
+///     work saves.
 /// </summary>
 /// <param name="collection">The collection this repository stores documents in.</param>
 /// <param name="changeTracker">The change tracker to stage writes onto.</param>
@@ -22,9 +22,8 @@ public abstract class MongoRepositoryBase<TEntity>(
     where TEntity : EntityBase
 {
     /// <summary>
-    ///     This property contains the collection every method below operates against. It is
-    ///     exposed as <see langword="protected" /> rather than kept private so that a derived
-    ///     repository can build additional MongoDB-specific queries against it directly.
+    ///     This property contains the collection the repository operates against. It is
+    ///     <see langword="protected" /> so a derived repository can build its own queries on it.
     /// </summary>
     protected IMongoCollection<TEntity> Collection { get; } = collection;
 
@@ -48,11 +47,9 @@ public abstract class MongoRepositoryBase<TEntity>(
     /// <inheritdoc />
     public virtual Task AddAsync(TEntity entity, CancellationToken stoppingToken = default)
     {
-        // Stage the insert rather than performing it immediately, so it is only written once
-        // IUnitOfWork.SaveChangesAsync is called.
+        // Staged, so it is written only when IUnitOfWork.SaveChangesAsync runs.
         ChangeTracker.Stage(token => Collection.InsertOneAsync(entity, cancellationToken: token));
 
-        // We're done; there is nothing to await yet, since the insert has only been staged.
         return Task.CompletedTask;
     }
 

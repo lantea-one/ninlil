@@ -55,20 +55,16 @@ public class DnsFilterListEntryMongoRepository(
         CancellationToken stoppingToken = default
     )
     {
-        // Stage the whole replace -- delete every existing entry for this list, then insert the
-        // freshly supplied set -- as a single unit of work, so it runs atomically-in-order
-        // relative to every other write staged on the same change tracker.
+        // Stage the delete and the insert as one operation, so they run together and in order
+        // with the other staged writes. A refresh swaps the whole set rather than diffing it.
         ChangeTracker.Stage(async token =>
         {
-            // A subscribed list's refresh is a wholesale swap-in, not an entry-by-entry diff.
             await Collection.DeleteManyAsync(entry => entry.ListId == listId, token);
 
-            // There is nothing further to insert if the refreshed list came back empty.
             if (replacements.Count == 0)
                 return;
 
-            // Stamp every freshly added entry with the same creation timestamp, since they are
-            // all conceptually part of one refresh operation.
+            // Every new entry gets the same creation time, since they come from one refresh.
             DateTimeOffset now = DateTimeOffset.UtcNow;
             List<DnsFilterListEntryEntity> entries =
             [
@@ -85,7 +81,6 @@ public class DnsFilterListEntryMongoRepository(
             await Collection.InsertManyAsync(entries, cancellationToken: token);
         });
 
-        // We're done; there is nothing to await yet, since the work has only been staged.
         return Task.CompletedTask;
     }
 }
