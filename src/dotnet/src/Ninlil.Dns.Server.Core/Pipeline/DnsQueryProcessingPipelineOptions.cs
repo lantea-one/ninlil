@@ -3,8 +3,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Pipeline</c> section of the application's
-///     configuration and controls how <see cref="DnsQueryProcessingPipeline" /> sizes its worker
-///     pool and inbound queue.
+///     configuration and controls <see cref="DnsQueryProcessingPipeline" />: its worker pool,
+///     queue size and UDP response limits. The DNS pipeline settings endpoint edits it. The UDP
+///     limits apply at once; the worker count and queue size apply when the pipeline restarts.
 /// </summary>
 public class DnsQueryProcessingPipelineOptions
 {
@@ -14,51 +15,40 @@ public class DnsQueryProcessingPipelineOptions
     public const string SectionName = "DnsServer:Pipeline";
 
     /// <summary>
-    ///     This property contains how many worker tasks concurrently decode, resolve, and encode
-    ///     queries pulled from the inbound queue. Defaults to one per available processor, since
-    ///     query processing is a mix of CPU-bound work (wire parsing) and short-lived I/O (a
-    ///     database lookup, an upstream query), which scales well with the number of cores.
+    ///     This property contains how many worker tasks process queries from the queue at once.
+    ///     The default is one per processor. A worker waits while its query is resolved
+    ///     (including upstream queries), so this also caps how many queries are in progress.
     /// </summary>
     public int WorkerCount { get; set; } = Environment.ProcessorCount;
 
     /// <summary>
-    ///     This property contains how many not-yet-processed queries may be queued at once.
-    ///     Every transport's own receive loop enqueues into this same queue rather than
-    ///     processing a query itself, so that a slow query never blocks that transport from
-    ///     accepting the next one off the wire.
+    ///     This property contains how many unprocessed queries may wait in the queue. When it is
+    ///     full, transports wait to enqueue.
     /// </summary>
     public int ChannelCapacity { get; set; } = 4096;
 
     /// <summary>
-    ///     This property contains the largest response, in bytes, this pipeline will ever send
-    ///     over UDP, regardless of what a requestor's own EDNS(0) payload size claims -- a safety
-    ///     ceiling against a client declaring an unrealistically large buffer and risking IP
-    ///     fragmentation. 1232 octets matches <see cref="Resolution.DnsQueryDispatcher.DefaultUdpPayloadSizeOctets" />,
-    ///     the value the DNS operator community converged on in 2020.
+    ///     This property contains the largest response, in octets, sent over UDP, whatever EDNS
+    ///     payload size the client advertises. It prevents IP fragmentation from clients that
+    ///     claim a very large buffer. The default, 1232, matches
+    ///     <see cref="Resolution.DnsQueryDispatcher.DefaultUdpPayloadSizeOctets" />. It is also the
+    ///     payload size advertised in OPT records the pipeline adds.
     /// </summary>
     public int MaxUdpPayloadSizeOctets { get; set; } = 1232;
 
     /// <summary>
-    ///     This property contains the largest multiple of a UDP query's own raw wire size that
-    ///     its response is ever allowed to be, an amplification-factor cap independent of (and
-    ///     typically tighter than) <see cref="MaxUdpPayloadSizeOctets" />'s flat ceiling -- a
-    ///     minimal, no-EDNS spoofed query is the classic reflection/amplification attack shape,
-    ///     and capping the *ratio* bounds how much bigger than the query a response can be sent
-    ///     to a claimed (possibly forged) source address, regardless of what payload size an
-    ///     EDNS-aware requestor claims to support. 20 is a conservative default: a typical
-    ///     EDNS-aware query (roughly 40-70 bytes once its own OPT pseudo-record is included)
-    ///     still comfortably fits a signed answer under this ratio, while a bare, no-EDNS query
-    ///     is bounded by <see cref="MinUdpAmplificationFloorSizeOctets" /> instead.
+    ///     This property contains the largest multiple of a UDP query's size that its response may
+    ///     be. It limits reflection attacks, where a small spoofed query makes this server send a
+    ///     large response to a forged address. The cap is never below
+    ///     <see cref="MinUdpAmplificationFloorSizeOctets" />. With the default of 20, a typical
+    ///     40 to 70 octet EDNS query still allows an 800 to 1400 octet answer.
     /// </summary>
     public double MaxUdpAmplificationFactor { get; set; } = 20;
 
     /// <summary>
-    ///     This property contains the smallest amplification-factor ceiling
-    ///     <see cref="MaxUdpAmplificationFactor" /> is ever allowed to compute down to, so a tiny
-    ///     (as little as 12-byte, header-only) query is not clamped to an unusably small
-    ///     response. 512 octets matches RFC 1035's own original, pre-EDNS UDP message size, the
-    ///     size every DNS implementation has always been required to support without any
-    ///     negotiation at all.
+    ///     This property contains the lowest value the <see cref="MaxUdpAmplificationFactor" />
+    ///     cap can drop to, so a very small query is not limited to an unusably small response.
+    ///     The default, 512 octets, is the RFC 1035 UDP limit every client supports.
     /// </summary>
     public int MinUdpAmplificationFloorSizeOctets { get; set; } = 512;
 }

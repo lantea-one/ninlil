@@ -14,10 +14,10 @@ using Ninlil.Dns.Server.Core.Tests.Fakes;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class exercises <see cref="DnsQueryProcessingPipeline" />'s rate limiting, DNS
-///     Cookies, and UDP amplification cap -- the same "construct the
-///     real pipeline against a minimal fake resolver" shape every transport's own permanent test
-///     suite already uses, without needing a real socket at all.
+///     This class tests the rate limiting, DNS Cookie handling, UDP amplification cap and
+///     restart safety of <see cref="DnsQueryProcessingPipeline" />. It starts the pipeline with a
+///     fake resolver and rate limiter, enqueues raw messages and captures the reply bytes; no
+///     socket is involved.
 /// </summary>
 public sealed class DnsQueryProcessingPipelineHardeningTests
 {
@@ -161,9 +161,7 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
             )
         );
 
-        // Nothing should ever arrive; a short grace delay confirms this rather than proving it,
-        // matching the same "give it a moment" convention this pipeline's other permanent tests
-        // already use against a real background worker.
+        // No reply should arrive. A short wait makes that likely, though it cannot prove it.
         await Task.Delay(200);
 
         Assert.False(responseReceived.Task.IsCompleted);
@@ -230,9 +228,7 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
         Assert.Equal(query.Id, response.Id);
         Assert.True(response.IsResponse);
         Assert.True(response.IsTruncated);
-        // The real resolver is never reached at all -- a subnet-throttled query is answered
-        // straight from the not-yet-decoded stage, exactly like a per-IP denial or a filter
-        // decision is.
+        // The resolver is never reached: a subnet-throttled query is answered before decoding.
         Assert.Equal(0, resolver.CallCount);
 
         await pipeline.StopAsync(CancellationToken.None);
@@ -315,8 +311,8 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
     [Fact]
     public async Task AmplificationCapTruncatesAHugeAnswerToATinyNoEdnsQuery()
     {
-        // 200 A records comfortably exceeds both the flat 512-byte no-EDNS ceiling and the
-        // amplification-ratio ceiling for a ~29-byte bare query.
+        // 200 A records exceed both the 512-byte no-EDNS limit and the amplification cap for a
+        // query of about 29 bytes.
         AlwaysAnswerResolver resolver = new(context => BuildAnswerWithManyRecords(context, 200));
         (DnsQueryProcessingPipeline pipeline, TaskCompletionSource<byte[]> responseReceived) =
             await StartPipelineAsync(resolver);
@@ -344,8 +340,7 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
     [Fact]
     public async Task AmplificationCapAllowsALargerResponseForALargerEdnsQuery()
     {
-        // A single A record's own answer easily fits even the tightened, EDNS-aware ceiling;
-        // this asserts the cap does not over-truncate a normal, moderately sized answer.
+        // One A record fits under the cap, so a normal answer is not truncated.
         AlwaysAnswerResolver resolver = new(context => BuildAnswerWithManyRecords(context, 1));
         (DnsQueryProcessingPipeline pipeline, TaskCompletionSource<byte[]> responseReceived) =
             await StartPipelineAsync(resolver);
@@ -370,16 +365,12 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
     }
 
     /// <summary>
-    ///     This test is the regression check for a real restart-safety bug: <c>StopAsync</c> used
-    ///     to call <c>Complete()</c> on the very same <see cref="System.Threading.Channels.Channel{T}" />
-    ///     instance a field initializer built once, at construction. A completed channel writer
-    ///     can never be reopened, so a second <c>StartAsync</c> call on the same instance -- the
-    ///     exact thing the <c>/api/services</c> restart action does -- would leave every
-    ///     subsequent <see cref="DnsQueryProcessingPipeline.EnqueueAsync" /> call throwing
-    ///     <see cref="System.Threading.Channels.ChannelClosedException" /> and every restarted
-    ///     worker exiting immediately with nothing to read, all while every transport still
-    ///     reported itself running. The fix recreates the channel (and the worker task list) fresh
-    ///     inside every <c>StartAsync</c> call instead.
+    ///     This test checks that the pipeline still processes queries after a stop and a second
+    ///     start on the same instance, as the <c>/api/services</c> restart does.
+    ///     <c>StopAsync</c> completes the channel writer, which cannot reopen, so
+    ///     <c>StartAsync</c> must build a new channel; otherwise every later
+    ///     <see cref="DnsQueryProcessingPipeline.EnqueueAsync" /> would throw
+    ///     <see cref="System.Threading.Channels.ChannelClosedException" />.
     /// </summary>
     [Fact]
     public async Task PipelineAnswersAQueryAgainAfterBeingStoppedAndRestartedOnTheSameInstance()
@@ -405,9 +396,7 @@ public sealed class DnsQueryProcessingPipelineHardeningTests
             DnsMessageReader.Read(firstResponseBytes, out _).ResponseCode
         );
 
-        // Stop, then start again on the very same instance -- exactly what a future
-        // ServicesController's own restart action does mid-process, and exactly the sequence
-        // that used to permanently break every later EnqueueAsync call.
+        // Stop, then start again on the same instance, as a service restart does.
         await pipeline.StopAsync(CancellationToken.None);
         await pipeline.StartAsync(CancellationToken.None);
 

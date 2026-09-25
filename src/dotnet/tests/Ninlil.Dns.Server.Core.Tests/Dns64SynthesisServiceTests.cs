@@ -9,10 +9,10 @@ using Ninlil.Dns.Server.Core.Tests.Fakes;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class tests <see cref="Dns64SynthesisService" />: RFC 6052 §2.2's own prefix-embedding
-///     algorithm across multiple legal prefix lengths, the disabled/enabled gate, and that a
-///     synthesized answer's own shape (owner name, class, TTL, CNAME passthrough) matches the real
-///     A answer it was derived from.
+///     This class tests <see cref="Dns64SynthesisService" /> with a fixed options monitor: the
+///     RFC 6052 §2.2 embedding for several prefix lengths, prefix parsing, the enable switch, and
+///     that a synthesized answer keeps the owner name, class, TTL and CNAME records of the A
+///     answer it came from.
 /// </summary>
 public class Dns64SynthesisServiceTests
 {
@@ -34,17 +34,13 @@ public class Dns64SynthesisServiceTests
         );
 
     [Theory]
-    // RFC 6052 §2.2's own worked example: the Well-Known Prefix (/96) leaves the IPv4 address's
-    // four octets contiguous at the very end, with nothing else to compute.
+    // The Well-Known Prefix (/96): the IPv4 address fills the last four octets.
     [InlineData("64:ff9b::/96", "192.0.2.1", "64:ff9b::c000:201")]
-    // A /32 Network-Specific Prefix: the IPv4 address occupies bits 32-63 (right after the
-    // prefix), the reserved "u" octet sits at bits 64-71, and the remaining 56 bits are the
-    // (here, all-zero) suffix.
+    // A /32 prefix: the IPv4 address takes bits 32 to 63, the "u" octet bits 64 to 71, and the
+    // remaining 56 bits are the zero suffix.
     [InlineData("2001:db8::/32", "192.0.2.1", "2001:db8:c000:201::")]
-    // A /64 Network-Specific Prefix: the reserved "u" octet sits immediately after the prefix
-    // (bits 64-71), and the IPv4 address's four octets follow it contiguously (bits 72-103) --
-    // confirmed against RFC 6052 §2.2's own text ("the IPv4 address is encoded in positions 72
-    // to 103"), not assumed from the table alone.
+    // A /64 prefix: the "u" octet takes bits 64 to 71 and the IPv4 address bits 72 to 103, as
+    // RFC 6052 §2.2 states.
     [InlineData("2001:db8:1:2::/64", "192.0.2.1", "2001:db8:1:2:c0:2:100:0")]
     public void EmbedIPv4AddressMatchesRfc6052Section22(
         string prefixCidr,
@@ -76,12 +72,11 @@ public class Dns64SynthesisServiceTests
     [InlineData("2001:db8::/48", true)]
     [InlineData("2001:db8::/56", true)]
     [InlineData("2001:db8::/64", true)]
-    // RFC 6052 §2.2 defines exactly six legal prefix lengths -- anything else must be rejected.
+    // RFC 6052 §2.2 defines six prefix lengths; anything else is rejected.
     [InlineData("2001:db8::/48/extra", false)]
     [InlineData("2001:db8::/33", false)]
     [InlineData("2001:db8::/128", false)]
-    // An IPv4 address (or anything else that isn't a well-formed IPv6 CIDR) is never a legal
-    // DNS64 prefix.
+    // Anything that is not an IPv6 CIDR, including an IPv4 one, is rejected.
     [InlineData("192.0.2.0/24", false)]
     [InlineData("not-a-prefix", false)]
     [InlineData("", false)]
@@ -96,9 +91,8 @@ public class Dns64SynthesisServiceTests
     [Fact]
     public void TryParsePrefixMasksHostBitsBeyondThePrefixLength()
     {
-        // A non-network address (host bits already set) must still be masked down to a real
-        // network address -- a misconfigured operator-supplied value should never leak stray
-        // bits into every synthesized address's own suffix.
+        // Bits after the prefix length are cleared, so a sloppy configured value cannot leak
+        // stray bits into synthesized addresses.
         Assert.True(
             Dns64SynthesisService.TryParsePrefix(
                 "2001:db8::1234/32",
@@ -134,7 +128,7 @@ public class Dns64SynthesisServiceTests
     [Fact]
     public void SynthesizeAaaaRecordsReturnsNothingWhenThePrefixIsMisconfigured()
     {
-        // Fails safe -- no synthesized answer -- rather than throwing mid-query.
+        // An invalid prefix gives no synthesized answer rather than an exception.
         Dns64SynthesisService service = CreateService(
             new Dns64Options { Enable = true, SynthesisPrefix = "not-a-prefix" }
         );
@@ -157,8 +151,7 @@ public class Dns64SynthesisServiceTests
         Assert.Equal(DnsResourceRecordTypeEnum.Aaaa, record.Type);
         Assert.Equal(Name, record.Name);
         Assert.Equal(DnsClassEnum.Internet, record.Class);
-        // RFC 6147 §6.1: a synthesized RRset's own TTL should be no greater than the real A
-        // record's own TTL.
+        // RFC 6147 §5.1.7: the synthesized TTL should not exceed the A record's TTL.
         Assert.Equal((uint)120, record.TimeToLive);
 
         Assert.True(

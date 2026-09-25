@@ -2,15 +2,15 @@
 namespace Ninlil.Dns.Server.Core.Caching;
 
 /// <summary>
-///     This interface is the one thing <see cref="DnsCacheStore{TKey, TEntry}" /> needs to know
-///     about whatever it holds: when the entry stops being fresh. Everything else about an entry
-///     (an RRset, a whole forwarded response, a negative answer) is the owning cache's business.
+///     This interface is what <see cref="DnsCacheStore{TKey, TEntry}" /> needs to know about an
+///     entry: when it stops being fresh. The rest of the entry (an RRset, a forwarded response, a
+///     negative answer) belongs to the cache that owns it.
 /// </summary>
 public interface IDnsCacheEntry
 {
     /// <summary>
-    ///     This property contains the point this entry stops being valid to serve as a fresh
-    ///     answer. It may still be served stale after this, if the owning cache allows it.
+    ///     This property contains when this entry stops being fresh. The owning cache may still
+    ///     serve it stale after this.
     /// </summary>
     DateTimeOffset ExpiresAtUtc { get; }
 }

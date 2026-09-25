@@ -2,11 +2,11 @@
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This interface is implemented once per event type a piece of code wants to react to --
-///     for example, an <c>IDnsServerEventSubscriber&lt;DnsQueryAnsweredEvent&gt;</c> that writes
-///     query metrics to the database. Any number of subscribers can be registered for the same
-///     event type; <see cref="DnsServerEventDispatcher" /> invokes every one of them whenever a
-///     matching event is published.
+///     This interface is implemented once per event type a class reacts to, for example an
+///     <c>IDnsServerEventSubscriber&lt;DnsQueryAnsweredEvent&gt;</c> that writes the query log.
+///     Any number of subscribers can be registered for one event type;
+///     <see cref="DnsServerEventDispatcher" /> calls them one after another, in a new DI scope
+///     per event.
 /// </summary>
 /// <typeparam name="TEvent">The type of event this subscriber reacts to.</typeparam>
 public interface IDnsServerEventSubscriber<in TEvent>

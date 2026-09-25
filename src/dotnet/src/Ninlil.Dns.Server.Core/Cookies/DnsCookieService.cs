@@ -8,27 +8,27 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Cookies;
 
 /// <summary>
-///     This class implements RFC 7873 DNS Cookies: a lightweight, stateless-to-the-server
-///     anti-spoofing mechanism, generating and validating a server cookie derived from a
-///     periodically rotated secret plus each client's own source address and client cookie --
-///     no per-client state is ever stored, unlike <see cref="RateLimiting.IDnsRateLimiter" />'s
-///     own token buckets. Registered unconditionally by <c>Server.Core</c>'s own DI extension
-///     (this class lives in <c>Server.Core</c> itself, not a separate project, since it needs no
-///     storage of its own -- the same reasoning already applied to
-///     <see cref="Certificates.TlsCertificateLoader" />), gated at runtime by
-///     <see cref="DnsCookieOptions.Enable" />.
+///     This class implements RFC 7873 DNS Cookies, a lightweight defence against spoofed source
+///     addresses. The server cookie is derived from a rotating secret, the client's source
+///     address and its client cookie, so no per-client state is kept.
+///     <see cref="Pipeline.DnsQueryProcessingPipeline" /> calls <see cref="Evaluate" /> for every
+///     decoded query. It is always registered by <c>AddNinlilDnsServerCore</c> and switched by
+///     <see cref="DnsCookieOptions.Enable" />. The secret lives in memory only, so every cookie
+///     changes on restart and each cluster node issues its own.
 /// </summary>
-/// <param name="options">This service's own configured enablement, requirement, and rotation interval.</param>
+/// <param name="options">
+///     The enable, require and rotation settings. Read through <see cref="IOptions{TOptions}" />,
+///     so a change applies after a restart.
+/// </param>
 public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisposable
 {
-    /// <summary>This constant contains RFC 7873 §4's fixed client-cookie length, in bytes.</summary>
+    /// <summary>This constant contains the fixed client cookie length from RFC 7873 §4, in bytes.</summary>
     private const int ClientCookieLength = 8;
 
     /// <summary>
-    ///     This constant contains the server-cookie length this service itself generates, in
-    ///     bytes. RFC 7873 §4 allows 8-32; 8 is the minimum, chosen since nothing about this
-    ///     service's own derivation needs more entropy than that to be an effective anti-spoofing
-    ///     signal.
+    ///     This constant contains the length of the server cookies this service generates, in
+    ///     bytes. RFC 7873 §4 allows 8 to 32; 8 bytes of HMAC output is plenty against an off-path
+    ///     attacker guessing it.
     /// </summary>
     private const int ServerCookieLength = 8;
 
@@ -40,14 +40,12 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     private Timer _timer;
 
     /// <summary>
-    ///     This method evaluates a single request against this server's own cookie policy,
-    ///     returning what <see cref="Pipeline.DnsQueryProcessingPipeline" /> should do about it.
-    ///     Starts this service's own secret-rotation timer on first use, rather than in the
-    ///     constructor, so a test that never calls this method never pays for a live
-    ///     <see cref="Timer" /> either.
+    ///     This method checks a request against the cookie policy and returns what
+    ///     <see cref="Pipeline.DnsQueryProcessingPipeline" /> should do with it. The first call
+    ///     starts the secret rotation timer, so a test that never calls it runs no timer.
     /// </summary>
     /// <param name="request">The decoded request.</param>
-    /// <param name="remoteAddress">The querying client's own source address.</param>
+    /// <param name="remoteAddress">The client's source address.</param>
     public DnsCookieOutcome Evaluate(DnsMessage request, IPAddress remoteAddress)
     {
         EnsureTimerStarted();
@@ -61,14 +59,10 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
 
         DnsCookieVerificationResultEnum verification = Verify(cookieOption, remoteAddress);
 
-        // RFC 7873 §5.2: when cookies are required, only a Valid server cookie is accepted
-        // outright. A cookie this server can still work with -- the client sent only its own
-        // 8-byte cookie, or sent a full cookie this server's own secret no longer recognizes --
-        // is answered BADCOOKIE together with a freshly derived server cookie, so a legitimate
-        // client can retry once with a cookie this server will actually accept. A cookie with no
-        // recoverable client cookie at all (absent, or the wrong length to safely echo back) is
-        // dropped instead: there is nothing valid to build a BADCOOKIE response's own cookie
-        // option around.
+        // RFC 7873 §5.2: when cookies are required, only a Valid server cookie is accepted. A
+        // client-only cookie or an unrecognized server cookie gets BADCOOKIE with a fresh server
+        // cookie, so a real client can retry. With no usable client cookie (absent or the wrong
+        // length) there is nothing to echo, so the query is answered REFUSED.
         if (options.Value.Require)
         {
             switch (verification)
@@ -87,12 +81,9 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
             }
         }
 
-        // Cookies are not required: a request with no cookie at all, or one too malformed to
-        // safely echo a client cookie back from, is answered normally with no cookie option of
-        // its own. Every other outcome -- including an Invalid one, since this server is not
-        // enforcing cookies -- still gets a fresh server cookie attached to its response, so a
-        // client that does support cookies can start using them without this server ever having
-        // rejected a query outright.
+        // Cookies are not required: a request with no cookie, or a malformed one, is answered
+        // without a cookie option. Every other request, including an Invalid one, is answered
+        // normally with a fresh server cookie attached.
         if (
             verification
             is DnsCookieVerificationResultEnum.NotPresent
@@ -108,11 +99,10 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     }
 
     /// <summary>
-    ///     This method checks a single Cookie option against this server's own current and
-    ///     immediately preceding secret.
+    ///     This method checks a Cookie option against the current and previous secrets.
     /// </summary>
-    /// <param name="cookieOption">The request's own Cookie option, or <see langword="null" />.</param>
-    /// <param name="remoteAddress">The querying client's own source address.</param>
+    /// <param name="cookieOption">The request's Cookie option, or <see langword="null" />.</param>
+    /// <param name="remoteAddress">The client's source address.</param>
     public DnsCookieVerificationResultEnum Verify(
         DnsEdnsOption cookieOption,
         IPAddress remoteAddress
@@ -123,10 +113,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
 
         byte[] data = cookieOption.Data;
 
-        // RFC 7873 §4: a Cookie option is either exactly the 8-byte client cookie alone, or the
-        // 8-byte client cookie followed by an 8-to-32-byte server cookie -- any other total
-        // length is not a shape this server's own wire format ever produced or can meaningfully
-        // interpret.
+        // RFC 7873 §4: a Cookie option is the 8-byte client cookie alone, or followed by an
+        // 8 to 32 byte server cookie. Any other length is malformed.
         if (
             data.Length != ClientCookieLength
             && (data.Length < ClientCookieLength + 8 || data.Length > ClientCookieLength + 32)
@@ -139,9 +127,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
         byte[] clientCookie = data[..ClientCookieLength];
         byte[] serverCookie = data[ClientCookieLength..];
 
-        // Re-derive what a server cookie for this client cookie/address pair should look like
-        // under the current secret, and compare. A match confirms this server (not a spoofed
-        // source address) actually issued the client's cookie.
+        // A match shows this server issued the cookie to this address, so the source address
+        // was not spoofed.
         if (
             ComputeServerCookie(clientCookie, remoteAddress, Volatile.Read(ref _currentSecret))
                 .AsSpan()
@@ -149,10 +136,7 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
         )
             return DnsCookieVerificationResultEnum.Valid;
 
-        // A mismatch against the current secret does not necessarily mean the cookie is invalid
-        // -- it may simply predate the most recent rotation. Re-check against the immediately
-        // preceding secret before giving up, so a cookie issued moments before a scheduled
-        // rotation does not spuriously fail verification.
+        // The cookie may predate the last rotation, so try the previous secret too.
         byte[] previousSecret = Volatile.Read(ref _previousSecret);
 
         if (
@@ -167,8 +151,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     }
 
     /// <summary>
-    ///     This method builds the Cookie option a response should carry: the client's own
-    ///     8-byte cookie, echoed back unchanged, followed by a freshly derived server cookie.
+    ///     This method builds the Cookie option for a response: the client's 8-byte cookie
+    ///     unchanged, followed by a server cookie derived with the current secret.
     /// </summary>
     public DnsEdnsOption BuildResponseOption(byte[] clientCookie, IPAddress remoteAddress)
     {
@@ -185,9 +169,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     }
 
     /// <summary>
-    ///     This method replaces this service's own current secret with a freshly generated one,
-    ///     keeping the immediately preceding secret around so a cookie issued just before this
-    ///     rotation does not suddenly stop validating.
+    ///     This method replaces the current secret with a new random one and keeps the old one as
+    ///     the previous secret, so cookies issued just before the rotation still validate.
     /// </summary>
     public void RotateSecret()
     {
@@ -197,8 +180,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     }
 
     /// <summary>
-    ///     This method starts this service's own secret-rotation timer the first time it is
-    ///     actually needed.
+    ///     This method starts the secret rotation timer on first use. The interval is read once,
+    ///     here.
     /// </summary>
     private void EnsureTimerStarted()
     {
@@ -216,11 +199,11 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     }
 
     /// <summary>
-    ///     This method derives a server cookie: an HMAC-SHA256 of the client's own source
-    ///     address and client cookie, keyed by <paramref name="secret" /> and truncated to
-    ///     <see cref="ServerCookieLength" /> bytes. RFC 7873 does not mandate a specific
-    ///     derivation function, only that it be a pseudorandom function of the client's own
-    ///     identity and a secret only this server knows.
+    ///     This method derives a server cookie: HMAC-SHA256 over the client cookie and source
+    ///     address, keyed by <paramref name="secret" /> and truncated to
+    ///     <see cref="ServerCookieLength" /> bytes. RFC 7873 only asks for a pseudorandom
+    ///     function of the client and a server secret; this is not the RFC 9018 interoperable
+    ///     format, so cookies are not shared across servers.
     /// </summary>
     private static byte[] ComputeServerCookie(
         byte[] clientCookie,

@@ -9,8 +9,8 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Core.Tests.Transport;
 
 /// <summary>
-///     This class binds real sockets through <see cref="ListenSocketSet" /> and checks, from the
-///     client side, which addresses actually receive traffic -- the only way to prove a listener
+///     This class binds real sockets through <see cref="ListenSocketSet" /> on free loopback ports
+///     and checks from the client side which addresses receive traffic, which shows a listener
 ///     bound where it was told to and nowhere else.
 /// </summary>
 public class ListenSocketSetTests

@@ -6,12 +6,10 @@ namespace Ninlil.Dns.Server.Core.Forwarding;
 
 /// <summary>
 ///     This interface is implemented once per <see cref="UpstreamForwarderProtocolEnum" /> value
-///     -- a plain UDP/TCP client, a DNS-over-TLS client, a DNS-over-HTTPS client, a DNS-over-QUIC
-///     client, and a DNSCrypt client -- each knowing how to forward a single query against a
-///     <see cref="UpstreamForwarderDefinition" /> matching its own <see cref="Protocol" />.
-///     Registered as <see cref="IEnumerable{T}" /> in dependency injection, the same
-///     multi-strategy shape <c>ICloudDnsProvider</c> already establishes for its own cloud
-///     connectors.
+///     (plain UDP/TCP, DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, DNSCrypt) in
+///     <c>Ninlil.Dns.Server.Forwarding</c>. Each sends a query to a
+///     <see cref="UpstreamForwarderDefinition" /> of its <see cref="Protocol" />. All are
+///     registered together, and the forwarder resolver picks one by protocol.
 /// </summary>
 public interface IUpstreamForwarderClient
 {
@@ -24,21 +22,19 @@ public interface IUpstreamForwarderClient
     ///     This method forwards a single query to an upstream forwarder and returns its response.
     /// </summary>
     /// <param name="definition">
-    ///     The forwarder to query -- its own <see cref="UpstreamForwarderDefinition.Protocol" />
-    ///     must equal this client's own <see cref="Protocol" />.
+    ///     The forwarder to query. Its <see cref="UpstreamForwarderDefinition.Protocol" /> must
+    ///     match this client's <see cref="Protocol" />.
     /// </param>
-    /// <param name="query">The query to forward, exactly as received from the original client.</param>
+    /// <param name="query">The query to forward, as received from the client (possibly with ECS added).</param>
     /// <param name="stoppingToken">
-    ///     The token used to observe cancellation of the operation -- a caller enforcing a
-    ///     per-forwarder timeout links this to a timeout-bound token rather than this method
-    ///     accepting a timeout parameter directly.
+    ///     The token used to observe cancellation. A caller that wants a per-forwarder timeout
+    ///     links it to a timeout token; there is no timeout parameter.
     /// </param>
-    /// <returns>The forwarder's own response.</returns>
+    /// <returns>The forwarder's response.</returns>
     /// <exception cref="OperationCanceledException">
-    ///     Thrown when <paramref name="stoppingToken" /> is cancelled before a response arrives
-    ///     -- including a caller-enforced timeout -- so a health-checking/failover caller can
-    ///     treat every failure mode (network error, malformed response, timeout) uniformly as
-    ///     "this forwarder did not answer," without needing to distinguish exception types.
+    ///     Thrown when <paramref name="stoppingToken" /> is cancelled before a response arrives,
+    ///     including by a caller's timeout. Network and parse errors surface as other exceptions;
+    ///     failover callers treat any exception as "this forwarder did not answer".
     /// </exception>
     Task<DnsMessage> ForwardAsync(
         UpstreamForwarderDefinition definition,

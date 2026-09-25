@@ -7,6 +7,12 @@ using Ninlil.Dns.Server.Core.Cookies;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Core.Tests;
 
+/// <summary>
+///     This class tests <see cref="DnsCookieService" /> (RFC 7873) directly with fixed options:
+///     what <see cref="DnsCookieService.Evaluate" /> decides with cookies disabled, optional and
+///     required, and what <see cref="DnsCookieService.Verify" /> accepts across source addresses,
+///     tampering, bad lengths and secret rotations.
+/// </summary>
 public class DnsCookieServiceTests
 {
     private static readonly IPAddress ClientAddress = IPAddress.Parse("203.0.113.55");

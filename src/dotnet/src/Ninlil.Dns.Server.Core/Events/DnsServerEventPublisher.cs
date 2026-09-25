@@ -8,24 +8,20 @@ using Ninlil.Dns.Server.Core.Events.Broker;
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This class implements <see cref="IDnsServerEventPublisher" /> by writing to an in-memory
-///     channel that <see cref="DnsServerEventDispatcher" /> drains in the background. It is
-///     registered in dependency injection under both this concrete type and the
-///     <see cref="IDnsServerEventPublisher" /> interface, pointing at the same singleton
-///     instance, so that most code depends only on the interface while
-///     <see cref="DnsServerEventDispatcher" /> can still reach the channel this class owns.
+///     This class implements <see cref="IDnsServerEventPublisher" /> by writing to a bounded
+///     in-memory channel that <see cref="DnsServerEventDispatcher" /> drains. One singleton is
+///     registered under this type and the interface, so the dispatcher can reach the channel
+///     while other code uses the interface.
 ///     <para>
-///         When <see cref="DnsServerEventPublisherOptions.Transport" /> names a real broker,
-///         <see cref="Publish" /> hands the event to
-///         <paramref name="brokerTransport" /> instead of writing directly to the local channel
-///         -- delivery to this instance's own subscribers then only happens once
-///         <see cref="Broker.BrokerEventConsumerService" /> receives that same event back from
-///         the broker and calls <see cref="EnqueueFromBroker" />, so
-///         <see cref="DnsServerEventDispatcher" /> itself needs no changes at all regardless of
-///         which transport is active.
+///         When <see cref="DnsServerEventPublisherOptions.Transport" /> names a broker,
+///         <see cref="Publish" /> sends the event to <paramref name="brokerTransport" /> instead.
+///         Local subscribers then only see it when
+///         <see cref="Broker.BrokerEventConsumerService" /> receives it back from the broker and
+///         calls <see cref="EnqueueFromBroker" />, so the dispatcher works the same for every
+///         transport.
 ///     </para>
 /// </summary>
-/// <param name="options">The queue capacity and configured transport.</param>
+/// <param name="options">The queue capacity and transport, read at startup.</param>
 /// <param name="brokerTransport">
 ///     The broker transport to publish through when configured, or <see langword="null" /> in
 ///     the default in-memory-only configuration.
@@ -38,8 +34,9 @@ public sealed class DnsServerEventPublisher(
 ) : IDnsServerEventPublisher
 {
     /// <summary>
-    ///     This property contains the channel published events wait in until
-    ///     <see cref="DnsServerEventDispatcher" /> delivers them.
+    ///     This field contains the channel events wait in until
+    ///     <see cref="DnsServerEventDispatcher" /> delivers them. When full, the oldest event is
+    ///     dropped.
     /// </summary>
     private readonly Channel<IDnsServerEvent> _channel = Channel.CreateBounded<IDnsServerEvent>(
         new BoundedChannelOptions(options.Value.Capacity)
@@ -64,18 +61,14 @@ public sealed class DnsServerEventPublisher(
             return;
         }
 
-        // Fire-and-forget, matching this method's own "deliberately synchronous and
-        // non-blocking" contract -- a broker round trip must never make the hot
-        // query-answering path wait on network I/O. A failed publish is logged, not retried;
-        // losing an occasional event under a broker outage is the same posture the in-memory
-        // channel already has under sustained overload.
+        // Not awaited, so the query path never waits on the broker. A failed publish is logged
+        // and not retried, and local subscribers never see that event.
         _ = PublishToBrokerAsync(domainEvent);
     }
 
     /// <summary>
-    ///     This method feeds a single event received back from the broker into the same local
-    ///     channel <see cref="DnsServerEventDispatcher" /> already drains -- called only by
-    ///     <see cref="Broker.BrokerEventConsumerService" />, never directly by application code.
+    ///     This method puts an event received from the broker into the local channel. Only
+    ///     <see cref="Broker.BrokerEventConsumerService" /> calls it.
     /// </summary>
     internal void EnqueueFromBroker(IDnsServerEvent domainEvent) =>
         _channel.Writer.TryWrite(domainEvent);

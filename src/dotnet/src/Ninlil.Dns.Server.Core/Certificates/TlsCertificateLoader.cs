@@ -7,12 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Ninlil.Dns.Server.Core.Certificates;
 
 /// <summary>
-///     This class resolves a <see cref="TlsCertificateOptions" /> configuration into an actual
-///     <see cref="X509Certificate2" /> a TLS-based transport can present to a connecting client
-///     -- loading an operator-provided one, or generating (and durably persisting) a self-signed
-///     one -- shared identically by every transport that needs a certificate at all, so DNS-over-
-///     TLS and DNS-over-HTTPS present the same server identity by default when neither is
-///     separately configured with its own certificate.
+///     This class turns a <see cref="TlsCertificateOptions" /> into the
+///     <see cref="X509Certificate2" /> a TLS transport presents: the configured PFX file, or a
+///     self-signed certificate generated once and saved. Every transport with the default
+///     settings shares the same state file, so they present the same self-signed certificate.
 /// </summary>
 public static class TlsCertificateLoader
 {
@@ -60,8 +58,9 @@ public static class TlsCertificateLoader
     }
 
     /// <summary>
-    ///     This method generates a new self-signed certificate, valid for two years, suitable
-    ///     for server (not client) TLS authentication.
+    ///     This method generates a new self-signed ECDSA P-256 certificate for server
+    ///     authentication, valid for two years. The first name is the subject CN; every name is a
+    ///     subject alternative name.
     /// </summary>
     private static X509Certificate2 GenerateSelfSigned(
         IReadOnlyList<string> subjectAlternativeNames
@@ -105,9 +104,8 @@ public static class TlsCertificateLoader
     }
 
     /// <summary>
-    ///     This method persists a certificate (including its private key) to disk, restricting
-    ///     its file permissions to this process's own owner wherever the underlying platform
-    ///     supports doing so.
+    ///     This method saves a certificate with its private key as an unencrypted PFX and, on
+    ///     non-Windows platforms, limits the file to its owner.
     /// </summary>
     private static void Persist(X509Certificate2 certificate, string path, ILogger logger)
     {
@@ -125,10 +123,8 @@ public static class TlsCertificateLoader
         }
         catch (IOException exception)
         {
-            // A failed write leaves the in-memory certificate (already returned to the caller)
-            // usable for the rest of this process's lifetime; only a *future* restart would
-            // regenerate a new one instead of reusing this one, which is an availability/UX
-            // concern, not a security or correctness one -- a warning, not fatal.
+            // The in-memory certificate still works for this run; the next start just
+            // generates a new one, so this is only a warning.
             logger.LogWarning(
                 exception,
                 "Failed to persist the self-signed TLS certificate to '{Path}'.",

@@ -13,9 +13,8 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///     <para>
 ///         With no addresses configured, this binds one IPv6 wildcard socket with
 ///         <see cref="SocketOptionName.IPv6Only" /> turned off, which accepts IPv6 and (through the
-///         operating system's IPv4-mapped addresses) IPv4 clients on every interface -- exactly
-///         what every listener did before listen addresses were configurable. A failure to bind it
-///         still throws, as it always has.
+///         operating system's IPv4-mapped addresses) IPv4 clients on every interface. A failure
+///         to bind it throws.
 ///     </para>
 ///     <para>
 ///         With addresses configured, this binds one socket per address. Every IPv6 socket is
@@ -23,8 +22,8 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         port. An address that cannot be bound (it isn't assigned to this host, another program
 ///         already owns that address and port, ...) is logged as an error naming the transport and
 ///         the address, recorded in <see cref="FailedAddresses" /> for the <c>/status</c> health
-///         check, and skipped -- every other address keeps serving and nothing is thrown, so one
-///         stale address in the configuration can't take the whole server down.
+///         check, and skipped. The other addresses keep serving and nothing is thrown, so one
+///         stale address cannot take the whole server down.
 ///     </para>
 /// </summary>
 public sealed class ListenSocketSet
@@ -39,8 +38,8 @@ public sealed class ListenSocketSet
     }
 
     /// <summary>
-    ///     This property contains an empty set, for a listener that has not bound anything yet --
-    ///     so a status read before the first bind sees "nothing failed" rather than a null.
+    ///     This property contains an empty set, for a listener that has not bound anything yet, so
+    ///     a status read before the first bind sees "nothing failed" rather than null.
     /// </summary>
     public static ListenSocketSet Empty { get; } = new([], []);
 
@@ -49,7 +48,7 @@ public sealed class ListenSocketSet
 
     /// <summary>
     ///     This property describes every configured address that is not being served, each as
-    ///     "address (reason)" -- an entry that isn't an IP address, or one that failed to bind.
+    ///     "address (reason)": an entry that is not an IP address, or one that failed to bind.
     /// </summary>
     public IReadOnlyList<string> FailedAddresses { get; }
 
@@ -138,7 +137,7 @@ public sealed class ListenSocketSet
     ///     This method resolves the endpoints a transport that can't use a plain socket
     ///     (DNS-over-QUIC, whose QUIC library creates its own sockets) should listen on, applying
     ///     the same rules and reporting as <see cref="Bind" />. With no addresses configured it
-    ///     returns the single IPv6 wildcard endpoint, as before.
+    ///     returns the single IPv6 wildcard endpoint.
     /// </summary>
     /// <param name="transportName">The transport's human-readable name, used in log messages.</param>
     /// <param name="configuredAddresses">The transport's <c>ListenAddresses</c> value.</param>
@@ -193,9 +192,9 @@ public sealed class ListenSocketSet
     }
 
     /// <summary>
-    ///     This method logs a problem that stops a listener from binding at all -- used by a
-    ///     transport (DNS-over-QUIC) that binds its endpoints itself, so it reports the same way
-    ///     <see cref="Bind" /> does.
+    ///     This method logs an error when a listener with configured addresses bound none of
+    ///     them. DNS-over-QUIC, which binds its endpoints itself, calls it too so it reports the
+    ///     same way <see cref="Bind" /> does.
     /// </summary>
     public static void ReportNothingBound(string transportName, int boundCount, ILogger logger)
     {
@@ -215,8 +214,8 @@ public sealed class ListenSocketSet
 
     /// <summary>
     ///     This method logs every configured entry that won't be served before anything is bound:
-    ///     one that isn't an IP address (an error), and one a same-family wildcard already covers
-    ///     (a warning -- its traffic is still answered, by the wildcard socket).
+    ///     one that is not an IP address (an error), and one a same-family wildcard already covers
+    ///     (a warning; the wildcard socket still answers its traffic).
     /// </summary>
     /// <returns>The unusable entries, each as "entry (reason)", to start the failure list with.</returns>
     private static List<string> ReportUnusableEntries(

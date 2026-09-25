@@ -21,8 +21,8 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         such as <c>"127.0.0.1, ::1"</c>. A list-typed option would get no <c>NINLIL_</c>
 ///         environment variable (the environment mapping skips lists, see
 ///         <c>OptionsEnvironmentVariableMap</c>), and choosing which interfaces a container
-///         listens on is exactly the kind of thing set from the environment. The same
-///         comma-joined-scalar shape <c>TlsCertificateOptions.AllowedProtocols</c> already uses.
+///         listens on is often set from the environment. <c>TlsCertificateOptions.AllowedProtocols</c>
+///         uses the same comma-joined shape.
 ///         The REST API still exposes it as a proper array.
 ///     </para>
 ///     <para>
@@ -32,14 +32,14 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         until the next restart, which is worse than asking for the address up front.
 ///     </para>
 ///     <para>
-///         An empty value means "every address", served by one dual-stack socket exactly as before
-///         this setting existed, so existing installations are unaffected.
+///         An empty value means "every address", served by one dual-stack socket. This is the
+///         default.
 ///     </para>
 /// </summary>
 public static partial class ListenAddressList
 {
     /// <summary>
-    ///     This constant contains the characters that separate entries. Whitespace is accepted as
+    ///     This field contains the characters that separate entries. Whitespace is accepted as
     ///     well as commas so a hand-typed <c>"127.0.0.1 ::1"</c> behaves as expected.
     /// </summary>
     private static readonly char[] Separators = [',', ';', ' ', '\t', '\r', '\n'];
@@ -210,10 +210,10 @@ public static partial class ListenAddressList
         family == AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4";
 
     /// <summary>
-    ///     This regular expression matches exactly four dot-separated decimal groups without
-    ///     leading zeros -- the only IPv4 spelling an operator means by a listen address. Leading
-    ///     zeros are refused because the underlying parser reads them as octal (<c>010.0.0.1</c>
-    ///     would quietly become <c>8.0.0.1</c>).
+    ///     This regular expression matches four dot-separated decimal groups without leading
+    ///     zeros, the only IPv4 spelling an operator means by a listen address. Leading zeros are
+    ///     refused because the parser reads them as octal (<c>010.0.0.1</c> would become
+    ///     <c>8.0.0.1</c>). Values above 255 are left to the parser to reject.
     /// </summary>
     [GeneratedRegex(@"^(0|[1-9]\d{0,2})(\.(0|[1-9]\d{0,2})){3}$")]
     private static partial Regex DottedQuad();
@@ -224,11 +224,10 @@ public static partial class ListenAddressList
 ///     bind.
 /// </summary>
 /// <param name="ListensEverywhere">
-///     Whether nothing was configured, meaning "bind every address with one dual-stack socket",
-///     the behavior from before this setting existed. When <see langword="false" /> and
-///     <paramref name="Addresses" /> is empty, every configured entry was unusable and the
-///     listener must not bind anywhere -- falling back to every address would expose the
-///     transport on exactly the interfaces the operator tried to keep it off.
+///     Whether nothing was configured, meaning "bind every address with one dual-stack socket".
+///     When <see langword="false" /> and <paramref name="Addresses" /> is empty, every configured
+///     entry was unusable and the listener must not bind anywhere; falling back to every address
+///     would expose the transport on the interfaces the operator tried to keep it off.
 /// </param>
 /// <param name="Addresses">The addresses to bind, one socket each.</param>
 /// <param name="InvalidEntries">Every configured entry that is not a valid IP literal.</param>

@@ -5,19 +5,19 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This event is published the moment <see cref="Resolution.IDnsQueryDispatcher" /> begins
-///     processing a query, before any resolver has had a chance to look at it.
+///     This event is published when <see cref="Resolution.DnsQueryDispatcher" /> starts on a
+///     query, before any resolver sees it. Queries the pipeline denies or answers before
+///     dispatch (rate limit, cookie, schedule, filter, rewrite) do not publish it.
 ///     <para>
-///         Carries a serializable summary of the query rather than the live
-///         <see cref="Resolution.DnsQueryContext" /> itself -- required for this event to ever
-///         cross a message broker.
+///         It carries a serializable summary rather than the <see cref="Resolution.DnsQueryContext" />,
+///         so it can cross a message broker.
 ///     </para>
 /// </summary>
 /// <param name="OccurredAtUtc">The UTC date and time the query was received.</param>
 /// <param name="Protocol">The transport the query arrived over.</param>
-/// <param name="RemoteAddress">The querying client's own source address.</param>
-/// <param name="QueriedName">The queried name's own presentation form, or <see langword="null" /> if the query carried no question at all.</param>
-/// <param name="QueriedType">The queried record type, or <see langword="null" /> if the query carried no question at all.</param>
+/// <param name="RemoteAddress">The client's source address.</param>
+/// <param name="QueriedName">The queried name in presentation form, or <see langword="null" /> if the query had no question.</param>
+/// <param name="QueriedType">The queried record type, or <see langword="null" /> if the query had no question.</param>
 public record DnsQueryReceivedEvent(
     DateTimeOffset OccurredAtUtc,
     DnsTransportProtocolEnum Protocol,

@@ -3,7 +3,8 @@ namespace Ninlil.Dns.Server.Core.Cookies;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Cookies</c> section of the application's
-///     configuration and controls <see cref="DnsCookieService" />'s own behavior.
+///     configuration and controls <see cref="DnsCookieService" />. The DNS Cookie settings
+///     endpoint edits it; changes apply after a restart.
 /// </summary>
 public sealed class DnsCookieOptions
 {
@@ -13,29 +14,24 @@ public sealed class DnsCookieOptions
     public const string SectionName = "DnsServer:Cookies";
 
     /// <summary>
-    ///     This property controls whether this server generates and validates DNS Cookies (RFC
-    ///     7873) at all. Defaults <see langword="true" /> -- unlike a transport's own
-    ///     capability-expanding <c>Enable</c> toggle, offering a cookie costs a cookie-unaware
-    ///     client nothing (it simply never sends one back) and opens no new attack surface, the
-    ///     same "self-maintaining, no corresponding abuse vector" reasoning already applied to
-    ///     DNSSEC validation and RFC 5011.
+    ///     This property controls whether this server generates and checks DNS Cookies (RFC 7873).
+    ///     On by default: a client that does not support cookies never sends one and is
+    ///     unaffected, and offering cookies opens no new attack surface.
     /// </summary>
     public bool Enable { get; set; } = true;
 
     /// <summary>
-    ///     This property controls whether a query lacking a valid, currently-recognized server
-    ///     cookie is refused outright rather than merely answered without one. Defaults
-    ///     <see langword="false" /> ("supported, not required") -- flipping this on gives a
-    ///     stricter anti-spoofing posture at the real cost of breaking any legacy client or
-    ///     resolver that never learns to retry with the cookie this server hands back.
+    ///     This property controls whether a query without a valid server cookie is rejected
+    ///     (BADCOOKIE, or REFUSED when it has no usable client cookie) instead of answered. Off by
+    ///     default. Turning it on resists spoofing better but breaks every client that does not
+    ///     send cookies or retry with the one it is given.
     /// </summary>
     public bool Require { get; set; }
 
     /// <summary>
-    ///     This property contains how often this service replaces its own server-cookie signing
-    ///     secret. The immediately preceding secret is kept around and still accepted for
-    ///     validation until the next rotation, so a cookie issued just before a rotation does not
-    ///     suddenly stop validating.
+    ///     This property contains how often the server cookie secret is replaced. The previous
+    ///     secret is still accepted until the next rotation, so a cookie issued just before a
+    ///     rotation keeps validating.
     /// </summary>
     public TimeSpan SecretRotationInterval { get; set; } = TimeSpan.FromHours(24);
 }

@@ -2,33 +2,25 @@
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This event is published whenever an operator writes one of the settings sections Phase
-///     9-6c's cluster config sync covers (today: event broker, rate limiting, DNS cookies, and
-///     reverse-proxy trust -- the four sections <c>PresetConfigurationFileApplier</c>'s own
-///     generic <c>IReadOnlyList&lt;PresetConfigurationSetting&gt;</c> overload already writes
-///     through, per that class's own doc comment). <see cref="SettingsJson" /> carries the exact
-///     list of configuration leaves that were just written, already serialized -- the same shape
-///     a receiving node's own settings applier re-hydrates and re-applies via that identical
-///     <c>PresetConfigurationFileApplier</c> overload, so this project never needs a second,
-///     parallel way to describe "write these configuration keys."
+///     This event is published when an operator writes one of the settings sections that
+///     cluster config sync covers: event broker, rate limiting, DNS cookies and reverse-proxy
+///     trust. <c>ClusterConfigSyncSettingsRecorder</c> (Ninlil.Web) publishes it and
+///     <c>SettingsClusterSyncEventSubscriber</c> forwards it to every peer, where it is applied
+///     through <c>PresetConfigurationFileApplier</c>, the same writer the local change used.
 ///     <para>
-///         Deliberately carries a plain JSON string rather than a strongly-typed settings payload:
-///         this project's event definitions live in <c>Ninlil.Dns.Server.Core</c>, which has no
-///         dependency on <c>Ninlil.Dns.Server.Presets</c> (where
-///         <c>PresetConfigurationSetting</c> itself is declared) -- and, per this project's own
-///         layering, never should, so the event's own publisher (a settings controller, in
-///         <c>Ninlil.Web</c>, which already depends on both) does the one serialization step
-///         instead.
+///         <see cref="SettingsJson" /> is a plain JSON string because <c>Server.Core</c> must not
+///         reference <c>Ninlil.Dns.Server.Presets</c>, where <c>PresetConfigurationSetting</c>
+///         is declared. The publisher in <c>Ninlil.Web</c> references both and serializes it.
 ///     </para>
 /// </summary>
 /// <param name="OccurredAtUtc">The UTC date and time the settings section was written.</param>
 /// <param name="SectionName">
-///     The settings section's own stable name (<c>ClusterSyncedSettingsStateEntity.SectionName</c>),
+///     The settings section's stable name (<c>ClusterSyncedSettingsStateEntity.SectionName</c>),
 ///     for example <c>"EventBroker"</c>.
 /// </param>
 /// <param name="SettingsJson">
 ///     The list of configuration leaves that were written, serialized as a JSON array of
-///     <c>{ sectionPath, key, value }</c> objects (<c>PresetConfigurationSetting</c>'s own shape).
+///     <c>{ sectionPath, key, value }</c> objects (the shape of <c>PresetConfigurationSetting</c>).
 /// </param>
 public record ClusterConfigSettingsChangedEvent(
     DateTimeOffset OccurredAtUtc,

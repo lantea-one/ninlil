@@ -150,8 +150,8 @@ public class ListenAddressListTests
     [Fact]
     public void Resolve_OnlyInvalidEntries_ListensNowhereRatherThanEverywhere()
     {
-        // Falling back to "every address" here would expose the transport on exactly the
-        // interfaces the operator was trying to keep it off.
+        // Falling back to "every address" would expose the transport on the interfaces the
+        // operator was trying to keep it off.
         ListenAddressResolution resolution = ListenAddressList.Resolve("eth0, wan0");
 
         Assert.False(resolution.ListensEverywhere);

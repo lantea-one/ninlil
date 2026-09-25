@@ -5,26 +5,19 @@ using Ninlil.Dns.Server.Core.Services;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class covers <see cref="ManagedServiceRegistration" />'s own start/stop bookkeeping,
-///     including a real bug the Service Lifecycle Management registry-wiring phase found and
-///     fixed: a fresh registration used to always report <see cref="ManagedServiceRegistration.IsRunning" />
-///     as <see langword="false" /> until its own <see cref="ManagedServiceRegistration.StartAsync" />
-///     was called at least once -- correct for a genuinely fresh, not-yet-started component, but
-///     wrong for the real shape every service this project's own composition root actually wraps:
-///     the ASP.NET Core generic host already called the wrapped <see cref="IHostedService" />'s own
-///     <c>StartAsync</c> directly, once, at process startup, well before any registry is ever built
-///     to wrap it -- so <c>GET /api/services</c> would have incorrectly reported every background
-///     service (every one with no richer <c>IsListening</c>-style probe of its own) as not running
-///     immediately after a real boot, until an operator happened to call this wrapper's own
-///     <c>StartAsync</c> at least once. The new <c>isAlreadyRunning</c> constructor parameter fixes
-///     this by letting the real composition root seed the correct initial state.
+///     This class tests the start/stop bookkeeping of <see cref="ManagedServiceRegistration" />
+///     with a fake <see cref="IHostedService" />: forwarding of start and stop, the
+///     <c>isAlreadyRunning</c> seed, and a running probe taking precedence. The seed matters
+///     because the host has already started every wrapped service before the registry is built;
+///     without it, <c>GET /api/services</c> would report every background service as stopped
+///     after boot.
 /// </summary>
 public sealed class ManagedServiceRegistrationTests
 {
     /// <summary>
-    ///     A minimal fake <see cref="IHostedService" /> recording whether it was actually started/
-    ///     stopped, so a test can assert this registration forwards its own calls through rather
-    ///     than only updating its own bookkeeping.
+    ///     This class is a fake <see cref="IHostedService" /> that records start and stop calls, so
+    ///     a test can check the registration forwards them rather than only updating its
+    ///     bookkeeping.
     /// </summary>
     private sealed class FakeHostedService : IHostedService
     {
@@ -59,9 +52,8 @@ public sealed class ManagedServiceRegistrationTests
     [Fact]
     public void ARegistrationConstructedWithIsAlreadyRunningTrue_ReportsRunningImmediately()
     {
-        // This is the real-world shape: the generic host already started the wrapped service
-        // directly, before this registration ever wraps it -- ManagedServiceRegistry.Build passes
-        // true for exactly this reason for every service with no richer probe of its own.
+        // As in production: the host already started the service before it was wrapped, so
+        // ManagedServiceRegistry passes true.
         ManagedServiceRegistration registration = new(
             "fake",
             ManagedServiceCategoryEnum.Background,
@@ -120,9 +112,8 @@ public sealed class ManagedServiceRegistrationTests
             isAlreadyRunning: true
         );
 
-        // isAlreadyRunning: true would otherwise report IsRunning as true, but a supplied probe
-        // always wins -- exactly the "a transport that is enabled but declined to bind" case
-        // IManagedServiceRegistration's own doc comment describes.
+        // isAlreadyRunning: true alone would report running, but a probe always wins: the
+        // "enabled but declined to bind" transport case.
         Assert.False(registration.IsRunning);
 
         probeState = true;

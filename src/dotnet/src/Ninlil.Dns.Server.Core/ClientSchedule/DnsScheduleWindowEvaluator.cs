@@ -4,39 +4,28 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Core.ClientSchedule;
 
 /// <summary>
-///     This class holds the one piece of pure, storage-free logic every schedule check ultimately
-///     reduces to: given a schedule's own days/start/end/time-zone and the current instant, is
-///     the blocking window currently active? Kept here, in <c>Server.Core</c>, rather than inside
-///     the engine implementation itself, since it needs no repository or identity-resolution
-///     dependency at all -- a real, dedicated static helper, directly and exhaustively unit
-///     testable without any dependency-injection setup, the same "extract the pure core, test it
-///     directly" shape <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.BuildWildcardRegexPattern</c>
-///     already establishes for its own bit of pure logic.
+///     This class answers the core question of every schedule check: given a schedule's days,
+///     start, end and time zone, is its blocking window active at a given instant? It needs no
+///     storage, so it lives here as a static helper that can be unit tested directly;
+///     <c>Ninlil.Dns.Server.ClientSchedule.DnsClientScheduleEngine</c> calls it.
 /// </summary>
 public static class DnsScheduleWindowEvaluator
 {
     /// <summary>
-    ///     This method checks whether a schedule's own blocking window is active at a given
-    ///     instant.
+    ///     This method checks whether a schedule's blocking window is active at an instant.
     ///     <para>
-    ///         <strong>Same-day window</strong> (<paramref name="startTime" /> earlier than or
-    ///         equal to <paramref name="endTime" />): active exactly when today, in the
-    ///         schedule's own local time zone, is one of <paramref name="daysOfWeek" />'s own
-    ///         matched days and the local time of day falls within <c>[startTime, endTime)</c>.
+    ///         <strong>Same-day window</strong> (<paramref name="startTime" /> at or before
+    ///         <paramref name="endTime" />): active when today, in the schedule's time zone, is one
+    ///         of <paramref name="daysOfWeek" /> and the local time is in <c>[startTime, endTime)</c>.
+    ///         Equal start and end give an empty window.
     ///     </para>
     ///     <para>
-    ///         <strong>Midnight-wrapping window</strong> (<paramref name="endTime" /> earlier
-    ///         than <paramref name="startTime" />, e.g. a 21:00-07:00 bedtime): a naive
-    ///         "<c>time &gt;= start &amp;&amp; time &lt;= end</c>" check is wrong here, since the
-    ///         blocked period spans across midnight into the next calendar day. Active in either
-    ///         of two cases instead: (a) <em>today</em> is a matched day and the local time is at
-    ///         or after <paramref name="startTime" /> -- the evening portion, running into
-    ///         tonight; or (b) <em>yesterday</em> (relative to the instant being evaluated) was a
-    ///         matched day and the local time is before <paramref name="endTime" /> -- the
-    ///         early-morning portion, spilled over from the previous night. A schedule covering
-    ///         Sunday-Thursday nights, for example, is therefore still active on Friday morning
-    ///         before <paramref name="endTime" /> (Thursday, the previous day, is a matched day),
-    ///         but not on Saturday morning (Friday, the previous day, is not).
+    ///         <strong>Window across midnight</strong> (<paramref name="endTime" /> before
+    ///         <paramref name="startTime" />, such as a 21:00 to 07:00 bedtime): active when (a)
+    ///         today is a listed day and the time is at or after <paramref name="startTime" />, or
+    ///         (b) yesterday was a listed day and the time is before <paramref name="endTime" />.
+    ///         A Sunday to Thursday night schedule is therefore active on Friday morning (Thursday
+    ///         is listed) but not on Saturday morning (Friday is not).
     ///     </para>
     /// </summary>
     /// <param name="daysOfWeek">The subset of the week's days this schedule applies to.</param>
@@ -53,23 +42,19 @@ public static class DnsScheduleWindowEvaluator
         DateTimeOffset nowUtc
     )
     {
-        // Convert the evaluated instant into the schedule's own local wall-clock time -- never
-        // UTC and never this server's own local time, per DnsClientScheduleEntity.TimeZoneId's
-        // own doc comment. TimeZoneInfo.ConvertTime resolves the correct offset for the exact
-        // date being evaluated, so a daylight-saving transition is handled correctly with no
-        // special-casing needed here.
+        // Use the schedule's time zone, not UTC or the server's zone. ConvertTime applies the
+        // offset for this date, so daylight-saving changes need no special handling.
         DateTimeOffset localNow = TimeZoneInfo.ConvertTime(nowUtc, timeZone);
         DayOfWeek today = localNow.DayOfWeek;
         TimeOnly localTime = TimeOnly.FromDateTime(localNow.DateTime);
 
         if (startTime <= endTime)
         {
-            // Same-day window: the whole blocking period sits inside one calendar day, so only
-            // today's own day-of-week and time of day matter.
+            // Same-day window: only today's day and time matter.
             return HasDay(daysOfWeek, today) && localTime >= startTime && localTime < endTime;
         }
 
-        // Midnight-wrapping window -- see this method's own doc comment for the full reasoning.
+        // Window across midnight; see the method summary.
         DayOfWeek yesterday = (DayOfWeek)(((int)today + 6) % 7);
         bool eveningPortion = HasDay(daysOfWeek, today) && localTime >= startTime;
         bool morningPortion = HasDay(daysOfWeek, yesterday) && localTime < endTime;
@@ -79,7 +64,7 @@ public static class DnsScheduleWindowEvaluator
 
     /// <summary>
     ///     This method checks whether a <see cref="DnsScheduleDayOfWeekEnum" /> value includes a
-    ///     given ordinary <see cref="DayOfWeek" />.
+    ///     given <see cref="DayOfWeek" />.
     /// </summary>
     private static bool HasDay(DnsScheduleDayOfWeekEnum daysOfWeek, DayOfWeek day)
     {

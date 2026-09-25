@@ -2,63 +2,46 @@
 namespace Ninlil.Dns.Server.Core.ClusterSync;
 
 /// <summary>
-///     This record is the cluster's own one generic wire shape for a single operational-config change
-///     propagated cluster-wide: an entity type, an entity-scoped key, its new content (when the
-///     change was not a deletion), and the last-write-wins conflict-resolution state (a UTC
-///     timestamp plus the id of the node the change originated on).
+///     This record is the wire shape for one operational config change sent between cluster
+///     nodes: an entity type, a key, the new content (unless it was a deletion), and the
+///     last-write-wins state (a UTC timestamp and the originating node's ID).
 ///     <para>
-///         Deliberately one shape for every synced category (filter lists, filter list entries,
-///         access-control rules, rewrites, forwarders, settings sections) rather than five
-///         bespoke wire formats: every
-///         category's own change ultimately reduces to exactly this same tuple, and a single
-///         shape means <c>ClusterChannelController</c>'s own inbound endpoint, and every outbound
-///         broadcaster call, needs writing (and testing) only once.
+///         Every synced category (filter lists, filter list entries, access-control rules,
+///         rewrites, forwarders, users, roles, settings sections) uses this one shape, so
+///         <c>ClusterChannelController</c>'s inbound endpoint and the broadcaster are written
+///         once.
 ///     </para>
 ///     <para>
-///         <see cref="PayloadJson" /> is deliberately an already-serialized string, not a generic
-///         type parameter -- this record (and the interfaces alongside it) lives in
-///         <c>Ninlil.Dns.Server.Core</c>, which has no dependency on
-///         <c>Ninlil.Dns.Data.Abstractions</c> at all, so it cannot know the shape of a <c>DnsFilterListEntity</c> or any
-///         other entity it carries. Each <see cref="IClusterConfigSyncApplier" /> implementation
-///         (which does have that dependency) is the only place that ever deserializes it.
+///         <see cref="PayloadJson" /> is a pre-serialized string because <c>Server.Core</c> does
+///         not reference <c>Ninlil.Dns.Data.Abstractions</c> and cannot know the entity types.
+///         Only the matching <see cref="IClusterConfigSyncApplier" /> deserializes it.
 ///     </para>
 /// </summary>
 /// <param name="EntityType">
-///     Which kind of thing this envelope carries -- one of the stable, per-category string
-///     constants each <see cref="IClusterConfigSyncApplier" /> implementation declares as its own
-///     <see cref="IClusterConfigSyncApplier.EntityType" /> (for example <c>"FilterList"</c>,
-///     "AccessControlRule", or <c>"Settings"</c>).
+///     The kind of thing carried, matching an <see cref="IClusterConfigSyncApplier.EntityType" />
+///     (for example <c>"FilterList"</c>, <c>"AccessControlRule"</c> or <c>"Settings"</c>).
 /// </param>
 /// <param name="EntityKey">
-///     The specific entity's own stable key within <see cref="EntityType" /> -- a
-///     <see cref="Guid" />'s string form for every entity-row category this sub-phase syncs, or a
-///     settings section's own stable name (for example <c>"EventBroker"</c>) for
-///     <c>EntityType == "Settings"</c>, where there is no single row identifier at all.
+///     The entity's key within <see cref="EntityType" />: a <see cref="Guid" /> string for row
+///     entities, or a settings section name (for example <c>"EventBroker"</c>) for
+///     <c>"Settings"</c>.
 /// </param>
 /// <param name="IsDeleted">
-///     Whether this change represents a deletion. When <see langword="true" />,
-///     <see cref="PayloadJson" /> is <see langword="null" /> -- there is nothing left to describe
-///     beyond "this no longer exists as of <see cref="LastModifiedUtc" />."
+///     Whether this change is a deletion. When <see langword="true" />,
+///     <see cref="PayloadJson" /> is <see langword="null" />.
 /// </param>
 /// <param name="PayloadJson">
-///     The entity's (or settings section's) new content, serialized as JSON in whatever shape
-///     the matching <see cref="IClusterConfigSyncApplier" /> expects -- <see langword="null" />
-///     when <see cref="IsDeleted" /> is <see langword="true" />.
+///     The new content as JSON in the shape the matching <see cref="IClusterConfigSyncApplier" />
+///     expects, or <see langword="null" /> for a deletion.
 /// </param>
 /// <param name="LastModifiedUtc">
-///     The UTC instant this change actually happened, at the originating node -- the value every
-///     last-write-wins comparison (<see cref="ClusterSyncConflictResolver.IncomingWins" />)
-///     actually compares. Always <c>AuditableEntityBaseExtensions.GetLastModifiedUtc</c>'s own
-///     precision: whatever a plain <see cref="DateTimeOffset.UtcNow" /> read on the originating
-///     node returned at write time, the same precision (and the same lack of any cluster-wide
-///     clock synchronization assumption) as every other <c>*AtUtc</c> field already stamped
-///     throughout this project.
+///     When the change happened on the originating node, from that node's clock. Last-write-wins
+///     compares this (<see cref="ClusterSyncConflictResolver.IncomingWins" />); node clocks are not
+///     assumed to be synchronized.
 /// </param>
 /// <param name="OriginatingNodeId">
-///     The cluster node (<c>ClusterOptions.NodeId</c>) the change actually happened on -- carried
-///     through unchanged by every peer this change is ever re-synced from, and the deterministic
-///     tie-breaker <see cref="ClusterSyncConflictResolver.IncomingWins" /> falls back to when two
-///     nodes recorded the exact same <see cref="LastModifiedUtc" />.
+///     The node (<c>ClusterOptions.NodeId</c>) the change happened on, kept unchanged as the
+///     change is re-synced, and used to break a tie on <see cref="LastModifiedUtc" />.
 /// </param>
 public sealed record ClusterConfigSyncEnvelope(
     string EntityType,

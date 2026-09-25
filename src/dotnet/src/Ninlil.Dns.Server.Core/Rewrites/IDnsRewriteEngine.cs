@@ -5,41 +5,31 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Rewrites;
 
 /// <summary>
-///     This interface is <c>Server.Core</c>'s own Data.Abstractions-free contract for
-///     DNS rewrites, implemented by <c>Ninlil.Dns.Server.Rewrites</c> (which does
-///     depend on <c>Data.Abstractions</c>) and consulted by
-///     <see cref="Pipeline.DnsQueryProcessingPipeline" /> -- the same "define the abstraction
-///     here, implement it in a dedicated project that may depend on storage" shape
-///     <see cref="Filtering.IDnsFilterEngine" /> already establishes for its own
-///     block/allow-list engine, kept consistent so <c>Server.Core</c> itself never needs a
-///     repository reference.
+///     This interface is DNS rewrites: operator-defined answers for a domain that bypass
+///     resolution. <see cref="Pipeline.DnsQueryProcessingPipeline" /> calls it. It is defined
+///     here, without storage types, and implemented by <c>Ninlil.Dns.Server.Rewrites</c>, so
+///     <c>Server.Core</c> needs no repository reference.
 /// </summary>
 public interface IDnsRewriteEngine
 {
     /// <summary>
-    ///     This method checks the request's own first question against every configured,
-    ///     enabled rewrite and, if one matches, builds the complete answer response for it.
-    ///     Called after every filter/cookie check has already passed (a rewrite never overrides
-    ///     a denial) and before <see cref="Resolution.IDnsQueryDispatcher.DispatchAsync" /> --
-    ///     a matched rewrite is answered directly, without either the authoritative, forwarder,
-    ///     or recursive resolver ever seeing the query, exactly like a zone/forwarder/recursion
-    ///     bypass this project's own "consulted early in the pipeline" design calls for.
+    ///     This method checks the request's first question against every enabled rewrite and,
+    ///     if one matches, builds the complete response. The pipeline calls it after the cookie,
+    ///     schedule and filter checks (a rewrite never overrides a denial) and before the
+    ///     dispatcher, so no resolver sees a rewritten query.
     /// </summary>
-    /// <param name="request">The already-decoded request.</param>
+    /// <param name="request">The decoded request.</param>
     /// <param name="remoteAddress">
-    ///     The querying client's own source address, used only to resolve a client-/client-group-
-    ///     scoped rewrite (see <c>Ninlil.Dns.Data.Abstractions.Entity.DnsRewriteEntity.ClientId</c>/
-    ///     <c>ClientGroupId</c>) via the optional <c>IClientIdentityResolver</c> a real
-    ///     implementation may have. <see langword="null" /> (the default, so every pre-existing
-    ///     caller/test keeps compiling and behaving unchanged) means client-derived scoping is
-    ///     entirely skipped -- only an unscoped (global) rewrite can ever match, identical to this
-    ///     method's own behavior before client scoping existed.
+    ///     The client's source address, used only to match rewrites scoped to a client or client
+    ///     group (<c>DnsRewriteEntity.ClientId</c> and <c>ClientGroupId</c>) through
+    ///     <c>IClientIdentityResolver</c>. With <see langword="null" />, only global rewrites can
+    ///     match.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The complete answer response, if a rewrite matched the request's own first question
-    ///     and its own record kind answers the question's own type; otherwise
-    ///     <see langword="null" />, meaning normal resolution should proceed unchanged.
+    ///     The complete response, if a rewrite matched the first question and its record kind
+    ///     answers the question's type; otherwise <see langword="null" />, and resolution
+    ///     continues.
     /// </returns>
     ValueTask<DnsMessage> TryBuildResponseAsync(
         DnsMessage request,

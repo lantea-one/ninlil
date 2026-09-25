@@ -2,19 +2,15 @@
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This event is published whenever a block/allow list's own metadata changes -- created,
-///     updated, deleted, or enabled/disabled through <c>FilterListsController</c>. Unlike
-///     <see cref="DnsAccessControlRuleChangedEvent" />, no local engine subscribes to this purely
-///     for cache invalidation (<c>DnsFilterEngine</c> re-reads its repositories fresh on every
-///     query, per its own doc comment) -- today, its only real subscriber is the cluster's own
-///     config sync, forwarding the change to every peer over the existing cluster channel.
+///     This event is published when a block/allow list is created, updated, deleted, enabled or
+///     disabled through <c>FilterListsController</c>. Cluster sync forwards it to peers. No
+///     local cache needs it, because <c>DnsFilterEngine</c> reads the lists from storage.
 /// </summary>
 /// <param name="OccurredAtUtc">The UTC date and time the list changed.</param>
 /// <param name="ListId">The identifier of the list that changed.</param>
 /// <param name="IsDeleted">
-///     Whether this change was a deletion -- <see langword="true" /> only for
-///     <c>FilterListsController.Delete</c>; a create, replace, or enable/disable toggle all
-///     report <see langword="false" />.
+///     Whether this change was a deletion (<see langword="true" /> only for
+///     <c>FilterListsController.Delete</c>).
 /// </param>
 public record DnsFilterListChangedEvent(
     DateTimeOffset OccurredAtUtc,

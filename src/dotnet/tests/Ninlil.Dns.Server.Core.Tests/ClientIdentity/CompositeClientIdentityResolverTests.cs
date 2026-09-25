@@ -6,10 +6,9 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dns.Server.Core.Tests.ClientIdentity;
 
 /// <summary>
-///     This class covers <see cref="CompositeClientIdentityResolver" />'s own ordered fallback
-///     behavior against small, in-memory fake <see cref="IClientIdentityResolver" />
-///     implementations -- no real DHCP or ARP mechanism is exercised here, only the composition
-///     logic itself.
+///     This class tests the ordered fallback of <see cref="CompositeClientIdentityResolver" />
+///     with in-memory fake <see cref="IClientIdentityResolver" />s; no DHCP or ARP lookup is
+///     involved.
 /// </summary>
 public sealed class CompositeClientIdentityResolverTests
 {
@@ -63,8 +62,8 @@ public sealed class CompositeClientIdentityResolverTests
     }
 
     /// <summary>
-    ///     This class is a small, in-memory fake used only by this test class, always answering
-    ///     the same fixed result and counting how many times it was consulted.
+    ///     This class is a fake resolver that always returns the same result and counts how often
+    ///     it was called.
     /// </summary>
     private sealed class FakeClientIdentityResolver(ClientIdentityResolution result)
         : IClientIdentityResolver

@@ -2,12 +2,11 @@
 namespace Ninlil.Dns.Server.Core.Pipeline;
 
 /// <summary>
-///     This delegate sends an encoded response back to whichever client sent the query it
-///     answers. Each transport supplies its own implementation of this alongside every
-///     <see cref="DnsInboundMessage" /> it enqueues -- writing to a UDP socket at a remembered
-///     endpoint, or completing an in-flight HTTP response, or writing to an open QUIC stream --
-///     so that <see cref="DnsQueryProcessingPipeline" /> can send a reply without needing to know
-///     anything about which transport the query arrived over.
+///     This delegate sends an encoded response to the client that sent the query. Each
+///     transport supplies one with every <see cref="DnsInboundMessage" /> it enqueues (sending
+///     a UDP datagram to the remembered endpoint, completing an HTTP response, writing to a QUIC
+///     stream), so <see cref="DnsQueryProcessingPipeline" /> can reply without knowing the
+///     transport. The pipeline calls it at most once; a dropped query never calls it.
 /// </summary>
 /// <param name="responseBytes">The encoded response to send.</param>
 /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

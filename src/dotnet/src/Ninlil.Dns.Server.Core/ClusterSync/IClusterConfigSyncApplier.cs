@@ -2,40 +2,31 @@
 namespace Ninlil.Dns.Server.Core.ClusterSync;
 
 /// <summary>
-///     This interface is implemented once per operational-config category the cluster's own
-///     config sync covers (filter lists, filter list entries, access-control rules, rewrites,
-///     forwarders, settings sections) -- the receiving half of a sync. <c>ClusterChannelController</c>'s
-///     own <c>config-sync</c> action resolves every registered <see cref="IClusterConfigSyncApplier" />
-///     and dispatches an inbound <see cref="ClusterConfigSyncEnvelope" /> to whichever one's
-///     <see cref="EntityType" /> matches, exactly the same "define the abstraction, implement it
-///     once per real concern, dispatch by a discriminator" shape this project's
-///     <c>IDnsServerEventSubscriber{TEvent}</c> registrations already establish for the event bus
-///     itself.
+///     This interface is the receiving half of cluster config sync, implemented once per synced
+///     category (filter lists, filter list entries, access-control rules, rewrites, forwarders,
+///     users, roles, settings sections). <c>ClusterChannelController</c>'s <c>config-sync</c>
+///     action passes each inbound <see cref="ClusterConfigSyncEnvelope" /> to the applier whose
+///     <see cref="EntityType" /> matches.
 ///     <para>
-///         Every real implementation owns its own last-write-wins decision internally (via
-///         <see cref="ClusterSyncConflictResolver.IncomingWins" />): looking up whatever it
-///         already has locally for <see cref="ClusterConfigSyncEnvelope.EntityKey" />, comparing
-///         its own recorded timestamp/originating-node-id against the envelope's, and either
-///         applying the incoming change through the exact same repository/write path a real local
-///         REST write already uses, or silently discarding a stale envelope. Nothing about the
-///         dispatch layer itself (<c>ClusterChannelController</c>) understands or enforces this --
-///         it exists once, per category, inside each applier, precisely because only that
-///         category's own applier knows how to read "what do I already have."
+///         Each applier makes the last-write-wins decision itself with
+///         <see cref="ClusterSyncConflictResolver.IncomingWins" />: it reads what it has locally
+///         for <see cref="ClusterConfigSyncEnvelope.EntityKey" />, compares timestamps and node
+///         IDs, and either writes the change through the same repositories a local REST write
+///         uses or drops the stale envelope. Only the applier knows how to read the local copy,
+///         so the controller does not take part.
 ///     </para>
 /// </summary>
 public interface IClusterConfigSyncApplier
 {
     /// <summary>
-    ///     This property contains the entity-type discriminator this applier handles -- matched
-    ///     against an inbound <see cref="ClusterConfigSyncEnvelope.EntityType" /> exactly, case
-    ///     sensitively.
+    ///     This property contains the entity type this applier handles, compared with
+    ///     <see cref="ClusterConfigSyncEnvelope.EntityType" /> case-sensitively.
     /// </summary>
     string EntityType { get; }
 
     /// <summary>
-    ///     This method applies one inbound change, if (and only if) it is genuinely newer than
-    ///     whatever this node already has locally for the same entity -- see this interface's own
-    ///     doc comment for the shared shape every implementation follows.
+    ///     This method applies one inbound change if it wins against the local copy (see the
+    ///     interface summary).
     /// </summary>
     /// <param name="envelope">The change to consider applying.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

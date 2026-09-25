@@ -6,26 +6,22 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
-///     This class carries a single decoded query, and everything about how it arrived, from the
-///     transport that received it through the dispatcher to whichever
-///     <see cref="IDnsQueryResolver" /> ends up answering it.
+///     This record carries one decoded query and how it arrived.
+///     <see cref="Pipeline.DnsQueryProcessingPipeline" /> builds it after decoding and passes it
+///     through <see cref="IDnsQueryDispatcher" /> to each <see cref="IDnsQueryResolver" />.
 /// </summary>
 /// <param name="Request">The decoded query.</param>
 /// <param name="Protocol">The transport the query arrived over.</param>
 /// <param name="RemoteAddress">
-///     The querying client's IP address. This is the address itself, not a full endpoint,
-///     because the port number is meaningful only to the transport that will send the reply
-///     (which already knows it from its own connection) and not to anything a resolver decides
-///     based on who is asking -- an access-control list or geolocation-based answer, for example.
+///     The client's IP address. The port is left out because only the transport needs it to
+///     reply, and resolvers decide on the address alone (access control, for example).
 /// </param>
 /// <param name="ReceivedAtUtc">The UTC date and time the query was received.</param>
 /// <param name="RawMessage">
-///     <paramref name="Request" />'s exact, not-yet-decoded wire bytes, or <see langword="null" />
-///     when nothing needs them. This exists specifically for TSIG-authenticated operations (zone
-///     transfers, dynamic update): per RFC 8945 §4.3.3, verifying a signature covers the literal
-///     bytes a message arrived as, not a value re-serialized from <paramref name="Request" />,
-///     which could legitimately differ in shape (a different, but equally valid, choice of name
-///     compression, for example) from whatever was actually signed.
+///     The wire bytes <paramref name="Request" /> was decoded from, or <see langword="null" />.
+///     TSIG verification (zone transfers, dynamic update) needs them because the MAC covers the
+///     bytes as received (RFC 8945 §4.3), and re-serializing <paramref name="Request" /> could
+///     differ, for example in name compression. The pipeline always sets it.
 /// </param>
 /// <param name="TsigRecordStartOffset">
 ///     The offset within <paramref name="RawMessage" /> a TSIG record started at, or -1 if
@@ -33,9 +29,8 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 ///     itself is <see langword="null" />).
 /// </param>
 /// <param name="ClientId">
-///     The client-supplied identifier this query carried, or <see langword="null" /> when it
-///     carried none -- see <see cref="Pipeline.DnsInboundMessage.ClientId" />'s own doc comment
-///     for which transport can ever populate this.
+///     The client identifier the query carried, or <see langword="null" />; see
+///     <see cref="Pipeline.DnsInboundMessage.ClientId" />.
 /// </param>
 public record DnsQueryContext(
     DnsMessage Request,

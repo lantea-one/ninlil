@@ -4,37 +4,24 @@ using System.Net;
 namespace Ninlil.Dns.Server.Core.ClientSchedule;
 
 /// <summary>
-///     This interface is <c>Server.Core</c>'s own Data.Abstractions-free contract for time-of-day
-///     parental-control scheduling and instant-pause enforcement -- the same "define the
-///     abstraction here, implement it in a dedicated project that may depend on storage" shape
-///     <see cref="Filtering.IDnsFilterEngine" />/<see cref="RateLimiting.IDnsRateLimiter" />/
-///     <see cref="AccessControl.IDnsAccessControlEngine" /> already establish, kept consistent so
-///     <c>Server.Core</c> itself never needs a repository reference. Consulted by
-///     <see cref="Pipeline.DnsQueryProcessingPipeline" /> to answer one question: "is this query's
-///     resolved client currently blocked by an active bedtime-style schedule, or by a one-click
-///     instant pause?" -- both are temporary, fully-blocking states this one engine evaluates
-///     together, with an instant pause always checked first and always taking priority (see the
-///     real implementation's own doc comment for why).
+///     This interface decides whether a client is blocked right now by an instant pause or a
+///     time-of-day (parental control) schedule. <see cref="Pipeline.DnsQueryProcessingPipeline" />
+///     calls it for every query before the domain filter. It is defined here, without storage
+///     types, and implemented by <c>Ninlil.Dns.Server.ClientSchedule.DnsClientScheduleEngine</c>,
+///     so <c>Server.Core</c> needs no repository reference.
 /// </summary>
 public interface IDnsClientScheduleEngine
 {
     /// <summary>
-    ///     This method checks whether a querying client is currently blocked -- by an instant
-    ///     pause (its own direct pause, or its resolved client group's pause, checked first and
-    ///     unconditionally overriding everything else) or, failing that, by an active time-of-day
-    ///     schedule (again, its own direct schedule or its resolved client group's schedule, an
-    ///     independent union of the two). Resolves the client the exact same way
-    ///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c> does (via
-    ///     <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c> and
-    ///     <c>Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository</c>) -- an unresolvable
-    ///     address, or an address with neither a pause nor a schedule at all, is never blocked.
+    ///     This method checks whether a client is blocked: first by a pause on the client or its
+    ///     client group, which wins over everything, then by an active schedule on the client or
+    ///     its group. The client is resolved the same way the filter engine does it, through
+    ///     <see cref="ClientIdentity.IClientIdentityResolver" /> and the client repository. An
+    ///     address that cannot be resolved, or has no pause or schedule, is not blocked.
     /// </summary>
-    /// <param name="remoteAddress">The querying client's own source address.</param>
+    /// <param name="remoteAddress">The client's source address.</param>
     /// <param name="nowUtc">
-    ///     The current instant, in UTC -- passed explicitly (rather than read internally via
-    ///     <see cref="DateTimeOffset.UtcNow" />) so a caller can evaluate against a fixed,
-    ///     reproducible instant, the same testability reasoning most of this project's own
-    ///     time-sensitive engines already follow.
+    ///     The current time in UTC, passed in so tests can use a fixed instant.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The resulting block/allow decision.</returns>

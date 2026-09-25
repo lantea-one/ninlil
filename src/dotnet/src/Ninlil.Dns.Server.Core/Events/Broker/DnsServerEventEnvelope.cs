@@ -2,13 +2,11 @@
 namespace Ninlil.Dns.Server.Core.Events.Broker;
 
 /// <summary>
-///     This class carries a single <see cref="IDnsServerEvent" /> across a message broker: its
-///     own registered <see cref="DnsServerEventTypeRegistry" /> name, alongside its JSON payload
-///     (via <c>Ninlil.Common.Serializer.JsonSerializer</c>, serialized against the event's
-///     own concrete type explicitly, never its static/interface type -- the exact
-///     <c>JsonSerializer.Serialize(payload)</c> single-argument-overload trap already documented
-///     elsewhere in this project for exactly this reason).
+///     This record carries one <see cref="IDnsServerEvent" /> across a message broker: its
+///     <see cref="DnsServerEventTypeRegistry" /> name and its JSON payload. The payload is
+///     serialized with the event's concrete type; serializing as the interface would drop every
+///     property but <see cref="IDnsServerEvent.OccurredAtUtc" />.
 /// </summary>
-/// <param name="EventTypeName">The published event's own registered short name.</param>
-/// <param name="PayloadJson">The published event, serialized against its own concrete type.</param>
+/// <param name="EventTypeName">The event's registered short name.</param>
+/// <param name="PayloadJson">The event, serialized with its concrete type.</param>
 public sealed record DnsServerEventEnvelope(string EventTypeName, string PayloadJson);

@@ -8,19 +8,19 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dns.Server.Core.Transport;
 
 /// <summary>
-///     This class implements <see cref="IOutboundUdpSocketPool" /> as a small, per-address-family
-///     pool of pre-bound, unconnected UDP sockets, reused across successive outbound queries
-///     rather than opened fresh (and thrown away) for every single one. This is this project's
-///     own UDP source-port randomization hardening: each pooled socket is bound once, to a
-///     locally-chosen port outside <see cref="OutboundQueryOptions.ExcludedSourcePorts" />, and
-///     that same, bounded set of ports is what every outbound query rotates across for the life
-///     of the process -- a real, operator-controllable, non-trivially-predictable source-port
-///     surface, rather than either a single fixed port (easy to guess) or a fully uncontrolled
-///     OS-ephemeral one (impossible to exclude a specific port from). Registered as a singleton:
-///     the whole point is one shared pool for every outbound query this process ever issues, not
-///     something scoped to a single request.
+///     This class implements <see cref="IOutboundUdpSocketPool" /> as a per-address-family pool of
+///     bound, unconnected UDP sockets reused across outbound queries. Each socket is bound once
+///     to an OS-assigned port outside <see cref="OutboundQueryOptions.ExcludedSourcePorts" /> and
+///     kept for the life of the process, so outbound queries rotate across a fixed set of at most
+///     <see cref="OutboundQueryOptions.PoolSizePerAddressFamily" /> ports. That set is not
+///     re-randomized, so it offers fewer possible source ports than a new ephemeral socket per
+///     query; the callers still check each reply's ID and source address. It is a
+///     singleton, shared by every outbound query.
 /// </summary>
-/// <param name="options">This pool's own configured pool size and excluded-port list, read live.</param>
+/// <param name="options">
+///     The pool settings. The enable switch and excluded ports are read on each use; the pool
+///     size only when a family's gate is first created.
+/// </param>
 /// <param name="logger">The logger this pool records a fallback-bind warning to.</param>
 public sealed class OutboundUdpSocketPool(
     IOptionsMonitor<OutboundQueryOptions> options,
@@ -28,24 +28,21 @@ public sealed class OutboundUdpSocketPool(
 ) : IOutboundUdpSocketPool, IDisposable
 {
     /// <summary>
-    ///     This constant contains how many times <see cref="CreateBoundSocket" /> retries binding
-    ///     to a fresh, OS-assigned port before giving up on avoiding
-    ///     <see cref="OutboundQueryOptions.ExcludedSourcePorts" /> and simply accepting whatever
-    ///     the OS hands out next.
+    ///     This constant contains how many times <see cref="CreateBoundSocket" /> tries for a port
+    ///     outside <see cref="OutboundQueryOptions.ExcludedSourcePorts" /> before accepting any
+    ///     port.
     /// </summary>
     private const int MaxBindAttempts = 25;
 
     /// <summary>
-    ///     This field contains every currently-available (not checked out) socket, one bag per
-    ///     address family.
+    ///     This field contains the sockets not currently checked out, one bag per address family.
     /// </summary>
     private readonly ConcurrentDictionary<AddressFamily, ConcurrentBag<Socket>> _available = new();
 
     /// <summary>
-    ///     This field contains one capacity gate per address family, bounding how many sockets of
-    ///     that family may be checked out at once to <see cref="OutboundQueryOptions.PoolSizePerAddressFamily" />
-    ///     -- created lazily, the first time either family is actually requested, since a
-    ///     recursive-only or forwarding-only deployment may only ever touch one.
+    ///     This field contains one gate per address family that limits how many sockets of that
+    ///     family are checked out at once to <see cref="OutboundQueryOptions.PoolSizePerAddressFamily" />.
+    ///     A gate is created the first time its family is requested.
     /// </summary>
     private readonly ConcurrentDictionary<AddressFamily, SemaphoreSlim> _gates = new();
 
@@ -55,9 +52,7 @@ public sealed class OutboundUdpSocketPool(
         CancellationToken stoppingToken = default
     )
     {
-        // Pooling disabled: hand back a one-off socket, exactly like this project's own
-        // pre-pool behavior, wrapped in a lease whose own Dispose discards it outright (see
-        // OutboundUdpSocketLease's own constructor doc comment for the null-pool convention).
+        // Pooling disabled: a one-off socket in a lease with no pool, which Dispose discards.
         if (!options.CurrentValue.EnableSourcePortPool)
             return new OutboundUdpSocketLease(CreateBoundSocket(family), null, family);
 
@@ -75,16 +70,14 @@ public sealed class OutboundUdpSocketPool(
     }
 
     /// <summary>
-    ///     This method returns a lease's own socket to this pool, called only by
-    ///     <see cref="OutboundUdpSocketLease.Dispose" />.
+    ///     This method takes a socket back from a lease. Only
+    ///     <see cref="OutboundUdpSocketLease.Dispose" /> calls it.
     /// </summary>
     /// <param name="family">Which address family <paramref name="socket" /> was bound for.</param>
     /// <param name="socket">The socket being returned.</param>
     /// <param name="healthy">
-    ///     Whether <paramref name="socket" /> is still fit to hand to a future caller --
-    ///     <see langword="false" /> (set via <see cref="OutboundUdpSocketLease.MarkUnhealthy" />)
-    ///     means it is disposed instead of pooled, so a socket that just threw a real
-    ///     <see cref="SocketException" /> is never reused.
+    ///     Whether <paramref name="socket" /> can be reused. <see langword="false" /> (from
+    ///     <see cref="OutboundUdpSocketLease.MarkUnhealthy" />) disposes it instead.
     /// </param>
     internal void Return(AddressFamily family, Socket socket, bool healthy)
     {
@@ -98,11 +91,10 @@ public sealed class OutboundUdpSocketPool(
     }
 
     /// <summary>
-    ///     This method binds a brand-new, unconnected UDP socket to a local, OS-assigned port
-    ///     that is not in <see cref="OutboundQueryOptions.ExcludedSourcePorts" />, retrying up to
-    ///     <see cref="MaxBindAttempts" /> times before falling back to whatever port the OS
-    ///     assigns next, unfiltered -- an outbound query must never fail outright merely because
-    ///     every attempt so far happened to land on an excluded port.
+    ///     This method binds a new, unconnected UDP socket to an OS-assigned port that is not in
+    ///     <see cref="OutboundQueryOptions.ExcludedSourcePorts" />. After
+    ///     <see cref="MaxBindAttempts" /> tries it accepts any port, so a query never fails just
+    ///     because of the exclusion list.
     /// </summary>
     private Socket CreateBoundSocket(AddressFamily family)
     {

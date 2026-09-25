@@ -4,10 +4,10 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
-///     This interface is the single entry point every transport calls to get a query answered.
-///     It hides, from a transport's perspective, that there might be an authoritative engine, a
-///     recursive engine, both, or neither, behind it -- a transport only ever needs to decode
-///     bytes into a query, hand it here, and encode whatever comes back.
+///     This interface resolves a decoded query to a response by offering it to the registered
+///     <see cref="IDnsQueryResolver" />s. <see cref="Pipeline.DnsQueryProcessingPipeline" /> calls
+///     it after its access, cookie, schedule, filter and rewrite checks; the transports never call
+///     it directly. The implementation is <see cref="DnsQueryDispatcher" />.
 /// </summary>
 public interface IDnsQueryDispatcher
 {
@@ -16,7 +16,7 @@ public interface IDnsQueryDispatcher
     /// </summary>
     /// <param name="context">The query to resolve.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>A complete answer, ready to be encoded and sent back to the requestor.</returns>
+    /// <returns>A complete answer, ready to be encoded and sent to the client.</returns>
     ValueTask<DnsMessage> DispatchAsync(
         DnsQueryContext context,
         CancellationToken stoppingToken = default

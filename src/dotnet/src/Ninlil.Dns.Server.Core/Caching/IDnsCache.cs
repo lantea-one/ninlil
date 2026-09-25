@@ -4,12 +4,11 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Caching;
 
 /// <summary>
-///     This interface is the operator- and maintenance-facing side of every in-memory DNS answer
-///     cache this server keeps: the recursive resolver's RRset cache and the forwarded-response
-///     cache. Each cache registers itself under this interface as well as its own
-///     resolver-facing one, so the periodic sweep (<see cref="DnsCacheEvictionService" />) and the
-///     REST endpoint that shows, flushes and trims caches can treat every cache alike without
-///     knowing what shape of entry each one holds.
+///     This interface is the management side of each in-memory DNS answer cache: the recursive
+///     resolver's RRset cache and the forwarded-response cache. Each cache registers under this
+///     interface as well as its resolver-facing one, so the sweep
+///     (<see cref="DnsCacheEvictionService" />) and the cache REST endpoint can handle every
+///     cache alike.
 ///     <para>
 ///         Every cache is per process, and so per cluster node: answers are never replicated,
 ///         and flushing a cache on one node leaves the other nodes' caches alone. That is the
@@ -20,8 +19,8 @@ namespace Ninlil.Dns.Server.Core.Caching;
 public interface IDnsCache
 {
     /// <summary>
-    ///     This property contains the cache's own short, stable name, for example
-    ///     <c>forwarded</c> or <c>recursive</c>. The REST API uses it to address one cache.
+    ///     This property contains the cache's short, stable name, for example <c>forwarded</c> or
+    ///     <c>recursive</c>. The REST API uses it to address one cache.
     /// </summary>
     string Name { get; }
 
@@ -38,9 +37,9 @@ public interface IDnsCache
     int Flush();
 
     /// <summary>
-    ///     This method removes every entry cached for exactly <paramref name="name" /> (every
-    ///     type and class, and for the forwarded cache every upstream set), compared
-    ///     case-insensitively. Names below it are left alone.
+    ///     This method removes every entry cached for <paramref name="name" /> (every type and
+    ///     class, and for the forwarded cache every upstream set), compared case-insensitively.
+    ///     Names below it are left alone.
     /// </summary>
     /// <param name="name">The owner name to forget.</param>
     /// <returns>How many entries were removed.</returns>

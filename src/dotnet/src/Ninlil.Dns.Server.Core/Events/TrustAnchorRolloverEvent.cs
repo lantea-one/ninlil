@@ -2,23 +2,18 @@
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This event is published whenever <c>Server.Recursive</c>'s own <c>TrustAnchorRolloverService</c>
-///     changes a root trust anchor's own RFC 5011 state -- a brand-new candidate key promoted to
-///     <c>Valid</c> after completing its hold-down period, or an existing anchor announcing its
-///     own revocation -- a genuinely noteworthy, autonomous trust-management moment, so an
-///     outbound webhook subscriber can be notified of it: this project's own homelab/set-and-forget deployment target
-///     means a real root KSK rollover could otherwise happen with no operator ever finding out it
-///     occurred at all. This event is deliberately not published for a brand-new candidate merely
-///     entering its own <c>AddPend</c> hold-down period -- that is an observation, not yet a
-///     completed rollover.
+///     This event is published when <c>TrustAnchorRolloverService</c> (Server.Recursive) changes
+///     a root trust anchor's RFC 5011 state: a new key becomes <c>Valid</c> after its hold-down,
+///     or an existing key is revoked. Webhooks can subscribe, so an operator hears about a root
+///     KSK rollover that otherwise happens unattended. A new key entering <c>AddPend</c> does
+///     not publish it, since nothing has changed yet.
 /// </summary>
 /// <param name="OccurredAtUtc">The UTC date and time the state change was recorded.</param>
-/// <param name="KeyTag">The trust anchor's own DNSKEY key tag.</param>
+/// <param name="KeyTag">The trust anchor's DNSKEY key tag.</param>
 /// <param name="NewState">
-///     The trust anchor's own new RFC 5011 state, as a short, human-readable name (for example,
-///     <c>"Valid"</c> or <c>"Revoked"</c>) -- a plain string rather than a typed enum reference,
-///     since <c>Server.Core</c> must not depend on <c>Server.Recursive</c>'s own
-///     <c>TrustAnchorStateEnum</c>.
+///     The new RFC 5011 state as a name, such as <c>"Valid"</c> or <c>"Revoked"</c>. It is a
+///     string because <c>Server.Core</c> must not reference <c>TrustAnchorStateEnum</c> in
+///     <c>Server.Recursive</c>.
 /// </param>
 public record TrustAnchorRolloverEvent(DateTimeOffset OccurredAtUtc, ushort KeyTag, string NewState)
     : IDnsServerEvent;

@@ -4,10 +4,9 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
-///     This class carries the outcome of asking a single <see cref="IDnsQueryResolver" /> to
-///     handle a query: either it claims the query and hands back a complete answer, or it
-///     declines, telling the dispatcher to move on and offer the query to the next resolver in
-///     line.
+///     This class carries the result of one <see cref="IDnsQueryResolver" />: either it claims
+///     the query and returns a complete answer, or it declines and the dispatcher tries the next
+///     resolver.
 /// </summary>
 public sealed class DnsQueryResolution
 {
@@ -23,8 +22,7 @@ public sealed class DnsQueryResolution
     public DnsMessage Response { get; }
 
     /// <summary>
-    ///     This constructor is private; construct an instance through <see cref="NotHandled" /> or
-    ///     <see cref="Handled" /> instead.
+    ///     This constructor is private; use <see cref="NotHandled" /> or <see cref="Handled" />.
     /// </summary>
     private DnsQueryResolution(bool isHandled, DnsMessage response)
     {
@@ -33,8 +31,7 @@ public sealed class DnsQueryResolution
     }
 
     /// <summary>
-    ///     This property contains the shared result a resolver returns to decline a query,
-    ///     telling the dispatcher to offer it to the next resolver in line instead.
+    ///     This property contains the shared result a resolver returns to decline a query.
     /// </summary>
     public static DnsQueryResolution NotHandled { get; } = new(false, null);
 

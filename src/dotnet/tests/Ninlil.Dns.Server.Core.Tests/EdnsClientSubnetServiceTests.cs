@@ -8,10 +8,10 @@ using Ninlil.Dns.Server.Core.Tests.Fakes;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class tests <see cref="EdnsClientSubnetService" />, including the precedence order
-///     its own doc comment states: an <see cref="EdnsClientSubnetOptions.OverrideAddress" />
-///     always wins, then a client-supplied ECS option is relayed unchanged, and only then is one
-///     synthesized from the real downstream address.
+///     This class tests <see cref="EdnsClientSubnetService" /> with a fixed options monitor,
+///     including its precedence: <see cref="EdnsClientSubnetOptions.OverrideAddress" /> wins,
+///     then a client-supplied ECS option is relayed, and only then is one built from the
+///     client's source address.
 /// </summary>
 public class EdnsClientSubnetServiceTests
 {
@@ -61,7 +61,7 @@ public class EdnsClientSubnetServiceTests
 
         Assert.NotNull(option);
         Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
-        // /24 default: the override address's own host octet is masked away.
+        // /24 default: the override address's host octet is masked away.
         Assert.Equal(IPAddress.Parse("198.51.100.0"), data.Address);
     }
 
@@ -84,8 +84,7 @@ public class EdnsClientSubnetServiceTests
 
         Assert.NotNull(option);
         Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
-        // The client's own /16, not the server's configured /24 default, and not DownstreamClient's
-        // own address.
+        // The client's /16, not the configured /24, and not DownstreamClient's address.
         Assert.Equal(16, data.SourcePrefixLength);
         Assert.Equal(IPAddress.Parse("192.0.0.0"), data.Address);
     }

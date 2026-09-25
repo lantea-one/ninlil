@@ -5,18 +5,12 @@ using Microsoft.Extensions.Logging;
 namespace Ninlil.Dns.Server.Core.Certificates;
 
 /// <summary>
-///     This class wraps <see cref="TlsCertificateLoader" /> with a periodic re-check of the
-///     configured certificate file's own last-write time, so an already-running TLS-based
-///     transport picks up a certificate replaced on disk after startup -- most notably, one
-///     <c>Ninlil.Dns.Server.Acme</c> renews mid-run -- without needing a restart, matching
-///     this project's own "an operator should never have to remember to do X, or it silently
-///     degrades over time" deployment-target principle already applied to RFC 5011's automated
-///     trust anchor rollover.
+///     This class wraps <see cref="TlsCertificateLoader" /> and re-checks the certificate file's
+///     last-write time on a timer, so a running TLS transport picks up a certificate replaced on
+///     disk (for example one <c>Ninlil.Dns.Server.Acme</c> renews) without a restart.
 ///     <para>
-///         A stale, already-superseded <see cref="X509Certificate2" /> is deliberately never
-///         disposed once replaced: a TLS handshake already in flight against it must be able to
-///         finish using it safely, and its own finalizer reclaims it once nothing references it
-///         anymore.
+///         A replaced <see cref="X509Certificate2" /> is not disposed, because a handshake in
+///         progress may still be using it; the garbage collector reclaims it.
 ///     </para>
 /// </summary>
 public sealed class ReloadableTlsCertificateProvider : IDisposable
@@ -29,12 +23,11 @@ public sealed class ReloadableTlsCertificateProvider : IDisposable
 
     /// <summary>
     ///     This constructor loads (or generates) the certificate <paramref name="options" />
-    ///     describes immediately, then starts a background timer that re-checks it every
-    ///     <paramref name="pollInterval" />.
+    ///     describes, then starts a timer that re-checks it every <paramref name="pollInterval" />.
     /// </summary>
     /// <param name="options">Where to load an existing certificate from, or how to generate one.</param>
     /// <param name="logger">The logger this provider records a reload, or a failed reload check, to.</param>
-    /// <param name="pollInterval">How often to re-check the certificate's own source file for a change. Defaults to 5 minutes.</param>
+    /// <param name="pollInterval">How often to re-check the certificate file for a change. Defaults to 5 minutes.</param>
     public ReloadableTlsCertificateProvider(
         TlsCertificateOptions options,
         ILogger logger,
@@ -51,15 +44,14 @@ public sealed class ReloadableTlsCertificateProvider : IDisposable
     }
 
     /// <summary>
-    ///     This property contains the currently active certificate. A caller must read this
-    ///     fresh on every use (a per-connection TLS certificate-selection callback, never a value
-    ///     cached once at startup) for a reload to actually take effect without a restart.
+    ///     This property contains the current certificate. Read it on every use (for example in a
+    ///     per-connection certificate selection callback), not once at startup, or a reload has
+    ///     no effect.
     /// </summary>
     public X509Certificate2 Current => Volatile.Read(ref _certificate);
 
     /// <summary>
-    ///     This method re-checks whether the configured certificate's own source file has
-    ///     changed since this provider last loaded it, reloading if so.
+    ///     This method reloads the certificate if its file is newer than the last one loaded.
     /// </summary>
     private void ReloadIfChanged()
     {
@@ -80,9 +72,8 @@ public sealed class ReloadableTlsCertificateProvider : IDisposable
         }
         catch (Exception exception)
         {
-            // A failed reload check must never take down whatever transport owns this provider
-            // -- the previously loaded certificate stays in Current and remains perfectly
-            // usable; at worst, this simply retries at the next poll.
+            // Keep the current certificate and try again at the next poll; the write time is
+            // not recorded, so a half-written file is retried.
             _logger.LogWarning(
                 exception,
                 "Failed to check for a replaced TLS certificate; continuing with the current one."
@@ -91,8 +82,8 @@ public sealed class ReloadableTlsCertificateProvider : IDisposable
     }
 
     /// <summary>
-    ///     This method reads the last-write time of whichever file <see cref="Current" /> was
-    ///     actually loaded from -- an operator-provided PFX, or the self-signed state file.
+    ///     This method reads the last-write time of the file <see cref="Current" /> comes from:
+    ///     the configured PFX, or the self-signed state file.
     /// </summary>
     private DateTime ReadSourceFileWriteTimeUtc()
     {

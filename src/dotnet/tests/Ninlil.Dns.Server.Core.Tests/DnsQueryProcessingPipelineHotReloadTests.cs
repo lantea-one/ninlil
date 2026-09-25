@@ -13,19 +13,15 @@ using Ninlil.Dns.Server.Core.Resolution;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class proves, against a real, running <see cref="DnsQueryProcessingPipeline" /> and a
-///     real reload-on-change JSON configuration file -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- the split hot-
-///     reload behavior this class's own doc comment describes: a write reaching
-///     <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" /> via
-///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.DnsPipelineSettingsController.Patch</c> itself calls)
-///     changes the very next query's own answer with no restart, while the identical write
-///     mechanism reaching <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> changes
-///     nothing about an already-running pipeline until it is genuinely restarted
-///     (<see cref="DnsQueryProcessingPipeline.StopAsync" /> then
-///     <see cref="DnsQueryProcessingPipeline.StartAsync" /> on the same instance, exactly what a
-///     <c>POST /api/services/query-processing-pipeline/restart</c> call does).
+///     This class checks which pipeline options apply without a restart. It runs a
+///     <see cref="DnsQueryProcessingPipeline" /> against a reload-on-change JSON file and writes
+///     settings through <see cref="Server.Presets.PresetConfigurationFileApplier" /> (what
+///     <c>Ninlil.Web.Controllers.DnsPipelineSettingsController.Patch</c> calls). A change to
+///     <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" /> affects the next
+///     query. A change to <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> has no
+///     effect until <see cref="DnsQueryProcessingPipeline.StopAsync" /> and
+///     <see cref="DnsQueryProcessingPipeline.StartAsync" /> run on the same instance, as
+///     <c>POST /api/services/query-processing-pipeline/restart</c> does.
 /// </summary>
 public sealed class DnsQueryProcessingPipelineHotReloadTests
 {
@@ -41,10 +37,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
     }
 
     /// <summary>
-    ///     This resolver never completes on its own -- every call blocks until the test itself
-    ///     releases <see cref="Gate" /> once per call -- letting a test deterministically control
-    ///     exactly how many queries a worker has "in flight" at once, rather than racing against a
-    ///     real timing window.
+    ///     This resolver blocks each call until the test releases <see cref="Gate" />, so a test
+    ///     controls how many queries are in progress without relying on timing.
     /// </summary>
     private sealed class GatedResolver : IDnsQueryResolver
     {
@@ -90,11 +84,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                     DnsClassEnum.Internet
                 ),
             },
-            // A no-EDNS query is always capped at RFC 1035's own flat 512-byte ceiling
-            // regardless of MaxUdpAmplificationFactor (the ceiling this pipeline computes is the
-            // smaller of the two), so proving the amplification factor itself hot-reloads needs
-            // a query that declares a larger EDNS payload size instead -- otherwise the factor
-            // can never become the binding constraint at all.
+            // A no-EDNS query is always capped at 512 bytes, whatever the amplification factor,
+            // so the query advertises a larger EDNS payload to make the factor the binding limit.
             Edns = withEdns ? new DnsEdnsOptions(0, 4096, false, []) : null,
         };
 
@@ -157,8 +148,7 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             IOptionsMonitor<DnsQueryProcessingPipelineOptions> monitor =
                 provider.GetRequiredService<IOptionsMonitor<DnsQueryProcessingPipelineOptions>>();
 
-            // A tight amplification cap: a 50-record answer to a bare, no-EDNS query will be
-            // truncated.
+            // A tight amplification cap: a 50-record answer will be truncated.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -197,8 +187,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             byte[] firstBytes = await firstResponse.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.True(DnsMessageReader.Read(firstBytes, out _).IsTruncated);
 
-            // The exact same write mechanism DnsPipelineSettingsController.Patch itself calls,
-            // this time loosening the cap enough that the same-shaped answer fits.
+            // The same write DnsPipelineSettingsController.Patch makes, loosening the cap so the
+            // same answer fits.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -210,18 +200,14 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                 path
             );
 
-            // Polls the actual settled value directly rather than trusting a single OnChange
-            // firing to mean the reload is fully applied -- a second write to the same monitor
-            // within one test can otherwise race a stray/delayed notification left over from the
-            // first write against this one, observed directly as a real, reproducible flake.
+            // Poll the value itself rather than trusting one OnChange: a late notification from
+            // the first write can fire first and made this test flaky.
             await WaitForReloadAsync(
                 monitor,
                 () => monitor.CurrentValue.MaxUdpAmplificationFactor == 1000.0
             );
 
-            // The identical, still-running pipeline instance now genuinely stops truncating --
-            // proof the cap was actually re-read on this next query rather than captured once at
-            // StartAsync.
+            // The same running pipeline now stops truncating, so the cap is read per query.
             TaskCompletionSource<byte[]> secondResponse = new();
             await pipeline.EnqueueAsync(
                 new DnsInboundMessage(
@@ -251,7 +237,7 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }
@@ -318,8 +304,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                 )
             );
 
-            // Wait for the single worker to actually dequeue and start resolving query A (where
-            // it now blocks on the gate), leaving the channel itself empty again.
+            // Wait until the single worker has taken query A and is blocked on the gate, so the
+            // channel is empty again.
             await WaitForConditionAsync(() => Volatile.Read(ref resolver.CallCount) >= 1);
 
             TaskCompletionSource<byte[]> responseB = new();
@@ -332,8 +318,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                 )
             );
 
-            // The one-slot channel is now full (query B occupies it, the one worker is stuck on
-            // query A) -- a third enqueue must block until space frees up.
+            // The one-slot channel now holds query B and the worker is stuck on A, so a third
+            // enqueue must wait.
             TaskCompletionSource<byte[]> responseC = new();
             ValueTask enqueueCValueTask = pipeline.EnqueueAsync(
                 new DnsInboundMessage(
@@ -351,8 +337,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                 "Expected the bounded channel (capacity 1) to still be full."
             );
 
-            // The exact same write mechanism DnsPipelineSettingsController.Patch itself calls --
-            // raising ChannelCapacity while the pipeline keeps running, with no restart.
+            // The same write DnsPipelineSettingsController.Patch makes, raising ChannelCapacity
+            // while the pipeline runs.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -364,24 +350,19 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                 path
             );
 
-            // Polls the actual settled value directly rather than trusting a single OnChange
-            // firing to mean the reload is fully applied -- a second write to the same monitor
-            // within one test can otherwise race a stray/delayed notification left over from the
-            // first write against this one, observed directly as a real, reproducible flake.
+            // Poll the value itself rather than trusting one OnChange: a late notification from
+            // the first write can fire first and made this test flaky.
             await WaitForReloadAsync(monitor, () => monitor.CurrentValue.ChannelCapacity == 100);
 
-            // Even though the options binding itself now reports 100, the already-running
-            // pipeline's own bounded Channel<T> was constructed with capacity 1 back at
-            // StartAsync and is never rebuilt without a real restart -- the third enqueue must
-            // still be blocked.
+            // The options now say 100, but the running channel was built with capacity 1 and is
+            // only rebuilt on restart, so the third enqueue is still waiting.
             await Task.Delay(200);
             Assert.False(
                 enqueueCTask.IsCompleted,
                 "ChannelCapacity must not hot-reload -- it is only re-read on the next StartAsync."
             );
 
-            // Drain the pipeline: release query A, letting the worker dequeue query B, which
-            // frees the slot query C's write was waiting on.
+            // Release query A so the worker takes query B, freeing the slot query C waits for.
             resolver.Gate.Release();
             await responseA.Task.WaitAsync(TimeSpan.FromSeconds(5));
             resolver.Gate.Release();
@@ -390,10 +371,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             resolver.Gate.Release();
             await responseC.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            // Now genuinely restart the pipeline -- exactly what a
-            // POST /api/services/query-processing-pipeline/restart call does -- and confirm the
-            // new ChannelCapacity (100) is in effect afterward: five back-to-back enqueues all
-            // succeed immediately, with nothing blocking.
+            // Restart the pipeline, as POST /api/services/query-processing-pipeline/restart does,
+            // and check the new capacity: five enqueues in a row complete at once.
             await pipeline.StopAsync(CancellationToken.None);
             await pipeline.StartAsync(CancellationToken.None);
 
@@ -415,8 +394,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                     )
                     .AsTask();
 
-                // With a genuine capacity of 100, every one of these five writes must complete
-                // immediately, without needing the (still-gated) resolver to drain anything.
+                // With capacity 100, each write completes without the gated resolver draining
+                // anything.
                 await enqueueTask.WaitAsync(TimeSpan.FromSeconds(2));
             }
 
@@ -439,15 +418,14 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }
 
     /// <summary>
-    ///     This method waits for a real configuration reload to actually happen (.NET's own JSON
-    ///     configuration provider debounces file-change notifications by a few hundred
-    ///     milliseconds) rather than asserting against a fixed delay.
+    ///     This method waits for the configuration reload event, since the JSON provider debounces
+    ///     file-change notifications, instead of a fixed delay.
     /// </summary>
     private static async Task WaitForReloadAsync(
         IOptionsMonitor<DnsQueryProcessingPipelineOptions> monitor,
@@ -462,8 +440,8 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
     }
 
     /// <summary>
-    ///     This method waits for an arbitrary condition (here, a background worker having reached
-    ///     a certain point) to become true, polling rather than sleeping a fixed amount.
+    ///     This method polls until a condition holds (such as a worker reaching a point) instead of
+    ///     sleeping a fixed time.
     /// </summary>
     private static async Task WaitForConditionAsync(Func<bool> condition)
     {

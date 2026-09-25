@@ -15,21 +15,20 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Core.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's shared DNS server core: the query dispatcher, the channel-based processing
-///     pipeline, and the internal event bus.
+///     This class provides the <see cref="IServiceCollection" /> extension that registers the
+///     shared DNS server core: the query pipeline and dispatcher, the event bus, the cache
+///     sweeper, and the storage-free services several resolver projects share (DNS Cookies, EDNS
+///     Client Subnet, DNS64 and the outbound UDP socket pool).
 /// </summary>
 public static class ServiceCollectionServerCoreExtension
 {
     /// <summary>
-    ///     This method registers <see cref="IDnsQueryDispatcher" />, <see cref="DnsQueryProcessingPipeline" />,
-    ///     and the event bus (<see cref="IDnsServerEventPublisher" /> plus its background
-    ///     dispatcher). It does not, on its own, register any <see cref="IDnsQueryResolver" /> --
-    ///     the composition root is expected to additionally register
-    ///     <c>Ninlil.Dns.Server.Authoritative</c>'s and/or
-    ///     <c>Ninlil.Dns.Server.Recursive</c>'s resolver, in whichever order they should be
-    ///     tried, and any <see cref="IDnsServerEventSubscriber{TEvent}" /> it wants events
-    ///     delivered to.
+    ///     This method registers <see cref="IDnsQueryDispatcher" />, <see cref="DnsQueryProcessingPipeline" />
+    ///     (as a singleton and a hosted service), the event bus (<see cref="IDnsServerEventPublisher" />,
+    ///     its dispatcher and the broker consumer), the cache sweeper, and the shared services
+    ///     with their options. It registers no <see cref="IDnsQueryResolver" />; the resolver
+    ///     projects do, in the order they should be tried, along with any
+    ///     <see cref="IDnsServerEventSubscriber{TEvent}" />.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read server-core settings from.</param>
@@ -58,55 +57,41 @@ public static class ServiceCollectionServerCoreExtension
 
         instance.AddSingleton<IDnsQueryDispatcher, DnsQueryDispatcher>();
 
-        // Unlike IDnsFilterEngine/IDnsRateLimiter, DnsCookieService lives in Server.Core itself
-        // (it needs no storage of its own) and is therefore always registered here, gated at
-        // runtime by DnsCookieOptions.Enable rather than by whether a separate project is
-        // referenced at all.
+        // DnsCookieService needs no storage, so it lives here and is always registered; it is
+        // switched on and off by DnsCookieOptions.Enable.
         instance.AddSingleton<DnsCookieService>();
 
-        // IOutboundUdpSocketPool/EdnsClientSubnetService are two more cross-cutting engines that
-        // live in Server.Core itself for the same reason DnsCookieService does: both
-        // Server.Recursive and Server.Forwarding already depend on this project, and neither
-        // needs storage of its own, so there is no reason to split either into its own project
-        // the way IDnsFilterEngine/IDnsRateLimiter's *implementations* are. Each is gated at
-        // runtime by its own options class instead (EnableSourcePortPool, EdnsClientSubnetOptions.Enable).
+        // Server.Recursive and Server.Forwarding both use these and both reference this project,
+        // so they live here. Each is switched by its options (OutboundQueryOptions.EnableSourcePortPool,
+        // EdnsClientSubnetOptions.Enable).
         instance.AddSingleton<IOutboundUdpSocketPool, OutboundUdpSocketPool>();
         instance.AddSingleton<EdnsClientSubnetService>();
 
-        // Dns64SynthesisService follows the exact same shape: storage-free, lives in Server.Core
-        // so both Server.Recursive and a future Server.Forwarding consumer could reach it without
-        // a project reference to one another, gated at runtime by its own Dns64Options.Enable.
+        // Used by Server.Recursive; switched by Dns64Options.Enable.
         instance.AddSingleton<Dns64SynthesisService>();
 
-        // DnsServerEventPublisher is registered once, as a singleton, under both its concrete
-        // type (which DnsServerEventDispatcher depends on to reach the channel it owns) and the
-        // IDnsServerEventPublisher interface (which everything else should depend on instead).
+        // One publisher instance under two types: DnsServerEventDispatcher needs the concrete
+        // type to read its channel; everything else uses the interface.
         instance.AddSingleton<DnsServerEventPublisher>();
         instance.AddSingleton<IDnsServerEventPublisher>(provider =>
             provider.GetRequiredService<DnsServerEventPublisher>()
         );
         instance.AddHostedService<DnsServerEventDispatcher>();
 
-        // A no-op when no IDnsServerEventBrokerTransport is registered (the default, in-memory
-        // configuration) -- see BrokerEventConsumerService's own doc comment. Whichever broker
-        // package (Ninlil.Dns.Server.Events.RabbitMq/.ActiveMq) an operator actually
-        // references registers the transport itself; this project only needs the consumer loop
-        // to exist so that registration has somewhere to plug into.
+        // Does nothing unless a broker package (Events.RabbitMq or Events.ActiveMq) registers
+        // an IDnsServerEventBrokerTransport.
         instance.AddHostedService<BrokerEventConsumerService>();
 
-        // One sweep for every IDnsCache the resolver projects register (the recursive cache and
-        // the forwarded-response cache); with none registered it simply has nothing to sweep.
+        // Sweeps every IDnsCache the resolver projects register.
         instance.AddHostedService<DnsCacheEvictionService>();
 
-        // DnsQueryProcessingPipeline is likewise registered once, as a singleton, so that a
-        // transport can inject it directly to call EnqueueAsync, while also being started and
-        // stopped automatically alongside the rest of the host.
+        // One pipeline instance: transports inject it to call EnqueueAsync, and the host starts
+        // and stops it.
         instance.AddSingleton<DnsQueryProcessingPipeline>();
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<DnsQueryProcessingPipeline>()
         );
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

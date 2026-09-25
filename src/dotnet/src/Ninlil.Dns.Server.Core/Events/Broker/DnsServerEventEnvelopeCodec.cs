@@ -4,15 +4,16 @@ using JsonSerializer = Ninlil.Common.Serializer.JsonSerializer;
 namespace Ninlil.Dns.Server.Core.Events.Broker;
 
 /// <summary>
-///     This class converts between a live <see cref="IDnsServerEvent" /> and its own
-///     <see cref="DnsServerEventEnvelope" /> wire form, shared by every
-///     <see cref="IDnsServerEventBrokerTransport" /> implementation so none of them need to
-///     reimplement this encoding themselves.
+///     This class converts between an <see cref="IDnsServerEvent" /> and its
+///     <see cref="DnsServerEventEnvelope" /> wire form. Every
+///     <see cref="IDnsServerEventBrokerTransport" /> uses it.
 /// </summary>
 public static class DnsServerEventEnvelopeCodec
 {
     /// <summary>
-    ///     This method encodes a live event into its own broker-wire envelope.
+    ///     This method encodes an event into an envelope. It throws
+    ///     <see cref="InvalidOperationException" /> for an event type not in
+    ///     <see cref="DnsServerEventTypeRegistry" />.
     /// </summary>
     public static DnsServerEventEnvelope Encode(IDnsServerEvent domainEvent)
     {
@@ -23,7 +24,7 @@ public static class DnsServerEventEnvelopeCodec
     }
 
     /// <summary>
-    ///     This method decodes a broker-wire envelope back into a live event.
+    ///     This method decodes an envelope back into an event.
     /// </summary>
     public static IDnsServerEvent Decode(DnsServerEventEnvelope envelope)
     {

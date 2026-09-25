@@ -2,15 +2,18 @@
 namespace Ninlil.Dns.Server.Core.Events.Broker;
 
 /// <summary>
-///     This class maps every broker-eligible <see cref="IDnsServerEvent" /> concrete type to (and
-///     from) a short, stable, explicit name -- used as <see cref="DnsServerEventEnvelope.EventTypeName" />
-///     -- rather than a reflection-derived <see cref="Type.AssemblyQualifiedName" /> or
-///     <see cref="Type.FullName" />. The same "explicit registry, not reflection-derived name"
-///     choice <see cref="Common.Wire.Records.DnsRecordDataCodecRegistry" /> and this project's
-///     own <c>DnssecAlgorithmRegistry</c> already make elsewhere: an explicit name survives a
-///     class rename/namespace move that would otherwise
-///     silently break every already-queued or already-persisted broker message referencing the
-///     old reflected name.
+///     This class maps event types to short, stable names, used as
+///     <see cref="DnsServerEventEnvelope.EventTypeName" /> and as webhook subscription event
+///     names. Explicit names, rather than <see cref="Type.FullName" />, survive a class rename
+///     or namespace move without breaking queued broker messages or stored webhook
+///     subscriptions.
+///     <para>
+///         Only the types listed here can cross a broker. The other events (filter list,
+///         forwarder, rewrite, access-control, DHCP lease, role, user and cluster settings
+///         changes) are not registered, so with a broker transport
+///         <see cref="DnsServerEventEnvelopeCodec.Encode" /> throws for them and they are not
+///         delivered at all.
+///     </para>
 /// </summary>
 public static class DnsServerEventTypeRegistry
 {
@@ -21,8 +24,7 @@ public static class DnsServerEventTypeRegistry
         ["DnsZoneChanged"] = typeof(DnsZoneChangedEvent),
         ["DnsCacheEvicted"] = typeof(DnsCacheEvictedEvent),
 
-        // Four genuinely noteworthy moments, curated as webhook-eligible subscription targets
-        // alongside the two above.
+        // Events chosen as webhook subscription targets, alongside the ones above.
         ["DnssecZoneResigningCompleted"] = typeof(DnssecZoneResigningCompletedEvent),
         ["AcmeCertificateRenewalSucceeded"] = typeof(AcmeCertificateRenewalSucceededEvent),
         ["AcmeCertificateRenewalFailed"] = typeof(AcmeCertificateRenewalFailedEvent),
@@ -36,13 +38,12 @@ public static class DnsServerEventTypeRegistry
     );
 
     /// <summary>
-    ///     This method looks up the registered name for an event's own concrete runtime type.
+    ///     This method looks up the registered name for an event's runtime type.
     /// </summary>
     /// <param name="domainEvent">The event to look up a name for.</param>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when <paramref name="domainEvent" />'s own concrete type is not registered --
-    ///     every <see cref="IDnsServerEvent" /> that should ever cross a broker must be added to
-    ///     this registry.
+    ///     Thrown when the event's type is not registered. Any event that must cross a broker has
+    ///     to be added here.
     /// </exception>
     public static string GetName(IDnsServerEvent domainEvent) =>
         TypeToName.TryGetValue(domainEvent.GetType(), out string name)
@@ -52,13 +53,12 @@ public static class DnsServerEventTypeRegistry
             );
 
     /// <summary>
-    ///     This method looks up the registered concrete type for an event's own name.
+    ///     This method looks up the event type registered under a name.
     /// </summary>
     /// <param name="eventTypeName">The registered name to look up.</param>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when <paramref name="eventTypeName" /> is not registered -- most likely a
-    ///     message from a newer Ninlil version this instance's own registry does not yet
-    ///     know about.
+    ///     Thrown when <paramref name="eventTypeName" /> is not registered, for example a message
+    ///     from a newer Ninlil version.
     /// </exception>
     public static Type GetType(string eventTypeName) =>
         NameToType.TryGetValue(eventTypeName, out Type type)

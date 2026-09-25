@@ -8,9 +8,8 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Core.Tests;
 
 /// <summary>
-///     This class tests <see cref="OutboundUdpSocketPool" /> against real, OS-bound UDP sockets --
-///     a fake here would prove nothing about the actual source-port-pooling/exclusion behavior
-///     this class exists for.
+///     This class tests <see cref="OutboundUdpSocketPool" /> with real OS-bound UDP sockets, since
+///     port reuse and port exclusion can only be observed on real sockets.
 /// </summary>
 public class OutboundUdpSocketPoolTests
 {
@@ -36,9 +35,7 @@ public class OutboundUdpSocketPoolTests
         using OutboundUdpSocketLease second = await pool.RentAsync(AddressFamily.InterNetwork);
 
         Assert.NotSame(firstSocket, second.Socket);
-        // A pooling-disabled lease disposes its socket outright rather than returning it --
-        // proof this is a genuinely fresh, one-off socket each time, not merely a different
-        // object wrapping the same underlying handle.
+        // With pooling off, disposing a lease disposes its socket, so each lease has a new one.
         Assert.Throws<ObjectDisposedException>(() => firstSocket.LocalEndPoint);
     }
 

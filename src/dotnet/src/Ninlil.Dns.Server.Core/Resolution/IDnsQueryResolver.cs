@@ -2,13 +2,12 @@
 namespace Ninlil.Dns.Server.Core.Resolution;
 
 /// <summary>
-///     This interface is implemented once by <c>Ninlil.Dns.Server.Authoritative</c> and once
-///     by <c>Ninlil.Dns.Server.Recursive</c> -- the two engines <see cref="IDnsQueryDispatcher" />
-///     tries, in order, for every query. Authoritative and recursive resolution are not two
-///     separate servers here; they are two implementations of this one contract, both mounted
-///     behind the same set of transports, exactly the way a full-featured DNS server (this
-///     server included) is expected to behave: answer authoritatively for a zone this server
-///     hosts, and recurse for everything else if recursion is enabled.
+///     This interface is one engine that can answer a query. <see cref="DnsQueryDispatcher" />
+///     offers each query to the registered resolvers in order until one claims it. The
+///     implementations are, in order: <c>NotifyQueryResolver</c>, <c>DynamicUpdateQueryResolver</c>
+///     and <c>AuthoritativeQueryResolver</c> (Server.Authoritative), <c>ForwarderQueryResolver</c>
+///     (Server.Forwarding) and <c>RecursiveQueryResolver</c> (Server.Recursive). All of them sit
+///     behind the same transports and <see cref="Pipeline.DnsQueryProcessingPipeline" />.
 /// </summary>
 public interface IDnsQueryResolver
 {
@@ -20,8 +19,8 @@ public interface IDnsQueryResolver
     /// <returns>
     ///     <see cref="DnsQueryResolution.Handled" /> with a complete answer if this resolver
     ///     claims the query, or <see cref="DnsQueryResolution.NotHandled" /> if it does not (for
-    ///     example, an authoritative resolver declining a name it hosts no zone for), so the
-    ///     dispatcher can offer the query to the next resolver in line.
+    ///     example, the authoritative resolver for a name in no hosted zone), so the dispatcher can
+    ///     offer the query to the next resolver.
     /// </returns>
     ValueTask<DnsQueryResolution> TryResolveAsync(
         DnsQueryContext context,

@@ -6,22 +6,20 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Core.Caching;
 
 /// <summary>
-///     This class is the storage engine shared by every DNS answer cache in this server: a
-///     thread-safe, in-memory, TTL-bound and size-bound dictionary. The recursive resolver's
-///     RRset cache and the forwarded-response cache differ in what they key on and what an
-///     entry holds, but expiry, serve-stale retention, the size bound, eviction events, hit and
-///     miss counting, flushing and per-name removal are the same problem for both, so they are
-///     solved once, here, rather than twice in two caches that could drift apart.
+///     This class is the storage shared by every DNS answer cache: a thread-safe, in-memory
+///     dictionary bounded by TTL and size. The recursive RRset cache and the forwarded-response
+///     cache differ in key and entry, but share expiry, serve-stale retention, the size bound,
+///     eviction events, hit and miss counts, flushing and per-name removal, which live here.
 ///     <para>
 ///         <b>Size bound.</b> The periodic sweep (<see cref="DnsCacheEvictionService" />) trims
-///         the cache to exactly its bound once a minute. Between sweeps a burst of new names
+///         the cache to its bound once a minute. Between sweeps a burst of new names
 ///         could otherwise grow it without limit, so every 64th store also checks the size, and
 ///         trims straight away once the cache has grown more than 10% past its bound. Checking
 ///         only every 64th store keeps <see cref="ConcurrentDictionary{TKey,TValue}.Count" />
 ///         (which briefly locks the whole dictionary) off almost every store.
 ///     </para>
 /// </summary>
-/// <typeparam name="TKey">The cache key; its own equality decides what counts as "the same question".</typeparam>
+/// <typeparam name="TKey">The cache key; its equality decides what counts as "the same question".</typeparam>
 /// <typeparam name="TEntry">The cached value.</typeparam>
 /// <param name="cacheName">The owning cache's short name, used in eviction event reasons.</param>
 /// <param name="nameOf">Returns the owner name a key is for, so an operator can remove one name.</param>
@@ -33,8 +31,8 @@ namespace Ninlil.Dns.Server.Core.Caching;
 /// <param name="eventPublisher">The publisher eviction events go out through.</param>
 /// <param name="sweepEvictionReason">
 ///     The <see cref="DnsCacheEvictedEvent.Reason" /> for an expiry or size eviction. The
-///     recursive cache keeps its long-standing <c>expired-or-capacity</c> so existing webhook
-///     and broker consumers see no change.
+///     recursive cache uses <c>expired-or-capacity</c>, which webhook and broker consumers may
+///     match on, so it must not change.
 /// </param>
 /// <param name="timeProvider">The clock, replaceable in tests; the system clock by default.</param>
 public sealed class DnsCacheStore<TKey, TEntry>(
@@ -50,18 +48,17 @@ public sealed class DnsCacheStore<TKey, TEntry>(
     where TEntry : class, IDnsCacheEntry
 {
     /// <summary>
-    ///     This constant contains how many stores pass between two size checks -- see this
-    ///     class's own doc comment.
+    ///     This constant contains how many stores pass between two size checks (see the class
+    ///     summary).
     /// </summary>
     private const int StoresPerSizeCheck = 64;
 
     private readonly ConcurrentDictionary<TKey, TEntry> _entries = new();
 
     /// <summary>
-    ///     This field tracks when each entry was last actually looked up (a real hit, fresh or
-    ///     stale), separately from the entry itself, so a read never has to replace an entry
-    ///     just to record that it happened. The recursive cache's prefetch uses it to tell a
-    ///     name that is still being asked for from one nobody wants any more.
+    ///     This field records when each entry was last returned by a lookup, fresh or stale. It is
+    ///     kept apart from the entry so a read never has to replace the entry. The recursive
+    ///     cache's prefetch uses it to tell names still being asked for from ones nobody wants.
     /// </summary>
     private readonly ConcurrentDictionary<TKey, DateTimeOffset> _lastAccessedUtc = new();
 
@@ -78,8 +75,8 @@ public sealed class DnsCacheStore<TKey, TEntry>(
     private int _storesSinceSizeCheck;
 
     /// <summary>
-    ///     This property contains the current UTC time on this store's own clock, so an owning
-    ///     cache computing an expiry uses the same clock expiry is checked against.
+    ///     This property contains the current UTC time on this store's clock, so an owning cache
+    ///     computes expiries with the same clock they are checked against.
     /// </summary>
     public DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
 
@@ -148,7 +145,7 @@ public sealed class DnsCacheStore<TKey, TEntry>(
 
     /// <summary>
     ///     This method stores an entry, replacing whatever was cached under the same key, then
-    ///     trims the store if it has grown well past its bound (see this class's own doc comment).
+    ///     trims the store if it has grown well past its bound (see the class summary).
     /// </summary>
     /// <param name="key">The key to store under.</param>
     /// <param name="entry">The entry to store.</param>
@@ -167,8 +164,8 @@ public sealed class DnsCacheStore<TKey, TEntry>(
 
     /// <summary>
     ///     This method returns every entry alongside when it was last looked up (or
-    ///     <see langword="null" /> if it never was), for an owning cache that needs to scan its
-    ///     own entries, such as the recursive cache's prefetch.
+    ///     <see langword="null" /> if it never was), for an owning cache that scans its entries,
+    ///     such as the recursive cache's prefetch.
     /// </summary>
     public IEnumerable<(TKey Key, TEntry Entry, DateTimeOffset? LastAccessedUtc)> Snapshot() =>
         _entries.Select(pair =>
@@ -193,11 +190,9 @@ public sealed class DnsCacheStore<TKey, TEntry>(
         {
             int evictedCount = 0;
 
-            // A TTL-expired entry is only actually removed once it has also aged past the
-            // stale-serve grace window (zero when serve-stale is off) -- a later serve-stale
-            // lookup needs it to still be here until then. The size bound below still evicts an
-            // entry regardless of that window; a hard memory ceiling takes priority over how far
-            // back stale answers can reach.
+            // An expired entry stays until it is also past the serve-stale window (zero when
+            // serve-stale is off), because a serve-stale lookup may still need it. The size bound
+            // below ignores that window: the memory limit wins.
             TimeSpan retention = staleRetention();
             DateTimeOffset now = UtcNow;
 
@@ -214,8 +209,7 @@ public sealed class DnsCacheStore<TKey, TEntry>(
 
             if (overCapacityCount > 0)
             {
-                // Evict whichever remaining entries expire soonest first -- a simple, if not
-                // perfectly LRU, approximation of "least likely to still be useful."
+                // Evict the entries that expire soonest, a rough stand-in for least useful.
                 List<TKey> keysToEvict =
                 [
                     .. _entries
@@ -265,7 +259,7 @@ public sealed class DnsCacheStore<TKey, TEntry>(
     }
 
     /// <summary>
-    ///     This method removes every entry whose key is for exactly <paramref name="name" />.
+    ///     This method removes every entry whose key is for <paramref name="name" />.
     /// </summary>
     /// <param name="name">The owner name to forget; compared case-insensitively.</param>
     /// <returns>How many entries were removed.</returns>

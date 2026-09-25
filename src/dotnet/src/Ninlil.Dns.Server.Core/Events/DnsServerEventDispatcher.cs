@@ -8,12 +8,13 @@ using Microsoft.Extensions.Logging;
 namespace Ninlil.Dns.Server.Core.Events;
 
 /// <summary>
-///     This class runs for the lifetime of the application, draining events from
-///     <see cref="DnsServerEventPublisher" /> and delivering each one to every
-///     <see cref="IDnsServerEventSubscriber{TEvent}" /> registered for that specific event's
-///     type. A new dependency injection scope is created for each event so a subscriber can
-///     safely depend on scoped services -- a repository backed by a database context, for
-///     example -- the same way a request handler would.
+///     This hosted service drains events from <see cref="DnsServerEventPublisher" /> one at a
+///     time and delivers each to every <see cref="IDnsServerEventSubscriber{TEvent}" /> registered
+///     for its exact runtime type, in registration order. Each event gets a new DI scope, so
+///     subscribers can use scoped services such as repositories. Delivery is sequential: a slow
+///     subscriber delays every later event, and if one subscriber throws, the remaining
+///     subscribers for that event are skipped (the error is logged and the next event
+///     proceeds).
 /// </summary>
 /// <param name="publisher">The publisher whose queued events this dispatcher drains.</param>
 /// <param name="scopeFactory">The factory used to create a dependency injection scope per event.</param>
@@ -25,10 +26,8 @@ public sealed class DnsServerEventDispatcher(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property caches, per concrete event type, the reflected
-    ///     <see cref="IDnsServerEventSubscriber{TEvent}.HandleAsync" /> method to invoke, so that
-    ///     the reflection lookup itself only ever happens once per event type rather than once
-    ///     per event.
+    ///     This field caches the reflected <see cref="IDnsServerEventSubscriber{TEvent}.HandleAsync" />
+    ///     method per event type, so the lookup happens once per type rather than per event.
     /// </summary>
     private static readonly ConcurrentDictionary<Type, MethodInfo> HandleMethodCache = new();
 
@@ -43,8 +42,7 @@ public sealed class DnsServerEventDispatcher(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // A misbehaving subscriber must never take the whole event pipeline down with
-                // it; log the failure and keep draining the queue.
+                // A failing subscriber must not stop the bus; log it and keep draining.
                 logger.LogError(
                     exception,
                     "Unhandled exception while dispatching a {EventType} event.",
@@ -55,8 +53,8 @@ public sealed class DnsServerEventDispatcher(
     }
 
     /// <summary>
-    ///     This method delivers a single event to every subscriber registered for its exact
-    ///     runtime type.
+    ///     This method delivers one event to every subscriber registered for its exact runtime
+    ///     type. Subscribers for a base type or interface are not called.
     /// </summary>
     private async Task DispatchAsync(IDnsServerEvent domainEvent, CancellationToken stoppingToken)
     {

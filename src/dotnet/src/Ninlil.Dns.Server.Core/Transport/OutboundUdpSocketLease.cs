@@ -4,15 +4,12 @@ using System.Net.Sockets;
 namespace Ninlil.Dns.Server.Core.Transport;
 
 /// <summary>
-///     This class wraps a single UDP socket checked out from <see cref="OutboundUdpSocketPool" />
-///     for the exclusive duration of one outbound query's own send-then-receive round trip.
-///     Disposing this lease returns <see cref="Socket" /> to the pool for reuse -- or, if
-///     <see cref="MarkUnhealthy" /> was called first, discards it instead, so a socket that just
-///     threw a real <see cref="SocketException" /> is never handed to a later, unrelated query.
-///     Public (rather than internal to <c>Server.Core</c>) since <see cref="IOutboundUdpSocketPool.RentAsync" />
-///     hands one back to callers in other projects (<c>Server.Recursive</c>, <c>Server.Forwarding</c>);
-///     its own constructor stays internal, since only <see cref="OutboundUdpSocketPool" /> itself
-///     ever needs to create one.
+///     This class holds one UDP socket from <see cref="OutboundUdpSocketPool" /> for a single
+///     outbound query's send and receive. Disposing it returns the socket to the pool, or
+///     discards it if <see cref="MarkUnhealthy" /> was called, so a socket that threw a
+///     <see cref="SocketException" /> is not reused. <c>Server.Recursive</c> and
+///     <c>Server.Forwarding</c> receive it from <see cref="IOutboundUdpSocketPool.RentAsync" />;
+///     only the pool creates it.
 /// </summary>
 public sealed class OutboundUdpSocketLease : IDisposable
 {
@@ -27,9 +24,8 @@ public sealed class OutboundUdpSocketLease : IDisposable
     /// <param name="socket">The socket this lease wraps.</param>
     /// <param name="owningPool">
     ///     The pool to return <paramref name="socket" /> to on <see cref="Dispose" />, or
-    ///     <see langword="null" /> for a one-off socket issued while pooling itself is disabled
-    ///     (<see cref="OutboundQueryOptions.EnableSourcePortPool" />) -- disposed outright instead
-    ///     of returned anywhere.
+    ///     <see langword="null" /> for a one-off socket issued while pooling is disabled
+    ///     (<see cref="OutboundQueryOptions.EnableSourcePortPool" />), which is disposed instead.
     /// </param>
     /// <param name="family">Which address family <paramref name="socket" /> was bound for.</param>
     internal OutboundUdpSocketLease(
@@ -44,15 +40,14 @@ public sealed class OutboundUdpSocketLease : IDisposable
     }
 
     /// <summary>
-    ///     This property contains the leased socket itself, ready to send from and receive into.
+    ///     This property contains the leased socket, bound and unconnected.
     /// </summary>
     public Socket Socket { get; }
 
     /// <summary>
-    ///     This method marks this lease's own socket as unfit to reuse -- call it after a real
-    ///     <see cref="SocketException" /> (as opposed to an ordinary timeout or a validation-
-    ///     hardening mismatch discard, both of which leave the socket itself perfectly healthy)
-    ///     so <see cref="Dispose" /> discards it instead of returning it to the pool.
+    ///     This method marks the socket as unfit to reuse, so <see cref="Dispose" /> discards it.
+    ///     Call it after a <see cref="SocketException" />; a timeout or a discarded mismatched
+    ///     reply leaves the socket usable.
     /// </summary>
     public void MarkUnhealthy() => _healthy = false;
 

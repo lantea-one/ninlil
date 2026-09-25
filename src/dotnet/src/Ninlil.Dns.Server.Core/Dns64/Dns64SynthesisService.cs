@@ -9,58 +9,44 @@ using Ninlil.Dns.Common.Wire.Records;
 namespace Ninlil.Dns.Server.Core.Dns64;
 
 /// <summary>
-///     This class implements RFC 6147 DNS64: synthesizing an AAAA answer, embedding a real A
-///     record's own IPv4 address into <see cref="Dns64Options.SynthesisPrefix" /> per RFC 6052
-///     §2.2's algorithm, for a name that has no AAAA record of its own. Kept in <c>Server.Core</c>
-///     (storage-free, IANA/RFC-sourced logic only) rather than <c>Server.Recursive</c> itself,
-///     mirroring where <see cref="ClientSubnet.EdnsClientSubnetService" /> lives, so a future
-///     consumer outside the recursive resolver (a forwarder re-answering a client's own AAAA
-///     query, for example) could reuse it without needing a project reference to
-///     <c>Server.Recursive</c>.
+///     This class implements RFC 6147 DNS64: for a name with no AAAA record, it builds AAAA
+///     records by embedding each A record's IPv4 address into
+///     <see cref="Dns64Options.SynthesisPrefix" /> (RFC 6052 §2.2). <c>RecursiveQueryResolver</c>
+///     is its only caller. It needs no storage, so it lives in <c>Server.Core</c> next to
+///     <see cref="ClientSubnet.EdnsClientSubnetService" />. It does not skip non-global IPv4
+///     addresses.
 ///     <para>
-///         <b>A synthesized AAAA answer must never be presented as DNSSEC-authenticated.</b> The
-///         address this service invents was never actually signed by anyone -- it has no real
-///         RRSIG covering it, only whatever RRSIG (if any) covered the real, unrelated A record it
-///         was derived from. RFC 6147 §3 explicitly warns that DNS64 synthesis can break DNSSEC
-///         validation for the synthesized RRset, and RFC 6840 §5.1 only ever permits the AD bit
-///         when *every* RRset in a response was cryptographically validated end-to-end as the
-///         literal data returned. A caller that uses this service's own synthesized records in a
-///         response is responsible for making sure that response's own <c>AuthenticData</c> bit
-///         is never set to <see langword="true" /> -- see <c>RecursiveQueryResolver</c>'s own
-///         handling for the one real caller that does this today.
+///         <b>A synthesized answer must never carry the AD bit.</b> No one signed the invented
+///         addresses; any RRSIG covered only the A record they came from. RFC 6147 §3 warns that
+///         synthesis breaks DNSSEC validation of the synthesized RRset. The caller must leave
+///         <c>AuthenticData</c> unset on a response that contains these records, as
+///         <c>RecursiveQueryResolver</c> does.
 ///     </para>
 /// </summary>
 /// <param name="options">
-///     This service's own <see cref="Dns64Options.Enable" /> gate and
-///     <see cref="Dns64Options.SynthesisPrefix" /> -- read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> so a <c>Dns64SettingsController.Patch</c> write
-///     reaches this service's very next synthesis attempt with no restart, the same reasoning
-///     every other <c>IOptionsMonitor</c>-bound singleton in this project's query path already
-///     documents for itself.
+///     The DNS64 settings, read through <see cref="IOptionsMonitor{TOptions}" /> on each call so
+///     a change made through <c>Dns64SettingsController</c> applies without a restart.
 /// </param>
 public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
 {
     /// <summary>
-    ///     This property contains the six prefix lengths RFC 6052 §2.2 defines for embedding a
-    ///     32-bit IPv4 address into a 128-bit IPv6 address -- any other length is rejected.
+    ///     This field contains the six prefix lengths RFC 6052 §2.2 defines; any other length is
+    ///     rejected.
     /// </summary>
     private static readonly int[] ValidPrefixLengths = [32, 40, 48, 56, 64, 96];
 
     /// <summary>
-    ///     This property reports whether DNS64 synthesis is currently enabled at all, read live.
+    ///     This property reports whether DNS64 synthesis is enabled.
     /// </summary>
     public bool IsEnabled => options.CurrentValue.Enable;
 
     /// <summary>
-    ///     This method builds the synthesized AAAA answer for a name that has no AAAA record but
-    ///     does have the A answer given by <paramref name="aAnswer" /> (that sequence's own exact
-    ///     shape, including any CNAME hops already followed to reach the real A record(s), the
-    ///     same shape <c>IterativeResolutionResult.Answer</c> already carries for a successful A
-    ///     resolution). Returns an empty list -- meaning "do not synthesize anything" -- when
-    ///     synthesis is disabled, <paramref name="aAnswer" /> is empty, or the currently configured
-    ///     <see cref="Dns64Options.SynthesisPrefix" /> is not a legal RFC 6052 §2.2 prefix; a
-    ///     misconfigured prefix fails safe (no synthesized answer at all) rather than throwing
-    ///     mid-query.
+    ///     This method builds the synthesized AAAA answer from the A answer
+    ///     <paramref name="aAnswer" />, which may include CNAME records followed on the way (the
+    ///     shape of <c>IterativeResolutionResult.Answer</c>). Each A record becomes an AAAA record
+    ///     and other records are copied. It returns an empty list, meaning "do not synthesize",
+    ///     when synthesis is disabled, <paramref name="aAnswer" /> is empty, or
+    ///     <see cref="Dns64Options.SynthesisPrefix" /> is not a valid RFC 6052 prefix.
     /// </summary>
     public IReadOnlyList<DnsResourceRecord> SynthesizeAaaaRecords(
         IReadOnlyList<DnsResourceRecord> aAnswer
@@ -84,9 +70,7 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
         {
             if (record.Type != DnsResourceRecordTypeEnum.A)
             {
-                // A CNAME hop already followed on the way to the real A record is carried
-                // through unchanged -- the synthesized AAAA name still needs to chain through
-                // exactly the same aliases a client resolving the real A record would have seen.
+                // Keep CNAME records so the answer chains through the same aliases.
                 synthesized.Add(record);
                 continue;
             }
@@ -105,8 +89,7 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
                     record.Name,
                     DnsResourceRecordTypeEnum.Aaaa,
                     record.Class,
-                    // RFC 6147 §6.1: a synthesized RRset's own TTL should be no greater than the
-                    // real A record's own TTL, so it never outlives the data it was derived from.
+                    // RFC 6147 §5.1.7: the synthesized TTL should not exceed the A record's TTL.
                     record.TimeToLive,
                     DnsRecordDataCodecRegistry.Encode(DnsResourceRecordTypeEnum.Aaaa, aaaaData)
                 )
@@ -117,20 +100,15 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     }
 
     /// <summary>
-    ///     This method embeds a 32-bit IPv4 address into a 128-bit IPv6 address under a given
-    ///     RFC 6052 §2.2 prefix, per that section's own exact bit layout: the prefix occupies the
-    ///     leading <paramref name="prefixLength" /> bits; the reserved "u" octet (bits 64-71,
-    ///     always zero) appears immediately after the prefix for every length except
-    ///     <c>/96</c> (where the prefix itself already fills bits 0-95, leaving no room or need
-    ///     for one); the IPv4 address's own 32 bits are split around that "u" octet for every
-    ///     prefix length shorter than <c>/64</c>, and placed contiguously right after it for
-    ///     <c>/64</c> and <c>/96</c>. All six legal lengths are exact octet boundaries, so no
-    ///     partial-byte bit manipulation is ever needed.
+    ///     This method embeds an IPv4 address into an IPv6 address under an RFC 6052 §2.2 prefix.
+    ///     The prefix fills the first <paramref name="prefixLength" /> bits. For every length but
+    ///     <c>/96</c>, bits 64 to 71 are the reserved "u" octet and stay zero; for lengths below
+    ///     <c>/64</c> the IPv4 bits are split around it. All six lengths are whole octets.
     /// </summary>
-    /// <param name="ipv4Address">The real IPv4 address being embedded.</param>
+    /// <param name="ipv4Address">The IPv4 address to embed.</param>
     /// <param name="prefixBytes">
-    ///     The 16-byte NAT64 prefix network address, already masked so every bit beyond
-    ///     <paramref name="prefixLength" /> is zero (see <see cref="TryParsePrefix" />).
+    ///     The 16-byte NAT64 prefix, masked so every bit after <paramref name="prefixLength" /> is
+    ///     zero (see <see cref="TryParsePrefix" />).
     /// </param>
     /// <param name="prefixLength">One of the six lengths <see cref="ValidPrefixLengths" /> lists.</param>
     public static byte[] EmbedIPv4Address(
@@ -188,14 +166,13 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
     }
 
     /// <summary>
-    ///     This method parses and validates a DNS64 prefix in CIDR notation, returning its own
-    ///     16-byte network address (masked so every bit beyond <paramref name="prefixLength" /> is
-    ///     zero, regardless of whether the operator-supplied text already was) and prefix length.
+    ///     This method parses a DNS64 prefix in CIDR notation into its 16-byte network address
+    ///     (with every bit after <paramref name="prefixLength" /> cleared) and its length.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> when <paramref name="cidr" /> is a well-formed IPv6 CIDR whose
-    ///     own prefix length is one of the six RFC 6052 §2.2 defines; <see langword="false" />
-    ///     otherwise, with both <see langword="out" /> parameters set to their default.
+    ///     <see langword="true" /> when <paramref name="cidr" /> is an IPv6 CIDR with one of the six
+    ///     RFC 6052 §2.2 lengths; otherwise <see langword="false" />, with both
+    ///     <see langword="out" /> parameters set to their defaults.
     /// </returns>
     public static bool TryParsePrefix(string cidr, out byte[] prefixBytes, out int prefixLength)
     {
@@ -219,8 +196,7 @@ public sealed class Dns64SynthesisService(IOptionsMonitor<Dns64Options> options)
         byte[] raw = address.GetAddressBytes();
         byte[] masked = new byte[16];
 
-        // Every one of the six legal RFC 6052 prefix lengths is an exact multiple of 8, so
-        // masking is always a whole-byte copy -- no partial-byte bit clearing is ever needed.
+        // Every valid length is a multiple of 8, so masking is a whole-byte copy.
         Array.Copy(raw, masked, length / 8);
 
         prefixBytes = masked;

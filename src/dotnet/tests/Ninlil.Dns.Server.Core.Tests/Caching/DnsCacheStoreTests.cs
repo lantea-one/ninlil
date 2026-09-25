@@ -8,7 +8,8 @@ namespace Ninlil.Dns.Server.Core.Tests.Caching;
 /// <summary>
 ///     This class tests <see cref="DnsCacheStore{TKey, TEntry}" />, the storage engine the
 ///     recursive and forwarded caches share: freshness, serve-stale retention, the size bound,
-///     statistics, flushing and per-name removal.
+///     statistics, flushing and per-name removal. It uses a <see cref="Fakes.ManualTimeProvider" />
+///     for expiry and a <see cref="Fakes.RecordingEventPublisher" /> for eviction events.
 /// </summary>
 public class DnsCacheStoreTests
 {

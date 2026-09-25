@@ -13,8 +13,8 @@ public static class LocalAddresses
 {
     /// <summary>
     ///     This property contains an address from the TEST-NET-1 documentation range (RFC 5737),
-    ///     which is never assigned to a real host -- binding it fails with "cannot assign
-    ///     requested address".
+    ///     which is never assigned to a host, so binding it fails with "cannot assign requested
+    ///     address".
     /// </summary>
     public static IPAddress Unassigned { get; } = IPAddress.Parse("192.0.2.1");
 

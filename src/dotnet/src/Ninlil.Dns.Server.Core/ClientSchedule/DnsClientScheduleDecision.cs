@@ -2,23 +2,21 @@
 namespace Ninlil.Dns.Server.Core.ClientSchedule;
 
 /// <summary>
-///     This class carries the outcome of a single <see cref="IDnsClientScheduleEngine.EvaluateAsync" />
-///     check -- mirroring <see cref="Filtering.DnsFilterDecision" /> exactly, since a schedule
-///     block is meant to look identical, on the wire, to a filter-list block (see
-///     <see cref="Pipeline.DnsQueryProcessingPipeline" />'s own consultation of this engine for
-///     the shared response-building path both denials go through).
+///     This class carries the result of one <see cref="IDnsClientScheduleEngine.EvaluateAsync" />
+///     check. It has the same shape as <see cref="Filtering.DnsFilterDecision" />; a schedule
+///     block is answered with the same denial response as a filter-list block (see
+///     <see cref="Pipeline.DnsQueryProcessingPipeline" />).
 /// </summary>
 public sealed class DnsClientScheduleDecision
 {
     /// <summary>
-    ///     This property indicates whether the querying client is currently blocked by an active
-    ///     schedule.
+    ///     This property indicates whether the client is blocked by a pause or an active schedule.
     /// </summary>
     public bool IsBlocked { get; }
 
     /// <summary>
-    ///     This property contains a short, human-readable reason for this decision -- used for
-    ///     logging, never shown to the querying client.
+    ///     This property contains a short reason for the decision, for logs only; the client never
+    ///     sees it.
     /// </summary>
     public string Reason { get; }
 
@@ -29,13 +27,13 @@ public sealed class DnsClientScheduleDecision
     }
 
     /// <summary>
-    ///     This property contains the shared result for "no active schedule blocks this client."
+    ///     This property contains the shared result for "not blocked".
     /// </summary>
     public static DnsClientScheduleDecision Allowed { get; } = new(false, null);
 
     /// <summary>
-    ///     This method builds the result for "an active schedule blocks this client."
+    ///     This method builds the result for "blocked by a pause or schedule".
     /// </summary>
-    /// <param name="reason">A short, human-readable reason (which schedule matched, and why).</param>
+    /// <param name="reason">A short reason, such as which pause or schedule matched.</param>
     public static DnsClientScheduleDecision Blocked(string reason) => new(true, reason);
 }

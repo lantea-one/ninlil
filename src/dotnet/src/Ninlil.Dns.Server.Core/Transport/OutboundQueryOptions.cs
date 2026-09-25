@@ -3,10 +3,9 @@ namespace Ninlil.Dns.Server.Core.Transport;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:OutboundQuery</c> section of the application's
-///     configuration and controls <see cref="OutboundUdpSocketPool" />'s own behavior: the
-///     source-port randomization/pooling every outbound UDP query this server itself issues (as
-///     a recursive resolver toward authoritative servers, and as a forwarder toward configured
-///     upstream resolvers) uses, per this sub-phase's own anti-cache-poisoning hardening goal.
+///     configuration and controls <see cref="OutboundUdpSocketPool" />, which supplies the source
+///     sockets for outbound UDP queries: the recursive resolver's queries to authoritative
+///     servers and the forwarder's queries to upstream resolvers.
 /// </summary>
 public sealed class OutboundQueryOptions
 {
@@ -16,39 +15,29 @@ public sealed class OutboundQueryOptions
     public const string SectionName = "DnsServer:OutboundQuery";
 
     /// <summary>
-    ///     This property controls whether outbound UDP queries are sent through
-    ///     <see cref="OutboundUdpSocketPool" /> at all. On by default: unlike a capability that
-    ///     exposes new information or opens a new listening surface, a pooled, excluded-port-aware
-    ///     source port is a pure hardening improvement over this project's previous behavior (a
-    ///     brand-new, fully OS-ephemeral-random socket per query) with no new attack surface of its
-    ///     own, matching the same "self-maintaining capabilities default on" bias every other
-    ///     pure-correctness/hardening toggle in this project already follows. When
-    ///     <see langword="false" />, <c>Ninlil.Dns.Server.Recursive.Transport.UpstreamDnsClient</c>
-    ///     and <c>Ninlil.Dns.Server.Forwarding.Clients.PlainForwarderClient</c> fall back to their
-    ///     original behavior: a fresh, one-off socket per query, bound to whatever port the OS
-    ///     assigns. Plain <c>&lt;c&gt;</c> text, not <c>&lt;see cref&gt;</c>, since this project
-    ///     does not (and, per its own layering, must not) reference either of those two consuming
-    ///     projects at compile time.
+    ///     This property controls whether outbound UDP queries reuse sockets from
+    ///     <see cref="OutboundUdpSocketPool" />. On by default. When on, queries rotate across a
+    ///     fixed set of at most <see cref="PoolSizePerAddressFamily" /> source ports that avoid
+    ///     <see cref="ExcludedSourcePorts" />. When off, each query in
+    ///     <c>Ninlil.Dns.Server.Recursive.Transport.UpstreamDnsClient</c> and
+    ///     <c>Ninlil.Dns.Server.Forwarding.Clients.PlainForwarderClient</c> gets a new socket on a
+    ///     random ephemeral port (still avoiding excluded ports), which gives more source-port
+    ///     randomness per query than the pool does.
     /// </summary>
     public bool EnableSourcePortPool { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how many outbound UDP sockets this pool keeps ready per address
-    ///     family (IPv4 and IPv6 are tracked, and therefore capped, independently) -- effectively
-    ///     how many distinct source ports this server's own outbound queries rotate across at
-    ///     once. A query issued while every pooled socket for its own family is already checked
-    ///     out waits for one to be returned rather than opening an unbounded number of concurrent
-    ///     sockets, the same backpressure-over-unbounded-growth posture
-    ///     <see cref="RateLimiting.IDnsRateLimiter" />'s own <c>MaxTrackedClients</c> cap takes for
-    ///     a different resource.
+    ///     This property contains how many sockets the pool keeps per address family (IPv4 and
+    ///     IPv6 are capped separately), which is how many source ports outbound queries rotate
+    ///     across. A query that finds every socket of its family in use waits for one to be
+    ///     returned. The value is read when a family is first used, so a change needs a restart.
     /// </summary>
     public int PoolSizePerAddressFamily { get; set; } = 128;
 
     /// <summary>
-    ///     This property contains local source ports this pool never binds an outbound socket to
-    ///     -- for example, a port some other local service on the same host already listens on,
-    ///     or one an operator otherwise wants this server's own outbound DNS traffic to avoid.
-    ///     Empty by default (no port excluded).
+    ///     This property contains local source ports outbound sockets must not use, such as a port
+    ///     another local service listens on. Empty by default. The check is best effort: after
+    ///     25 failed attempts the socket takes whatever port the OS assigns.
     /// </summary>
     public List<int> ExcludedSourcePorts { get; set; } = [];
 }

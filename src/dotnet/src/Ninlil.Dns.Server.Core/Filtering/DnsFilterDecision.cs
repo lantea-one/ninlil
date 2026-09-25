@@ -2,20 +2,20 @@
 namespace Ninlil.Dns.Server.Core.Filtering;
 
 /// <summary>
-///     This class carries the outcome of a single <see cref="IDnsFilterEngine" /> check: allow,
-///     deny, or "no list matched at all" (which behaves as allow, but is kept distinct so a
-///     caller can tell "explicitly allowed" apart from "nothing said anything").
+///     This class carries the result of one <see cref="IDnsFilterEngine" /> check: denied, with a
+///     reason, or allowed. An allow-list match and no match at all both return
+///     <see cref="Allowed" />.
 /// </summary>
 public sealed class DnsFilterDecision
 {
     /// <summary>
-    ///     This property indicates whether the query/response/client is denied.
+    ///     This property indicates whether the client, query or response is denied.
     /// </summary>
     public bool IsDenied { get; }
 
     /// <summary>
-    ///     This property contains a short, human-readable reason for this decision (which list
-    ///     matched, and its own name) -- used for logging, never shown to the querying client.
+    ///     This property contains a short reason for the decision (such as the matching list's
+    ///     name), for logs only; the client never sees it.
     /// </summary>
     public string Reason { get; }
 
@@ -34,6 +34,6 @@ public sealed class DnsFilterDecision
     ///     This method builds the result for "a block list matched, and no allow list overrode
     ///     it."
     /// </summary>
-    /// <param name="reason">A short, human-readable reason (the matching list's own name).</param>
+    /// <param name="reason">A short reason, such as the matching list's name.</param>
     public static DnsFilterDecision Denied(string reason) => new(true, reason);
 }
