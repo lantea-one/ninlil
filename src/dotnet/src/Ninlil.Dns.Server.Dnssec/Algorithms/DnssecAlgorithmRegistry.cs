@@ -5,18 +5,21 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This class is the single place that knows which <see cref="IDnssecSigningAlgorithm" />
-///     implements which <see cref="DnssecAlgorithmEnum" /> value -- the full IANA registry minus
-///     algorithm 12 (ECC-GOST), excluded for lack of any well-maintained, security-audited .NET
-///     implementation. A zone referencing algorithm 12
-///     (a legacy DS/DNSKEY record parsed from elsewhere, for example) is still representable by
-///     <see cref="Common.Wire.Records.DsRecordData" />/<see cref="Common.Wire.Records.DnsKeyRecordData" />
-///     -- this registry only governs which algorithms this project can itself sign or verify with.
+///     This class maps each <see cref="DnssecAlgorithmEnum" /> value to its
+///     <see cref="IDnssecSigningAlgorithm" />. It covers the signing algorithms 1, 3, 5, 6, 7, 8,
+///     10, 13, 14, 15 and 16. Algorithm 12 (ECC-GOST) is left out because there is no
+///     well-maintained, audited .NET implementation. DS and DNSKEY records that use algorithm 12
+///     can still be parsed and stored; they just cannot be signed or verified.
+///     <para>
+///         Nothing here excludes the algorithms RFC 8624 says must not be used for signing
+///         (RSAMD5, DSA, DSA-NSEC3-SHA1). Key generation limits them only through
+///         <see cref="DnssecAlgorithmPolicyOptions" />.
+///     </para>
 /// </summary>
 public static class DnssecAlgorithmRegistry
 {
     /// <summary>
-    ///     This property contains every supported algorithm, keyed by its <see cref="DnssecAlgorithmEnum" />
+    ///     This field contains every supported algorithm, keyed by its <see cref="DnssecAlgorithmEnum" />
     ///     value.
     /// </summary>
     private static readonly Dictionary<DnssecAlgorithmEnum, IDnssecSigningAlgorithm> Algorithms =

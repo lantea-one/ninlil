@@ -12,25 +12,21 @@ namespace Ninlil.Dns.Server.Dnssec;
 
 /// <summary>
 ///     This class implements <see cref="IDnssecKeyManagementService" /> against
-///     <see cref="IDnssecKeyRepository" />.
+///     <see cref="IDnssecKeyRepository" />. Private keys are stored as PKCS#8, Base64-encoded and
+///     encrypted with Data Protection under the purpose <c>"Ninlil.Dns.Server.Dnssec.PrivateKey"</c>.
 /// </summary>
 /// <param name="keyRepository">The repository this service persists keys through.</param>
 /// <param name="unitOfWork">The unit of work this service commits through.</param>
 /// <param name="dataProtectionProvider">
-///     The provider used to encrypt and decrypt a key's private key material, so the raw private
-///     key never sits in the database in plain text -- the same mechanism
-///     <c>Ninlil.Dns.Server.Tsig.TsigService</c> already uses for a TSIG shared secret.
+///     The provider used to encrypt and decrypt private keys, so they are not stored in plain
+///     text.
 /// </param>
 /// <param name="algorithmPolicy">
-///     The algorithm-restriction policy, consulted by <see cref="GenerateKeyAsync" />.
-///     <see langword="null" /> (the default, so a caller/test with no policy configured keeps
-///     compiling unchanged) or an empty <see cref="DnssecAlgorithmPolicyOptions.AllowedAlgorithms" />
-///     both mean "no restriction." Read fresh (<see cref="IOptionsMonitor{TOptions}.CurrentValue" />)
-///     on every <see cref="GenerateKeyAsync" /> call rather than snapshotted once -- this service
-///     is registered scoped, but the plain <see cref="IOptions{TOptions}" /> a scoped registration
-///     would otherwise receive is itself backed by a singleton whose <c>.Value</c> is computed
-///     once and cached for the life of the process, so a configuration-file write would never be
-///     observed without reading through the monitor instead.
+///     The algorithm policy checked by <see cref="GenerateKeyAsync" />. <see langword="null" />
+///     or an empty <see cref="DnssecAlgorithmPolicyOptions.AllowedAlgorithms" /> means no
+///     restriction. It is read through <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> on
+///     each call because <see cref="IOptions{TOptions}" /> caches its value for the life of the
+///     process, even for a scoped service, and would miss configuration changes.
 /// </param>
 public class DnssecKeyManagementService(
     IDnssecKeyRepository keyRepository,
@@ -40,8 +36,7 @@ public class DnssecKeyManagementService(
 ) : IDnssecKeyManagementService
 {
     /// <summary>
-    ///     This property contains the protector used to encrypt and decrypt a key's private key
-    ///     material.
+    ///     This field contains the protector used to encrypt and decrypt private keys.
     /// </summary>
     private readonly IDataProtector _privateKeyProtector = dataProtectionProvider.CreateProtector(
         "Ninlil.Dns.Server.Dnssec.PrivateKey"
@@ -56,10 +51,8 @@ public class DnssecKeyManagementService(
         CancellationToken stoppingToken = default
     )
     {
-        // An operator-configured allow-list is checked first, ahead of whether this project can
-        // even implement the algorithm at all -- a deliberately restricted policy (e.g. FIPS-only)
-        // should reject a disallowed-but-otherwise-supported algorithm with its own specific
-        // message, rather than the generic "not supported" one below.
+        // Check the policy first so a disallowed algorithm gets the policy message rather than
+        // the generic "not supported" one.
         List<DnssecAlgorithmEnum> allowedAlgorithms = algorithmPolicy
             ?.CurrentValue
             ?.AllowedAlgorithms;
@@ -69,9 +62,7 @@ public class DnssecKeyManagementService(
                 $"DNSSEC algorithm '{algorithm}' is not permitted by this server's own configured algorithm policy."
             );
 
-        // Only after clearing the policy check does this confirm the algorithm is one this
-        // project can actually generate a key for at all (excludes algorithm 12/ECC-GOST; see
-        // DnssecAlgorithmRegistry's own doc comment for why).
+        // Algorithm 12 (ECC-GOST) is not in the registry; see DnssecAlgorithmRegistry.
         if (
             !DnssecAlgorithmRegistry.TryGetAlgorithm(
                 algorithm,
@@ -152,9 +143,8 @@ public class DnssecKeyManagementService(
             stoppingToken
         );
 
-        // Exactly one rollover per role, per zone, at a time -- a second one starting mid-flight
-        // would leave this zone's own signing pipeline unable to tell which incoming key is
-        // actually being promoted toward, or which outgoing key is actually stepping down.
+        // One rollover per role per zone at a time; with two, the rollover service could not
+        // tell which incoming key replaces which outgoing one.
         bool rolloverAlreadyInProgress = siblings.Any(key =>
             key.Id != current.Id
             && key.Role == current.Role
@@ -176,11 +166,10 @@ public class DnssecKeyManagementService(
             stoppingToken
         );
 
-        // GenerateKeyAsync above always creates a brand-new key already Active, since that is the
-        // right state for every ordinary (non-rollover) caller -- a rollover's own incoming key
-        // instead starts one step earlier, per RFC 6781 §4.1.1.1 (Pre-Publish, for a ZSK) or
-        // §4.1.2 (Double-Signature, for a KSK); see DnssecKeyLifecycleStateEnum's own doc comment
-        // for why a KSK's rollover starts in DoubleSignature rather than Published.
+        // GenerateKeyAsync saves the key as Active. A rollover's incoming key starts earlier:
+        // Published for a ZSK (RFC 6781 §4.1.1.1) or DoubleSignature for a KSK (§4.1.2); see
+        // DnssecKeyLifecycleStateEnum for why a KSK skips Published. The key is briefly Active
+        // between the two saves.
         replacement.LifecycleState =
             current.Role == DnssecKeyRoleEnum.Ksk
                 ? DnssecKeyLifecycleStateEnum.DoubleSignature
@@ -218,11 +207,9 @@ public class DnssecKeyManagementService(
     }
 
     /// <summary>
-    ///     This method builds the DNSKEY RDATA a new key's own key tag is computed from -- the
-    ///     Zone Key flag is always set (per RFC 4034 §2.1.1, every key this project generates is
-    ///     a zone key), and the Secure Entry Point flag is set if, and only if, the key is a
-    ///     <see cref="DnssecKeyRoleEnum.Ksk" />, the conventional (but purely advisory) signal RFC
-    ///     4034 §2.1.1 describes.
+    ///     This method builds the DNSKEY RDATA that a new key's key tag is computed from. The Zone
+    ///     Key flag is always set (RFC 4034 §2.1.1). The Secure Entry Point flag is set only for a
+    ///     <see cref="DnssecKeyRoleEnum.Ksk" />; RFC 4034 §2.1.1 makes it advisory.
     /// </summary>
     private static byte[] BuildDnsKeyRdata(
         DnssecKeyRoleEnum role,

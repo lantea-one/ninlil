@@ -6,15 +6,14 @@ using Org.BouncyCastle.Security;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This class implements the two EdDSA-based DNSSEC algorithms this project supports --
-///     <see cref="DnssecAlgorithmEnum.Ed25519" /> and <see cref="DnssecAlgorithmEnum.Ed448" />,
-///     both defined by RFC 8080. Unlike every other algorithm this project implements, EdDSA has
-///     no .NET BCL support at all as of .NET 10, so this class is the one place
-///     <c>BouncyCastle.Cryptography</c> is used. RFC 8080 §3 gives both the same trivial wire
-///     format the underlying algorithm itself already defines: the public key and signature are
-///     each simply the algorithm's own raw encoded form, with no DNS-specific framing at all.
+///     This class implements the EdDSA DNSSEC algorithms from RFC 8080,
+///     <see cref="DnssecAlgorithmEnum.Ed25519" /> and <see cref="DnssecAlgorithmEnum.Ed448" />.
+///     The .NET base library has no EdDSA support, so this is the one place
+///     <c>BouncyCastle.Cryptography</c> is used; <see cref="IEdDsaVariant" /> holds the parts
+///     that differ between the two curves. Per RFC 8080 §3, the public key and signature are the
+///     algorithm's raw encodings with no DNS-specific framing.
 /// </summary>
-/// <param name="algorithmNumber">Which of the two EdDSA-family algorithm numbers this instance is.</param>
+/// <param name="algorithmNumber">Which of the two EdDSA algorithm numbers this instance handles.</param>
 /// <param name="variant">The concrete Ed25519 or Ed448 operations this algorithm number uses.</param>
 public class EdDsaSigningAlgorithm(DnssecAlgorithmEnum algorithmNumber, IEdDsaVariant variant)
     : IDnssecSigningAlgorithm

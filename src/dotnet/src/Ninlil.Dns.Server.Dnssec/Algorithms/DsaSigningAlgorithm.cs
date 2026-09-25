@@ -6,22 +6,20 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This class implements the two DSA-based DNSSEC algorithms this project keeps for legacy
-///     interop -- <see cref="DnssecAlgorithmEnum.Dsa" /> and <see cref="DnssecAlgorithmEnum.DsaNsec3Sha1" />
-///     -- which RFC 5155 §2 gives an identical key and signature wire format to (the two
-///     algorithm numbers exist only so an NSEC3-unaware validator can refuse to validate a zone
-///     it would otherwise misjudge as insecure, not because the cryptography differs at all).
-///     Both use RFC 2536's own idiosyncratic wire format, predating the cleaner RFC 3110-style
-///     convention RSA uses: a one-octet "T" parameter derived from the key size, since RFC
-///     2536 defines DSA for DNS only at 64-bit-aligned sizes between 512 and 1024 bits.
+///     This class implements the DSA DNSSEC algorithms, kept for interoperability with old zones:
+///     <see cref="DnssecAlgorithmEnum.Dsa" /> and <see cref="DnssecAlgorithmEnum.DsaNsec3Sha1" />.
+///     The cryptography is the same for both. RFC 5155 §2 added the second number so a validator
+///     that does not understand NSEC3 treats the zone as unsigned instead of failing on its
+///     denials. Both use the RFC 2536 wire format, which starts with a one-octet "T" parameter
+///     derived from the key size, because RFC 2536 allows only sizes from 512 to 1024 bits in
+///     64-bit steps. Signatures use SHA-1.
 /// </summary>
-/// <param name="algorithmNumber">Which of the two DSA-family algorithm numbers this instance is.</param>
+/// <param name="algorithmNumber">Which of the two DSA algorithm numbers this instance handles.</param>
 public class DsaSigningAlgorithm(DnssecAlgorithmEnum algorithmNumber) : IDnssecSigningAlgorithm
 {
     /// <summary>
-    ///     This constant contains the DSA key size, in bits, this implementation always
-    ///     generates -- the maximum RFC 2536 permits (<c>T = 8</c>), and the most broadly
-    ///     interoperable classic DSA size.
+    ///     This constant contains the DSA key size, in bits, that is always generated: the
+    ///     largest RFC 2536 allows (<c>T = 8</c>).
     /// </summary>
     private const int KeySizeBits = 1024;
 
@@ -61,8 +59,7 @@ public class DsaSigningAlgorithm(DnssecAlgorithmEnum algorithmNumber) : IDnssecS
         using DSA dsa = DSA.Create();
         dsa.ImportParameters(DecodePublicKey(publicKeyWireFormat));
 
-        // Byte 0 is the RFC 2536 "T" parameter, redundant with the public key's own P length and
-        // not something VerifyData needs -- only the 40-octet R||S concatenation that follows it.
+        // Octet 0 is the RFC 2536 "T" parameter; VerifyData needs only the 40-octet R||S after it.
         return dsa.VerifyData(
             signingInput,
             signature[1..],
@@ -72,9 +69,8 @@ public class DsaSigningAlgorithm(DnssecAlgorithmEnum algorithmNumber) : IDnssecS
     }
 
     /// <summary>
-    ///     This method encodes a DSA public key per RFC 2536 §2: T, then Q, then P, G, and Y --
-    ///     each of the latter three exactly <c>64 + 8T</c> octets long, per the RFC's own
-    ///     constraint on P's size.
+    ///     This method encodes a DSA public key per RFC 2536 §2: T, then Q (20 octets), then P, G
+    ///     and Y, each <c>64 + 8T</c> octets long.
     /// </summary>
     internal static byte[] EncodePublicKey(DSAParameters parameters)
     {
@@ -115,8 +111,8 @@ public class DsaSigningAlgorithm(DnssecAlgorithmEnum algorithmNumber) : IDnssecS
     }
 
     /// <summary>
-    ///     This method computes RFC 2536's "T" parameter from a DSA modulus's byte length, the
-    ///     inverse of the RFC's own <c>length(P) = 64 + 8T</c> relationship.
+    ///     This method computes the RFC 2536 "T" parameter from the length of P in octets, by
+    ///     inverting <c>length(P) = 64 + 8T</c>.
     /// </summary>
     private static byte ComputeT(int modulusLength) => (byte)((modulusLength - 64) / 8);
 

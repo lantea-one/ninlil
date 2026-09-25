@@ -3,12 +3,10 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dns.Server.Dnssec.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real, DI-built <see cref="IOptionsMonitor{TOptions}" />: it
-///     always reports the same, fixed <see cref="CurrentValue" /> and never actually fires
-///     <see cref="OnChange" />, mirroring every sibling test project's own identically-named fake
-///     (for example <c>Ninlil.Dns.Server.Acme.Tests.Fakes.StaticOptionsMonitor{TOptions}</c>)
-///     -- the minimal double a unit test needs to exercise a class that reads live configuration
-///     without spinning up the real configuration-reload machinery.
+///     This class is a test <see cref="IOptionsMonitor{TOptions}" /> that always returns the same
+///     <see cref="CurrentValue" /> and never raises <see cref="OnChange" />. It lets a test pass
+///     fixed options to a class that reads them through a monitor, without configuration
+///     reloading.
 /// </summary>
 /// <param name="value">The fixed value this monitor always reports.</param>
 public sealed class StaticOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>

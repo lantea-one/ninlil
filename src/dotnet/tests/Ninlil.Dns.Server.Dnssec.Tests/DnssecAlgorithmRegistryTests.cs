@@ -6,8 +6,10 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.Dnssec.Tests;
 
 /// <summary>
-///     This class tests every algorithm <see cref="DnssecAlgorithmRegistry" /> registers: a real
-///     generate-key/sign/verify round trip, tamper detection, and cross-key rejection.
+///     This class tests every algorithm <see cref="DnssecAlgorithmRegistry" /> registers: a
+///     generate, sign and verify round trip, tamper detection and rejection with another key. It
+///     also checks the wire sizes of ECDSA and DSA keys and signatures, and that ECC-GOST is
+///     absent.
 /// </summary>
 public class DnssecAlgorithmRegistryTests
 {
@@ -99,8 +101,7 @@ public class DnssecAlgorithmRegistryTests
     [Fact]
     public void EccGostIsNotRegistered()
     {
-        // Excluded per the flagged-infeasibility decision: no well-maintained, security-audited
-        // .NET implementation exists for GOST curves.
+        // No well-maintained, audited .NET implementation exists for the GOST curves.
         Assert.False(DnssecAlgorithmRegistry.TryGetAlgorithm(DnssecAlgorithmEnum.EccGost, out _));
     }
 

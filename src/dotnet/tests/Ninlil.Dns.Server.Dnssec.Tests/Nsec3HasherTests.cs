@@ -4,8 +4,9 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Dnssec.Tests;
 
 /// <summary>
-///     This class tests <see cref="Nsec3Hasher" />: RFC 5155 §5's salted, iterated hash, and the
-///     base32hex encoding (RFC 4648 §7) that becomes an NSEC3 record's own owner name.
+///     This class tests <see cref="Nsec3Hasher" />: the RFC 5155 §5 salted, iterated hash and the
+///     base32hex (RFC 4648 §7) owner name encoding. The tests check determinism and round trips;
+///     none compares against a published RFC 5155 test vector.
 /// </summary>
 public class Nsec3HasherTests
 {

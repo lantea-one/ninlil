@@ -7,7 +7,8 @@ namespace Ninlil.Dns.Server.Dnssec.Tests;
 
 /// <summary>
 ///     This class tests <see cref="DnssecKeyTag" /> (RFC 4034 Appendix B) and
-///     <see cref="DsDigestCodec" /> (RFC 4034 §5.1.4).
+///     <see cref="DsDigestCodec" /> (RFC 4034 §5.1.4) with freshly generated keys: determinism,
+///     sensitivity to RDATA changes, the RSA/MD5 special case and digest lengths per type.
 /// </summary>
 public class DnssecKeyTagAndDsDigestTests
 {
@@ -17,7 +18,7 @@ public class DnssecKeyTagAndDsDigestTests
     )
     {
         byte[] rdata = new byte[4 + publicKeyWireFormat.Length];
-        rdata[0] = 0x01; // Flags high byte: bit 7 (ZoneKey) set.
+        rdata[0] = 0x01; // Flags high octet: bit 7 (Zone Key) set.
         rdata[2] = 3; // Protocol.
         rdata[3] = (byte)algorithm;
         publicKeyWireFormat.CopyTo(rdata, 4);
@@ -63,10 +64,9 @@ public class DnssecKeyTagAndDsDigestTests
     }
 
     /// <summary>
-    ///     This test independently recomputes RFC 4034 Appendix B.1's algorithm-1 special case
-    ///     (the 4th/3rd-to-last octets of the modulus) itself, rather than re-deriving the same
-    ///     answer <see cref="DnssecKeyTag" /> already computes, so a shared off-by-one bug
-    ///     between the two implementations would not go unnoticed.
+    ///     This test computes the RFC 4034 Appendix B.1 special case for algorithm 1 (the
+    ///     third-to-last and second-to-last octets of the modulus) separately from
+    ///     <see cref="DnssecKeyTag" /> and compares the results.
     /// </summary>
     [Fact]
     public void RsaMd5KeyTagUsesTheAppendixB1SpecialCase()

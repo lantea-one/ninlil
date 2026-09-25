@@ -5,21 +5,19 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This class implements the two ECDSA-based DNSSEC algorithms this project supports --
+///     This class implements the ECDSA DNSSEC algorithms from RFC 6605,
 ///     <see cref="DnssecAlgorithmEnum.EcdsaP256Sha256" /> and <see cref="DnssecAlgorithmEnum.EcdsaP384Sha384" />,
-///     both defined by RFC 6605 -- which differ only in curve and matching hash algorithm. RFC
-///     6605 §4 gives both the same, much simpler wire format than the RSA and DSA families use:
-///     the public key is the curve point's two coordinates concatenated with no compression, sign,
-///     or length prefix at all, and the signature is the two integers R and S concatenated the
-///     same way -- exactly what .NET's own IEEE P1363 fixed-field format already produces, with
-///     no DNS-specific translation needed.
+///     which differ only in curve and hash. Per RFC 6605 §4, the public key is the point's X and
+///     Y coordinates concatenated, with no compression flag or length prefix, and the signature is
+///     R and S concatenated. That signature layout is the .NET IEEE P1363 fixed-field format, so
+///     no conversion is needed.
 /// </summary>
-/// <param name="algorithmNumber">Which of the two ECDSA-family algorithm numbers this instance is.</param>
+/// <param name="algorithmNumber">Which of the two ECDSA algorithm numbers this instance handles.</param>
 /// <param name="curve">The curve this algorithm number uses.</param>
 /// <param name="hashAlgorithm">The hash algorithm this algorithm number signs with.</param>
 /// <param name="fieldSizeBytes">
-///     The curve's field element size, in octets -- 32 for P-256, 48 for P-384 -- used to split
-///     the public key's concatenated coordinates back apart on decode.
+///     The curve's field element size in octets (32 for P-256, 48 for P-384), used to split the
+///     public key into its X and Y coordinates.
 /// </param>
 public class EcdsaSigningAlgorithm(
     DnssecAlgorithmEnum algorithmNumber,

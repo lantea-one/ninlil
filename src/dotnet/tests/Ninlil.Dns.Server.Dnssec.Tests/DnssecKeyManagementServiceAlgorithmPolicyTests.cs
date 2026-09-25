@@ -9,10 +9,10 @@ using Ninlil.Dns.Server.Dnssec.Tests.Fakes;
 namespace Ninlil.Dns.Server.Dnssec.Tests;
 
 /// <summary>
-///     This class exercises <see cref="DnssecAlgorithmPolicyOptions" /> enforcement inside
-///     <see cref="DnssecKeyManagementService.GenerateKeyAsync" /> -- the
-///     enforcement point the <c>FIPS</c> preset relies on to actually restrict which DNSSEC
-///     algorithm a new signing key may use.
+///     This class tests how <see cref="DnssecKeyManagementService.GenerateKeyAsync" /> applies
+///     <see cref="DnssecAlgorithmPolicyOptions" />, which is how the <c>FIPS</c> preset limits the
+///     algorithms of new keys. It uses an in-memory key repository, a no-op unit of work and a
+///     fixed options monitor.
 /// </summary>
 public sealed class DnssecKeyManagementServiceAlgorithmPolicyTests
 {

@@ -7,9 +7,8 @@ namespace Ninlil.Dns.Server.Dnssec;
 
 /// <summary>
 ///     This class computes a <see cref="DsRecordData.Digest" /> per RFC 4034 §5.1.4: a hash of
-///     the keyed <see cref="DnsKeyRecordData" />'s owner name (in canonical form) concatenated
-///     with its own RDATA, letting a parent zone vouch for a child's key without publishing the
-///     full key itself.
+///     the DNSKEY owner name in canonical form followed by the DNSKEY RDATA. The DS record lets a
+///     parent zone vouch for a child's key without publishing the key itself.
 /// </summary>
 public static class DsDigestCodec
 {
@@ -17,15 +16,13 @@ public static class DsDigestCodec
     ///     This method computes a DS digest.
     /// </summary>
     /// <param name="digestType">
-    ///     Which digest algorithm to use, per IANA's "Delegation Signer (DS) Resource Record (RR)
-    ///     Type Digest Algorithms" registry -- 1 (SHA-1), 2 (SHA-256), and 4 (SHA-384) are
-    ///     supported; 3 (GOST R 34.11-94) is not, for the same reason algorithm 12 is excluded
-    ///     from <see cref="Algorithms.DnssecAlgorithmRegistry" />.
+    ///     The digest type from the IANA DS digest algorithm registry: 1 (SHA-1), 2 (SHA-256) and
+    ///     4 (SHA-384) are supported. 3 (GOST R 34.11-94) is not, for the same reason algorithm 12
+    ///     is left out of <see cref="Algorithms.DnssecAlgorithmRegistry" />.
     /// </param>
-    /// <param name="ownerName">The keyed DNSKEY's own owner name.</param>
+    /// <param name="ownerName">The DNSKEY's owner name.</param>
     /// <param name="dnsKeyRdata">
-    ///     The keyed DNSKEY's complete RDATA, exactly as <see cref="DnsKeyRecordDataCodec" />
-    ///     would write it.
+    ///     The complete DNSKEY RDATA, as <see cref="DnsKeyRecordDataCodec" /> writes it.
     /// </param>
     /// <returns>The computed digest.</returns>
     /// <exception cref="NotSupportedException">

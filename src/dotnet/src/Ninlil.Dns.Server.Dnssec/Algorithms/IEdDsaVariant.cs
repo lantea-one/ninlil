@@ -9,9 +9,8 @@ using Org.BouncyCastle.Security;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This interface isolates the handful of BouncyCastle types and calls that actually differ
-///     between Ed25519 and Ed448, so <see cref="EdDsaSigningAlgorithm" /> itself needs no
-///     algorithm-specific branching at all.
+///     This interface holds the BouncyCastle types and calls that differ between Ed25519 and
+///     Ed448, so <see cref="EdDsaSigningAlgorithm" /> needs no per-curve branching.
 /// </summary>
 public interface IEdDsaVariant
 {
@@ -21,17 +20,17 @@ public interface IEdDsaVariant
     AsymmetricCipherKeyPair GenerateKeyPair(SecureRandom random);
 
     /// <summary>
-    ///     This method creates a fresh signer/verifier instance.
+    ///     This method creates a new signer, which also verifies.
     /// </summary>
     ISigner CreateSigner();
 
     /// <summary>
-    ///     This method encodes a public key in its raw, RFC 8080 wire form.
+    ///     This method encodes a public key in its raw RFC 8080 wire form.
     /// </summary>
     byte[] EncodePublicKey(AsymmetricKeyParameter publicKey);
 
     /// <summary>
-    ///     This method decodes a public key from its raw, RFC 8080 wire form.
+    ///     This method decodes a public key from its raw RFC 8080 wire form.
     /// </summary>
     AsymmetricKeyParameter DecodePublicKey(byte[] wireFormat);
 
@@ -81,7 +80,8 @@ public sealed class Ed25519Variant : IEdDsaVariant
 }
 
 /// <summary>
-///     This class implements <see cref="IEdDsaVariant" /> for Ed448.
+///     This class implements <see cref="IEdDsaVariant" /> for Ed448, with an empty context as
+///     RFC 8080 requires.
 /// </summary>
 public sealed class Ed448Variant : IEdDsaVariant
 {

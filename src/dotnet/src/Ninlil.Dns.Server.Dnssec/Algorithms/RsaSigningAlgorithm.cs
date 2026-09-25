@@ -7,14 +7,13 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.Dnssec.Algorithms;
 
 /// <summary>
-///     This class implements every RSA-based DNSSEC algorithm this project supports --
+///     This class implements the RSA DNSSEC algorithms:
 ///     <see cref="DnssecAlgorithmEnum.RsaMd5" />, <see cref="DnssecAlgorithmEnum.RsaSha1" />,
-///     <see cref="DnssecAlgorithmEnum.RsaSha1Nsec3Sha1" />, <see cref="DnssecAlgorithmEnum.RsaSha256" />,
-///     and <see cref="DnssecAlgorithmEnum.RsaSha512" /> -- since all five differ only in which
-///     hash algorithm signs the data; the public key format (RFC 3110), private key handling, and
-///     PKCS#1 v1.5 signature padding are identical across every one of them.
+///     <see cref="DnssecAlgorithmEnum.RsaSha1Nsec3Sha1" />, <see cref="DnssecAlgorithmEnum.RsaSha256" />
+///     and <see cref="DnssecAlgorithmEnum.RsaSha512" />. They differ only in the hash; the public
+///     key format (RFC 3110), private key handling and PKCS#1 v1.5 padding are the same.
 /// </summary>
-/// <param name="algorithmNumber">Which of the five RSA-family algorithm numbers this instance is.</param>
+/// <param name="algorithmNumber">Which of the five RSA algorithm numbers this instance handles.</param>
 /// <param name="hashAlgorithm">The hash algorithm this algorithm number signs with.</param>
 public class RsaSigningAlgorithm(
     DnssecAlgorithmEnum algorithmNumber,
@@ -60,10 +59,9 @@ public class RsaSigningAlgorithm(
     }
 
     /// <summary>
-    ///     This method encodes an RSA public key per RFC 3110: an exponent length (one octet, or
-    ///     a zero octet followed by a two-octet length for an exponent longer than 255 octets),
-    ///     the exponent, then the modulus -- with leading zero octets on both stripped, since RFC
-    ///     3110 prohibits them.
+    ///     This method encodes an RSA public key per RFC 3110: the exponent length (one octet, or
+    ///     a zero octet and a two-octet length for exponents over 255 octets), the exponent, then
+    ///     the modulus. Leading zero octets are stripped from both, as RFC 3110 requires.
     /// </summary>
     internal static byte[] EncodePublicKey(RSAParameters parameters)
     {
@@ -120,9 +118,8 @@ public class RsaSigningAlgorithm(
     }
 
     /// <summary>
-    ///     This method strips leading zero octets from a big-endian integer, returning a defensive
-    ///     copy even when nothing needed stripping. A value of all zeros is left as a single zero
-    ///     octet rather than stripped down to nothing.
+    ///     This method strips leading zero octets from a big-endian integer and always returns a
+    ///     copy. A value of all zeros keeps one zero octet.
     /// </summary>
     private static byte[] StripLeadingZeros(byte[] value)
     {

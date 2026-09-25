@@ -11,20 +11,15 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Dnssec.Tests;
 
 /// <summary>
-///     This class proves, against the real .NET configuration/options binding pipeline and a real
-///     reload-on-change JSON configuration file -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- that a write
-///     reaching <see cref="DnssecAlgorithmPolicyOptions" /> via
-///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.DnssecPolicySettingsController.Patch</c> itself calls) is
-///     honored by <see cref="DnssecKeyManagementService.GenerateKeyAsync" /> on the very next call,
-///     with no restart. Before this fix, <see cref="DnssecKeyManagementService" /> read
-///     <see cref="DnssecAlgorithmPolicyOptions" /> via the usual, snapshotted
-///     <see cref="IOptions{TOptions}" />, computed once and cached for the life of the process --
-///     a write reaching the configuration file would never have been observed at all, even though
-///     this service is itself registered scoped (a fresh instance per call/request), the same
-///     shape this project's other options-bound classes each already found and fixed for their own
-///     options class.
+///     This class checks that a change to <see cref="DnssecAlgorithmPolicyOptions" /> reaches
+///     <see cref="DnssecKeyManagementService.GenerateKeyAsync" /> on the next call, without a
+///     restart. It writes the setting through
+///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (what
+///     <c>Ninlil.Web.Controllers.DnssecPolicySettingsController.Patch</c> calls) into a JSON file
+///     loaded with reload-on-change, and uses an in-memory key repository.
+///     <see cref="DnssecKeyManagementService" /> must read the policy through
+///     <see cref="IOptionsMonitor{TOptions}" />; an <see cref="IOptions{TOptions}" /> value is
+///     cached for the life of the process, even for a scoped service.
 /// </summary>
 public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
 {
@@ -100,9 +95,8 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the same kind the web host uses for its
+            // configuration files.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -117,8 +111,7 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
                 IOptionsMonitor<DnssecAlgorithmPolicyOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // default: no restriction at all.
+            // The file does not exist yet, so this is the compiled-in default: no restriction.
             Assert.Empty(monitor.CurrentValue.AllowedAlgorithms);
 
             DnssecKeyManagementService service = new(
@@ -128,7 +121,7 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
                 monitor
             );
 
-            // Before the write, an Ed25519 key is allowed -- no restriction configured yet.
+            // Before the write, an Ed25519 key is allowed.
             DnssecKeyEntity before = await service.GenerateKeyAsync(
                 Guid.NewGuid(),
                 DnssecKeyRoleEnum.Ksk,
@@ -139,9 +132,8 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
             TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-            // The exact same write mechanism DnssecPolicySettingsController.Patch itself calls --
-            // restricting new-key generation to RSASHA256/ECDSAP256SHA256/ECDSAP384SHA384, the
-            // FIPS preset's own restriction.
+            // The same write DnssecPolicySettingsController.Patch makes, limiting new keys to the
+            // FIPS preset's list: RSASHA256, ECDSAP256SHA256 and ECDSAP384SHA384.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -158,9 +150,8 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
+            // The JSON provider debounces file-change notifications, so wait for the reload
+            // event rather than a fixed delay.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
@@ -168,9 +159,8 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
             Assert.Same(reloaded.Task, completed);
             Assert.Equal(3, monitor.CurrentValue.AllowedAlgorithms.Count);
 
-            // The identical service instance, constructed before the write, now genuinely rejects
-            // Ed25519 -- proof the toggle's own gate was actually re-evaluated rather than the
-            // service simply always answering the same way regardless of configuration.
+            // The same instance, built before the write, now rejects Ed25519, so the policy is
+            // re-read per call.
             await Assert.ThrowsAsync<ValidationException>(() =>
                 service.GenerateKeyAsync(
                     Guid.NewGuid(),
@@ -195,7 +185,7 @@ public sealed class DnssecAlgorithmPolicyOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }
