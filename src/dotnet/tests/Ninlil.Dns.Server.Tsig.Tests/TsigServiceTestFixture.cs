@@ -9,11 +9,10 @@ using Ninlil.Dns.Server.Tsig.Extension;
 namespace Ninlil.Dns.Server.Tsig.Tests;
 
 /// <summary>
-///     This class builds one real, SQLite-backed host shared by every test in
-///     <see cref="TsigServiceTests" />, so each test pays the database-creation cost only once.
-///     Every test creates its own, uniquely-named <see cref="Data.Abstractions.Entity.TsigKeyEntity" />
-///     so that sharing one database across sequentially-run tests in the same class never causes
-///     one test's data to collide with another's.
+///     This class builds one host with a temporary SQLite database, shared by every test in
+///     <see cref="TsigServiceTests" /> so the database is created once. Each test creates a
+///     uniquely named <see cref="Data.Abstractions.Entity.TsigKeyEntity" />, so tests sharing the
+///     database do not collide.
 /// </summary>
 public sealed class TsigServiceTestFixture : IAsyncLifetime
 {
@@ -25,7 +24,7 @@ public sealed class TsigServiceTestFixture : IAsyncLifetime
     private IHost _host;
 
     /// <summary>
-    ///     This property contains the scope every test resolves its services from.
+    ///     This property contains the root service provider tests create their scopes from.
     /// </summary>
     public IServiceProvider Services { get; private set; }
 

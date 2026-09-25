@@ -6,14 +6,15 @@ using Ninlil.Dns.Server.Tsig.Options;
 namespace Ninlil.Dns.Server.Tsig.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's TSIG engine.
+///     This class provides the <see cref="IServiceCollection" /> extension that registers the
+///     TSIG engine (<see cref="ITsigService" />) and its options.
 /// </summary>
 public static class ServiceCollectionTsigExtension
 {
     /// <summary>
-    ///     This method registers <see cref="ITsigService" />. The composition root is still
-    ///     expected to have already registered an
+    ///     This method registers <see cref="ITsigService" /> (scoped),
+    ///     <see cref="TsigSecretProtector" /> and <see cref="TsigServiceOptions" />. The caller
+    ///     must also register an
     ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />
     ///     implementation.
     /// </summary>
@@ -25,8 +26,7 @@ public static class ServiceCollectionTsigExtension
         IConfiguration configuration
     )
     {
-        // Data Protection backs the encryption of a TSIG key's shared secret at rest, the same
-        // mechanism Ninlil.Dns.Identity already uses for TOTP authenticator keys.
+        // Data Protection encrypts TSIG shared secrets at rest (see TsigSecretProtector).
         instance.AddDataProtection();
 
         instance.Configure<TsigServiceOptions>(
@@ -36,7 +36,6 @@ public static class ServiceCollectionTsigExtension
         instance.AddSingleton<TsigSecretProtector>();
         instance.AddScoped<ITsigService, TsigService>();
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

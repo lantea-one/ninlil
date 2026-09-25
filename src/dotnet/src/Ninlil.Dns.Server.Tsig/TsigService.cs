@@ -10,23 +10,17 @@ using Ninlil.Dns.Server.Tsig.Options;
 namespace Ninlil.Dns.Server.Tsig;
 
 /// <summary>
-///     This class implements <see cref="ITsigService" />, computing and checking HMAC-SHA256
-///     message authentication codes per RFC 8945 -- the only algorithm Ninlil implements.
+///     This class implements <see cref="ITsigService" /> with HMAC-SHA256 (RFC 8945), the only
+///     TSIG algorithm Ninlil supports. The three sign methods and three verify methods differ
+///     only in what goes before the message bytes in the digest and which TSIG fields follow it,
+///     so each group shares one core method.
 /// </summary>
 /// <param name="tsigKeyRepository">The repository this service looks up pre-shared keys from.</param>
-/// <param name="secretProtector">
-///     The protector used to decrypt a key's shared secret before use. A MAC cannot be computed
-///     from a one-way hash the way a password can be checked, so the secret has to be
-///     recoverable, not just comparable.
-/// </param>
+/// <param name="secretProtector">The protector that decrypts a key's shared secret.</param>
 /// <param name="options">
-///     This service's own configuration, such as the default signing fudge -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single <see cref="SignAsync" /> call, so a configuration write reaches the very
-///     next message this (scoped) service signs, with no restart -- even though a fresh instance
-///     is itself constructed per scope, the plain, snapshotted <see cref="IOptions{TOptions}" />
-///     this class used before this fix would still have handed every one of those fresh
-///     instances back the exact same process-wide-cached value.
+///     The signing settings. Read through <see cref="IOptionsMonitor{TOptions}" /> on every
+///     signature, because <see cref="IOptions{TOptions}" /> would keep returning the value
+///     cached at startup and a configuration change would need a restart.
 /// </param>
 public class TsigService(
     ITsigKeyRepository tsigKeyRepository,
@@ -36,9 +30,8 @@ public class TsigService(
 {
     /// <summary>
     ///     This constant contains the length, in bytes, of an HMAC-SHA256 digest. A MAC of any
-    ///     other length cannot possibly be a valid HMAC-SHA256 signature, so it is rejected
-    ///     before ever computing a comparison MAC -- Ninlil does not support RFC 8945 §5.3's
-    ///     optional truncated-MAC allowance.
+    ///     other length is rejected before the key lookup; truncated MACs (RFC 8945 §5.2.2.1) are
+    ///     not supported.
     /// </summary>
     private const int HmacSha256DigestLength = 32;
 
@@ -88,17 +81,14 @@ public class TsigService(
             rawMessage,
             tsigRecordStartOffset,
             message,
-            // RFC 8945 §5.3.1's own "DNS Messages" digest component: the running prior MAC,
-            // followed by the raw bytes of every message received since (but not including) the
-            // one that MAC came from, in order -- empty in the common case where every message in
-            // the sequence carries its own TSIG, as this project's own outbound path always does.
+            // RFC 8945 §5.3.1: the prior MAC, then the bytes of any unsigned messages received
+            // since it, in order.
             macPrefixBytes:
             [
                 .. priorMac ?? [],
                 .. (unsignedMessageBytesSincePriorTsig ?? []).SelectMany(bytes => bytes),
             ],
-            // Only the Timers -- not the full TSIG Variables -- are covered for a second or later
-            // message in the sequence; see TsigCodec.BuildTimersOnly's own doc comment.
+            // Later messages cover only the TSIG Timers; see TsigCodec.BuildTimersOnly.
             buildVariables: tsig => TsigCodec.BuildTimersOnly(tsig.TimeSigned, tsig.Fudge),
             stoppingToken
         );
@@ -148,25 +138,19 @@ public class TsigService(
             message,
             keyName,
             originalId,
-            // This project's own outbound zone-transfer path always signs every message in a
-            // sequence, so the "DNS Messages" digest component RFC 8945 §5.3.1 defines for a
-            // second-or-later message is always just the running prior MAC on its own -- no
-            // intervening unsigned message's own bytes ever need folding in here (contrast
-            // VerifyContinuationAsync, which still has to tolerate a real-world peer that chooses
-            // to leave some messages unsigned instead).
+            // The outbound path signs every message, so there are never unsigned messages to add
+            // after the prior MAC (unlike VerifyContinuationAsync).
             macPrefixBytes: priorMac ?? [],
             buildVariables: tsig => TsigCodec.BuildTimersOnly(tsig.TimeSigned, tsig.Fudge),
             stoppingToken
         );
 
     /// <summary>
-    ///     This method implements every <see cref="ITsigService" /> verification method: the
-    ///     shared checks RFC 8945 §5.2 requires regardless of which digest formula applies
-    ///     (recognized algorithm, correctly-sized MAC, a known and enabled key, and the signer's
-    ///     clock falling within its own declared tolerance), followed by a digest computed from
-    ///     whichever MAC-prefix and TSIG-variables-building rule the caller supplies -- the one
-    ///     axis <see cref="VerifyAsync" />/<see cref="VerifyResponseAsync" />/
-    ///     <see cref="VerifyContinuationAsync" /> actually differ on.
+    ///     This method does the work for all three verify methods. It checks, in order: a supported
+    ///     algorithm, the MAC length, a known and enabled key, and the time window (Time Signed
+    ///     within Fudge of now). It then computes the expected MAC from
+    ///     <paramref name="macPrefixBytes" />, the signed message bytes and
+    ///     <paramref name="buildVariables" />, and compares it with the one received.
     /// </summary>
     private async Task<TsigVerificationResult> VerifyCoreAsync(
         byte[] rawMessage,
@@ -185,29 +169,23 @@ public class TsigService(
 
         DnsTsigOptions tsig = message.Tsig;
 
-        // An algorithm this server does not implement can never be verified, regardless of
-        // whether a key by the claimed name even exists -- treated the same way BIND and most
-        // other implementations treat it in practice: as though the key itself were unusable.
+        // An unsupported algorithm is reported as BADKEY, whether or not the key exists.
         if (tsig.AlgorithmName != DnsTsigOptions.HmacSha256AlgorithmName)
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
 
-        // A wrong-length MAC can never equal a real HMAC-SHA256 digest, so it is rejected here,
-        // before the comparatively expensive key lookup and MAC computation below ever run.
+        // A wrong-length MAC can never match, so skip the key lookup and MAC computation.
         if (tsig.Mac.Length != HmacSha256DigestLength)
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadVersionOrBadSignature);
 
         string keyName = tsig.KeyName.ToString().TrimEnd('.');
         TsigKeyEntity key = await tsigKeyRepository.FindByNameAsync(keyName, stoppingToken);
 
-        // An unknown key name and a disabled key are reported identically (BadKey) -- a disabled
-        // key is meant to behave as though it no longer exists for verification purposes.
+        // A disabled key is reported the same as an unknown one (BADKEY).
         if (key is null or { IsDisabled: true })
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
 
-        // RFC 8945 §5.2 allows the signer's and verifier's clocks to disagree within the signer's
-        // own declared tolerance (Fudge), not require them to match exactly -- ordinary clock
-        // drift between two independent machines, not a security weakening, since the MAC itself
-        // covers both TimeSigned and Fudge and so cannot be forged independently of them.
+        // RFC 8945 §5.2.3: the clocks may differ by up to the signer's Fudge. The MAC covers
+        // Time Signed and Fudge, so neither can be altered without breaking the signature.
         long nowUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         long skewSeconds = Math.Abs(nowUnixSeconds - (long)tsig.TimeSigned);
 
@@ -223,21 +201,17 @@ public class TsigService(
         byte[] macInput = [.. macPrefixBytes, .. signedMessageBytes, .. variables];
         byte[] expectedMac = HMACSHA256.HashData(secret, macInput);
 
-        // A byte-by-byte comparison that returns as soon as it finds a mismatch would leak, via
-        // response timing, how many leading bytes of an attacker-supplied MAC happen to be
-        // correct -- letting a MAC be forged one byte at a time. FixedTimeEquals always compares
-        // every byte, in constant time regardless of where (or whether) a mismatch occurs.
+        // A comparison that stops at the first mismatch would leak through timing how many
+        // leading bytes are right, letting a MAC be guessed byte by byte.
         return CryptographicOperations.FixedTimeEquals(expectedMac, tsig.Mac)
             ? TsigVerificationResult.Success(key)
             : TsigVerificationResult.Failure(DnsResponseCodeEnum.BadVersionOrBadSignature, key);
     }
 
     /// <summary>
-    ///     This method implements every <see cref="ITsigService" /> signing method: the shared key
-    ///     lookup and MAC computation, parameterized by whichever MAC-prefix and
-    ///     TSIG-variables-building rule the caller supplies -- the one axis
-    ///     <see cref="SignAsync" />/<see cref="SignResponseAsync" />/
-    ///     <see cref="SignContinuationAsync" /> actually differ on.
+    ///     This method does the work for all three sign methods: it looks up and decrypts the key,
+    ///     then computes the MAC over <paramref name="macPrefixBytes" />, the message bytes and
+    ///     <paramref name="buildVariables" />, and attaches the TSIG record.
     /// </summary>
     private async Task<DnsMessage> SignCoreAsync(
         DnsMessage message,
@@ -257,8 +231,7 @@ public class TsigService(
 
         byte[] secret = secretProtector.Unprotect(key.SecretEncrypted);
 
-        // The MAC is computed over the message exactly as it would be sent without a TSIG
-        // record at all, so it is serialized once, before Tsig is ever assigned.
+        // The MAC covers the message without its TSIG record, so serialize before assigning it.
         byte[] messageBytes = DnsMessageWriter.Write(message);
 
         DnsTsigOptions unsignedTsig = new(

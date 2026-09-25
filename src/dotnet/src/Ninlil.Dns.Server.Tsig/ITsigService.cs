@@ -4,29 +4,29 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Tsig;
 
 /// <summary>
-///     This interface is Ninlil's TSIG (RFC 8945) engine: signing outgoing messages with a
-///     pre-shared key, and verifying incoming ones against whichever key they claim to be signed
-///     with. Zone transfers and dynamic update both depend on this for authorization -- both
-///     require a valid TSIG signature before the underlying operation is permitted.
+///     This interface is the TSIG (RFC 8945) engine. It signs outgoing messages with a
+///     pre-shared key and verifies incoming ones against the key they name. Zone transfers
+///     (<c>ZoneTransferService</c>) and dynamic updates (<c>DynamicUpdateQueryResolver</c>) both
+///     refuse a request without a valid TSIG signature; the zone transfer clients use it to sign
+///     their requests and verify the responses. Keys come from
+///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />.
 /// </summary>
 public interface ITsigService
 {
     /// <summary>
     ///     This method verifies a signed message.
     /// </summary>
-    /// <param name="rawMessage">The complete message, exactly as received from the wire.</param>
+    /// <param name="rawMessage">The complete message as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
-    ///     The offset within <paramref name="rawMessage" /> the TSIG record started at, as
-    ///     reported by <see cref="DnsMessageReader" />'s message-decoding overload that reports
-    ///     the TSIG record's starting offset.
+    ///     The offset within <paramref name="rawMessage" /> where the TSIG record starts, as
+    ///     reported by <see cref="DnsMessageReader" /> when it decodes the message.
     /// </param>
     /// <param name="message"><paramref name="rawMessage" />, already decoded.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The verification outcome.</returns>
     /// <exception cref="ArgumentException">
-    ///     Thrown when <paramref name="message" /> carries no TSIG record at all -- whether that
-    ///     is itself an error (a signature was required but absent) is a policy decision for the
-    ///     caller to make before ever calling this method, not something this service assumes.
+    ///     Thrown when <paramref name="message" /> has no TSIG record. Whether a missing
+    ///     signature is an error is the caller's decision, made before calling this method.
     /// </exception>
     Task<TsigVerificationResult> VerifyAsync(
         byte[] rawMessage,
@@ -36,18 +36,18 @@ public interface ITsigService
     );
 
     /// <summary>
-    ///     This method signs an outgoing message with a named, pre-shared key, setting its
-    ///     <see cref="DnsMessage.Tsig" /> property to the computed result.
+    ///     This method signs an outgoing request with a named pre-shared key and sets its
+    ///     <see cref="DnsMessage.Tsig" /> property to the result.
     /// </summary>
     /// <param name="message">
-    ///     The message to sign. Must not already carry a TSIG record -- signing computes the MAC
-    ///     over the message exactly as it stands, so nothing about it may change afterward
-    ///     except attaching the resulting <see cref="DnsTsigOptions" />.
+    ///     The message to sign. It must not already carry a TSIG record. The MAC covers the
+    ///     message as it stands, so nothing may change afterward except attaching the
+    ///     <see cref="DnsTsigOptions" />.
     /// </param>
     /// <param name="keyName">The name of the pre-shared key to sign with.</param>
     /// <param name="originalId">
-    ///     The message's own header ID, recorded in the TSIG record so a verifier can detect if
-    ///     an intermediary rewrote it afterward.
+    ///     The message's header ID, recorded in the TSIG record (Original ID) so the ID can be
+    ///     restored if an intermediary rewrites it.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns><paramref name="message" />, with <see cref="DnsMessage.Tsig" /> now set.</returns>
@@ -62,16 +62,19 @@ public interface ITsigService
     );
 
     /// <summary>
-    ///     This method signs the first message of a multi-message answer sequence -- or an
-    ///     ordinary, single-message answer, which RFC 8945 §5.3.1 treats identically -- per RFC
-    ///     8945 §5.3's own "Generation of TSIG on Answers" digest formula: the request's own MAC,
-    ///     prefixed ahead of the response's message bytes and full TSIG Variables, so the response
-    ///     is cryptographically bound to the specific request that produced it rather than any
-    ///     other request the same key could have signed.
+    ///     This method signs a single-message answer, or the first message of a multi-message
+    ///     answer, per RFC 8945 §5.3. The digest is the request's MAC, then the response bytes,
+    ///     then the full TSIG Variables. Including the request MAC binds the response to the
+    ///     request that produced it.
     /// </summary>
+    /// <remarks>
+    ///     The request MAC is digested as raw MAC bytes, without the two-byte MAC Size field.
+    ///     <see cref="VerifyResponseAsync" /> does the same, so both ends of a Ninlil-to-Ninlil
+    ///     transfer agree.
+    /// </remarks>
     /// <param name="message">The response message to sign, not yet carrying a TSIG record.</param>
     /// <param name="keyName">The name of the pre-shared key to sign with.</param>
-    /// <param name="originalId">The originating request's own header ID.</param>
+    /// <param name="originalId">The originating request's header ID.</param>
     /// <param name="requestMac">
     ///     The MAC from the request this message answers, as verified via <see cref="VerifyAsync" />
     ///     or <see cref="VerifyResponseAsync" />.
@@ -90,26 +93,17 @@ public interface ITsigService
     );
 
     /// <summary>
-    ///     This method signs the second or a later message within a multi-message answer sequence,
-    ///     per RFC 8945 §5.3.1's own reduced digest formula for such a message: the running prior
-    ///     MAC (from whichever earlier message in the sequence most recently carried one),
-    ///     prefixed ahead of this message's own bytes and its own "TSIG Timers" (Time Signed and
-    ///     Fudge only -- <em>not</em> the full TSIG Variables <see cref="SignResponseAsync" /> uses
-    ///     for the sequence's first message). This project's own outbound zone-transfer path
-    ///     always signs every message in a sequence this way (never omitting one, the more
-    ///     thorough of the two RFC-permitted choices), so this method never needs to account for
-    ///     an unsigned message appearing in between -- see
-    ///     <see cref="VerifyContinuationAsync" />'s own doc comment for why that same tolerance is
-    ///     still needed on the verifying side, for a real-world peer that chooses the lighter
-    ///     option instead.
+    ///     This method signs the second or a later message of a multi-message answer, per RFC 8945
+    ///     §5.3.1. The digest is the prior MAC, then this message's bytes, then only the TSIG
+    ///     Timers (Time Signed and Fudge), not the full TSIG Variables. The outbound zone transfer
+    ///     path signs every message, so no unsigned messages ever sit between two signed ones
+    ///     here; <see cref="VerifyContinuationAsync" /> still has to allow for them from peers.
     /// </summary>
     /// <param name="message">The response message to sign, not yet carrying a TSIG record.</param>
     /// <param name="keyName">The name of the pre-shared key to sign with.</param>
-    /// <param name="originalId">The originating request's own header ID.</param>
+    /// <param name="originalId">The originating request's header ID.</param>
     /// <param name="priorMac">
-    ///     The MAC from the TSIG record most recently attached within this same sequence --
-    ///     directly the previous message's own MAC when every message is signed, as this
-    ///     project's own outbound path always does.
+    ///     The MAC of the previous message in the sequence.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns><paramref name="message" />, with <see cref="DnsMessage.Tsig" /> now set.</returns>
@@ -125,15 +119,13 @@ public interface ITsigService
     );
 
     /// <summary>
-    ///     This method verifies the first message of a multi-message answer sequence -- or an
-    ///     ordinary, single-message answer -- per RFC 8945 §5.3's digest formula, the mirror image
-    ///     of <see cref="SignResponseAsync" />.
+    ///     This method verifies a single-message answer, or the first message of a multi-message
+    ///     answer, per RFC 8945 §5.3. It is the counterpart of <see cref="SignResponseAsync" />.
     /// </summary>
-    /// <param name="rawMessage">The complete message, exactly as received from the wire.</param>
+    /// <param name="rawMessage">The complete message as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
-    ///     The offset within <paramref name="rawMessage" /> the TSIG record started at, as
-    ///     reported by <see cref="DnsMessageReader" />'s message-decoding overload that reports
-    ///     the TSIG record's starting offset.
+    ///     The offset within <paramref name="rawMessage" /> where the TSIG record starts, as
+    ///     reported by <see cref="DnsMessageReader" /> when it decodes the message.
     /// </param>
     /// <param name="message"><paramref name="rawMessage" />, already decoded.</param>
     /// <param name="requestMac">The MAC from the request this message claims to answer.</param>
@@ -148,33 +140,25 @@ public interface ITsigService
     );
 
     /// <summary>
-    ///     This method verifies the second or a later message within a multi-message answer
-    ///     sequence, per RFC 8945 §5.3.1's reduced digest formula, the mirror image of
-    ///     <see cref="SignContinuationAsync" />. Unlike the signing side, this method also accepts
-    ///     a real-world peer's own choice to leave some messages in the sequence entirely unsigned
-    ///     (RFC 8945 §5.4 requires a verifier to tolerate up to 99 consecutive unsigned messages,
-    ///     as long as the sequence's own first and last message both carry a valid TSIG) --
-    ///     <paramref name="unsignedMessageBytesSincePriorTsig" /> carries exactly those messages'
-    ///     own raw bytes, in order, so this method can fold them into the digest exactly where RFC
-    ///     8945 §5.3.1's own "DNS Messages" component requires: between the running prior MAC and
-    ///     this message's own bytes.
+    ///     This method verifies the second or a later message of a multi-message answer, per RFC
+    ///     8945 §5.3.1. It is the counterpart of <see cref="SignContinuationAsync" />, but also
+    ///     accepts a peer that leaves some messages unsigned (RFC 8945 §5.3.1 allows up to 99 in
+    ///     a row, as long as the first and last messages are signed). The bytes of those unsigned
+    ///     messages go into the digest between the prior MAC and this message's bytes.
     /// </summary>
-    /// <param name="rawMessage">The complete message, exactly as received from the wire.</param>
+    /// <param name="rawMessage">The complete message as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
-    ///     The offset within <paramref name="rawMessage" /> the TSIG record started at, as
-    ///     reported by <see cref="DnsMessageReader" />'s message-decoding overload that reports
-    ///     the TSIG record's starting offset.
+    ///     The offset within <paramref name="rawMessage" /> where the TSIG record starts, as
+    ///     reported by <see cref="DnsMessageReader" /> when it decodes the message.
     /// </param>
     /// <param name="message"><paramref name="rawMessage" />, already decoded.</param>
     /// <param name="priorMac">
-    ///     The MAC from the TSIG record most recently attached within this same sequence.
+    ///     The MAC of the most recent signed message in the sequence.
     /// </param>
     /// <param name="unsignedMessageBytesSincePriorTsig">
-    ///     The complete raw bytes of every message received since (and not including) whichever
-    ///     earlier message <paramref name="priorMac" /> came from, that itself carried no TSIG
-    ///     record at all -- empty when this message is the very next one after the last
-    ///     TSIG-bearing message, as is always true against this project's own outbound path,
-    ///     which never leaves a message unsigned.
+    ///     The raw bytes of each unsigned message received after the one
+    ///     <paramref name="priorMac" /> came from, in order. Empty when the previous message was
+    ///     signed.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The verification outcome.</returns>

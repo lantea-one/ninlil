@@ -4,15 +4,12 @@ using Microsoft.AspNetCore.DataProtection;
 namespace Ninlil.Dns.Server.Tsig;
 
 /// <summary>
-///     This class encrypts and decrypts a TSIG key's shared secret at rest, via ASP.NET Core Data
-///     Protection -- the same mechanism <c>Ninlil.Dns.Identity</c> already uses for a user's
-///     TOTP authenticator key. Extracted into its own class, mirroring
-///     <c>Ninlil.Dns.Server.Authoritative.CloudSync.CloudCredentialProtector</c>'s own
-///     precedent, so the purpose string <c>"Ninlil.Dns.Server.Tsig.SharedSecret"</c> has
-///     exactly one place it is ever written, rather than being repeated as a literal everywhere a
-///     TSIG secret is protected or unprotected: <see cref="TsigService" /> uses this for verifying
-///     and signing, and <c>Ninlil.Web</c>'s own TSIG key management endpoints use it to
-///     encrypt a newly created key's secret before it is ever persisted.
+///     This class encrypts and decrypts a TSIG key's shared secret at rest with ASP.NET Core Data
+///     Protection. It keeps the purpose string <c>"Ninlil.Dns.Server.Tsig.SharedSecret"</c> in
+///     one place, like <c>Ninlil.Dns.Server.Authoritative.CloudSync.CloudCredentialProtector</c>
+///     does for cloud credentials. <see cref="TsigService" /> decrypts secrets to sign and verify;
+///     the TSIG key endpoints in <c>Ninlil.Web</c> encrypt a new key's secret before it is stored.
+///     The secret must be recoverable, not hashed, because computing a MAC needs the raw key.
 /// </summary>
 /// <param name="dataProtectionProvider">The provider this protector is built from.</param>
 public class TsigSecretProtector(IDataProtectionProvider dataProtectionProvider)

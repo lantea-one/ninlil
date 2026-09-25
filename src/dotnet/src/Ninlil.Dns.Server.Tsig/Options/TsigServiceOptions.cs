@@ -13,10 +13,10 @@ public class TsigServiceOptions
     public const string SectionName = "DnsServer:Tsig";
 
     /// <summary>
-    ///     This property contains how many seconds of clock skew between signer and verifier are
-    ///     tolerated, written into every message this server signs. RFC 8945 recommends 300
-    ///     seconds (5 minutes) as a sensible default -- long enough to absorb ordinary clock
-    ///     drift, short enough that a captured, signed message cannot be replayed indefinitely.
+    ///     This property contains the Fudge value, in seconds, written into every message this
+    ///     server signs: how far the verifier's clock may differ from the signing time. RFC 8945
+    ///     recommends 300 seconds, which absorbs ordinary clock drift while limiting how long a
+    ///     captured message can be replayed. Read on every signature, so changes apply at once.
     /// </summary>
     public ushort DefaultFudgeSeconds { get; set; } = 300;
 }

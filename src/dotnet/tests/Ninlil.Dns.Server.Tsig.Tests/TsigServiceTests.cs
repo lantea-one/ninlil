@@ -10,9 +10,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Tsig.Tests;
 
 /// <summary>
-///     This class tests <see cref="TsigService" /> (RFC 8945) against a real, SQLite-backed key
-///     repository and real encrypted secrets -- the same shape as the throwaway smoke test this
-///     project was originally verified with, now a permanent, committed regression suite.
+///     This class tests <see cref="TsigService" /> (RFC 8945) against the EF Core key repository
+///     on a temporary SQLite database (<see cref="TsigServiceTestFixture" />), with secrets
+///     encrypted by Data Protection. It covers sign/verify round trips, tampering, BADTIME,
+///     BADKEY (unknown, disabled, unsupported algorithm), wrong MAC length, and the request-MAC
+///     and prior-MAC chaining used by multi-message zone transfers.
 /// </summary>
 public class TsigServiceTests(TsigServiceTestFixture fixture)
     : IClassFixture<TsigServiceTestFixture>
@@ -49,12 +51,10 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
     }
 
     /// <summary>
-    ///     This method creates a real, persisted key exactly like <see cref="CreateKeyAsync" />,
-    ///     but also hands the test its own raw, unencrypted secret -- needed only by
-    ///     <see cref="VerifyContinuationToleratesARealUnsignedIntermediateMessage" />, which has to
-    ///     hand-compute an RFC 8945 §5.3.1 digest independently of <see cref="TsigService" /> itself
-    ///     to prove that class's own formula matches the RFC, not just that two calls into the
-    ///     same class happen to agree with each other.
+    ///     This method creates and stores a key like <see cref="CreateKeyAsync" />, and also
+    ///     returns the raw secret.
+    ///     <see cref="VerifyContinuationToleratesARealUnsignedIntermediateMessage" /> needs it to
+    ///     compute a digest by hand instead of through <see cref="TsigService" />.
     /// </summary>
     private async Task<(TsigKeyEntity Key, byte[] Secret)> CreateKeyWithSecretAsync()
     {
@@ -102,9 +102,9 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         };
 
     /// <summary>
-    ///     This method mirrors what a real transport does: sign, serialize, then re-parse (so
-    ///     the TSIG record's own starting offset is known), the same round trip
-    ///     <see cref="ITsigService.VerifyAsync" /> expects.
+    ///     This method serializes a signed message and parses it again, as a transport would, so
+    ///     the raw bytes and TSIG record offset that <see cref="ITsigService.VerifyAsync" /> needs
+    ///     are available.
     /// </summary>
     private static (byte[] RawMessage, int TsigRecordStartOffset, DnsMessage Reparsed) Reparse(
         DnsMessage signedMessage
@@ -146,8 +146,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         DnsMessage signed = await tsigService.SignAsync(BuildMessage(2), key.Name, 2);
         (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(signed);
 
-        // Flip a byte well before the TSIG record itself, inside the signed portion of the
-        // message -- the question section's own name.
+        // Flip a byte in the question name, inside the signed part of the message.
         rawMessage[13] ^= 0xFF;
 
         TsigVerificationResult result = await tsigService.VerifyAsync(
@@ -167,8 +166,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
         ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
-        // RFC 8945 §5.2.2's timestamp check runs before the MAC is ever computed or compared, so
-        // an otherwise-garbage, but correctly-sized, MAC is enough to reach it.
+        // TsigService checks the time before computing the MAC, so a correctly sized but
+        // meaningless MAC is enough to reach the check.
         DnsMessage message = BuildMessage(3);
         message.Tsig = new DnsTsigOptions(
             DnsName.Parse(key.Name),
@@ -226,7 +225,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
     {
         TsigKeyEntity key = await CreateKeyAsync();
 
-        // Sign while still enabled, then disable it -- a revoked-after-signing scenario.
+        // Sign while the key is enabled, then disable it.
         byte[] rawMessage;
         int tsigOffset;
         DnsMessage reparsed;
@@ -250,11 +249,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             await unitOfWork.SaveChangesAsync();
         }
 
-        // A fresh scope (and therefore a fresh DbContext, with no stale tracked entity left over
-        // from signing above) is essential here -- reusing signScope's own ITsigService would
-        // see its DbContext's own already-tracked, now-stale copy of the key instead of
-        // re-querying the database, masking the disable that just happened through a separate
-        // scope entirely.
+        // Verify in a new scope: signScope's DbContext still tracks the old, enabled copy of the
+        // key and would return it instead of re-reading the database.
         await using AsyncServiceScope verifyScope = fixture.Services.CreateAsyncScope();
         ITsigService verifyingService =
             verifyScope.ServiceProvider.GetRequiredService<ITsigService>();
@@ -278,7 +274,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         DnsMessage message = BuildMessage(6);
         message.Tsig = new DnsTsigOptions(
             DnsName.Parse(key.Name),
-            DnsName.Parse("hmac-sha1"), // Deliberately not the only algorithm this project implements.
+            DnsName.Parse("hmac-sha1"), // Not supported; only HMAC-SHA256 is.
             (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             300,
             new byte[32],
@@ -311,7 +307,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             DnsTsigOptions.HmacSha256AlgorithmName,
             (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             300,
-            new byte[16], // HMAC-SHA256 always produces 32 bytes -- this is deliberately wrong.
+            new byte[16], // HMAC-SHA256 produces 32 bytes.
             message.Id,
             DnsResponseCodeEnum.NoError,
             []
@@ -376,9 +372,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
         (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(signed);
 
-        // RFC 8945 §5.3 binds a response's own MAC to the specific request that produced it --
-        // verifying against a *different* request's MAC (as if this response had been spliced
-        // onto an unrelated exchange) must fail exactly the same way a tampered message body would.
+        // RFC 8945 §5.3 binds a response to its request, so verifying against a different
+        // request's MAC must fail like a tampered message.
         TsigVerificationResult result = await tsigService.VerifyResponseAsync(
             rawMessage,
             tsigOffset,
@@ -437,11 +432,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
         (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(signed);
 
-        // A genuinely broken chain -- verifying against the wrong prior MAC, exactly what a
-        // dropped, reordered, or spliced-in message within a real multi-message transfer would
-        // look like -- must be rejected, not silently accepted. This is the direct proof that
-        // adding the lighter, RFC 8945 §5.3.1 chained-MAC mode did not also quietly weaken
-        // verification: a chain that does not actually connect is still caught.
+        // A wrong prior MAC looks like a dropped, reordered or spliced-in message in a transfer,
+        // and must be rejected.
         byte[] wrongPriorMac = new byte[32];
         Random.Shared.NextBytes(wrongPriorMac);
 
@@ -464,10 +456,9 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
         ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
-        // Mirrors exactly how ZoneTransferService signs, and ZoneTransferPullOverStream verifies,
-        // a real multi-message AXFR/IXFR response sequence: message 1 chains from the original
-        // request's own MAC, and every later message chains from whichever message before it most
-        // recently carried a TSIG.
+        // The same chain ZoneTransferService signs and ZoneTransferPullOverStream verifies for a
+        // multi-message AXFR/IXFR: message 1 chains from the request MAC, each later message from
+        // the previous signed message.
         byte[] requestMac = new byte[32];
         Random.Shared.NextBytes(requestMac);
 
@@ -518,9 +509,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
         Assert.True(result3.IsValid);
 
-        // Skipping straight from message 1's own MAC to verify message 3 (as though message 2
-        // never happened) must fail -- each hop in the chain is genuinely load-bearing, not
-        // cosmetic.
+        // Verifying message 3 against message 1's MAC, as if message 2 were missing, must fail.
         TsigVerificationResult skippedResult = await tsigService.VerifyContinuationAsync(
             rawMessage3,
             tsigOffset3,
@@ -538,7 +527,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
         ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
-        // Message 1: an ordinary, fully-signed first message in the sequence.
+        // Message 1: a signed first message.
         byte[] requestMac = new byte[32];
         Random.Shared.NextBytes(requestMac);
         DnsMessage signed1 = await tsigService.SignResponseAsync(
@@ -549,16 +538,13 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
         (_, _, DnsMessage reparsed1) = Reparse(signed1);
 
-        // Message 2: per RFC 8945 §5.4, a real peer may choose to leave this one entirely
-        // unsigned -- up to 99 such messages are tolerated, as long as the sequence's own first
-        // and last message both carry a valid TSIG. This message carries no Tsig record at all.
+        // Message 2: unsigned. RFC 8945 §5.3.1 lets a peer leave up to 99 messages in a row
+        // unsigned, as long as the first and last are signed.
         byte[] unsignedMessage2Bytes = DnsMessageWriter.Write(BuildMessage(13));
 
-        // Message 3: the next message that *does* carry a TSIG. Per RFC 8945 §5.3.1's own "DNS
-        // Messages" digest component, its digest must fold in message 2's own raw bytes between
-        // the running prior MAC (message 1's own) and message 3's own bytes -- computed here by
-        // hand, independently of TsigService itself, to prove that class's formula genuinely
-        // matches the RFC rather than merely being internally self-consistent.
+        // Message 3: signed. Its digest is message 1's MAC, then message 2's bytes, then message
+        // 3's bytes, then the timers (RFC 8945 §5.3.1). It is computed by hand here rather than
+        // through TsigService. Like TsigService, it uses the raw MAC without its size field.
         DnsMessage message3 = BuildMessage(13);
         byte[] message3Bytes = DnsMessageWriter.Write(message3);
         ulong timeSigned = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -595,10 +581,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
 
         Assert.True(result.IsValid);
 
-        // Confirming the unsigned message's own bytes are genuinely load-bearing in the digest --
-        // verifying as though message 2 had never existed at all (an empty "DNS Messages" gap)
-        // must fail, proving this is real chaining, not a parameter this project's own code
-        // silently ignores.
+        // Leaving out message 2's bytes must fail, so the unsigned bytes are part of the digest.
         TsigVerificationResult resultIgnoringGap = await tsigService.VerifyContinuationAsync(
             rawMessage3,
             tsigOffset3,

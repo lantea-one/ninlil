@@ -5,9 +5,9 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Server.Tsig;
 
 /// <summary>
-///     This class carries the outcome of asking <see cref="ITsigService" /> to verify a signed
-///     message: either it was valid, or it was rejected for a specific, RFC 8945 §5.2-defined
-///     reason a caller can report back to whoever sent it.
+///     This class carries the outcome of an <see cref="ITsigService" /> verification: either the
+///     signature was valid, or it was rejected with an RFC 8945 §5.2 error (BADKEY, BADSIG,
+///     BADTIME) that the caller can report back to the sender.
 /// </summary>
 public sealed class TsigVerificationResult
 {
@@ -24,15 +24,14 @@ public sealed class TsigVerificationResult
     public DnsResponseCodeEnum Error { get; }
 
     /// <summary>
-    ///     This property contains the key the message claimed to be signed with, if one was
-    ///     found by that name, regardless of whether the signature itself turned out to be
-    ///     valid. <see langword="null" /> when no key by that name exists at all.
+    ///     This property contains the key named in the message's TSIG record, when that key exists,
+    ///     is enabled and the check got far enough to look it up. It is set on a BADTIME or BADSIG
+    ///     failure and <see langword="null" /> on a BADKEY failure.
     /// </summary>
     public TsigKeyEntity Key { get; }
 
     /// <summary>
-    ///     This constructor is private; construct an instance through <see cref="Success" /> or
-    ///     <see cref="Failure" /> instead.
+    ///     This constructor is private; use <see cref="Success" /> or <see cref="Failure" />.
     /// </summary>
     private TsigVerificationResult(bool isValid, DnsResponseCodeEnum error, TsigKeyEntity key)
     {
