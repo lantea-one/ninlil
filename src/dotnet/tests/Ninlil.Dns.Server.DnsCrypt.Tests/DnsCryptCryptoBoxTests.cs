@@ -4,6 +4,11 @@ using Ninlil.Dns.Server.DnsCrypt;
 // Define our namespace.
 namespace Ninlil.Dns.Server.DnsCrypt.Tests;
 
+/// <summary>
+///     This class tests <see cref="DnsCryptCryptoBox" /> for both ciphers with newly generated
+///     keys through libsodium: a round trip recovers the message and a changed ciphertext is
+///     rejected.
+/// </summary>
 public class DnsCryptCryptoBoxTests
 {
     private static readonly byte[] Message =

@@ -5,62 +5,58 @@ using System.Security.Cryptography;
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class reads and writes the client-query and server-response wire envelopes the
-///     DNSCrypt spec defines around an otherwise ordinary, plaintext DNS message:
-///     <c>&lt;client-magic&gt; &lt;client-pk&gt; &lt;client-nonce&gt; &lt;encrypted-query&gt;</c>
-///     for a query, and <c>&lt;resolver-magic&gt; &lt;nonce&gt; &lt;encrypted-response&gt;</c> for
-///     a response -- both ends of the exchange <c>Ninlil.Dns.Protocol.DnsCrypt</c>'s
-///     listener needs, kept here rather than in the transport project itself so this wire format
-///     stays independently testable, the same relationship
-///     <see cref="Ninlil.Dns.Server.Dnssec" />'s signature verification already has to the
-///     authoritative and recursive engines that both depend on it.
+///     This class reads and writes the envelopes the DNSCrypt spec puts around an ordinary DNS
+///     message: <c>&lt;client-magic&gt; &lt;client-pk&gt; &lt;client-nonce&gt; &lt;encrypted-query&gt;</c>
+///     for a query and <c>&lt;resolver-magic&gt; &lt;nonce&gt; &lt;encrypted-response&gt;</c> for
+///     a response. The server side (<see cref="TryReadClientMagic" />, <see cref="DecryptQuery" />,
+///     <see cref="EncryptResponse" />) is used by <c>DnsCryptQueryHandler</c> in
+///     <c>Ninlil.Dns.Protocol.DnsCrypt</c>, and the client side (<see cref="EncryptQuery" />,
+///     <see cref="DecryptResponse" />) by the DNSCrypt forwarder client in
+///     <c>Ninlil.Dns.Server.Forwarding</c>. Keeping both here lets the wire format be tested
+///     without a listener.
 /// </summary>
 public static class DnsCryptEnvelopeCodec
 {
     /// <summary>
-    ///     This constant contains a client-magic tag's own length, in bytes.
+    ///     This constant contains the length of a client-magic tag, in bytes.
     /// </summary>
     public const int ClientMagicLength = 8;
 
     /// <summary>
-    ///     This constant contains an X25519 public key's own length, in bytes -- the same for
-    ///     both currently supported ciphers.
+    ///     This constant contains the length of an X25519 public key, in bytes, for both ciphers.
     /// </summary>
     public const int PublicKeyLength = 32;
 
     /// <summary>
-    ///     This constant contains half of this construction's own 24-byte nonce -- the half a
-    ///     client chooses and sends explicitly; the other half is chosen by whichever side
-    ///     completes the nonce (all zero bytes for a query, the resolver's own random bytes for
-    ///     a response).
+    ///     This constant contains the length of half the 24-byte nonce. The client chooses and
+    ///     sends the first half; the second half is zero bytes for a query and random bytes chosen
+    ///     by the resolver for a response.
     /// </summary>
     public const int HalfNonceLength = 12;
 
     /// <summary>
-    ///     This constant contains this construction's own authentication tag length, in bytes.
+    ///     This constant contains the authentication tag length, in bytes.
     /// </summary>
     public const int MacLength = 16;
 
     /// <summary>
-    ///     This constant contains the smallest a client query packet could possibly be: every
-    ///     envelope field's own minimum length, plus at least one byte of actual (padded)
-    ///     ciphertext.
+    ///     This constant contains the smallest possible client query packet: the envelope fields
+    ///     and tag plus at least one byte of padded ciphertext.
     /// </summary>
     public const int MinimumClientQueryLength =
         ClientMagicLength + PublicKeyLength + HalfNonceLength + MacLength + 1;
 
     /// <summary>
-    ///     This constant contains the resolver-magic bytes a server response is always prefixed
-    ///     with, letting a client immediately tell a DNSCrypt response apart from an ordinary
-    ///     plaintext one -- <c>"r6fnvWj8"</c> in ASCII.
+    ///     This field contains the resolver-magic bytes every response starts with, so a client
+    ///     can tell a DNSCrypt response from a plain DNS one: <c>"r6fnvWj8"</c> in ASCII.
     /// </summary>
     public static readonly byte[] ResolverMagic = [0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38];
 
     /// <summary>
-    ///     This method reads the 8-byte client-magic tag off the front of a packet, without
-    ///     attempting to decrypt anything -- enough to look up which tracked certificate (and so
-    ///     which resolver secret key and cipher) the rest of the packet should be decrypted
-    ///     against.
+    ///     This method reads the 8-byte client-magic tag from the start of a packet without
+    ///     decrypting anything, so the caller can find the certificate (and so the secret key and
+    ///     cipher) to decrypt it with. It returns <see langword="false" /> for a packet shorter
+    ///     than <see cref="MinimumClientQueryLength" />, which <see cref="DecryptQuery" /> relies on.
     /// </summary>
     public static bool TryReadClientMagic(ReadOnlySpan<byte> packet, out byte[] clientMagic)
     {
@@ -79,15 +75,18 @@ public static class DnsCryptEnvelopeCodec
     ///     the original, unpadded DNS query message.
     /// </summary>
     /// <param name="certificateEntry">
-    ///     The tracked certificate whose own resolver secret key and cipher this packet's
-    ///     client-magic tag selected.
+    ///     The certificate whose client-magic tag matched the packet.
     /// </param>
-    /// <param name="packet">The complete client query packet, including its client-magic tag.</param>
-    /// <param name="clientPublicKey">The client's own public key, read out of the packet.</param>
-    /// <param name="clientNonceHalf">The client's own half-nonce, read out of the packet.</param>
+    /// <param name="packet">
+    ///     The complete client query packet, including its client-magic tag. Its length must have
+    ///     been checked by <see cref="TryReadClientMagic" />.
+    /// </param>
+    /// <param name="clientPublicKey">The client's public key, read from the packet.</param>
+    /// <param name="clientNonceHalf">The client's half-nonce, read from the packet.</param>
     /// <returns>The decrypted, unpadded DNS query message.</returns>
     /// <exception cref="CryptographicException">
-    ///     Thrown when authentication fails -- a corrupted, forged, or wrong-key-encrypted packet.
+    ///     Thrown when authentication fails: a corrupted or forged packet, or one encrypted with the
+    ///     wrong key.
     /// </exception>
     /// <exception cref="FormatException">
     ///     Thrown when the decrypted plaintext does not end in valid padding.
@@ -106,9 +105,7 @@ public static class DnsCryptEnvelopeCodec
         byte[] encryptedQuery = packet[(ClientMagicLength + PublicKeyLength + HalfNonceLength)..]
             .ToArray();
 
-        // A query's own nonce is the client's chosen half followed by 12 NUL bytes -- the
-        // client-side counterpart to a response's nonce, which instead completes the second
-        // half with the resolver's own random bytes.
+        // A query's nonce is the client's half followed by 12 zero bytes.
         byte[] nonce = new byte[HalfNonceLength * 2];
         clientNonceHalf.CopyTo(nonce, 0);
 
@@ -124,8 +121,9 @@ public static class DnsCryptEnvelopeCodec
     }
 
     /// <summary>
-    ///     This method encrypts a resolver's own DNS response message back into a complete
-    ///     response packet, ready to send back to the client that sent the query it answers.
+    ///     This method encrypts a DNS response into a complete response packet for the client
+    ///     that sent the query. It does not limit the packet to the query's size; the caller
+    ///     handles size limits.
     /// </summary>
     /// <param name="certificateEntry">The same certificate the originating query was decrypted against.</param>
     /// <param name="clientPublicKey">The same client public key <see cref="DecryptQuery" /> returned.</param>
@@ -143,10 +141,9 @@ public static class DnsCryptEnvelopeCodec
         clientNonceHalf.CopyTo(nonce, 0);
         resolverNonceHalf.CopyTo(nonce, HalfNonceLength);
 
-        // Per the spec, the total length of <resolver-response> <resolver-response-pad> must be
-        // a multiple of 64 bytes, with the pad itself (including its own leading marker byte)
-        // between 1 and 256 bytes -- exactly what padding to the next 64-byte boundary always
-        // produces.
+        // The spec requires <resolver-response> <resolver-response-pad> to be a multiple of 64
+        // bytes with a pad (marker included) of 1 to 256 bytes; padding to the next 64-byte
+        // boundary always gives 1 to 64.
         byte[] paddedResponse = DnsCryptPadding.PadToBlockSize(responseMessage, 64);
 
         byte[] encryptedResponse = DnsCryptCryptoBox.Encrypt(
@@ -166,16 +163,16 @@ public static class DnsCryptEnvelopeCodec
     }
 
     /// <summary>
-    ///     This method builds a complete client query packet -- the mirror of
-    ///     <see cref="EncryptResponse" />, needed by a client role (never by this resolver's own
-    ///     server role) to actually send an encrypted query.
+    ///     This method builds a complete client query packet, the client-side counterpart of
+    ///     <see cref="DecryptQuery" />. Only the forwarder client uses it. The query is padded to
+    ///     a multiple of 64 bytes, with no larger minimum size.
     /// </summary>
-    /// <param name="esVersion">The cipher the target certificate itself specifies.</param>
-    /// <param name="clientMagic">The target certificate's own client-magic tag.</param>
-    /// <param name="clientPublicKey">The client's own, freshly generated public key.</param>
-    /// <param name="clientSecretKey">The client's own, freshly generated secret key.</param>
-    /// <param name="resolverPublicKey">The target certificate's own resolver public key.</param>
-    /// <param name="clientNonceHalf">A freshly generated, client-chosen half-nonce.</param>
+    /// <param name="esVersion">The cipher the target certificate specifies.</param>
+    /// <param name="clientMagic">The target certificate's client-magic tag.</param>
+    /// <param name="clientPublicKey">The client's newly generated public key.</param>
+    /// <param name="clientSecretKey">The client's newly generated secret key.</param>
+    /// <param name="resolverPublicKey">The target certificate's resolver public key.</param>
+    /// <param name="clientNonceHalf">A newly generated client half-nonce.</param>
     /// <param name="queryMessage">The plaintext, encoded DNS query message.</param>
     public static byte[] EncryptQuery(
         DnsCryptEsVersion esVersion,
@@ -187,9 +184,8 @@ public static class DnsCryptEnvelopeCodec
         byte[] queryMessage
     )
     {
-        // A query's own nonce is the client's chosen half followed by 12 NUL bytes -- the
-        // resolver completes the second half only for its own response, never for the query
-        // itself.
+        // A query's nonce is the client's half followed by 12 zero bytes; the resolver fills the
+        // second half only in its response.
         byte[] nonce = new byte[HalfNonceLength * 2];
         clientNonceHalf.CopyTo(nonce, 0);
 
@@ -213,9 +209,9 @@ public static class DnsCryptEnvelopeCodec
     }
 
     /// <summary>
-    ///     This method decrypts and authenticates a complete server response packet -- the
-    ///     mirror of <see cref="DecryptQuery" />, needed by a client role to read back what
-    ///     <see cref="EncryptQuery" /> queried for.
+    ///     This method decrypts and authenticates a response packet, the client-side counterpart of
+    ///     <see cref="EncryptResponse" />, used by the forwarder client to read the answer to a
+    ///     query built with <see cref="EncryptQuery" />.
     /// </summary>
     /// <param name="esVersion">The same cipher <see cref="EncryptQuery" /> was called with.</param>
     /// <param name="packet">The complete response packet, including its resolver-magic tag.</param>
@@ -225,12 +221,12 @@ public static class DnsCryptEnvelopeCodec
     /// <returns>The decrypted, unpadded DNS response message.</returns>
     /// <exception cref="FormatException">
     ///     Thrown when <paramref name="packet" /> is too short to be a valid response, does not
-    ///     start with the resolver-magic tag, or its own echoed nonce half does not match
-    ///     <paramref name="clientNonceHalf" /> -- a sign this response was not actually meant for
-    ///     this query.
+    ///     start with the resolver-magic tag, or its echoed nonce half does not match
+    ///     <paramref name="clientNonceHalf" />, meaning the response is not for this query.
     /// </exception>
     /// <exception cref="CryptographicException">
-    ///     Thrown when authentication fails -- a corrupted, forged, or wrong-key-encrypted packet.
+    ///     Thrown when authentication fails: a corrupted or forged packet, or one encrypted with the
+    ///     wrong key.
     /// </exception>
     public static byte[] DecryptResponse(
         DnsCryptEsVersion esVersion,

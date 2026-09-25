@@ -9,23 +9,22 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class keeps <see cref="IDnsCryptCertificateStore" /> continuously stocked with a
-///     valid certificate for every <see cref="DnsCryptOptions.EnabledEsVersions" /> cipher, with
-///     no operator action needed -- consistent with this project's own RFC 5011 automatic
-///     trust-anchor rollover in automating exactly this kind of maintenance-burden task for its
-///     homelab/home router deployment target, rather than requiring manual rotation the way
-///     DNSSEC/TSIG key rollover deliberately still does.
+///     This hosted service keeps <see cref="IDnsCryptCertificateStore" /> supplied with a valid
+///     certificate for every <see cref="DnsCryptOptions.EnabledEsVersions" /> cipher, without
+///     operator action, like the automatic RFC 5011 trust-anchor rollover. It checks at startup
+///     and every <see cref="DnsCryptOptions.CertificateRotationInterval" />, drops expired
+///     certificates, and signs new ones with the store's provider key. It runs only while
+///     DNSCrypt is enabled.
 /// </summary>
 /// <param name="store">The certificate store this service reads from and updates.</param>
 /// <param name="options">
-///     This service's own configured rotation interval and validity duration -- read via
-///     <see cref="IOptionsMonitor{TOptions}" /> so a REST-driven <c>enable</c> toggle of DNSCrypt as
-///     a whole (which restarts this loop alongside <c>DnsCryptUdpListener</c>/
-///     <c>DnsCryptTcpListener</c>, since a listener with no valid certificate to serve can
-///     accept a connection but never actually answer one) is genuinely observed the next time
-///     <see cref="ExecuteAsync" /> runs.
+///     The DNSCrypt settings, read through <see cref="IOptionsMonitor{TOptions}" />. Enabling
+///     DNSCrypt at runtime restarts this service together with <c>DnsCryptUdpListener</c> and
+///     <c>DnsCryptTcpListener</c> (a listener without a certificate accepts queries but cannot
+///     answer them), and the new <c>Enable</c> value is seen when <see cref="ExecuteAsync" />
+///     runs again.
 /// </param>
-/// <param name="logger">The logger this service records every newly generated certificate to.</param>
+/// <param name="logger">The logger this service records new certificates and failed checks to.</param>
 public sealed class DnsCryptCertificateRotationService(
     IDnsCryptCertificateStore store,
     IOptionsMonitor<DnsCryptOptions> options,
@@ -33,26 +32,16 @@ public sealed class DnsCryptCertificateRotationService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This property reports whether this service's own rotation loop is genuinely active
-    ///     right now -- <see langword="false" /> both before <see cref="ExecuteAsync" /> has run
-    ///     and for the entire lifetime of an invocation that exited immediately because
-    ///     <c>DnsCryptOptions.Enable</c> was <see langword="false" /> at the time. Without a real
-    ///     signal like this one, <c>Ninlil.Web.Services.ManagedServiceRegistration</c>'s
-    ///     own fallback "has StartAsync been called more recently than StopAsync" bookkeeping
-    ///     would report this service as already running the instant the process starts -- true of
-    ///     every hosted service in this process, since the generic host always calls
-    ///     <see cref="BackgroundService.StartAsync(CancellationToken)" /> once at boot regardless
-    ///     of any <c>Enable</c> flag -- even on a fresh installation where DNSCrypt (and therefore
-    ///     this loop) starts disabled. <c>Ninlil.Web.Controllers.TransportSettingsController</c>'s
-    ///     own live <c>enable</c> toggle only calls this registration's own
-    ///     <c>IManagedServiceRegistration.StartAsync</c> when <c>IsRunning</c> actually disagrees
-    ///     with the desired state (see that controller's own doc comment on why a redundant call
-    ///     would be unsafe) -- with the stale bookkeeping fallback, that guard would silently skip
-    ///     ever restarting this loop, so a DNSCrypt transport enabled live on a fresh install would
-    ///     genuinely bind its socket (the two listeners each have their own real <c>IsListening</c>
-    ///     probe already) but never actually issue a certificate, leaving it deaf to every real,
-    ///     encrypted client query -- exactly the failure mode this class's own constructor
-    ///     parameter doc comment already warns a missing certificate causes.
+    ///     This property reports whether the rotation loop is running. It is
+    ///     <see langword="false" /> before <see cref="ExecuteAsync" /> runs, after it returns, and
+    ///     when it returned at once because <c>DnsCryptOptions.Enable</c> was off. The generic host
+    ///     calls <see cref="BackgroundService.StartAsync(CancellationToken)" /> at startup whatever
+    ///     the <c>Enable</c> flag, so without this property the fallback start/stop bookkeeping of
+    ///     <c>ManagedServiceRegistration</c> in <c>Server.Core</c> would report the service as
+    ///     running on an installation where DNSCrypt is off. <c>TransportSettingsController</c>
+    ///     starts the service only when <c>IsRunning</c> differs from the wanted state, so it would
+    ///     then never start it when DNSCrypt is enabled at runtime, and the listeners would run
+    ///     without a certificate.
     /// </summary>
     public bool IsRunning { get; private set; }
 
@@ -84,10 +73,8 @@ public sealed class DnsCryptCertificateRotationService(
                 }
                 catch (Exception exception)
                 {
-                    // A single failed rotation attempt must never take this whole background
-                    // service down -- there is always another attempt, at worst
-                    // CertificateRotationInterval later, and any certificate already issued stays
-                    // valid regardless.
+                    // A failed check must not stop the service: the next one runs one
+                    // CertificateRotationInterval later, and issued certificates stay valid.
                     logger.LogWarning(
                         exception,
                         "A DNSCrypt certificate rotation check failed unexpectedly."
@@ -97,19 +84,18 @@ public sealed class DnsCryptCertificateRotationService(
         }
         finally
         {
-            // Reached both on a graceful shutdown and (harmlessly) if EnsureCoverage's own
-            // initial call above throws -- either way, this loop is no longer genuinely active,
-            // so a later live re-enable must be free to actually restart it rather than being
-            // told (incorrectly) that it already is.
+            // Reached on shutdown and when the first EnsureCoverage call throws (that exception
+            // then leaves ExecuteAsync). Either way the loop has stopped, so a later enable must
+            // be able to start it again.
             IsRunning = false;
         }
     }
 
     /// <summary>
-    ///     This method prunes any certificate that has already expired, then, for every
-    ///     enabled cipher, generates a fresh certificate if none of that cipher's currently
-    ///     tracked certificates will still be valid by the next scheduled check -- guaranteeing
-    ///     continuous coverage rather than reacting only after a gap has already opened.
+    ///     This method drops expired certificates, then, for each enabled cipher, generates a new
+    ///     certificate unless one of that cipher's certificates is still valid at the next
+    ///     scheduled check, so coverage never lapses between checks. It saves the result to the
+    ///     store.
     /// </summary>
     private void EnsureCoverage()
     {
@@ -146,7 +132,8 @@ public sealed class DnsCryptCertificateRotationService(
     }
 
     /// <summary>
-    ///     This method generates, and Ed25519-signs, a single new certificate.
+    ///     This method generates and Ed25519-signs one new certificate with a new key pair, a
+    ///     random client magic, and the current Unix time as its serial.
     /// </summary>
     private DnsCryptCertificateEntry GenerateCertificate(
         DnsCryptEsVersion esVersion,

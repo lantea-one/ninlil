@@ -5,12 +5,13 @@ using Sodium;
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class implements the public-key "box" cryptography DNSCrypt's own client-query and
-///     resolver-response encryption is built on, uniformly across both supported
-///     <see cref="DnsCryptEsVersion" /> values: <see cref="DnsCryptEsVersion.XSalsa20Poly1305" />
-///     via <c>Sodium.Core</c>'s own <see cref="PublicKeyBox" /> class directly, and
-///     <see cref="DnsCryptEsVersion.XChaCha20Poly1305" /> via <see cref="NativeLibsodium" />'s
-///     supplementary declarations.
+///     This class implements the public-key "box" encryption that DNSCrypt queries and
+///     responses use, with one API for both <see cref="DnsCryptEsVersion" /> values:
+///     <see cref="DnsCryptEsVersion.XSalsa20Poly1305" /> through the <see cref="PublicKeyBox" />
+///     class of <c>Sodium.Core</c>, and <see cref="DnsCryptEsVersion.XChaCha20Poly1305" />
+///     through the libsodium functions declared in <see cref="NativeLibsodium" />.
+///     <see cref="DnsCryptEnvelopeCodec" />, <see cref="DnsCryptCertificateRotationService" /> and
+///     the DNSCrypt forwarder client call it.
 /// </summary>
 public static class DnsCryptCryptoBox
 {
@@ -51,8 +52,7 @@ public static class DnsCryptCryptoBox
     }
 
     /// <summary>
-    ///     This method generates a fresh, random nonce for the given cipher -- 24 bytes for
-    ///     both currently supported ciphers.
+    ///     This method generates a random 24-byte nonce, the nonce size of both ciphers.
     /// </summary>
     public static byte[] GenerateNonce() =>
         RandomNumberGenerator.GetBytes(NativeLibsodium.NonceBytes);
@@ -63,9 +63,9 @@ public static class DnsCryptCryptoBox
     /// <param name="esVersion">Which cipher to use.</param>
     /// <param name="message">The plaintext to encrypt.</param>
     /// <param name="nonce">A 24-byte nonce, unique for this sender/recipient key pair.</param>
-    /// <param name="recipientPublicKey">The recipient's own X25519 public key.</param>
-    /// <param name="senderSecretKey">The sender's own X25519 secret key.</param>
-    /// <returns>The authentication tag followed by the ciphertext, per libsodium's own "easy" box convention (and the DNSCrypt wire format).</returns>
+    /// <param name="recipientPublicKey">The recipient's X25519 public key.</param>
+    /// <param name="senderSecretKey">The sender's X25519 secret key.</param>
+    /// <returns>The authentication tag followed by the ciphertext, the libsodium "easy" box layout and the DNSCrypt wire format.</returns>
     public static byte[] Encrypt(
         DnsCryptEsVersion esVersion,
         byte[] message,
@@ -98,11 +98,11 @@ public static class DnsCryptCryptoBox
     /// <param name="esVersion">Which cipher to use.</param>
     /// <param name="cipherText">The authentication tag followed by the ciphertext.</param>
     /// <param name="nonce">The same nonce <see cref="Encrypt" /> was called with.</param>
-    /// <param name="senderPublicKey">The sender's own X25519 public key.</param>
-    /// <param name="recipientSecretKey">The recipient's own X25519 secret key.</param>
+    /// <param name="senderPublicKey">The sender's X25519 public key.</param>
+    /// <param name="recipientSecretKey">The recipient's X25519 secret key.</param>
     /// <returns>The decrypted plaintext.</returns>
     /// <exception cref="CryptographicException">
-    ///     Thrown when authentication fails -- a tampered, corrupted, or forged message.
+    ///     Thrown when authentication fails: a tampered, corrupted or forged message.
     /// </exception>
     public static byte[] Decrypt(
         DnsCryptEsVersion esVersion,

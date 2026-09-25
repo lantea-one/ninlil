@@ -12,8 +12,7 @@ public static class ServiceCollectionDnsCryptExtension
 {
     /// <summary>
     ///     This method registers the DNSCrypt certificate store and rotation service. The
-    ///     actual listener lives in <c>Ninlil.Dns.Protocol.DnsCrypt</c>, which depends on
-    ///     this registration having already run.
+    ///     listeners live in <c>Ninlil.Dns.Protocol.DnsCrypt</c> and need these registrations.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read DNSCrypt settings from.</param>
@@ -25,9 +24,7 @@ public static class ServiceCollectionDnsCryptExtension
     {
         instance.Configure<DnsCryptOptions>(configuration.GetSection(DnsCryptOptions.SectionName));
 
-        // IDnsCryptCertificateStore is a singleton -- its whole point (a durable, continuously
-        // rotated identity) only makes sense shared across every query and every rotation
-        // check, never scoped to one.
+        // A singleton, because every query and every rotation check must share one identity.
         instance.AddSingleton<IDnsCryptCertificateStore, FileDnsCryptCertificateStore>();
         instance.AddHostedService<DnsCryptCertificateRotationService>();
 

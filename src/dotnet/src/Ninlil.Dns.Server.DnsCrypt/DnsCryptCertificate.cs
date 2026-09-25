@@ -2,33 +2,31 @@
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class carries a single DNSCrypt certificate's fields, per the protocol's own
-///     <c>&lt;cert&gt;</c> structure -- what a resolver publishes (via a plain, unencrypted TXT
-///     query) so a client can discover its current public key, which cipher to use, and which
-///     <c>&lt;client-magic&gt;</c> to tag its own encrypted queries with.
+///     This record carries the fields of one DNSCrypt certificate (the protocol's
+///     <c>&lt;cert&gt;</c> structure). A resolver publishes its certificates in a plain TXT
+///     answer, so a client can learn the current public key, the cipher, and the
+///     <c>&lt;client-magic&gt;</c> to put on its encrypted queries.
+///     <see cref="DnsCryptCertificateCodec" /> converts it to and from the wire form.
 ///     <para>
-///         Like other models in this project carrying raw <c>byte[]</c> fields, this is a
-///         record with a broken, reference-based <c>Equals</c> for those fields -- harmless
-///         here since nothing compares two instances directly.
+///         Like other records here with <c>byte[]</c> fields, its <c>Equals</c> compares those
+///         arrays by reference. Nothing compares two instances, so that does not matter.
 ///     </para>
 /// </summary>
-/// <param name="EsVersion">Which cipher this certificate's own key is for.</param>
-/// <param name="ResolverPublicKey">The resolver's own X25519 public key for this certificate, 32 bytes.</param>
+/// <param name="EsVersion">The cipher this certificate's key is for.</param>
+/// <param name="ResolverPublicKey">The resolver's X25519 public key for this certificate, 32 bytes.</param>
 /// <param name="ClientMagic">
-///     An 8-byte tag a client prefixes every encrypted query built against this certificate
-///     with, letting the resolver recognize which certificate (and so, which key) to decrypt
-///     that query with.
+///     An 8-byte tag a client puts in front of every query encrypted for this certificate, so
+///     the resolver knows which certificate, and so which key, decrypts it.
 /// </param>
 /// <param name="Serial">
-///     This certificate's own version number -- among multiple currently valid certificates,
-///     a client should prefer the highest serial.
+///     The certificate's version number; among several valid certificates, a client should
+///     prefer the highest serial.
 /// </param>
 /// <param name="ValidFrom">The point this certificate becomes valid.</param>
 /// <param name="ValidUntil">The point this certificate stops being valid.</param>
 /// <param name="Signature">
-///     An Ed25519 signature, by the resolver's own long-term provider key, over every field
-///     above -- <see langword="null" /> or empty until <see cref="DnsCryptCertificateCodec.BuildSignedData" />'s
-///     output has actually been signed.
+///     The Ed25519 signature by the resolver's long-term provider key over the output of
+///     <see cref="DnsCryptCertificateCodec.BuildSignedData" />, or empty before signing.
 /// </param>
 public sealed record DnsCryptCertificate(
     DnsCryptEsVersion EsVersion,

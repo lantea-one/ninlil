@@ -6,6 +6,11 @@ using Ninlil.Dns.Server.DnsCrypt.Tests.Fakes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.DnsCrypt.Tests;
 
+/// <summary>
+///     This class tests <see cref="DnsCryptCertificateRotationService" /> by starting it against
+///     a <see cref="FileDnsCryptCertificateStore" /> in a temporary file, with short intervals:
+///     it issues one certificate per enabled cipher at startup and new ones on later ticks.
+/// </summary>
 public class DnsCryptCertificateRotationServiceTests
 {
     [Fact]

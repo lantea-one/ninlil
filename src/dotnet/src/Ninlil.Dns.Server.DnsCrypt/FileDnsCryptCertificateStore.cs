@@ -8,13 +8,13 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This class implements <see cref="IDnsCryptCertificateStore" /> as a single JSON file on
-///     disk, following the same "small local file for state that genuinely cannot live in the
-///     database" convention already used for the RFC 5011 trust anchor store and the
-///     self-signed TLS certificate -- a full database dependency would be disproportionate for
-///     tracking a resolver's own automatically generated, operator-invisible DNSCrypt identity.
+///     This class implements <see cref="IDnsCryptCertificateStore" /> as one JSON file at
+///     <see cref="DnsCryptOptions.CertificateStateFilePath" />, like the RFC 5011 trust anchor
+///     store and the self-signed TLS certificate: a small, automatically generated identity does
+///     not need the database. The state is loaded (or a new identity generated) when the
+///     singleton is constructed, and <see cref="Save" /> rewrites the whole file.
 /// </summary>
-/// <param name="options">This store's own configured file path.</param>
+/// <param name="options">The DNSCrypt settings, read for the state file path.</param>
 /// <param name="logger">The logger this store records a corrupt or unreadable state file to.</param>
 public sealed class FileDnsCryptCertificateStore(
     IOptions<DnsCryptOptions> options,
@@ -57,9 +57,9 @@ public sealed class FileDnsCryptCertificateStore(
     }
 
     /// <summary>
-    ///     This method loads this store's state file, or seeds a brand-new one -- a freshly
-    ///     generated provider key pair and no certificates yet -- if the file does not exist
-    ///     yet, or cannot be read at all.
+    ///     This method loads the state file, or creates a new one with a newly generated provider
+    ///     key pair and no certificates when the file does not exist or fails with an I/O or
+    ///     format error. Other errors, such as malformed JSON, are not caught.
     /// </summary>
     private static (
         DnssecKeyPair ProviderKeyPair,
@@ -116,8 +116,8 @@ public sealed class FileDnsCryptCertificateStore(
     }
 
     /// <summary>
-    ///     This method persists this store's state to disk, creating its containing directory
-    ///     if it does not exist yet.
+    ///     This method writes the state file, creating its directory if needed, and restricts it
+    ///     to owner read/write on Unix after writing.
     /// </summary>
     private static void WriteFile(
         string path,
@@ -146,10 +146,9 @@ public sealed class FileDnsCryptCertificateStore(
         }
         catch (IOException exception)
         {
-            // A failed write leaves the in-memory state (already updated by the caller) usable
-            // for the rest of this process's lifetime; only a *future* restart would regenerate
-            // a new provider identity instead of reusing this one, which is an availability/UX
-            // concern, not a security or correctness one -- a warning, not fatal.
+            // The in-memory state stays usable for this process, so a failed write is only a
+            // warning. The cost comes at the next restart, which starts from the old file or, if
+            // there is none, a new provider identity that clients must be given again.
             logger.LogWarning(
                 exception,
                 "Failed to persist the DNSCrypt certificate state file at '{Path}'.",
@@ -159,7 +158,7 @@ public sealed class FileDnsCryptCertificateStore(
     }
 
     /// <summary>
-    ///     This method converts a persisted certificate record back into a live
+    ///     This method converts a stored certificate record into a
     ///     <see cref="DnsCryptCertificateEntry" />.
     /// </summary>
     private static DnsCryptCertificateEntry ToEntry(PersistedCertificate persisted) =>
@@ -177,8 +176,7 @@ public sealed class FileDnsCryptCertificateStore(
         );
 
     /// <summary>
-    ///     This method converts a live <see cref="DnsCryptCertificateEntry" /> into its
-    ///     on-disk persisted record shape.
+    ///     This method converts a <see cref="DnsCryptCertificateEntry" /> into its stored record.
     /// </summary>
     private static PersistedCertificate ToPersisted(DnsCryptCertificateEntry entry) =>
         new(
@@ -193,7 +191,7 @@ public sealed class FileDnsCryptCertificateStore(
         );
 
     /// <summary>
-    ///     This class carries this store's own on-disk JSON shape.
+    ///     This record is the JSON shape of the state file.
     /// </summary>
     private sealed record PersistedState(
         byte[] ProviderPublicKey,
@@ -202,7 +200,7 @@ public sealed class FileDnsCryptCertificateStore(
     );
 
     /// <summary>
-    ///     This class carries a single certificate's own on-disk JSON shape.
+    ///     This record is the JSON shape of one certificate in the state file.
     /// </summary>
     private sealed record PersistedCertificate(
         DnsCryptEsVersion EsVersion,

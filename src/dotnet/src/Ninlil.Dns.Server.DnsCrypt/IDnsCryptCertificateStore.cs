@@ -4,27 +4,26 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 namespace Ninlil.Dns.Server.DnsCrypt;
 
 /// <summary>
-///     This interface holds this resolver's own DNSCrypt identity durably: its long-term
-///     Ed25519 provider key pair (which signs every certificate) and every certificate
-///     currently being tracked, across restarts.
+///     This interface stores the resolver's DNSCrypt identity across restarts: the long-term
+///     Ed25519 provider key pair that signs every certificate, and the tracked certificates.
+///     <see cref="DnsCryptCertificateRotationService" /> writes it and the DNSCrypt listeners
+///     read it. <see cref="FileDnsCryptCertificateStore" /> implements it.
 /// </summary>
 public interface IDnsCryptCertificateStore
 {
     /// <summary>
-    ///     This property contains this resolver's own long-term provider key pair, generated
-    ///     once and reused for the lifetime of this installation.
+    ///     This property contains the long-term provider key pair, generated once and kept for
+    ///     the lifetime of the installation.
     /// </summary>
     DnssecKeyPair ProviderKeyPair { get; }
 
     /// <summary>
-    ///     This property contains every certificate currently being tracked, regardless of
-    ///     whether it is still valid.
+    ///     This property contains every tracked certificate, valid or not.
     /// </summary>
     IReadOnlyList<DnsCryptCertificateEntry> Entries { get; }
 
     /// <summary>
-    ///     This method replaces this store's entire tracked set, both in memory and on whatever
-    ///     durable storage backs it.
+    ///     This method replaces the whole tracked set, in memory and in durable storage.
     /// </summary>
     /// <param name="entries">The complete, new set of tracked certificates.</param>
     void Save(IReadOnlyList<DnsCryptCertificateEntry> entries);

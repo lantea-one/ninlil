@@ -6,16 +6,21 @@ using Ninlil.Dns.Server.Dnssec.Algorithms;
 // Define our namespace.
 namespace Ninlil.Dns.Server.DnsCrypt.Tests;
 
+/// <summary>
+///     This class tests <see cref="DnsCryptCertificateCodec" /> with certificates signed by a
+///     newly generated Ed25519 provider key: the encoded length, and that a signature over
+///     <see cref="DnsCryptCertificateCodec.BuildSignedData" /> verifies and fails when the
+///     signed bytes are changed. <see cref="DnsCryptCertificateCodec.Decode" /> is not covered
+///     here.
+/// </summary>
 public class DnsCryptCertificateCodecTests
 {
     /// <summary>
-    ///     This method builds one real, validly-signed <see cref="DnsCryptCertificate" /> for a
-    ///     test to encode/decode/verify against: it generates a fresh Ed25519 provider key pair
-    ///     and a fresh resolver key pair, assembles an unsigned certificate valid from now through
-    ///     48 hours out, signs its canonical encoded form via
-    ///     <see cref="DnsCryptCertificateCodec.BuildSignedData" />, and returns both the signed
-    ///     certificate and the exact signing input/algorithm/key pair a test needs to
-    ///     independently re-verify that signature.
+    ///     This method builds a signed <see cref="DnsCryptCertificate" /> valid for 48 hours from
+    ///     new Ed25519 provider and X25519 resolver key pairs, signing the output of
+    ///     <see cref="DnsCryptCertificateCodec.BuildSignedData" />. It returns the certificate with
+    ///     the signed bytes, algorithm and provider key pair, so a test can verify the signature
+    ///     itself.
     /// </summary>
     private static (
         DnsCryptCertificate Signed,

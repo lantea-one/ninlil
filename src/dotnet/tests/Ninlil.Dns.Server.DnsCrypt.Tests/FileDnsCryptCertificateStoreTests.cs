@@ -5,6 +5,10 @@ using Ninlil.Dns.Server.DnsCrypt;
 // Define our namespace.
 namespace Ninlil.Dns.Server.DnsCrypt.Tests;
 
+/// <summary>
+///     This class tests <see cref="FileDnsCryptCertificateStore" /> with a state file in the
+///     temporary directory: a second instance reloads the provider key and saved certificates.
+/// </summary>
 public class FileDnsCryptCertificateStoreTests
 {
     [Fact]
