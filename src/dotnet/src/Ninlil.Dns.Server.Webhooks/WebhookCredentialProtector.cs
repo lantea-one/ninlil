@@ -4,46 +4,46 @@ using Microsoft.AspNetCore.DataProtection;
 namespace Ninlil.Dns.Server.Webhooks;
 
 /// <summary>
-///     This class encrypts and decrypts a <c>WebhookSubscriptionEntity</c>'s own two secret
-///     fields -- its outbound auth credential(s) (<c>AuthCredentialsEncrypted</c>) and its
-///     optional HMAC payload-signing secret (<c>HmacSigningSecretEncrypted</c>) -- via
-///     <see cref="IDataProtector" />, the same "encrypted at rest via ASP.NET Core Data
-///     Protection, never a custom crypto scheme" pattern <c>TsigSecretProtector</c>/
-///     <c>CloudCredentialProtector</c> already establish (architectural invariant #5). Each of
-///     the two fields gets its own purpose-scoped protector -- a compromise of one must not also
-///     compromise the other, since they protect genuinely independent secrets (one authenticates
-///     this server *to* the subscriber's endpoint, the other lets the subscriber verify a payload
-///     really came from this server) that an operator could rotate independently of each other.
+///     This class encrypts and decrypts the two secret fields of a
+///     <c>WebhookSubscriptionEntity</c>: the outbound auth credentials
+///     (<c>AuthCredentialsEncrypted</c>) and the optional HMAC signing secret
+///     (<c>HmacSigningSecretEncrypted</c>). It uses ASP.NET Core Data Protection
+///     (<see cref="IDataProtector" />) rather than a custom scheme, like
+///     <c>TsigSecretProtector</c> and <c>CloudCredentialProtector</c>. Each field has its own
+///     purpose string, so one ciphertext cannot be decrypted as the other: the credentials
+///     authenticate this server to the endpoint, the secret lets the endpoint verify payloads,
+///     and the two are rotated independently. <c>WebhooksController</c> encrypts them
+///     and <see cref="WebhookDeliveryService" /> decrypts them.
 /// </summary>
-/// <param name="dataProtectionProvider">The provider both protectors derive their own purpose-scoped keys from.</param>
+/// <param name="dataProtectionProvider">The provider both purpose-scoped protectors are created from.</param>
 public sealed class WebhookCredentialProtector(IDataProtectionProvider dataProtectionProvider)
 {
     /// <summary>
-    ///     This property contains the protector used for a subscription's own outbound auth
-    ///     credential(s) -- a small JSON object shaped by <c>WebhookAuthModeEnum</c>
+    ///     This field contains the protector for a subscription's outbound auth credentials, a
+    ///     small JSON object whose shape depends on <c>WebhookAuthModeEnum</c>
     ///     (<c>{"BearerToken":"..."}</c> or <c>{"Username":"...","Password":"..."}</c>).
     /// </summary>
     private readonly IDataProtector _authCredentialsProtector =
         dataProtectionProvider.CreateProtector("Ninlil.Dns.Server.Webhooks.AuthCredentials");
 
     /// <summary>
-    ///     This property contains the protector used for a subscription's own optional HMAC
-    ///     payload-signing secret.
+    ///     This field contains the protector for a subscription's optional HMAC signing secret.
     /// </summary>
     private readonly IDataProtector _hmacSigningSecretProtector =
         dataProtectionProvider.CreateProtector("Ninlil.Dns.Server.Webhooks.HmacSigningSecret");
 
     /// <summary>
-    ///     This method encrypts a subscription's own outbound auth credential(s) JSON payload,
-    ///     ready to store in <c>WebhookSubscriptionEntity.AuthCredentialsEncrypted</c>.
+    ///     This method encrypts a subscription's auth credentials JSON for
+    ///     <c>WebhookSubscriptionEntity.AuthCredentialsEncrypted</c>.
     /// </summary>
-    /// <param name="credentialsJson">The plaintext credential(s) JSON payload to encrypt.</param>
+    /// <param name="credentialsJson">The plaintext credentials JSON to encrypt.</param>
     public string ProtectAuthCredentials(string credentialsJson) =>
         _authCredentialsProtector.Protect(credentialsJson);
 
     /// <summary>
-    ///     This method decrypts a subscription's own outbound auth credential(s) JSON payload,
-    ///     previously encrypted by <see cref="ProtectAuthCredentials" />.
+    ///     This method decrypts auth credentials JSON encrypted by
+    ///     <see cref="ProtectAuthCredentials" />. It throws if the Data Protection key is no longer
+    ///     available.
     /// </summary>
     /// <param name="authCredentialsEncrypted">
     ///     A <c>WebhookSubscriptionEntity.AuthCredentialsEncrypted</c> value.
@@ -52,16 +52,17 @@ public sealed class WebhookCredentialProtector(IDataProtectionProvider dataProte
         _authCredentialsProtector.Unprotect(authCredentialsEncrypted);
 
     /// <summary>
-    ///     This method encrypts a subscription's own HMAC payload-signing secret, ready to store
-    ///     in <c>WebhookSubscriptionEntity.HmacSigningSecretEncrypted</c>.
+    ///     This method encrypts a subscription's HMAC signing secret for
+    ///     <c>WebhookSubscriptionEntity.HmacSigningSecretEncrypted</c>.
     /// </summary>
     /// <param name="secret">The plaintext HMAC signing secret to encrypt.</param>
     public string ProtectHmacSigningSecret(string secret) =>
         _hmacSigningSecretProtector.Protect(secret);
 
     /// <summary>
-    ///     This method decrypts a subscription's own HMAC payload-signing secret, previously
-    ///     encrypted by <see cref="ProtectHmacSigningSecret" />.
+    ///     This method decrypts an HMAC signing secret encrypted by
+    ///     <see cref="ProtectHmacSigningSecret" />. It throws if the Data Protection key is no
+    ///     longer available.
     /// </summary>
     /// <param name="hmacSigningSecretEncrypted">
     ///     A <c>WebhookSubscriptionEntity.HmacSigningSecretEncrypted</c> value.

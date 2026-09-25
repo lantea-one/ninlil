@@ -6,32 +6,25 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Webhooks;
 
 /// <summary>
-///     This class is the single, generic <see cref="IDnsServerEventSubscriber{TEvent}" />
-///     registered once per webhook-eligible event type -- one closed generic registration per
-///     type (see <c>ServiceCollectionWebhooksExtension</c>) rather than seven hand-written,
-///     near-identical subscriber classes, since <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" />
-///     itself only ever resolves subscribers for an event's own exact concrete runtime type (via
-///     <c>IDnsServerEventSubscriber&lt;&gt;.MakeGenericType</c>), which a single open generic
-///     class satisfies perfectly well once closed over each of the 7 curated "noteworthy" event
-///     types (<c>DnsZoneChangedEvent</c>, <c>DnsCacheEvictedEvent</c>,
-///     <c>DnssecZoneResigningCompletedEvent</c>, <c>AcmeCertificateRenewalSucceededEvent</c>,
-///     <c>AcmeCertificateRenewalFailedEvent</c>, <c>CloudDnsZoneSyncFailedEvent</c>,
-///     <c>TrustAnchorRolloverEvent</c>).
+///     This class is the <see cref="IDnsServerEventSubscriber{TEvent}" /> for webhooks,
+///     registered once for each of the seven webhook event types (<c>DnsZoneChangedEvent</c>,
+///     <c>DnsCacheEvictedEvent</c>, <c>DnssecZoneResigningCompletedEvent</c>,
+///     <c>AcmeCertificateRenewalSucceededEvent</c>, <c>AcmeCertificateRenewalFailedEvent</c>,
+///     <c>CloudDnsZoneSyncFailedEvent</c>, <c>TrustAnchorRolloverEvent</c>; see
+///     <c>ServiceCollectionWebhooksExtension</c>). One generic class is enough because
+///     <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" /> resolves subscribers
+///     for an event's exact runtime type.
 ///     <para>
-///         Delivery runs in a detached background task, not awaited directly from
-///         <see cref="HandleAsync" />, mirroring <c>ZoneNotifyEventSubscriber</c>'s/
-///         <c>CaaRecordReconciliationEventSubscriber</c>'s own exact reasoning (architectural
-///         invariant #3): <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" />
-///         processes one event at a time, and a slow or unreachable webhook target must never
-///         stall every other subscriber's own handling of every other event. The background task
-///         opens its own dependency injection scope for the same reason those two subscribers do
-///         -- the scope <see cref="HandleAsync" /> was invoked in is disposed as soon as every
-///         subscriber's own <see cref="System.Threading.Tasks.ValueTask" /> for this event
-///         completes, well before this detached delivery work is actually done.
+///         <see cref="HandleAsync" /> starts delivery on a detached task and returns at once,
+///         like <c>ZoneNotifyEventSubscriber</c> and <c>CaaRecordReconciliationEventSubscriber</c>:
+///         the dispatcher handles one event at a time, and a slow or unreachable endpoint must
+///         not hold up other subscribers and events. The task opens its own dependency injection
+///         scope for the scoped <see cref="WebhookDeliveryService" />, because the dispatcher's
+///         scope is disposed once every subscriber has returned, before delivery finishes.
 ///     </para>
 /// </summary>
 /// <typeparam name="TEvent">The webhook-eligible event type this closed generic subscriber handles.</typeparam>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped <see cref="WebhookDeliveryService" /> per event.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and a <see cref="WebhookDeliveryService" />, per event.</param>
 /// <param name="logger">The logger this subscriber records unhandled delivery-engine failures to.</param>
 public sealed class WebhookDeliverySubscriber<TEvent>(
     IServiceScopeFactory scopeFactory,
@@ -47,11 +40,10 @@ public sealed class WebhookDeliverySubscriber<TEvent>(
     }
 
     /// <summary>
-    ///     This method does the actual work: opening a fresh scope and delegating to
-    ///     <see cref="WebhookDeliveryService" />. <see cref="WebhookDeliveryService.DeliverAsync" />
-    ///     itself already catches and logs every per-subscription delivery failure internally, so
-    ///     this outer try/catch only ever guards against a genuinely unexpected failure (for
-    ///     example, resolving a scoped service, or the event-type registry lookup itself).
+    ///     This method opens a scope and calls <see cref="WebhookDeliveryService.DeliverAsync" />.
+    ///     HTTP failures are recorded per delivery there, so this catch only logs other failures,
+    ///     such as resolving services, reading subscriptions, decrypting credentials or saving
+    ///     the delivery.
     /// </summary>
     private async Task DeliverAsync(TEvent domainEvent, CancellationToken stoppingToken)
     {

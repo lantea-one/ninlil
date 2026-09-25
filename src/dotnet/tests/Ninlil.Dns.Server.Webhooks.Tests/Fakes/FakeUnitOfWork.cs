@@ -1,12 +1,12 @@
 using Ninlil.Dns.Data.Abstractions.Repository;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.Webhooks.Tests.Fakes;
 
 /// <summary>
-///     This class is a no-op <see cref="IUnitOfWork" /> stand-in for this project's own unit
-///     tests: every write below against <see cref="FakeWebhookDeliveryAttemptRepository" /> is
-///     already directly visible (it mutates a shared in-memory list/object graph), so there is
-///     nothing left for a real "commit" step to actually do.
+///     This class is an <see cref="IUnitOfWork" /> that saves nothing and counts
+///     <see cref="SaveChangesAsync" /> calls. Writes to <see cref="FakeWebhookDeliveryAttemptRepository" />
+///     change its in-memory list and entities directly, so there is nothing to commit.
 /// </summary>
 public sealed class FakeUnitOfWork : IUnitOfWork
 {

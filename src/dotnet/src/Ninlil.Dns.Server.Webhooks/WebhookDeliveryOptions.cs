@@ -3,15 +3,13 @@ namespace Ninlil.Dns.Server.Webhooks;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Webhooks:Delivery</c> section of the application's
-///     configuration and controls <see cref="WebhookDeliveryService" />'s own outbound HTTP
-///     timeout and retry/backoff timing, plus <see cref="WebhookDeliveryRetrySweepService" />'s
-///     own resume/retention sweep cadence. A single subscription's own maximum attempt
-///     <i>count</i> is per-subscription configuration
-///     (<c>WebhookSubscriptionEntity.MaxDeliveryAttempts</c>); this class only controls the shared
-///     timing every subscription's own retries use, mirroring
-///     <c>RabbitMqEventBrokerOptions</c>'s own "initial delay, doubling up to a ceiling" backoff
-///     shape -- the same "bounded retries with exponential backoff, then give up and log" middle
-///     ground the message-broker transports' own outage handling already establishes.
+///     configuration and holds the HTTP timeout and retry backoff of
+///     <see cref="WebhookDeliveryService" /> and the sweep interval and retention period of
+///     <see cref="WebhookDeliveryRetrySweepService" />. The maximum number of attempts is set per
+///     subscription (<c>WebhookSubscriptionEntity.MaxDeliveryAttempts</c>); these settings are
+///     the timing all subscriptions share. The backoff starts at an initial delay and doubles up
+///     to a ceiling, and a delivery that runs out of attempts is dead-lettered and logged. All
+///     values are read at use, so changes apply without a restart.
 /// </summary>
 public sealed class WebhookDeliveryOptions
 {
@@ -21,36 +19,32 @@ public sealed class WebhookDeliveryOptions
     public const string SectionName = "DnsServer:Webhooks:Delivery";
 
     /// <summary>
-    ///     This property contains how long <see cref="WebhookDeliveryService" /> waits before a
-    ///     subscription's own first retry, after its first delivery attempt fails (a non-2xx
-    ///     response or a transport-level failure).
+    ///     This property contains the delay before the first retry after a first attempt fails (a
+    ///     non-2xx response or a transport failure). The retry is made by the first sweep after
+    ///     the delay, so it can come up to <see cref="SweepInterval" /> later.
     /// </summary>
     public TimeSpan InitialRetryDelay { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    ///     This property contains the longest <see cref="WebhookDeliveryService" /> ever waits
-    ///     between two retries for the same delivery -- the retry delay doubles after each failed
-    ///     attempt, starting from <see cref="InitialRetryDelay" />, up to this ceiling, so a
-    ///     subscription configured with a large <c>MaxDeliveryAttempts</c> does not result in an
-    ///     unreasonably long tail of ever-growing waits.
+    ///     This property contains the longest delay between two attempts of the same delivery.
+    ///     The delay doubles after each failed attempt from <see cref="InitialRetryDelay" /> up to
+    ///     this ceiling, so a large <c>MaxDeliveryAttempts</c> does not produce ever-growing
+    ///     waits.
     /// </summary>
     public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    ///     This property contains the per-request timeout applied to every outbound delivery
-    ///     attempt's own <see cref="HttpClient" />.
+    ///     This property contains the timeout of each delivery request, applied to the
+    ///     <see cref="HttpClient" /> created for every attempt.
     /// </summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     ///     This property contains how often <see cref="WebhookDeliveryRetrySweepService" /> looks
-    ///     for a persisted delivery that is now due for a retry attempt -- every second or later
-    ///     attempt for any delivery is made exclusively from this sweep, never from an in-process
-    ///     <see cref="Task.Delay(TimeSpan)" /> loop, precisely so a delivery still waiting out its
-    ///     own backoff survives a process restart intact (see that class's own doc comment for the
-    ///     full reasoning). A shorter interval delivers a retry closer to its own computed backoff
-    ///     delay at the cost of more frequent, cheap polling queries; a longer interval trades the
-    ///     opposite way.
+    ///     for saved deliveries due for a retry. All retries are made by that sweep, so a
+    ///     delivery waiting out its backoff survives a restart. A shorter interval keeps retries
+    ///     closer to their computed time at the cost of more frequent (cheap) queries. It is also
+    ///     how long a delivery to a disabled subscription is deferred.
     /// </summary>
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromSeconds(5);
 
@@ -58,13 +52,11 @@ public sealed class WebhookDeliveryOptions
     ///     This property contains how long a delivery that has already reached a terminal outcome
     ///     (<see cref="Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.Succeeded" /> or
     ///     <see cref="Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.DeadLettered" />)
-    ///     is kept on record before <see cref="WebhookDeliveryRetrySweepService" />'s own
-    ///     retention sweep removes it -- the same "a persisted operational record must eventually
-    ///     age out, or it grows unboundedly on a server left running for years" reasoning
-    ///     <c>QueryLoggingOptions.RetentionPeriod</c> already establishes for the query log. A
-    ///     delivery still <see cref="Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" />
-    ///     is never removed by this sweep regardless of age, since it may still genuinely be
-    ///     retried.
+    ///     is kept, counted from its completion, before <see cref="WebhookDeliveryRetrySweepService" />
+    ///     removes it, so the table does not grow without bound on a long-running server (as
+    ///     <c>QueryLoggingOptions.RetentionPeriod</c> does for the query log). Zero or less turns
+    ///     removal off. A <see cref="Ninlil.Dns.Common.Enum.WebhookDeliveryAttemptStatusEnum.Pending" />
+    ///     delivery is never removed, whatever its age, since it may still be retried.
     /// </summary>
     public TimeSpan AttemptRetentionPeriod { get; set; } = TimeSpan.FromDays(30);
 }

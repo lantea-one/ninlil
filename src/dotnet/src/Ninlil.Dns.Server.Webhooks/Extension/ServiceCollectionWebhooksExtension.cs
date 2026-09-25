@@ -8,23 +8,21 @@ namespace Ninlil.Dns.Server.Webhooks.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's outbound subscribable webhooks feature: <see cref="WebhookCredentialProtector" />,
-///     the actual HTTP delivery engine (<see cref="WebhookDeliveryService" />, its own dedicated
-///     <see cref="HttpClient" />), <see cref="WebhookDeliveryRetrySweepService" /> (the persisted
-///     retry/dead-letter/retention sweep every delivery beyond its own first attempt runs
-///     through), and <see cref="WebhookDeliverySubscriber{TEvent}" /> closed once per
-///     webhook-eligible event type.
+///     Ninlil's outbound webhooks: <see cref="WebhookCredentialProtector" />, the delivery engine
+///     (<see cref="WebhookDeliveryService" /> and its named <see cref="HttpClient" />),
+///     <see cref="WebhookDeliveryRetrySweepService" /> (retries, dead-lettering and retention),
+///     and <see cref="WebhookDeliverySubscriber{TEvent}" /> for each webhook event type.
 /// </summary>
 public static class ServiceCollectionWebhooksExtension
 {
     /// <summary>
     ///     This method registers <see cref="WebhookCredentialProtector" />, the outbound delivery
-    ///     engine, the retry/retention sweep hosted service, and every webhook-eligible event
-    ///     type's own <see cref="IDnsServerEventSubscriber{TEvent}" /> registration. The
-    ///     composition root is still expected to have already registered an
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IWebhookSubscriptionRepository" />/
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IWebhookDeliveryAttemptRepository" />/
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IUnitOfWork" /> implementation.
+    ///     engine, the retry sweep hosted service, and an
+    ///     <see cref="IDnsServerEventSubscriber{TEvent}" /> for each webhook event type. The
+    ///     composition root must also register
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IWebhookSubscriptionRepository" />,
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IWebhookDeliveryAttemptRepository" /> and
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IUnitOfWork" />.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The configuration <see cref="WebhookDeliveryOptions" /> binds from.</param>
@@ -34,11 +32,9 @@ public static class ServiceCollectionWebhooksExtension
         IConfiguration configuration
     )
     {
-        // Data Protection backs the encryption of a subscription's own auth credentials and HMAC
-        // signing secret at rest, the same mechanism every other secret-bearing entity in this
-        // project already uses. Safe to call more than once -- Ninlil.Web's own
-        // Program.cs already relies on that being true for its own explicit AddDataProtection()
-        // call.
+        // Data Protection encrypts the subscription credentials and signing secret at rest.
+        // AddDataProtection is safe to call more than once; Ninlil.Web's Program.cs also calls
+        // it.
         instance.AddDataProtection();
 
         instance.AddSingleton<WebhookCredentialProtector>();
@@ -47,16 +43,10 @@ public static class ServiceCollectionWebhooksExtension
             configuration.GetSection(WebhookDeliveryOptions.SectionName)
         );
 
-        // A single, named HttpClient every delivery attempt (for every subscription) is created
-        // from via IHttpClientFactory -- the same "typed/named client via AddHttpClient, not a
-        // hand-constructed HttpClient" convention Server.Authoritative's own CloudSync connectors
-        // already establish. The client's own request timeout is read from WebhookDeliveryOptions
-        // at the point IHttpClientFactory actually builds a fresh handler for this named client
-        // (roughly every two minutes, per that factory's own default handler lifetime), via a
-        // real IOptionsMonitor<WebhookDeliveryOptions> rather than the plain, snapshotted
-        // IOptions<WebhookDeliveryOptions> -- the latter's own .Value is computed once and cached
-        // for the life of the process, so it would never actually let a configuration change
-        // reach a freshly built handler at all.
+        // One named HttpClient for every delivery attempt. IHttpClientFactory runs this callback
+        // for each client it creates, and it reads the timeout through IOptionsMonitor rather
+        // than IOptions (whose Value is cached for the process lifetime), so a changed
+        // RequestTimeout applies to the next attempt.
         instance
             .AddHttpClient(WebhookDeliveryService.HttpClientName)
             .ConfigureHttpClient(
@@ -71,15 +61,12 @@ public static class ServiceCollectionWebhooksExtension
 
         instance.AddScoped<WebhookDeliveryService>();
 
-        // The sole mechanism that ever performs a delivery's second or later attempt -- see this
-        // service's own doc comment for the full restart-durability reasoning.
+        // Makes every retry; see WebhookDeliveryRetrySweepService.
         instance.AddHostedService<WebhookDeliveryRetrySweepService>();
 
-        // One closed-generic IDnsServerEventSubscriber<TEvent> registration per webhook-eligible
-        // event type -- DnsServerEventDispatcher resolves every subscriber registered for an
-        // event's own exact concrete runtime type via GetServices, so registering the same
-        // WebhookDeliverySubscriber<TEvent> open generic closed over each of these 7 types is
-        // sufficient; no per-event-type subclass is needed.
+        // One WebhookDeliverySubscriber<TEvent> per webhook event type. DnsServerEventDispatcher
+        // resolves subscribers for an event's exact runtime type, so the generic class closed
+        // over each type is enough.
         instance.AddSingleton<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
             WebhookDeliverySubscriber<DnsZoneChangedEvent>

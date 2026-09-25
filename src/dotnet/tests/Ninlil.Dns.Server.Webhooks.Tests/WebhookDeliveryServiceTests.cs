@@ -22,12 +22,12 @@ using Ninlil.Dns.Server.Webhooks.Tests.Fakes;
 namespace Ninlil.Dns.Server.Webhooks.Tests;
 
 /// <summary>
-///     This class covers <see cref="WebhookDeliveryService" /> -- the outbound webhook delivery
-///     engine -- against a real, Kestrel-hosted fake HTTP server standing in for
-///     a subscriber's own webhook receiver, the same "real, Kestrel-hosted fake server" convention
-///     <c>CloudflareDnsProviderTests</c> already established for verifying an outbound HTTP call
-///     was made correctly (there is, by definition, no "real" third-party webhook receiver to
-///     verify against, mirroring the cloud connectors' own documented verification boundary).
+///     This class tests <see cref="WebhookDeliveryService" /> against a local Kestrel server that
+///     acts as the webhook receiver and records each request, as <c>CloudflareDnsProviderTests</c>
+///     does for the cloud connectors. Subscriptions and deliveries live in in-memory fakes. It
+///     covers the request body, auth headers and HMAC signature, event-type and disabled
+///     filtering, and the retry state machine, with retries driven by calling
+///     <see cref="WebhookDeliveryService.ResumeAttemptAsync" /> directly.
 /// </summary>
 public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
 {
@@ -35,19 +35,16 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
     private readonly List<CapturedRequest> _capturedRequests = [];
 
     /// <summary>
-    ///     This field holds the same <see cref="WebhookCredentialProtector" /> instance every test
-    ///     both encrypts a fixture's own credentials with and lets <see cref="WebhookDeliveryService" />
-    ///     decrypt from -- sharing one instance is required, not just convenient:
-    ///     <see cref="EphemeralDataProtectionProvider" /> generates a fresh, random in-memory
-    ///     master key on every instantiation, so two different instances can never decrypt data
-    ///     the other one encrypted.
+    ///     This field holds the <see cref="WebhookCredentialProtector" /> the tests encrypt
+    ///     credentials with and <see cref="WebhookDeliveryService" /> decrypts them with. It must
+    ///     be one instance: each <see cref="EphemeralDataProtectionProvider" /> has its own random
+    ///     key, so one instance cannot decrypt what another encrypted.
     /// </summary>
     private WebhookCredentialProtector _credentialProtector;
 
     /// <summary>
-    ///     This property controls how many consecutive requests the fake server responds to with
-    ///     a failing (<c>500</c>) status before it starts succeeding -- <c>0</c> means every
-    ///     request succeeds.
+    ///     This field controls how many requests the fake server answers with <c>500</c> before
+    ///     it starts succeeding; <c>0</c> means every request succeeds.
     /// </summary>
     private int _failuresBeforeSuccess;
     private int _requestCount;
@@ -242,9 +239,8 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
             CancellationToken.None
         );
 
-        // Only the enabled subscription's own request ever arrives -- FakeWebhookSubscriptionRepository's
-        // own ListEnabledAsync (mirroring the real repository contract) filters the disabled one
-        // out before WebhookDeliveryService ever sees it.
+        // Only the enabled subscription gets a request: ListEnabledAsync filters out the
+        // disabled one, as the real repositories do.
         Assert.Single(_capturedRequests);
     }
 
@@ -268,12 +264,9 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
             attemptRepository
         );
 
-        // The very first attempt is made synchronously from DeliverAsync itself; every attempt
-        // beyond that is only ever made by an explicit ResumeAttemptAsync call -- the exact same
-        // call WebhookDeliveryRetrySweepService's own periodic sweep makes once a delivery's own
-        // persisted NextRetryDueUtc has elapsed. Driving that here directly, with no real wait in
-        // between, is what keeps this test fast and deterministic while still exercising the
-        // real state machine end to end.
+        // DeliverAsync makes the first attempt; later ones come from ResumeAttemptAsync, the
+        // call the retry sweep makes once NextRetryDueUtc has passed. Calling it directly, with
+        // no wait, keeps the test fast and deterministic.
         await deliveryService.DeliverAsync(
             new DnsZoneChangedEvent(DateTimeOffset.UtcNow, Guid.NewGuid(), "example.com"),
             CancellationToken.None
@@ -326,8 +319,7 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
 
         await deliveryService.ResumeAttemptAsync(attempt, CancellationToken.None);
 
-        // One failed attempt, then one successful resumed retry -- MaxDeliveryAttempts (5) is
-        // never reached because the second attempt already succeeds.
+        // One failed attempt, then a successful retry; MaxDeliveryAttempts (5) is not reached.
         Assert.Equal(2, _capturedRequests.Count);
         Assert.Equal(WebhookDeliveryAttemptStatusEnum.Succeeded, attempt.Status);
         Assert.Equal(2, attempt.AttemptCount);
@@ -375,9 +367,8 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
         WebhookDeliveryAttemptEntity attempt = Assert.Single(attemptRepository.Items);
         int requestsBeforeResume = _capturedRequests.Count;
 
-        // FakeWebhookSubscriptionRepository is seeded with a fixed set at construction, so
-        // "deleting" the subscription here means simulating GetByIdAsync no longer finding it --
-        // the exact shape a real repository takes after a genuine delete.
+        // FakeWebhookSubscriptionRepository is read-only, so the delete is simulated with an
+        // empty repository whose GetByIdAsync finds nothing, as after a real delete.
         subscriptionRepository = new FakeWebhookSubscriptionRepository([]);
         deliveryService = new WebhookDeliveryService(
             subscriptionRepository,
@@ -402,16 +393,15 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
         Assert.Null(attempt.NextRetryDueUtc);
         Assert.Contains("no longer exists", attempt.LastErrorMessage);
 
-        // No HTTP request was ever made against the deleted subscription's own (still-valid)
-        // target URL.
+        // No request was sent to the deleted subscription's (still reachable) target URL.
         Assert.Equal(requestsBeforeResume, _capturedRequests.Count);
     }
 
     [Fact]
     public async Task ResumeAttemptAsync_ForADisabledSubscription_ReschedulesWithoutAttempting()
     {
-        // The first (live) attempt must fail, or this delivery would already be Succeeded (and
-        // NextRetryDueUtc already null) by the time the subscription is disabled below.
+        // The first attempt must fail, or the delivery would already be Succeeded when the
+        // subscription is disabled below.
         _failuresBeforeSuccess = int.MaxValue;
 
         WebhookSubscriptionEntity subscription = new()
@@ -444,8 +434,7 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
 
         await deliveryService.ResumeAttemptAsync(attempt, CancellationToken.None);
 
-        // Deferred, not attempted and not dead-lettered: the attempt budget is untouched, no HTTP
-        // request was made, but the delivery remains Pending and due again shortly.
+        // Deferred: no attempt spent, no request made, still Pending and due again later.
         Assert.Equal(attemptCountBeforeResume, attempt.AttemptCount);
         Assert.Equal(requestsBeforeResume, _capturedRequests.Count);
         Assert.Equal(WebhookDeliveryAttemptStatusEnum.Pending, attempt.Status);
@@ -453,12 +442,10 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="WebhookDeliveryService" /> wired against a real
-    ///     <see cref="IHttpClientFactory" /> (built from a tiny, throwaway <see cref="ServiceCollection" />,
-    ///     the same "real IHttpClientFactory, not a hand-constructed HttpClient" convention
-    ///     <c>ServiceCollectionWebhooksExtension</c>'s own production wiring uses) and a fake,
-    ///     in-memory <see cref="IWebhookSubscriptionRepository" /> seeded with
-    ///     <paramref name="subscriptions" />.
+    ///     This method builds a <see cref="WebhookDeliveryService" /> with an
+    ///     <see cref="IHttpClientFactory" /> from <see cref="BuildHttpClientFactory" />, fixed
+    ///     short retry delays, and an in-memory <see cref="IWebhookSubscriptionRepository" />
+    ///     holding <paramref name="subscriptions" />.
     /// </summary>
     private WebhookDeliveryService CreateDeliveryService(
         IReadOnlyList<WebhookSubscriptionEntity> subscriptions,
@@ -486,10 +473,9 @@ public sealed class WebhookDeliveryServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="IHttpClientFactory" /> from a tiny, throwaway
-    ///     <see cref="ServiceCollection" />, the same "real <see cref="IHttpClientFactory" />, not
-    ///     a hand-constructed <see cref="HttpClient" />" convention
-    ///     <c>ServiceCollectionWebhooksExtension</c>'s own production wiring uses.
+    ///     This method builds an <see cref="IHttpClientFactory" /> from a small
+    ///     <see cref="ServiceCollection" />, registering the named client as production does
+    ///     but without the timeout callback.
     /// </summary>
     private static IHttpClientFactory BuildHttpClientFactory()
     {

@@ -13,10 +13,12 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Webhooks.Tests;
 
 /// <summary>
-///     This class covers <see cref="WebhookDeliveryRetrySweepService.SweepAsync" /> directly
-///     (driven once per test rather than waiting out a real <see cref="WebhookDeliveryOptions.SweepInterval" />)
-///     against a real, SQLite-backed <see cref="WebhookTestHost" />: resuming a due delivery to
-///     completion, and the retention sweep's own bulk removal of old, terminal rows.
+///     This class tests <see cref="WebhookDeliveryRetrySweepService" /> on a SQLite-backed
+///     <see cref="WebhookTestHost" /> with a local Kestrel server as the webhook receiver. Each
+///     test calls <see cref="WebhookDeliveryRetrySweepService.SweepAsync" /> once instead of
+///     waiting for <see cref="WebhookDeliveryOptions.SweepInterval" />. It covers resuming a
+///     due delivery to success or dead letter, and the retention query that removes old
+///     completed rows.
 /// </summary>
 public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
 {
@@ -53,7 +55,7 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
             _databasePath,
             initialRetryDelay: TimeSpan.FromMilliseconds(1),
             maxRetryDelay: TimeSpan.FromMilliseconds(5),
-            sweepInterval: TimeSpan.FromHours(1) // Not exercised here -- this test drives SweepAsync directly.
+            sweepInterval: TimeSpan.FromHours(1) // Unused: the tests call SweepAsync directly.
         );
     }
 
@@ -72,11 +74,8 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     [Fact]
     public async Task SweepAsync_ResumesADueDeliveryAndAdvancesItToSuccess()
     {
-        // ResumeAttemptAsync performs exactly one real HTTP attempt per sweep pass (by design --
-        // see WebhookDeliveryRetrySweepService's own doc comment); this test drives exactly one
-        // SweepAsync() call, so that one real request (the seeded first attempt was faked,
-        // bypassing HTTP entirely -- see SeedFirstAttemptAsync's own doc comment) must itself
-        // succeed for this delivery to resolve within this single pass.
+        // A sweep makes one attempt per due delivery, and the seeded first attempt made no
+        // request (see SeedFirstAttemptAsync), so the one request this sweep sends must succeed.
         _failuresBeforeSuccess = 0;
 
         Guid attemptId = await SeedFirstAttemptAsync("resume-to-success", MaxDeliveryAttempts: 5);
@@ -124,7 +123,7 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
                 scope.ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
             IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            // An old, terminal (Succeeded) row -- past a 1-hour retention window.
+            // An old Succeeded row, past a one-hour retention window.
             await repository.AddAsync(
                 new WebhookDeliveryAttemptEntity
                 {
@@ -142,7 +141,7 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
                 }
             );
 
-            // A recent, terminal (DeadLettered) row -- inside the retention window, must survive.
+            // A recent DeadLettered row, inside the retention window, which must stay.
             await repository.AddAsync(
                 new WebhookDeliveryAttemptEntity
                 {
@@ -160,8 +159,7 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
                 }
             );
 
-            // An old row still genuinely Pending -- must never be removed by the retention sweep
-            // regardless of age, since it may still be retried.
+            // An old Pending row, which must stay whatever its age, since it may still be retried.
             await repository.AddAsync(
                 new WebhookDeliveryAttemptEntity
                 {
@@ -175,19 +173,16 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
                     AttemptCount = 1,
                     MaxAttempts = 5,
                     LastAttemptedAtUtc = now.AddHours(-3),
-                    NextRetryDueUtc = now.AddHours(100), // Far in the future -- never picked up by this test's own sweep.
+                    NextRetryDueUtc = now.AddHours(100), // Far in the future, so never due.
                 }
             );
 
             await unitOfWork.SaveChangesAsync();
         }
 
-        // This repository method itself is what WebhookDeliveryRetrySweepService.SweepAsync
-        // calls every sweep pass, governed by WebhookDeliveryOptions.AttemptRetentionPeriod --
-        // exercised here directly with an explicit 1-hour cutoff, the same "drive the underlying
-        // repository call with an explicit value rather than rebuilding a whole host per
-        // retention window" shape DnsQueryLogCleanupServiceTests already establishes for the
-        // query log's own comparable retention sweep.
+        // SweepAsync calls this repository method with a cutoff from AttemptRetentionPeriod.
+        // The test calls it directly with a one-hour cutoff instead of building a host with that
+        // retention period, as DnsQueryLogCleanupServiceTests does for the query log.
         await using AsyncServiceScope verifyScope = _testHost.Host.Services.CreateAsyncScope();
         IWebhookDeliveryAttemptRepository verifyRepository =
             verifyScope.ServiceProvider.GetRequiredService<IWebhookDeliveryAttemptRepository>();
@@ -202,13 +197,12 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method seeds a delivery's own already-completed first attempt directly (bypassing
-    ///     <see cref="WebhookDeliveryService.DeliverAsync" />'s own live HTTP call), landing it as
-    ///     <see cref="WebhookDeliveryAttemptStatusEnum.Pending" /> with an already-elapsed
-    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> -- exactly the shape a
-    ///     genuinely interrupted, restart-surviving delivery has on disk, which is what this
-    ///     class's own sweep tests need to drive <see cref="WebhookDeliveryRetrySweepService.SweepAsync" />
-    ///     against without a real first HTTP round trip or a real elapsed wait.
+    ///     This method saves a subscription and a delivery whose first attempt failed, without
+    ///     calling <see cref="WebhookDeliveryService.DeliverAsync" /> or sending a request: the row
+    ///     is <see cref="WebhookDeliveryAttemptStatusEnum.Pending" /> with a
+    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> already passed, as a delivery
+    ///     waiting across a restart would be. The next <see cref="WebhookDeliveryRetrySweepService.SweepAsync" />
+    ///     picks it up without any waiting.
     /// </summary>
     private async Task<Guid> SeedFirstAttemptAsync(string subscriptionName, int MaxDeliveryAttempts)
     {
@@ -263,12 +257,10 @@ public sealed class WebhookDeliveryRetrySweepServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method reaches the real, already-constructed <see cref="WebhookDeliveryRetrySweepService" />
-    ///     singleton <c>AddHostedService&lt;T&gt;()</c> registered against this host's own root
-    ///     service provider -- that registration only ever resolves as <see cref="IHostedService" />,
-    ///     never by its own concrete type directly, so this method finds it the same way
-    ///     <c>Ninlil.Web.Services.ManagedServiceRegistry.Build</c>'s own <c>Resolve&lt;T&gt;</c>
-    ///     local function already does for every other hosted service in this project.
+    ///     This method gets the <see cref="WebhookDeliveryRetrySweepService" /> instance the host
+    ///     registered with <c>AddHostedService&lt;T&gt;()</c>. That registration resolves only as
+    ///     <see cref="IHostedService" />, so it is found among those, as
+    ///     <c>ManagedServiceRegistry.Build</c> in <c>Ninlil.Web</c> does.
     /// </summary>
     private WebhookDeliveryRetrySweepService GetSweepService() =>
         _testHost

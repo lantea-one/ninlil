@@ -2,16 +2,16 @@ using System.Linq.Expressions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.Webhooks.Tests.Fakes;
 
 /// <summary>
-///     This class is a minimal, in-memory <see cref="IWebhookDeliveryAttemptRepository" />
-///     stand-in used by this project's own unit tests -- <see cref="WebhookDeliveryService" />
-///     itself has no dependency on any particular storage engine, so a real EF Core/MongoDB
-///     repository would only add unrelated database setup to a test that is actually about the
-///     delivery/retry state machine. <see cref="Items" /> is exposed directly so a test can
-///     inspect exactly what this engine persisted (its own <see cref="WebhookDeliveryAttemptEntity.Status" />,
-///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" />, and so on) after a call.
+///     This class is a list-backed <see cref="IWebhookDeliveryAttemptRepository" /> for the
+///     delivery tests, which test the retry state machine and need no database. Its queries
+///     match the EF Core repository's filters. <see cref="Items" /> is public so a test can
+///     check what <see cref="WebhookDeliveryService" /> saved (its
+///     <see cref="WebhookDeliveryAttemptEntity.Status" />,
+///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> and so on).
 /// </summary>
 public sealed class FakeWebhookDeliveryAttemptRepository : IWebhookDeliveryAttemptRepository
 {

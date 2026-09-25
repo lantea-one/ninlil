@@ -6,15 +6,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Webhooks.Tests;
 
 /// <summary>
-///     This class is a minimal, in-memory <see cref="IWebhookSubscriptionRepository" /> stand-in
-///     used only by <see cref="WebhookDeliveryServiceTests" />: <see cref="WebhookDeliveryService" />
-///     itself has no dependency on any particular storage engine, so a real EF Core/MongoDB
-///     repository would only add unrelated database setup to a test that is actually about HTTP
-///     delivery behavior. <see cref="ListEnabledAsync" /> mirrors the real repository contract's
-///     own filtering (only subscriptions with <see cref="WebhookSubscriptionEntity.IsDisabled" />
-///     <see langword="false" /> are ever returned) -- exercising that filter here is exactly how
-///     <c>DisabledSubscriptionIsNeverCalled</c> proves a disabled subscription is never delivered
-///     to.
+///     This class is a read-only, in-memory <see cref="IWebhookSubscriptionRepository" /> for
+///     <see cref="WebhookDeliveryServiceTests" /> and <see cref="WebhookDeliveryServiceHotReloadTests" />,
+///     which test HTTP delivery and need no database. <see cref="ListEnabledAsync" /> filters
+///     out disabled subscriptions like the real repositories, which
+///     <c>DisabledSubscriptionIsNeverCalled</c> relies on. Write methods throw.
 /// </summary>
 /// <param name="subscriptions">The fixed set of subscriptions this fake repository serves.</param>
 internal sealed class FakeWebhookSubscriptionRepository(

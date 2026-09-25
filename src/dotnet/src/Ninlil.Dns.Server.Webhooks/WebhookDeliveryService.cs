@@ -15,62 +15,40 @@ using Ninlil.Dns.Server.Core.Events.Broker;
 namespace Ninlil.Dns.Server.Webhooks;
 
 /// <summary>
-///     This class is this project's own outbound webhook delivery engine: given a single occurred
-///     <see cref="IDnsServerEvent" />, it looks up every currently enabled
-///     <see cref="WebhookSubscriptionEntity" /> whose own <c>EventTypeNames</c> includes that
-///     event's registered <see cref="DnsServerEventTypeRegistry" /> name, and POSTs a JSON payload
-///     to each matching subscription's own <c>TargetUrl</c> -- attaching the subscription's
-///     configured bearer/basic auth header and, if an HMAC signing secret is configured, an
-///     <see cref="SignatureHeaderName" /> header computed over the exact outbound request body.
+///     This class is the outbound webhook delivery engine. For an <see cref="IDnsServerEvent" />
+///     it finds every enabled <see cref="WebhookSubscriptionEntity" /> whose <c>EventTypeNames</c>
+///     include the event's <see cref="DnsServerEventTypeRegistry" /> name and POSTs a JSON
+///     payload to each subscription's <c>TargetUrl</c>, with the configured bearer or basic
+///     <c>Authorization</c> header and, when a signing secret is set, a
+///     <see cref="SignatureHeaderName" /> header over the request body.
 ///     <para>
-///         <b>Only a delivery's very first attempt is ever made from here.</b> Every second or
-///         later attempt (a retry, whether after a short in-process pause or after a full process
-///         restart days later) is made exclusively by
-///         <see cref="WebhookDeliveryRetrySweepService" />'s own periodic sweep against the
-///         persisted <see cref="WebhookDeliveryAttemptEntity" /> table -- this class never itself
-///         waits out a backoff delay with <see cref="Task.Delay(TimeSpan)" /> the way it once did.
-///         This split is the actual fix for this feature's own previously-documented durability
-///         gap: before it existed, a subscription's entire retry loop -- including every pending
-///         backoff wait -- lived purely inside one detached in-memory background task, so a
-///         process restart at any point mid-loop silently lost the delivery with no record it was
-///         ever attempted at all. Splitting the very first attempt out from every later one keeps
-///         today's low-latency "try immediately when the event happens" behavior for the common
-///         case (an endpoint that is actually up), while still making every attempt beyond the
-///         first fully durable: nothing about a delivery is ever persisted until its first attempt
-///         has actually completed (see <see cref="DeliverToSubscriptionAsync" />'s own doc
-///         comment for the one narrow, deliberately accepted gap that leaves open), but from that
-///         point on, every further step -- including any wait between attempts -- is real,
-///         on-disk state a fresh process can pick back up exactly where an old one left off.
+///         <b>Only the first attempt of a delivery is made from <see cref="DeliverAsync" />.</b>
+///         It is made at once, which keeps delivery fast when the endpoint is up, and its outcome
+///         is then saved as a <see cref="WebhookDeliveryAttemptEntity" />. Every later attempt is
+///         made by <see cref="WebhookDeliveryRetrySweepService" /> through
+///         <see cref="ResumeAttemptAsync" /> when the saved <c>NextRetryDueUtc</c> is reached;
+///         nothing here waits out a backoff in memory. So a pending retry, and the wait before it,
+///         survive a restart. Nothing is saved before the first attempt completes (see
+///         <see cref="DeliverToSubscriptionAsync" /> for that gap).
 ///     </para>
 ///     <para>
-///         This class is registered scoped (it depends on the scoped
-///         <see cref="IWebhookSubscriptionRepository" />/<see cref="IWebhookDeliveryAttemptRepository" />)
-///         and is never invoked directly from
-///         <see cref="Ninlil.Dns.Server.Core.Events.DnsServerEventDispatcher" />'s own event
-///         loop -- <see cref="WebhookDeliverySubscriber{TEvent}" /> is the actual
-///         <c>IDnsServerEventSubscriber&lt;TEvent&gt;</c> registered for each webhook-eligible
-///         event type, and always calls this class from its own detached background task, opened
-///         in a fresh dependency injection scope, per architectural invariant #3.
+///         This class is scoped because its repositories are. The event dispatcher never calls it
+///         directly: <see cref="WebhookDeliverySubscriber{TEvent}" />, registered for each
+///         webhook event type, calls it on a detached task in a new scope, so a slow endpoint
+///         does not hold up other subscribers.
 ///     </para>
 /// </summary>
 /// <param name="subscriptionRepository">The repository this engine reads enabled subscriptions from.</param>
-/// <param name="attemptRepository">The repository this engine persists every delivery's own progress to.</param>
-/// <param name="unitOfWork">The unit of work this engine commits every persisted delivery change through.</param>
-/// <param name="credentialProtector">The protector this engine decrypts a subscription's own auth credentials and HMAC signing secret through.</param>
+/// <param name="attemptRepository">The repository this engine saves each delivery's progress to.</param>
+/// <param name="unitOfWork">The unit of work this engine commits delivery changes through.</param>
+/// <param name="credentialProtector">The protector this engine decrypts a subscription's auth credentials and HMAC signing secret with.</param>
 /// <param name="httpClientFactory">The factory this engine creates its outbound <see cref="HttpClient" /> from.</param>
 /// <param name="options">
-///     This engine's own retry/backoff timing configuration -- bound via
-///     <see cref="IOptionsMonitor{TOptions}" /> and read fresh, via <c>options.CurrentValue</c>,
-///     on every single delivery this (scoped) engine attempts, so a configuration write reaches
-///     the very next retry/backoff computation with no restart. <see cref="WebhookDeliveryOptions.RequestTimeout" />
-///     is a partial exception: it is applied to an outbound <see cref="HttpClient" /> only when
-///     <see cref="IHttpClientFactory" /> actually builds a fresh handler for
-///     <see cref="HttpClientName" /> (by default, roughly every two minutes, per that factory's
-///     own handler-lifetime pooling) -- see <c>ServiceCollectionWebhooksExtension</c>'s own
-///     <c>ConfigureHttpClient</c> callback, which reads it from the same live
-///     <see cref="IOptionsMonitor{TOptions}" /> rather than a process-wide-cached
-///     <see cref="IOptions{TOptions}" />, so a configuration write does eventually reach a
-///     freshly built handler rather than being permanently cached at its first-ever value.
+///     The retry and backoff settings, read through <c>options.CurrentValue</c> each time they
+///     are used, so a configuration change applies to the next backoff computation without a
+///     restart. <see cref="WebhookDeliveryOptions.RequestTimeout" /> is applied by the
+///     <c>ConfigureHttpClient</c> callback in <c>ServiceCollectionWebhooksExtension</c>, which
+///     also reads the monitor, each time a client is created for an attempt.
 /// </param>
 /// <param name="logger">The logger this engine records delivery attempts and failures to.</param>
 public sealed class WebhookDeliveryService(
@@ -84,34 +62,31 @@ public sealed class WebhookDeliveryService(
 )
 {
     /// <summary>
-    ///     This constant contains the name this engine's own outbound <see cref="HttpClient" /> is
-    ///     registered under via <see cref="IHttpClientFactory" />.
+    ///     This constant contains the name of the outbound <see cref="HttpClient" /> registered with
+    ///     <see cref="IHttpClientFactory" />.
     /// </summary>
     public const string HttpClientName = "Ninlil.Dns.Server.Webhooks";
 
     /// <summary>
-    ///     This constant contains the header name a subscription's own HMAC-SHA256 payload
-    ///     signature (a lowercase hexadecimal digest of the exact outbound request body, keyed by
-    ///     the subscription's own decrypted signing secret's UTF-8 bytes) is delivered under, so a
-    ///     receiver can verify a payload really came from this server.
+    ///     This constant contains the header that carries a subscription's HMAC-SHA256 payload
+    ///     signature: the lowercase hexadecimal digest of the request body, keyed with the UTF-8
+    ///     bytes of the decrypted signing secret. A receiver uses it to check that the payload came
+    ///     from this server.
     /// </summary>
     public const string SignatureHeaderName = "X-Ninlil-Signature";
 
     /// <summary>
-    ///     This property contains the JSON options every outbound payload is serialized with --
-    ///     camelCase, matching every other JSON this REST API's own consumers already see, per
-    ///     architectural precedent (<c>RecordsController.ToCamelCaseDataJson</c>'s own reasoning).
+    ///     This field contains the JSON options every payload is serialized with: the web
+    ///     defaults, so property names are camelCase like the REST API's JSON.
     /// </summary>
     private static readonly JsonSerializerOptions PayloadSerializerOptions = new(
         JsonSerializerDefaults.Web
     );
 
     /// <summary>
-    ///     This method delivers a single occurred event to every currently enabled subscription
-    ///     whose own event-type filter matches it. Each matching subscription's own delivery
-    ///     runs concurrently with every other matching subscription's -- one subscription's own
-    ///     target being slow or down never delays delivery to any other subscription for the same
-    ///     event.
+    ///     This method makes the first delivery attempt of an event to every enabled subscription
+    ///     whose event-type filter matches it. The subscriptions are attempted concurrently, so a
+    ///     slow or unreachable target does not delay the others.
     /// </summary>
     /// <param name="domainEvent">The event to deliver.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -142,27 +117,17 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method performs a single subscription's own very first delivery attempt,
-    ///     synchronously, then persists the resulting <see cref="WebhookDeliveryAttemptEntity" />
-    ///     for the first time -- success, a scheduled retry, or an immediate dead letter if the
-    ///     subscription's own <c>MaxDeliveryAttempts</c> is <c>1</c>. This method never throws
-    ///     (other than genuine cancellation) -- a single subscription's own persistent failure
-    ///     must never prevent delivery to any other subscription.
+    ///     This method makes the first delivery attempt for one subscription and then saves the
+    ///     resulting <see cref="WebhookDeliveryAttemptEntity" />: succeeded, pending with a retry
+    ///     time, or dead-lettered at once when <c>MaxDeliveryAttempts</c> is <c>1</c>. HTTP
+    ///     failures are recorded in the row, not thrown.
     ///     <para>
-    ///         <b>The one deliberately accepted non-durable window this design still has</b>: if
-    ///         this process is killed during this very first attempt -- after the outbound HTTP
-    ///         request has already started but before this method has finished persisting the
-    ///         resulting row -- that one delivery is genuinely lost, with no record it was ever
-    ///         attempted, exactly like this feature's entire retry loop used to behave before
-    ///         <see cref="WebhookDeliveryAttemptEntity" /> existed at all. This is accepted rather
-    ///         than engineered around: there is no event queue upstream of this call either (the
-    ///         event itself was never durable to begin with -- see architectural invariant #3), so
-    ///         persisting a "we're about to try" row before the network call would only move the
-    ///         same narrow gap earlier without actually closing it, at the cost of a genuine
-    ///         double-delivery risk if a crash instead landed between that pre-write and the
-    ///         attempt's own real completion. Every attempt from this point on -- any wait between
-    ///         retries, and every retry itself -- is fully durable; only this one first instant is
-    ///         not.
+    ///         <b>Accepted gap</b>: if the process stops during this first attempt, before the row
+    ///         is saved, the delivery is lost without a record. Events are not durable before this
+    ///         point either (they live in an in-memory queue), so saving a row before the request
+    ///         would only move the gap earlier, and would risk a duplicate delivery if the process
+    ///         stopped between that write and the attempt. From the saved row on, every wait and
+    ///         retry survives a restart.
     ///     </para>
     /// </summary>
     private async Task DeliverToSubscriptionAsync(
@@ -202,14 +167,10 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method resumes a single previously-persisted delivery that
-    ///     <see cref="WebhookDeliveryRetrySweepService" /> found due for a retry -- looking the
-    ///     target subscription back up fresh (never trusting a stale in-memory copy, per this
-    ///     project's own documented "always re-read across a scope boundary that may span an
-    ///     intervening write" lesson), performing exactly one more attempt, and persisting the
-    ///     updated row. If the target subscription no longer exists at all (deleted since this
-    ///     delivery was first created), this delivery is dead-lettered immediately rather than
-    ///     retried forever against nothing.
+    ///     This method resumes one saved delivery that <see cref="WebhookDeliveryRetrySweepService" />
+    ///     found due. It reads the subscription again, so a changed URL, credential or enabled
+    ///     state since the last attempt is used, makes one more attempt and saves the updated row.
+    ///     If the subscription has been deleted, the delivery is dead-lettered instead of retried.
     /// </summary>
     /// <param name="attempt">The persisted delivery to resume, as read by the sweep.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -241,11 +202,9 @@ public sealed class WebhookDeliveryService(
             return;
         }
 
-        // A disabled subscription is deferred, not dead-lettered and not attempted: this
-        // delivery's own attempt budget is not spent re-trying a target an operator has
-        // deliberately turned off, but it is not silently abandoned either -- it simply becomes
-        // due again after one more sweep interval, in case the subscription is re-enabled before
-        // then.
+        // A disabled subscription is deferred, neither attempted nor dead-lettered: no attempt
+        // is spent on a target the operator turned off, and the delivery becomes due again one
+        // sweep interval later in case the subscription is re-enabled.
         if (subscription.IsDisabled)
         {
             attempt.NextRetryDueUtc = DateTimeOffset.UtcNow.Add(options.CurrentValue.SweepInterval);
@@ -272,13 +231,12 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method applies a single attempt's own <see cref="DeliveryAttemptOutcome" /> to
-    ///     <paramref name="attempt" />'s own <see cref="WebhookDeliveryAttemptEntity.Status" />/
-    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" />/
-    ///     <see cref="WebhookDeliveryAttemptEntity.CompletedAtUtc" />, and logs the outcome --
-    ///     shared between a delivery's very first attempt (<see cref="DeliverToSubscriptionAsync" />)
-    ///     and every attempt made from a resumed sweep (<see cref="ResumeAttemptAsync" />) so the
-    ///     two paths can never drift out of sync over what "succeeded"/"exhausted" actually means.
+    ///     This method sets the <see cref="WebhookDeliveryAttemptEntity.Status" />,
+    ///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> and
+    ///     <see cref="WebhookDeliveryAttemptEntity.CompletedAtUtc" /> of
+    ///     <paramref name="attempt" /> from an attempt's outcome and logs it. Both
+    ///     <see cref="DeliverToSubscriptionAsync" /> and <see cref="ResumeAttemptAsync" /> use it, so
+    ///     they agree on when a delivery has succeeded or run out of attempts.
     /// </summary>
     private void ApplyOutcome(
         WebhookDeliveryAttemptEntity attempt,
@@ -333,14 +291,13 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method performs exactly one outbound HTTP delivery attempt against
-    ///     <paramref name="subscription" />'s own target URL, building its own auth header and
-    ///     HMAC signature fresh on every call (so a credential rotated between two attempts of the
-    ///     same delivery is honored by the very next attempt) -- shared by both
-    ///     <see cref="DeliverToSubscriptionAsync" />'s own first attempt and
-    ///     <see cref="ResumeAttemptAsync" />'s own later ones. This method never throws (other
-    ///     than genuine cancellation); every failure, transport-level or a non-success response
-    ///     alike, is captured in the returned <see cref="DeliveryAttemptOutcome" /> instead.
+    ///     This method makes one HTTP delivery attempt to the target URL of
+    ///     <paramref name="subscription" />, used for both first attempts and retries. The auth
+    ///     header and signature are built on every call, so a credential rotated between two
+    ///     attempts is used by the next one. Transport failures, timeouts and non-2xx responses
+    ///     are returned in the <see cref="DeliveryAttemptOutcome" />. Cancellation through
+    ///     <paramref name="stoppingToken" /> propagates, and so does a failure to decrypt the
+    ///     credentials or signing secret, which happens before the request is sent.
     /// </summary>
     private async Task<DeliveryAttemptOutcome> TryDeliverOnceAsync(
         WebhookSubscriptionEntity subscription,
@@ -387,11 +344,10 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method computes the exponential backoff delay before the attempt immediately
-    ///     following <paramref name="completedAttemptNumber" /> -- doubling from
-    ///     <see cref="WebhookDeliveryOptions.InitialRetryDelay" /> after each failed attempt,
-    ///     capped at <see cref="WebhookDeliveryOptions.MaxRetryDelay" />, the exact same shape
-    ///     <c>RabbitMqDnsServerEventBrokerTransport</c>'s own reconnect backoff uses.
+    ///     This method computes the backoff before the attempt after
+    ///     <paramref name="completedAttemptNumber" />: <see cref="WebhookDeliveryOptions.InitialRetryDelay" />
+    ///     doubled after each failed attempt, capped at
+    ///     <see cref="WebhookDeliveryOptions.MaxRetryDelay" />.
     /// </summary>
     private TimeSpan ComputeBackoffDelay(int completedAttemptNumber)
     {
@@ -410,8 +366,8 @@ public sealed class WebhookDeliveryService(
 
     /// <summary>
     ///     This method builds the outbound <c>Authorization</c> header value for a subscription,
-    ///     decrypting its own stored auth credentials, or returns <see langword="null" /> when the
-    ///     subscription's own <c>AuthMode</c> is <c>None</c>.
+    ///     decrypting its stored credentials, or returns <see langword="null" /> when its
+    ///     <c>AuthMode</c> is <c>None</c> or no credentials are stored.
     /// </summary>
     private AuthenticationHeaderValue BuildAuthHeader(WebhookSubscriptionEntity subscription)
     {
@@ -447,10 +403,9 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method computes a subscription's own HMAC-SHA256 signature over the exact outbound
-    ///     request body, keyed by the subscription's own decrypted signing secret's UTF-8 bytes,
-    ///     or returns <see langword="null" /> when the subscription has no signing secret
-    ///     configured.
+    ///     This method computes the HMAC-SHA256 signature of the request body (see
+    ///     <see cref="SignatureHeaderName" />), or returns <see langword="null" /> when the
+    ///     subscription has no signing secret.
     /// </summary>
     private string BuildSignature(WebhookSubscriptionEntity subscription, string body)
     {
@@ -470,14 +425,13 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This method builds a single event's own outbound JSON payload:
-    ///     <c>{"eventType":"...","deliveredAtUtc":"...","data":{...}}</c>, where <c>data</c> is the
-    ///     event's own fields. <paramref name="domainEvent" />'s own concrete runtime
-    ///     <see cref="Type" /> is passed to <see cref="JsonSerializer" /> explicitly, rather than
-    ///     relying on the compile-time <see cref="IDnsServerEvent" /> parameter type -- the exact
-    ///     fix for the "single-argument <c>Serialize&lt;TSource&gt;</c> overload" trap: passing an interface- or
-    ///     marker-typed value to the generic overload silently serializes based on that interface's
-    ///     own (here, zero) properties instead of the real record's fields.
+    ///     This method builds an event's JSON payload:
+    ///     <c>{"eventType":"...","deliveredAtUtc":"...","data":{...}}</c>, where <c>data</c> holds
+    ///     the event's fields. The payload is built once and saved with the delivery, so
+    ///     <c>deliveredAtUtc</c> is the time of the first attempt, also on retries. The event's
+    ///     runtime <see cref="Type" /> is passed to <see cref="JsonSerializer" />: serializing
+    ///     through the <see cref="IDnsServerEvent" /> interface type would write only the
+    ///     interface's properties, of which there are none.
     /// </summary>
     private static string BuildPayload(IDnsServerEvent domainEvent, string eventTypeName)
     {
@@ -498,11 +452,10 @@ public sealed class WebhookDeliveryService(
     }
 
     /// <summary>
-    ///     This record carries a single delivery attempt's own outcome back from
-    ///     <see cref="TryDeliverOnceAsync" /> to whichever caller (the first, live attempt or a
-    ///     resumed retry) needs to persist it.
+    ///     This record carries the outcome of one attempt from <see cref="TryDeliverOnceAsync" />
+    ///     back to the caller that saves it.
     /// </summary>
-    /// <param name="Success">Whether the subscriber's own endpoint returned a 2xx response.</param>
+    /// <param name="Success">Whether the endpoint returned a 2xx response.</param>
     /// <param name="StatusCode">The HTTP status code received, or <see langword="null" /> if the attempt failed before a response was ever received.</param>
     /// <param name="ErrorMessage">A short, human-readable failure description, or <see langword="null" /> on success.</param>
     private sealed record DeliveryAttemptOutcome(

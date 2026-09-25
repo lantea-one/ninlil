@@ -15,25 +15,15 @@ using Ninlil.Dns.Server.Webhooks.Tests.Fakes;
 namespace Ninlil.Dns.Server.Webhooks.Tests;
 
 /// <summary>
-///     This class proves, against a real, Kestrel-hosted fake HTTP server and a real
-///     reload-on-change JSON configuration file -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation -- that a write
-///     reaching <see cref="WebhookDeliveryOptions.InitialRetryDelay" /> via
-///     <see cref="Server.Presets.PresetConfigurationFileApplier" /> (the exact mechanism
-///     <c>Ninlil.Web.Controllers.WebhookDeliverySettingsController.Patch</c> itself calls)
-///     changes the retry backoff computation the very next attempt -- whether the delivery's own
-///     first attempt (<see cref="WebhookDeliveryService.DeliverAsync" />) or a later one resumed
-///     by <see cref="WebhookDeliveryService.ResumeAttemptAsync" /> -- actually uses, with no
-///     restart. Before this fix, <see cref="WebhookDeliveryService" /> read
-///     <see cref="WebhookDeliveryOptions" /> via the usual, snapshotted
-///     <see cref="IOptions{TOptions}" />, computed once and cached for the life of the process --
-///     a write reaching the configuration file would never have been observed at all. This test
-///     inspects the persisted <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> the
-///     backoff computation actually produced, rather than timing a real wait -- fast and
-///     deterministic, and a closer fit for this project's own current architecture, where
-///     <see cref="WebhookDeliveryService" /> itself never waits out a backoff delay at all (see
-///     that class's own doc comment): only <see cref="WebhookDeliveryRetrySweepService" />'s own
-///     periodic sweep, driven by real wall-clock time, ever actually waits between two attempts.
+///     This class tests that a change to <see cref="WebhookDeliveryOptions.InitialRetryDelay" />
+///     written with <see cref="Server.Presets.PresetConfigurationFileApplier" /> (as
+///     <c>WebhookDeliverySettingsController.Patch</c> in <c>Ninlil.Web</c> does) changes the
+///     backoff of the next attempt of an existing <see cref="WebhookDeliveryService" />, without
+///     a restart. It uses a reload-on-change JSON configuration file, so the value flows through
+///     <see cref="IOptionsMonitor{TOptions}" /> as in production, and a local Kestrel server
+///     that always fails. The test reads the saved
+///     <see cref="WebhookDeliveryAttemptEntity.NextRetryDueUtc" /> instead of timing a wait,
+///     since only <see cref="WebhookDeliveryRetrySweepService" /> waits between attempts.
 /// </summary>
 public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
 {
@@ -81,9 +71,8 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file provider, the same kind of source
+            // WebApplication.CreateBuilder() sets up for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -146,8 +135,7 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
                 NullLogger<WebhookDeliveryService>.Instance
             );
 
-            // Every attempt fails -- this test only ever cares about the backoff the failure
-            // computes, never a successful delivery.
+            // Every attempt fails; the test only looks at the computed backoff.
             _failuresBeforeSuccess = int.MaxValue;
 
             await deliveryService.DeliverAsync(
@@ -165,8 +153,8 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
                 $"Expected the short 10ms InitialRetryDelay to drive the first computed backoff, got {firstDelay}."
             );
 
-            // The exact same write mechanism WebhookDeliverySettingsController.Patch itself
-            // calls, this time raising the initial retry delay by two orders of magnitude.
+            // The same write WebhookDeliverySettingsController.Patch makes, raising the initial
+            // retry delay a hundredfold.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -178,20 +166,16 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
                 path
             );
 
-            // Polls the actual settled value directly rather than trusting a single OnChange
-            // firing to mean the reload is fully applied -- a second write to the same monitor
-            // within one test can otherwise race a stray/delayed notification left over from the
-            // first write against this one, observed directly as a real, reproducible flake.
+            // Poll for the new value rather than waiting for one OnChange: a late notification
+            // from the first write can race this one, which made the test flaky.
             await WaitForReloadAsync(
                 monitor,
                 () => monitor.CurrentValue.InitialRetryDelay == TimeSpan.FromSeconds(1)
             );
 
-            // Resuming the exact same persisted delivery -- the same WebhookDeliveryService
-            // instance, constructed before the write -- now genuinely computes its next backoff
-            // from the new, longer delay: proof the value was actually re-read on this later
-            // attempt rather than captured once at construction (attempt 2's own multiplier is
-            // 2x InitialRetryDelay, per WebhookDeliveryService.ComputeBackoffDelay).
+            // The same service instance, built before the write, now computes the backoff from
+            // the new delay, so the value is read per attempt, not captured at construction.
+            // After attempt 2 the backoff is 2x InitialRetryDelay (see ComputeBackoffDelay).
             await deliveryService.ResumeAttemptAsync(attempt, CancellationToken.None);
 
             Assert.Equal(2, attempt.AttemptCount);
@@ -211,15 +195,15 @@ public sealed class WebhookDeliveryServiceHotReloadTests : IAsyncLifetime
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }
 
     /// <summary>
-    ///     This method waits for a real configuration reload to actually happen (.NET's own JSON
-    ///     configuration provider debounces file-change notifications by a few hundred
-    ///     milliseconds) rather than asserting against a fixed delay.
+    ///     This method polls until <paramref name="condition" /> holds, for up to ten seconds,
+    ///     because the JSON configuration provider reloads a changed file only after a short
+    ///     debounce delay.
     /// </summary>
     private static async Task WaitForReloadAsync(
         IOptionsMonitor<WebhookDeliveryOptions> monitor,
