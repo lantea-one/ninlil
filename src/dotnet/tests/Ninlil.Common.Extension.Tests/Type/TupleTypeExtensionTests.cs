@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="TupleTypeExtension" />.
+///     These tests call <see cref="TupleTypeExtension.GetTupleElementTypes" /> on one- and
+///     two-element tuples and on a non-tuple type.
 /// </summary>
 public class TupleTypeExtensionTests
 {
@@ -17,9 +18,8 @@ public class TupleTypeExtensionTests
     }
 
     /// <summary>
-    ///     Since <c>IsTypeExtension.IsTuple</c> recognizes every real tuple arity (not just a
-    ///     single-element one), <c>GetTupleElementTypes</c> returns the actual element types for a
-    ///     multi-element tuple too.
+    ///     <c>IsTypeExtension.IsTuple</c> recognizes every tuple arity, so
+    ///     <c>GetTupleElementTypes</c> returns the element types of a multi-element tuple too.
     /// </summary>
     [Fact]
     public void GetTupleElementTypesReturnsEachElementTypeForAMultiElementTuple()

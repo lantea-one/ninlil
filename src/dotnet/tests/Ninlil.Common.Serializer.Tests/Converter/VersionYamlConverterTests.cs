@@ -1,12 +1,12 @@
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.VersionYamlConverter" />,
-///     including the parser-positioning fix (see <see cref="IpAddressYamlConverterTests" /> for
-///     the full explanation). There is no JSON equivalent of this converter in the library, so
-///     only YAML round-tripping is covered here.
+///     These tests round-trip versions through <see cref="Serializer.Converter.VersionYamlConverter" />
+///     with sibling properties, to catch parser-positioning mistakes (see
+///     <see cref="IpAddressYamlConverterTests" />). The library has no JSON version converter.
 /// </summary>
 public class VersionYamlConverterTests
 {

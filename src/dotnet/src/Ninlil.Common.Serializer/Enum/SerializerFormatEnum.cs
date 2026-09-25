@@ -8,15 +8,17 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Enum;
 
 /// <summary>
-///     This enum defines our serialization formats.
+///     This enumeration lists the serialization formats the serializers and
+///     <see cref="Service.SerializerService" /> can pick between. <c>Jsonc</c> and <c>Yml</c> are
+///     aliases with the same values as <c>Json</c> and <c>Yaml</c>.
 /// </summary>
 [DefaultValue(None)]
 [JsonConverter<JsonStringEnumConverter<SerializerFormatEnum>>]
 public enum SerializerFormatEnum
 {
     /// <summary>
-    ///     This enum value defines no format, for
-    ///     string passthrough in external libraries.
+    ///     This value means no serialization: callers pass strings through or use
+    ///     <see cref="object.ToString" />.
     /// </summary>
     [Description("none")]
     [JsonStringEnumMemberName("none")]
@@ -25,7 +27,7 @@ public enum SerializerFormatEnum
     None,
 
     /// <summary>
-    ///     This enum value defines JSON format.
+    ///     This value is JSON.
     /// </summary>
     [Description("json")]
     [JsonStringEnumMemberName("json")]
@@ -34,7 +36,7 @@ public enum SerializerFormatEnum
     Json,
 
     /// <summary>
-    ///     This enum value defines JSONC format (JSON with comments).
+    ///     This value is JSONC (JSON with comments), an alias of <see cref="Json" />.
     /// </summary>
     [Description("jsonc")]
     [JsonStringEnumMemberName("jsonc")]
@@ -43,7 +45,7 @@ public enum SerializerFormatEnum
     Jsonc = Json,
 
     /// <summary>
-    ///     This enum value defines XML format.
+    ///     This value is XML.
     /// </summary>
     [Description("xml")]
     [JsonStringEnumMemberName("xml")]
@@ -52,7 +54,7 @@ public enum SerializerFormatEnum
     Xml,
 
     /// <summary>
-    ///     This enum value defines YAML format.
+    ///     This value is YAML.
     /// </summary>
     [Description("yaml")]
     [JsonStringEnumMemberName("yaml")]
@@ -61,7 +63,7 @@ public enum SerializerFormatEnum
     Yaml,
 
     /// <summary>
-    ///     This enum value defines YML format.
+    ///     This value is an alias of <see cref="Yaml" />.
     /// </summary>
     [Description("yml")]
     [JsonStringEnumMemberName("yml")]

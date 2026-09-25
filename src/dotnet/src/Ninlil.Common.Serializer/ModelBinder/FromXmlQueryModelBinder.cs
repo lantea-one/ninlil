@@ -5,18 +5,21 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 namespace Ninlil.Common.Serializer.ModelBinder;
 
 /// <summary>
-///     This class maintains our model binder structure for XML in a query parameter.
+///     This MVC model binder reads a query-string parameter as an XML document, deserializes it into
+///     the parameter's type with <see cref="XmlSerializer" /> and validates the result. Invalid XML
+///     adds a model-state error. <see cref="Filter.FromXmlQueryOperationFilter" /> documents such
+///     parameters in Swagger.
 /// </summary>
 /// <param name="validatorServiceProvider">The injected object model validation service provider instance.</param>
 public class FromXmlQueryModelBinder(IObjectModelValidator validatorServiceProvider) : IModelBinder
 {
     /// <summary>
-    ///     This property contains the instance of our object model validation service provider.
+    ///     This field contains the validator used on the deserialized model.
     /// </summary>
     private readonly IObjectModelValidator _validator = validatorServiceProvider;
 
     /// <summary>
-    ///     This method asynchronously binds the query parameter data to the model.
+    ///     This method binds the query parameter. An empty parameter leaves the binding result unset.
     /// </summary>
     /// <param name="bindingContext">The current context to bind to.</param>
     public Task BindModelAsync(ModelBindingContext bindingContext)

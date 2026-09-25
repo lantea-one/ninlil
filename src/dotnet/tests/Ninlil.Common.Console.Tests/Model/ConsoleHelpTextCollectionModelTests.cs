@@ -2,14 +2,13 @@ using Ninlil.Common.Console;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the console-help-text-collection-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleHelpTextCollectionModel" /> - the fluent
-///     With*/WithElement(s) builders, the application-information header block, and the full
-///     rendered help text produced for a realistic model mixing verbs, positional arguments, and
-///     named arguments.
+///     These tests cover <see cref="ConsoleHelpTextCollectionModel" />: the fluent <c>With*</c>
+///     builders, the application information block, and the help text rendered from the test input
+///     models in <c>TestSupport</c>.
 /// </summary>
 public class ConsoleHelpTextCollectionModelTests
 {
@@ -104,12 +103,10 @@ public class ConsoleHelpTextCollectionModelTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleHelpTextCollectionModel.WriteStartHelpText" /> omits the
-    ///     information block when no metadata is present. The collection's Application/Author/Company/
-    ///     Description/Version properties are explicitly cleared here rather than relying on a
-    ///     freshly constructed instance, since the constructor seeds them from
-    ///     <see cref="ConsoleCommand" />'s own static, process-wide metadata fields (which pick up
-    ///     ambient state such as the test host's own assembly name, and can also have been mutated by
-    ///     other tests in the same run).
+    ///     information block when no metadata is present. The metadata properties are cleared
+    ///     explicitly because a new instance copies them from <see cref="ConsoleCommand" />'s static
+    ///     fields, which hold the test host's assembly details and may have been changed by other
+    ///     tests.
     /// </summary>
     [Fact]
     public void WriteStartHelpText_WithoutMetadata_OmitsInformationBlock()
@@ -156,8 +153,8 @@ public class ConsoleHelpTextCollectionModelTests
     }
 
     /// <summary>
-    ///     Verifies a full, real-world rendering: a model's help text collection is built from its own
-    ///     attributes and produces sections for verbs, positional arguments, and named arguments.
+    ///     Verifies that the help text built from <see cref="VerbModel" />'s attributes has a verb
+    ///     section and a named-arguments section.
     /// </summary>
     [Fact]
     public void ToString_ForRealisticModel_RendersAllSections()
@@ -174,7 +171,7 @@ public class ConsoleHelpTextCollectionModelTests
         Assert.Contains("name", result);
     }
 
-    /// <summary>Verifies that positional arguments render under their own header, distinct from named arguments.</summary>
+    /// <summary>Verifies that positional arguments render under a separate header from named arguments.</summary>
     [Fact]
     public void ToString_WithPositionalArguments_RendersPositionalArgumentsHeader()
     {

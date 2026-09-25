@@ -1,13 +1,13 @@
 using System.Drawing;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.RgbColorYamlConverter" />,
-///     covering both the non-nullable <see cref="Color" /> and nullable <see cref="Color" />?
-///     forms it accepts, and the parser-positioning fix (see
-///     <see cref="IpAddressYamlConverterTests" /> for the full explanation).
+///     These tests round-trip the non-nullable and nullable <see cref="Color" /> forms through
+///     <see cref="Serializer.Converter.RgbColorYamlConverter" />, with sibling properties to catch
+///     parser-positioning mistakes (see <see cref="IpAddressYamlConverterTests" />).
 /// </summary>
 public class RgbColorYamlConverterTests
 {
@@ -51,9 +51,8 @@ public class RgbColorYamlConverterTests
     [Fact]
     public void Deserialize_MalformedColor_ReturnsEmpty_NotThrow()
     {
-        // Locks in the fix for the same rgb(r, g, b) round-trip bug documented on
-        // RgbColorJsonConverterTests -- ColorTranslator.FromHtml cannot parse this notation and
-        // used to throw for it instead of gracefully falling back.
+        // The written rgb(r, g, b) form must read back (see RgbColorJsonConverterTests);
+        // ColorTranslator.FromHtml cannot parse it.
         Wrapper result = YamlSerializer.Deserialize<Wrapper>("color: \"not-a-color\"\n");
 
         Assert.Equal(Color.Empty, result.Color);

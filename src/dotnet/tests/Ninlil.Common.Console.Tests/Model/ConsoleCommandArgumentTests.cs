@@ -1,12 +1,12 @@
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-command-argument tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleCommandArgument" /> - typed value retrieval and
-///     the two shapes of <see cref="ConsoleCommandArgument.ToString" /> output (positional vs. named).
+///     These tests cover <see cref="ConsoleCommandArgument" />: typed value conversion, the default
+///     state, and the positional and named forms of <see cref="ConsoleCommandArgument.ToString" />.
 /// </summary>
 public class ConsoleCommandArgumentTests
 {

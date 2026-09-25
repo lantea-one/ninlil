@@ -2,7 +2,9 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This clas maintains the <see cref="System.Type" /> object extensions for generating default values.
+///     This static class produces the runtime equivalent of <c>default(T)</c> for a
+///     <see cref="System.Type" />: a zeroed value type, or <see langword="null" /> for reference and
+///     nullable types. The console parser uses it to tell whether a property still holds its default.
 /// </summary>
 // ReSharper disable once UnusedType.Global
 public static class DefaultValueTypeExtension

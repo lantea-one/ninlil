@@ -1,7 +1,7 @@
 using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the shared test input models used across the console parsing test suite.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.TestSupport;
 
 /// <summary>
@@ -51,8 +51,8 @@ public class VerbModel : ConsoleCommandInputModel
 }
 
 /// <summary>
-///     This model exercises the "default verb" behavior, where the first CLI argument need not match
-///     the verb's own name because <see cref="ConsoleVerbAttribute.Default" /> is set.
+///     This model exercises the default-verb behavior, where the first CLI argument need not match
+///     the verb's name because <see cref="ConsoleVerbAttribute.Default" /> is set.
 /// </summary>
 [ConsoleVerb("run", "The default command.", true)]
 public class DefaultVerbModel : ConsoleCommandInputModel
@@ -63,8 +63,8 @@ public class DefaultVerbModel : ConsoleCommandInputModel
 }
 
 /// <summary>
-///     This model represents a nested verb's own argument shape - a single optional named value used
-///     to confirm that a parent model's nested-verb property gets populated correctly.
+///     This model is the argument shape of a nested verb: one optional named value, used to check
+///     that a parent model's nested-verb property is populated.
 /// </summary>
 public class ChildInputModel : ConsoleCommandInputModel
 {
@@ -86,9 +86,9 @@ public class ParentWithNestedVerbModel : ConsoleCommandInputModel
 }
 
 /// <summary>
-///     This model exercises the typed-value parsing path for collection-shaped named arguments -
-///     lists, dictionaries, and tuples - which depend on the corrected type-inspection/conversion
-///     helpers in the sibling Extension project.
+///     This model exercises typed-value parsing for collection-shaped named arguments (lists,
+///     dictionaries and tuples), which relies on the type-inspection and conversion helpers in
+///     Ninlil.Common.Extension.
 /// </summary>
 public class TypedArgsModel : ConsoleCommandInputModel
 {
@@ -121,13 +121,13 @@ public class UnknownArgsModel : ConsoleCommandInputModel
 }
 
 /// <summary>
-///     This model declares no required arguments and no verb at all, so it can be safely parsed from
-///     a completely empty CLI argument list without triggering the process-exit path that a required
-///     argument or verb would otherwise take.
+///     This model declares no required arguments and no verb, so it can be parsed from an empty
+///     CLI argument list without reaching the process-exit path a required argument or verb would
+///     take.
 /// </summary>
 public class AllOptionalModel : ConsoleCommandInputModel
 {
-    /// <summary>An entirely optional named argument.</summary>
+    /// <summary>An optional named argument with a default.</summary>
     [NamedConsoleArgument("label", "An optional label.", false, "default-label")]
     public string Label { get; set; }
 }

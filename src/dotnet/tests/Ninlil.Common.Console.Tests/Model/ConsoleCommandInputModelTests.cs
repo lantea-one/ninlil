@@ -2,15 +2,16 @@ using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the console-command-input-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleCommandInputModel" /> - reflection-driven
-///     attribute discovery (named/positional/nested-verb/verb), the argument-name/predicate helper
-///     methods, default-value application, and the static Parse/TryParse/HelpText entry points. As
-///     with <see cref="ConsoleCommandArgumentCollectionTests" />, every scenario supplies every
-///     required argument so the real process-exit paths inside the underlying parser are never hit.
+///     These tests cover <see cref="ConsoleCommandInputModel" /> using the models in
+///     <c>TestSupport</c>: attribute discovery (named, positional, nested verb, verb), the
+///     argument-name and predicate helpers, <see cref="ConsoleCommandInputModel.SetDefaults" />,
+///     and the static Parse/TryParse/help-text entry points. As in
+///     <see cref="ConsoleCommandArgumentCollectionTests" />, every parse supplies all required
+///     arguments so the parser never reaches its process-exit paths.
 /// </summary>
 public class ConsoleCommandInputModelTests
 {
@@ -56,7 +57,7 @@ public class ConsoleCommandInputModelTests
         Assert.Equal(nameof(ParentWithNestedVerbModel.Child), nested[0].Item1.Name);
     }
 
-    /// <summary>Verifies that <see cref="ConsoleCommandInputModel.GetVerb" /> returns the type's own verb attribute.</summary>
+    /// <summary>Verifies that <see cref="ConsoleCommandInputModel.GetVerb" /> returns the verb attribute declared on the type.</summary>
     [Fact]
     public void GetVerb_ReturnsDeclaredVerbAttribute()
     {
@@ -238,7 +239,7 @@ public class ConsoleCommandInputModelTests
         await model.ValidateAsync();
     }
 
-    /// <summary>Verifies that <see cref="ConsoleCommandInputModel.Parse{TInputModel}(string[])" /> parses real CLI arguments into a strongly-typed model.</summary>
+    /// <summary>Verifies that <see cref="ConsoleCommandInputModel.Parse{TInputModel}(string[])" /> parses CLI arguments into a strongly-typed model.</summary>
     [Fact]
     public void Parse_Generic_ParsesArgumentsIntoStronglyTypedModel()
     {

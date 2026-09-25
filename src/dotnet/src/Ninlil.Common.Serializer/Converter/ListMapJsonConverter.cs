@@ -3,40 +3,31 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Ninlil.Common.Serializer.Attribute;
 
-// Define the namespace for the serializer converters.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a JSON converter for a "list map" -- a JSON array of objects where one property
-///     of <typeparamref name="TItem" /> (identified via the <see cref="ListMapKeyAttribute" />) is treated
-///     as that item's unique key. During deserialization, it reads a JSON array, deserializes each element
-///     into a <typeparamref name="TItem" /> instance in the ordinary way, and additionally extracts and
-///     re-assigns the key property by reflection -- which matters specifically when the key property is
-///     excluded from ordinary serialization (for example via <see cref="JsonIgnoreAttribute" />) and would
-///     otherwise never be populated. During serialization, the reverse happens: each item is serialized
-///     normally and then has its key value explicitly (re-)injected under the key property's JSON name, so
-///     a <see cref="JsonIgnoreAttribute" />-decorated key property still round-trips correctly. This
-///     converter binds directly to a <see cref="List{TItem}" />-typed property or field.
+///     This class is a JSON converter for a "list map": a JSON array of objects in which one
+///     property of <typeparamref name="TItem" /> (marked with <see cref="ListMapKeyAttribute" />) is
+///     the item's unique key. Reading deserializes each element normally, then sets the key
+///     property by reflection. Writing serializes each item normally, then adds the key value under
+///     the key's JSON name. Both steps matter when the key property is hidden from ordinary
+///     serialization with <see cref="JsonIgnoreAttribute" />; for a visible key they are a
+///     harmless re-assignment. Apply it to a <see cref="List{TItem}" /> property or field.
 /// </summary>
 /// <typeparam name="TItem">
-///     The type of items in the collection that will be serialized and deserialized.
-///     This type must have a property decorated with the <see cref="ListMapKeyAttribute" />,
-///     which will be used as the unique key for each item in the collection. The converter
-///     relies on this attribute to identify the key property and extract its value during
-///     the serialization and deserialization processes.
+///     The item type. It must have a property marked with <see cref="ListMapKeyAttribute" />.
 /// </typeparam>
 public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
 {
     /// <summary>
-    ///     This method locates the property of <typeparamref name="TItem" /> decorated with the
-    ///     <see cref="ListMapKeyAttribute" />, which both <see cref="Read" /> and <see cref="Write" />
-    ///     rely on to identify the unique key for each item in the collection.
+    ///     This method finds the public property of <typeparamref name="TItem" /> marked with
+    ///     <see cref="ListMapKeyAttribute" />.
     /// </summary>
     /// <returns>The located key <see cref="PropertyInfo" />.</returns>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when <typeparamref name="TItem" /> does not have a property decorated with the
-    ///     <see cref="ListMapKeyAttribute" />, since the converter cannot determine which property
-    ///     to use as the unique key for each item in the collection without it.
+    ///     Thrown when <typeparamref name="TItem" /> has no property marked with
+    ///     <see cref="ListMapKeyAttribute" />.
     /// </exception>
     private static PropertyInfo GetKeyProperty() =>
         typeof(TItem)
@@ -55,7 +46,7 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
     ///     This method resolves the JSON property name that <paramref name="keyProperty" /> will be
     ///     written as/read from, honoring a <see cref="JsonPropertyNameAttribute" /> or a Newtonsoft.Json
     ///     <c>JsonPropertyAttribute</c> if either is present, and otherwise falling back to the
-    ///     property's own name.
+    ///     property name.
     /// </summary>
     /// <param name="keyProperty">The key property to resolve the JSON name of.</param>
     /// <returns>The resolved JSON property name.</returns>
@@ -65,23 +56,20 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
         ?? keyProperty.Name;
 
     /// <summary>
-    ///     This method reads and converts a JSON array into a <see cref="List{TItem}" />, extracting and
-    ///     re-assigning each item's key property by reflection so it round-trips correctly even when the
-    ///     key property is excluded from ordinary serialization (for example via
-    ///     <see cref="JsonIgnoreAttribute" />).
+    ///     This method reads a JSON array into a <see cref="List{TItem}" />, setting each item's key
+    ///     property by reflection from the element's key value.
     /// </summary>
     /// <param name="reader">The <see cref="Utf8JsonReader" /> to read from.</param>
     /// <param name="typeToConvert">
-    ///     The <see cref="Type" /> of object to convert. This is expected to be a
-    ///     <see cref="List{TItem}" />.
+    ///     The <see cref="Type" /> of object to convert, a <see cref="List{TItem}" />.
     /// </param>
     /// <param name="options">
     ///     The <see cref="JsonSerializerOptions" /> to use for deserializing each individual item and its
     ///     key value.
     /// </param>
     /// <returns>
-    ///     The deserialized <see cref="List{TItem}" />. Any array element that is not a JSON object, or
-    ///     whose key property's value is missing or null, is skipped.
+    ///     The deserialized <see cref="List{TItem}" />, or an empty list when the JSON is not an array.
+    ///     Any element that is not a JSON object, or whose key is missing or null, is skipped.
     /// </returns>
     public override List<TItem> Read(
         ref Utf8JsonReader reader,
@@ -94,10 +82,10 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
         PropertyInfo keyProperty = GetKeyProperty();
         string keyName = GetKeyName(keyProperty);
 
-        // Parse the reading element into a JsonDocument so we can extract the key from it.
+        // Parse the value into a JsonDocument so each element's key can be read.
         using var jsonDocument = JsonDocument.ParseValue(ref reader);
 
-        // If the JSON document is null or not an array, return an empty list of TItem.
+        // If the JSON value is not an array, return an empty list.
         if (jsonDocument.RootElement.ValueKind is not JsonValueKind.Array)
             return [];
 
@@ -115,23 +103,22 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
             if (!element.TryGetProperty(keyName, out var keyPropertyValue))
                 continue;
 
-            // Localize the item key value from the JSON element as its TKey type. If the key is null or empty, skip it.
+            // Deserialize the key value as the key property's type.
             var itemKey = JsonSerializer.Deserialize(
                 keyProperty.PropertyType,
                 keyPropertyValue.GetRawText(),
                 options
             );
 
-            // If the item key is null or empty, skip it.
+            // If the item key is null, skip it.
             if (itemKey is null)
                 continue;
 
             // Deserialize the raw JSON element into an instance of TItem.
             var item = JsonSerializer.Deserialize<TItem>(element.GetRawText(), options);
 
-            // Set the key into the property of the item using reflection -- this is what makes
-            // a JsonIgnore'd key property still populate correctly, and is a harmless no-op
-            // re-assignment for an ordinary (non-ignored) key property.
+            // Set the key by reflection. This populates a JsonIgnore'd key property and is a
+            // harmless re-assignment for a visible one.
             keyProperty.SetValue(item, itemKey);
 
             // Add the item to the list of TItem.
@@ -143,31 +130,22 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
     }
 
     /// <summary>
-    ///     This method writes a <see cref="List{TItem}" /> as a JSON array, serializing each item normally
-    ///     and then explicitly (re-)injecting its key value under the key property's JSON name -- keeping
-    ///     this the exact inverse of <see cref="Read" />, including when the key property is excluded from
-    ///     ordinary serialization (for example via <see cref="JsonIgnoreAttribute" />).
+    ///     This method writes a <see cref="List{TItem}" /> as a JSON array, serializing each item
+    ///     normally and then adding its key value under the key property's JSON name, so the output is
+    ///     what <see cref="Read" /> expects.
     /// </summary>
     /// <param name="writer">
-    ///     The <see cref="Utf8JsonWriter" /> to write to. This parameter represents the output stream
-    ///     where the serialized JSON data will be written. The method uses this writer to output the
-    ///     JSON representation of the collection of <typeparamref name="TItem" /> instances, ensuring
-    ///     that the resulting JSON is properly formatted and adheres to the specified serialization options.
+    ///     The <see cref="Utf8JsonWriter" /> to write to.
     /// </param>
     /// <param name="value">
-    ///     The collection of <typeparamref name="TItem" /> instances to serialize.
-    ///     This parameter represents the data that will be converted into JSON format.
+    ///     The items to serialize. Null writes an empty array.
     /// </param>
     /// <param name="options">
-    ///     The <see cref="JsonSerializerOptions" /> to use for serialization.
-    ///     This parameter allows customization of the JSON serialization process,
-    ///     such as specifying naming policies, converters, and other options.
+    ///     The <see cref="JsonSerializerOptions" /> to use for each item.
     /// </param>
     /// <exception cref="InvalidOperationException">
-    ///     The exception is thrown if the type <typeparamref name="TItem" /> does not have
-    ///     a property decorated with the <see cref="ListMapKeyAttribute" />. This indicates
-    ///     that the converter cannot determine which property to use as the unique key for
-    ///     each item in the collection, and therefore cannot serialize the collection correctly.
+    ///     Thrown when <typeparamref name="TItem" /> has no property marked with
+    ///     <see cref="ListMapKeyAttribute" />.
     /// </exception>
     public override void Write(
         Utf8JsonWriter writer,
@@ -175,8 +153,7 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
         JsonSerializerOptions options
     )
     {
-        // Localize the key property and its JSON name; both are required to (re-)inject each
-        // item's key value into its serialized JSON object below.
+        // Localize the key property and its JSON name, needed to add each item's key below.
         PropertyInfo keyProperty = GetKeyProperty();
         string keyName = GetKeyName(keyProperty);
 
@@ -186,26 +163,22 @@ public class ListMapJsonConverter<TItem> : JsonConverter<List<TItem>>
         // Iterate through each item in the collection of TItem.
         foreach (var item in value ?? [])
         {
-            // Serialize the item normally (respecting its own JsonIgnore/naming attributes),
-            // then decode it back into a string-keyed dictionary so the key property's value
-            // can be explicitly (re-)injected below.
+            // Serialize the item normally (respecting its JsonIgnore and naming attributes).
             string itemJson = JsonSerializer.Serialize(item, options);
 
-            // Decode the item's own serialized JSON into a dictionary we can inject the key into.
+            // Decode the item's JSON into a dictionary so the key can be added.
             var itemDictionary =
                 JsonSerializer.Deserialize<Dictionary<string, object>>(itemJson, options) ?? [];
 
-            // Explicitly (re-)inject the key's value under its JSON name -- this is what makes
-            // a JsonIgnore'd key property still round-trip, and is a harmless overwrite with
-            // the same value for an ordinary (non-ignored) key property.
+            // Add the key's value under its JSON name. This makes a JsonIgnore'd key round-trip
+            // and overwrites a visible key with the same value.
             itemDictionary[keyName] = keyProperty.GetValue(item);
 
             // Add the item's dictionary representation to the output list.
             items.Add(itemDictionary);
         }
 
-        // Serialize the resulting array of per-item dictionaries to JSON using the provided
-        // options -- this is the exact shape Read() parses back.
+        // Serialize the array of per-item dictionaries, the shape Read() parses back.
         string json = JsonSerializer.Serialize(items, options);
 
         // We're done, write the JSON string to the writer.

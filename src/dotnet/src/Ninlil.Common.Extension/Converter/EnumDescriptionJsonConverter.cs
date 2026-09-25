@@ -9,7 +9,11 @@ using Ninlil.Common.Extension.String;
 namespace Ninlil.Common.Extension.Converter;
 
 /// <summary>
-///     This class maintains the JSON converter for converting <see cref="System.Enum" /> values to and from JSON.
+///     This System.Text.Json converter writes an enum value as its description string and reads it
+///     back. The name comes from, in order, <see cref="JsonStringEnumMemberNameAttribute" />,
+///     <see cref="EnumMemberAttribute" /> and <see cref="DisplayNameAttribute" />, falling back to
+///     the member name (see <see cref="ToDescriptionEnumExtension" />). Ninlil's API enums use it so their JSON
+///     values are the names declared on each member (such as <c>IN</c> for a DNS class).
 /// </summary>
 public class EnumDescriptionJsonConverter<TEnum> : JsonConverter<TEnum>
     where TEnum : System.Enum

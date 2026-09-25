@@ -4,17 +4,16 @@ using Ninlil.Common.Configuration;
 namespace Ninlil.Common.Configuration.Tests;
 
 /// <summary>
-///     These tests cover <see cref="NinlilEnvironmentVariableNaming" />'s own PascalCase-to-
-///     underscore transform, including the codebase's own two real irregular-token cases
-///     (<c>IPv4</c>/<c>IPv6</c>) that ordinary word-boundary splitting cannot handle correctly on
-///     its own.
+///     These tests cover the PascalCase-to-underscore transform in
+///     <see cref="NinlilEnvironmentVariableNaming" />, including the irregular <c>IPv4</c>/<c>IPv6</c>
+///     tokens that ordinary word splitting gets wrong. They call the static methods directly with
+///     configuration paths used by the application.
 /// </summary>
 public sealed class NinlilEnvironmentVariableNamingTests
 {
     /// <summary>
-    ///     Confirms the exact worked example from <c>ENVIRONMENT.md</c>'s own <c>NINLIL_</c>
-    ///     environment-variable reference: <c>DnsServer:Web:HttpPort</c> becomes
-    ///     <c>NINLIL_DNS_SERVER_WEB_HTTP_PORT</c>.
+    ///     Confirms the worked example in <c>ENVIRONMENT.md</c>: <c>DnsServer:Web:HttpPort</c>
+    ///     becomes <c>NINLIL_DNS_SERVER_WEB_HTTP_PORT</c>.
     /// </summary>
     [Fact]
     public void ToEnvironmentVariableName_MatchesTheDocumentedWorkedExample()

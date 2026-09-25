@@ -6,20 +6,24 @@ using Ninlil.Common.Serializer.InputFormatter;
 using Ninlil.Common.Serializer.OutputFormatter;
 using YamlDotNet.Serialization;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Extension;
 
 /// <summary>
-///     This class maintains our IServiceCollection extensions for the Serializer.
+///     This static class wires this library into an ASP.NET Core host. The <c>UseSerializerMvc</c>
+///     overloads add MVC with the default formatters replaced by this library's JSON, XML and YAML
+///     formatters, honour the Accept header and return 406 for unsupported types. The
+///     <c>UseSerializer*Options</c> methods set the static, process-wide defaults on
+///     <see cref="JsonSerializer" /> and <see cref="XmlSerializer" />; they do not register anything
+///     with dependency injection.
 /// </summary>
 public static class ServiceCollectionSerializerExtension
 {
     /// <summary>
-    ///     This method configures the API to use our MVC which includes the
-    ///     built-in input/output formatters using the internal serializer.
+    ///     This method adds MVC with JSON, XML and YAML input and output formatters.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
-    /// <param name="prettyOutput">Optional, if true the output will be indented.</param>
+    /// <param name="prettyOutput">Optional, if true JSON and XML output is indented.</param>
     /// <returns>The modified <paramref name="instance" /> of IServiceCollection.</returns>
     public static IServiceCollection UseSerializerMvc(
         this IServiceCollection instance,
@@ -65,11 +69,11 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method configures the API to use our MVC which includes the
-    ///     built-in input/output formatters using the internal serializer.
+    ///     This method adds MVC with input and output formatters for only the listed
+    ///     <paramref name="formats" />.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
-    /// <param name="prettyOutput">If true the output will be indented.</param>
+    /// <param name="prettyOutput">If true JSON and XML output is indented.</param>
     /// <param name="formats">The formats to support.</param>
     /// <returns>The modified <paramref name="instance" /> of IServiceCollection.</returns>
     public static IServiceCollection UseSerializerMvc(
@@ -119,7 +123,7 @@ public static class ServiceCollectionSerializerExtension
                 options.OutputFormatters.Add(new XmlOutputFormatter(prettyOutput));
             }
 
-            // Check for YAML support then add our YAML formatters.
+            // Stop here unless YAML is requested.
             if (
                 !formats.Contains(SerializerFormatEnum.Yaml)
                 && !formats.Contains(SerializerFormatEnum.Yml)
@@ -138,11 +142,11 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method configures the API to use our MVC which includes the
-    ///     built-in input/output formatters using the internal serializer.
+    ///     This method adds MVC with input and output formatters for only the listed
+    ///     <paramref name="formats" />.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
-    /// <param name="prettyOutput">If true the output will be indented.</param>
+    /// <param name="prettyOutput">If true JSON and XML output is indented.</param>
     /// <param name="formats">The formats to support.</param>
     /// <returns>The modified <paramref name="instance" /> of IServiceCollection.</returns>
     public static IServiceCollection UseSerializerMvc(
@@ -152,8 +156,8 @@ public static class ServiceCollectionSerializerExtension
     ) => instance.UseSerializerMvc(prettyOutput, formats.AsEnumerable());
 
     /// <summary>
-    ///     This method configures the API to use our MVC which includes the
-    ///     built-in input/output formatters using the internal serializer.
+    ///     This method adds MVC with JSON, XML and YAML formatters built from the given options. Each
+    ///     option falls back to the library default when null.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
     /// <param name="jsonOptions">Optional, settings for the JSON serializer.</param>
@@ -218,7 +222,7 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method fluidly registers global serializer options for the JSON Serializer.
+    ///     This method sets the process-wide default options of <see cref="JsonSerializer" />.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
     /// <param name="options">The JSON serializer options.</param>
@@ -236,7 +240,7 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method fluidly registers global serializer options for the XML Deserializer.
+    ///     This method sets the process-wide default reader settings of <see cref="XmlSerializer" />.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
     /// <param name="options">The XML deserializer options.</param>
@@ -254,10 +258,10 @@ public static class ServiceCollectionSerializerExtension
     }
 
     /// <summary>
-    ///     This method fluidly registers global serializer options for the XML Deserializer.
+    ///     This method sets the process-wide default writer settings of <see cref="XmlSerializer" />.
     /// </summary>
     /// <param name="instance">The current IServiceCollection instance.</param>
-    /// <param name="options">The XML deserializer options.</param>
+    /// <param name="options">The XML serializer options.</param>
     /// <returns>The current IServiceCollection <paramref name="instance" />.</returns>
     public static IServiceCollection UseSerializerXmlSerializerOptions(
         this IServiceCollection instance,

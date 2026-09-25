@@ -4,38 +4,42 @@
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class maintains a collection of <see cref="ConsoleHelpTextModel" />
-///     objects, which are used to organize the help text output for a console application.
+///     This class builds the help text for a console application. It holds the application
+///     details (defaulting to the static values on <see cref="ConsoleCommand" />) and a list of
+///     <see cref="ConsoleHelpTextModel" /> entries, and writes them as an information block
+///     followed by verb, positional-argument and named-argument sections, each with a banner
+///     header. <see cref="ConsoleCommandInputModel.GetHelpTextCollection(Type, ConsoleHelpTextCollectionModel)" />
+///     fills it from an input model's attributes.
 /// </summary>
 public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
 {
     /// <summary>
-    ///     This property defines a tab character as four spaces.
+    ///     This property contains the indentation used in the help text: four spaces.
     /// </summary>
     public static string Tab => string.Join("", Enumerable.Repeat(" ", 4));
 
     /// <summary>
-    ///     This property is the internal container for the name of the application.
+    ///     This field holds the application name.
     /// </summary>
     private string _application = ConsoleCommand.Application;
 
     /// <summary>
-    ///     This property is the internal container for the author of the application.
+    ///     This field holds the application author.
     /// </summary>
     private string _author = ConsoleCommand.Author;
 
     /// <summary>
-    ///     This property is the internal container for the company that produced the application.
+    ///     This field holds the company.
     /// </summary>
     private string _company = ConsoleCommand.Company;
 
     /// <summary>
-    ///     This property is the internal container for the description of the application.
+    ///     This field holds the application description.
     /// </summary>
     private string _description = ConsoleCommand.Description;
 
     /// <summary>
-    ///     This property is the internal container for the version of the application.
+    ///     This field holds the application version.
     /// </summary>
     private string _version = ConsoleCommand.Version;
 
@@ -107,7 +111,8 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
         : base(collection) { }
 
     /// <summary>
-    ///     This method writes a <paramref name="header" /> block to the provided <paramref name="builder" />.
+    ///     This method writes a 120-column banner with <paramref name="header" /> to the provided
+    ///     <paramref name="builder" />.
     /// </summary>
     /// <param name="builder">The <see cref="StringBuilder" /> to write the <paramref name="header" /> block to.</param>
     /// <param name="header">The header text to write.</param>
@@ -134,7 +139,7 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
     /// </summary>
     /// <param name="builder">Optional <see cref="StringBuilder" /> to write the help text to.</param>
     /// <param name="skipInformationBlock">If true, the information block will not be written.</param>
-    /// <returns>>The <see cref="StringBuilder" /> representation of the instance.</returns>
+    /// <returns>The <see cref="StringBuilder" /> representation of the instance.</returns>
     public StringBuilder ToStringBuilder(
         StringBuilder builder = null,
         bool skipInformationBlock = false
@@ -143,7 +148,7 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
         // Define our additional padding for the description column.
         int additionalPadding = Tab.Length * 2;
 
-        // Bootstrap our builder
+        // Start with the information block, unless it is skipped.
         builder = WriteStartHelpText(builder, skipInformationBlock);
 
         // Check for verbs.
@@ -184,7 +189,8 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
             // Add our positional arguments header.
             WriteHeader(builder, "Positional Arguments");
 
-            // Localize the longest verb name length.
+            // Localize the longest name length. This measures the named arguments, not the
+            // positional ones.
             int longest = this.Where(e => e.Position < 0)
                 .Where(e => !e.Verb)
                 .Max(e => e.Name.Length);
@@ -220,7 +226,7 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
             // Add our named arguments header.
             WriteHeader(builder, "Named Arguments");
 
-            // Localize the longest verb name length.
+            // Localize the longest named-argument name length.
             int longest = this.Where(e => e.Position < 0)
                 .Where(e => !e.Verb)
                 .Max(e => e.Name.Length);
@@ -311,7 +317,7 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
     }
 
     /// <summary>
-    ///     This method fluently add a new <paramref name="element" /> to the collection.
+    ///     This method fluently adds a new <paramref name="element" /> to the collection.
     /// </summary>
     /// <param name="element">The <see cref="ConsoleHelpTextModel" /> element to add to the collection.</param>
     /// <returns>The updated <see cref="ConsoleHelpTextCollectionModel" /> collection.</returns>
@@ -383,8 +389,9 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
     }
 
     /// <summary>
-    ///     This method writes the start of the help text information block to the provided
-    ///     <paramref name="builder" /> if any of the metadata fields are populated.
+    ///     This method writes the application information block (name, version, copyright line and
+    ///     description) to the provided <paramref name="builder" />, when any of those fields are set.
+    ///     The copyright line uses the current year.
     /// </summary>
     /// <param name="builder">Optional <see cref="StringBuilder" /> to write the information block to.</param>
     /// <param name="skipInformationBlock">If true, the information block will not be written.</param>
@@ -397,7 +404,7 @@ public class ConsoleHelpTextCollectionModel : List<ConsoleHelpTextModel>
         // Ensure we have a builder to work with.
         builder ??= new StringBuilder().AppendLine();
 
-        //  Check the metadata fields and ensure they exist before proceeding.
+        // Skip the block when asked to or when every metadata field is empty.
         if (
             skipInformationBlock
             || Enumerable.All(

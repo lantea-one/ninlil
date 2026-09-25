@@ -4,13 +4,19 @@ using Ninlil.Common.Console.Model;
 namespace Ninlil.Common.Console;
 
 /// <summary>
-///     This interface maintains the structure of a console application.
+///     This interface is the contract for a console application built on this library. An
+///     application declares the input models (verbs) it accepts through the generic variants below
+///     and gets one <c>RunAsync</c> overload per model. <c>ConsoleCommand.ApplicationAsync</c>
+///     resolves the application from dependency injection, parses the command line into one of
+///     those models and calls <see cref="ExecuteAsync(IConsoleCommandInputModel, CancellationToken)" />,
+///     which dispatches to the matching <c>RunAsync</c>. <see cref="ConsoleApplication" /> is the
+///     abstract base class that implements it.
 /// </summary>
 public interface IConsoleApplication
 {
     /// <summary>
-    ///     This method is responsible for executing the console application with
-    ///     the parsed <paramref name="input" /> from the command line arguments.
+    ///     This method runs the application with an already parsed <paramref name="input" />,
+    ///     dispatching to the <c>RunAsync</c> overload for its type.
     /// </summary>
     /// <param name="input">The parsed command line arguments.</param>
     /// <param name="stoppingToken">The cancellation token to stop the operation.</param>
@@ -21,7 +27,8 @@ public interface IConsoleApplication
     );
 
     /// <summary>
-    ///     This method is responsible for executing the console application with the provided command line arguments.
+    ///     This method parses the raw command line <paramref name="arguments" /> against the
+    ///     application's input models and then runs it with the parsed model.
     /// </summary>
     /// <param name="arguments">The command line arguments.</param>
     /// <param name="stoppingToken">The cancellation token to stop the operation.</param>
@@ -32,14 +39,15 @@ public interface IConsoleApplication
     );
 
     /// <summary>
-    ///     This property contains the service provider for the console application.
+    ///     This method sets the service provider the application resolves its services from.
     /// </summary>
-    /// <param name="serviceProvider"></param>
+    /// <param name="serviceProvider">The service provider built for this run.</param>
     public void WithServiceProvider(IServiceProvider serviceProvider);
 }
 
 /// <summary>
-///     This interface maintains the structure of a console application with a single input model.
+///     This interface is a console application that accepts one input model. The variants with
+///     more type parameters each add one more input model and one more <c>RunAsync</c> overload.
 /// </summary>
 /// <typeparam name="TInputModel">The type of the input model.</typeparam>
 public interface IConsoleApplication<in TInputModel> : IConsoleApplication

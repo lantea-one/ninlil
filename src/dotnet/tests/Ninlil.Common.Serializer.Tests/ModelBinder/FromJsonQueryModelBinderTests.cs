@@ -7,22 +7,21 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Routing;
 using Ninlil.Common.Serializer.ModelBinder;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.ModelBinder;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FromJsonQueryModelBinder" />, constructing a
-///     real <see cref="ModelBindingContext" /> (via
-///     <see cref="DefaultModelBindingContext.CreateBindingContext" />) backed by a real
-///     <see cref="QueryStringValueProvider" /> reading from an in-memory query string, and a
-///     no-op <see cref="IObjectModelValidator" /> stand-in (this project has no committed
-///     integration-test host to exercise real model validation against).
+///     These tests bind JSON query values with <see cref="FromJsonQueryModelBinder" />. Each test
+///     builds a <see cref="ModelBindingContext" /> with
+///     <see cref="DefaultModelBindingContext.CreateBindingContext" /> over a
+///     <see cref="QueryStringValueProvider" /> reading an in-memory query string, and uses a no-op
+///     <see cref="IObjectModelValidator" />, since model validation needs a full host.
 /// </summary>
 public class FromJsonQueryModelBinderTests
 {
     /// <summary>
-    ///     This no-op validator lets the binder's own <c>_validator.Validate(...)</c> call
-    ///     complete without needing a fully wired-up DI-backed validation pipeline -- these tests
-    ///     are only concerned with whether the binder itself parsed the query value correctly.
+    ///     This no-op validator lets the binder's <c>_validator.Validate(...)</c> call complete
+    ///     without a validation pipeline; the tests only check parsing.
     /// </summary>
     private class NoOpObjectModelValidator : IObjectModelValidator
     {

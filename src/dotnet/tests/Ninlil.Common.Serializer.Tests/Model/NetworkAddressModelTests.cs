@@ -1,10 +1,12 @@
 using System.Net;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="NetworkAddressModel" />.
+///     These tests cover <see cref="NetworkAddressModel" />: parsing IPv4 and IPv6 addresses with
+///     and without CIDR prefixes, prefix range checks, formatting options and malformed input.
 /// </summary>
 public class NetworkAddressModelTests
 {
@@ -43,8 +45,8 @@ public class NetworkAddressModelTests
     [InlineData(-1)]
     public void IsValid_RejectsOutOfRangeIpv4Cidr(int cidr)
     {
-        // The CIDR mask is only reachable via parsing; -1 can't appear in real input (the regex
-        // requires digits), so this specifically checks the boundary just past the valid range.
+        // The CIDR mask is only set by parsing, and -1 cannot appear in input (the pattern
+        // requires digits), so only the value just past the valid range is checked.
         var model = new NetworkAddressModel($"192.168.1.0/{Math.Max(cidr, 0)}");
 
         if (cidr < 0)

@@ -6,7 +6,9 @@ using Ninlil.Common.Extension.HttpContext;
 namespace Ninlil.Common.Extension.Tests.HttpContext;
 
 /// <summary>
-///     This class tests <see cref="HttpContextExtensions" />.
+///     These tests run <see cref="HttpContextExtensions" /> against an in-memory
+///     <see cref="DefaultHttpContext" />: the forwarded-for header and remote-address fallback, the
+///     bearer token, and the user agent.
 /// </summary>
 public class HttpContextExtensionsTests
 {

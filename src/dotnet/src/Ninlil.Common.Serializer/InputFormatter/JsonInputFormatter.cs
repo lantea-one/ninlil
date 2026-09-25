@@ -7,17 +7,20 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 namespace Ninlil.Common.Serializer.InputFormatter;
 
 /// <summary>
-///     This input formatter provides our JSON capabilities.
+///     This MVC input formatter reads JSON request bodies (UTF-8, for <c>application/json</c>,
+///     <c>text/json</c>, the <c>jsonc</c> variants and their <c>+json</c> suffixes) using
+///     <see cref="JsonSerializer" /> with web defaults unless options are given.
+///     <see cref="Extension.ServiceCollectionSerializerExtension" /> registers it.
 /// </summary>
 public class JsonInputFormatter : TextInputFormatter
 {
     /// <summary>
-    ///     This property contains the serializer options.
+    ///     This field contains optional serializer options.
     /// </summary>
     private readonly JsonSerializerOptions _options;
 
     /// <summary>
-    ///     This method instantiates our formatter with supported encodings and media types.
+    ///     This constructor sets the supported encoding and media types.
     /// </summary>
     public JsonInputFormatter()
     {
@@ -42,14 +45,14 @@ public class JsonInputFormatter : TextInputFormatter
     }
 
     /// <summary>
-    ///     This method instantiates our formatter with serialization <paramref name="options" />.
+    ///     This constructor uses the given serializer <paramref name="options" />.
     /// </summary>
     /// <param name="options">Serializer options to control the serialization of objects.</param>
     public JsonInputFormatter(JsonSerializerOptions options)
         : this() => _options = options;
 
     /// <summary>
-    ///     This method reads and deserializes the request body.
+    ///     This method reads and deserializes the request body. An empty body gives no value.
     /// </summary>
     /// <param name="context">The serialization context.</param>
     /// <param name="encoding">The input encoding.</param>

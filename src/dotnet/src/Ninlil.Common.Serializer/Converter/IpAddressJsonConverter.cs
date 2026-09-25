@@ -6,7 +6,9 @@ using System.Text.Json.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a JSON converter for an <see cref="IPAddress" />.
+///     This System.Text.Json converter writes an <see cref="IPAddress" /> as its string form and
+///     reads it back. Text that is not a valid address reads as <see langword="null" /> instead of
+///     throwing. The web host adds it to the SignalR payload serializer.
 /// </summary>
 public class IpAddressJsonConverter : JsonConverter<IPAddress>
 {
@@ -16,7 +18,7 @@ public class IpAddressJsonConverter : JsonConverter<IPAddress>
     /// <param name="reader">The <see cref="Utf8JsonReader" /> to read from.</param>
     /// <param name="typeToConvert">The <see cref="Type" /> of object to convert.</param>
     /// <param name="options">The <see cref="JsonSerializerOptions" /> to use.</param>
-    /// <returns>>The converted <see cref="IPAddress" />.</returns>
+    /// <returns>The converted <see cref="IPAddress" />.</returns>
     public override IPAddress Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,

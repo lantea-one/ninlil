@@ -1,13 +1,12 @@
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-logger-configuration-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleLoggerConfigurationModel" /> - construction
-///     defaults, the level-to-color lookup (including a real bug fixed in this project), and the
-///     fluent With* builders.
+///     These tests cover <see cref="ConsoleLoggerConfigurationModel" />: constructor defaults, the
+///     level-to-color lookup and the fluent <c>With*</c> setters.
 /// </summary>
 public class ConsoleLoggerConfigurationModelTests
 {
@@ -37,11 +36,8 @@ public class ConsoleLoggerConfigurationModelTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleLoggerConfigurationModel.GetConsoleColor" /> returns the
-    ///     color registered for a known log level. This is a real bug found and fixed in this project:
-    ///     the original condition was inverted (<c>is null or {Length: 0}</c> instead of
-    ///     <c>is not (null or {Length: 0})</c>), so it always fell through to the "_" fallback color
-    ///     for every real, non-empty level name, and only ever attempted the actual dictionary lookup
-    ///     for a null/empty level (which, by definition, could never be found).
+    ///     color registered for a known log level rather than the "_" fallback. A non-empty level must
+    ///     be looked up in the dictionary; only a blank level goes straight to the fallback.
     /// </summary>
     [Fact]
     public void GetConsoleColor_ForKnownLevel_ReturnsRegisteredColor()
@@ -53,7 +49,7 @@ public class ConsoleLoggerConfigurationModelTests
         Assert.Equal(ConsoleColor.DarkRed, color);
     }
 
-    /// <summary>Verifies that a different known level resolves to its own distinct registered color, not the fallback.</summary>
+    /// <summary>Verifies that two known levels resolve to their different registered colors, not the fallback.</summary>
     [Fact]
     public void GetConsoleColor_ForDifferentKnownLevel_ReturnsItsOwnColor()
     {

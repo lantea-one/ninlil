@@ -1,12 +1,13 @@
 using System.Net;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="NetworkAclModel" />, which layers
-///     allow/deny/remove semantics (a "!" deny prefix and a "false" remove sentinel) on top of a
-///     bare <see cref="NetworkAddressModel" />.
+///     These tests parse and format <see cref="NetworkAclModel" /> rules: allowed addresses, the
+///     <c>!</c> deny prefix and the <c>false</c> remove value, on top of
+///     <see cref="NetworkAddressModel" />.
 /// </summary>
 public class NetworkAclModelTests
 {

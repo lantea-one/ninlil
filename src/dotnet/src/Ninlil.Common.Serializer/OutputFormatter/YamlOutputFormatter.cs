@@ -3,21 +3,23 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using YamlDotNet.Serialization;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.OutputFormatter;
 
 /// <summary>
-///     This output formatter provides our YAML response capabilities.
+///     This MVC output formatter writes responses as YAML (UTF-8, for <c>application/yaml</c>,
+///     <c>text/yaml</c> and their <c>+yaml</c> suffixes) using <see cref="YamlSerializer" />.
+///     <see cref="Extension.ServiceCollectionSerializerExtension" /> registers it.
 /// </summary>
 public class YamlOutputFormatter : TextOutputFormatter
 {
     /// <summary>
-    ///     This property contains our YAML serializer override.
+    ///     This field contains an optional YAML serializer to use instead of the default.
     /// </summary>
     private readonly ISerializer _serializer;
 
     /// <summary>
-    ///     This method instantiates our formatter with supported encodings and media types.
+    ///     This constructor sets the supported encoding and media types.
     /// </summary>
     public YamlOutputFormatter()
     {
@@ -38,14 +40,14 @@ public class YamlOutputFormatter : TextOutputFormatter
     }
 
     /// <summary>
-    ///     This method instantiates our formatter with a specific <paramref name="serializer" />.
+    ///     This constructor uses a specific <paramref name="serializer" />.
     /// </summary>
     /// <param name="serializer">YAML serializer override.</param>
     public YamlOutputFormatter(ISerializer serializer)
         : this() => _serializer = serializer;
 
     /// <summary>
-    ///     This method writes the JSON to the response body.
+    ///     This method writes the object to the response body as YAML.
     /// </summary>
     /// <param name="context">The serialization context.</param>
     /// <param name="selectedEncoding">The output encoding.</param>

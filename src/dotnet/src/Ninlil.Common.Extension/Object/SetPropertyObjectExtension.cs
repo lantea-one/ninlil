@@ -5,7 +5,8 @@ using System.Reflection;
 namespace Ninlil.Common.Extension.Object;
 
 /// <summary>
-///     This class contains extension methods for setting properties on objects.
+///     This static class sets a public property on an object by name or by a property selector
+///     expression, using reflection on the compile-time type <c>TObject</c>.
 /// </summary>
 public static class SetPropertyObjectExtension
 {
@@ -20,8 +21,8 @@ public static class SetPropertyObjectExtension
     /// <returns>The updated object <paramref name="instance" />.</returns>
     /// <exception cref="ArgumentException">When the <paramref name="propertyName" /> is not writable.</exception>
     /// <exception cref="ArgumentNullException">
-    ///     When the <paramref name="propertyName" /> is null or empty
-    ///     or doesn't exist on the <paramref name="instance" /> type.
+    ///     When the <paramref name="propertyName" /> is null or doesn't exist on
+    ///     <typeparamref name="TObject" />. An empty name throws <see cref="ArgumentException" />.
     /// </exception>
     public static TObject SetProperty<TObject>(
         this TObject instance,

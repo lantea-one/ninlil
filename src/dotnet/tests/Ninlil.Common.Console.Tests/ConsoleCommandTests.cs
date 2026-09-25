@@ -1,16 +1,16 @@
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the console-command tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleCommand" /> - static application metadata,
-///     the DI-registration helpers, <see cref="ConsoleCommand.WithParsedAsync{TInputModel}" />'s
-///     parse-and-dispatch orchestration, <see cref="ConsoleCommand.WithNotParsed{TException}" /> (a
-///     real bug fixed in this project), and a full end-to-end
-///     <see cref="ConsoleCommand.ApplicationAsync{TConsoleApplication}" /> run starting from raw CLI
-///     arguments. As elsewhere, every scenario avoids ever triggering the real process-exit paths.
+///     These tests cover <see cref="ConsoleCommand" />: help switches and help text, the service
+///     registration helpers, parse-and-dispatch through
+///     <see cref="ConsoleCommand.WithParsedAsync{TInputModel}" />, not-parsed handlers, and a run of
+///     <see cref="ConsoleCommand.ApplicationAsync{TConsoleApplication}" /> from raw CLI arguments.
+///     Every scenario avoids the paths that call <see cref="Environment.Exit" />, which would stop
+///     the test host.
 /// </summary>
 public class ConsoleCommandTests
 {
@@ -138,18 +138,13 @@ public class ConsoleCommandTests
     }
 
     /// <summary>
-    ///     Verifies that <see cref="ConsoleCommand.WithNotParsed{TException}" /> for a specific exception
-    ///     type (not exactly <see cref="Exception" />) is genuinely registered and invoked. This is a
-    ///     real bug found and fixed in this project: the original implementation tried to store the
-    ///     handler via a direct <c>as</c> cast to <c>CommandNotParsedAsyncDelegate&lt;Exception&gt;</c>,
-    ///     an unsound delegate-variance conversion that silently evaluates to null for any exception
-    ///     type more specific than exactly <c>Exception</c> - which either dropped the handler
-    ///     entirely, or threw a <see cref="NullReferenceException" /> the moment the dispatch loop tried
-    ///     to invoke the null delegate it had stored. The scenario also explicitly overwrites the
-    ///     constructor's own default <c>Exception</c>-keyed handler (which calls
-    ///     <see cref="Environment.Exit" /> via <c>ConsoleService.WriteLine(exception, true)</c>) with a
-    ///     harmless no-op, since every registered handler is invoked on a parse failure, not just the
-    ///     most specific match.
+    ///     Verifies that a <see cref="ConsoleCommand.WithNotParsed{TException}" /> handler for a
+    ///     specific exception type (not <see cref="Exception" /> itself) is registered and invoked.
+    ///     Storing such a handler with an <c>as</c> cast to
+    ///     <c>CommandNotParsedAsyncDelegate&lt;Exception&gt;</c> would give null, so the handler would be
+    ///     dropped or throw when invoked. The test also replaces the default <c>Exception</c> handler,
+    ///     which calls <see cref="Environment.Exit" />, with a no-op, because every registered handler
+    ///     runs on a parse failure, not just the most specific one.
     /// </summary>
     [Fact]
     public async Task WithNotParsed_ForSpecificExceptionType_HandlerIsGenuinelyInvoked()
@@ -157,7 +152,7 @@ public class ConsoleCommandTests
         bool specificHandlerInvoked = false;
 
         IConsoleCommand command = ConsoleCommand
-            .Create([]) // zero arguments against a model with a required argument - triggers a real parse failure without ever calling Environment.Exit.
+            .Create([]) // No arguments for a model with a required one: parsing fails without reaching Environment.Exit.
             .WithNotParsed<Exception>(_ => { })
             .WithNotParsed<InvalidOperationException>(_ => specificHandlerInvoked = true);
 
@@ -167,9 +162,9 @@ public class ConsoleCommandTests
     }
 
     /// <summary>
-    ///     Verifies a full, real end-to-end run: raw CLI arguments are parsed and dispatched through
-    ///     <see cref="ConsoleCommand.ApplicationAsync{TConsoleApplication}" /> to a real
-    ///     <see cref="EndToEndTestConsoleApplication" />'s <c>RunAsync</c> implementation.
+    ///     Verifies an end-to-end run: raw CLI arguments are parsed and dispatched through
+    ///     <see cref="ConsoleCommand.ApplicationAsync{TConsoleApplication}" /> to
+    ///     <see cref="EndToEndTestConsoleApplication" />'s <c>RunAsync</c>.
     /// </summary>
     [Fact]
     public async Task ApplicationAsync_Generic_RunsRealConsoleApplicationEndToEnd()

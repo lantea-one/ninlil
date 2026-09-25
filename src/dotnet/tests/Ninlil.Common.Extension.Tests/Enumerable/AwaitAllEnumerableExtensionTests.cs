@@ -4,7 +4,9 @@ using Ninlil.Common.Extension.Enumerable;
 namespace Ninlil.Common.Extension.Tests.Enumerable;
 
 /// <summary>
-///     This class tests <see cref="AwaitAllEnumerableExtension" />.
+///     These tests await collections of completed and failed tasks through each
+///     <see cref="AwaitAllEnumerableExtension" /> method and check the results, ordering, empty
+///     input, pre-cancelled tokens and exception propagation.
 /// </summary>
 public class AwaitAllEnumerableExtensionTests
 {

@@ -8,7 +8,12 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace Ninlil.Common.Serializer;
 
 /// <summary>
-///     This class maintains our YAML serialization capabilities.
+///     This static class wraps YamlDotNet with Ninlil's defaults: camelCase names and enums,
+///     double-quoted scalars, null values omitted and indented sequences when writing;
+///     case-insensitive, duplicate-checked matching that ignores unknown properties when reading.
+///     The shared <see cref="Converters" /> (structured strings, IP and MAC addresses, colors, URIs
+///     and versions) are added to every serializer and deserializer it builds. The MVC YAML
+///     formatters and <see cref="Service.SerializerService" /> use it.
 /// </summary>
 public static class YamlSerializer
 {
@@ -123,7 +128,7 @@ public static class YamlSerializer
             : (deserializer ?? GetDeserializer()).Deserialize<TResult>(yaml);
 
     /// <summary>
-    ///     This method returns an instance of our YAML deserializer.
+    ///     This method builds a deserializer with the reading defaults and shared converters.
     /// </summary>
     /// <returns>Our YAML deserializer.</returns>
     public static IDeserializer GetDeserializer()
@@ -143,7 +148,7 @@ public static class YamlSerializer
     }
 
     /// <summary>
-    ///     This method returns an instance of our YAML serializer.
+    ///     This method builds a serializer with the writing defaults and shared converters.
     /// </summary>
     /// <returns>Our YAML serializer.</returns>
     public static ISerializer GetSerializer()
@@ -180,9 +185,8 @@ public static class YamlSerializer
     /// <param name="serializer">Optional, YAML Serializer override.</param>
     /// <returns>YAML serialized <paramref name="payload" /> object instance.</returns>
     public static string Serialize(object payload, ISerializer serializer = null) =>
-        // A null payload has no runtime type to reflect -- fall back to typeof(object) so the
-        // 3-arg overload's own null check (which returns null) is reached instead of throwing a
-        // NullReferenceException here on payload.GetType().
+        // A null payload has no runtime type; use typeof(object) so the three-argument
+        // overload's null check returns null instead of throwing here.
         Serialize(payload?.GetType() ?? typeof(object), payload, serializer);
 
     /// <summary>
@@ -202,7 +206,7 @@ public static class YamlSerializer
     /// <param name="serializer">Optional, YAML Serializer override.</param>
     /// <returns>YAML serialized <paramref name="payload" />.</returns>
     public static string SerializePretty(object payload, ISerializer serializer = null) =>
-        // See the matching null-guard note on Serialize(object, ...) above.
+        // See the null-payload note on Serialize(object, ...) above.
         SerializePretty(payload?.GetType() ?? typeof(object), payload, serializer);
 
     /// <summary>
@@ -277,7 +281,7 @@ public static class YamlSerializer
         IDeserializer deserializer = null
     )
     {
-        // Try to deserialize the JSON string.
+        // Try to deserialize the YAML string.
         if (TryDeserialize(typeof(TResult), yaml, out object resultObject, deserializer))
         {
             // Reset the result to the deserialized object.

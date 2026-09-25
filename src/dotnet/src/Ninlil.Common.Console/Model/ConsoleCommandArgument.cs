@@ -9,17 +9,17 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents a console command argument, which is used to define the parameters
-///     that can be passed to a command-line application when executing a command. It contains
-///     properties for the argument's character, name, position, and value, which are used to
-///     identify and process the argument when parsing command-line input.
+///     This class is one token of a command line, produced by
+///     <see cref="ConsoleCommandArgumentCollection" />. A named token has a short
+///     <see cref="Character" /> or a long <see cref="Name" /> and a <see cref="Value" />; a
+///     positional token has a <see cref="Position" /> and a <see cref="Value" />.
 /// </summary>
 [XmlRoot("consoleArgument")]
 public class ConsoleCommandArgument
 {
     /// <summary>
-    ///     This property contains the short name of the console argument, which is used as
-    ///     a single-character identifier for the argument when parsing command-line input.
+    ///     This property contains the short name of a <c>-x</c> token, or <see cref="char.MinValue" />
+    ///     when there is none.
     /// </summary>
     [JsonPropertyName("character")]
     [XmlAttribute("character")]
@@ -27,8 +27,7 @@ public class ConsoleCommandArgument
     public char Character { get; set; } = char.MinValue;
 
     /// <summary>
-    ///     This property contains the index of the console argument as it appears in the command-line
-    ///     input, which is used to determine the order of arguments when parsing command-line input.
+    ///     This property contains the token's index in the raw argument list.
     /// </summary>
     [JsonPropertyName("index")]
     [XmlAttribute("index")]
@@ -36,8 +35,8 @@ public class ConsoleCommandArgument
     public int Index { get; set; }
 
     /// <summary>
-    ///     This property contains the name of the console argument, which
-    ///     is used to identify the argument when parsing command-line input.
+    ///     This property contains the name of a <c>--name</c> token, or <see langword="null" /> for a
+    ///     short or positional token.
     /// </summary>
     [JsonPropertyName("name")]
     [XmlAttribute("name")]
@@ -45,8 +44,8 @@ public class ConsoleCommandArgument
     public string Name { get; set; }
 
     /// <summary>
-    ///     This property contains the positional index of the console argument, which is
-    ///     used to determine the order of arguments when parsing command-line input.
+    ///     This property contains the position of a positional token (its raw index), or -1 for a
+    ///     named token.
     /// </summary>
     [JsonPropertyName("position")]
     [XmlAttribute("position")]
@@ -54,12 +53,9 @@ public class ConsoleCommandArgument
     public int Position { get; set; } = -1;
 
     /// <summary>
-    ///     This property determines the type of the console argument based on its characteristics, such as whether
-    ///     it has a character, name, or positional index. The type is determined as follows:
-    ///         - If the argument has a positional index greater than -1, it is classified as a positional argument.
-    ///         - If the argument has a character that is not the minimum value or a name that is not null or empty,
-    ///           it is classified as a named argument.
-    ///         - If neither of the above conditions are met, it is classified as a verb argument.
+    ///     This property contains the kind of token. The tokenizer sets it to
+    ///     <see cref="ConsoleCommandArgumentType.Named" /> or
+    ///     <see cref="ConsoleCommandArgumentType.Positional" />.
     /// </summary>
     [JsonPropertyName("type")]
     [XmlAttribute("type")]
@@ -67,8 +63,8 @@ public class ConsoleCommandArgument
     public ConsoleCommandArgumentType Type { get; set; } = ConsoleCommandArgumentType.Unknown;
 
     /// <summary>
-    ///     This property contains the value of the console argument, which is the
-    ///     actual input provided by the user when executing a command-line application.
+    ///     This property contains the token's value as typed. A switch with no value gets
+    ///     <c>true</c>.
     /// </summary>
     [JsonPropertyName("value")]
     [XmlText]
@@ -76,30 +72,12 @@ public class ConsoleCommandArgument
     public string Value { get; set; }
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as a specific <paramref name="valueType" />,
-    ///     which is used to convert the string value of the argument to a more specific data type for further
-    ///     processing in the application. The method takes in the desired type of the value, a delimiter for
-    ///     parsing collections, and a serializer format for handling complex data structures, and returns the
-    ///     value of the argument as an object of the specified type. This allows for more flexible and dynamic
-    ///     handling of console arguments in the application, as the value can be easily converted to the
-    ///     appropriate type based on the context of the command being executed.
+    ///     This method converts <see cref="Value" /> to <paramref name="valueType" />.
     /// </summary>
-    /// <param name="valueType">
-    ///     The type to which the value of the console argument should be converted, which is used to convert
-    ///     the string value of the argument to a more specific data type for further processing in the application.
-    /// </param>
-    /// <param name="delimiter">
-    ///     The optional delimiter used for parsing collections, which is used to specify the character that separates
-    ///     individual values in a collection when converting the string value of the argument to a more specific data
-    ///     type. This is particularly useful when the argument represents a list or array of values, allowing for easy
-    ///     parsing and conversion of the input into a collection data structure in the application.
-    /// </param>
+    /// <param name="valueType">The type to convert the value to.</param>
+    /// <param name="delimiter">The separator between items when the target is a collection.</param>
     /// <param name="serializerFormat">
-    ///     The optional <see cref="SerializerFormatEnum" /> format used for handling complex data structures, which is
-    ///     used to specify the format in which the string value of the argument should be serialized or deserialized
-    ///     when converting it to a more specific data type. This is particularly useful when the argument represents
-    ///     a complex object or data structure, allowing for flexible handling of the input based on the context of
-    ///     the command being executed and the desired format for processing the data in the application.
+    ///     The serializer format to use when the value holds a serialized object.
     /// </param>
     /// <returns>
     ///     The <see cref="Value" /> typed as <paramref name="valueType" />.
@@ -111,31 +89,13 @@ public class ConsoleCommandArgument
     ) => Value.GetTypedValue(valueType, delimiter, serializerFormat);
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as a specific <typeparamref name="TValue" />,
-    ///     which is used to convert the string value of the argument to a more specific data type for further
-    ///     processing in the application. The method takes in the desired type of the value, a delimiter for
-    ///     parsing collections, and a serializer format for handling complex data structures, and returns the
-    ///     value of the argument as an object of the specified type. This allows for more flexible and dynamic
-    ///     handling of console arguments in the application, as the value can be easily converted to the
-    ///     appropriate type based on the context of the command being executed.
+    ///     This method converts <see cref="Value" /> to <typeparamref name="TValue" />.
     /// </summary>
-    /// <param name="delimiter">
-    ///     The optional delimiter used for parsing collections, which is used to specify the character that separates
-    ///     individual values in a collection when converting the string value of the argument to a more specific data
-    ///     type. This is particularly useful when the argument represents a list or array of values, allowing for easy
-    ///     parsing and conversion of the input into a collection data structure in the application.
-    /// </param>
+    /// <param name="delimiter">The separator between items when the target is a collection.</param>
     /// <param name="serializerFormat">
-    ///     The optional <see cref="SerializerFormatEnum" /> format used for handling complex data structures, which is
-    ///     used to specify the format in which the string value of the argument should be serialized or deserialized
-    ///     when converting it to a more specific data type. This is particularly useful when the argument represents
-    ///     a complex object or data structure, allowing for flexible handling of the input based on the context of
-    ///     the command being executed and the desired format for processing the data in the application.
+    ///     The serializer format to use when the value holds a serialized object.
     /// </param>
-    /// <typeparam name="TValue">
-    ///     The type to which the value of the console argument should be converted, which is used to convert
-    ///     the string value of the argument to a more specific data type for further processing in the application.
-    /// </typeparam>
+    /// <typeparam name="TValue">The type to convert the value to.</typeparam>
     /// <returns>
     ///     The <see cref="Value" /> typed as <typeparamref name="TValue" />.
     /// </returns>

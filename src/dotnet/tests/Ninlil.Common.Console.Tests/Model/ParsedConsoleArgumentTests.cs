@@ -2,15 +2,15 @@ using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the parsed-console-argument tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ParsedConsoleArgument" /> - typed-value resolution for
-///     named, positional, and nested-verb arguments, including the collection-shaped (list/
-///     dictionary/tuple) parsing path that depends on the corrected type-inspection helpers in the
-///     sibling Extension project, plus <see cref="ParsedConsoleArgument.AttributeString" />/
-///     <see cref="ParsedConsoleArgument.PropertyString" /> and <see cref="ParsedConsoleArgument.SetValue" />.
+///     These tests cover <see cref="ParsedConsoleArgument" /> built by hand from attributes and
+///     tokens: <see cref="ParsedConsoleArgument.Found" /> and <see cref="ParsedConsoleArgument.Required" />,
+///     typed-value conversion for named (including list-typed) and positional arguments, defaults,
+///     the readable <see cref="ParsedConsoleArgument.AttributeString" /> and
+///     <see cref="ParsedConsoleArgument.PropertyString" />, and <see cref="ParsedConsoleArgument.SetValue" />.
 /// </summary>
 public class ParsedConsoleArgumentTests
 {

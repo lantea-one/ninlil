@@ -11,20 +11,16 @@ namespace Ninlil.Common.Serializer.Converter;
 ///     and <see cref="RgbColorYamlConverter" /> all write, into a <see cref="Color" />.
 /// </summary>
 /// <remarks>
-///     This helper exists because <see cref="ColorTranslator.FromHtml(string)" /> -- despite its name
-///     suggesting broad HTML/CSS color support -- does not actually understand the "rgb(r, g, b)"
-///     functional notation at all (it supports only hex codes such as "#RRGGBB", known/system color
-///     names, and a bare "r,g,b" form with no surrounding "rgb(...)"). Passing the very string these
-///     converters write back into <see cref="ColorTranslator.FromHtml(string)" /> throws, so the round
-///     trip these converters exist to provide was broken for every non-empty color value until this
-///     helper was introduced.
+///     <see cref="ColorTranslator.FromHtml(string)" /> cannot be used instead: it understands hex
+///     codes such as "#RRGGBB", color names and a bare "r,g,b" form, but not the "rgb(r, g, b)"
+///     notation these converters write, so it throws on their own output.
 /// </remarks>
 internal static class RgbColorParsingHelper
 {
     /// <summary>
     ///     This pattern matches an <c>rgb(r, g, b)</c> or <c>rgba(r, g, b, a)</c> string, tolerating
     ///     optional whitespace around each component and case-insensitivity of the "rgb"/"rgba" prefix.
-    ///     The alpha component, if present, is matched but not used -- these converters treat color as
+    ///     The alpha component, if present, is matched but not used; these converters treat color as
     ///     fully opaque.
     /// </summary>
     private static readonly Regex Pattern = new(

@@ -6,7 +6,9 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.String;
 
 /// <summary>
-///     This class tests <see cref="ToEnumStringExtension" />.
+///     These tests parse strings into a sample enum with <see cref="ToEnumStringExtension" /> and
+///     the default attribute checks: member names in any case, attribute values, blank input, and
+///     unmatched input (which gives the zero member, not null).
 /// </summary>
 public class ToEnumStringExtensionTests
 {

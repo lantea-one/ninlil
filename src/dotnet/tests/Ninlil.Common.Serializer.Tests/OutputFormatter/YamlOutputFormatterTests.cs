@@ -3,12 +3,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Ninlil.Common.Serializer.OutputFormatter;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.OutputFormatter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="YamlOutputFormatter" />. See
-///     <see cref="JsonOutputFormatterTests" /> for the shared reasoning behind how the response
-///     context is constructed for these tests.
+///     These tests call <see cref="YamlOutputFormatter" />'s <c>WriteResponseBodyAsync</c> directly,
+///     with the response context built as in <see cref="JsonOutputFormatterTests" />.
 /// </summary>
 public class YamlOutputFormatterTests
 {

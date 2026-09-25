@@ -6,7 +6,10 @@ using System.Text.Json.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a JSON converter for an <see cref="PhysicalAddress" />.
+///     This System.Text.Json converter writes a <see cref="PhysicalAddress" /> (MAC address) as its
+///     string form (hex digits without separators) and reads it back with
+///     <see cref="PhysicalAddress.TryParse(string, out PhysicalAddress)" />. Invalid text reads as
+///     <see langword="null" />.
 /// </summary>
 public class PhysicalAddressJsonConverter : JsonConverter<PhysicalAddress>
 {
@@ -16,7 +19,7 @@ public class PhysicalAddressJsonConverter : JsonConverter<PhysicalAddress>
     /// <param name="reader">The <see cref="Utf8JsonReader" /> to read from.</param>
     /// <param name="typeToConvert">The <see cref="Type" /> of object to convert.</param>
     /// <param name="options">The <see cref="JsonSerializerOptions" /> to use.</param>
-    /// <returns>>The converted <see cref="PhysicalAddress" />.</returns>
+    /// <returns>The converted <see cref="PhysicalAddress" />.</returns>
     public override PhysicalAddress Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,

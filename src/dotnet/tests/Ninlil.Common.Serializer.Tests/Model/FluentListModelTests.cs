@@ -1,9 +1,11 @@
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FluentListModel{TType}" />.
+///     These tests cover the fluent add, remove and clear methods and the constructors of
+///     <see cref="FluentListModel{TType}" /> on lists of strings.
 /// </summary>
 public class FluentListModelTests
 {
@@ -21,9 +23,8 @@ public class FluentListModelTests
     [Fact]
     public void WithItem_RemovesAnExistingEqualItem_BeforeAdding()
     {
-        // Base-class WithItem dedups by ordinary equality, not by any distinct property -- it
-        // just removes an exactly-equal item first, so re-adding "1" moves it to the end rather
-        // than producing a duplicate.
+        // The base WithItem deduplicates by equality: it removes an equal item first, so
+        // re-adding "1" moves it to the end instead of duplicating it.
         var list = new FluentListModel<int>().WithItems(1, 2, 3);
 
         list.WithItem(1);

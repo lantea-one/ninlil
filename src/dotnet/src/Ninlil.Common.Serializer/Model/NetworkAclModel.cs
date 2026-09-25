@@ -2,13 +2,14 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Xml.Serialization;
 
-// Define our namespace for the Network ACL (NAC) string model.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This class represents a model for Network ACL (NAC) string values, extending the StructuredStringModel.
-///     A NAC can be an IP address or network address to allow, prefixed with '!' to deny access,
-///     or set to 'false' to remove existing values.
+///     This class is a network access-control rule held as a structured string (see
+///     <see cref="StructuredStringModel" />): an address or CIDR network to allow, the same
+///     prefixed with <c>!</c> to deny, or the literal <c>false</c> to remove existing values. The
+///     address itself is a <see cref="NetworkAddressModel" />.
 /// </summary>
 [XmlRoot("networkAcl")]
 public class NetworkAclModel : StructuredStringModel
@@ -87,7 +88,7 @@ public class NetworkAclModel : StructuredStringModel
             // Reset the remove flag into the instance.
             Remove = true;
 
-            // We're one, return the instance as valid since no further parsing is needed for a remove command.
+            // We're done; a remove command needs no further parsing.
             return this;
         }
 

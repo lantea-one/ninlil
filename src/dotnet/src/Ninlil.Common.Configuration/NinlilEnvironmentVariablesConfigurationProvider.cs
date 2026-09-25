@@ -4,19 +4,18 @@ using Microsoft.Extensions.Configuration;
 namespace Ninlil.Common.Configuration;
 
 /// <summary>
-///     This configuration provider is the only environment-variable configuration source this
-///     project's host ever registers -- it replaces ASP.NET Core's own built-in
-///     <c>EnvironmentVariablesConfigurationProvider</c> (which understands only a double-
-///     underscore hierarchy separator and does no PascalCase word-splitting at all) with one that
-///     recognizes only this project's own single, consistent <c>NINLIL_</c>-prefixed naming
-///     scheme, mapping each recognized variable back onto its own real internal configuration path
-///     via an explicit, reflection-built lookup table (<see cref="OptionsEnvironmentVariableMap" />).
+///     This configuration provider is the only environment-variable source the Ninlil host
+///     registers. <c>Program.cs</c> removes ASP.NET Core's built-in
+///     <c>EnvironmentVariablesConfigurationProvider</c> (which only understands a double-underscore
+///     hierarchy separator) and puts this one in its place. It recognizes only the
+///     <c>NINLIL_</c>-prefixed names from <see cref="NinlilEnvironmentVariableNaming" /> and maps
+///     each one to its configuration path through the table built by
+///     <see cref="OptionsEnvironmentVariableMap" />.
 ///     <para>
-///         A <c>NINLIL_</c>-prefixed variable this provider does not recognize (a typo, or a name
-///         from a configuration class this project's own composition root never registered) is
-///         never silently ignored -- it is recorded in <see cref="UnrecognizedVariableNames" /> so
-///         the host can log a real startup warning about it once a real logger exists (this
-///         provider itself runs far too early in host startup to log anything on its own).
+///         A <c>NINLIL_</c>-prefixed variable with no table entry (a typo, or a setting the host
+///         does not register) is recorded in <see cref="UnrecognizedVariableNames" />. The provider
+///         runs too early in host startup to log, so the host logs a warning for each one after it
+///         has a logger.
 ///     </para>
 /// </summary>
 public sealed class NinlilEnvironmentVariablesConfigurationProvider : ConfigurationProvider
@@ -27,15 +26,15 @@ public sealed class NinlilEnvironmentVariablesConfigurationProvider : Configurat
     > _environmentVariableNameToConfigurationPath;
 
     /// <summary>
-    ///     This property lists every real, currently-set <c>NINLIL_</c>-prefixed environment
-    ///     variable this provider's own <see cref="Load" /> found no mapping table entry for.
-    ///     Populated once, during <see cref="Load" />; empty until then.
+    ///     This property lists every <c>NINLIL_</c>-prefixed environment variable that
+    ///     <see cref="Load" /> found set but could not map. It is empty until <see cref="Load" />
+    ///     runs.
     /// </summary>
     public IReadOnlyList<string> UnrecognizedVariableNames { get; private set; } = [];
 
     /// <summary>
-    ///     Constructs a new provider against an already-built NINLIL_ name -&gt; configuration path
-    ///     mapping table (see <see cref="OptionsEnvironmentVariableMap.BuildMappings" />).
+    ///     Constructs a new provider over a prebuilt NINLIL_ name -&gt; configuration path table
+    ///     (see <see cref="OptionsEnvironmentVariableMap.BuildMappings" />).
     /// </summary>
     public NinlilEnvironmentVariablesConfigurationProvider(
         IReadOnlyDictionary<string, string> environmentVariableNameToConfigurationPath
@@ -45,23 +44,19 @@ public sealed class NinlilEnvironmentVariablesConfigurationProvider : Configurat
     }
 
     /// <summary>
-    ///     This method reads the real process environment once, translating every recognized
-    ///     <c>NINLIL_</c>-prefixed variable into this provider's own <see cref="ConfigurationProvider.Data" />
-    ///     entry at its real internal configuration path. A variable whose name does not start
-    ///     with <see cref="NinlilEnvironmentVariableNaming.Prefix" /> is ignored outright -- this is
-    ///     exactly what makes the old double-underscore scheme, and every unrelated environment
-    ///     variable a process might happen to have set, genuinely inert once this provider replaces
-    ///     ASP.NET Core's own default one.
+    ///     This method reads the process environment and copies every recognized
+    ///     <c>NINLIL_</c>-prefixed variable into <see cref="ConfigurationProvider.Data" /> at its
+    ///     configuration path. Variables without the
+    ///     <see cref="NinlilEnvironmentVariableNaming.Prefix" /> are ignored, so the stock
+    ///     double-underscore names and unrelated variables have no effect on configuration.
     /// </summary>
     public override void Load()
     {
         Data.Clear();
         List<string> unrecognized = [];
 
-        // IDictionaryEnumerator (not a generic KeyValuePair) is what
-        // Environment.GetEnvironmentVariables() itself actually returns -- both the key and the
-        // value are boxed as plain objects, always really strings on every platform this project
-        // targets.
+        // Environment.GetEnvironmentVariables() returns a non-generic IDictionary whose keys and
+        // values are boxed strings.
         System.Collections.IDictionary realEnvironment = Environment.GetEnvironmentVariables();
 
         foreach (System.Collections.DictionaryEntry entry in realEnvironment)
@@ -92,11 +87,11 @@ public sealed class NinlilEnvironmentVariablesConfigurationProvider : Configurat
 }
 
 /// <summary>
-///     This configuration source produces one <see cref="NinlilEnvironmentVariablesConfigurationProvider" />
-///     against an already-built mapping table, and keeps a direct reference to the provider it
-///     builds (<see cref="Provider" />) so the composition root can inspect
+///     This configuration source creates one <see cref="NinlilEnvironmentVariablesConfigurationProvider" />
+///     over a prebuilt mapping table. It keeps a reference to that provider in
+///     <see cref="Provider" /> so the host can read
 ///     <see cref="NinlilEnvironmentVariablesConfigurationProvider.UnrecognizedVariableNames" />
-///     after the host finishes building, once a real logger actually exists.
+///     and log them once logging is available.
 /// </summary>
 public sealed class NinlilEnvironmentVariablesConfigurationSource : IConfigurationSource
 {
@@ -106,15 +101,13 @@ public sealed class NinlilEnvironmentVariablesConfigurationSource : IConfigurati
     > _environmentVariableNameToConfigurationPath;
 
     /// <summary>
-    ///     This property contains the single provider instance <see cref="Build" /> creates, once
-    ///     <see cref="IConfigurationBuilder.Build" /> is actually called on the host's own
-    ///     configuration builder -- <see langword="null" /> until then.
+    ///     This property contains the provider that <see cref="Build" /> created, or
+    ///     <see langword="null" /> until the configuration is built.
     /// </summary>
     public NinlilEnvironmentVariablesConfigurationProvider Provider { get; private set; }
 
     /// <summary>
-    ///     Constructs a new source against an already-built NINLIL_ name -&gt; configuration path
-    ///     mapping table.
+    ///     Constructs a new source over a prebuilt NINLIL_ name -&gt; configuration path table.
     /// </summary>
     public NinlilEnvironmentVariablesConfigurationSource(
         IReadOnlyDictionary<string, string> environmentVariableNameToConfigurationPath

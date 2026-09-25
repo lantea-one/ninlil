@@ -2,9 +2,9 @@
 namespace Ninlil.Common.Extension.Tests.TestSupport;
 
 /// <summary>
-///     A plain class with a public parameterless constructor and both a writable and a
-///     read-only property, used across this test project to exercise reflection-based
-///     extension methods (<c>Copy</c>, <c>SetProperty</c>, <c>TrimProperty</c>, <c>CreateInstance</c>).
+///     A plain class with a public parameterless constructor, writable properties and a read-only
+///     property. Tests across this project use it for the reflection-based extension methods
+///     (<c>Copy</c>, <c>SetProperty</c>, <c>TrimProperty</c>, <c>CreateInstance</c>).
 /// </summary>
 public class SampleModel
 {

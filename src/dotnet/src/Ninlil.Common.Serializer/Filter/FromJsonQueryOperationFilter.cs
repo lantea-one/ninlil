@@ -3,17 +3,20 @@ using Microsoft.OpenApi;
 using Ninlil.Common.Serializer.ModelBinder;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Filter;
 
 /// <summary>
-///     This class maintains the operation filter structure for representing
-///     <code>FromJsonQuery</code> values in Swagger/ReDoc documentation.
+///     This Swagger operation filter documents query parameters bound by
+///     <see cref="FromJsonQueryModelBinder" /> as JSON content, so Swagger/ReDoc show that the
+///     parameter carries a JSON document. Register it with
+///     <see cref="Extension.SwaggerGenOptionsSerializerExtension.AddSerializerJsonQueryFilters" />.
 /// </summary>
 public class FromJsonQueryOperationFilter : IOperationFilter
 {
     /// <summary>
-    ///     This method applies our filter to the <paramref name="operation" /> in the <paramref name="context" />.
+    ///     This method adds a JSON content entry, with the parameter's schema, to every parameter of
+    ///     <paramref name="operation" /> that uses the JSON query binder and already has content.
     /// </summary>
     /// <param name="operation">The operation to filter.</param>
     /// <param name="context">The current context of the operation.</param>

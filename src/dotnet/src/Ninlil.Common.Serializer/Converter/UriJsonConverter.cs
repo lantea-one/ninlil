@@ -5,7 +5,9 @@ using System.Text.Json.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a JSON converter for an <see cref="Uri" />.
+///     This System.Text.Json converter writes a <see cref="Uri" /> as its string form and reads
+///     relative or absolute URIs back. Text that is not a valid URI reads as
+///     <see langword="null" /> instead of throwing.
 /// </summary>
 public class UriJsonConverter : JsonConverter<Uri>
 {
@@ -15,7 +17,7 @@ public class UriJsonConverter : JsonConverter<Uri>
     /// <param name="reader">The <see cref="Utf8JsonReader" /> to read from.</param>
     /// <param name="typeToConvert">The <see cref="Type" /> of object to convert.</param>
     /// <param name="options">The <see cref="JsonSerializerOptions" /> to use.</param>
-    /// <returns>>The converted <see cref="Uri" />.</returns>
+    /// <returns>The converted <see cref="Uri" />.</returns>
     public override Uri Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,

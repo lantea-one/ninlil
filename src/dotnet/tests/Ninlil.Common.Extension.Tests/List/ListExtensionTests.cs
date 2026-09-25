@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.List;
 namespace Ninlil.Common.Extension.Tests.List;
 
 /// <summary>
-///     This class tests <see cref="ListExtension" />.
+///     These tests check <see cref="ListExtension.ToConsoleString{TValue}" /> output for null,
+///     empty, string and value-type lists.
 /// </summary>
 public class ListExtensionTests
 {
@@ -35,10 +36,9 @@ public class ListExtensionTests
     }
 
     /// <summary>
-    ///     The underlying <c>ToStringValueObjectExtension.ListToString</c> helper enumerates through the
-    ///     non-generic <see cref="System.Collections.IEnumerable" /> interface, which every array/list
-    ///     implements regardless of its element type, so a <see cref="List{T}" /> of a value type (like
-    ///     <see cref="int" />) stringifies its elements correctly instead of throwing.
+    ///     <c>ToStringValueObjectExtension.ListToString</c> enumerates the non-generic
+    ///     <see cref="System.Collections.IEnumerable" />, so a <see cref="List{T}" /> of a value type
+    ///     (like <see cref="int" />) is converted instead of throwing.
     /// </summary>
     [Fact]
     public void ToConsoleStringOnValueTypeListJoinsElementsWithComma()

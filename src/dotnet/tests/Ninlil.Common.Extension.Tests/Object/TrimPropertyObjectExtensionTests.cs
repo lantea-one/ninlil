@@ -5,7 +5,9 @@ using Ninlil.Common.Extension.Tests.TestSupport;
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
-///     This class tests <see cref="TrimPropertyObjectExtension" />.
+///     These tests trim string properties on the <c>SampleModel</c> test type through
+///     <see cref="TrimPropertyObjectExtension" />, by name and by selector, including the null
+///     fallback value and the exceptions for invalid property names.
 /// </summary>
 public class TrimPropertyObjectExtensionTests
 {
@@ -34,8 +36,8 @@ public class TrimPropertyObjectExtensionTests
     {
         SampleModel instance = new();
 
-        // ArgumentException.ThrowIfNullOrEmpty throws the more specific ArgumentNullException for a
-        // null argument, and the base ArgumentException for an empty one -- see the sibling test below.
+        // ArgumentException.ThrowIfNullOrEmpty throws ArgumentNullException for null and
+        // ArgumentException for an empty string (see the next test).
         Assert.Throws<ArgumentNullException>(() =>
             TrimPropertyObjectExtension.TrimProperty(instance, (string)null)
         );

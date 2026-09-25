@@ -1,9 +1,11 @@
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.UriJsonConverter" />.
+///     These tests round-trip absolute, relative and null URIs through
+///     <see cref="Serializer.Converter.UriJsonConverter" />.
 /// </summary>
 public class UriJsonConverterTests
 {

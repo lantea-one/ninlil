@@ -4,17 +4,16 @@ using Ninlil.Common.Extension.Tuple;
 namespace Ninlil.Common.Extension.Tests.Tuple;
 
 /// <summary>
-///     This class tests <see cref="TupleExtension" />.
+///     These tests check <see cref="TupleExtension" /> output for a null tuple and for tuples of
+///     two to eight elements.
 /// </summary>
 /// <remarks>
-///     <see cref="Ninlil.Common.Extension.Type.IsTypeExtension.IsTuple" /> recognizes every real
-///     1-through-8-element <c>Tuple&lt;...&gt;</c>/<c>ValueTuple&lt;...&gt;</c> arity, so the underlying
-///     <c>ToStringValueObjectExtension.ToStringValue</c> switch's dedicated tuple branch (which formats
-///     elements as a bare comma-separated list, e.g. <c>"(a,1)"</c>, via
-///     <see cref="System.Runtime.CompilerServices.ITuple" />) correctly triggers for every multi-element
-///     <see cref="Tuple{T1,T2}" />-and-larger instance, rather than falling through to the default
-///     <see cref="System.ComponentModel.TypeConverter" />-based branch that would otherwise just call the
-///     tuple's own built-in <see cref="object.ToString" /> (elements separated by <c>", "</c>).
+///     <see cref="Ninlil.Common.Extension.Type.IsTypeExtension.IsTuple" /> recognizes every
+///     <c>Tuple&lt;...&gt;</c> and <c>ValueTuple&lt;...&gt;</c> arity, so
+///     <c>ToStringValueObjectExtension.ToStringValue</c> takes its tuple branch, which formats
+///     elements through <see cref="System.Runtime.CompilerServices.ITuple" /> as <c>"(a,1)"</c>.
+///     Otherwise the tuple's own <see cref="object.ToString" /> would separate elements with
+///     <c>", "</c>.
 /// </remarks>
 public class TupleExtensionTests
 {

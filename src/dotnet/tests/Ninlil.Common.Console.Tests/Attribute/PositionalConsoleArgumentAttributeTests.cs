@@ -1,12 +1,12 @@
 using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the positional-console-argument attribute tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Attribute;
 
 /// <summary>
-///     This test class exercises <see cref="PositionalConsoleArgumentAttribute" /> - position
-///     validation, defaults, and the help-text model projection.
+///     These tests cover <see cref="PositionalConsoleArgumentAttribute" /> by constructing it
+///     directly: position validation, stored values and the help-text model projection.
 /// </summary>
 public class PositionalConsoleArgumentAttributeTests
 {

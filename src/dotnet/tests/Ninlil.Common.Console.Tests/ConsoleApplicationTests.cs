@@ -3,20 +3,20 @@ using Ninlil.Common.Console;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the console-application tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleApplication" />/<see cref="ConsoleApplication{TInputModel}" /> -
-///     the reflection-based dispatch from <see cref="IConsoleCommandInputModel" /> to the correctly
-///     typed <c>RunAsync</c> overload, the service-provider plumbing, and the metadata setters that
-///     mutate <see cref="ConsoleCommand" />'s own static, process-wide fields.
+///     These tests cover <see cref="ConsoleApplication" /> and <see cref="ConsoleApplication{TInputModel}" />
+///     through the <see cref="TestConsoleApplication" /> double: reflection dispatch from an input
+///     model to the matching <c>RunAsync</c> overload, service lookup, and the metadata setters that
+///     change <see cref="ConsoleCommand" />'s static, process-wide fields.
 /// </summary>
 public class ConsoleApplicationTests
 {
     /// <summary>
     ///     Verifies that <see cref="ConsoleApplication.ExecuteAsync(IConsoleCommandInputModel, CancellationToken)" />
-    ///     finds and invokes the exactly-typed <c>RunAsync</c> overload via reflection.
+    ///     finds and invokes the <c>RunAsync</c> overload for the input's type via reflection.
     /// </summary>
     [Fact]
     public async Task ExecuteAsync_WithMatchingInputModel_DispatchesToRunAsync()
@@ -64,8 +64,8 @@ public class ConsoleApplicationTests
     /// <summary>
     ///     Verifies that <see cref="ConsoleApplication.WithApplication" />/<c>WithAuthor</c>/<c>WithCompany</c>/
     ///     <c>WithDescription</c>/<c>WithVersion</c> update <see cref="ConsoleCommand" />'s static
-    ///     metadata fields. The original values are saved and restored, since these are genuinely
-    ///     process-wide static fields shared with every other test in this process.
+    ///     metadata fields. The original values are saved and restored because the fields are static
+    ///     and shared with every other test in the process.
     /// </summary>
     [Fact]
     public void WithMetadataSetters_UpdateConsoleCommandStaticFields()

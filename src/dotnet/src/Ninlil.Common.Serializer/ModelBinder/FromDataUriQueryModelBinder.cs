@@ -2,23 +2,25 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Ninlil.Common.Serializer.Model;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.ModelBinder;
 
 /// <summary>
-///     This class maintains our model binder for <see cref="DataUriModel" /> values in the query string.
+///     This MVC model binder reads a query-string parameter as a <c>data:</c> URI into a
+///     <see cref="DataUriModel" /> and validates it. An invalid data URI adds a model-state error.
+///     <see cref="Filter.FromDataUriQueryOperationFilter" /> documents such parameters in Swagger.
 /// </summary>
 /// <param name="validatorServiceProvider">The injected object model validation service provider instance.</param>
 public class FromDataUriQueryModelBinder(IObjectModelValidator validatorServiceProvider)
     : IModelBinder
 {
     /// <summary>
-    ///     This property contains the instance of our object model validation service provider.
+    ///     This field contains the validator used on the parsed model.
     /// </summary>
     private readonly IObjectModelValidator _validator = validatorServiceProvider;
 
     /// <summary>
-    ///     This method asynchronously binds the query parameter data to the model.
+    ///     This method binds the query parameter. An empty parameter leaves the binding result unset.
     /// </summary>
     /// <param name="bindingContext">The current context to bind to.</param>
     public Task BindModelAsync(ModelBindingContext bindingContext)

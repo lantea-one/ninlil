@@ -4,21 +4,20 @@ using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Extension;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the service-collection console extension tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Extension;
 
 /// <summary>
-///     This test class exercises <see cref="ServiceCollectionConsoleExtension" /> - every
-///     <c>UseConsoleLogging</c> overload's dependency-injection registration, including a real,
-///     significant bug fixed in this project: the class-typed
-///     <c>UseConsoleLogging&lt;TClassPrefix&gt;(format, prefix)</c> overload silently registered under
-///     the plain, non-generic <see cref="IConsoleLogger" /> service type instead of
-///     <see cref="IConsoleLogger{TClassPrefix}" />, because it built the singleton from a factory
-///     delegate whose inferred return type came from <see cref="ConsoleLogger{TClass}.Create(ConsoleLoggerLogFormatEnum, IEnumerable{string})" />'s
-///     own (at the time incorrectly declared) return type. Any consumer resolving
-///     <see cref="IConsoleLogger{TClassPrefix}" /> from the container would have failed with a
-///     missing-registration error - see <see cref="ConsoleLoggerTests.GenericCreate_WithFormatAndPrefix_ReturnsGenericallyTypedInstance" />
-///     for the narrower, non-DI regression test of the same root cause.
+///     These tests cover every <c>UseConsoleLogging</c> overload in
+///     <see cref="ServiceCollectionConsoleExtension" /> against a real <see cref="ServiceCollection" />.
+///     Each registration is a factory delegate, so the service type comes from the factory's
+///     return type. The class-typed overloads must therefore use factories that return
+///     <see cref="IConsoleLogger{TClassPrefix}" />
+///     (such as <see cref="ConsoleLogger{TClass}.Create(ConsoleLoggerLogFormatEnum, IEnumerable{string})" />);
+///     otherwise the logger lands under the plain <see cref="IConsoleLogger" /> type and resolving
+///     the class-typed service fails.
+///     <see cref="ConsoleLoggerTests.GenericCreate_WithFormatAndPrefix_ReturnsGenericallyTypedInstance" />
+///     checks the factory's return type directly.
 /// </summary>
 public class ServiceCollectionConsoleExtensionTests
 {
@@ -108,12 +107,8 @@ public class ServiceCollectionConsoleExtensionTests
 
     /// <summary>
     ///     Verifies that <see cref="ServiceCollectionConsoleExtension.UseConsoleLogging{TClassPrefix}(IServiceCollection, ConsoleLoggerLogFormatEnum, IEnumerable{string})" />
-    ///     registers under the class-typed <see cref="IConsoleLogger{TClass}" /> service type - the
-    ///     exact real bug described in this class's own summary, fixed by correcting
-    ///     <see cref="ConsoleLogger{TClass}.Create(ConsoleLoggerLogFormatEnum, IEnumerable{string})" />'s
-    ///     return type. Before the fix, this registration was silently made under the plain
-    ///     <see cref="IConsoleLogger" /> service type instead, so resolving the class-typed service
-    ///     here would have returned null.
+    ///     registers under the class-typed <see cref="IConsoleLogger{TClass}" /> service type, not the
+    ///     plain <see cref="IConsoleLogger" /> (see the class summary).
     /// </summary>
     [Fact]
     public void UseConsoleLoggingGeneric_WithFormat_RegistersUnderGenericServiceType()

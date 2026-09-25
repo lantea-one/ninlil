@@ -1,10 +1,12 @@
 using System.Net.NetworkInformation;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.PhysicalAddressJsonConverter" />.
+///     These tests round-trip MAC addresses, null and malformed input through
+///     <see cref="Serializer.Converter.PhysicalAddressJsonConverter" />.
 /// </summary>
 public class PhysicalAddressJsonConverterTests
 {

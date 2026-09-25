@@ -1,22 +1,20 @@
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-logger-message-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleLoggerMessageModel" /> - its three constructor
-///     overloads, and its string-rendering paths across the table/text/structured (JSON/XML/YAML)
-///     log formats, along with <see cref="ConsoleLoggerMessageModel.WriteAsync" />'s idempotency and
-///     quiet-mode behavior.
+///     These tests cover <see cref="ConsoleLoggerMessageModel" />: its constructors, rendering in
+///     table, text and JSON formats, and <see cref="ConsoleLoggerMessageModel.WriteAsync" /> writing
+///     a message only once. Writes use quiet mode so nothing depends on captured console output.
 /// </summary>
 public class ConsoleLoggerMessageModelTests
 {
     /// <summary>
-    ///     Verifies the level/message/data/prefix constructor sanitizes the level (trimming brackets/
-    ///     spaces/dashes, without changing case - <see cref="ConsoleLogger.GetSanitizedPart" /> never
-    ///     lowercases) and trims the message, and - a real bug found and fixed in this project - keeps
-    ///     a real, populated prefix rather than silently discarding it.
+    ///     Verifies the level/message/data/prefix constructor sanitizes the level (trimming brackets,
+    ///     spaces and dashes; <see cref="ConsoleLogger.GetSanitizedPart" /> does not change case),
+    ///     trims the message, and keeps a populated prefix instead of replacing it with an empty one.
     /// </summary>
     [Fact]
     public void Constructor_WithLevelMessageDataPrefix_SanitizesAndTrims()
@@ -44,7 +42,7 @@ public class ConsoleLoggerMessageModelTests
         Assert.Null(message.Data);
     }
 
-    /// <summary>Verifies that a null prefix falls back to a fresh, empty prefix model rather than staying null.</summary>
+    /// <summary>Verifies that a null prefix falls back to a new empty prefix model rather than staying null.</summary>
     [Fact]
     public void Constructor_WithNullPrefix_FallsBackToEmptyPrefixModel()
     {
@@ -168,8 +166,8 @@ public class ConsoleLoggerMessageModelTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleLoggerMessageModel.WriteAsync" /> flips
-    ///     <see cref="ConsoleLoggerMessageModel.Written" /> to true and does not write to the console
-    ///     twice (idempotency), using quiet mode so the assertion doesn't depend on capturing console output.
+    ///     <see cref="ConsoleLoggerMessageModel.Written" /> to true and that a second call does not
+    ///     write again. Quiet mode keeps the assertion independent of console output.
     /// </summary>
     [Fact]
     public async Task WriteAsync_SetsWrittenFlagAndIsIdempotent()
@@ -180,7 +178,7 @@ public class ConsoleLoggerMessageModelTests
         await message.WriteAsync(configuration);
         Assert.True(message.Written);
 
-        // A second call should be a no-op (the Written guard short-circuits before doing any work again).
+        // A second call is a no-op: the Written guard returns before doing any work.
         IConsoleLoggerMessageModel result = await message.WriteAsync(configuration);
         Assert.Same(message, result);
     }

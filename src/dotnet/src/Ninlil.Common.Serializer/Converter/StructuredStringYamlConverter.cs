@@ -7,8 +7,11 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a YAML type converter for forcing a
-///     <typeparamref name="TObject" /> to serialize and deserialize as a string.
+///     This YamlDotNet type converter writes a structured string model (see
+///     <see cref="IStructuredStringModel" />) as a plain scalar and parses it back with
+///     <see cref="StructuredStringModel.TryParse{TModel}(string, out TModel)" />, so the model appears
+///     in YAML as a string instead of a mapping. Blank or unparseable text reads as
+///     <see langword="null" />.
 /// </summary>
 /// <typeparam name="TObject">The type of object to convert.</typeparam>
 public class StructuredStringYamlConverter<TObject> : IYamlTypeConverter
@@ -32,12 +35,11 @@ public class StructuredStringYamlConverter<TObject> : IYamlTypeConverter
     /// </returns>
     public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
-        // Capture the scalar node the parser is currently positioned on -- it represents this
-        // value -- before advancing past it, so the parser is left correctly positioned for
-        // whatever the caller reads next (a sibling property, a sequence item, etc.).
+        // YamlDotNet calls the converter with Current on this value's node. Read it, then
+        // advance so the caller continues from the next node.
         Scalar scalar = parser.Current as Scalar;
 
-        // Advance the parser past this scalar now that we've captured it.
+        // Advance the parser past this node.
         parser.MoveNext();
 
         // Ensure we have a scalar value to read. If not, return null.

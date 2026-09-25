@@ -4,12 +4,13 @@
 namespace Ninlil.Common.Extension.List;
 
 /// <summary>
-///     This class provides extension methods for the <see cref="List{T}" /> class.
+///     This static class adds console-friendly formatting to <see cref="List{T}" />.
 /// </summary>
 public static class ListExtension
 {
     /// <summary>
-    ///     This method converts the <paramref name="instance" /> to a string representation suitable for console output.
+    ///     This method converts the <paramref name="instance" /> to a string for console output using
+    ///     <see cref="ToStringValueObjectExtension.ToStringValue" />, or <c>"null"</c> when it is null.
     /// </summary>
     /// <param name="instance">The instance of the <see cref="List{TValue}" /> to convert.</param>
     /// <typeparam name="TValue">The expected type of value in <paramref name="instance" />.</typeparam>

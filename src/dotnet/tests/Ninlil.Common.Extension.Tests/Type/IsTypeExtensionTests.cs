@@ -4,7 +4,9 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="IsTypeExtension" />.
+///     These tests run each <see cref="IsTypeExtension" /> check against matching and non-matching
+///     types. The <c>...ReturnsFalseForObject</c> tests guard against checks that test
+///     assignability the wrong way round, which is true for <see cref="object" />.
 /// </summary>
 public class IsTypeExtensionTests
 {
@@ -239,9 +241,8 @@ public class IsTypeExtensionTests
     }
 
     /// <summary>
-    ///     <c>IsTuple</c> compares <c>GetGenericTypeDefinition()</c> against every 1-through-8-element
-    ///     <c>Tuple&lt;...&gt;</c> open generic type definition, so it recognizes every real tuple arity,
-    ///     not just a single-element one.
+    ///     <c>IsTuple</c> compares <c>GetGenericTypeDefinition()</c> against every one- to
+    ///     eight-element <c>Tuple&lt;...&gt;</c> definition, so it recognizes every tuple arity.
     /// </summary>
     [Fact]
     public void IsTupleReturnsTrueForEveryTupleArity()

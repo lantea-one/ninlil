@@ -4,26 +4,29 @@ using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Formatters;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.OutputFormatter;
 
 /// <summary>
-///     This output formatter provides our XML response capabilities.
+///     This MVC output formatter writes responses as XML (UTF-8, for <c>application/xml</c>,
+///     <c>text/xml</c> and their <c>+xml</c> suffixes) using <see cref="XmlSerializer" />, optionally
+///     indented. <see cref="Extension.ServiceCollectionSerializerExtension" /> registers it.
 /// </summary>
 public class XmlOutputFormatter : TextOutputFormatter
 {
     /// <summary>
-    ///     This property denotes whether the output format should be pretty or not.
+    ///     This field denotes whether the output is indented; <see langword="null" /> keeps the
+    ///     writer settings' choice.
     /// </summary>
     private readonly bool? _pretty;
 
     /// <summary>
-    ///     This property contains the serializer options for the formatter.
+    ///     This field contains optional XML writer settings.
     /// </summary>
     private readonly XmlWriterSettings _options;
 
     /// <summary>
-    ///     This method instantiates our formatter with supported encodings and media types.
+    ///     This constructor sets the supported encoding and media types.
     /// </summary>
     public XmlOutputFormatter()
     {
@@ -44,15 +47,15 @@ public class XmlOutputFormatter : TextOutputFormatter
     }
 
     /// <summary>
-    ///     This method instantiates our formatter with a <paramref name="pretty" />
-    ///     flag and supported encodings and media types.
+    ///     This constructor sets whether the output is indented.
     /// </summary>
     /// <param name="pretty">Denotes whether the output should be pretty and indented or not.</param>
     public XmlOutputFormatter(bool? pretty = null)
         : this() => _pretty = pretty;
 
     /// <summary>
-    ///     This method instantiates our formatter with serialization <paramref name="options" />.
+    ///     This constructor uses the given writer <paramref name="options" />, including their indent
+    ///     setting.
     /// </summary>
     /// <param name="options">The serializer settings.</param>
     public XmlOutputFormatter(XmlWriterSettings options)

@@ -7,13 +7,16 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 namespace Ninlil.Common.Serializer.Filter;
 
 /// <summary>
-///     This class maintains the operation filter structure for representing
-///     <code>FromXmlQuery</code> values in Swagger/ReDoc documentation.
+///     This Swagger operation filter documents query parameters bound by
+///     <see cref="FromXmlQueryModelBinder" /> as XML content, so Swagger/ReDoc show that the
+///     parameter carries an XML document. Register it with
+///     <see cref="Extension.SwaggerGenOptionsSerializerExtension.AddSerializerXmlQueryFilters" />.
 /// </summary>
 public class FromXmlQueryOperationFilter : IOperationFilter
 {
     /// <summary>
-    ///     This method applies our filter to the <paramref name="operation" /> in the <paramref name="context" />.
+    ///     This method adds an XML content entry, with the parameter's schema, to every parameter of
+    ///     <paramref name="operation" /> that uses the XML query binder and already has content.
     /// </summary>
     /// <param name="operation">The operation to filter.</param>
     /// <param name="context">The current context of the operation.</param>

@@ -5,7 +5,9 @@ using Ninlil.Common.Extension.Tests.TestSupport;
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
-///     This class tests <see cref="SetPropertyObjectExtension" />.
+///     These tests set properties on the <c>SampleModel</c> test type through
+///     <see cref="SetPropertyObjectExtension" />, by name and by selector, and check the exceptions
+///     for null, empty, unknown and read-only property names.
 /// </summary>
 public class SetPropertyObjectExtensionTests
 {
@@ -35,8 +37,8 @@ public class SetPropertyObjectExtensionTests
     {
         SampleModel instance = new();
 
-        // ArgumentException.ThrowIfNullOrEmpty throws the more specific ArgumentNullException for a
-        // null argument, and the base ArgumentException for an empty one -- see the sibling test below.
+        // ArgumentException.ThrowIfNullOrEmpty throws ArgumentNullException for null and
+        // ArgumentException for an empty string (see the next test).
         Assert.Throws<ArgumentNullException>(() => instance.SetProperty((string)null, "value"));
     }
 

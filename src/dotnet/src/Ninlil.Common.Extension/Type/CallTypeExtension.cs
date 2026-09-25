@@ -4,22 +4,28 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This class provides extension methods for calling methods on a type.
+///     This static class calls a public method by name through reflection. The instance overloads
+///     call it on a given object; the type-only overloads call a static method, or else create an
+///     instance with its parameterless constructor and call the instance method. The typed
+///     overloads (up to 24 arguments) cast the result to <c>TResult</c>. The string conversion
+///     helpers use it to call <c>Add</c> and <c>ToArray</c> on lists built at run time.
+///     <para>
+///         Method lookup uses <see cref="System.Type.GetMethod(string, BindingFlags)" />, so an
+///         overloaded name throws <see cref="AmbiguousMatchException" />.
+///     </para>
 /// </summary>
 public static class CallTypeExtension
 {
     /// <summary>
-    ///     This method throws an <see cref="ArgumentException" /> or an
-    ///     <see cref="ArgumentNullException" />
-    ///     when the <paramref name="type" /> is not a valid type.
+    ///     This method throws when <paramref name="type" /> is null, not a class, an interface, an
+    ///     abstract class, or (when <paramref name="allowStatic" /> is false) a static class.
     /// </summary>
     /// <param name="type">The type to validate.</param>
     /// <param name="allowStatic">
     ///     Optional <see cref="bool" /> denoting whether static methods are allowed or not.
     /// </param>
     /// <param name="argumentName">
-    ///     Optional <see cref="string" /> denoting the name of the argument to
-    ///     use in the exception which defaults to <paramref name="type" />'s name.
+    ///     Optional name of the argument to report in the exception. Defaults to <c>"type"</c>.
     /// </param>
     /// <exception cref="ArgumentException">
     ///     When <paramref name="type" /> is not a class, an interface, an abstract class,
@@ -34,7 +40,7 @@ public static class CallTypeExtension
         // Ensure the type is not null.
         ArgumentNullException.ThrowIfNull(type, argumentName?.Trim() ?? nameof(type));
 
-        // Ensure the type is a class, not an interface nor abstract class.
+        // Ensure the type is a class.
         if (!type.IsClass)
             throw new ArgumentException(
                 $"{type.FullName} is not a class.",
@@ -48,7 +54,7 @@ public static class CallTypeExtension
                 argumentName?.Trim() ?? nameof(type)
             );
 
-        // Ensure the type isn't an abstract.
+        // Ensure the type isn't abstract (static classes are abstract and sealed, and are handled below).
         if (type.IsAbstract && !type.IsSealed)
             throw new ArgumentException(
                 $"{type.FullName} is an abstract class and cannot be instantiated for this method call.",
@@ -203,8 +209,9 @@ public static class CallTypeExtension
     ) => (TResult)CallMethod(type, instance, methodName, genericArguments, methodArguments);
 
     /// <summary>
-    ///     This extension method allows you to call <paramref name="methodName" />
-    ///     with <paramref name="methodArguments" /> on a <paramref name="type" />.
+    ///     This extension method calls <paramref name="methodName" /> on <paramref name="type" />:
+    ///     a public static method if there is one by that name, otherwise a public instance method
+    ///     on a new instance created with the parameterless constructor.
     /// </summary>
     /// <param name="type">The type on which the <paramref name="methodName" /> will be called.</param>
     /// <param name="methodName">The name of the method to call on the <paramref name="type" />.</param>
@@ -227,24 +234,23 @@ public static class CallTypeExtension
         string methodName,
         params object[] methodArguments
     ) =>
-        // Prefer a static method match first -- no instance was supplied to invoke against, so a
-        // static method by this name can be called directly with no further work.
+        // Prefer a static method, since no instance was supplied. The name check ignores case but
+        // GetMethod does not, so a differently cased name reaches the null-forgiving call.
         type.GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
             ? type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)!
                 .Invoke(null, methodArguments.Length > 0 ? methodArguments : null)
-        // Otherwise, fall back to an instance method by creating a throwaway instance of the type
-        // to invoke it against, since the caller only supplied a bare Type, not an instance, to call on.
+        // Otherwise, call an instance method on a new, throwaway instance of the type.
         : type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
             ? CallMethod(type, type.CreateInstance(), methodName, methodArguments)
-        // Neither a static nor an instance method exists by this name; there's nothing left to call.
+        // Neither a static nor an instance method exists by this name.
         : throw new MissingMethodException(type.FullName, methodName);
 
     /// <summary>
-    ///     This extension method allows you to call a generic <paramref name="methodName" />
-    ///     with <paramref name="methodArguments" /> on <paramref name="type" /> with
-    ///     <paramref name="genericArguments" />/
+    ///     This extension method calls a generic <paramref name="methodName" />, closed over
+    ///     <paramref name="genericArguments" />, on <paramref name="type" />: a static method if there
+    ///     is one by that name, otherwise an instance method on a new instance.
     /// </summary>
     /// <param name="type">The type on which the <paramref name="methodName" /> will be called.</param>
     /// <param name="methodName">The name of the method to call on the <paramref name="type" />.</param>
@@ -269,19 +275,17 @@ public static class CallTypeExtension
         IEnumerable<System.Type> genericArguments,
         params object[] methodArguments
     ) =>
-        // Prefer a static method match first -- no instance was supplied to invoke against, so a
-        // static generic method by this name can be closed and called directly with no further work.
+        // Prefer a static method, since no instance was supplied.
         type.GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
             ? type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(genericArguments?.ToArray() ?? [])
                 .Invoke(null, methodArguments.Length > 0 ? methodArguments : null)
-        // Otherwise, fall back to an instance method by creating a throwaway instance of the type
-        // to invoke it against, since the caller only supplied a bare Type, not an instance, to call on.
+        // Otherwise, call an instance method on a new, throwaway instance of the type.
         : type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Any(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase))
             ? CallMethod(type, type.CreateInstance(), methodName, genericArguments, methodArguments)
-        // Neither a static nor an instance method exists by this name; there's nothing left to call.
+        // Neither a static nor an instance method exists by this name.
         : throw new MissingMethodException(type.FullName, methodName);
 
     /// <summary>

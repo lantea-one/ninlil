@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="DictionaryTypeExtension" />.
+///     These tests call <see cref="DictionaryTypeExtension" /> on dictionary and non-dictionary
+///     types and check the key and value types it reports.
 /// </summary>
 public class DictionaryTypeExtensionTests
 {

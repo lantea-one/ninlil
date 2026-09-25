@@ -4,7 +4,17 @@
 namespace Ninlil.Common.Extension.Enum;
 
 /// <summary>
-///     This class provides extensions for <see cref="System.Enum" /> values.
+///     This static class turns an enum value into its description string. The caller passes
+///     attribute checks (delegates that pull a name out of an attribute such as
+///     <c>[EnumMember(Value = ...)]</c>); the first name any check finds on the member wins, and
+///     the member name is the fallback. <see cref="Ninlil.Common.Extension.String.ToEnumStringExtension" /> does the reverse. The
+///     enum JSON and YAML converters are built on these two.
+///     <para>
+///         Pass the concrete enum type (or call the generic overloads with a concrete
+///         <c>TEnum</c>). With a value typed as <see cref="System.Enum" />, the generic overloads
+///         bind <c>TEnum</c> to <see cref="System.Enum" /> itself, find no fields, and return the
+///         raw <see cref="System.Enum.ToString()" />.
+///     </para>
 /// </summary>
 public static class ToDescriptionEnumExtension
 {
@@ -12,12 +22,15 @@ public static class ToDescriptionEnumExtension
     extension(System.Enum enumInstance)
     {
         /// <summary>
-        ///     Converts a <see cref="System.Enum" /> <c>enumInstance</c> into a <see cref="string"/>.
+        ///     Converts an enum value into its description. When <paramref name="value" /> names a
+        ///     member of <paramref name="type" />, the member's first description is returned. Otherwise,
+        ///     if <paramref name="value" /> matches any description of the type (ignoring case), that
+        ///     description is returned. Failing both, the result is <c>enumInstance.ToString()</c>.
         /// </summary>
         /// <param name="type">The <see cref="System.Enum" /> type to convert.</param>
-        /// <param name="value">The specific value to convert in direct form or <see cref="string" /> form.</param>
-        /// <param name="attributeChecks">The additional attributes to check for.</param>
-        /// <returns>The <see cref="string" /> representation of the <c>enumInstance</c>.</returns>
+        /// <param name="value">The member to describe, as a value or its name.</param>
+        /// <param name="attributeChecks">The attribute checks that extract a description.</param>
+        /// <returns>The description, or <see langword="null" /> for a null <c>enumInstance</c>.</returns>
         public string ToDescription(
             System.Type type,
             object value,

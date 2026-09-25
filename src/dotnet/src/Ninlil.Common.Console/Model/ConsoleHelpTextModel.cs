@@ -4,23 +4,24 @@
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class maintains the model for a console help text element, which
-///     is used to organize the help text output for a console application.
+///     This class is one entry in the help text: a verb, a positional argument or a named
+///     argument. The console attributes create it through their <c>ToHelpTextModel</c> methods,
+///     and <see cref="ConsoleHelpTextCollectionModel" /> lays the entries out in columns.
 /// </summary>
 public class ConsoleHelpTextModel
 {
     /// <summary>
-    ///     This property is the internal container the description of the help text element.
+    ///     This field holds the description of the help text element.
     /// </summary>
     private string _description;
 
     /// <summary>
-    ///     This property is the internal container for the group name of the help text element.
+    ///     This field holds the group name of the help text element.
     /// </summary>
     private string _group;
 
     /// <summary>
-    ///     This property is the internal container for the name of the help text element.
+    ///     This field holds the name of the help text element.
     /// </summary>
     private string _name;
 
@@ -63,7 +64,8 @@ public class ConsoleHelpTextModel
     }
 
     /// <summary>
-    ///     This property contains the position of the help text element in the overall help text output.
+    ///     This property contains the argument position for a positional argument. A negative value
+    ///     (the default is <see cref="int.MinValue" />) marks a named argument or verb.
     /// </summary>
     public int Position { get; set; } = int.MinValue;
 
@@ -83,9 +85,14 @@ public class ConsoleHelpTextModel
     public bool Verb { get; set; }
 
     /// <summary>
-    ///     This method generates a detailed description for the help text element.
+    ///     This method builds the description column for the entry. A verb shows its description,
+    ///     marked when it is the default. An argument shows a bracketed line with its required flag,
+    ///     default and group, followed by the description lines.
     /// </summary>
-    /// <returns>A detailed description string for the help text element.</returns>
+    /// <param name="padding">
+    ///     Extra indentation for the description lines, used to align them under the column.
+    /// </param>
+    /// <returns>The description column text for the help text element.</returns>
     public string GetHelpDescription(int padding = 0)
     {
         // Check for a verb.
@@ -95,7 +102,7 @@ public class ConsoleHelpTextModel
         // Define our prefix list.
         List<string> prefixes = [$"Required: {Required.ToString().ToLower()}"];
 
-        // Check for a required argument or a default value.
+        // Check for a default value.
         if (Default is not null)
             prefixes.Add($"Default: {Default?.ToStringValue()}");
 
@@ -114,7 +121,7 @@ public class ConsoleHelpTextModel
         // Localize our longest description line.
         int longest = descriptionLines.Max(d => d.Length);
 
-        // Otherwise the description is shorter than the prefix, so pad the description.
+        // Right-align a description that is shorter than the bracketed line.
         if (longest < prefix.Length)
             descriptionLines = descriptionLines.Select(d => d.PadLeft(prefix.Length)).ToArray();
 
@@ -132,7 +139,9 @@ public class ConsoleHelpTextModel
     }
 
     /// <summary>
-    ///     This method generates the name string for the help text element.
+    ///     This method builds the name column for the entry: the verb name, <c>&lt;position&gt;</c>
+    ///     for a positional argument, or <c>-x, --name</c> for a named argument. Optional arguments
+    ///     are wrapped in brackets.
     /// </summary>
     /// <param name="padding">An optional padding value to apply to the name string.</param>
     /// <returns>The name string for the help text element.</returns>
@@ -161,9 +170,9 @@ public class ConsoleHelpTextModel
     }
 
     /// <summary>
-    ///     This method calculates the padding needed for the help text element based on its properties.
+    ///     This method returns the gap between the name and description columns, always four spaces.
     /// </summary>
-    /// <returns>The calculated padding value.</returns>
+    /// <returns>The column gap.</returns>
     public int GetPadding() => 4;
 
     /// <summary>

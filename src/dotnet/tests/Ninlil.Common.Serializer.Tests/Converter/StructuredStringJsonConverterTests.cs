@@ -1,12 +1,13 @@
 using Ninlil.Common.Serializer;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.StructuredStringJsonConverter{TObject}" />,
-///     exercised through <see cref="TimeStringModel" /> (a concrete <see cref="IStructuredStringModel" />
-///     implementation registered for JSON by <see cref="JsonSerializer" />).
+///     These tests cover <see cref="Serializer.Converter.StructuredStringJsonConverter{TObject}" />
+///     through <see cref="TimeStringModel" />, whose converter <see cref="JsonSerializer" /> registers
+///     for every call.
 /// </summary>
 public class StructuredStringJsonConverterTests
 {

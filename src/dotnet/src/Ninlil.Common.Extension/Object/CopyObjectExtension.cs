@@ -4,14 +4,14 @@
 namespace Ninlil.Common.Extension.Object;
 
 /// <summary>
-///     This class contains extension methods for copying properties from one object to another of the same type.
+///     This static class copies public property values from one object onto another object of the
+///     same type or a derived type. It is a shallow copy: reference-typed values are shared.
 /// </summary>
 public static class CopyObjectExtension
 {
     /// <summary>
-    ///     This extension method copies the property values
-    ///     from the <paramref name="source" /> to the
-    ///     <paramref name="destination" /> instance.
+    ///     This extension method copies every public writable property value of the
+    ///     <paramref name="source" />'s runtime type onto the <paramref name="destination" />.
     /// </summary>
     /// <param name="source">The source object from which to copy properties.</param>
     /// <param name="destination">The destination object to which properties will be copied.</param>
@@ -27,12 +27,8 @@ public static class CopyObjectExtension
         where TSource : class
         where TDestination : class, TSource
     {
-        // Reflect over the source value's actual runtime type, not the compile-time TSource type
-        // parameter -- when `source` is declared as a looser/base type than what it actually
-        // holds at runtime (e.g. a variable typed `object` holding a real model instance), using
-        // typeof(TSource) would walk that looser type's own (often far smaller, or in object's
-        // case entirely empty) property set instead of the real instance's properties, silently
-        // copying nothing.
+        // Reflect over the runtime type, not TSource. When the source is declared as a base type
+        // (or object), typeof(TSource) would list fewer properties, or none, and copy nothing.
         foreach (var property in source.GetType().GetProperties().Where(p => p.CanWrite))
             property.SetValue(destination, property.GetValue(source));
 
@@ -41,9 +37,8 @@ public static class CopyObjectExtension
     }
 
     /// <summary>
-    ///     This extension method copies the property values
-    ///     from the <paramref name="source" /> to a new instance
-    ///     of the <typeparamref name="TDestination" /> type.
+    ///     This extension method creates a new <typeparamref name="TDestination" /> and copies the
+    ///     property values from the <paramref name="source" /> onto it.
     /// </summary>
     /// <param name="source">The source object from which to copy properties.</param>
     /// <param name="constructorArguments">The constructor arguments to use when creating the new instance.</param>
@@ -60,15 +55,7 @@ public static class CopyObjectExtension
         where TDestination : class, TSource =>
         Copy(source, typeof(TDestination).CreateInstance<TDestination>(constructorArguments));
 
-    // The single-type-parameter same-type convenience overloads that used to live here
-    // (`Copy<TClass>(this TClass source, TClass destination)` and
-    // `Copy<TClass>(this TClass source, params object[] constructorArguments)`) are gone. Each was
-    // a real, confirmed compile-time ambiguity (CS0121) with its two-type-parameter sibling above
-    // whenever TSource and TDestination happened to coincide -- the compiler could not choose
-    // between them without an explicit `.Copy<TSource, TDestination>(...)` call. They added no
-    // capability the two-type-parameter overloads didn't already provide: when TSource and
-    // TDestination are the same type, ordinary generic type inference resolves the
-    // two-type-parameter overloads to that exact same-type case on its own, so removing the
-    // redundant overloads keeps every call shape working (`source.Copy(destination)`,
-    // `source.Copy<TClass, TClass>(destination)`, etc.) while eliminating the ambiguity entirely.
+    // Do not add single-type-parameter overloads such as Copy<TClass>(TClass, TClass). They are
+    // ambiguous (CS0121) with the overloads above when both type parameters are the same type,
+    // and type inference already handles the same-type case.
 }

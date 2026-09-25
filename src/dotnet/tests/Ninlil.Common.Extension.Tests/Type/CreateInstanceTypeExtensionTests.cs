@@ -5,7 +5,9 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="CreateInstanceTypeExtension" />.
+///     These tests cover <see cref="CreateInstanceTypeExtension" /> with the sample types in
+///     <c>TestSupport</c>: parameterless construction, value types, types without a parameterless
+///     constructor (which give null) and constructor arguments.
 /// </summary>
 public class CreateInstanceTypeExtensionTests
 {

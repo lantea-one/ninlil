@@ -6,13 +6,14 @@ using Ninlil.Common.Serializer.Filter;
 using Ninlil.Common.Serializer.ModelBinder;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Filter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FromDataUriQueryOperationFilter" />. Unlike
-///     <see cref="FromJsonQueryOperationFilter" />/<see cref="FromXmlQueryOperationFilter" />,
-///     this filter clears any pre-existing content entries on the parameter before adding
-///     <c>text/plain</c> -- these tests confirm that clearing behavior explicitly.
+///     These tests run <see cref="FromDataUriQueryOperationFilter" /> against a hand-built filter
+///     context (see <see cref="FromJsonQueryOperationFilterTests" />). Unlike the JSON and XML
+///     filters, it clears any existing content entries before adding <c>text/plain</c>, and the
+///     tests check that.
 /// </summary>
 public class FromDataUriQueryOperationFilterTests
 {

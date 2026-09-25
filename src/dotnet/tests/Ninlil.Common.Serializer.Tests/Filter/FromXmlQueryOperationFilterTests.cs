@@ -6,12 +6,13 @@ using Ninlil.Common.Serializer.Filter;
 using Ninlil.Common.Serializer.ModelBinder;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Filter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FromXmlQueryOperationFilter" />. See
-///     <see cref="FromJsonQueryOperationFilterTests" /> for the shared reasoning behind how the
-///     <see cref="OperationFilterContext" /> is constructed for these tests.
+///     These tests check that <see cref="FromXmlQueryOperationFilter" /> documents XML-bound
+///     parameters as XML content. The <see cref="OperationFilterContext" /> is built as in
+///     <see cref="FromJsonQueryOperationFilterTests" />.
 /// </summary>
 public class FromXmlQueryOperationFilterTests
 {

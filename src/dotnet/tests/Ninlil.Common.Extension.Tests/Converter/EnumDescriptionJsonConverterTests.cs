@@ -6,7 +6,9 @@ using Ninlil.Common.Extension.Converter;
 namespace Ninlil.Common.Extension.Tests.Converter;
 
 /// <summary>
-///     This class tests <see cref="EnumDescriptionJsonConverter{TEnum}" />.
+///     These tests round-trip a sample enum through System.Text.Json with
+///     <see cref="EnumDescriptionJsonConverter{TEnum}" />: attributed values, raw member names and
+///     unattributed members.
 /// </summary>
 public class EnumDescriptionJsonConverterTests
 {
@@ -52,10 +54,9 @@ public class EnumDescriptionJsonConverterTests
     }
 
     /// <summary>
-    ///     The converter's <c>Write</c> implementation calls <c>value.ToDescription(...)</c>, which is now
-    ///     correctly scoped per-member (see <c>ToDescriptionEnumExtensionTests</c>), so serializing an
-    ///     unattributed enum member other than the first-declared one writes its own JSON string, not the
-    ///     first-declared member's.
+    ///     <c>Write</c> calls <c>value.ToDescription(...)</c>, which falls back to the member's own
+    ///     name (see <c>ToDescriptionEnumExtensionTests</c>). An unattributed member that is not the
+    ///     first declared must be written as its name, not the first member's.
     /// </summary>
     [Fact]
     public void WriteOnUnattributedMemberSerializesItsOwnName()

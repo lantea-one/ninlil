@@ -6,17 +6,19 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.InputFormatter;
 
 /// <summary>
-///     This input formatter provides our YAML capabilities.
+///     This MVC input formatter reads YAML request bodies (UTF-8, for <c>application/yaml</c>,
+///     <c>text/yaml</c> and their <c>+yaml</c> suffixes) using <see cref="YamlSerializer" />.
+///     <see cref="Extension.ServiceCollectionSerializerExtension" /> registers it.
 /// </summary>
 public class YamlInputFormatter : TextInputFormatter
 {
     /// <summary>
-    ///     This property contains our YAML deserializer override.
+    ///     This field contains an optional YAML deserializer to use instead of the default.
     /// </summary>
     private readonly IDeserializer _deserializer;
 
     /// <summary>
-    ///     This method instantiates our formatter with supported encodings and media types.
+    ///     This constructor sets the supported encoding and media types.
     /// </summary>
     public YamlInputFormatter()
     {
@@ -37,14 +39,14 @@ public class YamlInputFormatter : TextInputFormatter
     }
 
     /// <summary>
-    ///     This method instantiates our formatter with a specific <paramref name="deserializer" />.
+    ///     This constructor uses a specific <paramref name="deserializer" />.
     /// </summary>
     /// <param name="deserializer">YAML deserializer override.</param>
     public YamlInputFormatter(IDeserializer deserializer)
         : this() => _deserializer = deserializer;
 
     /// <summary>
-    ///     This method reads and deserializes the request body.
+    ///     This method reads and deserializes the request body. An empty body gives no value.
     /// </summary>
     /// <param name="context">The serialization context.</param>
     /// <param name="encoding">The input encoding.</param>
@@ -68,7 +70,7 @@ public class YamlInputFormatter : TextInputFormatter
         if (yaml is null or "")
             return await InputFormatterResult.NoValueAsync();
 
-        // We're done, deserialize the JSON and return the result.
+        // We're done, deserialize the YAML and return the result.
         return await InputFormatterResult.SuccessAsync(
             YamlSerializer.Deserialize(context.ModelType, yaml, _deserializer)
         );

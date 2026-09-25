@@ -1,16 +1,14 @@
 using System.Drawing;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.RgbColorJsonConverter" />
-///     (the non-nullable <see cref="Color" /> variant). These tests specifically lock in the fix
-///     for a round-trip-breaking production bug: the converter wrote colors as an
-///     <c>rgb(r, g, b)</c> string, but read them back using <see cref="ColorTranslator.FromHtml(string)" />,
-///     which -- despite its name -- does not actually support that functional notation at all and
-///     throws for every non-empty color value written. The fix routes reading through
-///     <see cref="Serializer.Converter.RgbColorParsingHelper" /> instead.
+///     These tests round-trip colors through <see cref="Serializer.Converter.RgbColorJsonConverter" />
+///     (the non-nullable <see cref="Color" /> variant). The converter writes <c>rgb(r, g, b)</c>,
+///     which <see cref="ColorTranslator.FromHtml(string)" /> cannot parse, so reading must go through
+///     <see cref="Serializer.Converter.RgbColorParsingHelper" />; the round-trip tests check that.
 /// </summary>
 public class RgbColorJsonConverterTests
 {
@@ -48,8 +46,8 @@ public class RgbColorJsonConverterTests
     [Fact]
     public void RoundTrips_ColorWrittenBySerializer_ThroughTheRealWriter()
     {
-        // This exercises the real Write() -> Read() round trip end to end (rather than a
-        // hand-authored rgb(...) literal), which is exactly the path that used to throw.
+        // Use the Write() output for Read() rather than a hand-written rgb(...) literal, so the
+        // full round trip is covered.
         var wrapper = new Wrapper { Color = Color.FromArgb(255, 1, 2, 3) };
 
         string json = JsonSerializer.Serialize(wrapper);

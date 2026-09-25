@@ -7,8 +7,10 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a YAML type converter for <see cref="Color" />
-///     objects to and from the rgb(r, g, b) string representation.
+///     This YamlDotNet type converter writes a <see cref="Color" /> or nullable <see cref="Color" />
+///     as a CSS <c>rgb(r, g, b)</c> string, or <c>~</c> (YAML null) for an empty color, and reads it
+///     back through <see cref="RgbColorParsingHelper" />. Blank, null or unparseable text reads as
+///     <see langword="null" /> for a nullable target and <see cref="Color.Empty" /> otherwise.
 /// </summary>
 public class RgbColorYamlConverter : IYamlTypeConverter
 {
@@ -26,19 +28,18 @@ public class RgbColorYamlConverter : IYamlTypeConverter
     /// <param name="type">The type to deserialize to.</param>
     /// <param name="rootDeserializer">The root deserializer function.</param>
     /// <returns>
-    ///     The deserialized <see cref="Color" /> object or <see langword="null" /> if parsing fails.
+    ///     The deserialized <see cref="Color" />, or the empty result described in the class summary.
     /// </returns>
     public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
-        // Capture the string representation of the RGB color value from the scalar node the
-        // parser is currently positioned on before advancing past it, so the parser is left
-        // correctly positioned for whatever the caller reads next.
+        // Read the current scalar's text, then advance so the caller continues from the next
+        // node.
         var rgbString = (parser.Current as Scalar)?.Value?.Trim();
 
-        // Advance the parser past this scalar now that we've captured its value.
+        // Advance the parser past this node.
         parser.MoveNext();
 
-        // If the RGB string is null or empty, return null.
+        // A blank or YAML-null value is "no color".
         if (rgbString?.Trim() is null or { Length: 0 } or "~")
             return type == typeof(Color?) ? null : Color.Empty;
 
@@ -59,7 +60,7 @@ public class RgbColorYamlConverter : IYamlTypeConverter
     /// <param name="serializer">The serializer function.</param>
     public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer)
     {
-        // Check if the value is a Color object and if it is empty.
+        // Anything that is not a color, and Color.Empty, is written as YAML null.
         if (value is not Color color || color == Color.Empty)
         {
             // Write a null value to the YAML emitter.

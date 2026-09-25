@@ -5,7 +5,10 @@ using System.Xml.Serialization;
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This interface represents a structured string model.
+///     This interface is the contract for structured string models: typed values that serialize
+///     as a single formatted string (see <see cref="StructuredStringModel" />, the base class that
+///     implements it). The static members parse and validate by model type; the instance members
+///     parse into, compare and format one model.
 /// </summary>
 public interface IStructuredStringModel : IXmlSerializable
 {
@@ -186,14 +189,10 @@ public interface IStructuredStringModel : IXmlSerializable
     public int GetHashCode();
 
     /// <summary>
-    ///     This method checks if the current instance is considered
-    ///     <see see="string.Empty" /> based on the defined validation
-    ///     rules of the model.
+    ///     This method checks whether the model is empty. The base implementation treats empty the
+    ///     same as null (invalid).
     /// </summary>
-    /// <returns>
-    ///     <see langword="true" /> if the instance is considered
-    ///     <see see="string/Empty" />; otherwise, <see langword="false" />.
-    /// </returns>
+    /// <returns><see langword="true" /> if the model is empty; otherwise, <see langword="false" />.</returns>
     public bool IsEmpty();
 
     /// <summary>
@@ -213,15 +212,14 @@ public interface IStructuredStringModel : IXmlSerializable
     public bool IsValid();
 
     /// <summary>
-    ///     This method is responsible for parsing the provided input <paramref name="value" />
-    ///     string into the current instance of the model, updating its properties accordingly.
+    ///     This method parses <paramref name="value" /> into this instance, updating its properties.
     /// </summary>
     /// <param name="value">The input string value to be parsed into this model.</param>
     /// <returns>
     ///     The updated instance that was parsed from the provided input <paramref name="value" />.
     /// </returns>
     /// <exception cref="FormatException">
-    ///     When the provided <paramref name="value" /> does not match any of the defined <see name="Patterns" />.
+    ///     When the provided <paramref name="value" /> matches none of the <see cref="Patterns" />.
     /// </exception>
     public IStructuredStringModel Parse(string value);
 

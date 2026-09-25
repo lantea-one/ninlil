@@ -1,15 +1,16 @@
 using System.Net;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.IpAddressYamlConverter" />.
-///     These tests specifically lock in the fix for the parser-positioning bug where the converter
-///     used to call <c>parser.MoveNext()</c> before reading <c>parser.Current</c>, which read the
-///     wrong (already-advanced-past) scalar node. A wrapper model with two sibling properties is
-///     used so a positioning bug -- reading the wrong value or leaving the parser out of sync for
-///     the next property -- would be observable.
+///     These tests round-trip <see cref="IPAddress" /> values through
+///     <see cref="Serializer.Converter.IpAddressYamlConverter" />. A converter must read
+///     <c>parser.Current</c> before calling <c>parser.MoveNext()</c>; the wrapper model has two
+///     sibling properties so reading the wrong node, or leaving the parser out of step for the next
+///     property, shows up as a wrong or missing value. The other YAML converter tests rely on the
+///     same setup.
 /// </summary>
 public class IpAddressYamlConverterTests
 {
@@ -31,8 +32,8 @@ public class IpAddressYamlConverterTests
         string yaml = YamlSerializer.Serialize(wrapper);
         Wrapper result = YamlSerializer.Deserialize<Wrapper>(yaml);
 
-        // Both values must be read correctly and in the right slots -- a parser-positioning bug
-        // would either swap these, throw, or leave one of them null.
+        // Both values must land in the right properties; a positioning mistake would swap them,
+        // throw, or leave one null.
         Assert.Equal(IPAddress.Parse("10.0.0.1"), result.First);
         Assert.Equal(IPAddress.Parse("10.0.0.2"), result.Second);
     }

@@ -4,16 +4,14 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Ninlil.Common.Serializer.InputFormatter;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.InputFormatter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="JsonInputFormatter" />. Its
-///     <c>ReadRequestBodyAsync</c> override is exercised directly against a real
-///     <see cref="DefaultHttpContext" />/<see cref="InputFormatterContext" /> pair, which is
-///     everything the method itself actually reads -- the rest of the ASP.NET Core MVC formatter
-///     pipeline (content negotiation, <c>CanRead</c> checks) is not exercised here, since this
-///     project has no committed integration-test host to exercise it against; that would need a
-///     <c>WebApplicationFactory</c>-style test instead.
+///     These tests call <see cref="JsonInputFormatter" />'s <c>ReadRequestBodyAsync</c> directly
+///     with a <see cref="DefaultHttpContext" /> and <see cref="InputFormatterContext" />, which is all
+///     the method reads. Content negotiation and <c>CanRead</c> checks belong to the MVC pipeline and
+///     would need a <c>WebApplicationFactory</c>-style host, so they are not covered here.
 /// </summary>
 public class JsonInputFormatterTests
 {
@@ -72,7 +70,7 @@ public class JsonInputFormatterTests
     [Fact]
     public async Task ReadRequestBodyAsync_UsesProvidedOptions()
     {
-        // The options-carrying constructor must actually be respected when reading.
+        // The options passed to the constructor must be used when reading.
         var options = new System.Text.Json.JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,

@@ -1,12 +1,13 @@
 using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-verb attribute tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Attribute;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleVerbAttribute" /> and its
-///     <see cref="NestedConsoleVerbAttribute" /> subclass.
+///     These tests cover <see cref="ConsoleVerbAttribute" /> and its
+///     <see cref="NestedConsoleVerbAttribute" /> subclass by constructing them directly: name
+///     sanitizing, defaults, null-name rejection and the help-text projection.
 /// </summary>
 public class ConsoleVerbAttributeTests
 {

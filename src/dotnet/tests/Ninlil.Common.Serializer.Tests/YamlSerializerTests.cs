@@ -1,17 +1,15 @@
 using Ninlil.Common.Serializer;
 using Ninlil.Common.Serializer.Converter;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests;
 
 /// <summary>
-///     This class contains unit tests for the core <see cref="YamlSerializer" /> static wrapper.
-///     This test class also locks in the fix for a bug shared with <see cref="JsonSerializer" />:
+///     These tests cover the <see cref="YamlSerializer" /> static wrapper: round trips, camelCase
+///     naming and converter registration. A null payload must return null from
 ///     <see cref="YamlSerializer.Serialize(object, YamlDotNet.Serialization.ISerializer)" /> and
 ///     <see cref="YamlSerializer.SerializePretty(object, YamlDotNet.Serialization.ISerializer)" />
-///     used to call <c>payload.GetType()</c> unguarded, throwing a
-///     <see cref="NullReferenceException" /> for a null payload instead of gracefully returning
-///     null (as the 3-arg <c>Serialize(Type, object, ...)</c> overload they delegate to already
-///     does, and as <see cref="XmlSerializer" />'s equivalent methods already did).
+///     rather than throwing on <c>payload.GetType()</c>.
 /// </summary>
 public class YamlSerializerTests
 {
@@ -69,8 +67,8 @@ public class YamlSerializerTests
 
         Assert.True(success);
 
-        // Unlike JsonSerializer (no naming policy, always PascalCase), YamlSerializer's own
-        // GetSerializer() always applies a camelCase naming convention.
+        // Unlike JsonSerializer (no naming policy), YamlSerializer.GetSerializer() applies a
+        // camelCase naming convention.
         Assert.Contains("value", yaml);
     }
 
@@ -79,9 +77,8 @@ public class YamlSerializerTests
     {
         var converter = new IpAddressYamlConverter();
 
-        // Adding an already-registered converter type again must be a no-op -- this is checked
-        // indirectly via GetDeserializer()/GetSerializer() not throwing on a duplicate
-        // registration and by round-tripping still working normally afterward.
+        // Adding an already-registered converter type must be a no-op. This is checked
+        // indirectly: building the serializers does not throw and round trips still work.
         YamlSerializer.AddConverter(converter);
         YamlSerializer.AddConverter(converter);
 

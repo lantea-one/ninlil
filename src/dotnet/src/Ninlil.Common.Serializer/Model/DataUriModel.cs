@@ -12,7 +12,11 @@ using Ninlil.Common.Serializer.Converter;
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This class maintains the structure for a Data URI.
+///     This class is an RFC 2397 <c>data:</c> URI held as its parts: content bytes, MIME type,
+///     optional character set and optional file name. It reads and writes the base64 form
+///     <c>data:&lt;mime&gt;[;charset=..][;filename=..];base64,&lt;data&gt;</c>, and serializes as that
+///     string in JSON (through <see cref="StructuredStringJsonConverter{TObject}" />) and XML. The
+///     web console uses it for the uploaded branding logo.
 /// </summary>
 [JsonConverter<StructuredStringJsonConverter<DataUriModel>>]
 [XmlRoot("dataUri")]
@@ -60,7 +64,7 @@ public class DataUriModel : StructuredStringModel
         // Localize the stream reader into a disposable context.
         using StreamReader reader = new(stream);
 
-        // We're done, instantiates a new data URI with the stream's content as the binary then return it.
+        // Read the stream as text and store it as UTF-8 bytes; a file stream also supplies a name and MIME type.
         return stream is FileStream fileStream
             ? new(
                 Encoding.UTF8.GetBytes(reader.ReadToEnd()),
@@ -87,7 +91,8 @@ public class DataUriModel : StructuredStringModel
         TryParse(dataUri, out DataUriModel uri) ? uri : null;
 
     /// <summary>
-    ///     This constant defines the pattern to match data URIs.
+    ///     This property returns a new pattern matching a base64 data URI with optional
+    ///     <c>charset</c> and <c>filename</c> parameters.
     /// </summary>
     public static Regex Pattern =>
         new(
@@ -100,13 +105,9 @@ public class DataUriModel : StructuredStringModel
     /// </summary>
     /// <param name="value">The data URI <see cref="string" /> to parse.</param>
     /// <param name="uri">
-    ///     The output <see cref="DataUriModel" /> instance if the parse was successful, otherwise <see langword="null" />.
+    ///     The parsed <see cref="DataUriModel" />, or <see langword="null" /> when parsing fails.
     /// </param>
-    /// <returns>
-    ///     A <see langword="bool" /> indicating whether the parse was successful or not. If <see langword="true" />,
-    ///     the <paramref name="uri" /> output parameter will contain the parsed <see cref="DataUriModel" /> instance; if
-    ///     <see langword="false" />, the <paramref name="uri" /> output parameter will be <see langword="null" />.
-    /// </returns>
+    /// <returns><see langword="true" /> when <paramref name="value" /> is a valid data URI.</returns>
     public static bool TryParse(string value, out DataUriModel uri) =>
         TryParse<DataUriModel>(value, out uri);
 
@@ -118,7 +119,7 @@ public class DataUriModel : StructuredStringModel
     public byte[] Binary { get; set; }
 
     /// <summary>
-    ///     This property contains the filename if one was provided.
+    ///     This property contains the character set if one was provided.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
@@ -132,14 +133,15 @@ public class DataUriModel : StructuredStringModel
     public string Filename { get; set; }
 
     /// <summary>
-    ///     This property contains the mime-type for the binary.
+    ///     This property contains the MIME type of the content.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
     public string MimeType { get; set; }
 
     /// <summary>
-    ///     This method reads a file from the <paramref name="filePath" /> into a <see cref="DataUriModel" />.
+    ///     This method reads a file into a <see cref="DataUriModel" />; see
+    ///     <see cref="FromFileAsync" />.
     /// </summary>
     /// <param name="filePath">The file path to the file on the file system.</param>
     /// <returns>
@@ -150,7 +152,9 @@ public class DataUriModel : StructuredStringModel
         FromFileAsync(filePath).GetAwaiter().GetResult();
 
     /// <summary>
-    ///     This method asynchronously reads the <paramref name="filePath" /> into a <see cref="DataUriModel" />.
+    ///     This method reads a file into a <see cref="DataUriModel" />, taking the MIME type from the
+    ///     file extension. A path that does not start with the directory separator is resolved
+    ///     against the <c>ASPNETCORE_PHYSICAL_PATH</c> environment variable.
     /// </summary>
     /// <param name="filePath">The file path to the file on the file system.</param>
     /// <param name="stoppingToken">
@@ -188,7 +192,8 @@ public class DataUriModel : StructuredStringModel
     }
 
     /// <summary>
-    ///     This method converts a <paramref name="fileStream" /> into a <see cref="DataUriModel" />.
+    ///     This method reads a stream into a <see cref="DataUriModel" />; see
+    ///     <see cref="FromStreamAsync" />.
     /// </summary>
     /// <param name="fileStream">The file stream to convert.</param>
     /// <param name="fileName">The file name to use for the <paramref name="fileStream" />.</param>
@@ -198,7 +203,8 @@ public class DataUriModel : StructuredStringModel
         FromStreamAsync(fileStream, fileName, contentType).GetAwaiter().GetResult();
 
     /// <summary>
-    ///     This method asynchronously converts a <paramref name="fileStream" /> into a <see cref="DataUriModel" />.
+    ///     This method reads a stream into a <see cref="DataUriModel" />. The stream is read as text
+    ///     and re-encoded as UTF-8, so only text content round-trips unchanged.
     /// </summary>
     /// <param name="fileStream">The file stream to convert.</param>
     /// <param name="fileName">The file name to use for the <paramref name="fileStream" />.</param>
@@ -227,21 +233,21 @@ public class DataUriModel : StructuredStringModel
     }
 
     /// <summary>
-    ///     This method checks if a <paramref name="value" /> is a valid data-uri.
+    ///     This method checks whether <paramref name="value" /> is a non-blank, valid data URI.
     /// </summary>
-    /// <param name="value">The data-uri <see cref="string" /> to check.</param>
-    /// <returns>A <see cref="bool" /> indicating if the <paramref name="value" /> is a valid data-uri.</returns>
+    /// <param name="value">The data URI <see cref="string" /> to check.</param>
+    /// <returns>A <see cref="bool" /> indicating if the <paramref name="value" /> is a valid data URI.</returns>
     public static bool IsDataUri(string value) =>
         value?.Trim() is not (null or "") && TryParse<DataUriModel>(value, out _);
 
     /// <summary>
-    ///     This method instantiates an empty data URI.
+    ///     This constructor creates an empty data URI.
     /// </summary>
     public DataUriModel()
         : base(true, Pattern) { }
 
     /// <summary>
-    ///     This method instantiates a populated Data URI.
+    ///     This constructor creates a data URI from its parts.
     /// </summary>
     /// <param name="binary">The binary data to encode.</param>
     /// <param name="mimeType">The content-type of the <paramref name="binary" />.</param>
@@ -269,32 +275,21 @@ public class DataUriModel : StructuredStringModel
     }
 
     /// <summary>
-    ///     This method instantiates a data URI from a <see cref="string" />.
+    ///     This constructor parses a data URI string.
     /// </summary>
     /// <param name="dataUri">The data URI <see cref="string" /> to parse.</param>
     public DataUriModel(string dataUri)
         : base(true, dataUri, Pattern) { }
 
     /// <summary>
-    ///     This abstract method is responsible for parsing the provided <paramref name="match" />
-    ///     Regular Expression <see cref="Match" /> object into the properties of this model.
-    ///     The <paramref name="match" /> object is expected to contain the captured groups that correspond
-    ///     to the properties of this model, and the implementation of this method should extract those
-    ///     values and assign them to the appropriate properties.
+    ///     This method fills the model from a successful match, decoding the base64 content.
     /// </summary>
-    /// <param name="original">
-    ///     The original input string that was parsed to produce the <paramref name="match" />
-    ///     object. This can be used for reference or for any additional parsing logic that may
-    ///     require the original input string.
-    /// </param>
-    /// <param name="match">
-    ///     The Regular Expression <see cref="Match" /> object that contains
-    ///     the captured groups to be parsed into the properties of this model.
-    /// </param>
+    /// <param name="original">The input string that matched.</param>
+    /// <param name="match">The successful match, with the captured groups.</param>
+    /// <returns>This instance, or <see langword="null" /> when there is no content.</returns>
     protected override DataUriModel ParseMatch(string original, Match match)
     {
-        // Ensure we have a match -- a null/empty original, or a match that did not actually
-        // succeed, both mean this string is not a well-formed data URI.
+        // A blank original or a failed match means this is not a data URI.
         if (original?.Trim() is null or { Length: 0 } || match?.Success is null or false)
             return null;
 
@@ -331,9 +326,11 @@ public class DataUriModel : StructuredStringModel
     }
 
     /// <summary>
-    ///     This method converts the data URI instance into a data-uri <see cref="string" />.
+    ///     This method writes the data URI. Without a MIME type, the type is guessed from the file
+    ///     name, falling back to <c>application/octet-stream</c>. The file name is URL-encoded on
+    ///     write but not decoded on read.
     /// </summary>
-    /// <returns>The data-uri <see cref="string" /> representation of the instance.</returns>
+    /// <returns>The data URI <see cref="string" /> representation of the instance.</returns>
     protected override string ToString(IDictionary<string, object> _)
     {
         // Define our data URI string.
@@ -359,10 +356,9 @@ public class DataUriModel : StructuredStringModel
     }
 
     /// <summary>
-    ///     This method checks whether <see langword="this" /> is valid by ensuring that <see cref="Binary" />
-    ///     is not <see langword="null" /> and that its length is greater than <see langword="0" />.
+    ///     This method checks whether the model has any content bytes.
     /// </summary>
-    /// <returns>A <see langword="bool" /> indicating whether <see langword="this" /> is valid or not.</returns>
+    /// <returns><see langword="true" /> when <see cref="Binary" /> is not empty.</returns>
     public override bool IsValid() => Binary?.Length > 0;
 
     /// <summary>

@@ -1,12 +1,13 @@
 using System.Net.NetworkInformation;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.PhysicalAddressYamlConverter" />,
-///     including the parser-positioning fix (see <see cref="IpAddressYamlConverterTests" /> for
-///     the full explanation of the bug this guards against).
+///     These tests round-trip MAC addresses through
+///     <see cref="Serializer.Converter.PhysicalAddressYamlConverter" /> with two sibling properties,
+///     to catch parser-positioning mistakes (see <see cref="IpAddressYamlConverterTests" />).
 /// </summary>
 public class PhysicalAddressYamlConverterTests
 {

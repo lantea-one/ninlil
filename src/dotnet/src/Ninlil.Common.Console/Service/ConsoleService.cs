@@ -6,7 +6,8 @@ using Ninlil.Common.Serializer.Service;
 namespace Ninlil.Common.Console.Service;
 
 /// <summary>
-///     This class provides services for writing colored text to the console.
+///     This static class writes colored text, exceptions and serialized values to the console
+///     and resets the color afterwards. The parser uses it for help text and errors.
 /// </summary>
 public static class ConsoleService
 {
@@ -37,16 +38,13 @@ public static class ConsoleService
         params object[] replacements
     )
     {
-        // Reset the console color to the provided color.
+        // Set the console color to the provided color.
         System.Console.ForegroundColor = color;
 
-        // Only go through composite-format parsing when the caller actually supplied replacement
-        // values to substitute in. Console.WriteLine(string, object[]) always treats its first
-        // argument as a composite format string, even when the replacements array is empty - so any
-        // caller passing arbitrary text with no real substitutions (a plain log message, or - as
-        // every WriteLine<TValue> overload below does - serialized JSON/XML/YAML output, which
-        // routinely contains literal, unescaped '{'/'}' characters) would otherwise crash with a
-        // FormatException for text that was never meant to be interpreted as a format string at all.
+        // Only use composite formatting when there are replacements. Console.WriteLine(string,
+        // object[]) treats its first argument as a format string even when the array is empty, so
+        // plain text containing '{' or '}' (such as the serialized JSON, XML or YAML the
+        // WriteLine<TValue> overloads pass) would throw a FormatException.
         if (replacements is { Length: > 0 })
             System.Console.WriteLine(text, replacements);
         else
@@ -57,13 +55,13 @@ public static class ConsoleService
     }
 
     /// <summary>
-    ///     This method writes a line of the provided <paramref name="exception" /> to the console in red.
+    ///     This method writes the <paramref name="exception" /> to standard error in dark red.
     /// </summary>
     /// <param name="exception">The exception to write to the console.</param>
     /// <param name="exit">If true, the application will exit with code 1 after writing the exception.</param>
     public static void WriteLine(Exception exception, bool exit = false)
     {
-        // Reset the console color to the provided color.
+        // Set the console color to dark red.
         System.Console.ForegroundColor = ConsoleColor.DarkRed;
 
         // Write the line to the console.
@@ -79,7 +77,8 @@ public static class ConsoleService
 
     /// <summary>
     ///     This method serializes a <paramref name="value" /> into the specified <paramref name="format" />
-    ///     and writes it to the console in the specified <paramref name="color" />.
+    ///     and writes it to the console in the specified <paramref name="color" />. With
+    ///     <see cref="SerializerFormatEnum.None" /> the value's <see cref="object.ToString" /> is written.
     /// </summary>
     /// <param name="color">The color to write the serialized <paramref name="value" /> in.</param>
     /// <param name="format">The format to serialize the <paramref name="value" /> into.</param>
@@ -131,9 +130,8 @@ public static class ConsoleService
     }
 
     /// <summary>
-    ///     This method is a helper for returning operation cancelled messages from async methods.
+    ///     This method writes a standard "operation cancelled" message in dark red.
     /// </summary>
-    /// <returns>An awaitable <see cref="Task" /> that resolves when the message has been written.</returns>
     public static void WriteOperationCancelledLine() =>
         WriteLine(ConsoleColor.DarkRed, "Asynchronous operation has cancelled.");
 }

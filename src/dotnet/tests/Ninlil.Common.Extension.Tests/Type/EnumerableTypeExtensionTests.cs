@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="EnumerableTypeExtension" />.
+///     These tests call <see cref="EnumerableTypeExtension.GetEnumerableElementType" /> on arrays,
+///     lists, <see cref="IEnumerable{T}" /> and a scalar type.
 /// </summary>
 public class EnumerableTypeExtensionTests
 {

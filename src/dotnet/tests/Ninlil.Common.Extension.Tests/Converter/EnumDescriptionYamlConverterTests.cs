@@ -6,22 +6,16 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Extension.Tests.Converter;
 
 /// <summary>
-///     This class tests <see cref="EnumDescriptionYamlConverter" /> through the standard, documented
-///     YamlDotNet usage pattern (<c>SerializerBuilder</c>/<c>DeserializerBuilder</c>.<c>WithTypeConverter</c>)
-///     -- the only way this converter is meant to be consumed. It is not currently referenced anywhere
-///     else in the codebase, so these tests are this converter's only real exercise.
+///     These tests register <see cref="EnumDescriptionYamlConverter" /> with YamlDotNet's
+///     <c>SerializerBuilder</c>/<c>DeserializerBuilder</c> (<c>WithTypeConverter</c>) and round-trip
+///     a sample enum. Nothing else in the codebase references this converter, so these tests are
+///     its only coverage.
 /// </summary>
 /// <remarks>
-///     <c>WriteYaml</c> now explicitly passes the real, concrete enum <c>type</c> YamlDotNet hands it to
-///     <c>ToDescription</c>, rather than calling <c>TryToDescription</c> off a <c>value as System.Enum</c>
-///     -typed receiver (whose compile-time type is the abstract <see cref="System.Enum" /> base class --
-///     that used to resolve the generic overload with its type parameter bound to
-///     <see cref="System.Enum" /> itself instead of the real enum type, so the underlying lookup found no
-///     matching field/type and silently fell back to the enum's raw <see cref="object.ToString" />).
-///     <c>ReadYaml</c> now reads the parser's already-current scalar node first and only calls
-///     <c>MoveNext()</c> afterward to consume it, matching the standard <c>IYamlTypeConverter</c> contract
-///     (an earlier version called <c>MoveNext()</c> before inspecting <c>Current</c>, skipping straight
-///     past the actual scalar node).
+///     <c>WriteYaml</c> must pass the concrete enum <c>type</c> to <c>ToDescription</c>; calling the
+///     generic overload on a <see cref="System.Enum" />-typed value finds no fields and falls back to
+///     <see cref="object.ToString" />. <c>ReadYaml</c> must read the current scalar before calling
+///     <c>MoveNext()</c>, or it skips the value.
 /// </remarks>
 public class EnumDescriptionYamlConverterTests
 {
@@ -38,8 +32,8 @@ public class EnumDescriptionYamlConverterTests
     }
 
     /// <summary>
-    ///     A minimal wrapper class, since YamlDotNet's default document root handling is simplest to
-    ///     exercise against a scalar-valued property rather than a bare top-level enum.
+    ///     A minimal wrapper class, because YamlDotNet round-trips a scalar property more simply than
+    ///     a bare top-level enum.
     /// </summary>
     public class Wrapper
     {
@@ -65,8 +59,8 @@ public class EnumDescriptionYamlConverterTests
     }
 
     /// <summary>
-    ///     The registered custom converter now correctly emits the attribute-driven description for an
-    ///     attributed member instead of the raw member name.
+    ///     The converter writes the attribute-driven description for an attributed member instead of
+    ///     the member name.
     /// </summary>
     [Fact]
     public void SerializeEmitsTheAttributeDrivenDescriptionForAnAttributedMember()
@@ -78,8 +72,8 @@ public class EnumDescriptionYamlConverterTests
     }
 
     /// <summary>
-    ///     For an unattributed member, serialization falls back to that member's own raw name (via
-    ///     <c>ToDescription</c>'s own fallback), not another member's.
+    ///     For an unattributed member, serialization falls back to that member's name (through
+    ///     <c>ToDescription</c>'s fallback), not another member's.
     /// </summary>
     [Fact]
     public void SerializeFallsBackToTheRawMemberNameForAnUnattributedMember()
@@ -90,9 +84,8 @@ public class EnumDescriptionYamlConverterTests
     }
 
     /// <summary>
-    ///     <c>ReadYaml</c> now correctly locates the scalar node (reading <c>parser.Current</c> before
-    ///     calling <c>MoveNext()</c>), so deserializing round-trips both the attribute-driven description
-    ///     and a raw member name back to the correct enum member.
+    ///     <c>ReadYaml</c> reads <c>parser.Current</c> before calling <c>MoveNext()</c>, so both the
+    ///     attribute-driven description and a plain member name deserialize to the right member.
     /// </summary>
     [Fact]
     public void DeserializeResolvesBothTheAttributeValueAndTheRawMemberNameToTheCorrectMember()

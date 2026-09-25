@@ -4,25 +4,22 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Xml.Serialization;
 
-// Define our namespace for the Network ACL (NAC) string model.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
 ///     This class represents a model for a bare network address string value, extending
 ///     <see cref="StructuredStringModel" />: an IP address, optionally with a CIDR routing prefix
-///     (subnet mask) suffix (e.g. <c>10.0.0.0/24</c>). Unlike <see cref="NetworkAclModel" />, this
-///     model has no allow/deny/remove semantics -- it only ever represents an address.
+///     (subnet mask) suffix (e.g. <c>10.0.0.0/24</c>). Unlike <see cref="NetworkAclModel" />, it has
+///     no allow/deny/remove prefix; it is only an address.
 /// </summary>
 [XmlRoot("networkAddress")]
 public partial class NetworkAddressModel : StructuredStringModel
 {
     /// <summary>
-    ///     This static field contains the model's regular expression pattern for matching
-    ///     a network address. It captures the IP address with an optional CIDR subnet mask.
+    ///     This method returns the source-generated pattern behind <see cref="Pattern" />.
     /// </summary>
-    /// <returns>
-    ///     The <see cref="Regex" /> pattern for matching at compile time.
-    /// </returns>
+    /// <returns>The compiled network address <see cref="Regex" />.</returns>
     [GeneratedRegex(
         @"^(?<ip>[a-fA-F0-9\.:]+)(?:/(?<cidr>\d{1,3}))?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
@@ -37,7 +34,7 @@ public partial class NetworkAddressModel : StructuredStringModel
     public static readonly Regex Pattern = RegexPattern();
 
     /// <summary>
-    ///     Contains the parsed IP address or network boundary associated with this ACL.
+    ///     Contains the parsed IP address or network boundary.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
@@ -98,7 +95,7 @@ public partial class NetworkAddressModel : StructuredStringModel
     /// <returns>A populated model instance, or <see langword="null" /> if parsing fails.</returns>
     protected override StructuredStringModel ParseMatch(string original, Match match)
     {
-        // If we get to this pont and can't match an IP address, we cannot proceed with parsing, so return null.
+        // Without a parseable IP address there is nothing to populate, so return null.
         if (
             !match.Groups.TryGetValue("ip", out var ip)
             || ip is not { Success: true }

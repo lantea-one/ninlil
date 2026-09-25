@@ -11,7 +11,12 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Extension.Converter;
 
 /// <summary>
-///     This class provides a YAML type converter for <see cref="System.Enum" /> objects.
+///     This YamlDotNet type converter writes any enum value as its description string and reads
+///     it back. The name comes from, in order, <see cref="YamlMemberAttribute.Alias" />,
+///     <see cref="EnumMemberAttribute" />, <see cref="DisplayNameAttribute" /> and
+///     <see cref="JsonStringEnumMemberNameAttribute" />, falling back to the member name. It is the
+///     YAML counterpart of
+///     <see cref="EnumDescriptionJsonConverter{TEnum}" />.
 /// </summary>
 public class EnumDescriptionYamlConverter : IYamlTypeConverter
 {
@@ -29,14 +34,13 @@ public class EnumDescriptionYamlConverter : IYamlTypeConverter
     /// <param name="type">The type to deserialize to.</param>
     /// <param name="rootDeserializer">The root deserializer function.</param>
     /// <returns>
-    ///     The deserialized <see cref="System.Enum" /> object or <see langword="null" /> if parsing fails.
+    ///     The deserialized <see cref="System.Enum" /> object, or <see langword="null" /> when the
+    ///     current node is not a scalar or no member matches.
     /// </returns>
     public object ReadYaml(IParser parser, System.Type type, ObjectDeserializer rootDeserializer)
     {
-        // The parser's Current event is already positioned on the scalar node for this value when
-        // YamlDotNet invokes a registered IYamlTypeConverter -- read it first, then advance past it
-        // with MoveNext(). Calling MoveNext() before inspecting Current (as an earlier version of
-        // this method did) skips past the real value node entirely.
+        // YamlDotNet calls a type converter with Current already on this value's scalar node.
+        // Read it first, then advance with MoveNext(); advancing first would skip the value.
         if (parser.Current is not Scalar scalar)
             return null;
 
@@ -62,7 +66,8 @@ public class EnumDescriptionYamlConverter : IYamlTypeConverter
     }
 
     /// <summary>
-    ///     This method writes a YAML representation of an <see cref="System.Enum" /> object.
+    ///     This method writes an enum value as a scalar holding its description, or <c>~</c> (YAML
+    ///     null) for anything that is not an enum.
     /// </summary>
     /// <param name="emitter">The YAML emitter.</param>
     /// <param name="value">The value to serialize.</param>
@@ -74,13 +79,9 @@ public class EnumDescriptionYamlConverter : IYamlTypeConverter
         System.Type type,
         ObjectSerializer serializer
     ) =>
-        // Explicitly pass the real, concrete enum `type` YamlDotNet hands us to ToDescription
-        // instead of calling TryToDescription off a `value as System.Enum`-typed receiver: the
-        // latter's compile-time type is the abstract System.Enum base class, which resolves the
-        // generic ToDescription/TryToDescription overload with TEnum bound to System.Enum itself
-        // rather than the real enum type, so the underlying lookup finds no matching field/type
-        // and silently falls back to the enum's raw ToString(). Passing `type` explicitly avoids
-        // that trap and always resolves against the actual runtime enum type.
+        // Pass the concrete enum `type` to ToDescription. Calling the generic overload on a
+        // System.Enum-typed value binds TEnum to System.Enum itself, the attribute lookup finds no
+        // field, and the result falls back to the raw ToString().
         emitter.Emit(
             new Scalar(
                 value is System.Enum enumValue

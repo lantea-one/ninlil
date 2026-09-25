@@ -2,25 +2,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests;
 
 /// <summary>
-///     This class contains unit tests for the core <see cref="JsonSerializer" /> static wrapper,
-///     including the documented PascalCase-internal/no-naming-policy behavior, and two fixes made
-///     to <see cref="JsonSerializer.GetOptions" />:
-///     <list type="bullet">
-///         <item>
-///             It now returns an already-read-only <see cref="JsonSerializerOptions" /> instance
-///             verbatim instead of attempting to mutate it (which throws once an options instance
-///             has been used for a real (de)serialization operation).
-///         </item>
-///         <item>
-///             It now skips adding a converter type that's already present on the target options
-///             instance, instead of unconditionally appending the library's whole default
-///             converter list every call (which piled up duplicate converter instances on repeated
-///             calls against the same still-mutable options instance).
-///         </item>
-///     </list>
+///     These tests cover the <see cref="JsonSerializer" /> static wrapper: round trips, null and
+///     malformed input, property names kept as declared (no naming policy), and
+///     <see cref="JsonSerializer.GetOptions" />, which must return read-only options unchanged
+///     and must not add a converter type that is already present.
 /// </summary>
 public class JsonSerializerTests
 {
@@ -54,8 +43,8 @@ public class JsonSerializerTests
     [Fact]
     public void Serialize_UsesPascalCase_NoNamingPolicyApplied()
     {
-        // Per this project's documented convention, internal storage is always PascalCase --
-        // JsonSerializer sets no PropertyNamingPolicy, so property names round-trip verbatim.
+        // JsonSerializer sets no PropertyNamingPolicy, so property names round-trip as declared
+        // (PascalCase).
         string json = JsonSerializer.Serialize(new Simple { Value = "x" });
 
         Assert.Contains("\"Value\":\"x\"", json);
@@ -122,15 +111,15 @@ public class JsonSerializerTests
     [Fact]
     public void GetOptions_ReadOnlyInstance_IsReturnedVerbatim_NotMutated()
     {
-        // Lock an options instance by using it for a real serialization first.
+        // Make the options read-only by using them for a serialization first.
         var options = new JsonSerializerOptions();
         _ = System.Text.Json.JsonSerializer.Serialize(new Simple(), options);
         Assert.True(options.IsReadOnly);
 
         int converterCountBefore = options.Converters.Count;
 
-        // Before the fix, this would throw InvalidOperationException trying to mutate a locked
-        // options instance (setting WriteIndented, adding converters).
+        // Changing read-only options (WriteIndented, converters) would throw
+        // InvalidOperationException, so GetOptions must return them untouched.
         JsonSerializerOptions result = JsonSerializer.GetOptions(options);
 
         Assert.Same(options, result);
@@ -192,10 +181,9 @@ public class JsonSerializerTests
     [Fact]
     public void Serialize_WithExplicitConcreteType_SerializesConcreteMembers()
     {
-        // This documents the current, real behavior behind the interface-typed-payload trap: the non-generic
-        // Serialize(object payload) overload determines the serialization type from the runtime
-        // object via payload.GetType() (not the compile-time static type), so it is NOT
-        // susceptible to the "interface trap" -- it always sees the concrete shape.
+        // The non-generic Serialize(object payload) overload takes the type from
+        // payload.GetType() (not the compile-time type), so an interface-typed variable still
+        // serializes the concrete shape.
         IHasName asInterface = new Concrete { Name = "n", OnlyOnConcrete = 42 };
 
         string json = JsonSerializer.Serialize((object)asInterface);
@@ -206,13 +194,9 @@ public class JsonSerializerTests
     [Fact]
     public void SerializeGeneric_WithInterfaceTypeArgument_SerializesOnlyInterfaceMembers()
     {
-        // In contrast, the generic Serialize<TSource>(TSource payload) overload passes
-        // typeof(TSource) through explicitly -- if TSource is inferred/specified as an interface
-        // type, System.Text.Json serializes only that interface's own shape, exactly the
-        // interface-typed-payload trap. This is inherent to how the generic overload is
-        // implemented (it mirrors System.Text.Json's own generic API), not something this
-        // wrapper can silently correct without changing its documented, type-driven contract --
-        // this test exists to make the real, current behavior explicit rather than assumed.
+        // The generic Serialize<TSource>(TSource payload) overload passes typeof(TSource), so an
+        // interface TSource serializes only the interface's properties. This mirrors
+        // System.Text.Json's generic API; the test pins the behavior.
         IHasName asInterface = new Concrete { Name = "n", OnlyOnConcrete = 42 };
 
         string json = JsonSerializer.Serialize(asInterface);

@@ -1,21 +1,16 @@
 using System.Xml.Serialization;
 
-// Define our namespace for the FluentListModel class.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This class represents a generic list model that provides fluent methods for adding and removing items.
-///     It inherits from the generic <see cref="List{TType}" /> class, where TType is the type of items in the
-///     list. The class is decorated with XML serialization attributes to facilitate XML-based communication.
-///     It provides constructors for initializing the list with a specified capacity or from an existing collection
-///     of items. Additionally, it includes fluent methods for adding and removing items, allowing for method chaining.
-///     This class is useful for scenarios where you want to build and manipulate a list of items in a fluent and
-///     expressive manner.
+///     This class is a <see cref="List{T}" /> with fluent add and remove methods that return the
+///     list for chaining. <see cref="WithItem(TType)" /> removes an equal item before adding, so
+///     the list avoids duplicates by <see cref="object.Equals(object)" />.
+///     <see cref="FluentDistinctListModel{TType, TMatcher}" /> builds on it to deduplicate by a
+///     chosen property instead. It serializes as a plain XML <c>list</c>.
 /// </summary>
-/// <typeparam name="TType">
-///     The type of items in the list. This type parameter allows the list
-///     to hold any type of object, providing flexibility in its usage.
-/// </typeparam>
+/// <typeparam name="TType">The type of items in the list.</typeparam>
 [XmlInclude(typeof(List<>))]
 [XmlRoot("list")]
 public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
@@ -50,19 +45,9 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
         : base(items) { }
 
     /// <summary>
-    ///     This method fluently clears all items from the <see cref="FluentListModel{TType}" />.
-    ///     It removes all elements from the list, effectively resetting it to an empty state.
-    ///     This method is useful when you want to start fresh with an empty list and remove
-    ///     all previously added items. After calling this method, the list will be empty,
-    ///     and you can add new items as needed. The method returns the current instance of
-    ///     <see cref="FluentListModel{TType}" /> to allow for method chaining, enabling
-    ///     you to perform additional operations on the list after clearing it.
+    ///     This method removes every item from the list.
     /// </summary>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" />
-    ///     after clearing all items. This allows for method chaining, enabling you
-    ///     to perform additional operations on the list after clearing it.
-    /// </returns>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> ClearItems()
     {
         // Clear all items from the list.
@@ -73,27 +58,14 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
     }
 
     /// <summary>
-    ///     This method fluently adds a new <paramref name="item" /> to the
-    ///     <see cref="FluentListModel{TType}" />. It adds the specified item to the list
-    ///     and returns the current instance of the list for method chaining. This method is useful
-    ///     when you want to add items to the list in a fluent manner, allowing you to chain multiple
-    ///     method calls together. After calling this method, the specified item will be added to the
-    ///     list, and you can continue to add more items or perform other operations on the list. The
-    ///     method returns the current instance of <see cref="FluentListModel{TType}" /> to
-    ///     allow for method chaining, enabling you to perform additional operations on the list
-    ///     after adding the item.
+    ///     This method adds <paramref name="item" />, first removing one existing item equal to it.
     /// </summary>
     /// <param name="item">The item to be added to the list.</param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" />
-    ///     after adding the specified item. This allows for method chaining, enabling you
-    ///     to perform additional operations on the list after adding the item.
-    /// </returns>
+    /// <returns>The current list, for method chaining.</returns>
     public virtual FluentListModel<TType> WithItem(TType item)
     {
-        // Remove any existing item that is equal to this one (per its own Equals implementation)
-        // to avoid duplicates before adding it. A derived class (e.g. FluentDistinctListModel)
-        // overrides this method to use a distinct-property comparison instead of equality.
+        // Remove an existing equal item (by Equals) so the item is not duplicated.
+        // FluentDistinctListModel overrides this to compare a chosen property instead.
         WithoutItem(item);
 
         // Add the provided item to the list.
@@ -104,23 +76,11 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
     }
 
     /// <summary>
-    ///     This method fluently adds a collection of new <paramref name="items" /> to the
-    ///     <see cref="FluentListModel{TType}" />. It iterates through the provided
-    ///     collection of items and adds each one to the list using the <see cref="WithItem(TType)" />
-    ///     method. This ensures that any existing items with the same distinct property
-    ///     value are removed before adding the new items, preventing duplicates. The method
-    ///     returns the current instance of <see cref="FluentListModel{TType}" /> to
-    ///     allow for method chaining, enabling you to perform additional operations on the list
-    ///     after adding the items. This method is useful when you want to add multiple items to
-    ///     the list in a fluent manner, allowing you to chain multiple method calls together.
+    ///     This method adds each of <paramref name="items" /> through <see cref="WithItem(TType)" />, so
+    ///     duplicates are handled the same way (including by an override in a derived class).
     /// </summary>
     /// <param name="items">The collection of items to be added to the list.</param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" />
-    ///     after adding the specified collection of items. This allows for method
-    ///     chaining, enabling you to perform additional operations on the list after
-    ///     adding the items.
-    /// </returns>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithItems(IEnumerable<TType> items)
     {
         // Iterate through the provided collection of items and add each one to the list.
@@ -132,55 +92,23 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
     }
 
     /// <summary>
-    ///     This method fluently adds a variable number of new <paramref name="items" /> to the
-    ///     <see cref="FluentListModel{TType}" />. It converts the provided array of items
-    ///     into an enumerable collection and calls the <see cref="WithItems(IEnumerable{TType})" />
-    ///     method to add each item to the list. This ensures that any existing items with the same
-    ///     distinct property value are removed before adding the new items, preventing duplicates.
-    ///     The method returns the current instance of <see cref="FluentListModel{TType}" />
-    ///     to allow for method chaining, enabling you to perform additional operations on the list
-    ///     after adding the items. This method is useful when you want to add multiple items to the
-    ///     list in a fluent manner, allowing you to chain multiple method calls together.
+    ///     This method adds each of <paramref name="items" />; see
+    ///     <see cref="WithItems(IEnumerable{TType})" />.
     /// </summary>
     /// <param name="items">A variable number of items to be added to the list.</param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" />
-    ///     after adding the specified variable number of items. This allows for method
-    ///     chaining, enabling you to perform additional operations on the list after
-    ///     adding the items.
-    /// </returns>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithItems(params TType[] items) =>
         WithItems(items.AsEnumerable());
 
     /// <summary>
-    ///     This method fluently removes a specified <paramref name="item" /> from the
-    ///     <see cref="FluentListModel{TType}" />. It removes the specified item from
-    ///     the list and returns the current instance of the list for method chaining.
-    ///     This method is useful when you want to remove items from the list in a fluent
-    ///     manner, allowing you to chain multiple method calls together. After calling
-    ///     this method, the specified item will be removed from the list, and you can
-    ///     continue to remove more items or perform other operations on the list. The
-    ///     method returns the current instance of <see cref="FluentListModel{TType}" />
-    ///     to allow for method chaining, enabling you to perform additional operations
-    ///     on the list after removing the item.
+    ///     This method removes the first item equal to <paramref name="item" />, if any. A null item
+    ///     is ignored.
     /// </summary>
-    /// <param name="item">
-    ///     The item to be removed from the list. This parameter specifies the item that should
-    ///     be removed from the <see cref="FluentListModel{TType}" />. If the item is found in
-    ///     the list, it will be removed; otherwise, no action will be taken. The method ensures
-    ///     that the specified item is removed from the list, allowing for fluent manipulation
-    ///     of the collection.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" />
-    ///     after removing the specified item. This allows for method chaining, enabling you
-    ///     to perform additional operations on the list after removing the item. If the
-    ///     specified item was not found in the list, the method will still return the current
-    ///     instance, allowing for continued fluent manipulation of the collection without interruption.
-    /// </returns>
+    /// <param name="item">The item to be removed from the list.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithoutItem(TType item)
     {
-        // If the item is null, we cannot remove it from the list, so we simply return the current instance.
+        // A null item is ignored.
         if (item is null)
             return this;
 
@@ -192,56 +120,20 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
     }
 
     /// <summary>
-    ///     This method fluently removes the first item from the <see cref="FluentListModel{TType}" />
-    ///     that matches the specified <paramref name="predicate" />. It searches for the first item in
-    ///     the list that satisfies the provided predicate and removes it from the list. If no matching
-    ///     item is found, no action is taken. The method returns the current instance of the list for
-    ///     method chaining, allowing you to continue manipulating the list in a fluent manner. This
-    ///     method is useful when you want to remove items from the list based on specific conditions
-    ///     defined by the predicate, enabling more flexible and dynamic list manipulation.
+    ///     This method removes the first item that matches <paramref name="predicate" />. With no
+    ///     match, it tries to remove <c>default(TType)</c>, which for a value type can remove an
+    ///     unrelated item equal to the default.
     /// </summary>
-    /// <param name="predicate">
-    ///     A function that defines the conditions of the item to be removed. This predicate is used to
-    ///     identify the first item in the list that matches the specified criteria. The method will search
-    ///     through the list and remove the first item that satisfies the predicate. If no item matches the
-    ///     predicate, the method will not remove any items and will simply return the current instance of the list.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" /> after attempting to remove the
-    ///     first item that matches the specified predicate. This allows for method chaining, enabling you
-    ///     to perform additional operations on the list after the removal attempt. If no matching item was
-    ///     found, the method will still return the current instance, allowing for continued fluent manipulation
-    ///     of the collection without interruption.
-    /// </returns>
+    /// <param name="predicate">The condition the item to remove must meet.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithoutItem(Func<TType, bool> predicate) =>
         WithoutItem(this.FirstOrDefault(predicate));
 
     /// <summary>
-    ///     This method fluently removes a collection of specified <paramref name="items" /> from the
-    ///     <see cref="FluentListModel{TType}" />. It iterates through the provided collection of items
-    ///     and removes each one from the list using the <see cref="WithoutItem(TType)" /> method. This
-    ///     ensures that each specified item is removed from the list, and the method returns the current
-    ///     instance of <see cref="FluentListModel{TType}" /> to allow for method chaining, enabling you
-    ///     to perform additional operations on the list after removing the items. This method is useful
-    ///     when you want to remove multiple items from the list in a fluent manner, allowing you to chain
-    ///     multiple method calls together. After calling this method, the specified items will be removed
-    ///     from the list, and you can continue to remove more items or perform other operations on the list.
+    ///     This method removes one equal item for each of <paramref name="items" />.
     /// </summary>
-    /// <param name="items">
-    ///     The collection of items to be removed from the list. This parameter specifies the items that
-    ///     should be removed from the <see cref="FluentListModel{TType}" />. The method will iterate through
-    ///     the provided collection and remove each item from the list using the <see cref="WithoutItem(TType)" />
-    ///     method. If an item in the collection is not found in the list, no action will be taken for that item,
-    ///     and the method will continue to process the remaining items in the collection. The method ensures
-    ///     that all specified items are removed from the list, allowing for fluent manipulation of the collection.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" /> after removing the specified
-    ///     collection of items. This allows for method chaining, enabling you to perform additional
-    ///     operations on the list after removing the items. If any of the specified items were not found
-    ///     in the list, the method will still return the current instance, allowing for continued fluent
-    ///     manipulation of the collection without interruption.
-    /// </returns>
+    /// <param name="items">The collection of items to be removed from the list.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithoutItems(IEnumerable<TType> items)
     {
         // Iterate through the provided collection of items and remove each one from the list.
@@ -253,53 +145,21 @@ public class FluentListModel<TType> : List<TType>, IFluentListModel<TType>
     }
 
     /// <summary>
-    ///     This method fluently removes a variable number of specified <paramref name="items" /> from the
-    ///     <see cref="FluentListModel{TType}" />. It converts the provided array of items into an enumerable
-    ///     collection and calls the <see cref="WithoutItems(IEnumerable{TType})" /> method to remove each
-    ///     item from the list. This ensures that each specified item is removed from the list, and the method
-    ///     returns the current instance of <see cref="FluentListModel{TType}" /> to allow for method chaining,
-    ///     enabling you to perform additional operations on the list after removing the items. This method is
-    ///     useful when you want to remove multiple items from the list in a fluent manner, allowing you to
-    ///     chain multiple method calls together. After calling this method, the specified items will be removed
-    ///     from the list, and you can continue to remove more items or perform other operations on the list.
+    ///     This method removes one equal item for each of <paramref name="items" />.
     /// </summary>
     /// <param name="items">A variable number of items to be removed from the list.</param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentListModel{TType}" /> after removing the specified variable
-    ///     number of items. This allows for method chaining, enabling you to perform additional operations
-    ///     on the list after removing the items. If any of the specified items were not found in the list,
-    ///     the method will still return the current instance, allowing for continued fluent manipulation
-    ///     of the collection without interruption.
-    /// </returns>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithoutItems(params TType[] items) =>
         WithoutItems(items.AsEnumerable());
 
     /// <summary>
-    ///     This method fluently removes all items from the <see cref="FluentListModel{TType}" /> that match
-    ///     the specified <paramref name="predicate" />. It iterates through the list and removes each item
-    ///     that satisfies the provided predicate. If no matching items are found, no action is taken. The
-    ///     method returns the current instance of the list for method chaining, allowing you to continue
-    ///     manipulating the list in a fluent manner. This method is useful when you want to remove items
-    ///     from the list based on specific conditions defined by the predicate, enabling more flexible and
-    ///     dynamic list manipulation.
+    ///     This method removes every item that matches <paramref name="predicate" />.
     /// </summary>
-    /// <param name="predicate">
-    ///     A function that defines the conditions of the items to be removed. This predicate is used to identify
-    ///     the items in the list that match the specified criteria. The method will iterate through the list and
-    ///     remove all items that satisfy the predicate. If no items match the predicate, the method will not remove
-    ///     any items and will simply return the current instance of the list.
-    /// </param>
-    /// <returns>The current instance of <see cref="FluentListModel{TType}" /> after attempting to remove all
-    ///     items that match the specified predicate. This allows for method chaining, enabling you to perform
-    ///     additional operations on the list after the removal attempt. If no matching items were found, the
-    ///     method will still return the current instance, allowing for continued fluent manipulation of the
-    ///     collection without interruption.
-    /// </returns>
+    /// <param name="predicate">The condition the items to remove must meet.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentListModel<TType> WithoutItems(Func<TType, bool> predicate) =>
-        // Materialize the matches with ToList() before removing any of them -- WithoutItems(IEnumerable)
-        // below removes items one at a time as it enumerates its `items` argument, and passing it a
-        // lazy LINQ query directly over `this` would have that query's own enumerator invalidated by
-        // the very first removal (List<T>'s enumerator throws InvalidOperationException on the next
-        // MoveNext() once the list it's iterating has been structurally modified).
+        // Materialize the matches with ToList() first. WithoutItems(IEnumerable) removes items
+        // while enumerating its argument, and a lazy query over this list would throw
+        // InvalidOperationException after the first removal.
         WithoutItems(this.Where(predicate).ToList());
 }

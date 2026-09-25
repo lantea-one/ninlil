@@ -10,12 +10,11 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents a parsed console argument, which is used to store the information about a console
-///     argument that has been parsed from command-line input. It contains properties for the collection of CLI
-///     arguments associated with the argument, the attribute associated with the argument, and the property
-///     information of the associated input model property that corresponds to the CLI argument. This information
-///     is used to set the value of the property when parsing command-line input and to provide context about the
-///     argument for further processing in the application.
+///     This class pairs one argument declared on an input model (its attribute and property) with
+///     the command-line tokens that matched it. <see cref="ConsoleCommandArgumentCollection" />
+///     builds these while parsing, uses <see cref="Found" /> and <see cref="Required" /> to report
+///     missing arguments, and calls <see cref="SetValue" /> to convert the tokens and write the
+///     result to the model, falling back to the attribute's default when nothing matched.
 /// </summary>
 public class ParsedConsoleArgument
 {
@@ -28,8 +27,8 @@ public class ParsedConsoleArgument
     public ConsoleCommandArgumentCollection Arguments { get; set; } = [];
 
     /// <summary>
-    ///     This property contains the <see cref="ConsoleArgumentAttribute" />
-    ///     associated with the CLI <see cref="Arguments" />.
+    ///     This property contains the named, positional or nested-verb attribute that declares the
+    ///     argument.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
@@ -37,7 +36,7 @@ public class ParsedConsoleArgument
     public ConsoleArgumentAttribute Attribute { get; set; }
 
     /// <summary>
-    ///     This property contains a string representation of the <see cref="Attribute" />.
+    ///     This property contains a readable form of the <see cref="Attribute" /> for serialized output.
     /// </summary>
     [JsonPropertyName("attribute")]
     [XmlAttribute("attribute")]
@@ -47,7 +46,7 @@ public class ParsedConsoleArgument
             ? null
             : $"{Attribute.GetType().Name}[{Attribute switch
             {
-                // If we have a named attribute, return it's short or full name.
+                // A named attribute shows its short and/or long name.
                 NamedConsoleArgumentAttribute a => a.ShortName is not null && a.Name?.Trim() is not (null or { Length: 0 })
                     ? $"-{a.ShortName}, --{a.Name.Trim()}" : a.ShortName is null ? $"--{a.Name}" : $"-{a.ShortName}",
 
@@ -62,8 +61,7 @@ public class ParsedConsoleArgument
             }}]";
 
     /// <summary>
-    ///     This property contains the property information of the associated input model property that corresponds
-    ///     to the CLI argument, which is used to set the value of the property when parsing command-line input.
+    ///     This property contains the input model property the argument's value is written to.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
@@ -71,7 +69,7 @@ public class ParsedConsoleArgument
     public PropertyInfo Property { get; set; }
 
     /// <summary>
-    ///     This property contains a string representation of the <see cref="Property" />.
+    ///     This property contains a readable form of the <see cref="Property" /> for serialized output.
     /// </summary>
     [JsonPropertyName("property")]
     [XmlAttribute("property")]
@@ -80,10 +78,7 @@ public class ParsedConsoleArgument
         Property is null ? null : $"{Property.DeclaringType?.Name}.{Property.Name}";
 
     /// <summary>
-    ///     This field indicates whether the console argument was successfully found and parsed from the
-    ///     command-line input, which is used to determine whether the value of the property should be set
-    ///     when parsing command-line input and to provide context about the argument for further processing
-    ///     in the application.
+    ///     This property indicates whether any command-line token matched the argument.
     /// </summary>
     [JsonPropertyName("found")]
     [XmlAttribute("found")]
@@ -91,9 +86,8 @@ public class ParsedConsoleArgument
     public bool Found => Arguments?.Count > 0;
 
     /// <summary>
-    ///     This property indicates whether the console argument is required based on the associated attribute, which
-    ///     is used to determine whether the value of the property must be set when parsing command-line input and to
-    ///     provide context about the argument for further processing in the application.
+    ///     This property indicates whether the named or positional attribute marks the argument as
+    ///     required.
     /// </summary>
     [JsonPropertyName("required")]
     [XmlAttribute("required")]
@@ -104,46 +98,19 @@ public class ParsedConsoleArgument
                 or PositionalConsoleArgumentAttribute { Required: true };
 
     /// <summary>
-    ///     This method retrieves the default value of the console argument based on the associated attribute and
-    ///     the context of the argument, which is used to provide a default value for the property when parsing
-    ///     command-line input if the argument is not found or cannot be parsed. The method checks the required
-    ///     state of the argument and returns null if it's required. If the argument is not required, it determines
-    ///     the default value based on the type of the associated attribute and the context of the argument. For a
-    ///     named argument with a string default value, it attempts to parse the default value to the type of the
-    ///     property. For a nested verb, it creates an instance of the property type or retrieves the default value
-    ///     from the type itself. For a positional argument with a string default value, it also attempts to parse
-    ///     the default value to the type of the property. If none of these conditions are met, it checks for a
-    ///     default value property attribute and attempts to retrieve the default value from the property, or simply
-    ///     returns the default value from the type itself if there is no default value property attribute. This
-    ///     allows for flexible handling of default values for console arguments in the application, as it can
-    ///     determine the appropriate default value based on the context of the argument and the associated attribute,
-    ///     providing a more dynamic and robust way to handle default values for console arguments when parsing
-    ///     command-line input.
+    ///     This method returns the value to use when the argument was not given or could not be
+    ///     converted. A required argument gets <see langword="null" />. Otherwise the attribute's
+    ///     default is used, converted to the property type when it is a string; a nested verb gets
+    ///     a new instance of its type; and with no attribute default the property type's default is
+    ///     used.
     /// </summary>
-    /// <returns>
-    ///     The default value of the console argument based on the associated attribute and the context of the
-    ///     argument, which is used to provide a default value for the property when parsing command-line input
-    ///     if the argument is not found or cannot be parsed. The method checks the required state of the argument
-    ///     and returns null if it's required. If the argument is not required, it determines the default value based
-    ///     on the type of the associated attribute and the context of the argument. For a named argument with a string
-    ///     default value, it attempts to parse the default value to the type of the property. For a nested verb, it
-    ///     creates an instance of the property type or retrieves the default value from the type itself. For a
-    ///     positional argument with a string default value, it also attempts to parse the default value to the type
-    ///     of the property. If none of these conditions are met, it checks for a default value property attribute and
-    ///     attempts to retrieve the default value from the property, or simply returns the default value from the type
-    ///     itself if there is no default value property attribute. This allows for flexible handling of default values
-    ///     for console arguments in the application, as it can determine the appropriate default value based on the
-    ///     context of the argument and the associated attribute, providing a more dynamic and robust way to handle
-    ///     default values for console arguments when parsing command-line input.
-    /// </returns>
+    /// <returns>The fallback value for the property.</returns>
     private object GetDefaultValue() =>
         Required
             ? null
             : Attribute switch
             {
-                // Check for a named argument with a string default value then attempt to parse it,
-                // otherwise return the default value specified in the attribute, or the default value
-                // from the type if there is no default value specified in the attribute.
+                // A string default on a non-string property is converted to the property type.
                 NamedConsoleArgumentAttribute namedAttribute
                     when (
                         namedAttribute.Default?.GetType() == typeof(string)
@@ -160,13 +127,11 @@ public class ParsedConsoleArgument
                             : Property.PropertyType.GetDefaultValue()
                     ),
 
-                // Check for a nested verb with a string default value then attempt to parse it.
+                // A nested verb falls back to a new instance of its type.
                 NestedConsoleVerbAttribute => Property.PropertyType.CreateInstance()
                     ?? Property.PropertyType.GetDefaultValue(),
 
-                // Check for a positional argument with a string default value then attempt to parse it,
-                // otherwise return the default value specified in the attribute, or the default value
-                // from the type if there is no default value specified in the attribute.
+                // A string default on a non-string property is converted to the property type.
                 PositionalConsoleArgumentAttribute positionalAttribute
                     when (
                         positionalAttribute.Default?.GetType() == typeof(string)
@@ -184,39 +149,22 @@ public class ParsedConsoleArgument
                                 : Property.PropertyType.GetDefaultValue()
                         ),
 
-                // Otherwise, check for a default value property attribute and attempt to retrieve the default value
-                // from the property, or simply return the default value from the type itself if there is no default
-                // value property attribute.
+                // Any other attribute falls back to the property type's default.
                 _ => (Property.Attributes & PropertyAttributes.HasDefault) != 0
                     ? Property.GetValue(Property.PropertyType.CreateInstance())
                     : Property.PropertyType.GetDefaultValue(),
             };
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type, which is used to set the
-    ///     value of on an input model property when parsing command-line input. The method checks if the argument
-    ///     was found in the command-line input and attempts to parse the value of the argument to the type of the
-    ///     property. If the argument was not found and is required, it returns null; if the argument was not found
-    ///     and is not required, it returns the default value specified in the attribute. If the argument was found
-    ///     but the value cannot be parsed to the type of the property, it also returns null if the argument is
-    ///     required, or the default value if the argument is not required. This allows for flexible handling of
-    ///     console arguments in the application, as it can gracefully handle missing or invalid arguments based on
-    ///     the requirements specified in the attribute and provide appropriate default values when necessary.
+    ///     This method converts the tokens matched by a named argument to the property type. One
+    ///     token is converted directly. Several tokens (a repeated argument) are joined with commas,
+    ///     wrapped in <c>{}</c> for a dictionary or <c>()</c> for a tuple, and converted as one value.
+    ///     When nothing matched or conversion fails it returns <see cref="GetDefaultValue" />.
     /// </summary>
-    /// <returns>
-    ///     The value of the console argument as its specific type, which is used to set the value of on an input model
-    ///     property when parsing command-line input. The method checks if the argument was found in the command-line
-    ///     input and attempts to parse the value of the argument to the type of the property. If the argument was not
-    ///     found and is required, it returns null; if the argument was not found and is not required, it returns the
-    ///     default value specified in the attribute. If the argument was found but the value cannot be parsed to the
-    ///     type of the property, it also returns null if the argument is required, or the default value if the argument
-    ///     is not required. This allows for flexible handling of console arguments in the application, as it can
-    ///     gracefully handle missing or invalid arguments based on the requirements specified in the attribute and
-    ///     provide appropriate default values when necessary.
-    /// </returns>
+    /// <returns>The converted value, or the fallback value.</returns>
     private object GetParsedNamedValue()
     {
-        // Ensure the attribute has been found/provided and that it's not required.
+        // Without a matching token, use the fallback value.
         if (!Found)
             return GetDefaultValue();
 
@@ -256,51 +204,12 @@ public class ParsedConsoleArgument
     }
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type, which is used to set the
-    ///     value of on an input model property when parsing command-line input. The method checks if the argument
-    ///     was found in the command-line input and attempts to parse the value of the argument to the type of the
-    ///     property. If the argument was not found and is required, it returns null; if the argument was not found
-    ///     and is not required, it returns the default value specified in the attribute. If the argument was found
-    ///     but the value cannot be parsed to the type of the property, it also returns null if the argument is
-    ///     required, or the default value if the argument is not required. This allows for flexible handling of
-    ///     console arguments in the application, as it can gracefully handle missing or invalid arguments based on
-    ///     the requirements specified in the attribute and provide appropriate default values when necessary. The
-    ///     method also takes an optional <paramref name="argumentCollection" /> parameter, which is used to provide
-    ///     the collection of CLI arguments for parsing nested verb arguments, allowing for more complex command
-    ///     structures and nested commands in the application. If the argument is not found or cannot be parsed, it
-    ///     returns null or the default value based on the requirements specified in the attribute, providing graceful
-    ///     handling of missing or invalid arguments in the application. Overall, this method serves as a central
-    ///     point for retrieving the parsed value of a console argument based on its associated attribute and the
-    ///     context of the command being executed, allowing for flexible and dynamic handling of console arguments
-    ///     in the application when parsing command-line input.
+    ///     This method parses a nested verb. The tokens after the verb token are parsed into a new
+    ///     instance of the property type. When the verb was not given it returns
+    ///     <see cref="GetDefaultValue" />.
     /// </summary>
-    /// <param name="argumentCollection">
-    ///     The collection of CLI arguments for parsing nested verb arguments, which is used to provide the
-    ///     collection of CLI arguments for parsing nested verb arguments, allowing for more complex command structures
-    ///     and nested commands in the application. This parameter is particularly useful when the console argument
-    ///     being parsed is associated with a nested verb attribute, as it allows for the retrieval of the appropriate
-    ///     arguments for parsing the nested verb and its associated properties, providing a more dynamic and robust
-    ///     way to handle nested commands and their arguments in the application when parsing command-line input.
-    /// </param>
-    /// <returns>
-    ///     The value of the console argument as its specific type, which is used to set the value of on an input
-    ///     model property when parsing command-line input. The method checks if the argument was found in the
-    ///     command-line input and attempts to parse the value of the argument to the type of the property. If the
-    ///     argument was not found and is required, it returns null; if the argument was not found and is not
-    ///     required, it returns the default value specified in the attribute. If the argument was found but the
-    ///     value cannot be parsed to the type of the property, it also returns null if the argument is required,
-    ///     or the default value if the argument is not required. This allows for flexible handling of console
-    ///     arguments in the application, as it can gracefully handle missing or invalid arguments based on the
-    ///     requirements specified in the attribute and provide appropriate default values when necessary. The
-    ///     method also takes an optional <paramref name="argumentCollection" /> parameter, which is used to
-    ///     provide the collection of CLI arguments for parsing nested verb arguments, allowing for more complex
-    ///     command structures and nested commands in the application. If the argument is not found or cannot be
-    ///     parsed, it returns null or the default value based on the requirements specified in the attribute,
-    ///     providing graceful handling of missing or invalid arguments in the application. Overall, this method
-    ///     serves as a central point for retrieving the parsed value of a console argument based on its associated
-    ///     attribute and the context of the command being executed, allowing for flexible and dynamic handling of
-    ///     console arguments in the application when parsing command-line input.
-    /// </returns>
+    /// <param name="argumentCollection">The full token collection being parsed.</param>
+    /// <returns>The parsed nested input model, or the fallback value.</returns>
     private object GetParsedNestedVerbValue(ConsoleCommandArgumentCollection argumentCollection) =>
         Found
             ? new ConsoleCommandArgumentCollection(
@@ -309,27 +218,10 @@ public class ParsedConsoleArgument
             : GetDefaultValue();
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type, which is used to set the
-    ///     value of on an input model property when parsing command-line input. The method checks if the argument
-    ///     was found in the command-line input and attempts to parse the value of the argument to the type of the
-    ///     property. If the argument was not found and is required, it returns null; if the argument was not found
-    ///     and is not required, it returns the default value specified in the attribute. If the argument was found
-    ///     but the value cannot be parsed to the type of the property, it also returns null if the argument is
-    ///     required, or the default value if the argument is not required. This allows for flexible handling of
-    ///     console arguments in the application, as it can gracefully handle missing or invalid arguments based on
-    ///     the requirements specified in the attribute and provide appropriate default values when necessary.
+    ///     This method converts the token matched by a positional argument to the property type.
+    ///     When nothing matched or conversion fails it returns <see cref="GetDefaultValue" />.
     /// </summary>
-    /// <returns>
-    ///     The value of the console argument as its specific type, which is used to set the value of on an input model
-    ///     property when parsing command-line input. The method checks if the argument was found in the command-line
-    ///     input and attempts to parse the value of the argument to the type of the property. If the argument was not
-    ///     found and is required, it returns null; if the argument was not found and is not required, it returns the
-    ///     default value specified in the attribute. If the argument was found but the value cannot be parsed to the
-    ///     type of the property, it also returns null if the argument is required, or the default value if the
-    ///     argument is not required. This allows for flexible handling of console arguments in the application, as it
-    ///     can gracefully handle missing or invalid arguments based on the requirements specified in the attribute and
-    ///     provide appropriate default values when necessary.
-    /// </returns>
+    /// <returns>The converted value, or the fallback value.</returns>
     private object GetParsedPositionalValue() =>
         Found
         && Arguments
@@ -340,8 +232,8 @@ public class ParsedConsoleArgument
             : GetDefaultValue();
 
     /// <summary>
-    ///     This method retrieves the <see cref="ConsoleArgumentAttribute" /> associated with the CLI arguments as a
-    ///     specific type, which is used to provide context about the argument for further processing in the application.
+    ///     This method returns the <see cref="Attribute" /> as <typeparamref name="TAttribute" />, or
+    ///     <see langword="null" /> when it is a different kind.
     /// </summary>
     /// <typeparam name="TAttribute">
     ///     The type of the <see cref="ConsoleArgumentAttribute" /> to retrieve, which must be a subclass of
@@ -354,46 +246,15 @@ public class ParsedConsoleArgument
         where TAttribute : ConsoleArgumentAttribute => Attribute as TAttribute;
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type, which is used to set
-    ///     the value of on an input model property when parsing command-line input. The method checks the type
-    ///     of the associated attribute and calls the appropriate parsing method based on whether it's a named
-    ///     argument, a nested verb, or a positional argument. This allows for flexible handling of different
-    ///     types of console arguments in the application, as it can determine the appropriate parsing logic
-    ///     based on the context of the argument and the associated attribute, providing a more dynamic and robust
-    ///     way to handle console arguments when parsing command-line input. The method also takes an optional
-    ///     <paramref name="argumentCollection" /> parameter, which is used to provide the collection of CLI
-    ///     arguments for parsing nested verb arguments, allowing for more complex command structures and nested
-    ///     commands in the application. If the argument is not found or cannot be parsed, it returns null or
-    ///     the default value based on the requirements specified in the attribute, providing graceful handling of
-    ///     missing or invalid arguments in the application. Overall, this method serves as a central point for
-    ///     retrieving the parsed value of a console argument based on its associated attribute and the context of
-    ///     the command being executed, allowing for flexible and dynamic handling of console arguments in the
-    ///     application when parsing command-line input.
+    ///     This method converts the matched tokens to the property type, choosing the conversion by
+    ///     the kind of <see cref="Attribute" />.
     /// </summary>
     /// <param name="argumentCollection">
-    ///     The optional collection of CLI arguments for parsing nested verb arguments, which is used to provide
-    ///     the collection of CLI arguments for parsing nested verb arguments, allowing for more complex command
-    ///     structures and nested commands in the application. This parameter is particularly useful when the
-    ///     console argument being parsed is associated with a nested verb attribute, as it allows for the retrieval
-    ///     of the appropriate arguments for parsing the nested verb and its associated properties, providing a more
-    ///     dynamic and robust way to handle nested commands and their arguments in the application when parsing
-    ///     command-line input.
+    ///     The full token collection being parsed. Only a nested verb uses it.
     /// </param>
     /// <returns>
-    ///     The value of the console argument as its specific type, which is used to set the value of on an input model
-    ///     property when parsing command-line input. The method checks the type of the associated attribute and calls
-    ///     the appropriate parsing method based on whether it's a named argument, a nested verb, or a positional
-    ///     argument. This allows for flexible handling of different types of console arguments in the application,
-    ///     as it can determine the appropriate parsing logic based on the context of the argument and the associated
-    ///     attribute, providing a more dynamic and robust way to handle console arguments when parsing command-line
-    ///     input. The method also takes an optional <paramref name="argumentCollection" /> parameter, which is used
-    ///     to provide the collection of CLI arguments for parsing nested verb arguments, allowing for more complex
-    ///     command structures and nested commands in the application. If the argument is not found or cannot be
-    ///     parsed, it returns null or the default value based on the requirements specified in the attribute,
-    ///     providing graceful handling of missing or invalid arguments in the application. Overall, this method
-    ///     serves as a central point for retrieving the parsed value of a console argument based on its associated
-    ///     attribute and the context of the command being executed, allowing for flexible and dynamic handling of
-    ///     console arguments in the application when parsing command-line input.
+    ///     The converted value, the fallback value, or <see langword="null" /> for an unknown
+    ///     attribute kind.
     /// </returns>
     public object GetParsedValue(ConsoleCommandArgumentCollection argumentCollection = null) =>
         Attribute switch
@@ -412,94 +273,27 @@ public class ParsedConsoleArgument
         };
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type, which is used to set the
-    ///     value of on an input model property when parsing command-line input. The method checks the type of the
-    ///     associated attribute and calls the appropriate parsing method based on whether it's a named argument,
-    ///     a nested verb, or a positional argument. This allows for flexible handling of different types of console
-    ///     arguments in the application, as it can determine the appropriate parsing logic based on the context of
-    ///     the argument and the associated attribute, providing a more dynamic and robust way to handle console
-    ///     arguments when parsing command-line input. The method also takes an optional
-    ///     <paramref name="argumentCollection" /> parameter, which is used to provide the collection of CLI arguments
-    ///     for parsing nested verb arguments, allowing for more complex command structures and nested commands in the
-    ///     application. If the argument is not found or cannot be parsed, it returns null or the default value based
-    ///     on the requirements specified in the attribute, providing graceful handling of missing or invalid arguments
-    ///     in the application. Overall, this method serves as a central point for retrieving the parsed value of a
-    ///     console argument based on its associated attribute and the context of the command being executed, allowing
-    ///     for flexible and dynamic handling of console arguments in the application when parsing command-line input.
-    ///     The method is also generic, allowing the caller to specify the desired type of the value being retrieved,
-    ///     which is used to convert the parsed value to a more specific data type for further processing in the
-    ///     application. This provides a more convenient and type-safe way to retrieve the parsed value of a console
-    ///     argument, as the caller can directly specify the expected type of the value and receive it in that type
-    ///     without needing to manually cast the result, enhancing the usability and readability of the code when
-    ///     working with parsed console arguments in the application when parsing command-line input.
+    ///     This method converts the matched tokens to the property type and casts the result to
+    ///     <typeparamref name="TValue" />.
     /// </summary>
     /// <param name="argumentCollection">
-    ///     The optional collection of CLI arguments for parsing nested verb arguments, which is used to provide the
-    ///     collection of CLI arguments for parsing nested verb arguments, allowing for more complex command structures
-    ///     and nested commands in the application. This parameter is particularly useful when the console argument
-    ///     being parsed is associated with a nested verb attribute, as it allows for the retrieval of the appropriate
-    ///     arguments for parsing the nested verb and its associated properties, providing a more dynamic and robust
-    ///     way to handle nested commands and their arguments in the application when parsing command-line input.
-    ///     If the argument is not found or cannot be parsed, it returns null or the default value based on the
-    ///     requirements specified in the attribute, providing graceful handling of missing or invalid arguments in
-    ///     the application. Overall, this method serves as a central point for retrieving the parsed value of a
-    ///     console argument based on its associated attribute and the context of the command being executed, allowing
-    ///     for flexible and dynamic handling of console arguments in the application when parsing command-line input.
-    ///     The method is also generic, allowing the caller to specify the desired type of the value being retrieved,
-    ///     which is used to convert the parsed value to a more specific data type for further processing in the
-    ///     application. This provides a more convenient and type-safe way to retrieve the parsed value of a console
-    ///     argument, as the caller can directly specify the expected type of the value and receive it in that type
-    ///     without needing to manually cast the result, enhancing the usability and readability of the code when
-    ///     working with parsed console arguments in the application when parsing command-line input.
+    ///     The full token collection being parsed. Only a nested verb uses it.
     /// </param>
-    /// <typeparam name="TValue">
-    ///     The type to which the value of the console argument should be converted, which is used to convert the
-    ///     parsed value to a more specific data type for further processing in the application. This allows the
-    ///     caller to directly specify the expected type of the value being retrieved, providing a more convenient
-    ///     and type-safe way to work with parsed console arguments in the application when parsing command-line input,
-    ///     as it eliminates the need for manual casting and enhances the readability of the code when working with
-    ///     parsed console arguments in the application.
-    /// </typeparam>
-    /// <returns>
-    ///     The value of the console argument as its specific type, which is used to set the value of on an input model
-    ///     property when parsing command-line input. The method checks the type of the associated attribute and calls
-    ///     the appropriate parsing method based on whether it's a named argument, a nested verb, or a positional
-    ///     argument. This allows for flexible handling of different types of console arguments in the application, as
-    ///     it can determine the appropriate parsing logic based on the context of the argument and the associated
-    ///     attribute, providing a more dynamic and robust way to handle console arguments when parsing command-line
-    ///     input. The method also takes an optional <paramref name="argumentCollection" /> parameter, which is used
-    ///     to provide the collection of CLI arguments for parsing nested verb arguments, allowing for more complex
-    ///     command structures and nested commands in the application. If the argument is not found or cannot be
-    ///     parsed, it returns null or the default value based on the requirements specified in the attribute,
-    ///     providing graceful handling of missing or invalid arguments in the application. Overall, this method
-    ///     serves as a central point for retrieving the parsed value of a console argument based on its associated
-    ///     attribute and the context of the command being executed, allowing for flexible and dynamic handling of
-    ///     console arguments in the application when parsing command-line input. The method is also generic, allowing
-    ///     the caller to specify the desired type of the value being retrieved, which is used to convert the parsed
-    ///     value to a more specific data type for further processing in the application. This provides a more
-    ///     convenient and type-safe way to retrieve the parsed value of a console argument, as the caller can directly
-    ///     specify the expected type of the value and receive it in that type without needing to manually cast the
-    ///     result, enhancing the usability and readability of the code when working with parsed console arguments in
-    ///     the application when parsing command-line input.
-    /// </returns>
+    /// <typeparam name="TValue">The type to cast the converted value to.</typeparam>
+    /// <returns>The converted value as <typeparamref name="TValue" />.</returns>
     public TValue GetParsedValue<TValue>(
         ConsoleCommandArgumentCollection argumentCollection = null
     ) => (TValue)GetParsedValue(argumentCollection);
 
     /// <summary>
-    ///     This method retrieves the value of the console argument as its specific type,
-    ///     which is used to set the value of the provided <paramref name="inputModel" />
-    ///     property when parsing command-line input.
+    ///     This method converts the matched tokens and writes the result to <see cref="Property" />
+    ///     on <paramref name="inputModel" />.
     /// </summary>
-    /// <param name="inputModel">
-    ///     The input model instance for which the value of the console argument should be set,
-    ///     which is used to set the value of the property when parsing command-line input.
-    /// </param>
+    /// <param name="inputModel">The input model instance to write to.</param>
     /// <param name="argumentCollection">
-    ///     The full collection of CLI arguments being parsed, forwarded to <see cref="GetParsedValue(ConsoleCommandArgumentCollection)" />
-    ///     so a nested-verb property can locate and parse its own sub-collection of arguments. Without
-    ///     this, a nested verb's own arguments are invisible to it and it always resolves to its
-    ///     default value instead of what was actually typed on the command line.
+    ///     The full token collection being parsed, passed to
+    ///     <see cref="GetParsedValue(ConsoleCommandArgumentCollection)" /> so a nested verb can parse
+    ///     the tokens that follow it. Without it a nested verb always gets its default.
     /// </param>
     public void SetValue(
         object inputModel,

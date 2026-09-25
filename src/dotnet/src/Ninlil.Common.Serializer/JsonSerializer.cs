@@ -9,12 +9,20 @@ using Ninlil.Common.Serializer.Model;
 namespace Ninlil.Common.Serializer;
 
 /// <summary>
-///     This class maintains our JSON serialization capabilities.
+///     This static class is Ninlil's front door to System.Text.Json. Every call builds options that
+///     allow trailing commas and comments, ignore property-name case, and include the shared
+///     <see cref="Converters" /> (structured strings, IP and MAC addresses, colors, URIs and camelCase
+///     enum strings). Other assemblies add their own converters through <see cref="AddConverter(JsonConverter)" />,
+///     for example from a module initializer. Both serialized output and input to deserialize pass
+///     through <see cref="SanitizeJsonString" />. Deserializing with explicit options uses them as
+///     given, without adding the shared converters. The <c>Try*</c> methods return
+///     <see langword="false" /> instead of throwing.
 /// </summary>
 public static class JsonSerializer
 {
     /// <summary>
-    ///     This property contains our default JSON converters.
+    ///     This field lists the converters added to every set of options <see cref="GetOptions" />
+    ///     builds. Add to it through <see cref="AddConverter(JsonConverter)" />.
     /// </summary>
     public static readonly List<JsonConverter> Converters =
     [
@@ -39,12 +47,12 @@ public static class JsonSerializer
     ];
 
     /// <summary>
-    ///     This property contains our default JSON serializer options.
+    ///     This field holds the options exposed through <see cref="SerializerOptions" />.
     /// </summary>
     private static JsonSerializerOptions _options = GetOptions();
 
     /// <summary>
-    ///     This property contains our regular expression used to sanitize JSON strings.
+    ///     This field matches runs of <c>\uXXXX</c> escapes. Nothing in this class uses it.
     /// </summary>
     private static readonly Regex SanitizationRegularExpression = new(
         @"(\\u(?<Value>[a-zA-Z0-9]{4}))+",
@@ -52,7 +60,9 @@ public static class JsonSerializer
     );
 
     /// <summary>
-    ///     This property contains our default serializer options.
+    ///     This property holds process-wide default options, completed by <see cref="GetOptions" /> on
+    ///     set. The serialize and deserialize methods do not read it: without explicit options they
+    ///     build fresh defaults.
     /// </summary>
     public static JsonSerializerOptions SerializerOptions
     {
@@ -149,10 +159,14 @@ public static class JsonSerializer
             );
 
     /// <summary>
-    ///     This method generates new options for a de/serialization.
+    ///     This method returns options ready for use: <paramref name="fromOptions" />, or new defaults
+    ///     (trailing commas, comments skipped, case-insensitive names), with the indent setting applied
+    ///     and every converter in <see cref="Converters" /> added if its type is missing. The given
+    ///     options are changed in place. Read-only options (already used for serialization) are
+    ///     returned unchanged.
     /// </summary>
-    /// <param name="pretty">Denotes whether to indent the JSON or not.</param>
-    /// <param name="fromOptions">Optional default serializer options.</param>
+    /// <param name="pretty">Whether to indent the JSON; null keeps the existing setting.</param>
+    /// <param name="fromOptions">Optional options to complete instead of new defaults.</param>
     /// <returns>The JSON serializer options.</returns>
     public static JsonSerializerOptions GetOptions(
         JsonSerializerOptions fromOptions = null,
@@ -177,20 +191,17 @@ public static class JsonSerializer
                 WriteIndented = false,
             };
 
-        // A JsonSerializerOptions instance becomes permanently read-only the moment it's used
-        // for a (de)serialization operation. A custom JsonConverter that calls back into this
-        // wrapper (e.g. ListMapJsonConverter) is handed that very same, already-in-use instance
-        // by the framework -- it's already carrying every converter it needs from whichever
-        // top-level call locked it, so any further mutation attempt would throw. Return it as-is.
+        // Options become read-only once used. A converter that calls back into this class (such
+        // as ListMapJsonConverter) receives such in-use options, which already carry every
+        // converter; changing them would throw, so return them as they are.
         if (options.IsReadOnly)
             return options;
 
         // Reconcile the pretty option.
         options.WriteIndented = pretty ?? options.WriteIndented;
 
-        // Add our converters to the options, skipping any converter type that's already present
-        // so repeated calls against the same still-mutable options instance don't pile up
-        // duplicate converter instances.
+        // Add each shared converter whose type is not already present, so repeated calls on the
+        // same options do not add duplicates.
         Converters
             .Where(c => options.Converters.All(existing => existing.GetType() != c.GetType()))
             .ToList()
@@ -201,11 +212,9 @@ public static class JsonSerializer
     }
 
     /// <summary>
-    ///     This method repairs a malformed <paramref name="json" /> string that contains a literal,
-    ///     unescaped double-quote inside one of its own string values -- something no valid JSON
-    ///     document can contain, but which real upstream data (a user-typed comment, an externally
-    ///     sourced description field) occasionally does anyway, and which would otherwise make
-    ///     deserialization fail outright rather than simply losing a bit of fidelity in that one field.
+    ///     This method repairs JSON that contains an unescaped double quote inside a string value, which
+    ///     makes the document invalid, by escaping quotes inside every <c>"key": "value"</c> pair.
+    ///     It is a best-effort repair for hand-typed or external data.
     /// </summary>
     /// <param name="json">The JSON string to sanitize.</param>
     /// <returns>The sanitized <paramref name="json" /> string.</returns>
@@ -262,9 +271,8 @@ public static class JsonSerializer
     /// <param name="options">Optional, JSON Serializer Options override.</param>
     /// <returns>JSON serialized <paramref name="payload" /> object instance.</returns>
     public static string Serialize(object payload, JsonSerializerOptions options = null) =>
-        // A null payload has no runtime type to reflect -- fall back to typeof(object) so the
-        // 3-arg overload's own null check (which returns null) is reached instead of throwing a
-        // NullReferenceException here on payload.GetType().
+        // A null payload has no runtime type; use typeof(object) so the three-argument
+        // overload's null check returns null instead of throwing here.
         Serialize(payload?.GetType() ?? typeof(object), payload, options);
 
     /// <summary>
@@ -281,13 +289,13 @@ public static class JsonSerializer
     ) => Serialize(typeof(TSource), payload, options);
 
     /// <summary>
-    ///     This method serialized <paramref name="payload" /> into an indented and pretty JSON string.
+    ///     This method serializes <paramref name="payload" /> into an indented JSON string.
     /// </summary>
     /// <param name="payload">The value to serialize.</param>
     /// <param name="options">Optional, JSON Serializer Options override.</param>
     /// <returns>Pretty JSON-serialized <paramref name="payload" />.</returns>
     public static string SerializePretty(object payload, JsonSerializerOptions options = null) =>
-        // See the matching null-guard note on Serialize(object, ...) above.
+        // See the null-payload note on Serialize(object, ...) above.
         SerializePretty(payload?.GetType() ?? typeof(object), payload, options);
 
     /// <summary>

@@ -8,12 +8,12 @@ using Microsoft.AspNetCore.Routing;
 using Ninlil.Common.Serializer.Model;
 using Ninlil.Common.Serializer.ModelBinder;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.ModelBinder;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FromDataUriQueryModelBinder" />. See
-///     <see cref="FromJsonQueryModelBinderTests" /> for the shared reasoning behind how the
-///     binding context is constructed for these tests.
+///     These tests bind data URI query values with <see cref="FromDataUriQueryModelBinder" />, using
+///     a binding context built as in <see cref="FromJsonQueryModelBinderTests" />.
 /// </summary>
 public class FromDataUriQueryModelBinderTests
 {

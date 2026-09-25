@@ -1,17 +1,15 @@
 using Ninlil.Common.Console.Service;
 using Ninlil.Common.Serializer.Enum;
 
-// Define our namespace for the console-service tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Service;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleService" /> - the colored-output helpers. Most
-///     scenarios only verify the calls complete without throwing, since capturing real console output
-///     (or its color state, which reflects the actual OS terminal/redirected-stream default rather
-///     than any snapshot taken before the call) isn't meaningfully assertable in a headless,
-///     parallel-capable test run. <see cref="ConsoleService.Exit" />/the exiting overload of
-///     <see cref="ConsoleService.WriteLine(Exception, bool)" /> are never exercised at all - both call
-///     <see cref="Environment.Exit" />, which would terminate the test host.
+///     These tests cover the <see cref="ConsoleService" /> output helpers. They only check that the
+///     calls do not throw: console output and color state cannot be asserted reliably in a
+///     headless, parallel test run. <see cref="ConsoleService.Exit" /> and the exiting overload of
+///     <see cref="ConsoleService.WriteLine(Exception, bool)" /> are not tested because they call
+///     <see cref="Environment.Exit" />, which would stop the test host.
 /// </summary>
 public class ConsoleServiceTests
 {
@@ -24,11 +22,9 @@ public class ConsoleServiceTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleService.WriteLine(ConsoleColor, string, object[])" /> with no
-    ///     replacements does not treat the text as a composite format string. This is a real bug found
-    ///     and fixed in this project: <c>Console.WriteLine(string, object[])</c> always parses its first
-    ///     argument as a composite format string, even when the replacements array is empty, so any
-    ///     text containing an unescaped '{' (a bare, non-numeric brace like this test's) previously threw
-    ///     a <see cref="FormatException" /> instead of being printed literally.
+    ///     replacements does not treat the text as a composite format string.
+    ///     <c>Console.WriteLine(string, object[])</c> parses its first argument as a format string even
+    ///     when the array is empty, so text with a bare '{' would throw a <see cref="FormatException" />.
     /// </summary>
     [Fact]
     public void WriteLine_WithLiteralBraceAndNoReplacements_DoesNotThrow()
@@ -36,7 +32,7 @@ public class ConsoleServiceTests
         ConsoleService.WriteLine(ConsoleColor.DarkGreen, "status: {not a placeholder}");
     }
 
-    /// <summary>Verifies that <see cref="ConsoleService.WriteLine(ConsoleColor, string, object[])" /> with real replacements still applies composite formatting.</summary>
+    /// <summary>Verifies that <see cref="ConsoleService.WriteLine(ConsoleColor, string, object[])" /> with replacements still applies composite formatting.</summary>
     [Fact]
     public void WriteLine_WithReplacements_AppliesCompositeFormat()
     {
@@ -59,9 +55,9 @@ public class ConsoleServiceTests
 
     /// <summary>
     ///     Verifies that the generic <see cref="ConsoleService.WriteLine{TValue}(ConsoleColor, SerializerFormatEnum, TValue)" />
-    ///     overload doesn't throw when serializing a value to JSON - the exact real-world trigger for
-    ///     the bug described on <see cref="WriteLine_WithLiteralBraceAndNoReplacements_DoesNotThrow" />,
-    ///     since JSON output always contains literal, unescaped braces.
+    ///     overload doesn't throw when serializing a value to JSON. JSON output always contains
+    ///     braces, which is the case <see cref="WriteLine_WithLiteralBraceAndNoReplacements_DoesNotThrow" />
+    ///     guards against.
     /// </summary>
     [Fact]
     public void WriteLineGeneric_WithJsonFormat_DoesNotThrowOnBraceContainingOutput()

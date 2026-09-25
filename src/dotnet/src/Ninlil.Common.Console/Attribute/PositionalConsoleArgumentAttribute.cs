@@ -4,7 +4,9 @@
 namespace Ninlil.Common.Console.Attribute;
 
 /// <summary>
-///     This attribute is used to define console arguments for a command-line application that are positional.
+///     This attribute marks an input model property as a positional argument. The position is the
+///     token's index in the raw argument list, so the verb and any named arguments (with their
+///     values) before it count towards it.
 /// </summary>
 /// <param name="position">The index position of the console argument in the command line.</param>
 /// <param name="description">The description of the console argument to be displayed in the help text.</param>
@@ -24,22 +26,22 @@ public class PositionalConsoleArgumentAttribute(
 ) : ConsoleArgumentAttribute
 {
     /// <summary>
-    ///     This property contains the default value for the console argument.
+    ///     This field contains the default value for the console argument.
     /// </summary>
     public readonly object Default = defaultValue;
 
     /// <summary>
-    ///     This property contains the description of the console argument to be displayed in the help text.
+    ///     This field contains the description of the console argument to be displayed in the help text.
     /// </summary>
     public readonly string Description = description?.Trim();
 
     /// <summary>
-    ///     This property contains the group name for the console argument, which can be used to categorize related arguments.
+    ///     This field contains the group name for the console argument, which can be used to categorize related arguments.
     /// </summary>
     public readonly string Group = group?.Trim();
 
     /// <summary>
-    ///     This property contains the index position of the console argument in the command line.
+    ///     This field contains the index position of the console argument in the command line.
     /// </summary>
     public readonly int Position =
         position >= 0
@@ -50,7 +52,7 @@ public class PositionalConsoleArgumentAttribute(
             );
 
     /// <summary>
-    ///     This property indicates whether the console argument is required.
+    ///     This field indicates whether the console argument is required.
     /// </summary>
     public readonly bool Required = required;
 
@@ -70,7 +72,8 @@ public class PositionalConsoleArgumentAttribute(
 }
 
 /// <summary>
-///     This attribute is used to define console arguments for a command-line application that are positional.
+///     This attribute is the generic form of <see cref="PositionalConsoleArgumentAttribute" />.
+///     The type parameter documents the argument's value type; parsing uses the property type.
 /// </summary>
 /// <param name="position">The index position of the console argument in the command line.</param>
 /// <param name="description">The description of the console argument to be displayed in the help text.</param>

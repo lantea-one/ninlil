@@ -7,7 +7,8 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a YAML type converter for <see cref="PhysicalAddress" /> objects.
+///     This YamlDotNet type converter writes a <see cref="PhysicalAddress" /> (MAC address) as its string form and reads it back. Unparseable
+///     text reads as <see langword="null" />, and a null value is written as an empty string.
 /// </summary>
 public class PhysicalAddressYamlConverter : IYamlTypeConverter
 {
@@ -29,12 +30,11 @@ public class PhysicalAddressYamlConverter : IYamlTypeConverter
     /// </returns>
     public object ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
-        // Capture the scalar node the parser is currently positioned on -- it represents this
-        // value -- before advancing past it, so the parser is left correctly positioned for
-        // whatever the caller reads next (a sibling property, a sequence item, etc.).
+        // YamlDotNet calls the converter with Current on this value's node. Read it, then
+        // advance so the caller continues from the next node.
         Scalar scalar = parser.Current as Scalar;
 
-        // Advance the parser past this scalar now that we've captured its value.
+        // Advance the parser past this node.
         parser.MoveNext();
 
         // We're done, parse the captured scalar's value into a physical address, or return null.

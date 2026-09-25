@@ -6,16 +6,15 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="GetEnumDescriptionsTypeExtension" />.
+///     These tests list descriptions of a sample enum with <see cref="GetEnumDescriptionsTypeExtension" />
+///     and the default attribute checks, for the whole type and for single members.
 /// </summary>
 public class GetEnumDescriptionsTypeExtensionTests
 {
     /// <summary>
-    ///     An enum decorated with the same description-carrying attribute the production code checks
-    ///     for by default (<see cref="EnumMemberAttribute" />; <see cref="DisplayNameAttribute" /> is
-    ///     also in the default attribute-check list, but cannot itself be applied to an enum member --
-    ///     its own <see cref="AttributeUsageAttribute" /> only allows class/method/property/indexer/event
-    ///     targets, not fields, so it can never actually fire against an enum value in practice).
+    ///     An enum with one <see cref="EnumMemberAttribute" /> member. The default checks also include
+    ///     <see cref="DisplayNameAttribute" />, but its <see cref="AttributeUsageAttribute" /> does not
+    ///     allow fields, so it cannot be applied to an enum member.
     /// </summary>
     private enum SampleDescribedEnum
     {
@@ -70,9 +69,8 @@ public class GetEnumDescriptionsTypeExtensionTests
     }
 
     /// <summary>
-    ///     The <c>fieldName</c> overload scopes its result to just that one field: its attribute-derived
-    ///     description(s), plus the field's own raw name as a fallback -- never another member's name or
-    ///     value.
+    ///     The <c>fieldName</c> overload returns only that field's attribute-derived descriptions plus
+    ///     its name, never another member's.
     /// </summary>
     [Fact]
     public void GetEnumDescriptionsForSpecificFieldNameIsScopedToThatFieldOnly()
@@ -91,8 +89,7 @@ public class GetEnumDescriptionsTypeExtensionTests
     }
 
     /// <summary>
-    ///     For an unattributed member, the <c>fieldName</c> overload's result falls back to just that
-    ///     field's own raw name -- not any other member's, and not every member concatenated together.
+    ///     For an unattributed member, the <c>fieldName</c> overload returns only that field's name.
     /// </summary>
     [Fact]
     public void GetEnumDescriptionsForUnattributedFieldNameFallsBackToJustItsOwnName()

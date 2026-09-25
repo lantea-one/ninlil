@@ -1,12 +1,11 @@
 using Ninlil.Common.Console.Enum;
 
-// Define our namespace for the console-command-argument-type enum tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Enum;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleCommandArgumentType" /> - specifically that its
-///     members exist with the expected distinct values, since several parsing code paths branch on
-///     these exact values.
+///     These tests check that <see cref="ConsoleCommandArgumentType" /> defines the expected
+///     members with distinct values, since the parser branches on them.
 /// </summary>
 public class ConsoleCommandArgumentTypeTests
 {

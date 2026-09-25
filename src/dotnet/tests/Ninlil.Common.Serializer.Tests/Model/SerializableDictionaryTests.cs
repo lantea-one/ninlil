@@ -2,17 +2,15 @@ using System.Xml.Serialization;
 using Ninlil.Common.Serializer;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="SerializableDictionary{TKey, TValue}" />,
-///     specifically its custom <see cref="IXmlSerializable" /> implementation. These tests
-///     specifically lock in the fix for a bug where <c>WriteXml</c> embedded each value's full,
-///     standalone XML document (including its own leading <c>&lt;?xml ...?&gt;</c> declaration)
-///     directly inside the dictionary's own element -- an XML declaration is legal only as the
-///     very first thing in an entire document, so any non-null value broke the round trip
-///     entirely: <c>ReadXml</c> (via <see cref="System.Xml.XmlReader.ReadInnerXml" />) threw
-///     trying to parse it back.
+///     These tests round-trip <see cref="SerializableDictionary{TKey, TValue}" /> through its
+///     <see cref="IXmlSerializable" /> implementation. Each value must be written as a fragment
+///     without an <c>&lt;?xml ...?&gt;</c> declaration, which is only legal at the start of a
+///     document; otherwise <c>ReadXml</c> (through <see cref="System.Xml.XmlReader.ReadInnerXml" />)
+///     cannot parse it back.
 /// </summary>
 public class SerializableDictionaryTests
 {

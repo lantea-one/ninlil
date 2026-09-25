@@ -10,13 +10,20 @@ using Ninlil.Common.Console.Service;
 namespace Ninlil.Common.Console;
 
 /// <summary>
-///     This class represents a console command that can be used to execute various operations through the CLI.
+///     This class is the command-line parser and runner at the centre of this library. It holds
+///     the raw arguments and a service collection. <c>WithParsedAsync</c> tries each candidate
+///     input model type in turn through <see cref="ConsoleCommandInputModel.TryParse(Type, out object, string[])" /> and hands
+///     the first match, with a freshly built service provider, to a delegate.
+///     <see cref="ApplicationAsync(Type, CancellationToken)" /> does the same for an
+///     <see cref="IConsoleApplication" /> type. A help switch as the first argument prints the help
+///     text for the candidate types and exits the process. The static properties hold the
+///     application details shown in the help text and default to the entry assembly's metadata.
 /// </summary>
 /// <param name="arguments">The CLI arguments passed to the console command.</param>
 public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
 {
     /// <summary>
-    ///     This property is the internal container for the name of the application.
+    ///     This field holds the application name, defaulting to the entry assembly's name.
     /// </summary>
     private static string _application = (
         Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly()
@@ -25,19 +32,21 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         .Name;
 
     /// <summary>
-    ///     This property is the internal container for the author of the application.
+    ///     This field holds the application author, which has no default.
     /// </summary>
     private static string _author;
 
     /// <summary>
-    ///     This property is the internal container for the company that produced the application.
+    ///     This field holds the company, defaulting to the entry assembly's
+    ///     <see cref="AssemblyCompanyAttribute" />.
     /// </summary>
     private static string _company = (Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly())
         .GetCustomAttribute<AssemblyCompanyAttribute>()
         ?.Company;
 
     /// <summary>
-    ///     This property is the internal container for the description of the application.
+    ///     This field holds the description, defaulting to the entry assembly's
+    ///     <see cref="AssemblyDescriptionAttribute" />.
     /// </summary>
     private static string _description = (
         Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly()
@@ -46,14 +55,14 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         ?.Description;
 
     /// <summary>
-    ///     This property is the internal container for the version of the application.
+    ///     This field holds the version, defaulting to the entry assembly's version.
     /// </summary>
     private static string _version = (Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly())
         .GetName()
         .Version?.ToString();
 
     /// <summary>
-    ///     This property contains the name of the application.
+    ///     This property contains the application name shown in the help text.
     /// </summary>
     public static string Application
     {
@@ -62,7 +71,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This property contains the author of the application.
+    ///     This property contains the author shown in the help text.
     /// </summary>
     public static string Author
     {
@@ -71,7 +80,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This property contains the company that produced the application.
+    ///     This property contains the company shown in the help text.
     /// </summary>
     public static string Company
     {
@@ -80,7 +89,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This property contains the description of the application.
+    ///     This property contains the description shown in the help text.
     /// </summary>
     public static string Description
     {
@@ -89,12 +98,14 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This property contains the help request switches that can be used to request help information.
+    ///     This field lists the switches that request the help text when given as the first
+    ///     argument. They are compared after <see cref="NamedConsoleArgumentAttribute.SanitizeArgumentName" />
+    ///     and ignore case.
     /// </summary>
     public static readonly string[] HelpRequestSwitches = ["?", "/?", "/h", "h", "help", "version"];
 
     /// <summary>
-    ///     This property contains the version of the application.
+    ///     This property contains the version shown in the help text.
     /// </summary>
     public static string Version
     {
@@ -103,7 +114,7 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This field contains the default <see cref="ConsoleCommand" /> instance.
+    ///     This method creates a new <see cref="ConsoleCommand" /> for the given arguments.
     /// </summary>
     /// <param name="arguments">The CLI arguments passed to the console command.</param>
     public static ConsoleCommand Create(IEnumerable<string> arguments) => new(arguments);
@@ -2902,12 +2913,14 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         );
 
     /// <summary>
-    ///     This property contains the command-line arguments to parse.
+    ///     This field contains the command-line arguments to parse.
     /// </summary>
     private readonly IEnumerable<string> _arguments = arguments;
 
     /// <summary>
-    ///     This property contains the handler for when the command-line arguments are not parsed.
+    ///     This field maps an exception type to the handler that runs when no input model matches the
+    ///     arguments. The default <see cref="Exception" /> entry writes the error to the console;
+    ///     <see cref="WithNotParsed{TException}" /> adds or replaces entries.
     /// </summary>
     private readonly Dictionary<
         Type,
@@ -2920,12 +2933,13 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     ]);
 
     /// <summary>
-    ///     This property contains our service collection for dependency injection.
+    ///     This field contains the service collection that each parse builds a provider from.
     /// </summary>
     private readonly IServiceCollection _services = new ServiceCollection();
 
     /// <summary>
-    ///     This method sets up the environment and prepares it for handling the command-line arguments.
+    ///     This method builds a service provider and invokes <paramref name="handler" /> with the
+    ///     parsed input. It does nothing when parsing produced no input.
     /// </summary>
     /// <param name="input">The input model to parse.</param>
     /// <param name="handler">The delegate to invoke after the input model is parsed.</param>
@@ -2948,7 +2962,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This method retrieves the input model types for a <paramref name="consoleApplicationType" />.
+    ///     This method finds the input model types of a <paramref name="consoleApplicationType" /> by
+    ///     walking up its base types to the first generic one and returning that type's arguments.
     /// </summary>
     /// <param name="consoleApplicationType">
     ///     The type of <see cref="IConsoleApplication"/> to retrieve input model types for.
@@ -2971,16 +2986,18 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This method parses the command-line arguments and returns
-    ///     an instance of <see cref="IConsoleCommandInputModel" />
-    ///     that matches one of the provided <paramref name="types" />.
+    ///     This method parses the command-line arguments into the first of
+    ///     <paramref name="types" /> that accepts them. If the first argument is a help switch it
+    ///     prints the help text and exits the process. If the first argument names a verb on one of
+    ///     the types, only the types with that verb are tried. When nothing matches, every
+    ///     not-parsed handler is called.
     /// </summary>
     /// <param name="types">The various types of input models to parse.</param>
     /// <returns>The parsed input model if successful, otherwise null.</returns>
-    /// <exception cref="ArgumentException">
-    ///     When one or more of the provided <paramref name="types" />
-    ///     are not a valid <see cref="IConsoleCommandInputModel" />.
-    /// </exception>
+    /// <remarks>
+    ///     Types that are null or do not implement <see cref="IConsoleCommandInputModel" /> are
+    ///     dropped from <paramref name="types" /> rather than rejected.
+    /// </remarks>
     private TInputModel Parse<TInputModel>(params Type[] types)
         where TInputModel : class, IConsoleCommandInputModel
     {
@@ -3004,10 +3021,10 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
                 // Print the help text for the provided types.
                 HelpText(types);
 
-                // We're done, exit the application entirely.
+                // Exit the process once the help text is printed.
                 Environment.Exit(0);
 
-                // We're done, return null.
+                // Unreachable after Environment.Exit, but the compiler needs a return.
                 return null;
             }
 
@@ -3253,7 +3270,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         // Localize the type of the input model for the console application.
         Type[] inputModelTypes = GetConsoleApplicationInputModelTypes(consoleApplicationType);
 
-        // If there aren't any input model types then there's structured input for this application.
+        // Without input model types the application takes no structured input, so it receives the
+        // raw arguments.
         if (inputModelTypes.Length is 0)
         {
             // Localize our service provider.
@@ -3292,7 +3310,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         ApplicationAsync(typeof(TConsoleApplication), stoppingToken);
 
     /// <summary>
-    ///     This method uses a <paramref name="handler" /> to configure the runtime <see name="_services" />.
+    ///     This method lets <paramref name="handler" /> register services in the service collection
+    ///     used for each parse.
     /// </summary>
     /// <param name="handler">The handler to configure the services.</param>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>
@@ -3306,7 +3325,8 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     }
 
     /// <summary>
-    ///     This method retries a registered service instance from the <see cref="_services" />.
+    ///     This method resolves a registered service. Each call builds a new service provider from
+    ///     the service collection.
     /// </summary>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
     /// <returns>The service instance of the specified type <typeparamref name="TService" />.</returns>
@@ -3314,10 +3334,11 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
         where TService : class => _services.BuildServiceProvider().GetRequiredService<TService>();
 
     /// <summary>
-    ///     This method fluently sets the not parsed handler into the instance.
+    ///     This method registers a handler to run when no input model matches the arguments. It
+    ///     replaces any handler already registered for <typeparamref name="TException" />.
     /// </summary>
     /// <param name="handler">
-    ///     The <see cref="Action" /> to execute when the command-line arguments are not parsed.
+    ///     The handler to execute when the command-line arguments are not parsed.
     /// </param>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>
     public IConsoleCommand WithNotParsed<TException>(
@@ -3327,13 +3348,10 @@ public class ConsoleCommand(IEnumerable<string> arguments) : IConsoleCommand
     {
         // Ensure we have a valid handler to register before proceeding.
         if (handler is not null)
-            // Wrap the typed handler in a delegate accepting the common Exception base type instead of
-            // casting it directly - a direct "as" cast here is an unsound delegate-variance conversion
-            // (narrowing from a specific exception type to the base Exception type) that silently
-            // evaluates to null for any TException other than exactly Exception, which would either
-            // drop the handler entirely or throw a NullReferenceException when it's later invoked.
-            // The wrapper only forwards to the handler when the raised exception is actually
-            // compatible with TException, otherwise it's a safe no-op.
+            // Wrap the typed handler instead of casting it. Delegate contravariance does not allow
+            // converting a handler of TException to a handler of Exception, so an "as" cast gives
+            // null for any TException other than Exception. The wrapper only forwards exceptions that
+            // are a TException and ignores the rest.
             _notParsed[typeof(TException)] = exception =>
             {
                 if (exception is TException typedException)

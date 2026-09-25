@@ -6,7 +6,9 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents the validation container for a console command.
+///     This class collects missing, invalid and unknown arguments found while validating a
+///     command, and formats them as a readable report. Nothing in the library fills it; an
+///     application can use it from its own validation.
 /// </summary>
 [XmlRoot("ConsoleCommandValidation")]
 public class ConsoleCommandValidationModel

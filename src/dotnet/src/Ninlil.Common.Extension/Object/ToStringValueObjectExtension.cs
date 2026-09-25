@@ -10,7 +10,11 @@ using Ninlil.Common.Serializer.Model;
 namespace Ninlil.Common.Extension.Object;
 
 /// <summary>
-///     This class maintains our extension methods for converting an <see cref="object" /> to a <see cref="string" />.
+///     This static class converts any value to a stable, culture-free string: lowercase booleans
+///     and GUIDs, ISO 8601 dates, Base64 byte arrays, enum member names, and <c>a,b</c>,
+///     <c>{k:v}</c> and <c>(a,b)</c> for lists, dictionaries and tuples. It is the inverse of
+///     <see cref="Ninlil.Common.Extension.String.GetTypeValueStringExtension" /> and is used for console
+///     output and help text.
 /// </summary>
 public static class ToStringValueObjectExtension
 {
@@ -20,15 +24,11 @@ public static class ToStringValueObjectExtension
     /// <param name="dictionary">The <see cref="object" /> instance to convert.</param>
     /// <returns>The <see cref="string" /> representation of the <paramref name="dictionary" />.</returns>
     private static string DictionaryToString(object dictionary) =>
-        // Read through the non-generic System.Collections.IDictionary interface, which every
-        // closed Dictionary<TKey,TValue> implements regardless of its actual key/value types,
-        // instead of the invariant "as Dictionary<object, object>" cast this previously used --
-        // generics are invariant, so that cast silently failed (and rendered an empty "{}") for
-        // any dictionary whose key/value types were not literally object. Iterating via
-        // IDictionary.Keys plus its indexer (rather than Cast<DictionaryEntry>() over the plain
-        // enumerator) is required because Dictionary<TKey,TValue>'s own non-generic
-        // IEnumerator.Current explicitly yields a boxed KeyValuePair<TKey,TValue>, not a
-        // DictionaryEntry -- only its separate IDictionaryEnumerator.Entry property does that.
+        // Read through the non-generic IDictionary, which every Dictionary<TKey,TValue>
+        // implements whatever its key and value types; a cast to Dictionary<object, object> fails
+        // because generics are invariant. Iterate Keys plus the indexer rather than
+        // Cast<DictionaryEntry>(): Dictionary's non-generic enumerator yields boxed
+        // KeyValuePair<TKey,TValue> values, not DictionaryEntry.
         dictionary is IDictionary dict
             ? $"{{{string.Join(",", dict.Keys.Cast<object>().Select(key =>
                 string.Join(":", key.ToStringValue(), dict[key].ToStringValue())))}}}"
@@ -47,12 +47,9 @@ public static class ToStringValueObjectExtension
             ",",
             list switch
             {
-                // Enumerate through the non-generic System.Collections.IEnumerable interface
-                // (which every array/list implements regardless of its element type) instead of
-                // matching only the specific reference-type-element shapes object[]/List<object>/
-                // IEnumerable<object> -- a value-type element array/list (e.g. int[]) is not
-                // covariant to IEnumerable<object>, so it previously never matched any case here
-                // and fell straight through to the exception below.
+                // Enumerate through the non-generic IEnumerable, which every array and list implements.
+                // A value-type collection such as int[] is not covariant to IEnumerable<object>, so
+                // matching on the generic interface would miss it.
                 IEnumerable l => l.Cast<object>().Select(s => s.ToStringValue()),
 
                 // If we don't recognize the type, throw an exception.
@@ -72,12 +69,8 @@ public static class ToStringValueObjectExtension
     ///     Thrown when the <paramref name="tuple" /> is not a recognized type.
     /// </exception>
     private static string TupleToString(object tuple) =>
-        // Every real Tuple<...>/ValueTuple<...> arity implements the framework's own
-        // System.Runtime.CompilerServices.ITuple interface, exposing its element count and values
-        // positionally -- using that here (instead of pattern-matching against the specific,
-        // all-object-typed shapes Tuple<object,object>, Tuple<object,object,object>, etc.) means
-        // this correctly handles a tuple whose element types are anything at all, not just object,
-        // which is virtually every real-world tuple usage.
+        // Every Tuple<...> and ValueTuple<...> implements ITuple, which exposes the element count
+        // and values by position, so this handles any arity and any element types.
         tuple is ITuple t
             ? $"({string.Join(",", System.Linq.Enumerable.Range(0, t.Length).Select(i => t[i].ToStringValue()))})"
             : throw new ArgumentException(
@@ -86,14 +79,19 @@ public static class ToStringValueObjectExtension
             );
 
     /// <summary>
-    ///     This method converts the <see cref="object"/> <paramref name="instance" /> to a <see cref="string"/> value.
+    ///     This method converts the <see cref="object"/> <paramref name="instance" /> to a
+    ///     <see cref="string"/>. Known scalar types use a fixed format; collections, dictionaries and
+    ///     tuples are converted item by item; everything else goes through its
+    ///     <see cref="TypeConverter" />. The base converter can always convert to a string (it calls
+    ///     <see cref="object.ToString" />), so an ordinary class gets its <c>ToString()</c> and the
+    ///     property-dictionary branch after it is only reached when a custom converter refuses.
     /// </summary>
     /// <param name="instance">The <see cref="object" /> instance to convert.</param>
     /// <returns>The <see cref="string" /> value of the <paramref name="instance" />.</returns>
     public static string ToStringValue(this object instance) =>
         instance switch
         {
-            // Check for a string object, then return it as is.
+            // Check for a string object, then return it trimmed.
             string v => v.Trim(),
 
             // Check for a boolean, then convert to a string.
@@ -123,7 +121,8 @@ public static class ToStringValueObjectExtension
             // Check for a Guid object, then convert to a string.
             Guid v => v.ToString().ToLower(),
 
-            // Check for an enumeration, then convert to a string.
+            // Check for an enumeration, then convert to a string. With TEnum bound to System.Enum and no
+            // attribute checks, ToDescription returns the member name.
             System.Enum v => v.ToDescription(),
 
             // Check for a TimeOnly object, then convert to an ISO-8601 string.
@@ -132,7 +131,7 @@ public static class ToStringValueObjectExtension
             // Check for a timespan object, then convert to an ISO-8601 string.
             TimeSpan v => v.ToString("c"),
 
-            // Check for an array, then convert to a comma-separated string.
+            // Check for an array or list, then convert to a comma-separated string.
             not null when instance.GetType().IsEnumerableType(false) => ListToString(instance),
 
             // Check for a dictionary, then convert to a comma-separated string of key-value pairs.
@@ -154,7 +153,7 @@ public static class ToStringValueObjectExtension
                     .Select(p => new KeyValuePair<string, object>(p.Name, p.GetValue(instance)))
             ).ToStringValue(),
 
-            // Otherwise, call it's ToString method.
+            // Otherwise, call its ToString method (null stays null).
             _ => instance?.ToString(),
         };
 }

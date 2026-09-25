@@ -1,10 +1,12 @@
 using System.Text.Json.Serialization;
 using Ninlil.Common.Serializer.Attribute;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Attribute;
 
 /// <summary>
-///     This class contains unit tests for <see cref="JsonConverterAttribute{TConverter}" />.
+///     These tests check that <see cref="JsonConverterAttribute{TConverter}" /> applies its converter
+///     type, both by inspecting the attribute and through a serialization round trip.
 /// </summary>
 public class JsonConverterAttributeTests
 {
@@ -34,10 +36,9 @@ public class JsonConverterAttributeTests
     [Fact]
     public void AppliedToAProperty_IsHonoredByTheRealSerializer()
     {
-        // The base System.Text.Json.Serialization.JsonConverterAttribute's own CreateConverter
-        // returns null unless overridden -- the framework instead reads ConverterType directly
-        // when the attribute is discovered on a type/property, which this test confirms end to
-        // end via a real Serialize call rather than by calling CreateConverter directly.
+        // The base JsonConverterAttribute.CreateConverter returns null unless overridden; the
+        // framework reads ConverterType instead. So this test serializes a value rather than
+        // calling CreateConverter.
         string json = System.Text.Json.JsonSerializer.Serialize(new Wrapper { Value = 5 });
 
         Assert.Equal("""{"Value":5}""", json);

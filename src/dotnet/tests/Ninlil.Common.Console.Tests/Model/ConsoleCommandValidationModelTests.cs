@@ -1,6 +1,6 @@
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-command-validation-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>

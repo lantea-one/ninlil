@@ -5,13 +5,14 @@ using Ninlil.Common.Console.Model;
 namespace Ninlil.Common.Console.Attribute;
 
 /// <summary>
-///     This class maintains the metadata for a console verb, which is used to define commands in a console application.
+///     This attribute names the verb (command) that an input model class handles. The first
+///     command-line token must match the name for the model to be chosen, unless the verb is the
+///     default verb. The description appears in the help text.
 /// </summary>
 /// <param name="name">The name of the verb, which is used to invoke the command.</param>
 /// <param name="description">The description of the verb, which is displayed in the help text.</param>
 /// <param name="isDefault">
-///     Optional <see cref="bool" /> indicating whether this verb
-///     is the default verb for the console application or not.
+///     Whether this verb is the default, which the model accepts without the verb token.
 /// </param>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
 public class ConsoleVerbAttribute(
@@ -21,17 +22,17 @@ public class ConsoleVerbAttribute(
 ) : ConsoleArgumentAttribute
 {
     /// <summary>
-    ///     This property indicates whether this verb is the default verb for the console application.
+    ///     This field indicates whether this verb is the default verb for the console application.
     /// </summary>
     public readonly bool Default = isDefault;
 
     /// <summary>
-    ///     This property contains the description of the verb, which is displayed in the help text.
+    ///     This field contains the description of the verb, which is displayed in the help text.
     /// </summary>
     public readonly string Description = description?.Trim();
 
     /// <summary>
-    ///     This property contains the name of the verb, which is used to invoke the command in the console application.
+    ///     This field contains the verb's name, with leading dashes and whitespace removed.
     /// </summary>
     public readonly string Name =
         NamedConsoleArgumentAttribute.SanitizeArgumentName(name)

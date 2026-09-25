@@ -2,15 +2,14 @@ using Ninlil.Common.Console;
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-logger tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleLogger" /> and its class-typed
-///     <see cref="ConsoleLogger{TClass}" /> variant - the factory methods, message-level logging
-///     helpers, prefix-length bookkeeping, and the class-prefix auto-injection behavior. Every
-///     scenario logs under a quiet configuration so assertions don't depend on capturing real
-///     console output.
+///     These tests cover <see cref="ConsoleLogger" /> and the class-typed
+///     <see cref="ConsoleLogger{TClass}" />: the factories, the level-named log methods, prefix-width
+///     tracking, and adding the class name to the prefix. Every scenario logs with a quiet
+///     configuration so assertions do not depend on console output.
 /// </summary>
 public class ConsoleLoggerTests
 {
@@ -231,14 +230,11 @@ public class ConsoleLoggerTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleLogger{TClass}.Create(ConsoleLoggerLogFormatEnum, IEnumerable{string})" />
-    ///     returns an instance that is genuinely typed as <see cref="IConsoleLogger{TClass}" /> - a real
-    ///     bug found and fixed in this project: the method's declared return type was the plain,
-    ///     non-generic <see cref="IConsoleLogger" /> instead of <see cref="IConsoleLogger{TClass}" />,
-    ///     which broke type inference at every call site that relies on it (most notably
-    ///     <c>ServiceCollectionConsoleExtension.UseConsoleLogging&lt;TClassPrefix&gt;(format, prefix)</c>,
-    ///     whose <c>services.TryAddSingleton(_ =&gt; ConsoleLogger&lt;TClassPrefix&gt;.Create(format, prefix))</c>
-    ///     call infers the registered service type from this exact return type - see
-    ///     <c>Extension.ServiceCollectionConsoleExtensionTests</c> for that DI-level regression test).
+    ///     is declared to return <see cref="IConsoleLogger{TClass}" />, not the plain
+    ///     <see cref="IConsoleLogger" />. <c>UseConsoleLogging&lt;TClassPrefix&gt;(format, prefix)</c>
+    ///     registers <c>_ =&gt; ConsoleLogger&lt;TClassPrefix&gt;.Create(format, prefix)</c>, so the service
+    ///     type it registers comes from this return type. <c>ServiceCollectionConsoleExtensionTests</c>
+    ///     checks the registration itself.
     /// </summary>
     [Fact]
     public void GenericCreate_WithFormatAndPrefix_ReturnsGenericallyTypedInstance()

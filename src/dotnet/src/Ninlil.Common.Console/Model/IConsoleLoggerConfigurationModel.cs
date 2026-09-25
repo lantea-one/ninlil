@@ -1,53 +1,60 @@
 using Ninlil.Common.Console.Enum;
 
-// Define our namespace for the console logger configuration model
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This interface represents the configuration settings for a console logger,
-///     including options for formatting, log levels, and output destinations.
+///     This interface is the contract for a <see cref="ConsoleLogger" /> configuration: layout
+///     format, prefix, level colors, and whether output goes to the console, a file or both.
+///     <see cref="ConsoleLoggerConfigurationModel" /> implements it with fluent <c>With*</c> setters.
 /// </summary>
 public interface IConsoleLoggerConfigurationModel
 {
     /// <summary>
-    ///     This property indicates whether the log output should be center-aligned in the console window.
+    ///     This property indicates whether text-format prefixes are padded to
+    ///     <see cref="MaxPrefixLength" /> with each part centered, so columns line up.
     /// </summary>
     public bool CenterAlign { get; set; }
 
     /// <summary>
-    ///     This property indicates whether debug-level log messages should be included in the log output.
+    ///     This property indicates whether debug and trace messages are written to the console. They
+    ///     are always written to the log file.
     /// </summary>
     public bool Debug { get; set; }
 
     /// <summary>
-    ///     This property specifies the file path where log output should be written.
+    ///     This property specifies the file every message is appended to, or null for console only.
     /// </summary>
     public string File { get; set; }
 
     /// <summary>
-    ///     This property specifies the format in which log messages should be displayed in the console.
+    ///     This property specifies how each entry is laid out: padded text, a table, or a JSON, XML
+    ///     or YAML document.
     /// </summary>
     public ConsoleLoggerLogFormatEnum Format { get; set; }
 
     /// <summary>
-    ///     This property is a dictionary that maps log levels to their corresponding console colors.
+    ///     This property maps log levels (ignoring case) to console colors. The <c>_</c> entry is
+    ///     the fallback for levels without their own entry.
     /// </summary>
     public Dictionary<string, ConsoleColor> Levels { get; set; }
 
     /// <summary>
-    ///     This property specifies the maximum length of the prefix that can be displayed in the console output.
+    ///     This property specifies the width each prefix part is padded to when
+    ///     <see cref="CenterAlign" /> is on. <see cref="ConsoleLogger" /> widens it to fit the longest
+    ///     part logged so far.
     /// </summary>
     public int MaxPrefixLength { get; set; }
 
     /// <summary>
-    ///     This property specifies the prefix model that can be used
-    ///     to customize the prefix displayed in the console output.
+    ///     This property specifies the prefix parts added to every message, after the timestamp and
+    ///     level and before the message's parts.
     /// </summary>
     public IConsoleLoggerPrefixModel Prefix { get; set; }
 
     /// <summary>
-    ///     This property indicates whether the console logger should
-    ///     operate in quiet mode, suppressing most log output.
+    ///     This property indicates whether console output is suppressed. The log file is still
+    ///     written.
     /// </summary>
     public bool Quiet { get; set; }
 

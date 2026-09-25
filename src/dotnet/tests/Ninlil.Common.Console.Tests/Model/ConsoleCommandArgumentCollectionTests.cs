@@ -2,18 +2,17 @@ using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using Ninlil.Common.Console.Tests.TestSupport;
 
-// Define our namespace for the console-command-argument-collection tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleCommandArgumentCollection" /> - raw CLI tokenization
-///     (positional/named/switch/embedded-value forms), the implicit conversions and factory methods,
-///     the reflection-driven Parse*Arguments helpers, and the top-level Parse/TryParse orchestration.
-///     Every scenario below deliberately supplies every required argument (and never starts with a
-///     help-request token) so that the real, unmockable <see cref="Environment.Exit" /> calls inside
-///     <see cref="ConsoleCommandArgumentCollection.Parse(Type)" /> for a missing-required-argument or a
-///     help request are never reached - those two paths cannot be exercised from an in-process test at
-///     all since they would terminate the test host, so they're deliberately left untested here.
+///     These tests cover <see cref="ConsoleCommandArgumentCollection" />: tokenizing raw CLI
+///     arguments (positional, named, switch and embedded-value forms), the implicit conversions and
+///     factory methods, the <c>Parse*Arguments</c> matchers, and Parse/TryParse against the models
+///     in <c>TestSupport</c>. Every scenario supplies all required arguments and never starts with
+///     a help switch. Those two cases make <see cref="ConsoleCommandArgumentCollection.Parse(Type)" />
+///     call <see cref="Environment.Exit" />, which would stop the test host, so they are not tested
+///     here.
 /// </summary>
 public class ConsoleCommandArgumentCollectionTests
 {
@@ -57,12 +56,8 @@ public class ConsoleCommandArgumentCollectionTests
     }
 
     /// <summary>
-    ///     Verifies that a long-form argument with an embedded "=value" is split into the correct name
-    ///     and value - this is the exact shape of a real bug found and fixed in this project: the
-    ///     original "inclusive value" detection condition could never be true (it compared the raw,
-    ///     dash-prefixed token against a prefix built from values that were already derived from that
-    ///     same token in a way that could never match), so "--name=value" fell through to being
-    ///     misparsed as a boolean switch instead.
+    ///     Verifies that a long-form argument with an embedded "=value" is split into its name and
+    ///     value, rather than being read as a boolean switch named "name=John".
     /// </summary>
     [Fact]
     public void Constructor_ParsesLongNamedArgumentWithEmbeddedValue()
@@ -77,7 +72,7 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that a short-form argument with an embedded "=value" is split into the correct
-    ///     character and value (the short-form counterpart of the embedded-value bug above).
+    ///     character and value (the short-form counterpart of the test above).
     /// </summary>
     [Fact]
     public void Constructor_ParsesShortNamedArgumentWithEmbeddedValue()
@@ -186,10 +181,9 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleCommandArgumentCollection.ParseNamedArguments" /> matches CLI
-    ///     tokens to their corresponding declared property via either the short or long name. Note that
-    ///     the base <see cref="ConsoleCommandInputModel" /> class itself declares two named arguments
-    ///     (Format and Silent), so the returned list always includes those in addition to whatever the
-    ///     concrete model itself declares.
+    ///     tokens to their declared property by either the short or the long name. The base
+    ///     <see cref="ConsoleCommandInputModel" /> declares two named arguments (Format and Silent), so
+    ///     the returned list always includes those as well as the model's own.
     /// </summary>
     [Fact]
     public void ParseNamedArguments_MatchesShortAndLongNames()
@@ -233,7 +227,7 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleCommandArgumentCollection.ParseNestedVerbs" /> matches a CLI
-    ///     token whose value equals the nested verb's own name.
+    ///     token whose value equals the nested verb's name.
     /// </summary>
     [Fact]
     public void ParseNestedVerbs_MatchesByVerbName()
@@ -249,8 +243,8 @@ public class ConsoleCommandArgumentCollectionTests
     }
 
     /// <summary>
-    ///     Verifies a full round-trip: parsing a model with both named and positional arguments, all
-    ///     required arguments satisfied, produces a correctly populated instance.
+    ///     Verifies that parsing long and short named arguments, with every required argument given,
+    ///     produces a populated instance.
     /// </summary>
     [Fact]
     public void Parse_WithNamedArguments_PopulatesInstance()
@@ -315,7 +309,7 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that a default verb (<see cref="Ninlil.Common.Console.Attribute.ConsoleVerbAttribute.Default" />)
-    ///     does not require its own name to appear as the first CLI argument.
+    ///     does not require its name to appear as the first CLI argument.
     /// </summary>
     [Fact]
     public void Parse_WithDefaultVerb_DoesNotRequireVerbNameAsFirstArgument()
@@ -328,7 +322,7 @@ public class ConsoleCommandArgumentCollectionTests
         Assert.Equal("server1", model.Target);
     }
 
-    /// <summary>Verifies that a nested verb property is populated with a parsed instance of its own type.</summary>
+    /// <summary>Verifies that a nested verb property is populated with a parsed instance of its type.</summary>
     [Fact]
     public void Parse_WithNestedVerb_PopulatesNestedInstance()
     {
@@ -430,9 +424,8 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that a single CLI token carrying a brace-delimited dictionary literal
-    ///     ("{key:value,...}") is parsed into a genuinely typed <see cref="Dictionary{TKey,TValue}" />,
-    ///     exercising the collection-typed value-parsing path that depends on the corrected
-    ///     type-inspection/conversion helpers in the sibling Extension project.
+    ///     ("{key:value,...}") is parsed into a typed <see cref="Dictionary{TKey,TValue}" />, through
+    ///     the type-inspection and conversion helpers in Ninlil.Common.Extension.
     /// </summary>
     [Fact]
     public void Parse_WithDictionaryTypedNamedArgument_PopulatesDictionary()
@@ -449,7 +442,7 @@ public class ConsoleCommandArgumentCollectionTests
 
     /// <summary>
     ///     Verifies that a single CLI token carrying a parenthesized tuple literal ("(a,b)") is parsed
-    ///     into a genuinely typed <see cref="Tuple{T1,T2}" />.
+    ///     into a typed <see cref="Tuple{T1,T2}" />.
     /// </summary>
     [Fact]
     public void Parse_WithTupleTypedNamedArgument_PopulatesTuple()

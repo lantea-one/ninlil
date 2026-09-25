@@ -5,7 +5,9 @@ using Ninlil.Common.Serializer.Enum;
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This interface represents the input model for console applications which define console verbs and arguments.
+///     This interface is the contract for an input model: a class whose attributes declare the
+///     verb and arguments a command line is parsed into. <see cref="ConsoleCommandInputModel" />
+///     implements it and is the base class input models derive from.
 /// </summary>
 public interface IConsoleCommandInputModel
 {
@@ -20,9 +22,9 @@ public interface IConsoleCommandInputModel
     public bool Silent { get; set; }
 
     /// <summary>
-    ///     This method forces the output format to be a specific serialization <see cref="SerializerFormatEnum" />.
+    ///     This method makes sure the output uses a serialized format (JSON, XML or YAML).
     /// </summary>
-    /// <param name="format">The <see cref="SerializerFormatEnum" /> to force the output format to.</param>
+    /// <param name="format">The requested serialized format.</param>
     public void ForceSerializedOutputFormat(SerializerFormatEnum format);
 
     /// <summary>
@@ -152,7 +154,7 @@ public interface IConsoleCommandInputModel
     /// </summary>
     /// <returns>
     ///     The current instance of <see cref="IConsoleCommandInputModel" /> with the default
-    ///    values  set for all named and positional arguments along with the nested verbs.
+    ///     values set for all named and positional arguments along with the nested verbs.
     /// </returns>
     public IConsoleCommandInputModel SetDefaults();
 
@@ -172,7 +174,7 @@ public interface IConsoleCommandInputModel
     public string ToOutput(dynamic models);
 
     /// <summary>
-    ///     This method asynchronously validates parsed <see cref="ConsoleCommandInputModel" />
+    ///     This method validates the parsed model.
     /// </summary>
     /// <param name="stoppingToken">
     ///     Optional <see cref="CancellationToken" /> used for tracking asynchronous operations.

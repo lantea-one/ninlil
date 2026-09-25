@@ -4,12 +4,17 @@
 namespace Ninlil.Common.Extension.String;
 
 /// <summary>
-///     Extensions for the <see cref="string"/> class to provide the Like functionality.
+///     This static class adds a <c>Like</c> match to <see cref="string" /> that accepts either a
+///     regular expression or a glob (<c>*</c> and <c>?</c>).
 /// </summary>
 public static class LikeStringExtension
 {
     /// <summary>
-    ///     Check if a string <paramref name="instance" /> matches the <paramref name="searchPattern" />
+    ///     This method checks whether the trimmed <paramref name="instance" /> matches
+    ///     <paramref name="searchPattern" />. The pattern is tried as a regular expression first; only
+    ///     if it is not a valid regular expression is it treated as a whole-string glob, matched
+    ///     ignoring case. A pattern that is valid as both (such as <c>a?b</c>) is used as a regular
+    ///     expression.
     /// </summary>
     /// <param name="instance">
     ///     The instance of the <see cref="string" /> to compare to the <paramref name="searchPattern" />.
@@ -23,7 +28,8 @@ public static class LikeStringExtension
     /// </param>
     /// <returns>
     ///     <see langword="true"/> if the <paramref name="instance"/> matches the
-    ///     <paramref name="searchPattern"/>, otherwise <see langword="false"/>.
+    ///     <paramref name="searchPattern"/>, otherwise <see langword="false"/> (always for a blank
+    ///     <paramref name="instance" />).
     /// </returns>
     public static bool Like(this string instance, string searchPattern, RegexOptions regexOptions)
     {
@@ -37,7 +43,7 @@ public static class LikeStringExtension
             // Return the direct match result.
             return Regex.IsMatch(instance.Trim(), searchPattern, regexOptions);
         }
-        // If it fails, we assume it's a glob pattern and convert it.
+        // An invalid regular expression is treated as a glob pattern.
         catch (ArgumentException)
         {
             // Convert the glob pattern to a regular expression.
@@ -50,7 +56,9 @@ public static class LikeStringExtension
     }
 
     /// <summary>
-    ///     Check if a string <paramref name="instance" /> matches the <paramref name="searchPattern" />
+    ///     This method checks whether <paramref name="instance" /> matches
+    ///     <paramref name="searchPattern" />, ignoring case. See
+    ///     <see cref="Like(string, string, RegexOptions)" /> for how the pattern is read.
     /// </summary>
     /// <param name="instance">
     ///     The instance of the <see cref="string" /> to compare to the <paramref name="searchPattern" />.

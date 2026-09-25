@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="DefaultValueTypeExtension" />.
+///     These tests check the default value <see cref="DefaultValueTypeExtension" /> returns for
+///     value, reference and nullable types, through both overloads.
 /// </summary>
 public class DefaultValueTypeExtensionTests
 {

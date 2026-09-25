@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.Dictionary;
 namespace Ninlil.Common.Extension.Tests.Dictionary;
 
 /// <summary>
-///     This class tests <see cref="DictionaryExtensions" />.
+///     These tests cover <see cref="DictionaryExtensions" />: merging with and without overwrite,
+///     and console formatting.
 /// </summary>
 public class DictionaryExtensionsTests
 {
@@ -63,11 +64,9 @@ public class DictionaryExtensionsTests
     }
 
     /// <summary>
-    ///     The underlying <c>ToStringValueObjectExtension.DictionaryToString</c> helper reads the
-    ///     dictionary through the non-generic <see cref="System.Collections.IDictionary" /> interface,
-    ///     which every closed <see cref="Dictionary{TKey,TValue}" /> implements regardless of its actual
-    ///     key/value types, so <c>DictionaryExtensions.ToConsoleString</c> renders every real-world
-    ///     dictionary's actual entries.
+    ///     <c>ToStringValueObjectExtension.DictionaryToString</c> reads the dictionary through the
+    ///     non-generic <see cref="System.Collections.IDictionary" />, so a dictionary whose key and value
+    ///     types are not <see cref="object" /> still renders its entries.
     /// </summary>
     [Fact]
     public void ToConsoleStringOnPopulatedDictionaryRendersItsEntries()

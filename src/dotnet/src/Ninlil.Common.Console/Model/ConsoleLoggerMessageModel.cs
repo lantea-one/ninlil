@@ -10,17 +10,21 @@ using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Serializer;
 using YamlDotNet.Serialization;
 
-// Define our namespace for the console logger message model.
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents a log message model for the console logger. It contains properties
-///     for the log level, message, data, prefix, timestamp, color, buffer, padding, and format.
+///     This class is one entry written by <see cref="ConsoleLogger" />: a level, message, optional
+///     data object and prefix, stamped with the local time. <see cref="ToString(IConsoleLoggerConfigurationModel)" />
+///     renders it in the configured format (padded text, a table, or a JSON/XML/YAML document), and
+///     <see cref="WriteAsync" /> writes it once to the console and, when configured, appends it to
+///     the log file.
 /// </summary>
 public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
 {
     /// <summary>
-    ///     This HashSet contains the scalar types that can be serialized directly without additional formatting.
+    ///     This field lists the types whose data is written with <see cref="object.ToString" />
+    ///     instead of being serialized.
     /// </summary>
     private static readonly HashSet<Type> ScalarTypes =
     [
@@ -41,8 +45,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     ];
 
     /// <summary>
-    ///     This property contains an <see cref="int" /> representing the number of buffer lines
-    ///     to add before and after the log message when outputting to the console or file.
+    ///     This property contains the number of blank lines to add before and after the message in
+    ///     text format.
     /// </summary>
     [JsonPropertyName("buffer")]
     [XmlElement("buffer")]
@@ -50,8 +54,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public int Buffer { get; set; }
 
     /// <summary>
-    ///     This property contains the optional <see cref="ConsoleColor" /> for the message when
-    ///     outputting to the console. If not set, the color will be determined by the log level.
+    ///     This property contains the optional <see cref="ConsoleColor" /> for the message. If not
+    ///     set, the configuration picks a color from the log level.
     /// </summary>
     [JsonPropertyName("color")]
     [XmlElement("color")]
@@ -59,8 +63,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public ConsoleColor? Color { get; set; }
 
     /// <summary>
-    ///     This property contains any data object associated with the log message.
-    ///     It can be of any type and will be serialized based on the specified format.
+    ///     This property contains any data object attached to the message. It is serialized in
+    ///     <see cref="Format" />.
     /// </summary>
     [JsonPropertyName("data")]
     [XmlElement("data")]
@@ -68,8 +72,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public object Data { get; set; }
 
     /// <summary>
-    ///     This property contains format specific to the message which will
-    ///     override the global configuration format when serializing the message.
+    ///     This property contains the format used to serialize <see cref="Data" />. The configuration's
+    ///     format decides how the whole entry is laid out.
     /// </summary>
     [JsonPropertyName("format")]
     [XmlElement("format")]
@@ -94,8 +98,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public string Message { get; set; }
 
     /// <summary>
-    ///     This property contains a <see cref="int" /> representing the
-    ///     number of spaces to use for padding when formatting the log message.
+    ///     This property contains the number of spaces used to indent the message (and twice that
+    ///     for data) in text format.
     /// </summary>
     [JsonPropertyName("padding")]
     [XmlElement("padding")]
@@ -111,8 +115,7 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public IConsoleLoggerPrefixModel Prefix { get; set; } = new ConsoleLoggerPrefixModel();
 
     /// <summary>
-    ///     This property contains the timestamp at which the log message was created.
-    ///     It is set to the current date and time by default.
+    ///     This property contains the local time the message was created.
     /// </summary>
     [JsonPropertyName("timestamp")]
     [XmlElement("timestamp")]
@@ -120,7 +123,8 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public DateTime Timestamp { get; set; } = DateTime.Now;
 
     /// <summary>
-    ///     This property indicates whether the log message has already been written to the console and/or file.
+    ///     This property indicates whether the message has been written. <see cref="WriteAsync" />
+    ///     writes a message only once.
     /// </summary>
     [JsonIgnore]
     [XmlIgnore]
@@ -133,11 +137,11 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public ConsoleLoggerMessageModel() { }
 
     /// <summary>
-    ///    This constructor initializes a new instance of the
+    ///     This constructor initializes a new instance of the
     ///     <see cref="ConsoleLoggerMessageModel" /> class
     ///     with the specified log <paramref name="level" />,
     ///     <paramref name="message" />, <paramref name="data" />,
-    ///     and <paramref name="prefix" />.
+    ///     and <paramref name="prefix" />. The level is sanitized and the message trimmed.
     /// </summary>
     /// <param name="level">
     ///     The log level of the message, such as "info", "warn", "error", etc.
@@ -163,12 +167,7 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
             data,
             ConsoleLogger.GetSanitizedPart(level, true),
             message?.Trim() is not (null or { Length: 0 }) ? message.Trim() : null,
-            // A null or genuinely empty prefix falls back to a fresh, empty model; any real,
-            // populated prefix is kept as-is. The condition previously here was inverted (it
-            // checked for "not (null or non-empty)", i.e. "null-or-non-empty" negated down to
-            // "non-null and empty"), which meant a real, populated prefix always failed the check
-            // and got silently replaced with a fresh empty one - so per-message prefixes were
-            // discarded outright.
+            // A null or empty prefix becomes a new empty model; a populated prefix is kept.
             prefix is null or { Count: 0 }
                 ? new ConsoleLoggerPrefixModel()
                 : prefix
@@ -212,22 +211,17 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
         : this(level, null, data, new ConsoleLoggerPrefixModel(prefix?.ToArray() ?? [])) { }
 
     /// <summary>
-    ///     This method serializes the provided <paramref name="data" /> object into a string representation
-    ///    based on the specified <paramref name="format" /> and <paramref name="indented" /> preference.
+    ///     This method turns <paramref name="data" /> into text. Strings, booleans, byte arrays
+    ///     (as Base64), dates (ISO 8601), exceptions and the types in <see cref="ScalarTypes" /> are
+    ///     written directly. Other objects are serialized in <paramref name="format" />, or written
+    ///     with <see cref="object.ToString" /> when the format is not JSON, XML or YAML.
     /// </summary>
-    /// <param name="data">
-    ///     The object to be serialized. It can be of any type, including null, string, boolean, byte array,
-    /// </param>
-    /// <param name="format">
-    ///     The desired serialization format, specified as a <see cref="ConsoleLoggerLogFormatEnum" />.
-    /// </param>
-    /// <param name="indented">
-    ///     A boolean indicating whether the serialized output should be indented for better readability.
-    /// </param>
+    /// <param name="data">The object to turn into text.</param>
+    /// <param name="format">The serialization format for complex objects.</param>
+    /// <param name="indented">Whether JSON and XML output is indented.</param>
     /// <returns>
-    ///     A string representation of the serialized <paramref name="data" /> object based on the specified
-    ///    <paramref name="format" /> and <paramref name="indented" /> preference. If the <paramref name="data" />
-    ///     is <see langword="null" />, an empty string, or whitespace, it returns <see langword="null" />.
+    ///     The text form of <paramref name="data" />, or <see langword="null" /> when it is
+    ///     <see langword="null" /> or a blank string.
     /// </returns>
     private string Serialize(
         object data,
@@ -272,48 +266,40 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
         if (ScalarTypes.Contains(data.GetType()))
             return data.ToString()?.Trim();
 
-        // If the data object is an enumerable (e.g., list, array, etc.), serialize it to JSON and return the string.
+        // Serialize any other object as JSON.
         if (format is ConsoleLoggerLogFormatEnum.Json)
             return JsonSerializer.Serialize(data, JsonSerializer.GetOptions(null, indented));
 
-        // If the data object is an enumerable (e.g., list, array, etc.), serialize it to XML and return the string.
+        // Serialize any other object as XML.
         if (format is ConsoleLoggerLogFormatEnum.Xml)
             return Serializer.XmlSerializer.Serialize(
                 data,
                 Serializer.XmlSerializer.GetWriterOptions(null, Encoding.UTF8, indented)
             );
 
-        // If the data object is an enumerable (e.g., list, array, etc.), serialize it to YAML and return the string.
+        // Serialize any other object as YAML.
         if (format is ConsoleLoggerLogFormatEnum.Yaml or ConsoleLoggerLogFormatEnum.Yml)
             return YamlSerializer.Serialize(data);
 
-        // If we get here, return the string representation of the data.
+        // For any other format, fall back to ToString().
         return data.ToString()?.Trim();
     }
 
     /// <summary>
-    ///     This method converts the current log message instance into a dictionary
-    ///     representation with keys for timestamp, level, prefix, message, and data.
+    ///     This method converts the message into a dictionary with timestamp, level, prefix, message
+    ///     and data entries, for table and serialized output.
     /// </summary>
     /// <param name="table">
-    ///     A <see cref="bool" /> indicating whether to format the data as a table.
-    ///     If <see langword="true" /> and the data is not <see langword="null" />,
-    ///     it will be serialized as a table; otherwise, it will be included as-is.
+    ///     Whether the dictionary is for a table. A table gets the data as text; otherwise the raw
+    ///     data object is kept for the serializer.
     /// </param>
     /// <param name="logPrefixOverride">
-    ///     An optional <see cref="IConsoleLoggerPrefixModel" /> to override the instance's prefix.
+    ///     An optional <see cref="IConsoleLoggerPrefixModel" /> to use instead of the message's prefix.
     /// </param>
     /// <param name="serializedDataOverride">
-    ///     An optional <see cref="string" /> to override the serialized data representation.
+    ///     Optional data text to use instead of serializing <see cref="Data" />.
     /// </param>
-    /// <returns>
-    ///     A <see cref="Dictionary{String, Object}" /> containing the log message properties:
-    ///         - "timestamp": The timestamp of the log message in "yyyy-MM-dd HH:mm:ss.fff" format.
-    ///         - "level": The log level of the message.
-    ///         - "prefix": The string representation of the log prefix.
-    ///         - "message": The log message string.
-    ///         - "data": The serialized data representation, formatted as a table if specified.
-    /// </returns>
+    /// <returns>The message as a dictionary.</returns>
     private Dictionary<string, object> ToDictionary(
         bool table = false,
         IConsoleLoggerPrefixModel logPrefixOverride = null,
@@ -332,16 +318,15 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
         };
 
     /// <summary>
-    ///     This method converts the current log message instance into a string representation
-    ///     based on the values in the provided logger <paramref name="configuration" />.
+    ///     This method renders the message in the configuration's format. The prefix shown is the
+    ///     timestamp, the level, the configuration's prefix and then the message's prefix. Text
+    ///     format writes the prefix line, then the message and data indented on the following
+    ///     lines; table format writes a one-row table; JSON, XML and YAML serialize the whole entry.
     /// </summary>
     /// <param name="configuration">
-    ///     The logger configuration model that specifies how the log message should be formatted and output.
+    ///     The logger configuration model that specifies how the log message should be formatted.
     /// </param>
-    /// <returns>
-    ///     A string representation of the log message, formatted
-    ///     according to the specified logger <paramref name="configuration" />.
-    /// </returns>
+    /// <returns>The rendered message.</returns>
     public string ToString(IConsoleLoggerConfigurationModel configuration)
     {
         // Sanitize the log level in the instance to ensure it is valid and safe for output.
@@ -472,20 +457,16 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     public override string ToString() => ToString(new ConsoleLoggerConfigurationModel());
 
     /// <summary>
-    ///     This method converts the current log message instance into a table representation
-    ///     using the ConsoleTables library. It formats the log message properties into a table with
-    ///     columns for timestamp, level, prefix, message, and data.
+    ///     This method renders the message as a one-row table (ConsoleTables library) with
+    ///     timestamp, level, prefix, message and data columns.
     /// </summary>
     /// <param name="loggerPrefixOverride">
-    ///     An optional <see cref="IConsoleLoggerPrefixModel" /> to override the instance's prefix.
+    ///     An optional <see cref="IConsoleLoggerPrefixModel" /> to use instead of the message's prefix.
     /// </param>
     /// <param name="serializedDataOverride">
-    ///     An optional <see cref="string" /> to override the serialized data representation.
+    ///     Optional data text to use instead of serializing <see cref="Data" />.
     /// </param>
-    /// <returns>
-    ///     A string representation of the log message formatted as a table,
-    ///     with columns for timestamp, level, prefix, message, and data.
-    /// </returns>
+    /// <returns>The message as a table.</returns>
     public string ToTable(
         IConsoleLoggerPrefixModel loggerPrefixOverride = null,
         string serializedDataOverride = null
@@ -505,32 +486,27 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
     }
 
     /// <summary>
-    ///     This method writes the log message to the console and/or a file based on the provided logger configuration.
+    ///     This method writes the message synchronously; see <see cref="WriteAsync" />.
     /// </summary>
     /// <param name="configuration">
     ///     The logger configuration model that specifies how the log message should be formatted and output.
     /// </param>
-    /// <returns>
-    ///     An instance of <see cref="IConsoleLoggerMessageModel" /> representing
-    ///     the current log message after writing it to the console and/or file.
-    /// </returns>
+    /// <returns>The current message.</returns>
     public IConsoleLoggerMessageModel Write(IConsoleLoggerConfigurationModel configuration) =>
         WriteAsync(configuration, CancellationToken.None).GetAwaiter().GetResult();
 
     /// <summary>
-    ///     This asynchronous method writes the log message to the console
-    ///     and/or a file based on the provided logger configuration.
+    ///     This method writes the message once. It appends the rendered text to the configured log
+    ///     file, if any, and writes it to the console unless the configuration is quiet. Debug and
+    ///     trace messages only reach the console when the configuration enables debug output.
     /// </summary>
     /// <param name="configuration">
     ///     The logger configuration model that specifies how the log message should be formatted and output.
     /// </param>
     /// <param name="stoppingToken">
-    ///     An optional <see cref="CancellationToken" /> that can be used to cancel the asynchronous operation.
+    ///     An optional <see cref="CancellationToken" /> that can be used to cancel the file write.
     /// </param>
-    /// <returns>
-    ///     An awaitable <see cref="Task{ConsoleLoggerMessageModel}" /> that resolves to the current
-    ///     instance of <see cref="IConsoleLoggerMessageModel" /> after writing the log message.
-    /// </returns>
+    /// <returns>The current message.</returns>
     public async Task<IConsoleLoggerMessageModel> WriteAsync(
         IConsoleLoggerConfigurationModel configuration,
         CancellationToken stoppingToken = default
@@ -575,7 +551,7 @@ public class ConsoleLoggerMessageModel : IConsoleLoggerMessageModel
             System.Console.ForegroundColor = originalColor;
         }
 
-        // Reset the written flag to true to indicate that the log message has been written to the console and/or file.
+        // Mark the message as written so it is not written again.
         Written = true;
 
         // We're done, return the current instance of the log message.

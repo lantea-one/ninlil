@@ -5,11 +5,11 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="CallTypeExtension" />. <c>CallTypeExtension</c> exposes many overloads
-///     to support 0-through-24 typed arguments, but every arity funnels through the same two core
-///     reflection paths (call on a given instance, or call on a freshly-instantiated/static type) tested
-///     here — arity 0 through 5 is exercised directly, and the remaining higher-arity overloads are pure
-///     mechanical forwarders with no independent logic to fail differently.
+///     These tests call methods on <c>SampleCallableModel</c> through <see cref="CallTypeExtension" />.
+///     Its overloads for 0 to 24 typed arguments all forward to two reflection paths (call on a given
+///     instance, or call a static method or a new instance's method from the type), which are tested
+///     here. The typed overloads are exercised with 0, 1, 2 and 5 arguments; the others forward the
+///     same way.
 /// </summary>
 public class CallTypeExtensionTests
 {

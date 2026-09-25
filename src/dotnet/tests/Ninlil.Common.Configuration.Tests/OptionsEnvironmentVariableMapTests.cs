@@ -4,11 +4,11 @@ using Ninlil.Common.Configuration;
 namespace Ninlil.Common.Configuration.Tests;
 
 /// <summary>
-///     These fake "Options" classes stand in for a real bound configuration class, exercising
-///     exactly the shapes <see cref="OptionsEnvironmentVariableMap" /> must handle correctly: a
-///     scalar leaf property, a nested complex-object property reused by two different parents (the
-///     same real shape <c>TlsCertificateOptions</c> has in the real application), and a
-///     list-valued property that must be skipped rather than mapped.
+///     This fake nested options class and the fake classes below stand in for bound configuration
+///     classes. Together they cover the shapes <see cref="OptionsEnvironmentVariableMap" /> must
+///     handle: a scalar leaf property, a nested complex property reused by two parents (the shape
+///     <c>TlsCertificateOptions</c> has in the application), a list-valued property that must be
+///     skipped, a class without a <c>SectionName</c> constant and two classes whose paths collide.
 /// </summary>
 file sealed class FakeNestedOptions
 {
@@ -51,6 +51,10 @@ file sealed class FakeCollidingOptionsTwo
     public int HttpPortValue { get; set; }
 }
 
+/// <summary>
+///     These tests cover <see cref="OptionsEnvironmentVariableMap.BuildMappings" /> by reflecting
+///     over the fake options classes in this file and checking the generated table.
+/// </summary>
 public sealed class OptionsEnvironmentVariableMapTests
 {
     [Fact]
@@ -83,9 +87,8 @@ public sealed class OptionsEnvironmentVariableMapTests
     [Fact]
     public void BuildMappings_ReusesTheSameNestedTypeUnderTwoDifferentParents()
     {
-        // TlsCertificateOptions is nested under four unrelated real parents in the real
-        // application -- this confirms the recursion's own visited-type guard only blocks a
-        // genuine cycle along one path, not legitimate reuse across sibling roots.
+        // TlsCertificateOptions is nested under several parents in the application. The
+        // visited-type guard must only block a cycle along one path, not reuse across roots.
         IReadOnlyDictionary<string, string> mappings = OptionsEnvironmentVariableMap.BuildMappings([
             new OptionsEnvironmentVariableRoot(typeof(FakeParentOptionsA)),
             new OptionsEnvironmentVariableRoot(typeof(FakeParentOptionsB)),
@@ -140,10 +143,9 @@ public sealed class OptionsEnvironmentVariableMapTests
     [Fact]
     public void BuildMappings_ThrowsOnAGenuineNameCollision()
     {
-        // "Fake:Colliding:HttpPort:Value" and "Fake:Colliding:HttpPortValue" are two genuinely
-        // different configuration paths that both generate NINLIL_FAKE_COLLIDING_HTTP_PORT_VALUE
-        // -- exactly the kind of ambiguity that must fail loudly at mapping-build time rather than
-        // silently letting one setting shadow the other.
+        // "Fake:Colliding:HttpPort:Value" and "Fake:Colliding:HttpPortValue" both generate
+        // NINLIL_FAKE_COLLIDING_HTTP_PORT_VALUE. Building the table must fail instead of letting
+        // one setting shadow the other.
         Assert.Throws<InvalidOperationException>(() =>
             OptionsEnvironmentVariableMap.BuildMappings([
                 new OptionsEnvironmentVariableRoot(typeof(FakeCollidingOptionsOne)),

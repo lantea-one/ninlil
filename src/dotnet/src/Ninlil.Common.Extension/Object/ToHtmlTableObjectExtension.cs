@@ -7,13 +7,16 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Object;
 
 /// <summary>
-///     This class provides extension methods for converting a user-
-///     defined class object to an HTML table string representation.
+///     This static class renders an object, a <c>Dictionary&lt;string, object&gt;</c> or a list of
+///     such dictionaries as an HTML table using MimeKit's <see cref="HtmlWriter" />. Public
+///     properties (or dictionary keys) become the header cells; nested classes and dictionaries
+///     become nested tables. Each value is written in its own body row with a single cell.
 /// </summary>
 public static class ToHtmlTableObjectExtension
 {
     /// <summary>
-    ///     This method converts the <paramref name="instance" /> to an HTML table string representation.
+    ///     This method renders a dictionary as an HTML table: the keys as header cells, then one row
+    ///     per value.
     /// </summary>
     /// <param name="instance">
     ///     The instance of the <see cref="Dictionary{TKey,TValue}" /> to convert where
@@ -36,7 +39,7 @@ public static class ToHtmlTableObjectExtension
         // Ensure the table attributes are not null.
         tableAttributes ??= [];
 
-        // Create our xml memory stream.
+        // Create our HTML memory stream.
         await using MemoryStream memoryStream = new();
 
         // Create our HTML writer using the memory stream and UTF-8 encoding.
@@ -98,7 +101,9 @@ public static class ToHtmlTableObjectExtension
                     await ToHtmlTableAsync(dictionary, null, false, stoppingToken)
                 );
 
-            // Check the type of value for a nested dictionary then write it as a nested HTML table.
+            // Check the type of value for a list of dictionaries then write it as a nested HTML table.
+            // This is not an else-if, so a nested dictionary also reaches the else branch below and
+            // is written a second time as text.
             if (value is IEnumerable<Dictionary<string, object>> enumerable)
                 htmlWriter.WriteMarkupText(
                     await ToHtmlTableAsync(enumerable, null, false, stoppingToken)
@@ -141,7 +146,8 @@ public static class ToHtmlTableObjectExtension
     }
 
     /// <summary>
-    ///     This method converts an <see cref="IEnumerable{Dictionary}"/> of to an HTML table string representation.
+    ///     This method renders a list of dictionaries as one HTML table, taking the header cells from
+    ///     the first dictionary's keys and writing each dictionary's rows in turn.
     /// </summary>
     /// <param name="instance">The instance of the <see cref="IEnumerable{Dictionary}"/> to convert.</param>
     /// <param name="tableAttributes">Optional attributes for the HTML table element.</param>
@@ -169,7 +175,7 @@ public static class ToHtmlTableObjectExtension
             )
             .ToArray();
 
-        // Create our xml memory stream.
+        // Create our HTML memory stream.
         await using MemoryStream memoryStream = new();
 
         // Create our HTML writer using the memory stream and UTF-8 encoding.
@@ -252,12 +258,14 @@ public static class ToHtmlTableObjectExtension
     }
 
     /// <summary>
-    ///     This extension method converts a user-defined class object to an HTML table string representation.
+    ///     This extension method renders an object as an HTML table. A dictionary or list of
+    ///     dictionaries is rendered directly; any other class is rendered from its public
+    ///     properties.
     /// </summary>
     /// <param name="instance">The instance of the user-defined class to convert.</param>
     /// <param name="tableAttributes">Optional attributes for the HTML table element.</param>
     /// <param name="rowOnly">
-    ///     Option flag to indicate whether to write only the rows of
+    ///     Optional flag to indicate whether to write only the rows of
     ///     data for the table without the header or surrounding elements.
     /// </param>
     /// <param name="stoppingToken">Optional cancellation token to stop the operation.</param>
@@ -311,7 +319,7 @@ public static class ToHtmlTableObjectExtension
         // Ensure the table attributes are not null.
         tableAttributes ??= [];
 
-        // Create our xml memory stream.
+        // Create our HTML memory stream.
         await using MemoryStream memoryStream = new();
 
         // Create our HTML writer using the memory stream and UTF-8 encoding.
@@ -383,16 +391,13 @@ public static class ToHtmlTableObjectExtension
                 htmlWriter.WriteMarkupText(
                     await ToHtmlTableAsync(nestedDictionary, null, false, stoppingToken)
                 );
-            // Check the type of value for a nested dictionary then write it as a nested HTML table.
+            // Check the type of value for a list of dictionaries then write it as a nested HTML table.
             else if (value is IEnumerable<Dictionary<string, object>> nestedEnumerable)
                 htmlWriter.WriteMarkupText(
                     await ToHtmlTableAsync(nestedEnumerable, null, false, stoppingToken)
                 );
-            // Check for a nested class type and write it as a nested HTML table. This must inspect
-            // the current property's own value type, not the enclosing instance's type (which is
-            // constant across the whole loop and, having already passed the same guard once at the
-            // top of this method, would always be a class) -- otherwise every non-null property
-            // value, primitive or not, gets recursed into as if it were itself a nested class.
+            // Check for a nested class and write it as a nested HTML table. Test the property value's
+            // type, not the enclosing instance's type, which always passes this check.
             else if (
                 value is not null
                 && !value.GetType().IsPrimitive()

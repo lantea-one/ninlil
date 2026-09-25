@@ -6,8 +6,10 @@ using Ninlil.Common.Extension.String;
 namespace Ninlil.Common.Extension.Tests.String;
 
 /// <summary>
-///     This class tests <c>GetTypeValueStringExtension</c> (the public class name in
-///     <c>GetTypedValueStringExtension.cs</c>; the file and class names do not match).
+///     These tests convert strings to many target types with <c>GetTypeValueStringExtension</c>
+///     (the class in <c>GetTypedValueStringExtension.cs</c>; the file and class names differ):
+///     null-like tokens, scalars, enums, collections, dictionaries, tuples, custom delimiters and
+///     quoted input, plus the <c>Can</c>/<c>Try</c> variants.
 /// </summary>
 public class GetTypedValueStringExtensionTests
 {
@@ -212,13 +214,10 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     The non-generic entry point instantiates a real <c>Dictionary&lt;TKey, TValue&gt;</c> (via
-    ///     reflection over the requested key/value types) and populates it through its own <c>Add</c>
-    ///     method, rather than LINQ's <c>ToDictionary(keySelector, valueSelector)</c> -- whose inferred
-    ///     <c>TKey</c>/<c>TValue</c> would always be <see cref="object" /> regardless of the requested
-    ///     types, since <c>GetTypedValue(Type, ...)</c> itself returns <see cref="object" />. So the result
-    ///     is a genuinely typed <c>Dictionary&lt;string, int&gt;</c>, not a
-    ///     <c>Dictionary&lt;object, object&gt;</c>.
+    ///     The non-generic entry point creates a <c>Dictionary&lt;TKey, TValue&gt;</c> of the requested
+    ///     types by reflection and fills it through <c>Add</c>. LINQ's <c>ToDictionary</c> would infer
+    ///     <see cref="object" /> for both, since <c>GetTypedValue(Type, ...)</c> returns
+    ///     <see cref="object" />. The result must be a <c>Dictionary&lt;string, int&gt;</c>.
     /// </summary>
     [Fact]
     public void GetTypedValueOnDictionaryParsesBraceDelimitedKeyValuePairsAsATypedDictionary()
@@ -231,9 +230,9 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     Since the non-generic entry point now produces a genuinely typed dictionary (see above), the
-    ///     generic <c>GetTypedValue&lt;TValue&gt;()</c> helper's plain C# cast to <c>TValue</c> succeeds
-    ///     instead of always throwing <see cref="InvalidCastException" />.
+    ///     Because the non-generic entry point produces a typed dictionary (see above), the generic
+    ///     <c>GetTypedValue&lt;TValue&gt;()</c> cast to <c>TValue</c> succeeds instead of throwing
+    ///     <see cref="InvalidCastException" />.
     /// </summary>
     [Fact]
     public void GetTypedValueGenericOnDictionaryReturnsATypedDictionary()
@@ -265,10 +264,9 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     A single-element tuple still deliberately isn't supported by this parsing branch: its own
-    ///     element-count guard requires at least two element types (the branch's parenthesized-and-comma
-    ///     syntax doesn't distinguish a genuine single-element tuple literal from a plain parenthesized
-    ///     expression), so it always throws for that one specific shape.
+    ///     A single-element tuple is not supported: the tuple branch requires at least two element
+    ///     types, because its parenthesized syntax cannot tell a one-element tuple from a
+    ///     parenthesized value. It always throws for that shape.
     /// </summary>
     [Fact]
     public void GetTypedValueOnASingleElementTupleThrowsDueToTheElementCountGuard()
@@ -280,10 +278,9 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     With <c>IsTypeExtension.IsTuple</c> now recognizing every real tuple arity (see
-    ///     <c>IsTypeExtensionTests</c>) and the branch actually constructing a real tuple instance (rather
-    ///     than returning an untyped <see cref="System.Collections.Generic.IEnumerable{T}" /> projection),
-    ///     a genuine multi-element tuple parses successfully.
+    ///     <c>IsTypeExtension.IsTuple</c> recognizes every tuple arity (see <c>IsTypeExtensionTests</c>)
+    ///     and the branch constructs a tuple instance rather than returning an untyped
+    ///     <see cref="System.Collections.Generic.IEnumerable{T}" />, so a multi-element tuple parses.
     /// </summary>
     [Fact]
     public void GetTypedValueOnAMultiElementTupleParsesEachElement()
@@ -298,11 +295,9 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     The tuple branch's own element-count guard now splits on the real <c>delimiter</c>
-    ///     parameter rather than a hardcoded comma, so a caller using a non-default delimiter (e.g.
-    ///     <c>Ninlil.Common.Console</c>'s own tuple parsing, which uses <c>"]-["</c> so a comma
-    ///     inside an individual element's own value is never mistaken for an element separator)
-    ///     parses successfully instead of always failing the count check.
+    ///     The tuple branch's element-count check splits on the <c>delimiter</c> argument rather than
+    ///     a hardcoded comma, so a custom delimiter such as <c>"]-["</c> lets an element contain a
+    ///     comma.
     /// </summary>
     [Fact]
     public void GetTypedValueOnATupleWithACustomDelimiterParsesEachElement()
@@ -356,11 +351,9 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     With <c>IsTypeExtension</c>'s collection-detection helpers no longer misreporting
-    ///     <see cref="object" /> as a list/dictionary/collection/enumerable (see
-    ///     <c>IsTypeExtensionTests</c>), <c>GetTypedValue(instance, typeof(object), ...)</c> now correctly
-    ///     reaches its intended "pass the raw string straight through" fallback instead of taking the
-    ///     array/list-parsing branch and throwing.
+    ///     <c>IsTypeExtension</c> does not report <see cref="object" /> as a collection (see
+    ///     <c>IsTypeExtensionTests</c>), so <c>GetTypedValue(instance, typeof(object), ...)</c> reaches
+    ///     its fallback and returns the raw string instead of taking the list branch and throwing.
     /// </summary>
     [Fact]
     public void GetTypedValueOnObjectTypePassesTheRawStringThrough()
@@ -371,10 +364,10 @@ public class GetTypedValueStringExtensionTests
     }
 
     /// <summary>
-    ///     Since <c>GetTypedValue</c> runs every input through <c>SanitizeForValueTyping()</c> (default
-    ///     <c>depth: 13</c>) before doing anything else, and that method's quote-unwrapping loop no longer
-    ///     re-strips characters on every iteration (see <c>SanitizeStringExtensionTests</c>), a realistic
-    ///     short quoted string is correctly unwrapped instead of throwing.
+    ///     <c>GetTypedValue</c> runs every input through <c>SanitizeForValueTyping()</c> (default
+    ///     <c>depth: 13</c>) first, and that method strips the quote pair only once (see
+    ///     <c>SanitizeStringExtensionTests</c>), so a short quoted string is unwrapped instead of
+    ///     throwing.
     /// </summary>
     [Fact]
     public void GetTypedValueOnAShortQuotedStringUnwrapsTheQuotes()

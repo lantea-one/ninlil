@@ -5,7 +5,8 @@ using System.Reflection;
 namespace Ninlil.Common.Extension.Object;
 
 /// <summary>
-///     This class contains extension methods for trimming properties on objects.
+///     This static class trims a public string property on an object in place, by name or by a
+///     property selector expression.
 /// </summary>
 public static class TrimPropertyObjectExtension
 {
@@ -15,15 +16,18 @@ public static class TrimPropertyObjectExtension
     /// </summary>
     /// <param name="instance">The object instance to trim the property on.</param>
     /// <param name="propertyName">The name of the property to trim.</param>
-    /// <param name="defaultValue">The default value to set the property to if it is null or empty.</param>
+    /// <param name="defaultValue">
+    ///     The value to use when the property is null. A blank value is trimmed to an empty string,
+    ///     not replaced.
+    /// </param>
     /// <typeparam name="TObject">The type of the object <paramref name="instance" />.</typeparam>
     /// <returns>The updated object <paramref name="instance" />.</returns>
     /// <exception cref="ArgumentException">
-    ///     When the <paramref name="propertyName" /> is not writable or of type <see cref="string" />.
+    ///     When the property is not writable or is not of type <see cref="string" />.
     /// </exception>
     /// <exception cref="ArgumentNullException">
-    ///     When the <paramref name="propertyName" /> is null or empty
-    ///     or doesn't exist on the <paramref name="instance" /> type.
+    ///     When the <paramref name="propertyName" /> is null or doesn't exist on
+    ///     <typeparamref name="TObject" />.
     /// </exception>
     public static TObject TrimProperty<TObject>(
         this TObject instance,
@@ -71,7 +75,7 @@ public static class TrimPropertyObjectExtension
     /// </summary>
     /// <param name="instance">The object instance to trim the property on.</param>
     /// <param name="propertySelector">The expression to select the property to trim.</param>
-    /// <param name="defaultValue">The default value to set the property to if it is null or empty.</param>
+    /// <param name="defaultValue">The value to use when the property is null.</param>
     /// <typeparam name="TObject">The type of the object <paramref name="instance" />.</typeparam>
     /// <returns>The updated object <paramref name="instance" />.</returns>
     public static TObject TrimProperty<TObject>(

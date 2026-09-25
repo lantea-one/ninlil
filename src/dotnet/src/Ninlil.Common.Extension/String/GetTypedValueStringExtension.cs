@@ -11,7 +11,31 @@ using Ninlil.Common.Serializer.Service;
 namespace Ninlil.Common.Extension.String;
 
 /// <summary>
-///     This class provides extension methods for converting a <see cref="string" /> value to typed values.
+///     This static class converts a string into a value of a runtime <see cref="System.Type" />.
+///     It is the inverse of <see cref="Object.ToStringValueObjectExtension" /> and is how the console
+///     parser turns command-line text into typed property values.
+///     <list type="bullet">
+///         <item>
+///             Quotes are stripped first. Blank, <c>nil</c> or <c>null</c> input gives the type's
+///             default (<see langword="null" /> for nullable types).
+///         </item>
+///         <item>
+///             With a <see cref="SerializerFormatEnum" /> other than <c>None</c>, the text is
+///             deserialized in that format.
+///         </item>
+///         <item>
+///             Scalars use their own parsers: enums by member name or number, bytes as hex, byte
+///             arrays as Base64, dates, numbers, GUIDs, IP and email addresses.
+///         </item>
+///         <item>
+///             Lists and arrays split on <c>delimiter</c>; dictionaries use <c>{k:v,...}</c>;
+///             tuples use <c>(a,b,...)</c>. Each item is converted recursively.
+///         </item>
+///         <item>
+///             Anything else is tried as JSON, then XML, then <see cref="Convert.ChangeType(object, System.Type)" />.
+///         </item>
+///     </list>
+///     The file is named GetTypedValueStringExtension.cs; the class name drops the "d".
 /// </summary>
 public static class GetTypeValueStringExtension
 {
@@ -47,14 +71,18 @@ public static class GetTypeValueStringExtension
     ) => instance.TryGetTypedValue(out TValue _, delimiter, format);
 
     /// <summary>
-    ///     This method converts the <see cref="string" />
-    ///     <paramref name="instance" /> value string to it's <paramref name="type" />.
+    ///     This method converts the <see cref="string" /> <paramref name="instance" /> to
+    ///     <paramref name="type" /> using the rules in the class summary.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> value to convert.</param>
     /// <param name="type">The expected resulting type.</param>
     /// <param name="delimiter">Optional, delimiter used for parsing.</param>
     /// <param name="format">Optional, serialization format used.</param>
     /// <returns>Typed representation of <paramref name="instance" /> into <paramref name="type" />.</returns>
+    /// <exception cref="Exception">
+    ///     Any parse or format exception from the underlying converter when the text does not fit
+    ///     the type.
+    /// </exception>
     public static object GetTypedValue(
         this string instance,
         System.Type type,
@@ -69,7 +97,7 @@ public static class GetTypeValueStringExtension
         if (instance?.Trim().ToLower() is null or "" or "nil" or "null")
             return Nullable.GetUnderlyingType(type) is null ? type.GetDefaultValue() : null;
 
-        // Check for a string and simply return the instance.
+        // Check for a string and return the sanitized instance.
         if (type == typeof(string))
             return instance;
 
@@ -86,7 +114,8 @@ public static class GetTypeValueStringExtension
                 ? result
                 : instance.ToEnum(type);
 
-        // Check for a boolean type then parse and return the value.
+        // Check for a boolean type. The pattern is not anchored, so any text containing one of
+        // the words (such as "not", which contains "t") reads as true.
         if (type.IsBoolean())
             return Regex.IsMatch(
                 instance,
@@ -105,11 +134,11 @@ public static class GetTypeValueStringExtension
                 ? structured
                 : null;
 
-        // Check for a byte type then parse and return the value.
+        // Check for a byte type then parse it as hexadecimal.
         if (type == typeof(byte))
             return byte.Parse(instance, NumberStyles.HexNumber);
 
-        // Check for a byte array type then parse and return the value.
+        // Check for a byte array type then decode it from Base64.
         if (type == typeof(byte[]))
             return Convert.FromBase64String(instance);
 
@@ -189,7 +218,7 @@ public static class GetTypeValueStringExtension
         if (type == typeof(ushort))
             return ushort.Parse(instance);
 
-        // Check for an array type then parse and return the value.
+        // Check for an array or list type then split, convert each item and return the value.
         if (type.IsEnumerableType(false))
         {
             // Instantiate our new list with the specified element type.
@@ -264,12 +293,9 @@ public static class GetTypeValueStringExtension
                     nameof(instance)
                 );
 
-            // Instantiate a real Dictionary<keyType, valueType> via reflection and populate it
-            // through its own "Add" method, rather than LINQ's ToDictionary(keySelector,
-            // valueSelector) -- that overload infers TKey/TValue from the selectors' *return*
-            // type, which is always `object` here (since the non-generic GetTypedValue(Type, ...)
-            // always returns object regardless of the requested key/value types), so it would
-            // always produce a Dictionary<object,object> instead of the requested shape.
+            // Create a Dictionary<keyType, valueType> by reflection and fill it through Add.
+            // LINQ's ToDictionary infers TKey/TValue from the selectors' return type, which is
+            // object here, so it would produce a Dictionary<object, object>.
             object instanceDictionary = typeof(Dictionary<,>)
                 .MakeGenericType(keyType, valueType)
                 .CreateInstance();
@@ -301,7 +327,7 @@ public static class GetTypeValueStringExtension
             if (instance.ToLower() is null or "" or "null")
                 return null;
 
-            // Ensure the syntax is correct for the dictionary.
+            // Ensure the syntax is correct for the tuple.
             if (!instance.StartsWith('(') || !instance.EndsWith(')'))
                 throw new ArgumentException(
                     $"Invalid tuple syntax for type: {type.Name}. Expected format: (<item1>,<item2>,<item3>...).",
@@ -311,19 +337,15 @@ public static class GetTypeValueStringExtension
             // Localize the element types for the tuple into this scope.
             System.Type[] elementTypes = type.GetTupleElementTypes();
 
-            // Ensure we have at least two element types for a dictionary.
+            // Ensure the tuple has at least two element types.
             if (elementTypes.Length < 2)
                 throw new ArgumentException(
                     $"Unable to determine element types for tuple: {type.Name}. Expected at least two element types.",
                     nameof(type)
                 );
 
-            // Ensure the number of elements matches the expected types. This must split on the
-            // real `delimiter` parameter, not a hardcoded comma -- a caller using a non-default
-            // delimiter (e.g. Ninlil.Common.Console's tuple parsing, which deliberately uses
-            // "]-[" so a comma inside an individual element's own value never gets mistaken for
-            // an element separator) would otherwise almost always fail this count check and throw,
-            // even for perfectly well-formed input.
+            // Ensure the number of elements matches the expected types. Split on `delimiter`, not a
+            // hardcoded comma, so callers with a different separator can parse tuples.
             if (
                 instance
                     .SanitizeForValueTypingTuple()
@@ -343,12 +365,8 @@ public static class GetTypeValueStringExtension
                     nameof(instance)
                 );
 
-            // Parse each element per its own tuple-slot type, then construct the requested
-            // Tuple/ValueTuple instance via reflection with the parsed values as constructor
-            // arguments (every Tuple<...>/ValueTuple<...> arity has a public constructor taking
-            // exactly its element values in order). Returning the raw LINQ projection here (as an
-            // earlier version of this method did) would produce an untyped IEnumerable<object>,
-            // never an actual instance of the requested tuple type.
+            // Convert each element to its slot's type, then construct the tuple by reflection. Every
+            // Tuple and ValueTuple arity has a public constructor taking its element values in order.
             return type.CreateInstance(
                 instance
                     .SanitizeForValueTypingTuple()
@@ -371,8 +389,8 @@ public static class GetTypeValueStringExtension
     }
 
     /// <summary>
-    ///     This method converts the <see cref="string" />
-    ///     <paramref name="instance" /> value string to it's <typeparamref name="TValue" />.
+    ///     This method converts the <see cref="string" /> <paramref name="instance" /> to
+    ///     <typeparamref name="TValue" />.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> value to convert.</param>
     /// <param name="delimiter">Optional, delimiter used for parsing.</param>
@@ -415,7 +433,7 @@ public static class GetTypeValueStringExtension
         // Catch any exceptions that occur.
         catch (Exception)
         {
-            // Reset the value as null into the output.
+            // Output the type's default value.
             value = type.GetDefaultValue();
 
             // We're done, return false as we couldn't convert the value.
@@ -450,7 +468,7 @@ public static class GetTypeValueStringExtension
             return true;
         }
 
-        // Reset the value as null into the output.
+        // Output the type's default value.
         value = typeof(TValue).GetDefaultValue<TValue>();
 
         // We're done, return false as we couldn't convert the value.

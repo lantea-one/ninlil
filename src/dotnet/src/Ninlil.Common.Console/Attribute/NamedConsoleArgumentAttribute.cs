@@ -4,17 +4,19 @@
 namespace Ninlil.Common.Console.Attribute;
 
 /// <summary>
-///     This attribute is used to define console arguments for a command-line application.
+///     This attribute marks an input model property as a named argument, given on the command line
+///     as <c>--name value</c>, <c>--name=value</c>, <c>-x value</c> or, for a switch, just the
+///     name. The help text lists it with its description and group.
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public class NamedConsoleArgumentAttribute : ConsoleArgumentAttribute
 {
     /// <summary>
-    ///     This method sanitizes the argument <paramref name="name" />
-    ///     by removing leading dashes and trimming whitespace.
+    ///     This method removes leading dashes (<c>--</c> or <c>-</c>) and surrounding whitespace from
+    ///     an argument name.
     /// </summary>
     /// <param name="name">The argument name to sanitize.</param>
-    /// <returns>The sanitized argument <paramref name="name" />, or null if the input is null or empty.</returns>
+    /// <returns>The sanitized argument <paramref name="name" />.</returns>
     /// <exception cref="ArgumentNullException">Thrown when the <paramref name="name" /> is null or empty.</exception>
     public static string SanitizeArgumentName(string name) =>
         name?.Trim() is null or ""
@@ -24,32 +26,32 @@ public class NamedConsoleArgumentAttribute : ConsoleArgumentAttribute
         : name.Trim();
 
     /// <summary>
-    ///     This property contains the default value for the console argument.
+    ///     This field contains the default value for the console argument.
     /// </summary>
     public readonly object Default;
 
     /// <summary>
-    ///     This property contains the description of the console argument to be displayed in the help text.
+    ///     This field contains the description of the console argument to be displayed in the help text.
     /// </summary>
     public readonly string Description;
 
     /// <summary>
-    ///     This property contains the group name of the console argument, if applicable.
+    ///     This field contains the group name of the console argument, if applicable.
     /// </summary>
     public readonly string Group;
 
     /// <summary>
-    ///     This property is used to set the name of the console argument.
+    ///     This field contains the long name of the console argument, without leading dashes.
     /// </summary>
     public readonly string Name;
 
     /// <summary>
-    ///     This property indicates whether the console argument is required.
+    ///     This field indicates whether the console argument is required.
     /// </summary>
     public readonly bool Required;
 
     /// <summary>
-    ///     This property contains the short name of the console argument, if applicable.
+    ///     This field contains the single-character short name of the console argument, if any.
     /// </summary>
     public readonly char? ShortName;
 
@@ -136,7 +138,8 @@ public class NamedConsoleArgumentAttribute : ConsoleArgumentAttribute
 }
 
 /// <summary>
-///     This attribute is used to define console arguments for a command-line application.
+///     This attribute is the generic form of <see cref="NamedConsoleArgumentAttribute" />. The
+///     type parameter types the default value; parsing uses the property type.
 /// </summary>
 /// <typeparam name="TValue">The type of the value for the console argument.</typeparam>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]

@@ -3,15 +3,14 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Ninlil.Common.Serializer.OutputFormatter;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.OutputFormatter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="JsonOutputFormatter" />. Its
-///     <c>WriteResponseBodyAsync</c> override is exercised directly against a real
-///     <see cref="DefaultHttpContext" />/<see cref="OutputFormatterWriteContext" /> pair, writing
-///     into an in-memory response body stream -- the rest of the ASP.NET Core MVC formatter
-///     pipeline (content negotiation) is not exercised here; see
-///     <see cref="InputFormatter.JsonInputFormatterTests" /> for the matching read-side note.
+///     These tests call <see cref="JsonOutputFormatter" />'s <c>WriteResponseBodyAsync</c>
+///     directly with a <see cref="DefaultHttpContext" /> and <see cref="OutputFormatterWriteContext" />,
+///     writing into an in-memory response body. Content negotiation is not covered (see
+///     <see cref="InputFormatter.JsonInputFormatterTests" />).
 /// </summary>
 public class JsonOutputFormatterTests
 {
@@ -46,11 +45,9 @@ public class JsonOutputFormatterTests
     [Fact]
     public async Task WriteResponseBodyAsync_WritesSerializedJson_CamelCased()
     {
-        // Unlike JsonSerializer.GetOptions() (no naming policy, PascalCase-verbatim, per this
-        // project's documented "internal storage is always PascalCase" convention), the default
-        // JsonOutputFormatter falls back to `new JsonSerializerOptions(JsonSerializerDefaults.Web)`
-        // when no explicit options are supplied, which sets a camelCase naming policy -- this is
-        // the REST response boundary where that conversion is documented to happen.
+        // Unlike JsonSerializer.GetOptions() (no naming policy, names kept as declared), the
+        // formatter without explicit options uses JsonSerializerDefaults.Web, which camelCases
+        // property names in responses.
         (_, string body) = await WriteAsync(
             new JsonOutputFormatter(),
             new Simple { Value = "x" },

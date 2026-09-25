@@ -1,6 +1,7 @@
 using System.Net;
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
@@ -11,9 +12,8 @@ namespace Ninlil.Common.Serializer.Tests.Converter;
 public class IpAddressJsonConverterTests
 {
     /// <summary>
-    ///     This model wraps an <see cref="IPAddress" /> property so the converter (which is
-    ///     registered globally by <see cref="JsonSerializer" />) is exercised through the ordinary
-    ///     top-level serializer entry points.
+    ///     This model wraps an <see cref="IPAddress" /> property so the converter, which
+    ///     <see cref="JsonSerializer" /> registers for every call, runs through the normal entry points.
     /// </summary>
     private class Wrapper
     {

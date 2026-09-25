@@ -1,9 +1,11 @@
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests;
 
 /// <summary>
-///     This class contains unit tests for the core <see cref="XmlSerializer" /> static wrapper.
+///     These tests cover the <see cref="XmlSerializer" /> static wrapper: round trips, null and
+///     malformed input, indented output, namespaces and the reader and writer settings.
 /// </summary>
 public class XmlSerializerTests
 {
@@ -73,9 +75,8 @@ public class XmlSerializerTests
     [Fact]
     public void AddNamespace_And_ClearNamespaces_DoNotThrow()
     {
-        // AddNamespace/ClearNamespaces mutate XmlSerializer's own shared static state, which
-        // every other test in this assembly implicitly relies on being at its default (empty) --
-        // always restore it, even if an assertion below fails.
+        // AddNamespace/ClearNamespaces change shared static state that other tests expect to be
+        // empty, so always restore it, even if an assertion fails.
         try
         {
             XmlSerializer.AddNamespace("test", "http://example.com/test");

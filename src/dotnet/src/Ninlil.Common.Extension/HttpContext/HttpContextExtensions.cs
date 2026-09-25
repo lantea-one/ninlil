@@ -5,22 +5,22 @@ using Microsoft.Net.Http.Headers;
 namespace Ninlil.Common.Extension.HttpContext;
 
 /// <summary>
-///     This class maintains our extensions for <see cref="HttpContext" /> instances.
+///     This static class reads client details (address, bearer token, user agent) from an ASP.NET
+///     Core <see cref="Microsoft.AspNetCore.Http.HttpContext" />.
 /// </summary>
 public static class HttpContextExtensions
 {
     /// <summary>
-    ///     This method provides the IP address of the requesting client from the HTTP request <paramref name="instance" />.
+    ///     This method returns the client's IP address: the first address in an
+    ///     <c>X-Forwarded-For</c> header when one is present, otherwise the connection's remote
+    ///     address. The header is trusted as sent, so only use this behind a proxy that sets it.
     /// </summary>
     /// <param name="instance">The HttpContext instance to pull the IP address from.</param>
     /// <returns>The IP address of the current client.</returns>
     public static string GetIpAddress(this Microsoft.AspNetCore.Http.HttpContext instance)
     {
-        // Check for a proxied request and return the first (original caller's) address in the
-        // forwarded chain. ContainsKey(...).ToString() previously drove this check, which compares
-        // the string form of a bool ("True"/"False") against string.Empty - always true, so this
-        // branch ran unconditionally and returned an empty string whenever the header was absent,
-        // never falling back to RemoteIpAddress below.
+        // For a proxied request, return the first (original caller's) address in the forwarded
+        // chain. A missing or blank header falls through to RemoteIpAddress below.
         if (
             instance.Request.Headers.TryGetValue("x-forwarded-for", out StringValues forwardedFor)
             && !string.IsNullOrWhiteSpace(forwardedFor.ToString())
@@ -35,7 +35,8 @@ public static class HttpContextExtensions
     }
 
     /// <summary>
-    ///     This method retrieves the authorization bearer if one exists in the HTTP request <paramref name="instance" />.
+    ///     This method returns the token from an <c>Authorization: Bearer ...</c> header, or
+    ///     <see langword="null" /> when there is no bearer header.
     /// </summary>
     /// <param name="instance">The HttpContext instance to pull the authorization bearer from.</param>
     /// <returns>The authorization bearer from the HTTP request <paramref name="instance" /> if it exists.</returns>
@@ -51,7 +52,7 @@ public static class HttpContextExtensions
             .Select(h => h.Value)
             .FirstOrDefault();
 
-        // Check the authorization header and end the result.
+        // A blank header has no token.
         if (authorizationHeader?.Trim() is null or "")
             return null;
 

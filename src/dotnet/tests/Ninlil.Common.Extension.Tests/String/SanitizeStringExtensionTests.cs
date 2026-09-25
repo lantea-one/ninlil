@@ -4,26 +4,22 @@ using Ninlil.Common.Extension.String;
 namespace Ninlil.Common.Extension.Tests.String;
 
 /// <summary>
-///     This class tests <see cref="SanitizeStringExtension" />.
+///     These tests cover the three <see cref="SanitizeStringExtension" /> methods: quote removal,
+///     brace stripping and parenthesis stripping, including null input.
 /// </summary>
 /// <remarks>
-///     <c>SanitizeForValueTypingDictionary</c>/<c>SanitizeForValueTypingTuple</c> call
-///     <c>TrimEnd('}'/')').TrimStart('{'/'(')</c> <em>before</em> the final <c>.Trim()</c>. When the input
-///     has whitespace outside the delimiter characters (e.g. <c>"  { a:1 }  "</c>), the delimiter
-///     characters are not actually at the string's start/end at the point <c>TrimEnd</c>/<c>TrimStart</c>
-///     run, so neither call removes anything, and only the surrounding whitespace ends up trimmed -- the
-///     braces/parentheses themselves are left in place. (This is a separate, narrower behavior from
-///     <c>SanitizeForValueTyping</c>'s own quote-unwrapping loop below and is not part of this pass's fix
-///     scope.)
+///     <c>SanitizeForValueTypingDictionary</c> and <c>SanitizeForValueTypingTuple</c> run
+///     <c>TrimEnd</c>/<c>TrimStart</c> on the delimiter characters before the final
+///     <c>.Trim()</c>. With whitespace outside the delimiters (e.g. <c>"  { a:1 }  "</c>), the
+///     delimiters are not at the ends when those calls run, so they stay and only the whitespace is
+///     removed. The tests below pin that behavior.
 /// </remarks>
 public class SanitizeStringExtensionTests
 {
     /// <summary>
-    ///     The quote-unwrapping loop now strips the surrounding quote pair exactly once, outside the
-    ///     loop, then only progressively unescapes backslash-escaped inner quotes on each subsequent
-    ///     iteration -- so a realistic short quoted value no longer exhausts the string and throws
-    ///     <see cref="ArgumentOutOfRangeException" /> before the default <c>depth</c> (13) iterations
-    ///     complete.
+    ///     The surrounding quote pair is stripped once, before the unescaping loop, so a short quoted
+    ///     value survives the default <c>depth</c> (13) iterations without throwing
+    ///     <see cref="ArgumentOutOfRangeException" />.
     /// </summary>
     [Fact]
     public void SanitizeForValueTypingWithDefaultDepthUnwrapsARealisticShortQuotedString()
@@ -32,8 +28,8 @@ public class SanitizeStringExtensionTests
     }
 
     /// <summary>
-    ///     Passing <c>depth: 1</c> demonstrates the quote-removal behavior for a single-quote-pair input
-    ///     (only one iteration runs).
+    ///     Passing <c>depth: 1</c> shows quote removal for a single quote pair with only one unescaping
+    ///     iteration.
     /// </summary>
     [Fact]
     public void SanitizeForValueTypingWithDepthOneRemovesASimpleSurroundingDoubleQuotePair()
@@ -66,9 +62,8 @@ public class SanitizeStringExtensionTests
     }
 
     /// <summary>
-    ///     See the class-level remarks: whitespace outside the braces prevents <c>TrimEnd</c>/
-    ///     <c>TrimStart</c> from ever reaching the actual <c>{</c>/<c>}</c> characters, so they are left
-    ///     in place -- only the outer whitespace is removed.
+    ///     See the class remarks: with whitespace outside the braces, the <c>{</c> and <c>}</c> stay and
+    ///     only the outer whitespace is removed.
     /// </summary>
     [Fact]
     public void SanitizeForValueTypingDictionaryLeavesBracesInPlaceWhenSurroundedByWhitespace()
@@ -89,9 +84,8 @@ public class SanitizeStringExtensionTests
     }
 
     /// <summary>
-    ///     See the class-level remarks: whitespace outside the parentheses prevents <c>TrimEnd</c>/
-    ///     <c>TrimStart</c> from ever reaching the actual <c>(</c>/<c>)</c> characters, so they are left
-    ///     in place -- only the outer whitespace is removed.
+    ///     See the class remarks: with whitespace outside the parentheses, the <c>(</c> and <c>)</c>
+    ///     stay and only the outer whitespace is removed.
     /// </summary>
     [Fact]
     public void SanitizeForValueTypingTupleLeavesParenthesesInPlaceWhenSurroundedByWhitespace()

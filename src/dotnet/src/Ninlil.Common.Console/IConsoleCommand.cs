@@ -5,19 +5,23 @@ using Ninlil.Common.Console.Model;
 namespace Ninlil.Common.Console;
 
 /// <summary>
-///     This interface represents a console command that can be used to execute various operations through the CLI.
+///     This interface is the contract for <see cref="ConsoleCommand" />, the command-line parser and
+///     runner. It registers services, sets the not-parsed handler, and parses the arguments into
+///     one of up to 24 candidate input model types before handing the result to a delegate or an
+///     <see cref="IConsoleApplication" />.
 /// </summary>
 public interface IConsoleCommand
 {
     /// <summary>
-    ///     This delegate is used to handle the case when the command-line arguments are not parsed successfully.
+    ///     This delegate handles the case where no input model matches the command-line arguments.
+    ///     It is synchronous despite its name.
     /// </summary>
     /// <typeparam name="TException">The type of the exception that occurred during parsing.</typeparam>
     public delegate void CommandNotParsedAsyncDelegate<in TException>(TException exception)
         where TException : Exception;
 
     /// <summary>
-    ///     This delegate is used to asynchronously handle the parsed result of a console command.
+    ///     This delegate receives the parsed input model and the service provider built for the run.
     /// </summary>
     /// <param name="input">The input model containing the parsed command arguments.</param>
     /// <param name="serviceProvider">The service provider to resolve dependencies.</param>
@@ -132,14 +136,16 @@ public interface IConsoleCommand
         where TConsoleApplication : class, IConsoleApplication;
 
     /// <summary>
-    ///     This method uses a <paramref name="handler" /> to configure the runtime <see cref="IServiceProvider" />.
+    ///     This method lets <paramref name="handler" /> register services in the service collection
+    ///     used for each parse.
     /// </summary>
     /// <param name="handler">The handler to configure the services.</param>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>
     public IConsoleCommand ConfigureServices(Action<IServiceCollection> handler);
 
     /// <summary>
-    ///     This method retries a registered service instance from the instance <see cref="IServiceCollection" />.
+    ///     This method resolves a registered service from the instance's
+    ///     <see cref="IServiceCollection" />.
     /// </summary>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
     /// <returns>The service instance of the specified type <typeparamref name="TService" />.</returns>
@@ -147,10 +153,10 @@ public interface IConsoleCommand
         where TService : class;
 
     /// <summary>
-    ///     This method fluently sets the not parsed handler into the instance.
+    ///     This method registers a handler to run when no input model matches the arguments.
     /// </summary>
     /// <param name="handler">
-    ///     The <see cref="Action" /> to execute when the command-line arguments are not parsed.
+    ///     The handler to execute when the command-line arguments are not parsed.
     /// </param>
     /// <typeparam name="TException">The type of the exception that occurred during parsing.</typeparam>
     /// <returns>The updated <see cref="IConsoleCommand" /> instance.</returns>

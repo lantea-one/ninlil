@@ -5,7 +5,9 @@ using Ninlil.Common.Extension.String;
 namespace Ninlil.Common.Extension.Tests.String;
 
 /// <summary>
-///     This class tests <see cref="LikeStringExtension" />.
+///     These tests cover <see cref="LikeStringExtension.Like(string, string)" />: blank input,
+///     regular-expression matches, case handling and the glob fallback for patterns that are not
+///     valid regular expressions.
 /// </summary>
 public class LikeStringExtensionTests
 {
@@ -31,18 +33,16 @@ public class LikeStringExtensionTests
     [Fact]
     public void LikeFallsBackToGlobConversionWhenTheRegexIsInvalid()
     {
-        // "*.txt" is not valid regex syntax on its own (a leading, unquantifiable '*'), so this
-        // exercises the ArgumentException catch/glob-conversion fallback path.
+        // "*.txt" is not a valid regular expression (a leading '*' has nothing to repeat), so
+        // this takes the glob fallback.
         Assert.True("report.txt".Like("*.txt"));
         Assert.False("report.csv".Like("*.txt"));
     }
 
     /// <summary>
-    ///     "c?t" is coincidentally also a syntactically valid (if semantically different) regular
-    ///     expression -- an optional literal 'c' followed by 't' -- so it always matches via the primary
-    ///     regex path (e.g. it matches "coat" too, via the trailing "t") and never reaches the glob
-    ///     fallback at all. A pattern that is only valid as a glob, like a leading bare "?" (an invalid
-    ///     regex quantifier with nothing to repeat), is needed to actually exercise the fallback.
+    ///     Uses "?at" because a pattern like "c?t" is also a valid regular expression (an optional
+    ///     'c' then 't') and would never reach the glob fallback. A leading "?" is not a valid
+    ///     regular expression, so this pattern is read as a glob.
     /// </summary>
     [Fact]
     public void LikeGlobFallbackSupportsSingleCharacterWildcard()

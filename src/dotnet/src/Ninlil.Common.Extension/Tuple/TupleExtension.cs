@@ -4,7 +4,10 @@
 namespace Ninlil.Common.Extension.Tuple;
 
 /// <summary>
-///     This class provides extension methods for the <see cref="Tuple" /> class.
+///     This static class adds console-friendly formatting to <see cref="System.Tuple" /> types of
+///     every arity. Each overload formats with
+///     <see cref="ToStringValueObjectExtension.ToStringValue" />, giving <c>(a,b,...)</c>, or
+///     <c>"null"</c> for a null tuple.
 /// </summary>
 public static class TupleExtension
 {

@@ -20,7 +20,13 @@ using XmlSerializer = Ninlil.Common.Serializer.XmlSerializer;
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents the input model for console applications which define console verbs and arguments.
+///     This abstract class is the base for input models: classes whose attributes declare a verb
+///     (<see cref="ConsoleVerbAttribute" />), nested verbs, positional arguments and named
+///     arguments. Its static methods read those attributes to build help text and to parse a
+///     command line (through <see cref="ConsoleCommandArgumentCollection" />). Every input model
+///     inherits the <c>--output-format</c> and <c>-s|--silent</c> arguments, and
+///     <see cref="ToOutput{TModel}" /> renders results as JSON, XML, YAML or a console table
+///     according to <see cref="Format" />.
 /// </summary>
 public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 {
@@ -134,7 +140,7 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
         // Check for positional arguments then add them to the help text.
         helpText.AddRange(positionalArguments.Select(a => a.ToHelpTextModel()));
 
-        // Check for named arguments then append an empty line for readability.
+        // Add the named arguments to the help text.
         helpText.AddRange(namedArguments.Select(a => a.ToHelpTextModel()));
 
         // We're done, return the help text collection.
@@ -194,7 +200,7 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <param name="type">The type to retrieve nested verbs from.</param>
     /// <returns>
     ///     An <see cref="IEnumerable{T}" /> of tuples containing the <see cref="PropertyInfo" />
-    ///     and <see cref="NestedConsoleVerbAttribute" /> for each named argument in the <paramref name="type" />.
+    ///     and <see cref="NestedConsoleVerbAttribute" /> for each nested verb in the <paramref name="type" />.
     /// </returns>
     public static IEnumerable<Tuple<PropertyInfo, NestedConsoleVerbAttribute>> GetNestedVerbs(
         Type type
@@ -210,12 +216,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <summary>
     ///     This method retrieves the <see cref="PropertyInfo" /> and
     ///     <see cref="PositionalConsoleArgumentAttribute" /> from the
-    ///     specified <paramref name="type" />.
+    ///     specified <paramref name="type" />, ordered by position. Only the first property declared
+    ///     for each position is kept.
     /// </summary>
-    /// <param name="type">The type to retrieve named arguments from.</param>
+    /// <param name="type">The type to retrieve positional arguments from.</param>
     /// <returns>
     ///     An <see cref="IEnumerable{T}" /> of tuples containing the <see cref="PropertyInfo" />
-    ///     and <see cref="PositionalConsoleArgumentAttribute" /> for each named argument in the <paramref name="type" />.
+    ///     and <see cref="PositionalConsoleArgumentAttribute" /> for each positional argument in the <paramref name="type" />.
     /// </returns>
     public static IEnumerable<
         Tuple<PropertyInfo, PositionalConsoleArgumentAttribute>
@@ -230,13 +237,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
             .DistinctBy(a => a.Item2.Position);
 
     /// <summary>
-    ///     This method retrieves the <see cref="PropertyInfo" /> and
-    ///     <see cref="ConsoleVerbAttribute" /> from the specified <paramref name="type" />.
+    ///     This method retrieves the <see cref="ConsoleVerbAttribute" /> declared on the specified
+    ///     <paramref name="type" />.
     /// </summary>
-    /// <param name="type">The type to retrieve named arguments from.</param>
+    /// <param name="type">The type to retrieve the verb from.</param>
     /// <returns>
-    ///     An <see cref="IEnumerable{T}" /> of tuples containing the <see cref="PropertyInfo" />
-    ///     and <see cref="ConsoleVerbAttribute" /> for each named argument in the <paramref name="type" />.
+    ///     The <see cref="ConsoleVerbAttribute" /> declared on <paramref name="type" /> (not inherited),
+    ///     or <see langword="null" /> when it has none.
     /// </returns>
     public static ConsoleVerbAttribute GetVerb(Type type) =>
         type.GetCustomAttribute<ConsoleVerbAttribute>(false);
@@ -311,7 +318,8 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
 
     /// <summary>
     ///     This method attempts to parse the <paramref name="arguments" /> from the CLI into an
-    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />.
+    ///     <see cref="IConsoleCommandInputModel" /> of the specified <paramref name="type" />. Any
+    ///     exception from parsing counts as a failure.
     /// </summary>
     /// <param name="type">The type of the console command input model to parse the arguments into.</param>
     /// <param name="model">The output model to parse the arguments into.</param>
@@ -397,8 +405,8 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// <summary>
     ///     This method retrieves the <see cref="PropertyInfo" /> for the specified <paramref name="propertyName" />.
     /// </summary>
-    /// <param name="propertyName">The name of the property to retrieve.</param>
-    /// <returns></returns>
+    /// <param name="propertyName">The name of the property to retrieve, ignoring case.</param>
+    /// <returns>The <see cref="PropertyInfo" /> for the property.</returns>
     /// <exception cref="ArgumentException">
     ///     When the <paramref name="propertyName" /> does not exist
     ///     in the type or isn't a public instance property.
@@ -433,9 +441,12 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
         GetPropertyInfo((expression.Body as MemberExpression)?.Member.Name);
 
     /// <summary>
-    ///     This method forces the output format to be a specific serialization <see cref="SerializerFormatEnum" />.
+    ///     This method makes sure the output uses a serialized format. If <see cref="Format" /> is
+    ///     not JSON, XML or YAML it is set to JSON.
     /// </summary>
-    /// <param name="format">The <see cref="SerializerFormatEnum" /> to force the output format to.</param>
+    /// <param name="format">
+    ///     The requested format. The current implementation ignores it and always falls back to JSON.
+    /// </param>
     public void ForceSerializedOutputFormat(SerializerFormatEnum format) =>
         Format = Format
             is not (
@@ -686,7 +697,7 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     /// </summary>
     /// <returns>
     ///     The current instance of <see cref="IConsoleCommandInputModel" /> with the default
-    ///    values  set for all named and positional arguments along with the nested verbs.
+    ///     values set for all named and positional arguments along with the nested verbs.
     /// </returns>
     public IConsoleCommandInputModel SetDefaults()
     {
@@ -765,10 +776,13 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     }
 
     /// <summary>
-    ///     This method converts the <paramref name="models" /> into an output string.
+    ///     This method converts the <paramref name="models" /> into an output string in the
+    ///     <see cref="Format" /> the user chose. JSON, XML and YAML use the serializers; any other
+    ///     format renders a console table with one row per model and one column per public property.
+    ///     Models that are themselves collections get a single column named after their kind.
     /// </summary>
-    /// <param name="models">The models to convert into an output string.</param>
-    /// <returns>The output string representation of the models.</returns>
+    /// <param name="models">The model, or collection of models, to convert into an output string.</param>
+    /// <returns>The output string, or an empty string when there are no models.</returns>
     public string ToOutput<TModel>(TModel models)
         where TModel : class
     {
@@ -888,7 +902,8 @@ public abstract class ConsoleCommandInputModel : IConsoleCommandInputModel
     public string ToOutput(object models) => ToOutput<object>(models);
 
     /// <summary>
-    ///     This method asynchronously validates parsed <see cref="ConsoleCommandInputModel" />
+    ///     This method validates the parsed model. The base implementation accepts everything.
+    ///     The library never calls it; an application that overrides it calls it itself.
     /// </summary>
     /// <param name="stoppingToken">
     ///     Optional <see cref="CancellationToken" /> used for tracking asynchronous operations.

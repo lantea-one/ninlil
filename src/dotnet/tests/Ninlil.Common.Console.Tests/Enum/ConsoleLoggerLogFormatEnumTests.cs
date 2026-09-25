@@ -1,19 +1,18 @@
 using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-logger-log-format enum tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Enum;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleLoggerLogFormatEnum" /> - the six supported log
-///     output formats (including the Yaml/Yml alias pair), since
-///     <see cref="ConsoleLoggerMessageModel" />'s formatting logic branches directly on these values.
+///     These tests cover <see cref="ConsoleLoggerLogFormatEnum" />: the six log formats, including
+///     the Yaml/Yml pair. <see cref="ConsoleLoggerMessageModel" /> branches on these values, so the
+///     tests pin them.
 /// </summary>
 public class ConsoleLoggerLogFormatEnumTests
 {
     /// <summary>
-    ///     Verifies the expected numeric ordering of the enum's members, since some callers rely on the
-    ///     underlying integral value (e.g. serialization round-tripping).
+    ///     Verifies the numeric value of each member, so reordering the enum is caught.
     /// </summary>
     [Fact]
     public void Members_HaveExpectedNumericValues()
@@ -27,8 +26,8 @@ public class ConsoleLoggerLogFormatEnumTests
     }
 
     /// <summary>
-    ///     Verifies that Yaml and Yml are deliberately distinct members (an alias pair with different
-    ///     underlying values), not the same value under two names.
+    ///     Verifies that Yaml and Yml are separate members with different values, not one value under
+    ///     two names.
     /// </summary>
     [Fact]
     public void Yaml_And_Yml_AreDistinctMembers()

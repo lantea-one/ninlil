@@ -1,9 +1,9 @@
-// Define our namespace for the console logger prefix model.
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents a model for managing console logger prefixes,
-///     allowing for the addition, removal, and formatting of prefix parts.
+///     This interface is the contract for a log prefix: an ordered list of parts, each shown in
+///     brackets before a message. <see cref="ConsoleLoggerPrefixModel" /> implements it.
 /// </summary>
 public interface IConsoleLoggerPrefixModel : IList<string>
 {
@@ -28,7 +28,7 @@ public interface IConsoleLoggerPrefixModel : IList<string>
     ///     An <see cref="int" /> specifying the amount of padding to apply to each part when formatting.
     /// </param>
     /// <returns>
-    ///    A <see cref="List{String}" /> of representing the parts of the <see cref="IConsoleLoggerPrefixModel" />,
+    ///     A <see cref="List{String}" /> representing the parts of the <see cref="IConsoleLoggerPrefixModel" />,
     ///     <paramref name="formatted" /> with the specified <paramref name="padding" />.
     /// </returns>
     public List<string> GetParts(bool formatted = false, int padding = 0);
@@ -69,10 +69,12 @@ public interface IConsoleLoggerPrefixModel : IList<string>
     public string ToString();
 
     /// <summary>
-    ///     This method removes a specified <paramref name="part" /> from the <see cref="IConsoleLoggerPrefixModel" />,
-    ///     ensuring that the part is sanitized and non-empty before attempting to remove it.
+    ///     This method removes a <paramref name="part" /> from the <see cref="IConsoleLoggerPrefixModel" />.
     /// </summary>
-    /// <param name="part">The part to remove from the <see cref="IConsoleLoggerPrefixModel" />.</param>
+    /// <param name="part">
+    ///     The part text to remove, or an <see cref="int" /> index. A negative index removes that many
+    ///     parts from the end.
+    /// </param>
     /// <returns>
     ///     The current instance of <see cref="IConsoleLoggerPrefixModel" /> with the specified part removed.
     /// </returns>

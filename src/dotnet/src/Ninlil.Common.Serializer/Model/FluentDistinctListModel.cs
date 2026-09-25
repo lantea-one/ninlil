@@ -1,21 +1,15 @@
 using System.Xml.Serialization;
 
-// Define our namespace for the FluentDistinctListModel class, which provides a generic
-// list implementation that ensures distinct elements based on a specified property.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     Represents a list that ensures distinct elements based on a specified property.
+///     This class is a fluent list that keeps at most one item per value of a chosen property (the
+///     "distinct property"), such as a list of records keyed by name. Adding an item replaces any
+///     existing item with the same distinct value. It is serialized as a plain list.
 /// </summary>
-/// <typeparam name="TType">
-///     The type of elements in the list. This type parameter allows the
-///     list to hold any type of object, providing flexibility in its usage.
-/// </typeparam>
-/// <typeparam name="TMatcher">
-///     The type of the property used to determine distinctness. This type parameter
-///     allows the list to compare elements based on a specific property, ensuring
-///     that only unique elements are retained according to the selected property.
-/// </typeparam>
+/// <typeparam name="TType">The type of elements in the list.</typeparam>
+/// <typeparam name="TMatcher">The type of the property that decides whether two items are the same.</typeparam>
 [XmlInclude(typeof(FluentListModel<>))]
 [XmlRoot("list")]
 public class FluentDistinctListModel<TType, TMatcher>
@@ -23,38 +17,19 @@ public class FluentDistinctListModel<TType, TMatcher>
         IFluentDistinctListModel<TType, TMatcher>
 {
     /// <summary>
-    ///     This factory method creates a distinct list from the provided <paramref name="source" /> collection,
-    ///     using the specified <paramref name="distinctPropertySelector" /> to determine uniqueness. It returns
-    ///     an <see cref="IEnumerable{TType}" /> containing only the distinct elements based on the selected property.
-    ///     This method is useful for filtering out duplicate items from a collection according to a specific property
-    ///     or criteria, allowing for more efficient data handling and manipulation.
+    ///     This method keeps the first item for each distinct property value in
+    ///     <paramref name="source" />.
     /// </summary>
-    /// <param name="source">
-    ///     The source collection from which to create the distinct list. It is an
-    ///     <see cref="IEnumerable{TType}" /> containing the elements to be filtered
-    ///     for uniqueness.
-    /// </param>
-    /// <param name="distinctPropertySelector">
-    ///     A function that selects the property of each element in the source collection to be used for determining
-    ///     distinctness. It is a delegate that takes an element of type <typeparamref name="TType" /> and returns a
-    ///     value of type <typeparamref name="TMatcher" /> representing the property to be used for comparison.
-    /// </param>
-    /// <returns>
-    ///     An <see cref="IEnumerable{TType}" /> containing only the distinct elements based on the selected property.
-    /// </returns>
+    /// <param name="source">The items to filter.</param>
+    /// <param name="distinctPropertySelector">The function that selects each item's distinct property.</param>
+    /// <returns>The first item for each distinct value, in source order.</returns>
     public static IEnumerable<TType> Distinct(
         IEnumerable<TType> source,
         Func<TType, TMatcher> distinctPropertySelector
     ) => source.GroupBy(distinctPropertySelector).Select(g => g.First());
 
     /// <summary>
-    ///     This field holds the predicate function used to determine the distinctness
-    ///     of elements in the list. It is a delegate that takes an element of type
-    ///     <typeparamref name="TType" /> and returns a value of type
-    ///     <typeparamref name="TMatcher" /> indicating the distinct property of the
-    ///     element. This selector is used to filter out duplicate elements when adding
-    ///     new items to the list, ensuring that only unique elements are retained according
-    ///     to the specified logic.
+    ///     This field holds the function that selects each item's distinct property.
     /// </summary>
     private readonly Func<TType, TMatcher> _distinctPropertySelector;
 
@@ -82,7 +57,8 @@ public class FluentDistinctListModel<TType, TMatcher>
 
     /// <summary>
     ///     This constructor initializes a new instance of the <see cref="FluentDistinctListModel{TType, TMatcher}" />
-    ///     class with the specified distinct property selector and initial <paramref name="collection" /> of items.
+    ///     class with the specified distinct property selector and initial <paramref name="collection" />
+    ///     of items. Duplicates by distinct property are dropped, keeping the first.
     /// </summary>
     /// <param name="distinctPropertySelector">
     ///     The function used to select the distinct property of elements in the list.
@@ -98,6 +74,7 @@ public class FluentDistinctListModel<TType, TMatcher>
     /// <summary>
     ///     This constructor initializes a new instance of the <see cref="FluentDistinctListModel{TType, TMatcher}" />
     ///     class with the specified distinct property selector and initial <paramref name="items" />.
+    ///     Duplicates by distinct property are dropped, keeping the first.
     /// </summary>
     /// <param name="distinctPropertySelector">
     ///     The function used to select the distinct property of elements in the list.
@@ -110,12 +87,9 @@ public class FluentDistinctListModel<TType, TMatcher>
         : this(distinctPropertySelector, Distinct(items, distinctPropertySelector)) { }
 
     /// <summary>
-    ///     This method fluently adds a new <paramref name="item" /> to the list, overriding the base
-    ///     <see cref="FluentListModel{TType}.WithItem(TType)" /> to enforce distinctness by the
-    ///     configured distinct property selector rather than by the base class's default equality
-    ///     comparison -- any existing item that shares this item's distinct property value is
-    ///     removed first, so the list never ends up holding two items with the same distinct
-    ///     property value even if they are otherwise unequal.
+    ///     This method fluently adds <paramref name="item" />, first removing any existing item with
+    ///     the same distinct property value. It overrides <see cref="FluentListModel{TType}.WithItem(TType)" />,
+    ///     which compares whole items instead.
     /// </summary>
     /// <param name="item">The item to be added to the list.</param>
     /// <returns>
@@ -124,14 +98,12 @@ public class FluentDistinctListModel<TType, TMatcher>
     /// </returns>
     public override FluentDistinctListModel<TType, TMatcher> WithItem(TType item)
     {
-        // A null item has no distinct property value to compare against, so fall back to the
-        // base class's own equality-based handling (which itself no-ops on a null item, and still
-        // returns this same instance, so the cast below is safe).
+        // A null item has no distinct property value, so use the base handling, which ignores a
+        // null item and returns this instance (making the cast safe).
         if (item is null)
             return (FluentDistinctListModel<TType, TMatcher>)base.WithItem(item);
 
-        // Remove any existing item that shares this item's distinct property value before adding,
-        // so distinctness is enforced by the selected property rather than by object equality.
+        // Remove any existing item with the same distinct property value.
         WithoutItem(_distinctPropertySelector(item));
 
         // Add the item and return this instance for method chaining.
@@ -140,46 +112,21 @@ public class FluentDistinctListModel<TType, TMatcher>
     }
 
     /// <summary>
-    ///     This method fluently removes an item from the list based on the specified <paramref name="matchValue" />.
-    ///     It uses the distinct property selector to identify the item to be removed, ensuring that only the item
-    ///     with the matching distinct property value is removed from the list. The method returns the current
-    ///     instance of <see cref="FluentDistinctListModel{TType, TMatcher}" /> after the removal operation, allowing
-    ///     for method chaining and further modifications to the list.
+    ///     This method fluently removes every item whose distinct property equals
+    ///     <paramref name="matchValue" />.
     /// </summary>
-    /// <param name="matchValue">
-    ///     The value of the distinct property used to identify the item to be removed from the list. This value
-    ///     is compared against the distinct property of each item in the list to determine which item should be
-    ///     removed. If an item with a matching distinct property value is found, it will be removed from the list,
-    ///     and the method will return the current instance of <see cref="FluentDistinctListModel{TType, TMatcher}" />
-    ///     for further modifications or method chaining.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentDistinctListModel{TType, TMatcher}" /> after
-    ///     the removal operation, allowing for method chaining and further modifications to the list.
-    /// </returns>
+    /// <param name="matchValue">The distinct property value of the items to remove.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentDistinctListModel<TType, TMatcher> WithoutItem(TMatcher matchValue) =>
         base.WithoutItems(p => _distinctPropertySelector(p).Equals(matchValue))
         as FluentDistinctListModel<TType, TMatcher>;
 
     /// <summary>
-    ///     This method fluently removes multiple items from the list based on the specified
-    ///     <paramref name="matchValues" />. It uses the distinct property selector to identify the items
-    ///     to be removed, ensuring that only the items with matching distinct property values are removed
-    ///     from the list. The method returns the current instance of
-    ///     <see cref="FluentDistinctListModel{TType, TMatcher}" /> after the removal operation, allowing
-    ///     for method chaining and further modifications to the list.
+    ///     This method fluently removes every item whose distinct property is one of
+    ///     <paramref name="matchValues" />.
     /// </summary>
-    /// <param name="matchValues">
-    ///     A collection of values of the distinct property used to identify the items to be removed from the
-    ///     list. These values are compared against the distinct property of each item in the list to determine
-    ///     which items should be removed. If any items with matching distinct property values are found, they
-    ///     will be removed from the list, and the method will return the current instance of
-    ///     <see cref="FluentDistinctListModel{TType, TMatcher}" /> for further modifications or method chaining.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentDistinctListModel{TType, TMatcher}" /> after
-    ///     the removal operation, allowing for method chaining and further modifications to the list.
-    /// </returns>
+    /// <param name="matchValues">The distinct property values of the items to remove.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentDistinctListModel<TType, TMatcher> WithoutItems(
         IEnumerable<TMatcher> matchValues
     ) =>
@@ -187,25 +134,11 @@ public class FluentDistinctListModel<TType, TMatcher>
         as FluentDistinctListModel<TType, TMatcher>;
 
     /// <summary>
-    ///     This method fluently removes multiple items from the list based on the specified
-    ///     <paramref name="matchValues" />. It uses the distinct property selector to identify
-    ///     the items to be removed, ensuring that only the items with matching distinct property
-    ///     values are removed from the list. The method returns the current instance of
-    ///     <see cref="FluentDistinctListModel{TType, TMatcher}" /> after the removal operation,
-    ///     allowing for method chaining and further modifications to the list.
+    ///     This method fluently removes every item whose distinct property is one of
+    ///     <paramref name="matchValues" />.
     /// </summary>
-    /// <param name="matchValues">
-    ///     A variable number of values of the distinct property used to identify the items to be removed
-    ///     from the list. These values are compared against the distinct property of each item in the list
-    ///     to determine which items should be removed. If any items with matching distinct property values
-    ///     are found, they will be removed from the list, and the method will return the current instance
-    ///     of <see cref="FluentDistinctListModel{TType, TMatcher}" /> for further modifications or method
-    ///     chaining.
-    /// </param>
-    /// <returns>
-    ///     The current instance of <see cref="FluentDistinctListModel{TType, TMatcher}" /> after
-    ///     the removal operation, allowing for method chaining and further modifications to the list.
-    /// </returns>
+    /// <param name="matchValues">The distinct property values of the items to remove.</param>
+    /// <returns>The current list, for method chaining.</returns>
     public FluentDistinctListModel<TType, TMatcher> WithoutItems(params TMatcher[] matchValues) =>
         WithoutItems(matchValues.AsEnumerable());
 }

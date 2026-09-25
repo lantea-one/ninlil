@@ -2,28 +2,25 @@
 namespace Ninlil.Common.Extension.String;
 
 /// <summary>
-///     This class provides extensions for sanitizing strings.
+///     This static class strips quoting and brackets from a string before
+///     <see cref="GetTypeValueStringExtension" /> converts it to a typed value.
 /// </summary>
 public static class SanitizeStringExtension
 {
     /// <summary>
-    ///     This method is used to sanitize a string for use when determining the typed value of a <see cref="string" />.
+    ///     This method removes one pair of surrounding double or single quotes, unescapes escaped
+    ///     double quotes up to <paramref name="depth" /> levels deep, and trims the result.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> instance to sanitize.</param>
-    /// <param name="depth">The depth to which to unescape nested quotes.</param>
+    /// <param name="depth">The number of backslash-escape levels to unescape.</param>
     /// <returns>The sanitized <see cref="string" /> <paramref name="instance" />.</returns>
     public static string SanitizeForValueTyping(this string instance, int depth = 13)
     {
-        // Check for a double-quoted string and remove the surrounding quote pair exactly once,
-        // outside the loop. The loop below then progressively unescapes one additional level of
-        // backslash-escaped quotes per iteration (level+1 backslashes collapse to level
-        // backslashes), so a value that was quoted and escaped several times over comes back down
-        // to its original content. An earlier version of this method re-ran the outer
-        // Substring(1, Length - 2) call on every iteration instead of once, unconditionally
-        // re-stripping two more characters off the string up to `depth` times regardless of
-        // whether there was still anything left to strip -- which threw
-        // ArgumentOutOfRangeException for any realistic short quoted value long before `depth`
-        // iterations could complete.
+        // Remove the surrounding quote pair once, outside the loop. Each loop iteration then
+        // collapses one more level of escaping (level+1 backslashes before a quote become level
+        // backslashes), so a value quoted and escaped several times comes back to its content.
+        // Stripping inside the loop would cut two characters per iteration and throw on short
+        // values.
         if (instance?.StartsWith('"') is true && instance.EndsWith('"'))
         {
             instance = instance.Substring(1, instance.Length - 2);
@@ -35,8 +32,7 @@ public static class SanitizeStringExtension
                 );
         }
 
-        // Check for a single-quoted string and remove the surrounding quote pair exactly once;
-        // same progressive unescaping as the double-quoted case above.
+        // Do the same for a single-quoted string. The loop unescapes double quotes, as above.
         if (instance?.StartsWith('\'') is true && instance.EndsWith('\''))
         {
             instance = instance.Substring(1, instance.Length - 2);
@@ -53,8 +49,8 @@ public static class SanitizeStringExtension
     }
 
     /// <summary>
-    ///     This method is used to sanitize a string for use when determining
-    ///     the typed value of a <see cref="string" /> in a dictionary.
+    ///     This method strips the surrounding braces of a dictionary literal (<c>{a:1,b:2}</c>) and
+    ///     trims the result.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> instance to sanitize.</param>
     /// <returns>The sanitized <see cref="string" /> <paramref name="instance" />.</returns>
@@ -62,8 +58,8 @@ public static class SanitizeStringExtension
         instance?.TrimEnd('}').TrimStart('{').Trim();
 
     /// <summary>
-    ///     This method is used to sanitize a string for use when determining
-    ///     the typed value of a <see cref="string" /> in a tuple.
+    ///     This method strips the surrounding parentheses of a tuple literal (<c>(a,1)</c>) and trims
+    ///     the result.
     /// </summary>
     /// <param name="instance">The <see cref="string" /> instance to sanitize.</param>
     /// <returns>The sanitized <see cref="string" /> <paramref name="instance" />.</returns>

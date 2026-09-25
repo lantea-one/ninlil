@@ -2,11 +2,15 @@ using System.Xml;
 using System.Xml.Schema;
 using System.Xml.Serialization;
 
-// Define our namespace for the <see cref="SerializableDictionary{TKey, TValue}" /> class.
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This class represents a serializable dictionary that can be serialized to and deserialized from XML.
+///     This class is a <see cref="Dictionary{TKey, TValue}" /> that <see cref="System.Xml.Serialization.XmlSerializer" />
+///     can handle, which a plain dictionary cannot. Each entry becomes an element named after the
+///     key's JSON form (XML-encoded with <see cref="XmlConvert.EncodeName" />), holding the value's
+///     XML. A key that is blank or cannot be serialized is written as <c>UnknownKey_n</c> and is
+///     dropped when read back.
 /// </summary>
 /// <typeparam name="TKey"> The type of the keys in the dictionary.</typeparam>
 /// <typeparam name="TValue">The type of the values in the dictionary.</typeparam>
@@ -103,12 +107,9 @@ public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IX
         : base(collection, comparer) { }
 
     /// <summary>
-    ///     This method retrieves the XML schema for the <see cref="SerializableDictionary{TKey,TValue}" /> class.
+    ///     This method returns <see langword="null" />, as <see cref="IXmlSerializable" /> recommends.
     /// </summary>
-    /// <returns>
-    ///     The XML schema for the <see cref="SerializableDictionary{TKey,TValue}" />
-    ///     class, or <see langword="null" /> if no schema is available.
-    /// </returns>
+    /// <returns>Always <see langword="null" />.</returns>
     public XmlSchema GetSchema() => null;
 
     /// <summary>
@@ -144,16 +145,16 @@ public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IX
                 // Get the encoded name of the current XML element.
                 var encodedKey = reader.Name;
 
-                // Decode the XML name to retrieve the original JSON string or fallback key.
+                // Decode the element name back to the key's JSON form or the fallback key.
                 var key = XmlConvert.DecodeName(encodedKey);
 
-                // Localize the key into its original form by decoding any special characters.
+                // Deserialize the key from JSON; a generated UnknownKey_n becomes default and is skipped.
                 TKey thisKey = key.ToLower().StartsWith("unknownkey_")
                     ? default
                     : JsonSerializer.Deserialize<TKey>(key);
 
-                // Read the inner XML of the current element and deserialize it into a value of type TValue.
-                // Note: ReadInnerXml() consumes the element and automatically advances the reader to the next node.
+                // Deserialize the element's inner XML as the value. ReadInnerXml() consumes the element
+                // and advances the reader to the next node.
                 TValue thisValue = XmlSerializer.Deserialize<TValue>(reader.ReadInnerXml());
 
                 // Add the key-value pair to the dictionary.
@@ -185,14 +186,14 @@ public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IX
         // Iterate through the instance and add the items to the XML writer as their key-value pairs.
         foreach (var pair in this)
         {
-            // If the key is null or empty, generate a unique key.
+            // Use the key's JSON form, or a generated key when it is blank or cannot be serialized.
             var key =
                 pair.Key?.ToString()?.Trim() is null or { Length: 0 }
                 || !JsonSerializer.TrySerialize(pair.Key, out var keyJson)
                     ? $"UnknownKey_{++unknownKey}"
                     : keyJson;
 
-            // Remove any special characters from the key to ensure it is a valid XML element name.
+            // Encode the key so it is a valid XML element name.
             key = XmlConvert.EncodeName(key);
 
             // Create an XML element for the key-value pair with the
@@ -212,14 +213,10 @@ public class SerializableDictionary<TKey, TValue> : Dictionary<TKey, TValue>, IX
                 continue;
             }
 
-            // Serialize the value as an XML fragment (not a standalone document) and write it
-            // to the writer. XmlSerializer.Serialize's default writer settings emit a leading
-            // "<?xml ...?>" declaration, which is only legal as the very first thing in an entire
-            // document -- writing that declaration here, nested inside this dictionary's own
-            // element, produces invalid XML that ReadXml (via XmlReader.ReadInnerXml) cannot parse
-            // back. Clone the library's default writer settings (rather than mutating the shared
-            // static instance XmlSerializer.SerializerOptions itself) and suppress the declaration
-            // for this one nested value.
+            // Write the value as an XML fragment. The default writer settings emit an
+            // "<?xml ...?>" declaration, which is only legal at the start of a document; nested here
+            // it would make XML that ReadXml cannot parse. Clone the shared default settings (do not
+            // modify them) and turn the declaration off for this value.
             XmlWriterSettings valueWriterSettings = XmlSerializer.SerializerOptions.Clone();
             valueWriterSettings.OmitXmlDeclaration = true;
             writer.WriteRaw(XmlSerializer.Serialize(value, valueWriterSettings));

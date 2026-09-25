@@ -1,11 +1,12 @@
 using Ninlil.Common.Serializer;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Converter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="Serializer.Converter.UriYamlConverter" />,
-///     including the parser-positioning fix (see <see cref="IpAddressYamlConverterTests" /> for
-///     the full explanation).
+///     These tests round-trip URIs through <see cref="Serializer.Converter.UriYamlConverter" />
+///     with two sibling properties, to catch parser-positioning mistakes (see
+///     <see cref="IpAddressYamlConverterTests" />).
 /// </summary>
 public class UriYamlConverterTests
 {

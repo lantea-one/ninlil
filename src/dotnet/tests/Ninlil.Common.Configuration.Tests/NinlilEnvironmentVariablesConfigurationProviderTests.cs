@@ -4,14 +4,11 @@ using Ninlil.Common.Configuration;
 namespace Ninlil.Common.Configuration.Tests;
 
 /// <summary>
-///     These tests exercise <see cref="NinlilEnvironmentVariablesConfigurationProvider" />/
-///     <see cref="NinlilEnvironmentVariablesConfigurationSource" /> directly against the real
-///     process environment (there is no in-process fake for
-///     <see cref="Environment.GetEnvironmentVariables()" /> -- ASP.NET Core's own built-in
-///     environment-variable provider tests work exactly the same way). Every test uses its own
-///     uniquely-named variable and always removes it again in a <c>finally</c> block, so a test
-///     failure never leaks a stray environment variable into a later test or the wider test
-///     process.
+///     These tests cover <see cref="NinlilEnvironmentVariablesConfigurationProvider" /> and
+///     <see cref="NinlilEnvironmentVariablesConfigurationSource" /> against the process
+///     environment, since <see cref="Environment.GetEnvironmentVariables()" /> has no in-process
+///     fake. Each test sets a uniquely named variable and removes it in a <c>finally</c> block, so
+///     a failing test never leaks a variable into later tests.
 /// </summary>
 public sealed class NinlilEnvironmentVariablesConfigurationProviderTests
 {
@@ -81,9 +78,8 @@ public sealed class NinlilEnvironmentVariablesConfigurationProviderTests
     [Fact]
     public void Load_OldDoubleUnderscoreStyleVariableIsGenuinelyInert()
     {
-        // The exact style of variable the NINLIL_-only scheme retires: even if a mapping entry
-        // happened to exist for the real configuration path, an old-style name is never even
-        // inspected, because it never starts with the NINLIL_ prefix at all.
+        // A stock ASP.NET Core double-underscore name is ignored even when the table maps the
+        // same configuration path, because it does not start with the NINLIL_ prefix.
         const string variableName = "DnsServer__Web__HttpPort";
         Environment.SetEnvironmentVariable(variableName, "8080");
         try
@@ -110,9 +106,8 @@ public sealed class NinlilEnvironmentVariablesConfigurationProviderTests
             new Dictionary<string, string>()
         );
 
-        // Build() never actually reads the IConfigurationBuilder argument it is handed -- it only
-        // needs one to satisfy IConfigurationSource's own signature -- so a null reference is a
-        // perfectly real exercise of the real method, not a shortcut around it.
+        // Build() ignores its IConfigurationBuilder argument, which only exists to satisfy
+        // IConfigurationSource, so passing null is safe.
         Microsoft.Extensions.Configuration.IConfigurationProvider built = source.Build(null);
 
         Assert.Same(built, source.Provider);

@@ -1,12 +1,12 @@
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the console-logger-prefix-model tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Model;
 
 /// <summary>
-///     This test class exercises <see cref="ConsoleLoggerPrefixModel" /> - part sanitization, index
-///     lookup, formatted/padded rendering, the merge operation (including a real bug fixed in this
-///     project), and the With*/WithoutPart mutators.
+///     These tests cover <see cref="ConsoleLoggerPrefixModel" />: part sanitizing, index lookup,
+///     formatted rendering, merging, the <c>With*</c>/<c>WithoutPart</c> mutators and the implicit
+///     conversion from a string array.
 /// </summary>
 public class ConsoleLoggerPrefixModelTests
 {
@@ -97,10 +97,8 @@ public class ConsoleLoggerPrefixModelTests
     /// <summary>
     ///     Verifies that <see cref="ConsoleLoggerPrefixModel.Merge" /> does not duplicate a part that
     ///     already exists in this model, even when that part sits at a different index in the other
-    ///     model. This is a real bug found and fixed in this project: the original condition compared
-    ///     the part's index in each list to each other (<c>GetPartIndex(o) != other.GetPartIndex(o)</c>)
-    ///     rather than checking whether the part already existed in this model at all, so merging any
-    ///     two prefix models that shared a part at different positions produced a duplicate.
+    ///     model. Merge must check whether the part exists anywhere in this model, not compare its
+    ///     index in the two models.
     /// </summary>
     [Fact]
     public void Merge_DoesNotDuplicateExistingPartAtDifferentIndex()
@@ -127,7 +125,7 @@ public class ConsoleLoggerPrefixModelTests
 
     /// <summary>
     ///     Verifies that <see cref="ConsoleLoggerPrefixModel.ToString()" /> joins the formatted (bracket-wrapped)
-    ///     parts with spaces - the parameterless overload always renders formatted, via
+    ///     parts with spaces. The parameterless overload always renders formatted, through
     ///     <see cref="ConsoleLoggerPrefixModel.ToString(int)" /> with zero padding.
     /// </summary>
     [Fact]

@@ -4,7 +4,8 @@ using Ninlil.Common.Extension.String;
 namespace Ninlil.Common.Extension.Tests.String;
 
 /// <summary>
-///     This class tests <see cref="IsStringExtension" />.
+///     These tests run table-driven inputs through each <see cref="IsStringExtension" /> check
+///     and confirm the alias methods agree with the methods they wrap.
 /// </summary>
 public class IsStringExtensionTests
 {

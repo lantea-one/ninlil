@@ -6,14 +6,17 @@ using Ninlil.Common.Serializer.Model;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class maintains our custom JSON converter for string-like values.
+///     This System.Text.Json converter writes a structured string model (see
+///     <see cref="IStructuredStringModel" />) as its string form and parses it back with
+///     <see cref="StructuredStringModel.TryParse{TModel}(string, out TModel)" />. Blank, unparseable or
+///     null-valued input reads as <see langword="null" />, and an empty model is written as JSON null.
 /// </summary>
 /// <typeparam name="TObject">The type of object to convert.</typeparam>
 public class StructuredStringJsonConverter<TObject> : JsonConverter<TObject>
     where TObject : class, IStructuredStringModel, new()
 {
     /// <summary>
-    ///     This method reads the string-like value from JSON.
+    ///     This method reads the model from a JSON string.
     /// </summary>
     /// <param name="reader">The reference instance of the JSON reader.</param>
     /// <param name="typeToConvert">The type to be converted.</param>
@@ -41,7 +44,7 @@ public class StructuredStringJsonConverter<TObject> : JsonConverter<TObject>
     }
 
     /// <summary>
-    ///     This method writes a string-like value to a JSON string.
+    ///     This method writes the model as a JSON string, or null when its string form is blank.
     /// </summary>
     /// <param name="writer">The JSON writer.</param>
     /// <param name="value">The typed value to serialize.</param>

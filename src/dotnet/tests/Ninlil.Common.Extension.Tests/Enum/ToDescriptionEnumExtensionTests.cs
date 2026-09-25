@@ -6,7 +6,9 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Enum;
 
 /// <summary>
-///     This class tests <see cref="ToDescriptionEnumExtension" />.
+///     These tests convert a sample enum to descriptions with <see cref="ToDescriptionEnumExtension" />
+///     and the default attribute checks: attributed and unattributed members, the generic and
+///     non-generic overloads, an explicit value, and null receivers.
 /// </summary>
 public class ToDescriptionEnumExtensionTests
 {
@@ -33,11 +35,10 @@ public class ToDescriptionEnumExtensionTests
     }
 
     /// <summary>
-    ///     For a member with no matching attribute-driven description, the production code falls back to
-    ///     <c>type.GetEnumDescriptions(enumValueName, attributeChecks).FirstOrDefault()</c> -- which is
-    ///     now correctly scoped to just the requested field, so calling <c>ToDescription()</c> on the
-    ///     unattributed <see cref="SampleEnum.Second" /> member returns its own name, "Second", not
-    ///     another member's.
+    ///     For a member with no attribute-driven description, <c>ToDescription</c> takes
+    ///     <c>type.GetEnumDescriptions(enumValueName, attributeChecks).FirstOrDefault()</c>, which is
+    ///     scoped to that one field, so the unattributed <see cref="SampleEnum.Second" /> returns
+    ///     "Second", not another member's name.
     /// </summary>
     [Fact]
     public void ToDescriptionOnUnattributedMemberReturnsItsOwnName()
@@ -50,12 +51,10 @@ public class ToDescriptionEnumExtensionTests
     }
 
     /// <summary>
-    ///     Documents a real bug: the <c>ToDescription(Type, params attributeChecks[])</c> overload
-    ///     forwards to <c>enumInstance.ToDescription(type, enumInstance.ToString(), attributeChecks)</c>
-    ///     without first checking for a null receiver, so calling it on a null
-    ///     <see cref="System.Enum" /> reference throws a <see cref="NullReferenceException" /> instead of
-    ///     returning <see langword="null" /> the way the 3-argument overload it forwards to explicitly
-    ///     does when called directly.
+    ///     Pins a known bug: the <c>ToDescription(Type, params attributeChecks[])</c> overload calls
+    ///     <c>enumInstance.ToString()</c> before forwarding, so a null <see cref="System.Enum" />
+    ///     throws <see cref="NullReferenceException" /> instead of returning <see langword="null" /> as
+    ///     the three-argument overload does.
     /// </summary>
     [Fact]
     public void ToDescriptionWithTypeAndParamsOverloadThrowsOnNullEnumInsteadOfReturningNull()

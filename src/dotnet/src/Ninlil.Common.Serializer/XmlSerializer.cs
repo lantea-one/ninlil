@@ -6,12 +6,17 @@ using System.Xml.Serialization;
 namespace Ninlil.Common.Serializer;
 
 /// <summary>
-///     This class provides XML serialization.
+///     This static class wraps <see cref="System.Xml.Serialization.XmlSerializer" /> with
+///     process-wide default reader and writer settings (indented UTF-8 output with a declaration)
+///     and a shared set of namespace prefixes used when writing. The MVC XML formatters, model
+///     binder and <see cref="Service.SerializerService" /> go through it. The <c>Try*</c> methods
+///     return <see langword="false" /> instead of throwing.
 /// </summary>
 public static class XmlSerializer
 {
     /// <summary>
-    ///     This property contains the registered namespaces for the serializer.
+    ///     This field holds the namespace prefixes written on every serialized document. It is
+    ///     shared process-wide and not synchronized.
     /// </summary>
     private static XmlSerializerNamespaces _namespaces = new([new(string.Empty, String.Empty)]);
 
@@ -161,13 +166,9 @@ public static class XmlSerializer
         bool? pretty = null
     )
     {
-        // Clone the base options (whichever were provided, or the shared static default) before
-        // mutating anything below. SerializerOptions is a process-wide singleton shared by every
-        // caller that doesn't supply its own settings -- writing into it directly here would let
-        // one call's per-call Encoding/Indent override leak into every other caller's "default"
-        // behavior, including other threads calling this concurrently (this project's real
-        // deployment target is a multi-threaded ASP.NET Core server, where that race is not
-        // theoretical). Cloning keeps this method's own mutations local to its own return value.
+        // Clone the base settings before changing them. SerializerOptions is shared by every
+        // caller, so writing a per-call encoding or indent into it would leak into other calls,
+        // including concurrent ones on other threads.
         XmlWriterSettings options = (fromOptions ?? SerializerOptions).Clone();
 
         // Reset the encoding into the options.

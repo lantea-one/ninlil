@@ -1,22 +1,15 @@
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FluentDistinctListModel{TType, TMatcher}" />.
-///     These tests specifically lock in a fix for a bug where adding an item via
-///     <see cref="FluentListModel{TType}.WithItem(TType)" /> (inherited, unoverridden) never
-///     enforced distinctness by the configured property selector -- only the constructor's own
-///     up-front <see cref="FluentDistinctListModel{TType, TMatcher}.Distinct" /> call did, so
-///     calling <c>WithItem</c>/<c>WithItems</c> after construction could leave two items sharing
-///     the same distinct property value sitting side by side in the list, defeating the whole
-///     point of the class. The fix makes the base class's <c>WithItem</c> virtual and overrides it
-///     here to remove any existing item with a matching distinct property value first.
-///     These tests also exercise <see cref="FluentDistinctListModel{TType, TMatcher}.WithoutItem(TMatcher)" />
-///     and <see cref="FluentDistinctListModel{TType, TMatcher}.WithoutItems(IEnumerable{TMatcher})" />,
-///     both of which route through the same <c>WithoutItems(Func{TType,bool})</c> path whose
-///     lazy-enumeration-during-mutation bug is fixed and covered by
-///     <see cref="FluentListModelTests.WithoutItems_ByPredicate_RemovesAllMatches" />.
+///     These tests cover <see cref="FluentDistinctListModel{TType, TMatcher}" /> with a small record
+///     type. Adding through <c>WithItem</c>/<c>WithItems</c> after construction must replace an
+///     item with the same distinct value, not only the constructor's up-front
+///     <see cref="FluentDistinctListModel{TType, TMatcher}.Distinct" />. Removal by distinct value
+///     goes through the base <c>WithoutItems(Func{TType,bool})</c>, which must not modify the list
+///     while enumerating it (see <see cref="FluentListModelTests.WithoutItems_ByPredicate_RemovesAllMatches" />).
 /// </summary>
 public class FluentDistinctListModelTests
 {
@@ -31,10 +24,9 @@ public class FluentDistinctListModelTests
             .WithItem(new Item("a", "first"))
             .WithItem(new Item("a", "second"));
 
-        // Two items were added with the same distinct key ("a") but are NOT equal by the record's
-        // own value-equality (different Payload) -- the base class's default equality-based
-        // WithItem would never have deduplicated these. Only one must remain, and it must be the
-        // most recently added one.
+        // Both items have the distinct key "a" but are not equal records (different Payload),
+        // so equality-based deduplication would keep both. Only the most recently added may
+        // remain.
         Item single = Assert.Single(list);
         Assert.Equal("second", single.Payload);
     }
@@ -80,9 +72,8 @@ public class FluentDistinctListModelTests
     [Fact]
     public void WithoutItems_ByMatchValues_RemovesEachMatch_WithoutThrowing()
     {
-        // This specifically exercises the same predicate-based removal path whose lazy-enumeration
-        // bug was fixed on the base class -- with more than one match, the old implementation would
-        // throw InvalidOperationException here.
+        // With more than one match, removing while lazily enumerating the list would throw
+        // InvalidOperationException here.
         FluentDistinctListModel<Item, string> list = NewList()
             .WithItem(new Item("a", "1"))
             .WithItem(new Item("b", "2"))

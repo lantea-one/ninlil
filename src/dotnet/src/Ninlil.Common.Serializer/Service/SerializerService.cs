@@ -8,7 +8,12 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Service;
 
 /// <summary>
-///     This class maintains our global serializer service wrapper.
+///     This class dispatches serialization by <see cref="SerializerFormatEnum" /> to
+///     <see cref="JsonSerializer" />, <see cref="XmlSerializer" /> or <see cref="YamlSerializer" />,
+///     so a caller can pick the format at run time (for example from a user's output-format
+///     choice). The <c>options</c> arguments are passed to the chosen serializer when they are of
+///     its type and ignored otherwise. <see cref="SerializerFormatEnum.None" /> is not supported
+///     and throws <see cref="NotSupportedException" />. All members are static.
 /// </summary>
 public class SerializerService
 {
@@ -107,10 +112,8 @@ public class SerializerService
     public static void AddConverter<TConverter>()
         where TConverter : class, new()
     {
-        // Ensure the converter type derives from (or implements) either a JSON or YAML
-        // converter contract. This must check whether TConverter derives from JsonConverter/
-        // IYamlTypeConverter, not the reverse -- IsAssignableFrom(derived) is what confirms a
-        // derived type can be assigned to the base type.
+        // Ensure TConverter derives from JsonConverter or implements IYamlTypeConverter.
+        // base.IsAssignableFrom(derived) is the correct direction for that check.
         if (
             !typeof(JsonConverter).IsAssignableFrom(typeof(TConverter))
             && !typeof(IYamlTypeConverter).IsAssignableFrom(typeof(TConverter))

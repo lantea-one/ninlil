@@ -9,13 +9,16 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This extension class provides methods for retrieving descriptions from <see cref="System.Enum"/> types.
+///     This static class lists the descriptions (alternative names) of an enum type's members.
+///     A description is whatever a caller-supplied attribute check extracts from an attribute on
+///     the member, plus the member name itself. <see cref="Ninlil.Common.Extension.Enum.ToDescriptionEnumExtension" /> and
+///     <see cref="Ninlil.Common.Extension.String.ToEnumStringExtension" /> use these lists to convert
+///     in each direction.
 /// </summary>
 public static class GetEnumDescriptionsTypeExtension
 {
     /// <summary>
-    ///     This delegate defines the structure for adding additional attributes
-    ///     to check for descriptions on <see cref="System.Enum"/> values.
+    ///     This delegate extracts a description from one attribute on an enum member.
     /// </summary>
     /// <param name="attribute">The <see cref="Attribute"/> instance to check.</param>
     /// <returns>
@@ -25,10 +28,11 @@ public static class GetEnumDescriptionsTypeExtension
     public delegate string EnumToStringExtensionAttributeDelegate(Attribute attribute);
 
     /// <summary>
-    ///     This delegate defines the structure for adding additional attributes
-    ///     to check for descriptions on <see cref="System.Enum"/> values, with access
-    ///     to the <paramref name="attributeType" /> and <paramref name="propertyName" />
-    ///     for dynamic checks using reflection.
+    ///     This delegate names an attribute type and the property on it that holds the description.
+    ///     The overloads that accept it read <c>attributeType</c> and <c>propertyName</c> from fields
+    ///     of the delegate's target by reflection, so it only works when the delegate is a closure
+    ///     that captures variables with those names; the delegate's parameters themselves are never
+    ///     used.
     /// </summary>
     /// <param name="attributeType">The type of the attribute to check.</param>
     /// <param name="propertyName">
@@ -44,8 +48,11 @@ public static class GetEnumDescriptionsTypeExtension
     );
 
     /// <summary>
-    ///     This field defines the default checks for checking the various
-    ///     display name attributes for an <see cref="System.Enum" /> value.
+    ///     This property returns the standard attribute checks, in order:
+    ///     <see cref="EnumMemberAttribute" />, <see cref="JsonStringEnumMemberNameAttribute" />,
+    ///     <see cref="XmlEnumAttribute" />, <see cref="YamlMemberAttribute" /> alias and
+    ///     <see cref="DisplayNameAttribute" />. Nothing applies them automatically; pass them
+    ///     explicitly.
     /// </summary>
     public static IEnumerable<EnumToStringExtensionAttributeDelegate> DefaultAttributeChecks =>
         [
@@ -69,10 +76,10 @@ public static class GetEnumDescriptionsTypeExtension
     extension(System.Type type)
     {
         /// <summary>
-        ///     This extension method retrieves the descriptions for all values
-        ///     of an <see cref="System.Enum"/> <paramref name="type"/>.
+        ///     This extension method lists every description of every member of <paramref name="type" />,
+        ///     followed by the member names, without duplicates. A non-enum type gives an empty list.
         /// </summary>
-        /// <param name="attributeChecks">The additional attributes to check for.</param>
+        /// <param name="attributeChecks">The attribute checks that extract a description.</param>
         /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions(
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
@@ -87,12 +94,12 @@ public static class GetEnumDescriptionsTypeExtension
                     .Distinct(StringComparer.Ordinal);
 
         /// <summary>
-        ///     This extension method retrieves the descriptions for all values
-        ///     of an <see cref="System.Enum"/> <paramref name="type"/>.
+        ///     This extension method lists the descriptions of one member, in attribute order, followed
+        ///     by the member name.
         /// </summary>
         /// <param name="field">The field info for the enum member value.</param>
-        /// <param name="attributeChecks">The additional attributes to check for.</param>
-        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <param name="attributeChecks">The attribute checks that extract a description.</param>
+        /// <returns>The descriptions of the member, or an empty list for a null field or non-enum type.</returns>
         public IEnumerable<string> GetEnumDescriptions(
             FieldInfo field,
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
@@ -103,22 +110,20 @@ public static class GetEnumDescriptionsTypeExtension
                     .Where(f => f == field)
                     .SelectMany(f => f.GetCustomAttributes())
                     .SelectMany(a => (attributeChecks ?? []).Select(c => c.Invoke(a)))
-                    // Scope the fallback name to this one field only -- concatenating every
-                    // member's name/value here (as an earlier version of this method did) meant an
-                    // unattributed member other than the type's first-declared one would resolve to
-                    // that first member's name instead of its own, since FirstOrDefault() at the
-                    // call site always picked the earliest match in declaration order.
+                    // Add only this member's name as the fallback. Callers take FirstOrDefault(), so
+                    // adding every member's name would make an unattributed member resolve to the
+                    // first-declared member's name.
                     .Concat([field.Name])
                     .Where(d => d?.Trim() is not (null or ""))
                     .Distinct(StringComparer.Ordinal);
 
         /// <summary>
-        ///     This extension method retrieves the descriptions for all values
-        ///     of an <see cref="System.Enum"/> <paramref name="type"/>.
+        ///     This extension method lists the descriptions of the member named
+        ///     <paramref name="fieldName" />, followed by the member name.
         /// </summary>
-        /// <param name="fieldName">The name of the field on the enum type to check for additional attributes.</param>
-        /// <param name="attributeChecks">The additional attributes to check for.</param>
-        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <param name="fieldName">The name of the enum member.</param>
+        /// <param name="attributeChecks">The attribute checks that extract a description.</param>
+        /// <returns>The descriptions of the member, or an empty list when there is no such member.</returns>
         public IEnumerable<string> GetEnumDescriptions(
             string fieldName,
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
@@ -152,8 +157,8 @@ public static class GetEnumDescriptionsTypeExtension
             type.GetEnumDescriptions(
                 attributeChecks?.Select(d => new EnumToStringExtensionAttributeDelegate(attribute =>
                 {
-                    // Localize the value of the first parameter on the incoming
-                    // delegate, which should be the attribute type we're checking for.
+                    // Read the attribute type from a captured "attributeType" field on the
+                    // delegate's closure (see the delegate's summary).
                     System.Type attributeType = d
                         .Target?.GetType()
                         .GetFields()
@@ -167,9 +172,7 @@ public static class GetEnumDescriptionsTypeExtension
                     if (attributeType is null)
                         return null;
 
-                    // Localize the property name value of the second parameter on the incoming delegate,
-                    // which should be the name of the property on the attribute that contains the
-                    // description value.
+                    // Read the property name from a captured "propertyName" field on the closure.
                     string propertyName = d
                         .Target?.GetType()
                         .GetFields()
@@ -183,9 +186,8 @@ public static class GetEnumDescriptionsTypeExtension
                     if (propertyName?.Trim() is null or { Length: 0 })
                         return null;
 
-                    // Ensure the attribute we're checking is of the correct type; otherwise, return null. Otherwise,
-                    // use reflection to get the value of the specified property on the attribute, which should contain
-                    // the description value, and return it if it's a valid string; otherwise, return null.
+                    // For an attribute of the named type, return the named property's value as a string;
+                    // any other attribute gives null.
                     return attribute.GetType() != attributeType
                         ? null
                         : attribute
@@ -212,7 +214,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// </summary>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
         )
@@ -225,7 +227,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// <param name="field">The field info for the enum member value.</param>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             FieldInfo field,
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
@@ -239,7 +241,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// <param name="fieldName">The name of the field on the enum type to check for additional attributes.</param>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             string fieldName,
             IEnumerable<EnumToStringExtensionAttributeDelegate> attributeChecks
@@ -253,7 +255,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// </summary>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             params EnumToStringExtensionAttributeDelegate[] attributeChecks
         )
@@ -266,7 +268,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// </summary>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             IEnumerable<EnumToStringExtensionAttributeMetaTypeDelegate> attributeChecks
         )
@@ -278,7 +280,7 @@ public static class GetEnumDescriptionsTypeExtension
         /// </summary>
         /// <param name="attributeChecks">The additional attributes to check for.</param>
         /// <typeparam name="TEnum">The <see cref="System.Enum"/> type for which to retrieve descriptions.</typeparam>
-        /// <returns>>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
+        /// <returns>A collection of descriptions for all values of the specified <see cref="System.Enum"/> type.</returns>
         public IEnumerable<string> GetEnumDescriptions<TEnum>(
             params EnumToStringExtensionAttributeMetaTypeDelegate[] attributeChecks
         )

@@ -2,7 +2,8 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This class contains extension methods for <see cref="System.Type"/> to perform various operations on tuple types.
+///     This static class reads the element types of a tuple <see cref="System.Type" />. The string
+///     conversion helpers use it to convert each tuple item.
 /// </summary>
 public static class TupleTypeExtension
 {

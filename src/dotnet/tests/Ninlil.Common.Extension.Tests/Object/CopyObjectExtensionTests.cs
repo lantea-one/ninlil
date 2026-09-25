@@ -5,19 +5,15 @@ using Ninlil.Common.Extension.Tests.TestSupport;
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
-///     This class tests <see cref="CopyObjectExtension" />.
+///     These tests copy <c>SampleModel</c> instances with <see cref="CopyObjectExtension" />, onto an
+///     existing object and into a new one, including a source declared as <see cref="object" /> and
+///     a read-only property.
 /// </summary>
 /// <remarks>
-///     <c>CopyObjectExtension</c> used to also declare a same-type convenience overload,
-///     <c>Copy&lt;TClass&gt;(this TClass source, TClass destination)</c> (and its constructor-arguments
-///     sibling), but each was a real, confirmed compile-time-ambiguous overload with
-///     <c>Copy&lt;TSource, TDestination&gt;(TSource, TDestination)</c> whenever <c>TSource</c> and
-///     <c>TDestination</c> happened to be the same type -- the compiler could not choose between them and
-///     refused to build (CS0121) unless the call site supplied explicit type arguments. Both
-///     single-type-parameter overloads have been removed: ordinary generic type inference already resolves
-///     the two-type-parameter overloads to the same-type case on its own, so every call shape below
-///     (implicit inference and explicit <c>.Copy&lt;TSource, TDestination&gt;(...)</c> alike) now works
-///     without ambiguity.
+///     The calls below use both inferred and explicit <c>Copy&lt;TSource, TDestination&gt;</c>
+///     type arguments. They compile only because there is no single-type-parameter
+///     <c>Copy&lt;TClass&gt;</c> overload, which would be ambiguous (CS0121) when both types are
+///     the same.
 /// </remarks>
 public class CopyObjectExtensionTests
 {
@@ -49,10 +45,9 @@ public class CopyObjectExtensionTests
     }
 
     /// <summary>
-    ///     <c>Copy</c> now reflects over <c>source.GetType()</c> -- the value's actual runtime type --
-    ///     rather than the compile-time <c>TSource</c> type parameter, so a source reference declared as a
-    ///     looser type than its real value (here, <see cref="object" /> holding a <see cref="SampleModel" />)
-    ///     still copies its real property values.
+    ///     <c>Copy</c> reflects over <c>source.GetType()</c>, the runtime type, not <c>TSource</c>, so a
+    ///     source declared as <see cref="object" /> holding a <see cref="SampleModel" /> still copies its
+    ///     property values.
     /// </summary>
     [Fact]
     public void CopyFromASourceDeclaredAsALooserTypeStillCopiesItsRuntimeTypesProperties()
@@ -84,8 +79,8 @@ public class CopyObjectExtensionTests
         SampleModel source = new() { Name = "read-only-safe" };
         SampleModel destination = new();
 
-        // FixedValue is read-only (get-only), so Copy skips it via property.CanWrite -- this
-        // asserts the writable properties still copy correctly around it, without throwing.
+        // FixedValue is get-only, so Copy skips it (property.CanWrite). The writable properties
+        // must still copy without throwing.
         SampleModel result = source.Copy<SampleModel, SampleModel>(destination);
 
         Assert.Equal("read-only-safe", result.Name);

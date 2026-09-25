@@ -7,17 +7,19 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 namespace Ninlil.Common.Serializer.InputFormatter;
 
 /// <summary>
-///     This input formatter provides our XML capabilities.
+///     This MVC input formatter reads XML request bodies (UTF-8, for <c>application/xml</c>,
+///     <c>text/xml</c> and their <c>+xml</c> suffixes) using <see cref="XmlSerializer" />.
+///     <see cref="Extension.ServiceCollectionSerializerExtension" /> registers it.
 /// </summary>
 public class XmlInputFormatter : TextInputFormatter
 {
     /// <summary>
-    ///     This property contains our deserializer settings.
+    ///     This field contains optional XML reader settings.
     /// </summary>
     private readonly XmlReaderSettings _options;
 
     /// <summary>
-    ///     This method instantiates our formatter with supported encodings and media types.
+    ///     This constructor sets the supported encoding and media types.
     /// </summary>
     public XmlInputFormatter()
     {
@@ -38,14 +40,14 @@ public class XmlInputFormatter : TextInputFormatter
     }
 
     /// <summary>
-    ///     This method instantiates our formatter with deserializer <paramref name="options" />.
+    ///     This constructor uses the given reader <paramref name="options" />.
     /// </summary>
     /// <param name="options">Deserializer options.</param>
     public XmlInputFormatter(XmlReaderSettings options)
         : this() => _options = options;
 
     /// <summary>
-    ///     This method reads and deserializes the request body.
+    ///     This method reads and deserializes the request body. An empty body gives no value.
     /// </summary>
     /// <param name="context">The current serialization context.</param>
     /// <param name="encoding">The input encoding.</param>

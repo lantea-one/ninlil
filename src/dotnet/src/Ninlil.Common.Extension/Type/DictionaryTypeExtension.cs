@@ -2,8 +2,9 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This class contains extension methods for <see cref="System.Type"/> to
-///     perform various operations on <see cref="Dictionary{TKey,TValue}"/> types.
+///     This static class reads the key and value types of a dictionary <see cref="System.Type" />
+///     (as recognized by <see cref="IsTypeExtension.IsDictionary(System.Type)" />). The string conversion helpers
+///     use it to convert each entry.
 /// </summary>
 public static class DictionaryTypeExtension
 {

@@ -2,15 +2,16 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This class contains extension methods for <see cref="System.Type"/> to
-///     perform various operations on enumerable types.
+///     This static class reads the element type of an array or generic collection
+///     <see cref="System.Type" />. The string conversion helpers use it to convert each item.
 /// </summary>
 public static class EnumerableTypeExtension
 {
     /// <summary>
-    ///     This method return the <see cref="System.Type" /> of the element in an
-    ///     <see cref="Array" />, <see cref="ICollection{T}" />, <see cref="IEnumerable{T}" />
-    ///     or <see cref="IList{T}" /> type, by default <see langword="null" /> is returned.
+    ///     This method returns the element <see cref="System.Type" /> of an <see cref="Array" />,
+    ///     <see cref="ICollection{T}" />, <see cref="IEnumerable{T}" /> or <see cref="IList{T}" />
+    ///     type: the array element type, or else the first generic argument. It returns
+    ///     <see langword="null" /> for any other type.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type"/> instance to check.</param>
     /// <returns>

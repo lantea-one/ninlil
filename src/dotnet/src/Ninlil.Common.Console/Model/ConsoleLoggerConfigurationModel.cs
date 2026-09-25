@@ -3,19 +3,21 @@ using System.Xml.Serialization;
 using Ninlil.Common.Console.Enum;
 using YamlDotNet.Serialization;
 
-// Define our namespace for the console logger configuration model.
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents the configuration settings for a console logger,
-///     including options for formatting, log levels, and output destinations.
+///     This class holds the settings a <see cref="ConsoleLogger" /> writes messages with: layout
+///     format (table by default), prefix, level colors, center alignment, debug and quiet
+///     switches and an optional log file. The <c>With*</c> methods set them fluently.
 /// </summary>
 [XmlInclude(typeof(ConsoleLoggerPrefixModel))]
 [XmlRoot("consoleLoggerConfiguration")]
 public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
 {
     /// <summary>
-    ///     This property indicates whether the log output should be center-aligned in the console window.
+    ///     This property indicates whether text-format prefixes are padded to
+    ///     <see cref="MaxPrefixLength" /> with each part centered, so columns line up.
     /// </summary>
     [JsonPropertyName("centerAlign")]
     [XmlElement("centerAlign")]
@@ -23,7 +25,8 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public bool CenterAlign { get; set; }
 
     /// <summary>
-    ///     This property indicates whether debug-level log messages should be included in the log output.
+    ///     This property indicates whether debug and trace messages are written to the console. They
+    ///     are always written to the log file.
     /// </summary>
     [JsonPropertyName("debug")]
     [XmlElement("debug")]
@@ -31,7 +34,7 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public bool Debug { get; set; }
 
     /// <summary>
-    ///     This property specifies the file path where log output should be written.
+    ///     This property specifies the file every message is appended to, or null for console only.
     /// </summary>
     [JsonPropertyName("file")]
     [XmlElement("file")]
@@ -39,7 +42,8 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public string File { get; set; }
 
     /// <summary>
-    ///     This property specifies the format in which log messages should be displayed in the console.
+    ///     This property specifies how each entry is laid out: padded text, a table, or a JSON, XML
+    ///     or YAML document.
     /// </summary>
     [JsonPropertyName("format")]
     [XmlElement("format")]
@@ -47,7 +51,8 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public ConsoleLoggerLogFormatEnum Format { get; set; } = ConsoleLoggerLogFormatEnum.Table;
 
     /// <summary>
-    ///     This property is a dictionary that maps log levels to their corresponding console colors.
+    ///     This property maps log levels (ignoring case) to console colors. The <c>_</c> entry is
+    ///     the fallback for levels without their own entry.
     /// </summary>
     [JsonPropertyName("levels")]
     [XmlIgnore]
@@ -69,7 +74,9 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
         };
 
     /// <summary>
-    ///     This property specifies the maximum length of the prefix that can be displayed in the console output.
+    ///     This property specifies the width each prefix part is padded to when
+    ///     <see cref="CenterAlign" /> is on. <see cref="ConsoleLogger" /> widens it to fit the longest
+    ///     part logged so far.
     /// </summary>
     [JsonPropertyName("maxPrefixLength")]
     [XmlElement("maxPrefixLength")]
@@ -77,8 +84,8 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public int MaxPrefixLength { get; set; }
 
     /// <summary>
-    ///     This property specifies the prefix model that can be used
-    ///     to customize the prefix displayed in the console output.
+    ///     This property specifies the prefix parts added to every message, after the timestamp and
+    ///     level and before the message's parts.
     /// </summary>
     [JsonPropertyName("prefix")]
     [XmlElement("prefix")]
@@ -86,8 +93,8 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public IConsoleLoggerPrefixModel Prefix { get; set; } = new ConsoleLoggerPrefixModel();
 
     /// <summary>
-    ///     This property indicates whether the console logger should
-    ///     operate in quiet mode, suppressing most log output.
+    ///     This property indicates whether console output is suppressed. The log file is still
+    ///     written.
     /// </summary>
     [JsonPropertyName("quiet")]
     [XmlAttribute("quiet")]
@@ -95,20 +102,21 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public bool Quiet { get; set; }
 
     /// <summary>
-    ///     This is the default constructor for the <see cref="ConsoleLoggerConfigurationModel" /> class.
+    ///     This constructor creates a configuration with the defaults: table format, no prefix and
+    ///     debug output off.
     /// </summary>
     public ConsoleLoggerConfigurationModel() => Debug = false;
 
     /// <summary>
     ///     This constructor initializes a new instance of the <see cref="ConsoleLoggerConfigurationModel" />
-    ///     class with the specified logging <paramref name="format" /> and option <paramref name="prefix" />.
+    ///     class with the specified logging <paramref name="format" /> and optional <paramref name="prefix" />.
     /// </summary>
     /// <param name="format">
     ///     The logging format to be used for console output, represented
     ///     by the <see cref="ConsoleLoggerLogFormatEnum" /> enumeration.
     /// </param>
     /// <param name="prefix">
-    ///     The option prefix to be used for console output, represented by an enumerable collection of strings.
+    ///     The optional prefix parts for every message.
     /// </param>
     public ConsoleLoggerConfigurationModel(
         ConsoleLoggerLogFormatEnum format,
@@ -189,11 +197,11 @@ public class ConsoleLoggerConfigurationModel : IConsoleLoggerConfigurationModel
     public IConsoleLoggerConfigurationModel WithFile(string file)
     {
         // If the provided file path is null, empty, or consists only of
-        // whitespace, return the current instance without making any changes
+        // whitespace, return the current instance without making any changes.
         if (file?.Trim() is null or { Length: 0 })
             return this;
 
-        //  Reset the file path to the full path of the provided file, trimming any leading or trailing whitespace
+        // Store the file as a full path, so a later change of working directory does not move the log.
         File = Path.GetFullPath(file.Trim());
 
         // We're done, return the current instance for method chaining.

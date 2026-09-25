@@ -1,17 +1,17 @@
 using Ninlil.Common.Console.Enum;
 
-// Define our namespace for the console logger message model.
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This interface represents a log message model for the console logger. It contains properties
-///     for the log level, message, data, prefix, timestamp, color, buffer, padding, and format.
+///     This interface is the contract for one log entry written by <see cref="ConsoleLogger" />.
+///     <see cref="ConsoleLoggerMessageModel" /> implements it.
 /// </summary>
 public interface IConsoleLoggerMessageModel
 {
     /// <summary>
-    ///     This property contains an <see cref="int" /> representing the number of buffer lines
-    ///     to add before and after the log message when outputting to the console or file.
+    ///     This property contains the number of blank lines to add before and after the message in
+    ///     text format.
     /// </summary>
     public int Buffer { get; set; }
 
@@ -28,8 +28,8 @@ public interface IConsoleLoggerMessageModel
     public object Data { get; set; }
 
     /// <summary>
-    ///     This property contains format specific to the message which will
-    ///     override the global configuration format when serializing the message.
+    ///     This property contains the format used to serialize <see cref="Data" />. The configuration's
+    ///     format decides how the whole entry is laid out.
     /// </summary>
     public ConsoleLoggerLogFormatEnum Format { get; set; }
 
@@ -45,8 +45,8 @@ public interface IConsoleLoggerMessageModel
     public string Message { get; set; }
 
     /// <summary>
-    ///     This property contains a <see cref="int" /> representing the
-    ///     number of spaces to use for padding when formatting the log message.
+    ///     This property contains the number of spaces used to indent the message (and twice that
+    ///     for data) in text format.
     /// </summary>
     public int Padding { get; set; }
 
@@ -56,13 +56,12 @@ public interface IConsoleLoggerMessageModel
     public IConsoleLoggerPrefixModel Prefix { get; set; }
 
     /// <summary>
-    ///     This property contains the timestamp at which the log message was created.
-    ///     It is set to the current date and time by default.
+    ///     This property contains the local time the message was created.
     /// </summary>
     public DateTime Timestamp { get; set; }
 
     /// <summary>
-    ///     This property indicates whether the log message has already been written to the console and/or file.
+    ///     This property indicates whether the message has been written. A message is written only once.
     /// </summary>
     public bool Written { get; set; }
 

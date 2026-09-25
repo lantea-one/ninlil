@@ -1,7 +1,7 @@
 using Ninlil.Common.Console.Attribute;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the named-console-argument attribute tests.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.Attribute;
 
 /// <summary>

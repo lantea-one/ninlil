@@ -5,7 +5,9 @@ using Ninlil.Common.Extension.Tests.TestSupport;
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
-///     This class tests <see cref="ToHtmlTableObjectExtension" />.
+///     These tests render objects, dictionaries and lists of dictionaries with
+///     <see cref="ToHtmlTableObjectExtension" /> and check the HTML for the expected elements and
+///     values, plus the exceptions for null and non-class inputs and cancellation.
 /// </summary>
 public class ToHtmlTableObjectExtensionTests
 {
@@ -25,12 +27,9 @@ public class ToHtmlTableObjectExtensionTests
     }
 
     /// <summary>
-    ///     The per-property rendering loop's nested-class recursion guard now inspects the current
-    ///     property's own <c>value.GetType()</c> instead of the enclosing <c>instance.GetType()</c> (which
-    ///     is constant for the whole loop and always a class, since that same guard already passed once
-    ///     earlier in the method to get this far) -- so a plain POCO with primitive-typed properties
-    ///     renders successfully instead of always recursing into every non-null property value and
-    ///     throwing on the first primitive one.
+    ///     The nested-class check in the property loop tests each property value's type, not the
+    ///     enclosing instance's type (which always passes), so a plain class with primitive properties
+    ///     renders instead of recursing into a primitive and throwing.
     /// </summary>
     [Fact]
     public async Task ToHtmlTableAsyncOnPlainClassWithAPrimitivePropertyRendersSuccessfully()

@@ -5,27 +5,20 @@ using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Service;
 
 /// <summary>
-///     This class contains unit tests for <see cref="SerializerService" />. This test class
-///     specifically locks in the fix for a bug in
-///     <see cref="SerializerService.AddConverter{TConverter}" />: the original checks used
-///     <c>typeof(TConverter).IsAssignableFrom(typeof(JsonConverter))</c> /
-///     <c>typeof(TConverter).IsAssignableFrom(typeof(IYamlTypeConverter))</c> -- backwards from
-///     what <see cref="Type.IsAssignableFrom" /> actually needs to answer "does TConverter derive
-///     from/implement this contract?" (that requires calling <c>IsAssignableFrom</c> ON the base
-///     type/interface, passing the derived type as the argument, the reverse of what was written).
-///     Since <c>JsonConverter</c>/<c>IYamlTypeConverter</c> are never themselves assignable *from*
-///     an unrelated concrete <c>TConverter</c>, the original checks were always false for every
-///     real converter type, so <c>AddConverter&lt;TConverter&gt;()</c> always threw
-///     <see cref="ArgumentException" />, for every input, including entirely valid converters.
+///     These tests cover <see cref="SerializerService" />: format dispatch for JSON, XML and YAML
+///     and converter registration. <see cref="SerializerService.AddConverter{TConverter}" /> must
+///     test <c>typeof(JsonConverter).IsAssignableFrom(typeof(TConverter))</c> (base first); the
+///     reverse direction is false for every converter and would reject valid ones.
 /// </summary>
 public class SerializerServiceTests
 {
     /// <summary>
-    ///     A minimal real JSON converter type, used to prove <c>AddConverter&lt;TConverter&gt;()</c>
-    ///     now actually accepts a valid JSON converter instead of always throwing.
+    ///     A minimal JSON converter type, used to check that <c>AddConverter&lt;TConverter&gt;()</c>
+    ///     accepts a valid JSON converter.
     /// </summary>
     private class TestJsonConverter : JsonConverter<int>
     {
@@ -43,7 +36,7 @@ public class SerializerServiceTests
     }
 
     /// <summary>
-    ///     A minimal real YAML converter type, for the same reason as <see cref="TestJsonConverter" />.
+    ///     A minimal YAML converter type, for the same reason as <see cref="TestJsonConverter" />.
     /// </summary>
     private class TestYamlConverter : IYamlTypeConverter
     {

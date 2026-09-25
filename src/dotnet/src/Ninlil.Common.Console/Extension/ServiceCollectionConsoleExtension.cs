@@ -7,8 +7,10 @@ using Ninlil.Common.Console.Model;
 namespace Ninlil.Common.Console.Extension;
 
 /// <summary>
-///     This extension class provides Console Library extensions for the <see cref="IServiceCollection" /> class.
-///     This allows for easy integration of the Console Library into .NET applications that use dependency injection.
+///     This static class registers the console logger with dependency injection. The
+///     non-generic overloads register an <see cref="IConsoleLogger" /> singleton; the generic ones
+///     register an <see cref="IConsoleLogger{TClass}" /> whose prefix is the class name. Each
+///     overload uses <c>TryAdd</c>, so an existing registration is kept.
 /// </summary>
 public static class ServiceCollectionConsoleExtension
 {

@@ -1,18 +1,14 @@
 using Ninlil.Common.Serializer;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="TimeStringModel" />, with particular
-///     attention to <see cref="TimeStringModel.IsValid" />. This test class specifically locks in
-///     the fix for a bug where <c>IsValid()</c> was implemented backwards: the original condition
-///     returned <see langword="true" /> exactly when every component equaled
-///     <see cref="TimeStringModel.Empty" /> (i.e. when the instance held no value at all), which is
-///     the opposite of the documented, interface-mandated meaning of <c>IsValid</c> (see
-///     <see cref="IStructuredStringModel.IsValid" /> and <see cref="StructuredStringModel.IsNull" />,
-///     which is defined as <c>!IsValid()</c>) -- an empty/unset model was reporting itself valid
-///     and non-null, and a genuinely populated model was reporting itself invalid and null.
+///     These tests cover <see cref="TimeStringModel" />: parsing, component rollover, conversions
+///     and <see cref="TimeStringModel.IsValid" />. A populated model must be valid and an empty one
+///     invalid, because <see cref="StructuredStringModel.IsNull" /> is <c>!IsValid()</c> (see
+///     <see cref="IStructuredStringModel.IsValid" />).
 /// </summary>
 public class TimeStringModelTests
 {

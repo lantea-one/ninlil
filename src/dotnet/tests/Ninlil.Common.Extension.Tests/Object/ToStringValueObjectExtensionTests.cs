@@ -4,7 +4,9 @@ using Ninlil.Common.Extension.Object;
 namespace Ninlil.Common.Extension.Tests.Object;
 
 /// <summary>
-///     This class tests <see cref="ToStringValueObjectExtension" />.
+///     These tests check the string <see cref="ToStringValueObjectExtension.ToStringValue" /> gives
+///     for each branch: scalars, dates, enums, arrays, lists, dictionaries, tuples, a plain class
+///     and null.
 /// </summary>
 public class ToStringValueObjectExtensionTests
 {
@@ -133,10 +135,9 @@ public class ToStringValueObjectExtensionTests
     }
 
     /// <summary>
-    ///     The private <c>ListToString</c> helper enumerates through the non-generic
-    ///     <see cref="System.Collections.IEnumerable" /> interface, which every array/list implements
-    ///     regardless of its element type, so a value-type array correctly stringifies its elements
-    ///     instead of throwing.
+    ///     The private <c>ListToString</c> helper enumerates the non-generic
+    ///     <see cref="System.Collections.IEnumerable" />, so a value-type array is converted instead of
+    ///     throwing.
     /// </summary>
     [Fact]
     public void ToStringValueOnValueTypeArrayJoinsElementsWithComma()
@@ -147,10 +148,9 @@ public class ToStringValueObjectExtensionTests
     }
 
     /// <summary>
-    ///     The private <c>DictionaryToString</c> helper reads the incoming value through the non-generic
-    ///     <see cref="System.Collections.IDictionary" /> interface, which every closed
-    ///     <see cref="Dictionary{TKey,TValue}" /> implements regardless of its actual key/value types, so
-    ///     <c>ToStringValue</c> renders its actual entries.
+    ///     The private <c>DictionaryToString</c> helper reads the value through the non-generic
+    ///     <see cref="System.Collections.IDictionary" />, so a dictionary whose key and value types are
+    ///     not <see cref="object" /> still renders its entries.
     /// </summary>
     [Fact]
     public void ToStringValueOnTypedDictionaryRendersItsEntries()
@@ -161,10 +161,9 @@ public class ToStringValueObjectExtensionTests
     }
 
     /// <summary>
-    ///     <c>IsTypeExtension.IsTuple</c> now recognizes every real tuple arity, so the outer switch's
-    ///     dedicated tuple branch correctly triggers for a multi-element tuple, formatting its elements as
-    ///     a bare comma-separated list (via <see cref="System.Runtime.CompilerServices.ITuple" />) rather
-    ///     than falling through to the tuple's own built-in <see cref="object.ToString" />.
+    ///     <c>IsTypeExtension.IsTuple</c> recognizes every tuple arity, so a multi-element tuple takes the
+    ///     tuple branch and is formatted through <see cref="System.Runtime.CompilerServices.ITuple" />
+    ///     rather than the tuple's own <see cref="object.ToString" />.
     /// </summary>
     [Fact]
     public void ToStringValueOnMultiElementTupleJoinsElementsWithComma()
@@ -176,13 +175,10 @@ public class ToStringValueObjectExtensionTests
 
     /// <summary>
     ///     A plain class with no custom <see cref="System.ComponentModel.TypeConverter" /> reaches the
-    ///     <c>TypeDescriptor.GetConverter(...).CanConvertTo(typeof(string))</c> branch, and the base
-    ///     <see cref="System.ComponentModel.TypeConverter" /> always answers <see langword="true" /> for a
-    ///     <see cref="string" /> destination type, whose default <c>ConvertToString</c> implementation just
-    ///     calls the instance's own <see cref="object.ToString" />. In practice this means the later
-    ///     "convert public properties to a dictionary" class fallback branch is unreachable for an ordinary
-    ///     class, since the <see cref="System.ComponentModel.TypeConverter" /> branch always intercepts
-    ///     first.
+    ///     <c>TypeDescriptor.GetConverter(...).CanConvertTo(typeof(string))</c> branch. The base converter
+    ///     always answers <see langword="true" /> for <see cref="string" /> and calls
+    ///     <see cref="object.ToString" />, so the later property-dictionary branch is unreachable for an
+    ///     ordinary class.
     /// </summary>
     [Fact]
     public void ToStringValueOnPlainClassUsesDefaultObjectToStringNotPropertyDictionary()

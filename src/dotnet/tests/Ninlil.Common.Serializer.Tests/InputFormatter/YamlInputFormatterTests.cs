@@ -4,12 +4,12 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Ninlil.Common.Serializer.InputFormatter;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.InputFormatter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="YamlInputFormatter" />. See
-///     <see cref="JsonInputFormatterTests" /> for the shared reasoning behind how the request
-///     context is constructed for these tests.
+///     These tests call <see cref="YamlInputFormatter" />'s <c>ReadRequestBodyAsync</c> directly,
+///     with the request context built as in <see cref="JsonInputFormatterTests" />.
 /// </summary>
 public class YamlInputFormatterTests
 {

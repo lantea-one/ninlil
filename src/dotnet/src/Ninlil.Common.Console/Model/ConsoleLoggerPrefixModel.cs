@@ -1,9 +1,11 @@
-// Define our namespace for the console logger prefix model.
+// Define our namespace.
 namespace Ninlil.Common.Console.Model;
 
 /// <summary>
-///     This class represents a model for managing console logger prefixes,
-///     allowing for the addition, removal, and formatting of prefix parts.
+///     This class is a log prefix: an ordered list of parts such as a class name or request id,
+///     each shown in brackets before a message. Parts are sanitized when added (brackets, hyphens
+///     and surrounding spaces are trimmed) and blank parts are dropped. When formatted with
+///     padding, each part except timestamps is centered in a fixed width so log columns line up.
 /// </summary>
 public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
 {
@@ -14,7 +16,7 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
     ///     The <see cref="Array" /> of <see cref="string" /> to convert into a <see cref="ConsoleLoggerPrefixModel" />.
     /// </param>
     /// <returns>
-    ///     The <see cref="ConsoleLoggerPrefixModel" /> representation of the <paramref name="collection" />
+    ///     The <see cref="ConsoleLoggerPrefixModel" /> representation of the <paramref name="collection" />.
     /// </returns>
     public static implicit operator ConsoleLoggerPrefixModel(string[] collection)
     {
@@ -44,7 +46,7 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
 
     /// <summary>
     ///     This constructor instantiates a new instance of the <see cref="ConsoleLoggerPrefixModel" />
-    ///     class with a specified initial <paramref name="capacity" />
+    ///     class with a specified initial <paramref name="capacity" />.
     /// </summary>
     /// <param name="capacity">
     ///     The initial number of elements that the <see cref="ConsoleLoggerPrefixModel" /> can contain.
@@ -54,7 +56,8 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
 
     /// <summary>
     ///     This constructor instantiates a new instance of the <see cref="ConsoleLoggerPrefixModel" />
-    ///     from a provided existing <paramref name="collection" /> of strings.
+    ///     from a provided existing <paramref name="collection" /> of strings. The strings are added
+    ///     as they are, without sanitizing.
     /// </summary>
     /// <param name="collection">
     ///     The collection of strings to initialize the <see cref="ConsoleLoggerPrefixModel" /> with.
@@ -83,10 +86,11 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
     ///     A <see cref="bool" /> indicating whether the parts should be formatted with padding.
     /// </param>
     /// <param name="padding">
-    ///     An <see cref="int" /> specifying the amount of padding to apply to each part when formatting.
+    ///     The width to center each part in when formatting. A negative value uses the longest
+    ///     non-timestamp part.
     /// </param>
     /// <returns>
-    ///    A <see cref="List{String}" /> of representing the parts of the <see cref="ConsoleLoggerPrefixModel" />,
+    ///     A <see cref="List{String}" /> representing the parts of the <see cref="ConsoleLoggerPrefixModel" />,
     ///     <paramref name="formatted" /> with the specified <paramref name="padding" />.
     /// </returns>
     public List<string> GetParts(bool formatted = false, int padding = 0) =>
@@ -177,10 +181,12 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
     public override string ToString() => ToString(0);
 
     /// <summary>
-    ///     This method removes a specified <paramref name="part" /> from the <see cref="ConsoleLoggerPrefixModel" />,
-    ///     ensuring that the part is sanitized and non-empty before attempting to remove it.
+    ///     This method removes a <paramref name="part" /> from the <see cref="ConsoleLoggerPrefixModel" />.
     /// </summary>
-    /// <param name="part">The part to remove from the <see cref="ConsoleLoggerPrefixModel" />.</param>
+    /// <param name="part">
+    ///     The part text to remove, or an <see cref="int" /> index. A negative index removes that many
+    ///     parts from the end; a positive index out of range throws.
+    /// </param>
     /// <returns>
     ///     The current instance of <see cref="IConsoleLoggerPrefixModel" /> with the specified part removed.
     /// </returns>
@@ -210,7 +216,7 @@ public class ConsoleLoggerPrefixModel : List<string>, IConsoleLoggerPrefixModel
                 return this;
             }
 
-            // Remove the part at the specified index if it is within bounds.
+            // Remove the part at the specified index (List.RemoveAt throws when it is out of range).
             RemoveAt(intPart);
 
             // We're done, return the current instance of the ConsoleLoggerPrefixModel after removing the specified part.

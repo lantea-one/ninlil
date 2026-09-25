@@ -1,7 +1,7 @@
 using Ninlil.Common.Console;
 using Ninlil.Common.Console.Model;
 
-// Define our namespace for the shared test console-application doubles.
+// Define our namespace.
 namespace Ninlil.Common.Console.Tests.TestSupport;
 
 /// <summary>
@@ -40,9 +40,9 @@ public class TestConsoleApplication : ConsoleApplication<SimpleNamedArgsModel>
 }
 
 /// <summary>
-///     This test double records whether it ran, and with what input, exercising a full real
-///     end-to-end <see cref="IConsoleCommand.ApplicationAsync{TConsoleApplication}" /> dispatch
-///     starting from raw CLI arguments.
+///     This test double records the input it ran with in a static property, so a test can drive
+///     <see cref="IConsoleCommand.ApplicationAsync{TConsoleApplication}" /> from raw CLI arguments
+///     (which creates the instance itself) and still inspect the result.
 /// </summary>
 public class EndToEndTestConsoleApplication : ConsoleApplication<SimpleNamedArgsModel>
 {

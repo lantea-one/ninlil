@@ -2,16 +2,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Common.Serializer.Filter;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-// Define our namespace
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Extension;
 
 /// <summary>
-///     This class maintains our SwaggerGenOptions extensions
+///     This static class registers the Swagger operation filters that document query parameters
+///     bound by this library's JSON, XML and data URI model binders.
 /// </summary>
 public static class SwaggerGenOptionsSerializerExtension
 {
     /// <summary>
-    ///     This method registers the Serializer FromJsonQuery and FromXmlQuery filters for Swagger/ReDoc.
+    ///     This method registers the data URI, JSON and XML query filters.
     /// </summary>
     /// <param name="instance">The current instance of SwaggerGenOptions.</param>
     /// <returns>The current <paramref name="instance" /> of SwaggerGenOptions.</returns>
@@ -30,7 +31,7 @@ public static class SwaggerGenOptionsSerializerExtension
         this SwaggerGenOptions instance
     )
     {
-        // Add the JSON operation filter.
+        // Add the data URI operation filter.
         instance.OperationFilter<FromDataUriQueryOperationFilter>();
 
         // We're done, return the instance.
@@ -52,7 +53,7 @@ public static class SwaggerGenOptionsSerializerExtension
     }
 
     /// <summary>
-    ///     This method registers the Serializer FromXmlQuery and FromXmlQuery filters for Swagger/ReDoc.
+    ///     This method registers the Serializer FromXmlQuery filter for Swagger/ReDoc.
     /// </summary>
     /// <param name="instance">The current instance of SwaggerGenOptions.</param>
     /// <returns>The current <paramref name="instance" /> of SwaggerGenOptions.</returns>

@@ -2,7 +2,16 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///  This class contains extension methods for checking if a type is something.
+///     This static class classifies a <see cref="System.Type" /> as an array, list, collection,
+///     dictionary, enumerable, key/value pair, tuple, nullable or primitive. The string conversion
+///     and console parsing helpers use it to pick a conversion.
+///     <para>
+///         The generic checks compare the type's generic definition against a fixed set
+///         (for example <see cref="List{T}" /> and <see cref="IList{T}" /> for a list). They do not
+///         match other implementations such as <see cref="HashSet{T}" />. They must not use
+///         <c>instance.IsAssignableFrom(typeof(X&lt;&gt;))</c>: that tests assignability the wrong
+///         way round and is true for <see cref="object" />.
+///     </para>
 /// </summary>
 public static class IsTypeExtension
 {
@@ -61,17 +70,13 @@ public static class IsTypeExtension
     public static bool IsBoolean(this System.Type instance) => instance == typeof(bool);
 
     /// <summary>
-    ///     This method checks if the given <paramref name="instance" />
-    ///     is an <see cref="ICollection{T}" /> type or not.
+    ///     This method checks if the given <paramref name="instance" /> is a closed
+    ///     <see cref="ICollection{T}" /> interface type.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is an <see cref="ICollection{T}" /> or not.</returns>
     public static bool IsCollection(this System.Type instance) =>
-        // Only compare against the exact open generic type definition here -- the previous
-        // "instance.IsAssignableFrom(typeof(ICollection<>))" fallback checked assignability
-        // backwards (whether the unbound, instance-less open generic type itself could be
-        // assigned to `instance`), which .NET considers true for `object` and any other
-        // sufficiently broad reference type, so it silently misreported those as collections.
+        // Compare generic definitions only (see the class summary).
         instance.IsGenericType
         && instance.GetGenericTypeDefinition() == typeof(ICollection<>);
 
@@ -122,20 +127,15 @@ public static class IsTypeExtension
         IsCollection<KeyValuePair<TKey, TValue>>(instance);
 
     /// <summary>
-    ///     This method checks if the given <paramref name="instance" />
-    ///     is a <see cref="Dictionary{TKey,TValue}" /> type or not.
+    ///     This method checks if the given <paramref name="instance" /> is a
+    ///     <see cref="Dictionary{TKey,TValue}" /> or <see cref="IDictionary{TKey,TValue}" /> type.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>
     ///     A <see cref="bool" /> indicating whether the type is a <see cref="Dictionary{TKey,TValue}" /> or not.
     /// </returns>
     public static bool IsDictionary(this System.Type instance) =>
-        // Only compare against the exact open generic type definitions here -- the previous
-        // "instance.IsAssignableFrom(typeof(Dictionary<,>)/typeof(IDictionary<,>))" fallback
-        // checked assignability backwards (whether the unbound, instance-less open generic type
-        // itself could be assigned to `instance`), which .NET considers true for `object` and any
-        // other sufficiently broad reference type, so it silently misreported those as
-        // dictionaries.
+        // Compare generic definitions only (see the class summary).
         instance.IsGenericType
         && (
             instance.GetGenericTypeDefinition() == typeof(Dictionary<,>)
@@ -183,17 +183,13 @@ public static class IsTypeExtension
         IsDictionary(instance, typeof(TKey), typeof(TValue));
 
     /// <summary>
-    ///     This method checks if the given <paramref name="instance" />
-    ///     is an <see cref="IEnumerable{T}" /> type or not.
+    ///     This method checks if the given <paramref name="instance" /> is a closed
+    ///     <see cref="IEnumerable{T}" /> interface type.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is an <see cref="IEnumerable{T}" /> or not.</returns>
     public static bool IsEnumerable(this System.Type instance) =>
-        // Only compare against the exact open generic type definition here -- the previous
-        // "instance.IsAssignableFrom(typeof(IEnumerable<>))" fallback checked assignability
-        // backwards (whether the unbound, instance-less open generic type itself could be
-        // assigned to `instance`), which .NET considers true for `object` and any other
-        // sufficiently broad reference type, so it silently misreported those as enumerables.
+        // Compare generic definitions only (see the class summary).
         instance.IsGenericType
         && instance.GetGenericTypeDefinition() == typeof(IEnumerable<>);
 
@@ -244,7 +240,9 @@ public static class IsTypeExtension
         IsEnumerable<KeyValuePair<TKey, TValue>>(instance);
 
     /// <summary>
-    ///     This extension method checks if the given <paramref name="instance" /> is an enumerable type or not.
+    ///     This extension method checks if the given <paramref name="instance" /> is an array, or one
+    ///     of the list, collection, enumerable or (optionally) dictionary types the other checks in
+    ///     this class recognize.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <param name="includeDictionary">
@@ -312,17 +310,13 @@ public static class IsTypeExtension
         IsKeyValuePair(instance, typeof(TKey), typeof(TValue));
 
     /// <summary>
-    ///     This method checks if the given <paramref name="instance" />
-    ///     is an <see cref="IList{T}" /> type or not.
+    ///     This method checks if the given <paramref name="instance" /> is a <see cref="List{T}" />
+    ///     or <see cref="IList{T}" /> type.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is an <see cref="IList{T}" /> or not.</returns>
     public static bool IsList(this System.Type instance) =>
-        // Only compare against the exact open generic type definitions here -- the previous
-        // "instance.IsAssignableFrom(typeof(List<>)/typeof(IList<>))" fallback checked
-        // assignability backwards (whether the unbound, instance-less open generic type itself
-        // could be assigned to `instance`), which .NET considers true for `object` and any other
-        // sufficiently broad reference type, so it silently misreported those as lists.
+        // Compare generic definitions only (see the class summary).
         instance.IsGenericType
         && (
             instance.GetGenericTypeDefinition() == typeof(List<>)
@@ -379,7 +373,8 @@ public static class IsTypeExtension
         IsList<KeyValuePair<TKey, TValue>>(instance);
 
     /// <summary>
-    ///     This extension method checks if the given <paramref name="instance" /> is a nullable type or not.
+    ///     This extension method checks whether the given <paramref name="instance" /> can hold
+    ///     <see langword="null" />: any reference type, or a <see cref="Nullable{T}" />.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is nullable or not.</returns>
@@ -387,7 +382,10 @@ public static class IsTypeExtension
         !instance.IsValueType || Nullable.GetUnderlyingType(instance) is not null;
 
     /// <summary>
-    ///     This method checks if the given <paramref name="instance" /> is a primitive type or not.
+    ///     This method checks if the given <paramref name="instance" /> is a CLR primitive or one of
+    ///     the simple value-like types treated the same way: <see cref="string" />,
+    ///     <see cref="decimal" />, <see cref="DateTime" />, <see cref="DateTimeOffset" />,
+    ///     <see cref="TimeSpan" /> and <see cref="Guid" />.
     /// </summary>
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is primitive or not.</returns>
@@ -401,9 +399,9 @@ public static class IsTypeExtension
         || instance == typeof(Guid);
 
     /// <summary>
-    ///     This field enumerates every open generic <see cref="Tuple" />/<see cref="ValueTuple" />
-    ///     type definition, across their full 1-through-8-element (<c>Rest</c>-nested) arity range, used
-    ///     by <see cref="IsTuple" /> to recognize any real tuple shape rather than just a single element.
+    ///     This field lists every open generic <see cref="System.Tuple" /> and <see cref="ValueTuple" />
+    ///     definition, from one to eight elements (the eighth being the nested <c>Rest</c>), for
+    ///     <see cref="IsTuple" />.
     /// </summary>
     private static readonly System.Type[] TupleGenericTypeDefinitions =
     [
@@ -431,13 +429,8 @@ public static class IsTypeExtension
     /// <param name="instance">The <see cref="System.Type" /> to check.</param>
     /// <returns>A <see cref="bool" /> indicating whether the type is a <see langword="Tuple" /> or not.</returns>
     public static bool IsTuple(this System.Type instance) =>
-        // Compare against every 1-through-8-element Tuple/ValueTuple open generic type definition,
-        // not just the single-element Tuple<>/ValueTuple<> forms -- the previous version's
-        // GetGenericTypeDefinition() comparison only ever matched a single-element tuple, so every
-        // real-world multi-element Tuple<T1,T2,...> went undetected. The previous
-        // "instance.IsAssignableFrom(typeof(Tuple<>)/typeof(ValueTuple<>))" fallback is also removed
-        // for the same reason as the other IsX checks in this class: it checked assignability
-        // backwards and incorrectly matched broad reference types like `object`.
+        // Check every arity, not just the single-element Tuple<>/ValueTuple<> definitions, and
+        // compare generic definitions only (see the class summary).
         instance.IsGenericType
         && TupleGenericTypeDefinitions.Contains(instance.GetGenericTypeDefinition());
 }

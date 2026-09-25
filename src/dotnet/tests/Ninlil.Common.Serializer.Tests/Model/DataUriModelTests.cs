@@ -2,11 +2,13 @@ using System.Text;
 using Ninlil.Common.Serializer;
 using Ninlil.Common.Serializer.Model;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Model;
 
 /// <summary>
-///     This class contains unit tests for <see cref="DataUriModel" />, covering parsing,
-///     round-tripping through JSON, and its implicit conversions.
+///     These tests cover <see cref="DataUriModel" />: parsing with and without optional
+///     parameters, validity, round trips through its string form and JSON, the implicit
+///     conversions and malformed input.
 /// </summary>
 public class DataUriModelTests
 {

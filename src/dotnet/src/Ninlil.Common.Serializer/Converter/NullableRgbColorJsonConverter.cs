@@ -6,8 +6,9 @@ using System.Text.Json.Serialization;
 namespace Ninlil.Common.Serializer.Converter;
 
 /// <summary>
-///     This class provides a JSON converter for an <see cref="Nullable{Color}" />
-///     objects to and from the rgb(r, g, b) string representation.
+///     This System.Text.Json converter writes a nullable <see cref="Color" /> as a CSS
+///     <c>rgb(r, g, b)</c> string and reads it back through <see cref="RgbColorParsingHelper" />.
+///     Null, blank or unparseable text reads as <see langword="null" />; alpha is dropped.
 /// </summary>
 public class NullableRgbColorJsonConverter : JsonConverter<Color?>
 {
@@ -17,15 +18,14 @@ public class NullableRgbColorJsonConverter : JsonConverter<Color?>
     /// <param name="reader">The <see cref="Utf8JsonReader" /> to read from.</param>
     /// <param name="typeToConvert">The <see cref="Type" /> of object to convert.</param>
     /// <param name="options">The <see cref="JsonSerializerOptions" /> to use.</param>
-    /// <returns>>The converted <see cref="Nullable{Color}" />.</returns>
+    /// <returns>The converted <see cref="Nullable{Color}" />.</returns>
     public override Color? Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
-        // Localize the string representation of the RGB color value
-        // from the JSON reader and convert it to a Color object.
+        // Localize the color string from the JSON reader.
         var rgbString = reader.GetString();
 
         // If the RGB string is null or empty, return null. Otherwise, parse the rgb(r, g, b)

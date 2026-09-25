@@ -9,7 +9,10 @@ using YamlDotNet.Serialization;
 namespace Ninlil.Common.Serializer.Model;
 
 /// <summary>
-///     This class represents a model for handling TimeSpan strings in the format "000d00h00m00s000ms".
+///     This class is a <see cref="TimeSpan" /> held as a compact structured string such as
+///     <c>1d2h30m</c> (days, hours, minutes, seconds and milliseconds, each optional). It converts
+///     implicitly to and from <see cref="TimeSpan" /> and <see cref="string" />, and serializes as the
+///     string (see <see cref="StructuredStringModel" />).
 /// </summary>
 [JsonConverter<StructuredStringJsonConverter<TimeStringModel>>]
 [XmlRoot("timeSpan", DataType = "string", IsNullable = true)]
@@ -96,7 +99,7 @@ public class TimeStringModel : StructuredStringModel
     ///     from a string representation of a TimeSpan provided in <paramref name="input" />.
     /// </summary>
     /// <param name="input">The string representation of a TimeSpan in the format "000d00h00m00s000ms".</param>
-    /// <returns>>The created <see cref="TimeStringModel" />.</returns>
+    /// <returns>The created <see cref="TimeStringModel" />.</returns>
     public static TimeStringModel FromString(string input) => new(input);
 
     /// <summary>
@@ -104,7 +107,7 @@ public class TimeStringModel : StructuredStringModel
     ///     from a <see cref="TimeSpan" /> provided in <paramref name="input" />.
     /// </summary>
     /// <param name="input">The <see cref="TimeSpan" /> to initialize the instance from.</param>
-    /// <returns>>The created <see cref="TimeStringModel" />.</returns>
+    /// <returns>The created <see cref="TimeStringModel" />.</returns>
     public static TimeStringModel FromTimeSpan(TimeSpan input) => new(input);
 
     /// <summary>
@@ -115,7 +118,7 @@ public class TimeStringModel : StructuredStringModel
     /// <param name="additional">
     ///     An optional additional <see cref="TimeSpan" /> to subtract from the elapsed time.
     /// </param>
-    /// <returns>>The created <see cref="TimeStringModel" />.</returns>
+    /// <returns>The created <see cref="TimeStringModel" />.</returns>
     public static TimeStringModel Since(DateTime timestamp, TimeSpan? additional = null)
     {
         // Localize our timespan for the difference.
@@ -137,7 +140,7 @@ public class TimeStringModel : StructuredStringModel
     /// <param name="additional">
     ///     An optional additional <see cref="TimeSpan" /> to subtract from the elapsed time.
     /// </param>
-    /// <returns>>The created <see cref="TimeStringModel" />.</returns>
+    /// <returns>The created <see cref="TimeStringModel" />.</returns>
     public static TimeStringModel SinceUtc(DateTime timestamp, TimeSpan? additional = null)
     {
         // Localize our timespan for the difference.
@@ -157,7 +160,7 @@ public class TimeStringModel : StructuredStringModel
     /// </summary>
     /// <param name="input">The string representation of a TimeSpan in the format "000d00h00m00s000ms".</param>
     /// <param name="model">The parsed <see cref="TimeStringModel" /> output.</param>
-    /// <returns>>A <see cref="bool" /> indicating whether the parsing was successful or not.</returns>
+    /// <returns>A <see cref="bool" /> indicating whether the parsing was successful or not.</returns>
     public static bool TryParse(string input, out TimeStringModel model) =>
         TryParse<TimeStringModel>(input, out model);
 

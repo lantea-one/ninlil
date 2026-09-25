@@ -5,15 +5,15 @@ using Ninlil.Common.Extension.Type;
 namespace Ninlil.Common.Extension.Tests.Type;
 
 /// <summary>
-///     This class tests <see cref="SingletonTypeExtension" />. The extension's own singleton registry is a
-///     single shared, process-wide static list, so every test here uses model types dedicated to this test
-///     class alone to avoid cross-test interference.
+///     These tests cover <see cref="SingletonTypeExtension" />. Its store is a process-wide static
+///     list, so each test uses model types that belong to this class alone to avoid interference
+///     from other tests.
 /// </summary>
 public class SingletonTypeExtensionTests
 {
     /// <summary>
-    ///     A dedicated model type, used only by these tests, so the shared static singleton registry
-    ///     cannot be polluted by another test class running concurrently.
+    ///     A model type used only by these tests, so other test classes running in parallel cannot
+    ///     change the shared static store for it.
     /// </summary>
     private class SingletonProbeModel
     {
@@ -52,8 +52,8 @@ public class SingletonTypeExtensionTests
     [Fact]
     public void GetSingletonInstanceReturnsTheSameInstanceAcrossCalls()
     {
-        // Use a dedicated nested type unique to this test so a prior test's singleton
-        // registration for SingletonProbeModel cannot leak in and change identity.
+        // Use a nested type unique to this test so another test's instance of
+        // SingletonProbeModel cannot change the identity being checked.
         object first = typeof(GetSingletonProbeModel).GetSingletonInstance();
         object second = typeof(GetSingletonProbeModel).GetSingletonInstance();
 
@@ -61,7 +61,7 @@ public class SingletonTypeExtensionTests
     }
 
     /// <summary>
-    ///     A dedicated model type used only by <see cref="GetSingletonInstanceReturnsTheSameInstanceAcrossCalls" />.
+    ///     A model type used only by <see cref="GetSingletonInstanceReturnsTheSameInstanceAcrossCalls" />.
     /// </summary>
     private class GetSingletonProbeModel;
 
@@ -79,8 +79,8 @@ public class SingletonTypeExtensionTests
     [Fact]
     public void GetSingletonInstanceGenericReturnsTypedInstance()
     {
-        // Use a dedicated nested type unique to this test to avoid the shared static
-        // registry being mutated by another test's use of SingletonProbeModel.
+        // Use a nested type unique to this test so another test's use of SingletonProbeModel
+        // cannot change the shared store underneath it.
         SampleModel result = typeof(SampleModel).GetSingletonInstance<SampleModel>();
 
         Assert.NotNull(result);

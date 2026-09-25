@@ -6,29 +6,36 @@ using Ninlil.Common.Console.Model;
 namespace Ninlil.Common.Console;
 
 /// <summary>
-///     This class maintains the structure of a console application.
+///     This abstract class is the base for console applications built on this library. It holds
+///     the logger and the service provider, exposes service lookup to subclasses, and turns a
+///     parsed input model into a call to the matching <c>RunAsync</c> overload by reflection. The
+///     generic subclasses declare which input models (verbs) the application accepts; each adds
+///     one abstract <c>RunAsync</c> overload for the application to implement.
 /// </summary>
 /// <param name="logger">The logger for the console application.</param>
 public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplication
 {
     /// <summary>
-    ///     This property contains the service provider for the console application.
+    ///     This field contains the service provider for the current run, set through
+    ///     <see cref="WithServiceProvider" />.
     /// </summary>
     private IServiceProvider _serviceProvider;
 
     /// <summary>
-    ///     This property contains the logger for the console application.
+    ///     This field contains the logger for the console application.
     /// </summary>
     protected IConsoleLogger Logger = logger;
 
     /// <summary>
-    ///     This method is responsible for configuring the dependency injection container.
+    ///     This method lets a subclass register its services. It runs before the command line is
+    ///     parsed, when <see cref="ExecuteAsync(IEnumerable{string}, CancellationToken)" /> builds
+    ///     the <see cref="IConsoleCommand" />.
     /// </summary>
     /// <param name="services">The dependency injection container.</param>
     protected virtual void ConfigureServices(IServiceCollection services) { }
 
     /// <summary>
-    ///     This method is responsible for retrieving a service from the service provider.
+    ///     This method resolves a required service from the service provider.
     /// </summary>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
     /// <returns>The service from the service provider.</returns>
@@ -36,7 +43,7 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
         where TService : class => _serviceProvider.GetRequiredService<TService>();
 
     /// <summary>
-    ///     This method is responsible for retrieving a <paramref name="key" /> service from the service provider.
+    ///     This method resolves a required keyed service from the service provider.
     /// </summary>
     /// <param name="key">The key to identify the service.</param>
     /// <typeparam name="TService">The type of the service to retrieve.</typeparam>
@@ -45,7 +52,9 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
         where TService : class => _serviceProvider.GetRequiredKeyedService<TService>(key);
 
     /// <summary>
-    ///     This method is responsible for executing the console application with the provided command line arguments.
+    ///     This method runs the application with an already parsed <paramref name="input" />. It finds
+    ///     the public <c>RunAsync</c> overload whose first parameter is the runtime type of
+    ///     <paramref name="input" /> and invokes it.
     /// </summary>
     /// <param name="input">The parsed input model from the command line arguments.</param>
     /// <param name="stoppingToken">The cancellation token to stop the operation.</param>
@@ -55,7 +64,7 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
         CancellationToken stoppingToken = default
     )
     {
-        // Instantiate our method info for the generic method on the parser that supports the number of generic arguments.
+        // Find the RunAsync overload declared for this input model type.
         MethodInfo method = GetType()
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
             .Where(m => m.Name.Equals("RunAsync", StringComparison.OrdinalIgnoreCase))
@@ -67,12 +76,14 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
                 $"The console application does not support this operation [RunAsync({input.GetType().Name}, CancellationToken)]."
             );
 
-        // Execute the method with they typed input model and the cancellation token.
+        // Execute the method with the typed input model and the cancellation token.
         return (Task)method.Invoke(this, [input, stoppingToken]);
     }
 
     /// <summary>
-    ///     This method is responsible for executing the console application with the provided command line arguments.
+    ///     This method parses the raw command line <paramref name="arguments" /> against the input
+    ///     models named by this class's generic arguments, stores the service provider built for the
+    ///     run and then calls <see cref="ExecuteAsync(IConsoleCommandInputModel, CancellationToken)" />.
     /// </summary>
     /// <param name="arguments">The command line arguments.</param>
     /// <param name="stoppingToken">The cancellation token to stop the operation.</param>
@@ -90,7 +101,7 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
         // Determine the number of generic arguments on this class.
         Type[] genericArguments = GetType().GetGenericArguments();
 
-        // Instantiate our method info for the generic method on the parser that supports the number of generic arguments.
+        // Find the WithParsedAsync overload whose arity matches the number of generic arguments.
         MethodInfo method = typeof(IConsoleCommand).GetMethod(
             nameof(IConsoleCommand.WithParsedAsync),
             genericArguments
@@ -112,7 +123,7 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
                 [
                     (IConsoleCommandInputModel input, ServiceProvider serviceProvider) =>
                     {
-                        // Reset the service provider into the instance.
+                        // Store the service provider built for this run.
                         WithServiceProvider(serviceProvider);
 
                         // We're done, execute the console application.
@@ -123,47 +134,54 @@ public abstract class ConsoleApplication(IConsoleLogger logger) : IConsoleApplic
     }
 
     /// <summary>
-    ///     This method resets the <paramref name="applicationName" /> of the running console application.
+    ///     This method sets the application name shown in the help text. It writes the static
+    ///     <see cref="ConsoleCommand.Application" />, so it applies process-wide.
     /// </summary>
     /// <param name="applicationName">The name of the application.</param>
     public void WithApplication(string applicationName) =>
         ConsoleCommand.Application = applicationName?.Trim();
 
     /// <summary>
-    ///     This method resets the <paramref name="author" /> of the running console application.
+    ///     This method sets the author shown in the help text (process-wide, through
+    ///     <see cref="ConsoleCommand.Author" />).
     /// </summary>
     /// <param name="author">The author information for the application.</param>
     public void WithAuthor(string author) => ConsoleCommand.Author = author?.Trim();
 
     /// <summary>
-    ///     This method resets the <paramref name="company" /> of the running console application.
+    ///     This method sets the company shown in the help text (process-wide, through
+    ///     <see cref="ConsoleCommand.Company" />).
     /// </summary>
     /// <param name="company">The company information for the application.</param>
     public void WithCompany(string company) => ConsoleCommand.Company = company?.Trim();
 
     /// <summary>
-    ///     This method resets the <paramref name="description" /> of the running console application.
+    ///     This method sets the description shown in the help text (process-wide, through
+    ///     <see cref="ConsoleCommand.Description" />).
     /// </summary>
     /// <param name="description">The description information for the application.</param>
     public void WithDescription(string description) =>
         ConsoleCommand.Description = description?.Trim();
 
     /// <summary>
-    ///     This property contains the service provider for the console application.
+    ///     This method sets the service provider the application resolves its services from.
     /// </summary>
-    /// <param name="serviceProvider"></param>
+    /// <param name="serviceProvider">The service provider built for this run.</param>
     public void WithServiceProvider(IServiceProvider serviceProvider) =>
         _serviceProvider = serviceProvider;
 
     /// <summary>
-    ///     This method resets the <paramref name="version" /> of the running console application.
+    ///     This method sets the version shown in the help text (process-wide, through
+    ///     <see cref="ConsoleCommand.Version" />).
     /// </summary>
     /// <param name="version">The version information for the application.</param>
     public void WithVersion(string version) => ConsoleCommand.Version = version?.Trim();
 }
 
 /// <summary>
-///     This class maintains the structure of a console application with a single input model.
+///     This class is a console application that accepts one input model. The variants with more
+///     type parameters each add one more input model and one more abstract <c>RunAsync</c>
+///     overload.
 /// </summary>
 /// <param name="logger">The logger for the console application.</param>
 /// <typeparam name="TInputModel">The type of the input model.</typeparam>

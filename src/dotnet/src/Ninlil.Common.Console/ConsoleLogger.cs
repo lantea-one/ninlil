@@ -4,12 +4,17 @@ using Ninlil.Common.Console.Enum;
 using Ninlil.Common.Console.Model;
 using YamlDotNet.Serialization;
 
-// Define our namespace for the console logger.
+// Define our namespace.
 namespace Ninlil.Common.Console;
 
 /// <summary>
-///     This class represents a console logger that can log messages
-///     to the console with various configurations and formats.
+///     This class is the logger for console applications built on this library. Each
+///     <c>Log*</c> call creates a <see cref="ConsoleLoggerMessageModel" />, writes it at once
+///     according to <see cref="Configuration" /> (format, prefix, colors, quiet/debug switches and
+///     optional log file) and keeps it in <see cref="Messages" />. The prefix column width grows to
+///     fit the longest prefix seen so far so text output stays aligned.
+///     <see cref="Extension.ServiceCollectionConsoleExtension" /> registers it for dependency
+///     injection, and <see cref="ConsoleApplication" /> receives it through its constructor.
 /// </summary>
 [XmlInclude(typeof(ConsoleLoggerConfigurationModel))]
 [XmlInclude(typeof(ConsoleLoggerMessageModel))]
@@ -94,9 +99,7 @@ public class ConsoleLogger : IConsoleLogger
         new ConsoleLoggerConfigurationModel();
 
     /// <summary>
-    ///     This property holds a list of messages that have been logged
-    ///     by the console logger. Each message is represented by an
-    ///     instance of the IConsoleLoggerMessageModel interface.
+    ///     This property holds every message logged by this instance. It is never trimmed.
     /// </summary>
     [JsonPropertyName("messages")]
     [XmlElement("message")]
@@ -141,15 +144,15 @@ public class ConsoleLogger : IConsoleLogger
     }
 
     /// <summary>
-    ///     This method exits the application with the specified <paramref name="exitCode" />.
+    ///     This method writes any unwritten messages and exits the process with
+    ///     <paramref name="exitCode" />. A negative code does nothing.
     /// </summary>
     /// <param name="exitCode">
-    ///     The exit code to use when exiting the application. If the exit code is greater than <see langword="-1" />,
-    ///     the logger will flush any pending messages before exiting. The default value is <see langword="-1" />.
+    ///     The exit code to use. The default of <see langword="-1" /> leaves the process running.
     /// </param>
     public void Exit(int exitCode = -1)
     {
-        // If the exit code is less than or equal to -1, do not exit the application.
+        // A negative exit code means do not exit.
         if (exitCode <= -1)
             return;
 
@@ -161,7 +164,7 @@ public class ConsoleLogger : IConsoleLogger
     }
 
     /// <summary>
-    ///     This method flushes any pending log messages that have not yet been written to the console.
+    ///     This method writes any logged messages that have not been written yet.
     /// </summary>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger Flush()
@@ -188,18 +191,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogDebug(
@@ -225,18 +226,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogDone(
@@ -262,18 +261,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogError(
@@ -299,18 +296,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogFatal(
@@ -336,18 +331,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogHeartbeat(
@@ -373,18 +366,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogInformation(
@@ -398,7 +389,8 @@ public class ConsoleLogger : IConsoleLogger
     ) => LogMessage("info", message, prefix, data, buffer, padding, format, color);
 
     /// <summary>
-    ///     This method logs a message to the console using the provided <paramref name="message" /> model.
+    ///     This method records the <paramref name="message" />, widens
+    ///     <see cref="IConsoleLoggerConfigurationModel.MaxPrefixLength" /> to fit its prefix and writes it.
     /// </summary>
     /// <param name="message">
     ///     The <see cref="IConsoleLoggerMessageModel" /> instance that represents the log message to be logged.
@@ -409,7 +401,8 @@ public class ConsoleLogger : IConsoleLogger
         // Add the provided log message to the list of messages in the logger.
         Messages.Add(message);
 
-        // Determine the maximum prefix length among all messages that have a non-null prefix and at least one part.
+        // Find the longest prefix part across all messages, ignoring timestamp parts, plus two for
+        // the surrounding brackets.
         int maxPrefixLength =
             Messages
                 .Where(m => m.Prefix?.GetParts().Count > 0)
@@ -450,18 +443,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogMessage(
@@ -488,18 +479,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogNotice(
@@ -525,18 +514,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogSuccess(
@@ -562,18 +549,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogTrace(
@@ -599,18 +584,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger LogWarning(
@@ -644,18 +627,16 @@ public class ConsoleLogger : IConsoleLogger
     ///     An optional object that contains additional data or context related to the log message.
     /// </param>
     /// <param name="buffer">
-    ///     An optional integer that specifies the buffer space to be used when logging the message.
+    ///     The number of blank lines to add before and after the message in text format.
     /// </param>
     /// <param name="padding">
-    ///     An optional integer that specifies the padding to be applied to the log message for formatting purposes.
+    ///     The number of spaces to indent the message by in text format.
     /// </param>
     /// <param name="format">
-    ///     An optional <see cref="ConsoleLoggerLogFormatEnum" /> value
-    ///     that specifies the log format to be used for the message.
+    ///     The format used to serialize <paramref name="data" />.
     /// </param>
     /// <param name="color">
-    ///     An optional <see cref="ConsoleColor" /> value that specifies
-    ///     the color to be used for the log message in the console.
+    ///     The console color for the message; when null the level decides.
     /// </param>
     /// <returns>
     ///     A new instance of the <see cref="IConsoleLoggerMessageModel" /> interface
@@ -685,13 +666,10 @@ public class ConsoleLogger : IConsoleLogger
         };
 
     /// <summary>
-    ///     This method returns a string representation of the console logger,
-    ///     including all logged messages formatted according to the current configuration.
+    ///     This method renders every logged message according to the current configuration, one per
+    ///     line.
     /// </summary>
-    /// <returns>
-    ///     A string that represents the console logger and its logged
-    ///     messages, formatted according to the current configuration.
-    /// </returns>
+    /// <returns>The rendered messages.</returns>
     public override string ToString() =>
         string.Join(Environment.NewLine, Messages.Select(m => m.ToString(Configuration)));
 
@@ -714,13 +692,14 @@ public class ConsoleLogger : IConsoleLogger
     }
 
     /// <summary>
-    ///     This method synchronously writes all logged messages to the console using the current configuration.
+    ///     This method synchronously writes any logged messages that have not been written yet.
     /// </summary>
     /// <returns>The current instance of the <see cref="IConsoleLogger" /> for method chaining.</returns>
     public IConsoleLogger Write() => WriteAsync(CancellationToken.None).GetAwaiter().GetResult();
 
     /// <summary>
-    ///     This method asynchronously writes all logged messages to the console using the current configuration.
+    ///     This method writes any logged messages that have not been written yet. Each message is
+    ///     written only once.
     /// </summary>
     /// <param name="stoppingToken">
     ///     An optional <see cref="CancellationToken" /> that can be used to cancel the asynchronous operation.
@@ -731,8 +710,7 @@ public class ConsoleLogger : IConsoleLogger
     /// </returns>
     public async Task<IConsoleLogger> WriteAsync(CancellationToken stoppingToken = default)
     {
-        // Iterate through the log messages and write them
-        // asynchronously to the console using the current configuration.
+        // Write each message; messages already written are skipped by the message itself.
         foreach (var message in Messages)
             await message.WriteAsync(Configuration, stoppingToken);
 
@@ -742,40 +720,37 @@ public class ConsoleLogger : IConsoleLogger
 }
 
 /// <summary>
-///     This class represents a console logger that is associated
-///     with a specific class type <typeparamref name="TClass" />.
+///     This class is a <see cref="ConsoleLogger" /> whose prefix starts with the name of
+///     <typeparamref name="TClass" />, so messages show which class logged them. It is the
+///     <see cref="IConsoleLogger{TClass}" /> registered by the generic
+///     <c>UseConsoleLogging&lt;TClassPrefix&gt;</c> overloads.
 /// </summary>
-/// <typeparam name="TClass">
-///     The class type that the console logger is associated with. This allows for
-///     type-specific logging and configuration for different classes in the application.
-/// </typeparam>
+/// <typeparam name="TClass">The class whose name prefixes every message.</typeparam>
 public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
     where TClass : class
 {
     /// <summary>
-    ///     This static factory method creates a new instance of the <see cref="ConsoleLogger" /> class.
+    ///     This static factory method creates a new <see cref="ConsoleLogger{TClass}" />.
     /// </summary>
-    /// <returns>A new instance of the <see cref="ConsoleLogger" /> class.</returns>
+    /// <returns>A new <see cref="ConsoleLogger{TClass}" />.</returns>
     public static new IConsoleLogger<TClass> Create() => new ConsoleLogger<TClass>();
 
     /// <summary>
-    ///     This static factory method creates a new instance of the <see cref="ConsoleLogger" />
-    ///     class with the specified <paramref name="configuration" /> settings.
+    ///     This static factory method creates a new <see cref="ConsoleLogger{TClass}" /> with the
+    ///     specified <paramref name="configuration" /> settings.
     /// </summary>
     /// <param name="configuration">
     ///     The <see cref="IConsoleLoggerConfigurationModel" /> instance
     ///     that contains the configuration settings for the console logger.
     /// </param>
-    /// <returns>
-    ///     A new instance of the <see cref="ConsoleLogger" /> class with the specified configuration.
-    /// </returns>
+    /// <returns>A new <see cref="ConsoleLogger{TClass}" /> with the specified configuration.</returns>
     public static new IConsoleLogger<TClass> Create(
         IConsoleLoggerConfigurationModel configuration
     ) => new ConsoleLogger<TClass>(configuration);
 
     /// <summary>
-    ///     This static factory method creates a new instance of the <see cref="ConsoleLogger" />
-    ///     class with the specified <paramref name="format" /> and optional <paramref name="prefix" /> settings.
+    ///     This static factory method creates a new <see cref="ConsoleLogger{TClass}" /> with the
+    ///     specified <paramref name="format" /> and optional <paramref name="prefix" /> settings.
     /// </summary>
     /// <param name="format">
     ///     The <see cref="ConsoleLoggerLogFormatEnum" /> value that specifies the log format for the console logger.
@@ -783,17 +758,14 @@ public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
     /// <param name="prefix">
     ///     An optional collection of strings that represent the prefix for log messages.
     /// </param>
-    /// <returns>
-    ///     A new instance of the <see cref="ConsoleLogger" /> class with the specified format and optional prefix.
-    /// </returns>
+    /// <returns>A new <see cref="ConsoleLogger{TClass}" /> with the specified format and prefix.</returns>
     public static new IConsoleLogger<TClass> Create(
         ConsoleLoggerLogFormatEnum format,
         IEnumerable<string> prefix = null
     ) => new ConsoleLogger<TClass>(format, prefix);
 
     /// <summary>
-    ///     This is the default constructor for the <see cref="ConsoleLogger" /> class.
-    ///     It initializes a new instance of the console logger with default configuration settings.
+    ///     This constructor creates a logger with YAML format and the class name as the prefix.
     /// </summary>
     public ConsoleLogger() =>
         Configuration = new ConsoleLoggerConfigurationModel
@@ -803,8 +775,8 @@ public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
         };
 
     /// <summary>
-    ///     This constructor initializes a new instance of the <see cref="ConsoleLogger" />
-    ///     class with the specified <paramref name="configuration" /> settings.
+    ///     This constructor creates a logger with the specified <paramref name="configuration" />,
+    ///     adding the class name to the front of its prefix when it is not there yet.
     /// </summary>
     /// <param name="configuration">
     ///     The <see cref="IConsoleLoggerConfigurationModel" /> instance
@@ -818,11 +790,9 @@ public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
         // Ensure we have a valid logger prefix; if not, create a new instance with default settings.
         configuration.Prefix ??= new ConsoleLoggerPrefixModel();
 
-        // If the class name is not already part of the prefix, add it to the prefix parts. This checks
-        // the incoming "configuration" parameter's own prefix - not the instance's own (still-default)
-        // "Configuration" property, which hasn't been assigned yet at this point in the constructor and
-        // would therefore always report an empty prefix, making the class name appear "missing" and get
-        // inserted a second time even when the caller had already included it.
+        // Check the incoming configuration's prefix, not the Configuration property. The property
+        // is not assigned yet, so it would always look empty and the class name would be added
+        // twice.
         if (
             !configuration
                 .Prefix.GetParts()
@@ -835,8 +805,8 @@ public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
     }
 
     /// <summary>
-    ///     This constructor initializes a new instance of the <see cref="ConsoleLogger" />
-    ///     class with the specified <paramref name="format" /> and optional <paramref name="prefix" /> settings.
+    ///     This constructor creates a logger with the specified <paramref name="format" />, using
+    ///     the class name followed by <paramref name="prefix" /> as the prefix.
     /// </summary>
     /// <param name="format">
     ///     The <see cref="ConsoleLoggerLogFormatEnum" /> value that specifies the log format for the console logger.
@@ -846,7 +816,7 @@ public class ConsoleLogger<TClass> : ConsoleLogger, IConsoleLogger<TClass>
     /// </param>
     public ConsoleLogger(ConsoleLoggerLogFormatEnum format, IEnumerable<string> prefix = null)
     {
-        // Ensure we have a valid prefix; if not, create a new instance with the class name as the default prefix.
+        // Start from the provided prefix parts, or an empty list.
         List<string> prefixParts = prefix?.ToList() ?? [];
 
         // If the class name is not already part of the prefix, add it to the prefix parts.

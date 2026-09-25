@@ -2,11 +2,12 @@ using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using YamlDotNet.Serialization;
 
-// Define our namespace for the console logger log format enumeration
+// Define our namespace.
 namespace Ninlil.Common.Console.Enum;
 
 /// <summary>
-///     This enumeration defines the available log formats for the console logger.
+///     This enumeration lists the output formats <see cref="ConsoleLogger" /> can write log
+///     entries in. The lowercase names are what configuration and serialized output use.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ConsoleLoggerLogFormatEnum>))]
 public enum ConsoleLoggerLogFormatEnum

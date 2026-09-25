@@ -2,13 +2,16 @@
 namespace Ninlil.Common.Extension.Type;
 
 /// <summary>
-///     This class maintains the Singleton extensions for <see cref="System.Type" /> objects.
+///     This static class keeps one process-wide instance per concrete class type, created on
+///     demand from a <see cref="System.Type" />. <c>Create*</c> always replaces the stored
+///     instance; <c>Get*</c> returns it, creating it first if needed. The store is a plain list
+///     with no locking, so it is not safe for concurrent use.
 /// </summary>
 // ReSharper disable once UnusedType.Global
 public static class SingletonTypeExtension
 {
     /// <summary>
-    ///     This property contains our singleton instances
+    ///     This field holds the stored instances, at most one per type.
     /// </summary>
     private static readonly List<dynamic> SingletonInstances = new();
 
@@ -38,7 +41,8 @@ public static class SingletonTypeExtension
         !typeInstance.IsAbstract && typeInstance.IsClass;
 
     /// <summary>
-    ///     This method creates a singleton instance of a type.
+    ///     This method creates a new instance of the type and stores it, replacing any instance
+    ///     already stored for that type.
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to create the Singleton for.</param>
     /// <returns>The singleton instance of <see cref="System.Type" />.</returns>
@@ -66,7 +70,7 @@ public static class SingletonTypeExtension
     ///     This method creates a singleton instance of a type.
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to create the Singleton for.</param>
-    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constuctor.</param>
+    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constructor.</param>
     /// <returns>The singleton instance of <see cref="System.Type" />.</returns>
     /// <exception cref="ArgumentException">When <paramref name="typeInstance" /> is not a class or is abstract.</exception>
     // ReSharper disable once MemberCanBePrivate.Global
@@ -106,7 +110,7 @@ public static class SingletonTypeExtension
     ///     This method creates a singleton instance of a type.
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to create the Singleton for.</param>
-    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constuctor.</param>
+    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constructor.</param>
     /// <typeparam name="TInstance">The expected type of the instance.</typeparam>
     /// <returns>The singleton instance of <see cref="System.Type" /> <paramref name="typeInstance" />.</returns>
     /// <exception cref="ArgumentException">When <paramref name="typeInstance" /> is not a class or is abstract.</exception>
@@ -119,7 +123,8 @@ public static class SingletonTypeExtension
         typeInstance.CreateSingletonInstance(constructorArguments) as TInstance;
 
     /// <summary>
-    ///     This method retrieves a singleton instance of a type.
+    ///     This method returns the stored instance of the type, creating and storing one if there is
+    ///     none.
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to retrieve the Singleton for.</param>
     /// <returns>The singleton instance of <see cref="System.Type" /> <paramref name="typeInstance" />.</returns>
@@ -136,10 +141,12 @@ public static class SingletonTypeExtension
     }
 
     /// <summary>
-    ///     This method retrieves a singleton instance of a type.
+    ///     This method returns the stored instance of the type, creating one with
+    ///     <paramref name="constructorArguments" /> if there is none. The arguments are ignored when
+    ///     an instance already exists.
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to retrieve the Singleton for.</param>
-    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constuctor.</param>
+    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constructor.</param>
     /// <returns>The singleton instance of <see cref="System.Type" /> <paramref name="typeInstance" />.</returns>
     /// <exception cref="ArgumentException">When <paramref name="typeInstance" /> is not a class or is abstract.</exception>
     // ReSharper disable once MemberCanBePrivate.Global
@@ -172,7 +179,7 @@ public static class SingletonTypeExtension
     /// </summary>
     /// <param name="typeInstance">The <see cref="System.Type" /> to retrieve the Singleton for.</param>
     /// <typeparam name="TInstance">The expected type of the instance.</typeparam>
-    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constuctor.</param>
+    /// <param name="constructorArguments">The arguments to pass to the <paramref name="typeInstance" /> constructor.</param>
     /// <returns>The singleton instance of <see cref="System.Type" /> <paramref name="typeInstance" />.</returns>
     /// <exception cref="ArgumentException">When <paramref name="typeInstance" /> is not a class or is abstract.</exception>
     // ReSharper disable once UnusedMember.Global

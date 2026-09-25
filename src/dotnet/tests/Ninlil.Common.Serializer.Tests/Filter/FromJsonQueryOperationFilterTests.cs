@@ -6,25 +6,22 @@ using Ninlil.Common.Serializer.Filter;
 using Ninlil.Common.Serializer.ModelBinder;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
+// Define our namespace.
 namespace Ninlil.Common.Serializer.Tests.Filter;
 
 /// <summary>
-///     This class contains unit tests for <see cref="FromJsonQueryOperationFilter" />, which
-///     re-shapes a Swagger/ReDoc operation's parameter documentation for any parameter bound via
-///     <see cref="FromJsonQueryModelBinder" /> so it's documented under the
-///     <c>application/json</c> content type instead of a plain query-string schema.
+///     These tests check that <see cref="FromJsonQueryOperationFilter" /> documents parameters bound
+///     by <see cref="FromJsonQueryModelBinder" /> under the <c>application/json</c> content type and
+///     leaves other parameters alone.
 /// </summary>
 public class FromJsonQueryOperationFilterTests
 {
     /// <summary>
-    ///     This method constructs a minimal, real <see cref="OperationFilterContext" /> with one
-    ///     action parameter bound via <paramref name="binderType" /> (or unbound, if
-    ///     <see langword="null" />), and a matching <see cref="OpenApiOperation" /> carrying a
-    ///     single <see cref="OpenApiParameter" /> of the same name with pre-populated content.
-    ///     Only the members the filters under test actually read are populated -- everything else
-    ///     the real Swashbuckle pipeline would normally supply (schema generator, schema
-    ///     repository, the owning document, the action method) is irrelevant to these filters and
-    ///     is left null.
+    ///     This method builds a minimal <see cref="OperationFilterContext" /> with one action parameter
+    ///     bound by <paramref name="binderType" /> (or unbound, if <see langword="null" />), and a
+    ///     matching <see cref="OpenApiOperation" /> with one <see cref="OpenApiParameter" /> of the same
+    ///     name and some existing content. Only the members the filters read are set; the schema
+    ///     generator, repository, document and action method are left null.
     /// </summary>
     private static (OpenApiOperation Operation, OperationFilterContext Context) BuildContext(
         string parameterName,
