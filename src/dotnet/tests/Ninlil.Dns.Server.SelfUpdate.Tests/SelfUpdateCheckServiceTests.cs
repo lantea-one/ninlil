@@ -2,19 +2,20 @@ using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Server.SelfUpdate.Tests.Fakes;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.SelfUpdate.Tests;
 
 /// <summary>
-///     This class verifies <see cref="SelfUpdateCheckService.CheckNowAsync" /> -- the shared
-///     logic behind both this service's own periodic loop and a manual "check now" REST action --
-///     against a fake HTTP transport, covering an unconfigured feed, a real newer/older/equal
-///     version comparison, and a failed check that must preserve the last known-good result.
+///     This class tests <see cref="SelfUpdateCheckService.CheckNowAsync" />, which both the
+///     periodic loop and the manual check use, against a fake HTTP handler. It covers an
+///     unconfigured feed, newer, older and equal versions, malformed feeds, and a failed check
+///     that must keep the last good result.
 /// </summary>
 public class SelfUpdateCheckServiceTests
 {
     /// <summary>
-    ///     This method builds a real <see cref="SelfUpdateCheckService" /> wired to a fake
-    ///     transport and a fixed "currently running" version, ready for a test to drive directly.
+    ///     This method builds a <see cref="SelfUpdateCheckService" /> with a fake HTTP handler and
+    ///     a fixed running version.
     /// </summary>
     private static (
         SelfUpdateCheckService Service,
@@ -150,7 +151,7 @@ public class SelfUpdateCheckServiceTests
         );
         await successService.CheckNowAsync();
 
-        // A second check, sharing the same cache, whose own transport now fails outright.
+        // A second service shares the cache, and its feed returns HTTP 500.
         FakeHttpMessageHandler failingHandler = FakeHttpMessageHandler.ReturningStatus(
             HttpStatusCode.InternalServerError
         );
@@ -163,8 +164,7 @@ public class SelfUpdateCheckServiceTests
         );
         SelfUpdateStatus status = await failingService.CheckNowAsync();
 
-        // The last genuinely known-good result must still be visible through the transient
-        // failure -- only the error and the checked-at timestamp change.
+        // The last good result stays visible; only the error and the check time change.
         Assert.Equal(new Version(3, 0, 0), status.LatestKnownVersion);
         Assert.True(status.UpdateAvailable);
         Assert.Equal("https://example.com/3.0.0", status.ReleaseUrl);

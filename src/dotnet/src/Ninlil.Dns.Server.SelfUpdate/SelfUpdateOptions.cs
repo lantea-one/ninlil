@@ -5,39 +5,23 @@ namespace Ninlil.Dns.Server.SelfUpdate;
 ///     This class binds to the <c>DnsServer:SelfUpdate</c> section of the application's
 ///     configuration and controls whether, how often, and against what feed
 ///     <see cref="SelfUpdateCheckService" /> checks whether a newer release of this server
-///     exists.
+///     exists. <c>SelfUpdateSettingsController</c> edits these settings at runtime.
 ///     <para>
-///         <b>Check-only, deliberately, forever.</b> Automatically checking for a new release is
-///         the same "self-maintaining capability defaults on" behavior
-///         <c>RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate</c> (a sibling settings
-///         class this project's own recursive resolver already uses, out of this project's own
-///         reach at compile time)
-///         already establishes for this project's own homelab deployment target (a box set up
-///         once and left running for years, with nobody around to remember to check manually) --
-///         but automatically *applying* an update to a running DNS server with no human oversight
-///         is a genuine reliability risk, not merely an abuse-vector question: a bad release could
-///         break resolution for every client on the network with nobody watching to notice or roll
-///         it back. So this feature only ever answers "is a newer version available," surfaced as
-///         a real, visible notice (a REST field and an Angular dashboard notification, not a log
-///         line an unattended operator will never read) -- actually applying an update is always a
-///         distinct, explicit action an operator takes themselves, deliberately outside this
-///         class's own scope. See <c>Controllers.SelfUpdateController</c>'s own doc comment for
-///         exactly what "applying" means today (an honest instruction, not a fake button).
+///         <b>Check only.</b> Checking for a release is on by default, like
+///         <c>RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate</c>, because a home or
+///         small-office server often runs for years with nobody checking by hand. Applying an
+///         update automatically is not offered: a bad release could break resolution for every
+///         client with nobody watching to roll it back. The result is shown as a notice in the
+///         REST status and the web UI dashboard, and applying an update is a manual step (see
+///         <c>Controllers.SelfUpdateController</c>).
 ///     </para>
 ///     <para>
-///         <b>No hardcoded release-feed URL, and a genuine reason why not.</b> This project has no
-///         GitHub remote configured today, so hardcoding "check GitHub's own releases API" would point this feature at a project
-///         that doesn't exist there -- a false assumption baked into working code, worse than no
-///         feature at all. Instead, <see cref="ReleaseFeedUrl" /> is a plain, empty-by-default
-///         configuration value: checking itself is still enabled by default (see
-///         <see cref="EnableAutomaticCheck" />), it simply has nothing to check against until an
-///         operator points it at a real feed they control, once this project actually has a real
-///         release process and a real place to publish one. The feed's own expected shape is
-///         deliberately minimal and self-describing rather than tied to any one hosting platform's
-///         own API -- see <see cref="SelfUpdateReleaseFeedDocument" />'s own doc comment for its
-///         exact JSON shape -- so an operator can serve it from anything: a static JSON file next
-///         to their own build output, a tiny script, or a real release-hosting platform's API
-///         translated into this shape by a small adapter, once one exists.
+///         <b>No built-in feed URL.</b> <see cref="ReleaseFeedUrl" /> is empty by default, so
+///         nothing is fetched until an operator sets it, even though
+///         <see cref="EnableAutomaticCheck" /> is on. The feed is a small JSON document tied to
+///         no hosting platform (see <see cref="SelfUpdateReleaseFeedDocument" />), so it can be
+///         a static file, a script's output, or a hosting platform's release API translated by a
+///         small adapter.
 ///     </para>
 /// </summary>
 public sealed class SelfUpdateOptions
@@ -49,35 +33,28 @@ public sealed class SelfUpdateOptions
 
     /// <summary>
     ///     This property controls whether <see cref="SelfUpdateCheckService" /> periodically
-    ///     checks <see cref="ReleaseFeedUrl" /> for a newer release at all. On by default -- the
-    ///     same "pure availability/correctness improvement, no new attack surface" reasoning
-    ///     <c>RecursiveServerOptions.EnableAutomaticTrustAnchorUpdate</c> and
-    ///     <c>RecursiveServerOptions.EnableServeStale</c> already document for
-    ///     themselves: checking for an update, on its own, changes nothing about this server's own
-    ///     behavior or exposed surface -- it only ever produces a notice. An empty
-    ///     <see cref="ReleaseFeedUrl" /> makes every check a safe, immediate, honest no-op (see
-    ///     that property's own doc comment) rather than something an operator must remember to
-    ///     turn on later.
+    ///     checks <see cref="ReleaseFeedUrl" /> for a newer release. It is on by default because a
+    ///     check changes nothing about how the server behaves; it only produces a notice. With an
+    ///     empty <see cref="ReleaseFeedUrl" /> each check records an "unconfigured" status without
+    ///     fetching anything. The manual check in <c>SelfUpdateController</c> runs even when this
+    ///     is off.
     /// </summary>
     public bool EnableAutomaticCheck { get; set; } = true;
 
     /// <summary>
     ///     This property contains the URL <see cref="SelfUpdateCheckService" /> fetches a
-    ///     <see cref="SelfUpdateReleaseFeedDocument" /> JSON document from. Empty by default,
-    ///     meaning "nothing to check against yet" -- see this class's own doc comment for why this
-    ///     project deliberately does not hardcode an assumed release-hosting location. A check
-    ///     against an empty URL is skipped entirely (not attempted and logged as a failure), so
-    ///     leaving this unset is a genuinely inert, quiet default rather than a permanently-failing
-    ///     background loop.
+    ///     <see cref="SelfUpdateReleaseFeedDocument" /> JSON document from. It is empty by
+    ///     default, and an empty URL is not fetched: the check records an "unconfigured" status
+    ///     instead of logging a failure, so leaving it unset is quiet.
     /// </summary>
     public string ReleaseFeedUrl { get; set; } = string.Empty;
 
     /// <summary>
     ///     This property contains how often <see cref="SelfUpdateCheckService" /> re-checks
-    ///     <see cref="ReleaseFeedUrl" /> for a newer release. Defaults to once every 24 hours --
-    ///     frequent enough that an operator sees a real notice within a day of a new release
-    ///     going out, infrequent enough to never meaningfully load whatever this feed turns out to
-    ///     be hosted on.
+    ///     <see cref="ReleaseFeedUrl" /> for a newer release. The default of 24 hours shows a notice
+    ///     within about a day of a release without loading the feed's host. The service wakes every
+    ///     15 minutes to see whether a check is due, so this is effectively rounded up to the next
+    ///     15-minute tick.
     /// </summary>
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(24);
 }

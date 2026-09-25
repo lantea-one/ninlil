@@ -2,14 +2,13 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Server.SelfUpdate.Tests.Fakes;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.SelfUpdate.Tests;
 
 /// <summary>
-///     This class verifies <see cref="SelfUpdateCheckService" />'s own <see cref="BackgroundService" />
-///     lifecycle -- specifically, that starting it runs a real check immediately, rather than only
-///     after its own (deliberately much longer) periodic tick interval first elapses. See that
-///     class's own doc comment for why an immediate first check matters for an operator who just
-///     restarted onto a new build.
+///     This class tests <see cref="SelfUpdateCheckService" /> as a <see cref="BackgroundService" />
+///     with a fake HTTP handler: starting it runs a check at once instead of after the first
+///     15-minute tick, and runs none when automatic checking is off.
 /// </summary>
 public class SelfUpdateCheckServiceHostedLifecycleTests
 {
@@ -33,8 +32,8 @@ public class SelfUpdateCheckServiceHostedLifecycleTests
 
         await service.StartAsync(CancellationToken.None);
 
-        // Poll briefly rather than a single fixed sleep -- the background loop's own first check
-        // runs asynchronously as soon as StartAsync returns, not synchronously within it.
+        // Poll instead of sleeping once: the first check runs on the background loop after
+        // StartAsync returns, not inside it.
         DateTime deadline = DateTime.UtcNow.AddSeconds(5);
         while (!cache.Current.Configured && DateTime.UtcNow < deadline)
             await Task.Delay(25);

@@ -9,7 +9,8 @@ namespace Ninlil.Dns.Server.SelfUpdate.Extension;
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up the
 ///     self-update checker: <see cref="SelfUpdateOptions" />, the shared
 ///     <see cref="ISelfUpdateStatusCache" /> singleton, and <see cref="SelfUpdateCheckService" />
-///     itself as a hosted background service.
+///     as a singleton that also runs as a hosted service, so <c>SelfUpdateController</c> can
+///     call the same instance for a manual check.
 /// </summary>
 public static class ServiceCollectionSelfUpdateExtension
 {
@@ -28,10 +29,8 @@ public static class ServiceCollectionSelfUpdateExtension
             configuration.GetSection(SelfUpdateOptions.SectionName)
         );
 
-        // A dedicated named HttpClient, rather than a bare `new HttpClient()`, so this project's
-        // usual IHttpClientFactory-managed connection pooling/lifetime applies here too, and so a
-        // future need (a timeout override, a custom handler for a test) has a single, obvious
-        // place to attach to.
+        // A named client, so IHttpClientFactory manages connection pooling and lifetime, and a
+        // timeout or custom handler can be attached here.
         instance.AddHttpClient(SelfUpdateCheckService.HttpClientName);
 
         instance.AddSingleton<

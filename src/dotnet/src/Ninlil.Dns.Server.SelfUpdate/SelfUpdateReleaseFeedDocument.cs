@@ -2,25 +2,19 @@
 namespace Ninlil.Dns.Server.SelfUpdate;
 
 /// <summary>
-///     This class represents the plain, self-describing JSON document
-///     <see cref="SelfUpdateCheckService" /> expects to find at an operator-configured
-///     <see cref="SelfUpdateOptions.ReleaseFeedUrl" />. Deliberately not shaped after any one real
-///     hosting platform's own release API (GitHub's, GitLab's, or otherwise) -- see
-///     <see cref="SelfUpdateOptions" />'s own doc comment for why this project cannot assume where
-///     its own releases will eventually be published. An operator (or, eventually, this project's
-///     own release tooling) serves a document shaped exactly like this from wherever they choose;
-///     a small adapter in front of a real hosting platform's own API is this project's own
-///     intended way to bridge the gap, not a hardcoded assumption baked into this class.
+///     This class represents the JSON document <see cref="SelfUpdateCheckService" /> expects at
+///     <see cref="SelfUpdateOptions.ReleaseFeedUrl" />. It follows no hosting platform's release
+///     API (GitHub, GitLab or otherwise), so it can be served from anywhere, with an adapter in
+///     front of a platform API if needed (see <see cref="SelfUpdateOptions" />).
 ///     <para>
-///         Expected JSON shape (every field required, this class's own deserialization is
-///         intentionally strict about the fields it actually reads rather than tolerant of a
-///         completely different shape it would otherwise silently misinterpret):
+///         Expected JSON shape. Only <c>version</c> is required; a missing or unparseable
+///         version fails the check. The other fields are shown as given and may be absent.
 ///         <code>
 ///         {
-///           "version": "1.4.0",
-///           "releaseUrl": "https://example.com/releases/1.4.0",
-///           "publishedAtUtc": "2026-09-01T00:00:00Z",
-///           "notes": "Fixes a real bug in X; adds Y."
+///           "version": "2026.9.24.1",
+///           "releaseUrl": "https://example.com/releases/2026.9.24.1",
+///           "publishedAtUtc": "2026-09-24T00:00:00Z",
+///           "notes": "Fixes a bug in X; adds Y."
 ///         }
 ///         </code>
 ///     </para>
@@ -28,34 +22,32 @@ namespace Ninlil.Dns.Server.SelfUpdate;
 public sealed class SelfUpdateReleaseFeedDocument
 {
     /// <summary>
-    ///     This property contains the latest published version, as a plain, dotted version
-    ///     string (<c>System.Version</c>-parseable, e.g. <c>"1.4.0"</c>) -- deliberately not a
-    ///     full SemVer parser, since this project's own version scheme is exactly this shape (see
-    ///     <see cref="SelfUpdateCheckService" />'s own doc comment on how the *current* running
-    ///     version is determined) and a heavier SemVer dependency would buy nothing this project
-    ///     actually needs yet.
+    ///     This property contains the latest published version as a dotted string that
+    ///     <see cref="System.Version" /> can parse. It is compared with the running assembly
+    ///     version (see <see cref="DefaultCurrentAssemblyVersionProvider" />), which the build
+    ///     pipeline stamps in the numeric <c>yyyy.m.d.increment</c> form, so the feed must use
+    ///     that form (for example <c>"2026.9.24.1"</c>), not the <c>v…R…</c> release name. No
+    ///     SemVer parser is needed.
     /// </summary>
     public string Version { get; set; }
 
     /// <summary>
-    ///     This property contains a human-facing URL an operator can visit to read about, and
-    ///     download, this release -- surfaced verbatim in <see cref="SelfUpdateStatus" /> and in
-    ///     the "here's what to run" instructions <c>Controllers.SelfUpdateController</c> returns,
-    ///     never followed or fetched automatically by this server itself.
+    ///     This property contains a URL where an operator can read about and download the release.
+    ///     It is shown as given in <see cref="SelfUpdateStatus" /> and in the instructions
+    ///     <c>Controllers.SelfUpdateController</c> returns; the server never fetches it.
     /// </summary>
     public string ReleaseUrl { get; set; }
 
     /// <summary>
-    ///     This property contains when this release was published, as reported by the feed
-    ///     itself -- purely informational, never compared against to decide whether an update is
-    ///     available (only <see cref="Version" /> decides that).
+    ///     This property contains when the release was published, as reported by the feed. Only
+    ///     <see cref="Version" /> decides whether an update is available; this value is not
+    ///     copied into <see cref="SelfUpdateStatus" />.
     /// </summary>
     public DateTimeOffset? PublishedAtUtc { get; set; }
 
     /// <summary>
-    ///     This property contains free-text release notes, surfaced verbatim in
-    ///     <see cref="SelfUpdateStatus" /> so an operator can see what changed without leaving
-    ///     this server's own admin console.
+    ///     This property contains free-text release notes, shown as given in
+    ///     <see cref="SelfUpdateStatus" /> so an operator can see what changed from the web UI.
     /// </summary>
     public string Notes { get; set; }
 }

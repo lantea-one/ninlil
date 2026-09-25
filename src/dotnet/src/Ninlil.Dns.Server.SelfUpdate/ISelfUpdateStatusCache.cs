@@ -2,10 +2,10 @@
 namespace Ninlil.Dns.Server.SelfUpdate;
 
 /// <summary>
-///     This interface exposes the one, shared, in-memory <see cref="SelfUpdateStatus" /> snapshot
-///     both <see cref="SelfUpdateCheckService" />'s own background loop and a manual "check now"
-///     REST action write into, and <c>Controllers.SelfUpdateController</c> reads from -- so both
-///     ways of triggering a check are observed identically by every reader.
+///     This interface holds the shared, in-memory <see cref="SelfUpdateStatus" />.
+///     <see cref="SelfUpdateCheckService" /> writes to it from both its periodic loop and the
+///     manual check, and <c>Controllers.SelfUpdateController</c> reads it, so readers see the
+///     same result however the check was started.
 /// </summary>
 public interface ISelfUpdateStatusCache
 {

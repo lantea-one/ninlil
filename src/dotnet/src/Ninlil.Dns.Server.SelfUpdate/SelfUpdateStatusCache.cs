@@ -2,26 +2,25 @@
 namespace Ninlil.Dns.Server.SelfUpdate;
 
 /// <summary>
-///     This class implements <see cref="ISelfUpdateStatusCache" /> as a simple, thread-safe,
-///     in-process singleton -- a plain <see langword="lock" />-guarded field is sufficient here,
-///     since a write only ever happens once per check (never more than a handful of times an
-///     hour) and a read is a cheap, uncontended snapshot copy.
+///     This class implements <see cref="ISelfUpdateStatusCache" /> as a thread-safe singleton.
+///     A lock around one field is enough: writes happen once per check and reads are rare.
 /// </summary>
 /// <param name="currentVersionProvider">
-///     The provider this cache asks for the running process's own current version, to seed
-///     <see cref="SelfUpdateStatus.Empty" /> before any real check has ever completed.
+///     The provider this cache asks for the running version, to build
+///     <see cref="SelfUpdateStatus.Empty" /> before any check has completed.
 /// </param>
 public sealed class SelfUpdateStatusCache(ICurrentAssemblyVersionProvider currentVersionProvider)
     : ISelfUpdateStatusCache
 {
     /// <summary>
-    ///     This field guards <see cref="_current" /> against a concurrent read/write race between
-    ///     the background loop and a manual "check now" request arriving at the same moment.
+    ///     This field guards <see cref="_current" />, which the periodic loop and a manual check
+    ///     can write at the same time.
     /// </summary>
     private readonly Lock _gate = new();
 
     /// <summary>
-    ///     This field contains the actual, currently recorded status snapshot.
+    ///     This field contains the recorded status, or <see langword="null" /> until the first
+    ///     read or write.
     /// </summary>
     private SelfUpdateStatus _current;
 

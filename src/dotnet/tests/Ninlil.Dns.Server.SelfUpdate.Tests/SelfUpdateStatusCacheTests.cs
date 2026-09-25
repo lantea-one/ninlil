@@ -1,11 +1,12 @@
 using Ninlil.Dns.Server.SelfUpdate.Tests.Fakes;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.SelfUpdate.Tests;
 
 /// <summary>
-///     This class verifies <see cref="SelfUpdateStatusCache" />: it seeds an empty snapshot from
-///     the current version on first read, and a later <see cref="ISelfUpdateStatusCache.Update" />
-///     genuinely replaces what a later read returns.
+///     This class tests <see cref="SelfUpdateStatusCache" />: the first read returns an empty
+///     status built from the current version, and <see cref="ISelfUpdateStatusCache.Update" />
+///     replaces what later reads return.
 /// </summary>
 public class SelfUpdateStatusCacheTests
 {
