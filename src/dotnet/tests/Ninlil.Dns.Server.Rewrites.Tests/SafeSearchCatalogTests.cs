@@ -5,14 +5,11 @@ using Ninlil.Dns.Server.Rewrites.SafeSearch;
 namespace Ninlil.Dns.Server.Rewrites.Tests;
 
 /// <summary>
-///     This class covers <see cref="SafeSearchCatalog" />'s own structural invariants -- every
-///     entry must have a stable, non-blank key, at least one hostname mapping, and every mapping's
-///     own target must actually classify as CNAME (never an IP literal, which
-///     <c>DnsRewriteEngine</c> would answer with a completely different record type than a real
-///     safe-search CNAME target ever needs) via the real
-///     <see cref="DnsRewriteTargetClassifier" /> -- the same classifier
-///     <c>Ninlil.Web.Controllers.SafeSearchController</c> and <c>DnsRewriteEngine</c> itself
-///     both use.
+///     This class checks the shape of the static <see cref="SafeSearchCatalog" /> data: unique keys,
+///     filled-in names and documentation links, at least one mapping per entry, no duplicate source
+///     domains, and every target classifying as a CNAME through
+///     <see cref="DnsRewriteTargetClassifier" /> (an IP target would be answered as A/AAAA). It
+///     also covers case-insensitive <see cref="SafeSearchCatalog.FindByKey" />.
 /// </summary>
 public class SafeSearchCatalogTests
 {

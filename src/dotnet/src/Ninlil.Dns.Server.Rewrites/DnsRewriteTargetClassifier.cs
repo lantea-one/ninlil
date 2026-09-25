@@ -7,15 +7,11 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Dns.Server.Rewrites;
 
 /// <summary>
-///     This class classifies a <c>DnsRewriteEntity.Target</c> string into the
-///     <see cref="DnsRewriteTargetKindEnum" /> it answers as, the single, real place this
-///     classification logic exists -- <c>DnsRewritesController</c> (validation at write time,
-///     and computing the read-only classification for a REST response) and
-///     <see cref="DnsRewriteEngine" /> (answer construction at query time) both call this
-///     directly, mirroring <c>FilterListEntriesController</c>'s own precedent of calling
-///     <c>DnsFilterEngine.CompileOrNull</c>/<c>DnsFilterEngine.BuildWildcardRegexPattern</c>
-///     directly rather than duplicating the logic or inventing a second interface just for
-///     validation.
+///     This class decides which <see cref="DnsRewriteTargetKindEnum" /> a
+///     <c>DnsRewriteEntity.Target</c> string answers as: an IP address is A or AAAA, and a domain
+///     name is a CNAME. It is the one place this rule lives. <c>DnsRewritesController</c> and
+///     <c>SafeSearchController</c> call it to validate targets and to report their kind, and
+///     <see cref="DnsRewriteEngine" /> calls it to build answers.
 /// </summary>
 public static class DnsRewriteTargetClassifier
 {
@@ -41,10 +37,7 @@ public static class DnsRewriteTargetClassifier
             return false;
         }
 
-        // What/why: an IP-literal target is checked first, since a well-formed IPv4/IPv6 address
-        // is never also a well-formed domain name -- how: the family the literal parsed as
-        // decides A vs. AAAA directly, no separate domain-name parse is attempted for this
-        // target at all once this branch succeeds.
+        // An IP literal is checked first; its address family decides A or AAAA.
         if (IPAddress.TryParse(target, out IPAddress address))
         {
             kind =
@@ -54,11 +47,9 @@ public static class DnsRewriteTargetClassifier
             return true;
         }
 
-        // What/why/how: anything that isn't an IP literal is classified as a CNAME target only if
-        // it is itself a structurally valid domain name -- a target that is neither is rejected
-        // outright here, so DnsRewriteEngine never has to handle an unclassifiable value at query
-        // time (its own defensive fallback exists only for a row some non-REST write path
-        // inserted without this validation).
+        // Anything else must be a valid domain name to be a CNAME target. Rejecting the rest
+        // here means only rows written without this validation can reach DnsRewriteEngine
+        // unclassifiable.
         if (!DnsName.TryParse(target, out _, out string nameError))
         {
             error =

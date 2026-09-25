@@ -5,6 +5,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Rewrites.Tests;
 
+/// <summary>
+///     This class is an in-memory <see cref="IDnsRewriteRepository" /> that
+///     <see cref="DnsRewriteEngineTests" /> fills directly through <see cref="Items" />.
+/// </summary>
 public sealed class InMemoryDnsRewriteRepository : IDnsRewriteRepository
 {
     public readonly List<DnsRewriteEntity> Items = [];

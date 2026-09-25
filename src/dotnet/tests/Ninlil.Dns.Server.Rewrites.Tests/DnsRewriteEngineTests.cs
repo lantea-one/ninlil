@@ -11,6 +11,13 @@ using Ninlil.Dns.Server.Rewrites.Tests.Fakes;
 // Define our namespace.
 namespace Ninlil.Dns.Server.Rewrites.Tests;
 
+/// <summary>
+///     This class covers <see cref="DnsRewriteEngine" />: exact and wildcard matching, which
+///     record types each target kind answers, disabled rows, the wildcard match timeout, the live
+///     <see cref="DnsRewriteOptions.Enable" /> switch, and client and group scoping. Each test
+///     builds the engine over in-memory repositories in a small service provider, with a fixed
+///     options monitor and, for scoping, <see cref="FakeClientIdentityResolver" />.
+/// </summary>
 public class DnsRewriteEngineTests
 {
     private sealed class Fixture
@@ -21,15 +28,12 @@ public class DnsRewriteEngineTests
         public readonly DnsRewriteEngine Engine;
 
         /// <param name="clientIdentityResolver">
-        ///     The optional resolver to construct the engine with -- <see langword="null" /> (the
-        ///     default) reproduces this engine's own pre-client-scoping construction exactly, the
-        ///     shape every pre-existing test in this file still uses.
+        ///     The optional resolver to build the engine with. <see langword="null" /> (the default)
+        ///     leaves client scoping off.
         /// </param>
         /// <param name="registerClientRepository">
-        ///     Whether <see cref="Clients" /> is registered in the same service provider the
-        ///     engine's own scope factory resolves against -- <see langword="false" /> reproduces
-        ///     the "resolver present, but no client repository wired up" absent-infrastructure case
-        ///     a dedicated regression test below covers.
+        ///     Whether <see cref="Clients" /> is registered in the engine's service provider.
+        ///     <see langword="false" /> sets up the case of a resolver without a client repository.
         /// </param>
         public Fixture(
             IClientIdentityResolver clientIdentityResolver = null,
@@ -97,8 +101,8 @@ public class DnsRewriteEngineTests
         }
 
         /// <summary>
-        ///     This method registers a known, non-disabled client row for a given identifier/
-        ///     protocol version pair, optionally naming its own client group.
+        ///     This method registers a client for an IPv4 client identifier, optionally in a client
+        ///     group or disabled.
         /// </summary>
         public DnsClientEntity AddClient(
             string clientIdentifier,
@@ -318,11 +322,8 @@ public class DnsRewriteEngineTests
     public async Task PathologicalWildcardMatch_TimesOutRatherThanHangingTheQuery()
     {
         Fixture fixture = new();
-        // A wildcard glob with many '*' segments translates to a regex with many ".*" segments,
-        // which can exhibit catastrophic backtracking against a long, non-matching input --
-        // the same real regression shape DnsFilterEngineTests already covers for its own
-        // timeout wiring, reproduced here independently since this engine compiles its own
-        // regex rather than sharing DnsFilterEngine's.
+        // Many '*' segments become many ".*" segments, which backtrack badly on a long
+        // non-matching name. DnsFilterEngineTests has the same test for the filter's regexes.
         fixture.Add(
             new string('*', 1) + string.Concat(Enumerable.Repeat("a*", 30)) + "z",
             "203.0.113.9"
@@ -344,15 +345,9 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves a structural fix: <see cref="DnsRewriteEngine" /> is
-    ///     now constructed and consulted regardless of <see cref="DnsRewriteOptions.Enable" />'s
-    ///     own value at construction time, with its own live check reading
-    ///     <c>IOptionsMonitor</c>'s <c>CurrentValue</c> fresh on every call -- so the *same,
-    ///     already-constructed* engine instance genuinely starts answering once
-    ///     <see cref="DnsRewriteOptions.Enable" /> flips to <see langword="true" /> on the shared
-    ///     options object it was built against, with no restart and no new instance, mirroring
-    ///     <c>RecursiveOptionsHotReloadTests</c>'s own "same instance, before/after" proof shape
-    ///     for <c>RecursiveServerOptions</c>.
+    ///     This test checks that an engine built while <see cref="DnsRewriteOptions.Enable" /> is
+    ///     off starts answering, without being rebuilt, once the flag turns on, because it reads
+    ///     <c>CurrentValue</c> on every call.
     /// </summary>
     [Fact]
     public async Task TryBuildResponseAsync_WhenEnableFlipsLiveOnTheSharedOptionsObject_TheSameEngineInstanceStartsAnswering()
@@ -361,9 +356,7 @@ public class DnsRewriteEngineTests
         fixture.Options.Enable = false;
         fixture.Add("host.example.com", "203.0.113.5");
 
-        // Before: a real, matching rewrite exists, but the engine is disabled, so the early-exit
-        // gate wins -- this is the "structural" half of the proof, distinguishing "no match" from
-        // "declined because disabled."
+        // A matching rewrite exists, so a null here means "disabled", not "no match".
         DnsMessage before = await fixture.Engine.TryBuildResponseAsync(
             BuildRequest("host.example.com", DnsResourceRecordTypeEnum.A)
         );
@@ -371,8 +364,7 @@ public class DnsRewriteEngineTests
 
         fixture.Options.Enable = true;
 
-        // After: the identical engine instance, with no reconstruction, now genuinely matches and
-        // synthesizes the same rewrite's own answer.
+        // The same instance now answers.
         DnsMessage after = await fixture.Engine.TryBuildResponseAsync(
             BuildRequest("host.example.com", DnsResourceRecordTypeEnum.A)
         );
@@ -386,10 +378,8 @@ public class DnsRewriteEngineTests
     private static readonly IPAddress UnknownAddress = IPAddress.Parse("192.0.2.99");
 
     /// <summary>
-    ///     This test proves the core backward-compatibility property client scoping must never
-    ///     violate: an ordinary, unscoped rewrite still applies to every query exactly as before,
-    ///     even when a real <see cref="IClientIdentityResolver" /> is wired up and genuinely
-    ///     resolves the querying address to a known client.
+    ///     This test checks that a global rewrite applies to every query, both a resolved client's
+    ///     and an unknown address's, when an <see cref="IClientIdentityResolver" /> is present.
     /// </summary>
     [Fact]
     public async Task UnscopedRewrite_StillAppliesToEveryQuery_EvenWithClientIdentityInfrastructurePresent()
@@ -418,10 +408,8 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves the same backward-compatibility property holds with no client-identity
-    ///     infrastructure wired up at all (the default <see cref="Fixture" /> shape every
-    ///     pre-existing test in this file already uses) -- an explicit, dedicated regression rather
-    ///     than only ever being implied by every other test never passing a <c>remoteAddress</c>.
+    ///     This test checks that a global rewrite applies when no client-identity resolver is
+    ///     wired up, even though a <c>remoteAddress</c> is passed.
     /// </summary>
     [Fact]
     public async Task UnscopedRewrite_StillApplies_WithNoClientIdentityResolverAtAll()
@@ -439,10 +427,8 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves the same backward-compatibility property holds when a resolver is
-    ///     wired up but the client repository itself is not registered in dependency injection --
-    ///     the second absent-infrastructure shape <c>DnsFilterEngine</c>'s own equivalent tests
-    ///     already cover.
+    ///     This test checks that a global rewrite applies when a resolver is present but no client
+    ///     repository is registered.
     /// </summary>
     [Fact]
     public async Task UnscopedRewrite_StillApplies_WhenResolverPresentButClientRepositoryAbsent()
@@ -464,8 +450,8 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves a client-scoped rewrite answers only its own client's queries -- an
-    ///     unrelated, unresolved address gets no answer for the exact same question.
+    ///     This test checks that a client-scoped rewrite answers only that client; an unresolved
+    ///     address gets no answer for the same question.
     /// </summary>
     [Fact]
     public async Task ClientScopedRewrite_AppliesOnlyToItsOwnClient()
@@ -497,8 +483,7 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves a group-scoped rewrite applies to every member of that group, not just
-    ///     one specific client.
+    ///     This test checks that a group-scoped rewrite applies to every member of the group.
     /// </summary>
     [Fact]
     public async Task GroupScopedRewrite_AppliesToEveryMemberOfTheGroup()
@@ -537,9 +522,8 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves a disabled client contributes neither its own nor its group's scoped
-    ///     rewrites -- mirroring <c>DnsFilterEngine</c>'s own identical "a disabled client
-    ///     contributes nothing" rule.
+    ///     This test checks that a disabled client does not match a rewrite scoped to it (a
+    ///     disabled client resolves to nothing, as in <c>DnsFilterEngine</c>).
     /// </summary>
     [Fact]
     public async Task DisabledClient_NeverMatchesAScopedRewrite()
@@ -561,11 +545,9 @@ public class DnsRewriteEngineTests
     }
 
     /// <summary>
-    ///     This test proves the scope-specificity tie-break <c>DnsRewriteEngine.FindBestMatch</c>'s
-    ///     own doc comment describes: when a global rewrite and a client-scoped rewrite both
-    ///     exactly match the same query type for the resolved client, the client-scoped one wins
-    ///     for that client -- while an unrelated client, which the scoped row never applies to,
-    ///     still gets the global answer, exactly as it always would have.
+    ///     This test checks the audience tie-break in <c>DnsRewriteEngine.FindBestMatch</c>: when a
+    ///     global and a client-scoped rewrite both match exactly, the client-scoped one wins for
+    ///     that client, and an unknown address gets the global answer.
     /// </summary>
     [Fact]
     public async Task ClientScopedRewrite_TakesPrecedenceOverAGlobalRewrite_ForItsOwnClientOnly()

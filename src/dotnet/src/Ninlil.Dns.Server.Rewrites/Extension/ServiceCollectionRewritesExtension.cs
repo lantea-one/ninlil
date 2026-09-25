@@ -7,25 +7,20 @@ using Ninlil.Dns.Server.Rewrites;
 namespace Ninlil.Dns.Server.Rewrites.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's Phase 5h-3 DNS rewrites.
+///     This class provides our <see cref="IServiceCollection" /> extension for wiring up DNS
+///     rewrites.
 /// </summary>
 public static class ServiceCollectionRewritesExtension
 {
     /// <summary>
     ///     This method binds <see cref="DnsRewriteOptions" /> and registers
-    ///     <see cref="IDnsRewriteEngine" /> unconditionally, regardless of
-    ///     <see cref="DnsRewriteOptions.Enable" />'s own value at process startup -- a
-    ///     <c>RewriteSettingsController.Patch</c> write toggling rewrites on at runtime needs a
-    ///     real, already-constructed <see cref="IDnsRewriteEngine" /> for
-    ///     <c>DnsQueryProcessingPipeline</c> to actually consult; registering it only when already
-    ///     enabled at startup (this method's own original shape) would mean a fresh install --
-    ///     which starts with rewrites off by design -- could never turn them on live at all, the
-    ///     same structural gap Phase 5o-3 found and fixed for DNS-over-HTTPS's own route mapping.
-    ///     <see cref="DnsRewriteEngine" /> itself now carries the live
-    ///     <see cref="DnsRewriteOptions.Enable" /> check internally (via
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />), so a disabled
-    ///     engine costs one field read per check, never a database round trip.
+    ///     <see cref="IDnsRewriteEngine" />. The engine is registered even when
+    ///     <see cref="DnsRewriteOptions.Enable" /> is off at startup, so that
+    ///     <c>RewriteSettingsController.Patch</c> can turn rewrites on without a restart (a fresh
+    ///     install starts with them off). <see cref="DnsRewriteEngine" /> checks
+    ///     <see cref="DnsRewriteOptions.Enable" /> live through
+    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so a disabled
+    ///     engine costs one field read per query and no database access.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read rewrite settings from.</param>
@@ -39,12 +34,9 @@ public static class ServiceCollectionRewritesExtension
             configuration.GetSection(DnsRewriteOptions.SectionName)
         );
 
-        // Singleton, not scoped: DnsQueryProcessingPipeline (itself a singleton) takes
-        // IDnsRewriteEngine as a direct constructor dependency, so a scoped registration here
-        // would be an invalid captive dependency -- the same reasoning
-        // ServiceCollectionFilteringExtension already documents for IDnsFilterEngine.
-        // DnsRewriteEngine itself never holds a repository directly -- it opens its own
-        // short-lived scope per check via the injected IServiceScopeFactory.
+        // Singleton, because the singleton DnsQueryProcessingPipeline takes it as a constructor
+        // dependency. The engine reaches the scoped repository by opening a short-lived scope
+        // per query through IServiceScopeFactory.
         instance.AddSingleton<IDnsRewriteEngine, DnsRewriteEngine>();
 
         // We're done, return the IServiceCollection instance.

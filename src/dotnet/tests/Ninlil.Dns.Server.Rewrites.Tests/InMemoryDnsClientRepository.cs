@@ -7,20 +7,18 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Rewrites.Tests;
 
 /// <summary>
-///     This class is a minimal, in-memory <see cref="IDnsClientRepository" /> stand-in, mirroring
-///     <c>Ninlil.Dns.Server.ClientSchedule.Tests.InMemoryDnsClientRepository</c>'s own identical
-///     fake -- only the handful of members <see cref="DnsRewriteEngine" />'s own client-resolution
-///     path actually calls are meaningfully implemented.
+///     This class is a minimal in-memory <see cref="IDnsClientRepository" /> for the client-scoping
+///     tests. Only the members <see cref="DnsRewriteEngine" /> calls to resolve a client are
+///     implemented meaningfully.
 /// </summary>
 public sealed class InMemoryDnsClientRepository : IDnsClientRepository
 {
     public readonly List<DnsClientEntity> Items = [];
 
     /// <summary>
-    ///     This field is this fake's own minimal stand-in for the real
-    ///     <c>DnsClientAddressEntity</c> table <see cref="GetByClientIdentifierAsync" /> joins
-    ///     through in production -- a test populates it (see <c>Fixture.AddClient</c>) alongside
-    ///     adding the owning <see cref="DnsClientEntity" /> to <see cref="Items" />.
+    ///     This field stands in for the <c>DnsClientAddressEntity</c> table that
+    ///     <see cref="GetByClientIdentifierAsync" /> joins through in production. A test fills it
+    ///     (see <c>Fixture.AddClient</c>) along with adding the client to <see cref="Items" />.
     /// </summary>
     public readonly List<(
         string ClientIdentifier,
@@ -68,8 +66,8 @@ public sealed class InMemoryDnsClientRepository : IDnsClientRepository
         );
     }
 
-    // This fake holds no address rows, so only the client-level filters are honored here; the
-    // presence filters and last-seen ordering are covered against the real repositories instead.
+    // Only the client-level filters are honored here; presence filters and last-seen ordering
+    // are covered by the repository tests.
     public Task<IReadOnlyList<DnsClientEntity>> SearchAsync(
         DnsClientSearchCriteria criteria,
         int skip,
