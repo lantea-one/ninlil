@@ -5,10 +5,10 @@ using System.Text;
 namespace Ninlil.Dns.Identity.Token;
 
 /// <summary>
-///     This class hashes the secret half of a bearer credential -- a refresh token or an API
-///     token -- the same way a password is hashed: the raw value is shown to its owner exactly
-///     once, at the moment it is issued, and only its hash is ever stored. If the database were
-///     ever exposed, nobody could reconstruct a working token from what is stored there.
+///     This class hashes a bearer credential (a refresh token or an API token). The raw value is
+///     shown to its owner once, when issued, and only the hash is stored, so a leaked database
+///     does not yield working tokens. A plain, unsalted SHA-256 is enough because the tokens are
+///     long random values, and it keeps the hash usable as a lookup key.
 /// </summary>
 public static class TokenHasher
 {

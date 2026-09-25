@@ -10,48 +10,34 @@ using Ninlil.Dns.Identity.Options;
 namespace Ninlil.Dns.Identity.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's admin-login brute-force rate limiter, via ASP.NET Core's own built-in
-///     <see cref="Microsoft.AspNetCore.RateLimiting" /> middleware -- scoped specifically to the
-///     sign-in endpoints (see <see cref="AuthenticationEndpointPolicyName" />), never the whole
-///     API surface, and genuinely distinct from <c>Server.RateLimiting</c>'s own DNS-query
-///     limiter (see <see cref="AdminLoginRateLimitOptions" />'s own doc comment for the full
-///     "fails closed, not open" reasoning).
+///     This class provides our <see cref="IServiceCollection" /> extension for the admin sign-in
+///     brute-force limiter, built on the ASP.NET Core <see cref="Microsoft.AspNetCore.RateLimiting" />
+///     middleware. It applies only to the sign-in endpoints (see
+///     <see cref="AuthenticationEndpointPolicyName" />) and is separate from the DNS query limiter
+///     in <c>Server.RateLimiting</c>; <see cref="AdminLoginRateLimitOptions" /> explains why it
+///     fails closed.
 /// </summary>
 public static class ServiceCollectionAdminLoginRateLimitingExtension
 {
     /// <summary>
-    ///     This constant contains the rate limiting policy name
-    ///     <c>Web.Controllers.AuthController.Login</c> and
-    ///     <c>Web.Controllers.AuthController.TwoFactorLogin</c> both apply via their own
-    ///     <c>[EnableRateLimiting]</c> attribute -- no other endpoint in this project ever
-    ///     references this policy, so this limiter's own cost is paid only by the two endpoints it
-    ///     actually protects.
+    ///     This constant contains the policy name that <c>Web.Controllers.AuthController.Login</c> and
+    ///     <c>Web.Controllers.AuthController.TwoFactorLogin</c> apply with <c>[EnableRateLimiting]</c>.
+    ///     No other endpoint uses it.
     /// </summary>
     public const string AuthenticationEndpointPolicyName = "admin-login";
 
     /// <summary>
-    ///     This method registers <see cref="AdminLoginRateLimitOptions" /> and the real
-    ///     <see cref="AuthenticationEndpointPolicyName" /> rate limiting policy -- a fixed-window
-    ///     limiter partitioned per connecting client IP address (see
-    ///     <see cref="AdminLoginRateLimitOptions" />'s own doc comment for why IP, never the
-    ///     submitted username), with <see cref="FixedWindowRateLimiterOptions.QueueLimit" /> fixed
-    ///     at zero -- a request past the limit is rejected immediately with
-    ///     <c>429 Too Many Requests</c>, never queued and delayed, since queueing would soften
-    ///     this limiter's own deliberate fail-closed posture into something closer to the DNS-side
-    ///     limiter's fail-open one.
+    ///     This method registers <see cref="AdminLoginRateLimitOptions" /> and the
+    ///     <see cref="AuthenticationEndpointPolicyName" /> policy: a fixed-window limiter partitioned
+    ///     by client IP address (see <see cref="AdminLoginRateLimitOptions" /> for why not by user
+    ///     name), with <see cref="FixedWindowRateLimiterOptions.QueueLimit" /> zero, so a request over
+    ///     the limit gets <c>429 Too Many Requests</c> at once rather than waiting in a queue.
     ///     <para>
-    ///         <b>The named policy is always registered, even when <see cref="AdminLoginRateLimitOptions.Enable" />
-    ///         is <see langword="false" />.</b> <c>Microsoft.AspNetCore.RateLimiting</c>'s own
-    ///         middleware throws at request time if an endpoint's
-    ///         <c>[EnableRateLimiting(name)]</c> names a policy that was never registered at all --
-    ///         found only by tracing through what actually happens to
-    ///         <c>Web.Controllers.AuthController.Login</c>/<c>TwoFactorLogin</c> when this feature
-    ///         is turned off, not by assumption. So a disabled configuration still registers this
-    ///         same policy name, just backed by <see cref="RateLimitPartition.GetNoLimiter{TKey}" />
-    ///         -- a real partition that never actually limits anything -- rather than skipping
-    ///         registration outright; the two protected endpoints keep working identically to
-    ///         every other endpoint in this project either way.
+    ///         <b>The policy is registered even when <see cref="AdminLoginRateLimitOptions.Enable" />
+    ///         is <see langword="false" />.</b> The middleware throws at request time if
+    ///         <c>[EnableRateLimiting(name)]</c> names an unregistered policy, so a disabled limiter
+    ///         registers the same name backed by <see cref="RateLimitPartition.GetNoLimiter{TKey}" />,
+    ///         a partition that never limits.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
@@ -74,23 +60,16 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
 
         instance.AddRateLimiter(rateLimiterOptions =>
         {
-            // The default status code for a rejected request is already 429, matching this
-            // limiter's own fail-closed intent -- set explicitly regardless, so a future change
-            // to the library's own default can never silently soften this endpoint's own
-            // response.
+            // Set explicitly so a change in the library default cannot alter the response.
             rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
             rateLimiterOptions.AddPolicy(
                 AuthenticationEndpointPolicyName,
                 httpContext =>
                 {
-                    // Partitioned by the connecting client's own remote IP address -- never by
-                    // the submitted username -- so a remote attacker can never weaponize this
-                    // limiter to lock a specific, known administrator account out from a
-                    // different address. A request whose connection somehow carries no remote
-                    // address at all shares one fallback partition, exactly as
-                    // Web.Controllers.AuthController's own refresh-token audit trail already
-                    // falls back to "unknown" for the same missing-address case.
+                    // Partitioned by remote IP address, never by user name, so an attacker cannot lock
+                    // a known administrator out. Connections without a remote address share one
+                    // "unknown" partition.
                     string partitionKey =
                         httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
@@ -110,7 +89,6 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
             );
         });
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

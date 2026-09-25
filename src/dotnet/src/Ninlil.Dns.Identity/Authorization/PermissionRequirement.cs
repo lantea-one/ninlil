@@ -4,8 +4,9 @@ using Microsoft.AspNetCore.Authorization;
 namespace Ninlil.Dns.Identity.Authorization;
 
 /// <summary>
-///     This class describes a single permission an authorization policy requires the current
-///     caller to hold -- for example, <c>zones:write</c>.
+///     This record describes one permission an authorization policy requires the caller to hold,
+///     such as <c>zones:write</c>. <see cref="PermissionPolicyProvider" /> creates it and
+///     <see cref="PermissionAuthorizationHandler" /> checks it.
 /// </summary>
 /// <param name="Permission">The permission that must be present as a claim.</param>
 public record PermissionRequirement(string Permission) : IAuthorizationRequirement;

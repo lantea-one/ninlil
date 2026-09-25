@@ -10,27 +10,20 @@ using Ninlil.Dns.Identity.Options;
 namespace Ninlil.Dns.Identity.Tests;
 
 /// <summary>
-///     This class proves, against real listening sockets rather than a mock, that
-///     <see cref="SmtpEmailSender" /> genuinely reads <see cref="EmailSenderOptions" /> fresh on
-///     every <see cref="SmtpEmailSender.SendAsync" /> call, via <see cref="IOptionsMonitor{TOptions}" />
-///     rather than the snapshotted <see cref="IOptions{TOptions}" /> it used before this class's own
-///     conversion -- the same real functional gap this project's other hot-reload fixes each already
-///     found and fixed for their own options class (a config write that would never have been
-///     observed by an already-constructed instance). This is checked here directly against
-///     <see cref="SmtpEmailSender" /> itself, since <c>SmtpSettingsControllerTests</c> (in
-///     <c>Ninlil.Web.Tests</c>) only proves the REST/configuration-file side of the same
-///     fix.
+///     This class tests that <see cref="SmtpEmailSender" /> reads <see cref="EmailSenderOptions" />
+///     through <see cref="IOptionsMonitor{TOptions}" /> on every <see cref="SmtpEmailSender.SendAsync" />
+///     call, so one instance follows a configuration change. It uses two listening loopback TCP
+///     endpoints and a reload-on-change JSON file, not mocks. <c>SmtpSettingsControllerTests</c>
+///     in <c>Ninlil.Web.Tests</c> covers the REST and configuration-file side.
 /// </summary>
 public class SmtpEmailSenderHotReloadTests
 {
     [Fact]
     public async Task SendAsync_OnTheSameConstructedInstance_ConnectsToWhicheverHostAndPortIsCurrentlyConfigured()
     {
-        // Two independent, real, listening TCP endpoints -- each accepts a connection, records
-        // that it did, then immediately closes it without ever sending a real SMTP greeting, so
-        // MailKit's own handshake fails fast on end-of-stream instead of hanging on a read
-        // timeout. This is genuinely proving which physical endpoint a given SendAsync call
-        // reaches, not merely that an options value changed in isolation.
+        // Two listening TCP endpoints that accept, count and close each connection without an
+        // SMTP greeting, so MailKit fails fast instead of waiting for a timeout. The counts show
+        // which endpoint each SendAsync call reached.
         await using FakeTcpEndpoint endpointA = FakeTcpEndpoint.Start();
         await using FakeTcpEndpoint endpointB = FakeTcpEndpoint.Start();
 
@@ -43,9 +36,8 @@ public class SmtpEmailSenderHotReloadTests
         {
             await WriteEmailSectionAsync(path, endpointA.Port);
 
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file provider, the kind WebApplication.CreateBuilder() uses
+            // for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -60,10 +52,8 @@ public class SmtpEmailSenderHotReloadTests
                 IOptionsMonitor<EmailSenderOptions>
             >();
 
-            // The same SmtpEmailSender instance, constructed once, is reused for both sends below
-            // -- proving any observed difference in which endpoint receives a connection comes
-            // from a live configuration change reaching an already-constructed instance, not from
-            // a fresh instance re-reading options at its own construction time.
+            // One SmtpEmailSender instance is used for both sends, so a change of endpoint can only
+            // come from the configuration change reaching that instance.
             SmtpEmailSender sender = new(monitor);
 
             await SendAndExpectFailureAsync(sender);
@@ -75,9 +65,8 @@ public class SmtpEmailSenderHotReloadTests
 
             await WriteEmailSectionAsync(path, endpointB.Port);
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
+            // The JSON provider debounces file changes by a few hundred milliseconds, so wait for
+            // the reload instead of a fixed delay.
             Task reloadCompleted = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
@@ -96,16 +85,15 @@ public class SmtpEmailSenderHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }
 
     /// <summary>
-    ///     This method calls <see cref="SmtpEmailSender.SendAsync" />, bounded by a real timeout
-    ///     so a genuine hang (rather than the expected fast connection failure) fails the test
-    ///     loudly instead of blocking the whole run, and asserts it fails -- neither fake endpoint
-    ///     ever completes a real SMTP handshake.
+    ///     This method calls <see cref="SmtpEmailSender.SendAsync" /> with a timeout, so a hang fails
+    ///     the test instead of blocking the run, and asserts that the call fails, since neither
+    ///     endpoint completes an SMTP handshake.
     /// </summary>
     private static async Task SendAndExpectFailureAsync(SmtpEmailSender sender)
     {
@@ -138,9 +126,8 @@ public class SmtpEmailSenderHotReloadTests
         );
 
     /// <summary>
-    ///     This class is a minimal, real, listening TCP endpoint standing in for an SMTP server
-    ///     that never actually speaks SMTP -- it exists solely so a test can observe, by way of a
-    ///     real connection count, which physical host/port a connecting client actually reached.
+    ///     This class is a listening TCP endpoint that stands in for an SMTP server but never speaks
+    ///     SMTP. Its connection count shows which host and port a client reached.
     /// </summary>
     private sealed class FakeTcpEndpoint : IAsyncDisposable
     {
@@ -150,7 +137,7 @@ public class SmtpEmailSenderHotReloadTests
         private int _connectionCount;
 
         /// <summary>
-        ///     This property contains the loopback port this endpoint is actually listening on.
+        ///     This property contains the loopback port this endpoint listens on.
         /// </summary>
         public int Port { get; }
 
@@ -177,9 +164,8 @@ public class SmtpEmailSenderHotReloadTests
         }
 
         /// <summary>
-        ///     This method accepts every incoming connection, records it, and closes it
-        ///     immediately -- no SMTP greeting is ever sent, so a real connecting client's own
-        ///     handshake fails fast on end-of-stream rather than hanging on a read timeout.
+        ///     This method accepts, counts and closes every connection without an SMTP greeting, so a
+        ///     client's handshake fails fast instead of waiting for a read timeout.
         /// </summary>
         private async Task AcceptLoopAsync(CancellationToken cancellationToken)
         {
@@ -215,8 +201,7 @@ public class SmtpEmailSenderHotReloadTests
             }
             catch (Exception)
             {
-                // Best-effort shutdown only -- this loop's own exception handling above already
-                // covers its two expected shutdown exceptions.
+                // Best-effort shutdown; the loop above handles its expected shutdown exceptions.
             }
 
             _cancellation.Dispose();

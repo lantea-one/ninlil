@@ -7,55 +7,43 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Identity.Sso;
 
 /// <summary>
-///     This class implements <see cref="IOidcUserProvisioningService" />: it matches an OpenID
-///     Connect sign-in against a local account by the identity provider's own immutable
-///     <c>sub</c> claim -- never by e-mail address, since an e-mail address is something a
-///     provider can legally reuse or reassign to a different person over time, while a subject
-///     identifier is not -- and, on that subject's first-ever sign-in, provisions a brand-new
-///     local account for it.
+///     This class implements <see cref="IOidcUserProvisioningService" />. It matches an OpenID
+///     Connect sign-in to a local account by the provider's immutable <c>sub</c> claim, never by
+///     e-mail address, which a provider can reassign to another person. On a subject's first
+///     sign-in it creates a local account.
 ///     <para>
-///         <b>Auto-provisioning is deliberately conservative: a freshly-provisioned account gets
-///         no roles and no permission claims at all</b>, exactly as if an administrator had used
-///         <c>Web.Controllers.UsersController.Create</c> to add a brand-new local account and had
-///         not yet granted it anything. An operator must explicitly grant roles/permissions to a
-///         newly-federated account afterward, through the same administrative surface as any
-///         other account, before it can do anything beyond simply being signed in. This is a
-///         considered choice, not an oversight -- silently trusting an identity provider's own
-///         group/role claims (which this service does not even read) to decide administrative
-///         capability on this server would let a misconfigured or compromised upstream IdP grant
-///         itself privileges here with zero local review.
+///         <b>A new account gets no roles and no permission claims</b>, like a local account just
+///         created with <c>Web.Controllers.UsersController.Create</c>. An operator must grant
+///         roles or permissions before it can do more than sign in. The provider's group or role
+///         claims are not read, so a misconfigured or compromised provider cannot grant itself
+///         privileges here.
 ///     </para>
 ///     <para>
-///         Persistence goes directly through <see cref="IUserRepository" />/<see cref="IUnitOfWork" />,
-///         the same repository-plus-unit-of-work shape <c>Token.JwtTokenService.CreateRefreshTokenAsync</c>
-///         already establishes, rather than through <c>Microsoft.AspNetCore.Identity.UserManager{TUser}</c>
-///         -- there is no password to hash or validate here, and this service needs to set
-///         <see cref="UserEntity.ExternalIdentityProvider" />/<see cref="UserEntity.ExternalSubjectId" />,
-///         fields <c>UserManager{TUser}</c> has no concept of.
+///         It writes through <see cref="IUserRepository" /> and <see cref="IUnitOfWork" /> rather
+///         than <c>Microsoft.AspNetCore.Identity.UserManager{TUser}</c>, because there is no
+///         password to handle and it must set <see cref="UserEntity.ExternalIdentityProvider" />
+///         and <see cref="UserEntity.ExternalSubjectId" />, which <c>UserManager{TUser}</c> does not
+///         know about.
 ///     </para>
 /// </summary>
-/// <param name="userRepository">The repository this service reads accounts from and writes newly-provisioned accounts to.</param>
-/// <param name="unitOfWork">The unit of work a newly-provisioned account is committed through.</param>
+/// <param name="userRepository">The repository accounts are read from and new accounts written to.</param>
+/// <param name="unitOfWork">The unit of work a new account is saved through.</param>
 public sealed class OidcUserProvisioningService(
     IUserRepository userRepository,
     IUnitOfWork unitOfWork
 ) : IOidcUserProvisioningService
 {
     /// <summary>
-    ///     This constant contains the fixed value every OIDC-provisioned account's own
-    ///     <see cref="UserEntity.ExternalIdentityProvider" /> is set to -- this project supports
-    ///     exactly one external identity provider kind today.
+    ///     This constant contains the <see cref="UserEntity.ExternalIdentityProvider" /> value of every
+    ///     OIDC-provisioned account; OIDC is the only external provider kind.
     /// </summary>
     public const string ProviderName = "Oidc";
 
     /// <summary>
-    ///     This constant contains the domain suffix a synthesized placeholder e-mail address is
-    ///     built from when the identity provider's own token carries no <c>email</c> claim at all
-    ///     -- an address deliberately structured so it can never resolve or accept mail, since
-    ///     <c>RequireUniqueEmail=true</c> rejects a <see langword="null" />/empty e-mail as
-    ///     genuinely invalid, not merely absent (see the codebase's own bug catalog, entry 15),
-    ///     and this project's own <see cref="UserEntity.Email" /> column is otherwise always
-    ///     expected to hold something.
+    ///     This constant contains the domain of the placeholder e-mail address used when the token
+    ///     has no <c>email</c> claim. The <c>.invalid</c> TLD never resolves or accepts mail. A
+    ///     placeholder is needed because, with <c>RequireUniqueEmail=true</c>, Identity's user
+    ///     validation (run by <c>UserManager</c> updates) rejects a null or empty e-mail.
     /// </summary>
     private const string PlaceholderEmailDomain = "sso.invalid";
 
@@ -77,11 +65,8 @@ public sealed class OidcUserProvisioningService(
                     + "server cannot identify who signed in without one."
             );
 
-        // An already-provisioned account is matched by subject alone -- no field on it is ever
-        // synced from a later sign-in's own claims, deliberately: an operator may have since
-        // renamed the account, corrected its e-mail address, or otherwise diverged it from what
-        // the identity provider currently reports, and a silent overwrite on every sign-in would
-        // undo that every time.
+        // An existing account is matched by subject only and never updated from later claims,
+        // so an operator's renames or e-mail corrections are not overwritten on each sign-in.
         UserEntity existingUser = await userRepository.FindByExternalSubjectAsync(
             ProviderName,
             subjectId,
@@ -91,8 +76,7 @@ public sealed class OidcUserProvisioningService(
         if (existingUser is not null)
             return existingUser;
 
-        // This is this subject's first sign-in -- provision a brand-new, permission-less account
-        // for it.
+        // First sign-in: create an account with no permissions.
         string preferredUsername = ReadClaim(principal, "preferred_username");
         string candidateUserName = string.IsNullOrWhiteSpace(preferredUsername)
             ? subjectId
@@ -114,14 +98,11 @@ public sealed class OidcUserProvisioningService(
             Email = effectiveEmail,
             NormalizedEmail = effectiveEmail.ToUpperInvariant(),
 
-            // The identity provider already vouched for the address by including it in a signed
-            // token -- confirmed only when it actually sent one; a synthesized placeholder is
-            // never treated as confirmed.
+            // An address from the signed token counts as confirmed; a placeholder never does.
             EmailConfirmed = hasRealEmail,
 
-            // This account can only ever sign in through this OIDC flow -- a null password hash
-            // means IUserPasswordStore.HasPasswordAsync reports "no password", and Identity's own
-            // password sign-in path rejects it outright rather than trying to verify a null hash.
+            // The account signs in only through OIDC: with a null hash, HasPasswordAsync reports no
+            // password and password sign-in rejects the account.
             PasswordHash = null,
             SecurityStamp = Guid.NewGuid().ToString("N"),
             ConcurrencyStamp = Guid.NewGuid().ToString(),
@@ -136,15 +117,11 @@ public sealed class OidcUserProvisioningService(
     }
 
     /// <summary>
-    ///     This method resolves a candidate user name against every existing local account,
-    ///     appending an incrementing numeric suffix (<c>-2</c>, <c>-3</c>, and so on) until it
-    ///     finds one that is not already taken -- the same collision-handling shape an
-    ///     administrator hits (via <c>Microsoft.AspNetCore.Identity.UserManager{TUser}.CreateAsync</c>'s
-    ///     own duplicate-name validation) when two accounts would otherwise share a sign-in name,
-    ///     applied here proactively instead of reactively since this service bypasses
-    ///     <c>UserManager{TUser}</c> entirely (see this class's own doc comment).
+    ///     This method makes a candidate user name unique by appending <c>-2</c>, <c>-3</c>, and so
+    ///     on until no account has it. <c>UserManager{TUser}</c> would reject a duplicate name, but
+    ///     this service does not go through it, so it avoids the clash up front.
     /// </summary>
-    /// <param name="candidateUserName">The identity provider's own preferred user name, or the subject identifier if it supplied none.</param>
+    /// <param name="candidateUserName">The provider's preferred user name, or the subject identifier if it sent none.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     private async Task<string> ResolveUniqueUserNameAsync(
         string candidateUserName,
@@ -170,14 +147,11 @@ public sealed class OidcUserProvisioningService(
     }
 
     /// <summary>
-    ///     This method reads the first present claim, by type, off a principal -- tried in the
-    ///     order given, since <c>OpenIdConnectOptions.MapInboundClaims</c> is explicitly disabled
-    ///     for this scheme (see <c>ServiceCollectionAuthenticationExtension</c>'s own doc comment,
-    ///     and the codebase's own bug catalog entry 16 on why this matters), so a real OIDC claim
-    ///     always arrives under its own standard short name (<c>sub</c>, <c>email</c>, and so on)
-    ///     rather than a renamed <see cref="ClaimTypes" /> equivalent -- the
-    ///     <see cref="ClaimTypes" /> fallback exists only in case a non-standard provider or a
-    ///     test double supplies the claim that way instead.
+    ///     This method returns the first claim present among the given types, in order.
+    ///     <c>OpenIdConnectOptions.MapInboundClaims</c> is disabled for this scheme (see
+    ///     <c>ServiceCollectionAuthenticationExtension</c>), so OIDC claims arrive under their short
+    ///     names (<c>sub</c>, <c>email</c>, and so on). The <see cref="ClaimTypes" /> fallbacks cover a
+    ///     non-standard provider or a test double.
     /// </summary>
     /// <param name="principal">The principal to read a claim from.</param>
     /// <param name="claimTypes">Every claim type to try, in priority order.</param>

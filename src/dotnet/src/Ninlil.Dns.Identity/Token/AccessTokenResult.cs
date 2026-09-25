@@ -2,9 +2,8 @@
 namespace Ninlil.Dns.Identity.Token;
 
 /// <summary>
-///     This class carries a newly-issued JSON Web Token access token, along with the moment it
-///     stops being valid, so a caller knows when it will need to be refreshed without having to
-///     parse the token itself to find out.
+///     This record carries a newly issued JWT access token and when it expires, so a caller knows
+///     when to refresh it without parsing the token.
 /// </summary>
 /// <param name="AccessToken">The signed, encoded JSON Web Token.</param>
 /// <param name="ExpiresAtUtc">The UTC date and time at which the token expires.</param>

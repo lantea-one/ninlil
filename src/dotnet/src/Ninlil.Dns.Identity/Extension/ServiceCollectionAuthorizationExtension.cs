@@ -6,8 +6,8 @@ using Ninlil.Dns.Identity.Authorization;
 namespace Ninlil.Dns.Identity.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's permission-based policy authorization.
+///     This class provides our <see cref="IServiceCollection" /> extension for permission-based
+///     policy authorization.
 /// </summary>
 public static class ServiceCollectionAuthorizationExtension
 {
@@ -25,7 +25,6 @@ public static class ServiceCollectionAuthorizationExtension
         instance.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         instance.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

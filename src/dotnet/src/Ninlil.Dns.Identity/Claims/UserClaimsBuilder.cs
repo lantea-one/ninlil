@@ -7,9 +7,8 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Identity.Claims;
 
 /// <summary>
-///     This class implements <see cref="IUserClaimsBuilder" /> by combining a user's own record
-///     with the roles they hold and the permission claims those roles -- and the user directly --
-///     have been granted.
+///     This class implements <see cref="IUserClaimsBuilder" /> by combining a user's record, the
+///     roles they hold, and the permission claims granted through those roles or directly.
 /// </summary>
 /// <param name="userRepository">The repository used to look up a user's roles and claims.</param>
 /// <param name="roleRepository">The repository used to look up the claims granted by a role.</param>
@@ -22,14 +21,11 @@ public class UserClaimsBuilder(IUserRepository userRepository, IRoleRepository r
         CancellationToken stoppingToken = default
     )
     {
-        // Look up the roles this user holds, so both the role names and the permissions those
-        // roles grant can be turned into claims.
         IReadOnlyList<RoleEntity> roles = await userRepository.ListRolesAsync(
             user.Id,
             stoppingToken
         );
 
-        // Gather every permission granted by any of those roles.
         List<string> permissionsFromRoles = [];
         foreach (RoleEntity role in roles)
         {
@@ -45,7 +41,6 @@ public class UserClaimsBuilder(IUserRepository userRepository, IRoleRepository r
             );
         }
 
-        // Gather every permission granted to the user directly, independent of their roles.
         IReadOnlyList<UserClaimEntity> userClaims = await userRepository.ListClaimsAsync(
             user.Id,
             stoppingToken
@@ -55,26 +50,22 @@ public class UserClaimsBuilder(IUserRepository userRepository, IRoleRepository r
             .Where(claim => claim.ClaimType == NinlilDnsClaimTypes.Permission)
             .Select(claim => claim.ClaimValue);
 
-        // Combine both sources into the final, de-duplicated set of effective permissions.
+        // Role and direct permissions combined, without duplicates.
         HashSet<string> effectivePermissions = [.. permissionsFromRoles, .. permissionsFromUser];
 
-        // Build the identity claims every signed-in user carries.
         List<Claim> claims =
         [
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
         ];
 
-        // Only include the e-mail claim once the address has actually been confirmed, so a
-        // caller never asserts an unverified e-mail address as fact.
+        // Only a confirmed e-mail address is asserted as a claim.
         if (user.EmailConfirmed && !string.IsNullOrWhiteSpace(user.Email))
             claims.Add(new Claim(JwtRegisteredClaimNames.Email, user.Email));
 
-        // Add one role claim per role, using the standard .NET role claim type so that
-        // [Authorize(Roles = "...")] recognizes it without any extra configuration.
+        // The standard role claim type makes [Authorize(Roles = "...")] work unchanged.
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role.Name)));
 
-        // Add one permission claim per effective permission.
         claims.AddRange(
             effectivePermissions.Select(permission => new Claim(
                 NinlilDnsClaimTypes.Permission,
@@ -82,7 +73,6 @@ public class UserClaimsBuilder(IUserRepository userRepository, IRoleRepository r
             ))
         );
 
-        // We're done, return the completed claim set.
         return claims;
     }
 }

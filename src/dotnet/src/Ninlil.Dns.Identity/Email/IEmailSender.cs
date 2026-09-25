@@ -2,11 +2,9 @@
 namespace Ninlil.Dns.Identity.Email;
 
 /// <summary>
-///     This interface describes the one thing Ninlil's identity layer needs from an e-mail
-///     system: the ability to send a message. It exists so that e-mail delivery -- an SMTP
-///     server, a transactional e-mail API, or a test double that just records what would have
-///     been sent -- can be swapped out independently of the code that decides what to send and
-///     when.
+///     This interface describes what the identity layer needs from e-mail: sending a message.
+///     Delivery (SMTP through <see cref="SmtpEmailSender" />, another service, or a test double)
+///     can be swapped without touching the code that decides what to send.
 /// </summary>
 public interface IEmailSender
 {

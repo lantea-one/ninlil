@@ -14,25 +14,22 @@ using Ninlil.Dns.Identity.Token;
 namespace Ninlil.Dns.Identity.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's identity layer: ASP.NET Core Identity adapted onto Ninlil's own
-///     repositories, two-factor authentication, and the supporting services (claims building,
-///     JSON Web Tokens, API tokens, e-mail delivery) built on top of it.
+///     This class provides our <see cref="IServiceCollection" /> extension for the identity layer:
+///     ASP.NET Core Identity on top of the Ninlil repositories, two-factor authentication, and the
+///     services built on it (claims, JSON Web Tokens, API tokens, e-mail, OIDC provisioning).
 /// </summary>
 public static class ServiceCollectionIdentityExtension
 {
     /// <summary>
-    ///     This constant contains the configuration section name <see cref="IdentityOptions" />
-    ///     is optionally bound from, letting an operator override any of the defaults set below
-    ///     without needing to change code.
+    ///     This constant contains the configuration section <see cref="IdentityOptions" /> is bound
+    ///     from, so an operator can override the defaults set here.
     /// </summary>
     public const string IdentityOptionsSectionName = "Identity";
 
     /// <summary>
-    ///     This method registers ASP.NET Core Identity, configured to store everything through
-    ///     Ninlil's own <see cref="UserEntity" />/<see cref="RoleEntity" /> repositories
-    ///     rather than through Entity Framework Core directly, plus the JSON Web Token, API
-    ///     token, and e-mail-sending services built on top of it.
+    ///     This method registers ASP.NET Core Identity, storing users and roles through the
+    ///     <see cref="UserEntity" /> and <see cref="RoleEntity" /> repositories rather than Entity
+    ///     Framework Core directly, plus the token, e-mail and OIDC services built on it.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read identity settings from.</param>
@@ -42,80 +39,61 @@ public static class ServiceCollectionIdentityExtension
         IConfiguration configuration
     )
     {
-        // Data Protection backs both our own TOTP authenticator key encryption and several of
-        // Identity's own default token providers (used for password reset and e-mail
-        // confirmation links, for example).
+        // Data Protection encrypts TOTP authenticator keys and backs several default Identity
+        // token providers (password reset and e-mail confirmation, for example).
         instance.AddDataProtection();
 
-        // SignInManager<TUser>, registered by AddSignInManager() below, requires an
-        // IHttpContextAccessor to reach the current request; AddIdentityCore does not register
-        // one on its own.
+        // SignInManager<TUser> needs IHttpContextAccessor, which AddIdentityCore does not
+        // register.
         instance.AddHttpContextAccessor();
 
         instance
             .AddIdentityCore<UserEntity>(options =>
             {
-                // Require a password strong enough to resist offline guessing, without being so
-                // long that a real person can't reasonably type it.
+                // Strong enough to resist offline guessing while still typeable.
                 options.Password.RequiredLength = 12;
                 options.Password.RequireDigit = true;
                 options.Password.RequireLowercase = true;
                 options.Password.RequireUppercase = true;
                 options.Password.RequireNonAlphanumeric = true;
 
-                // Lock an account out for 15 minutes after 5 consecutive failed sign-in
-                // attempts, including for brand-new accounts.
+                // 15-minute lockout after 5 failed sign-ins in a row, for new accounts too.
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.AllowedForNewUsers = true;
 
-                // Two different people cannot register the same e-mail address.
                 options.User.RequireUniqueEmail = true;
             })
             .AddRoles<RoleEntity>()
             .AddUserStore<NinlilDnsUserStore>()
             .AddRoleStore<NinlilDnsRoleStore>()
             .AddSignInManager()
-            // Registers, among others, the "Authenticator" provider behind TOTP codes (RFC 6238)
-            // and the "Email" provider behind e-mail-based two-factor codes -- both ready to use
-            // as soon as IUserAuthenticatorKeyStore and IUserEmailStore are implemented, which
-            // NinlilDnsUserStore already does.
+            // Includes the "Authenticator" provider for TOTP codes (RFC 6238) and the "Email"
+            // provider for e-mail two-factor codes, which work because NinlilDnsUserStore
+            // implements IUserAuthenticatorKeyStore and IUserEmailStore.
             .AddDefaultTokenProviders();
 
-        // Let an operator override any of the defaults configured above through the "Identity"
-        // configuration section, without needing to change code.
+        // The "Identity" section can override the defaults above.
         instance.Configure<IdentityOptions>(configuration.GetSection(IdentityOptionsSectionName));
 
-        // UserManager<TUser>'s own constructor reads IOptions<IdentityOptions> exactly once, at
-        // construction, and the plain IOptions<T> the framework would otherwise inject is itself
-        // a singleton whose own .Value is computed once and cached for the life of the process --
-        // so a configuration-file write would never have been observed by any UserManager
-        // constructed after the very first one, restart or not. This explicit registration
-        // (added after Configure<IdentityOptions> above, so it wins DI's own "last registration
-        // for this exact closed type" resolution over the framework's own TryAdd-registered
-        // default) routes every future IOptions<IdentityOptions> read through a live
-        // IOptionsMonitor<IdentityOptions> instead -- see IdentityOptionsMonitorProxy's own doc
-        // comment for the full reasoning, including why this is "next request" hot reload rather
-        // than true mid-instance hot reload.
+        // Replace the default IOptions<IdentityOptions> so each new UserManager sees the
+        // current configuration; see IdentityOptionsMonitorProxy. Registered last, so it wins
+        // over the framework's TryAdd registration.
         instance.AddSingleton<IOptions<IdentityOptions>>(
             provider => new IdentityOptionsMonitorProxy(
                 provider.GetRequiredService<IOptionsMonitor<IdentityOptions>>()
             )
         );
 
-        // Register the JWT, e-mail, and OIDC SSO settings these services depend on. OidcSsoOptions
-        // is bound via IOptionsMonitor (the framework's own default TryAdd registration is left
-        // in place, unlike IdentityOptions above) so OidcSsoSettingsController's own GET/PATCH
-        // actions always read/merge against the live, currently-effective values -- only the
-        // OpenID Connect scheme's own one-time registration in AddNinlilDnsAuthentication needs a
-        // restart to pick up a change, not this options class's own REST surface.
+        // OidcSsoOptions keeps the default registration and is read through IOptionsMonitor,
+        // so OidcSsoSettingsController always sees current values; only the scheme registration
+        // in AddNinlilDnsAuthentication needs a restart.
         instance.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         instance.Configure<EmailSenderOptions>(
             configuration.GetSection(EmailSenderOptions.SectionName)
         );
         instance.Configure<OidcSsoOptions>(configuration.GetSection(OidcSsoOptions.SectionName));
 
-        // Register the supporting services built on top of Identity.
         instance.AddScoped<IUserClaimsBuilder, UserClaimsBuilder>();
         instance.AddScoped<IJwtTokenService, JwtTokenService>();
         instance.AddScoped<IApiTokenService, ApiTokenService>();
@@ -123,7 +101,6 @@ public static class ServiceCollectionIdentityExtension
         instance.AddScoped<IOidcUserProvisioningService, OidcUserProvisioningService>();
         instance.AddSingleton<OidcClientSecretProtector>();
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

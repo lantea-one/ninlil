@@ -10,33 +10,25 @@ using Ninlil.Dns.Identity.Extension;
 namespace Ninlil.Dns.Identity.Tests;
 
 /// <summary>
-///     This class proves <see cref="ServiceCollectionAdminLoginRateLimitingExtension" />'s own
-///     real request-time behavior -- a rejected 429 past the configured threshold, a real
-///     window-based reset, per-partition isolation, and a genuine no-op when disabled -- against a
-///     minimal, dedicated ASP.NET Core host built specifically for this test class, using
-///     <see cref="TestServer" /> directly rather than <c>Ninlil.Web.Program</c>'s own, much
-///     heavier composition root.
+///     This class tests the request-time behavior of
+///     <see cref="ServiceCollectionAdminLoginRateLimitingExtension" />: a 429 past the limit, reset
+///     when the window rolls over, and no limiting when disabled. Each test builds a minimal
+///     ASP.NET Core host on <see cref="TestServer" /> with one protected endpoint, instead of the
+///     full <c>Ninlil.Web.Program</c>.
 ///     <para>
-///         <b>Why a dedicated host, not <c>NinlilDnsWebApplicationFactory</c>:</b> that shared
-///         fixture's own <c>TestServer</c>-backed in-memory transport leaves
-///         <see cref="HttpContext.Connection" />'s own <c>RemoteIpAddress</c>
-///         <see langword="null" /> for every request (the same real behavior
-///         <c>Web.Tests.ReverseProxyTrustGatingMiddlewareTests</c>'s own doc comment already
-///         found necessary to work around for an unrelated middleware) -- which would collapse
-///         this limiter's own per-client-IP partitioning onto one shared "unknown" bucket used by
-///         every one of the dozens of unrelated test classes that shared factory's own collection
-///         already calls <c>POST /api/auth/login</c> from. This class needs a host with real,
-///         controllable behavior for exactly the dimension under test (partition key, threshold,
-///         window, enabled/disabled), so it builds one directly instead.
+///         <b>Why not <c>NinlilDnsWebApplicationFactory</c>:</b> its in-memory transport leaves
+///         <c>HttpContext.Connection.RemoteIpAddress</c> <see langword="null" />, so every request
+///         would fall into the shared "unknown" partition that many other test classes also hit
+///         through <c>POST /api/auth/login</c>. A dedicated host keeps the partition, limit and
+///         window under the test's control.
 ///     </para>
 /// </summary>
 public class AdminLoginRateLimitingTests
 {
     /// <summary>
-    ///     This method builds and starts a minimal <see cref="WebApplication" /> carrying only
-    ///     this limiter's own real middleware and a single trivial endpoint protected by its
-    ///     policy, returning a real <see cref="HttpClient" /> talking to it over
-    ///     <see cref="TestServer" />'s in-memory transport.
+    ///     This method starts a minimal <see cref="WebApplication" /> with only the rate limiter and
+    ///     one endpoint protected by its policy, and returns an <see cref="HttpClient" /> for it over
+    ///     the <see cref="TestServer" /> in-memory transport.
     /// </summary>
     private static async Task<(WebApplication App, HttpClient Client)> StartHostAsync(
         bool enable,
@@ -89,11 +81,8 @@ public class AdminLoginRateLimitingTests
     }
 
     /// <summary>
-    ///     This test is the real, direct proof of this feature's own core promise: the
-    ///     (PermitLimit + 1)th attempt from the same client within one window is genuinely
-    ///     rejected with <c>429</c>, never merely logged or delayed -- this limiter's own
-    ///     deliberate fail-closed posture, the opposite of <c>Server.RateLimiting</c>'s own
-    ///     fail-open DNS-query limiter.
+    ///     This test checks the main promise: attempt PermitLimit + 1 from one client within a
+    ///     window is rejected with <c>429</c>, not logged or delayed.
     /// </summary>
     [Fact]
     public async Task Login_PastThePermitLimit_IsRejectedWithTooManyRequests()
@@ -115,8 +104,7 @@ public class AdminLoginRateLimitingTests
             HttpResponseMessage rejected = await client.PostAsync("/login", content: null);
             Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
 
-            // Confirms this is a genuine lockout, not a one-off blip -- a further attempt still
-            // inside the same window keeps being rejected.
+            // Further attempts in the same window are rejected too.
             HttpResponseMessage stillRejected = await client.PostAsync("/login", content: null);
             Assert.Equal(HttpStatusCode.TooManyRequests, stillRejected.StatusCode);
         }
@@ -127,11 +115,9 @@ public class AdminLoginRateLimitingTests
     }
 
     /// <summary>
-    ///     This test proves the lockout is genuinely temporary: once the fixed window rolls over,
-    ///     a client that was locked out can sign in again with no operator intervention -- this
-    ///     limiter's own effective "lockout duration" is exactly
-    ///     <see cref="Ninlil.Dns.Identity.Options.AdminLoginRateLimitOptions.Window" />, per that
-    ///     class's own doc comment.
+    ///     This test checks that the lockout ends when the window rolls over, so a locked-out client
+    ///     can sign in again without intervention; the lockout lasts
+    ///     <see cref="Ninlil.Dns.Identity.Options.AdminLoginRateLimitOptions.Window" />.
     /// </summary>
     [Fact]
     public async Task Login_AfterTheWindowRollsOver_SucceedsAgain()
@@ -162,13 +148,10 @@ public class AdminLoginRateLimitingTests
     }
 
     /// <summary>
-    ///     This test proves <see cref="Ninlil.Dns.Identity.Options.AdminLoginRateLimitOptions.Enable" />
-    ///     set to <see langword="false" /> is a genuine no-op -- far more attempts than
-    ///     <c>permitLimit</c> all still succeed -- and, just as importantly, that the protected
-    ///     endpoint does not throw a configuration error for referencing a policy name this
-    ///     disabled configuration might otherwise have left unregistered (see
-    ///     <see cref="ServiceCollectionAdminLoginRateLimitingExtension.AddNinlilDnsAdminLoginRateLimiting" />'s
-    ///     own doc comment for the real bug this was found to guard against).
+    ///     This test checks that with <see cref="Ninlil.Dns.Identity.Options.AdminLoginRateLimitOptions.Enable" />
+    ///     set to <see langword="false" />, many more attempts than <c>permitLimit</c> all succeed,
+    ///     and the endpoint does not fail for referencing an unregistered policy (see
+    ///     <see cref="ServiceCollectionAdminLoginRateLimitingExtension.AddNinlilDnsAdminLoginRateLimiting" />).
     /// </summary>
     [Fact]
     public async Task Login_WhenDisabled_NeverRejectsRegardlessOfAttemptCount()

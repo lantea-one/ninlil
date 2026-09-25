@@ -6,6 +6,11 @@ using Ninlil.Dns.Identity.Authorization;
 // Define our namespace.
 namespace Ninlil.Dns.Identity.Tests;
 
+/// <summary>
+///     This class tests <see cref="PermissionAuthorizationHandler" /> directly, with an
+///     in-memory <see cref="ClaimsPrincipal" /> per case: an exact permission, a different one,
+///     the wildcard, and none.
+/// </summary>
 public class PermissionAuthorizationHandlerTests
 {
     private static async Task<bool> EvaluateAsync(ClaimsPrincipal user, string requiredPermission)

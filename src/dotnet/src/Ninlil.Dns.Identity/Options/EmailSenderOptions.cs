@@ -3,8 +3,8 @@ namespace Ninlil.Dns.Identity.Options;
 
 /// <summary>
 ///     This class binds to the <c>Email</c> section of the application's configuration and
-///     describes the SMTP server Ninlil sends e-mail through -- most importantly, the
-///     e-mail-based two-factor authentication codes issued by <c>EmailTokenProvider&lt;UserEntity&gt;</c>.
+///     describes the SMTP server <see cref="Email.SmtpEmailSender" /> sends through, mainly for
+///     the e-mail two-factor codes issued by <c>EmailTokenProvider&lt;UserEntity&gt;</c>.
 /// </summary>
 public class EmailSenderOptions
 {
@@ -24,8 +24,8 @@ public class EmailSenderOptions
     public int SmtpPort { get; set; } = 587;
 
     /// <summary>
-    ///     This property indicates whether the connection to the SMTP server should be secured
-    ///     with TLS.
+    ///     This property indicates whether the SMTP connection is upgraded to TLS with STARTTLS.
+    ///     Implicit TLS (port 465) is not supported.
     /// </summary>
     public bool UseTls { get; set; } = true;
 
@@ -36,7 +36,8 @@ public class EmailSenderOptions
     public string Username { get; set; }
 
     /// <summary>
-    ///     This property contains the password to authenticate to the SMTP server with.
+    ///     This property contains the password to authenticate to the SMTP server with. It is
+    ///     stored in plain text in the configuration file.
     /// </summary>
     public string Password { get; set; }
 

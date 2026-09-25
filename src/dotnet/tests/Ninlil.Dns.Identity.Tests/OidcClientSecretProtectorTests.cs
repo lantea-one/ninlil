@@ -6,13 +6,11 @@ using Ninlil.Dns.Identity.Sso;
 namespace Ninlil.Dns.Identity.Tests;
 
 /// <summary>
-///     This class covers <see cref="OidcClientSecretProtector" />'s own encrypt/decrypt round
-///     trip, using a single shared <see cref="IDataProtectionProvider" /> instance the way a
-///     real, persistent Data Protection key ring would behave -- deliberately not two separate
-///     <see cref="EphemeralDataProtectionProvider" /> instances, since each one generates its own
-///     fresh random key (the codebase's own bug catalog, entry 10), which
-///     <see cref="TwoIndependentProviderInstancesCannotDecryptEachOthersPayloads" /> below relies
-///     on directly, rather than working around it.
+///     This class tests the encrypt and decrypt round trip of <see cref="OidcClientSecretProtector" />
+///     in memory. Round trips share one <see cref="IDataProtectionProvider" />, as a persistent
+///     key ring would. Two separate <see cref="EphemeralDataProtectionProvider" /> instances each
+///     generate a random key and cannot read each other's payloads;
+///     <see cref="TwoIndependentProviderInstancesCannotDecryptEachOthersPayloads" /> checks that.
 /// </summary>
 public sealed class OidcClientSecretProtectorTests
 {
@@ -55,9 +53,8 @@ public sealed class OidcClientSecretProtectorTests
         IDataProtectionProvider provider = new EphemeralDataProtectionProvider();
         OidcClientSecretProtector protector = new(provider);
 
-        // No client secret has ever been configured -- OidcSsoOptions.ClientSecretEncrypted
-        // defaults to an empty string, not null, and this method must tolerate reading that
-        // compiled-in default without ever having called Protect first.
+        // With no secret configured, OidcSsoOptions.ClientSecretEncrypted is an empty string,
+        // which must decrypt to empty without Protect ever having been called.
         Assert.Equal(string.Empty, protector.Unprotect(string.Empty));
     }
 }

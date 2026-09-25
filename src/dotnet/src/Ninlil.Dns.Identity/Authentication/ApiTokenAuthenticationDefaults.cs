@@ -2,8 +2,8 @@
 namespace Ninlil.Dns.Identity.Authentication;
 
 /// <summary>
-///     This class defines the fixed names used to register and refer to Ninlil's API token
-///     authentication scheme.
+///     This class defines the names used to register and refer to the API token authentication
+///     scheme (<see cref="ApiTokenAuthenticationHandler" />).
 /// </summary>
 public static class ApiTokenAuthenticationDefaults
 {

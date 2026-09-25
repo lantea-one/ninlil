@@ -8,25 +8,17 @@ using Ninlil.Dns.Identity.Options;
 namespace Ninlil.Dns.Identity.Tests;
 
 /// <summary>
-///     This class proves, against the real .NET configuration/options binding pipeline and a real
-///     reload-on-change JSON configuration file, that <see cref="IdentityOptionsMonitorProxy" />
-///     actually closes the hot-reload gap it exists to close: <see cref="UserManager{TUser}" />'s
-///     own constructor (a fixed framework signature this project cannot change) reads
-///     <see cref="IOptions{TOptions}" /> of <see cref="IdentityOptions" /> exactly once, capturing
-///     the result in its own private field for that instance's lifetime -- this test simulates
-///     that exact "read <c>.Value</c> once, at construction, and keep it" shape directly, rather
-///     than reading <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> repeatedly (which would
-///     trivially always show the live value, proving nothing about the real risk).
+///     This class tests that <see cref="IdentityOptionsMonitorProxy" /> lets a new
+///     <see cref="UserManager{TUser}" /> see a configuration change without a restart. It uses the
+///     .NET configuration and options pipeline with a reload-on-change JSON file in a temporary
+///     directory.
 ///     <para>
-///         Before this fix, the plain, framework-registered <see cref="IOptions{TOptions}" /> of
-///         <see cref="IdentityOptions" /> is itself backed by a singleton whose own <c>.Value</c>
-///         is computed once, lazily, and cached for the life of the process -- confirmed directly
-///         (a freshly re-resolved <see cref="IOptions{TOptions}" /> from a brand new scope never
-///         observed a later configuration-file change at all). This test proves the registered
-///         override instead makes each *new* scope's own freshly resolved accessor (mirroring a
-///         fresh, per-request <see cref="UserManager{TUser}" /> instance) observe the live value
-///         at the moment it is resolved -- "next request" hot reload, not true mid-instance hot
-///         reload, exactly as <see cref="IdentityOptionsMonitorProxy" />'s own doc comment
+///         <see cref="UserManager{TUser}" /> reads <see cref="IOptions{TOptions}" /> of
+///         <see cref="IdentityOptions" /> once, at construction. The test copies that pattern
+///         (resolve in a new scope, read <c>.Value</c> once, keep the result) rather than reading
+///         <see cref="IOptionsMonitor{TOptions}.CurrentValue" />, which would always be current and
+///         prove nothing. It checks that a new scope sees the new value while a value captured
+///         earlier stays as it was: the change applies from the next request, as the proxy
 ///         describes.
 ///     </para>
 /// </summary>
@@ -42,21 +34,17 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file provider, the kind WebApplication.CreateBuilder() uses
+            // for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
 
             ServiceCollection services = new();
 
-            // The same two-registration order ServiceCollectionIdentityExtension itself
-            // establishes: AddIdentityCore's own hardcoded defaults, then the optional
-            // configuration-section override, then this project's own live-monitor-backed
-            // IOptions<IdentityOptions> override -- added last, so it wins DI's own "last
-            // registration for this exact closed type" resolution over the framework's own
-            // TryAdd-registered default.
+            // Same order as ServiceCollectionIdentityExtension: AddIdentityCore defaults, the
+            // configuration section, then the proxy, registered last so it wins over the
+            // framework's TryAdd default.
             services.Configure<IdentityOptions>(options => options.Password.RequiredLength = 12);
             services.Configure<IdentityOptions>(configuration.GetSection("Identity"));
             services.AddSingleton<IOptions<IdentityOptions>>(
@@ -67,9 +55,8 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
 
             await using ServiceProvider provider = services.BuildServiceProvider();
 
-            // Simulates UserManager<TUser>'s own constructor: resolve IOptions<IdentityOptions>
-            // from a fresh scope, then immediately read .Value once and keep only that captured
-            // result -- never the accessor itself.
+            // Like the UserManager<TUser> constructor: resolve IOptions<IdentityOptions> in a new
+            // scope, read .Value once and keep only the result.
             int CaptureRequiredLengthFromAFreshScope()
             {
                 using IServiceScope scope = provider.CreateScope();
@@ -80,8 +67,7 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
                 return accessor.Value.Password.RequiredLength;
             }
 
-            // Before any write, the file does not exist yet -- this project's own compiled-in
-            // default.
+            // Before any write the file does not exist, so the built-in default applies.
             int capturedBeforeWrite = CaptureRequiredLengthFromAFreshScope();
             Assert.Equal(12, capturedBeforeWrite);
 
@@ -91,7 +77,7 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
             TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-            // The exact same write mechanism IdentitySettingsController.Patch itself calls.
+            // The same write IdentitySettingsController.Patch uses.
             await Server.Presets.PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new Server.Presets.PresetConfigurationSetting(
@@ -103,24 +89,20 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
+            // The JSON provider debounces file changes by a few hundred milliseconds, so wait for
+            // the reload instead of a fixed delay.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
             );
             Assert.Same(reloaded.Task, completed);
 
-            // A brand new scope -- the "next request" -- genuinely observes the new value, with
-            // no restart.
+            // A new scope (the next request) sees the new value without a restart.
             int capturedAfterWrite = CaptureRequiredLengthFromAFreshScope();
             Assert.Equal(20, capturedAfterWrite);
 
-            // The value captured before the write is a plain int, already copied out of the
-            // IdentityOptions instance that existed at that moment -- it can never itself change
-            // retroactively, the concrete proof that this is "next request" hot reload, not true
-            // mid-instance hot reload.
+            // The value captured before the write stays as it was: changes apply from the next
+            // request, not inside an existing instance.
             Assert.Equal(12, capturedBeforeWrite);
         }
         finally
@@ -131,7 +113,7 @@ public sealed class IdentityOptionsMonitorProxyHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temp file is harmless.
             }
         }
     }

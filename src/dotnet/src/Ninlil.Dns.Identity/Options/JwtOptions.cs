@@ -3,10 +3,9 @@ namespace Ninlil.Dns.Identity.Options;
 
 /// <summary>
 ///     This class binds to the <c>Jwt</c> section of the application's configuration and
-///     describes how Ninlil issues and validates the JSON Web Tokens defined by RFC 7519. A
-///     token's signature uses HMAC-SHA256 (RFC 7518), which needs nothing more than a single
-///     shared secret to configure -- appropriate for a self-hosted server that issues and
-///     validates its own tokens, rather than trusting tokens issued by a separate authority.
+///     describes how Ninlil issues and validates JSON Web Tokens (RFC 7519). Tokens are signed
+///     with HMAC-SHA256 (RFC 7518), which needs only one shared secret; that suits a server that
+///     validates only the tokens it issues itself.
 /// </summary>
 public class JwtOptions
 {
@@ -29,37 +28,35 @@ public class JwtOptions
 
     /// <summary>
     ///     This property contains the shared secret used to sign and validate a token's HMAC-SHA256
-    ///     signature. It must be at least 32 bytes (256 bits) once UTF-8 encoded, and must be kept
-    ///     confidential -- anyone who has it can forge a token this server will accept.
+    ///     signature. It must be at least 32 bytes (256 bits) as UTF-8 and kept secret: anyone who
+    ///     has it can forge tokens this server accepts.
     /// </summary>
     public string SigningKey { get; set; }
 
     /// <summary>
-    ///     This property contains how long a newly-issued access token remains valid. Kept short,
-    ///     since a leaked access token cannot be revoked before it expires on its own; the caller
-    ///     is expected to use the accompanying refresh token to obtain a new one instead of
-    ///     requesting a long-lived access token up front.
+    ///     This property contains how long a new access token stays valid. It is short because a
+    ///     leaked access token cannot be revoked before it expires; callers renew it with the
+    ///     refresh token.
     /// </summary>
     public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    ///     This property contains how long a newly-issued refresh token, tracked as a
-    ///     <c>SessionEntity</c>, remains valid before the caller must sign in again from scratch.
+    ///     This property contains how long a long-lived refresh token (a <c>SessionEntity</c>) stays
+    ///     valid before the caller must sign in again.
     /// </summary>
     public TimeSpan RefreshTokenLifetime { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
     ///     This property contains how long a browser-session sign-in (one made without "Remember
-    ///     me") stays renewable without activity. Every refresh rotates the token and restarts
-    ///     this window, so an admin console left open keeps its session, while one abandoned (or
-    ///     whose cookie a browser restores after closing) expires on the server within this long
-    ///     regardless of what the browser does with the cookie.
+    ///     me") stays renewable without activity. Each refresh rotates the token and restarts the
+    ///     window, so an open admin console keeps its session, while an abandoned one (or one whose
+    ///     cookie a browser restores after closing) expires on the server within this time,
+    ///     whatever the browser does with the cookie.
     /// </summary>
     public TimeSpan BrowserSessionRefreshTokenLifetime { get; set; } = TimeSpan.FromHours(12);
 
     /// <summary>
-    ///     This property contains how much clock drift, between this server and whichever server
-    ///     eventually validates a token, is tolerated when checking a token's expiry.
+    ///     This property contains how much clock drift is tolerated when checking a token's expiry.
     /// </summary>
     public TimeSpan ClockSkew { get; set; } = TimeSpan.FromSeconds(30);
 }

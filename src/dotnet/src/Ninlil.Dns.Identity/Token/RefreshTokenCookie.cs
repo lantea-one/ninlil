@@ -5,21 +5,20 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Identity.Token;
 
 /// <summary>
-///     This class reads, writes, and clears the refresh-token cookie the browser admin console
-///     signs in with -- shared by the local sign-in endpoints and the OpenID Connect sign-in
-///     handler, so every path that issues a browser session sets exactly the same cookie.
+///     This class reads, writes and clears the refresh-token cookie of the browser admin console.
+///     The local sign-in endpoints and the OpenID Connect handler both use it, so every browser
+///     session gets the same cookie.
 ///     <para>
-///         The cookie is <c>HttpOnly</c> (page script can never read it), <c>SameSite=Strict</c>
-///         (a cross-site page can never make the browser send it), and scoped to
-///         <see cref="CookiePath" />, so it accompanies only the refresh and sign-out calls rather
-///         than every API request. It is marked <c>Secure</c> whenever the request itself arrived
-///         over HTTPS (as seen after trusted forwarded headers); a homelab console served over
-///         plain HTTP still works, with the same exposure its access token already has there.
+///         The cookie is <c>HttpOnly</c> (page script cannot read it), <c>SameSite=Strict</c> (a
+///         cross-site page cannot make the browser send it) and scoped to <see cref="CookiePath" />,
+///         so it goes only with the refresh and sign-out calls. It is <c>Secure</c> when the request
+///         arrived over HTTPS (after trusted forwarded headers); a console served over plain HTTP
+///         still works, with the same exposure its access token already has.
 ///     </para>
 ///     <para>
-///         A persistent session's cookie expires with the session itself; a browser-session one
-///         carries no expiry, so the browser discards it on close, and the server's own shorter
-///         browser-session lifetime bounds it even if a browser restores it anyway.
+///         A persistent session's cookie expires with the session. A browser-session cookie has
+///         no expiry, so the browser drops it on close, and the shorter server-side
+///         browser-session lifetime limits it even if a browser restores it.
 ///     </para>
 /// </summary>
 public static class RefreshTokenCookie

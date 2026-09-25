@@ -4,17 +4,16 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dns.Identity.Token;
 
 /// <summary>
-///     This interface issues and manages the two halves of Ninlil's sign-in credential: a
-///     short-lived JSON Web Token (RFC 7519) access token that authenticates individual API
-///     requests, and a longer-lived, opaque refresh token that lets a caller obtain a new access
-///     token without asking the user to sign in again.
+///     This interface issues and manages the two parts of a sign-in: a short-lived JSON Web Token
+///     (RFC 7519) access token that authenticates API requests, and a longer-lived opaque refresh
+///     token that gets a new access token without signing in again. <see cref="JwtTokenService" />
+///     implements it.
 /// </summary>
 public interface IJwtTokenService
 {
     /// <summary>
-    ///     This method issues a signed access token for a user, embedding their roles and
-    ///     effective permissions as claims so that authorization decisions can be made from the
-    ///     token alone, without a database round trip on every request.
+    ///     This method issues a signed access token for a user with their roles and permissions as
+    ///     claims, so authorization needs no database lookup per request.
     /// </summary>
     /// <param name="user">The user to issue the token for.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -46,14 +45,14 @@ public interface IJwtTokenService
     );
 
     /// <summary>
-    ///     This method looks up and validates a refresh token, checking that a session with a
-    ///     matching hash exists and is neither revoked nor expired.
+    ///     This method validates a refresh token: a session with a matching hash must exist and be
+    ///     neither revoked nor expired.
     /// </summary>
     /// <param name="rawRefreshToken">The raw refresh token value presented by the caller.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The matching, still-valid <see cref="SessionEntity" />, or <see langword="null" /> if
-    ///     the token does not match any session or the session it matches is no longer valid.
+    ///     The matching valid <see cref="SessionEntity" />, or <see langword="null" /> if there is no
+    ///     match or the session is no longer valid.
     /// </returns>
     Task<SessionEntity> ValidateRefreshTokenAsync(
         string rawRefreshToken,
@@ -61,8 +60,7 @@ public interface IJwtTokenService
     );
 
     /// <summary>
-    ///     This method revokes a session, so its refresh token can no longer be used to obtain a
-    ///     new access token.
+    ///     This method revokes a session, so its refresh token no longer works.
     /// </summary>
     /// <param name="session">The session to revoke.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

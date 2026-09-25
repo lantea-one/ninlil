@@ -8,18 +8,16 @@ using Ninlil.Dns.Identity.Options;
 namespace Ninlil.Dns.Identity.Email;
 
 /// <summary>
-///     This class implements <see cref="IEmailSender" /> by delivering a message over SMTP,
-///     using the server and credentials configured in <see cref="EmailSenderOptions" />.
+///     This class implements <see cref="IEmailSender" /> over SMTP (MailKit), using the server and
+///     credentials in <see cref="EmailSenderOptions" />.
 ///     <para>
-///         Reads <see cref="EmailSenderOptions" /> via <see cref="IOptionsMonitor{TOptions}" />,
-///         not the snapshotted <see cref="IOptions{TOptions}" /> -- a fresh value is read on every
-///         <see cref="SendAsync" /> call rather than once at construction time, so a write
-///         <c>SmtpSettingsController.Patch</c> merges into the configuration file takes effect on
-///         the very next e-mail sent, with no restart, even though this class itself is registered
-///         scoped and a given instance's own lifetime is typically as short as a single request.
+///         It reads the options through <see cref="IOptionsMonitor{TOptions}" /> on every
+///         <see cref="SendAsync" /> call, not through <see cref="IOptions{TOptions}" />, whose
+///         value is fixed once per process. A change saved by <c>SmtpSettingsController.Patch</c>
+///         therefore applies to the next e-mail without a restart.
 ///     </para>
 /// </summary>
-/// <param name="optionsMonitor">The live, currently-effective SMTP server settings to send through.</param>
+/// <param name="optionsMonitor">The current SMTP settings.</param>
 public class SmtpEmailSender(IOptionsMonitor<EmailSenderOptions> optionsMonitor) : IEmailSender
 {
     /// <inheritdoc />
@@ -30,30 +28,20 @@ public class SmtpEmailSender(IOptionsMonitor<EmailSenderOptions> optionsMonitor)
         CancellationToken stoppingToken = default
     )
     {
-        // Read the currently-effective settings fresh, rather than a value cached at this
-        // instance's own construction time, so a live configuration change is honored
-        // immediately.
         EmailSenderOptions options = optionsMonitor.CurrentValue;
 
-        // Build the message being sent.
         MimeMessage message = new();
 
-        // Set the sender address and display name.
         message.From.Add(new MailboxAddress(options.FromDisplayName, options.FromAddress));
 
-        // Set the recipient address.
         message.To.Add(MailboxAddress.Parse(toAddress));
 
-        // Set the subject line.
         message.Subject = subject;
 
-        // Set the HTML body.
         message.Body = new TextPart("html") { Text = htmlBody };
 
-        // Localize the SMTP client into a disposable context.
         using SmtpClient client = new();
 
-        // Connect to the configured SMTP server.
         await client.ConnectAsync(
             options.SmtpHost,
             options.SmtpPort,
@@ -61,14 +49,12 @@ public class SmtpEmailSender(IOptionsMonitor<EmailSenderOptions> optionsMonitor)
             stoppingToken
         );
 
-        // Authenticate, unless the server was configured to accept anonymous connections.
+        // No username means the server accepts anonymous connections.
         if (!string.IsNullOrWhiteSpace(options.Username))
             await client.AuthenticateAsync(options.Username, options.Password, stoppingToken);
 
-        // Send the message.
         await client.SendAsync(message, stoppingToken);
 
-        // We're done, disconnect cleanly.
         await client.DisconnectAsync(true, stoppingToken);
     }
 }

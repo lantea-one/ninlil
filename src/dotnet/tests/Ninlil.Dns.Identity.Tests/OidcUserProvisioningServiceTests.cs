@@ -11,11 +11,10 @@ using Ninlil.Dns.Identity.Sso;
 namespace Ninlil.Dns.Identity.Tests;
 
 /// <summary>
-///     This class proves <see cref="OidcUserProvisioningService" /> actually round-trips a
-///     <see cref="UserEntity" /> against a real SQLite database -- not just "the code compiles
-///     against <see cref="Ninlil.Dns.Data.Abstractions.Repository.IUserRepository" />'s own
-///     generic shape" -- the same real-database standard
-///     <c>Server.AccessControl.Tests.DnsAccessControlRuleRepositoryTests</c> already establishes.
+///     This class tests <see cref="OidcUserProvisioningService" /> against a SQLite database
+///     through the Entity Framework Core <see cref="Ninlil.Dns.Data.Abstractions.Repository.IUserRepository" />,
+///     so accounts are written and read back for real: first sign-in, missing claims, repeat
+///     sign-in and user-name collisions.
 /// </summary>
 public sealed class OidcUserProvisioningServiceTests : IDisposable
 {
@@ -52,12 +51,11 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     This method builds the <see cref="ClaimsPrincipal" /> shape
-    ///     <c>OpenIdConnectOptions.Events.OnTokenValidated</c> would hand
-    ///     <see cref="IOidcUserProvisioningService.FindOrProvisionUserAsync" /> after a real
-    ///     handshake -- claims under their own real OIDC short names, matching
-    ///     <c>MapInboundClaims = false</c> (see <c>ServiceCollectionAuthenticationExtension</c>'s
-    ///     own doc comment).
+    ///     This method builds the <see cref="ClaimsPrincipal" /> that
+    ///     <c>OpenIdConnectOptions.Events.OnTokenValidated</c> passes to
+    ///     <see cref="IOidcUserProvisioningService.FindOrProvisionUserAsync" />, with claims under
+    ///     their OIDC short names because <c>MapInboundClaims = false</c> (see
+    ///     <c>ServiceCollectionAuthenticationExtension</c>).
     /// </summary>
     private static ClaimsPrincipal BuildPrincipal(
         string subject,
@@ -100,9 +98,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         Assert.Equal(OidcUserProvisioningService.ProviderName, user.ExternalIdentityProvider);
         Assert.Equal("subject-1", user.ExternalSubjectId);
 
-        // A freshly-provisioned account has been granted absolutely nothing yet -- confirmed
-        // against the real repository, not just against the in-memory object this method
-        // returned.
+        // A new account has no roles or claims, checked in the database rather than on the
+        // returned object.
         IReadOnlyList<RoleEntity> roles = await _userRepository.ListRolesAsync(user.Id);
         IReadOnlyList<UserClaimEntity> directClaims = await _userRepository.ListClaimsAsync(
             user.Id
@@ -133,7 +130,7 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
 
         Assert.Equal("subject-bare", user.UserName);
 
-        // No 'name' claim was supplied either -- the display name falls back to the user name.
+        // No 'name' claim either, so the display name falls back to the user name.
         Assert.Equal("subject-bare", user.DisplayName);
     }
 
@@ -148,9 +145,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         UserEntity firstResult = await _service.FindOrProvisionUserAsync(firstPrincipal);
         await _context.SaveChangesAsync();
 
-        // A fresh context/repository, standing in for a fresh scope/request, confirms this
-        // second lookup is a real database read, not merely still-tracked in-memory state (the
-        // codebase's own bug catalog, entry 3).
+        // A new context and repository (a new request) make sure the second lookup reads the
+        // database rather than tracked in-memory state.
         DbContextOptionsBuilder<NinlilDnsContext> freshOptionsBuilder = new();
         freshOptionsBuilder.UseNinlilDnsSqlite($"Data Source={_databasePath}");
         await using NinlilDnsContext freshContext = new(freshOptionsBuilder.Options);
@@ -158,9 +154,8 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         EntityFrameworkUnitOfWork freshUnitOfWork = new(freshContext);
         OidcUserProvisioningService freshService = new(freshRepository, freshUnitOfWork);
 
-        // The identity provider now reports a different e-mail address for the exact same
-        // subject -- this must still resolve to the same local account, and must not silently
-        // overwrite the operator-visible fields already on file for it.
+        // The provider now reports a different e-mail for the same subject: it must resolve to
+        // the same account and must not overwrite the stored fields.
         ClaimsPrincipal secondPrincipal = BuildPrincipal(
             "subject-2",
             preferredUsername: "carol",
@@ -171,7 +166,7 @@ public sealed class OidcUserProvisioningServiceTests : IDisposable
         Assert.Equal(firstResult.Id, secondResult.Id);
         Assert.Equal("carol@old-example.com", secondResult.Email);
 
-        // No second account was ever created for this subject.
+        // No second account was created.
         IReadOnlyList<UserEntity> allUsers = await freshRepository.ListAsync();
         Assert.Single(allUsers);
     }

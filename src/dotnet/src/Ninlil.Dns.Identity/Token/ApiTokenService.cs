@@ -44,8 +44,7 @@ public class ApiTokenService(IApiTokenRepository apiTokenRepository, IUnitOfWork
         CancellationToken stoppingToken
     )
     {
-        // Generate the raw, secret token value. This is the only moment its plain-text form ever
-        // exists; from here on, only its hash is kept.
+        // The plain-text token exists only here and in the result; only its hash is stored.
         string rawToken = CryptoRandom.CreateUniqueId(32, CryptoRandom.OutputFormat.Base64Url);
 
         ApiTokenEntity token = new()
@@ -62,7 +61,6 @@ public class ApiTokenService(IApiTokenRepository apiTokenRepository, IUnitOfWork
         await apiTokenRepository.AddAsync(token, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, return the raw token alongside the persisted record.
         return new CreatedApiTokenResult(rawToken, token);
     }
 
@@ -77,26 +75,23 @@ public class ApiTokenService(IApiTokenRepository apiTokenRepository, IUnitOfWork
             stoppingToken
         );
 
-        // The token must exist, must not have been revoked, and must not have expired.
         if (token is not { RevokedAtUtc: null })
             return null;
 
         if (token.ExpiresAtUtc is { } expiresAtUtc && expiresAtUtc <= DateTimeOffset.UtcNow)
             return null;
 
-        // A one-time token that has already been consumed can never be validated again.
         if (token.Type == ApiTokenTypeEnum.OneTime)
         {
             if (token.ConsumedAtUtc is not null)
                 return null;
 
-            // Validating a one-time token is what consumes it.
+            // Validating a one-time token consumes it.
             token.ConsumedAtUtc = DateTimeOffset.UtcNow;
             apiTokenRepository.Update(token);
             await unitOfWork.SaveChangesAsync(stoppingToken);
         }
 
-        // We're done, the token is valid.
         return token;
     }
 

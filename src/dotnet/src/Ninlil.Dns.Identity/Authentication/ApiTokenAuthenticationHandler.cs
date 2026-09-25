@@ -13,12 +13,11 @@ using Ninlil.Dns.Identity.Token;
 namespace Ninlil.Dns.Identity.Authentication;
 
 /// <summary>
-///     This class authenticates a request that presents a Ninlil API token instead of a JSON
-///     Web Token -- for example, <c>Authorization: ApiToken 7f2e...</c>. It validates the token
-///     (and, for a one-time token, consumes it) through <see cref="IApiTokenService" />, then
-///     builds exactly the same claims a JWT-authenticated request would carry, through the same
-///     <see cref="IUserClaimsBuilder" />, so downstream authorization logic never needs to know
-///     which credential a caller actually used.
+///     This class authenticates a request that presents an API token instead of a JWT, for
+///     example <c>Authorization: ApiToken 7f2e...</c>. It validates (and, for a one-time token,
+///     consumes) the token through <see cref="IApiTokenService" />, then builds the same claims a
+///     JWT request carries through <see cref="IUserClaimsBuilder" />, so authorization does not
+///     depend on which credential was used.
 /// </summary>
 /// <param name="options">The scheme's configured header name and prefix.</param>
 /// <param name="logger">The logger factory used to create this handler's diagnostic logger.</param>
@@ -38,16 +37,14 @@ public class ApiTokenAuthenticationHandler(
     /// <inheritdoc />
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // There is nothing for this handler to do if the configured header is not present at
-        // all; let ASP.NET Core fall through to whatever other authentication is configured.
+        // No header: leave the request to the other authentication schemes.
         if (!Request.Headers.TryGetValue(Options.HeaderName, out StringValues headerValues))
             return AuthenticateResult.NoResult();
 
         string headerValue = headerValues.ToString();
         string prefix = $"{Options.SchemePrefix} ";
 
-        // The header is present, but it is not using this scheme's prefix (for example, it might
-        // be a "Bearer" JSON Web Token instead); again, let another handler take it.
+        // A different prefix (a "Bearer" JWT, for example) belongs to another scheme.
         if (!headerValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             return AuthenticateResult.NoResult();
 
@@ -56,13 +53,11 @@ public class ApiTokenAuthenticationHandler(
         if (string.IsNullOrEmpty(rawToken))
             return AuthenticateResult.Fail("The API token header was present but empty.");
 
-        // Validate (and, for a one-time token, consume) the presented token.
         ApiTokenEntity token = await apiTokenService.ValidateAsync(rawToken);
 
         if (token is null)
             return AuthenticateResult.Fail("The API token is invalid, expired, or revoked.");
 
-        // Look up the user the token authenticates as.
         UserEntity user = await userRepository.GetByIdAsync(token.UserId);
 
         if (user is null or { IsDisabled: true })
@@ -70,13 +65,10 @@ public class ApiTokenAuthenticationHandler(
                 "The API token's owning account no longer exists or is disabled."
             );
 
-        // Build the same identity, role, and permission claims a JWT-authenticated request would
-        // carry, so authorization behaves identically regardless of which credential was used.
         ClaimsIdentity identity = new(await claimsBuilder.BuildClaimsAsync(user), Scheme.Name);
         ClaimsPrincipal principal = new(identity);
         AuthenticationTicket ticket = new(principal, Scheme.Name);
 
-        // We're done, authentication succeeded.
         return AuthenticateResult.Success(ticket);
     }
 }

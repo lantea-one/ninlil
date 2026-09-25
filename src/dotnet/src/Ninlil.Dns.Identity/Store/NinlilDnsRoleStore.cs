@@ -7,12 +7,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Identity.Store;
 
 /// <summary>
-///     This class is the bridge between ASP.NET Core Identity's <see cref="RoleManager{TRole}" />
-///     and Ninlil's own, storage-agnostic <see cref="RoleEntity" /> repository. It implements
-///     <see cref="IRoleClaimStore{TRole}" /> rather than the smaller <see cref="IRoleStore{TRole}" />
-///     it extends, because Ninlil's permission model is expressed entirely through claims
-///     granted to a role (see <see cref="RoleClaimEntity" />) rather than through any built-in
-///     notion of a permission level.
+///     This class connects the ASP.NET Core Identity <see cref="RoleManager{TRole}" /> to the
+///     storage-agnostic <see cref="RoleEntity" /> repository. It implements
+///     <see cref="IRoleClaimStore{TRole}" />, not just <see cref="IRoleStore{TRole}" />, because
+///     permissions are claims granted to a role (<see cref="RoleClaimEntity" />).
 /// </summary>
 /// <param name="roleRepository">The repository this store reads roles from and writes roles to.</param>
 /// <param name="unitOfWork">The unit of work this store commits its changes through.</param>
@@ -60,7 +58,6 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
         await roleRepository.AddAsync(role, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
@@ -69,12 +66,11 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
     {
         role.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        // This is the point where Identity always expects a previously-staged claim grant or
-        // revocation to actually be committed.
+        // Identity calls UpdateAsync after staging a claim grant or revocation, so this also
+        // saves those.
         roleRepository.Update(role);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
@@ -84,7 +80,6 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
         roleRepository.Remove(role);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
@@ -122,7 +117,6 @@ public class NinlilDnsRoleStore(IRoleRepository roleRepository, IUnitOfWork unit
     /// <inheritdoc />
     public void Dispose()
     {
-        // Nothing here owns a disposable resource of its own; the repository and unit of work
-        // are both owned and disposed of by the dependency injection container.
+        // Nothing to dispose; the container owns the repository and unit of work.
     }
 }

@@ -8,19 +8,15 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Identity.Store;
 
 /// <summary>
-///     This class is the bridge between ASP.NET Core Identity and Ninlil's own,
-///     storage-agnostic <see cref="UserEntity" /> repository. ASP.NET Core Identity's
-///     <see cref="UserManager{TUser}" /> never touches a database directly; every read or write
-///     it needs goes through a store like this one, implementing whichever of Identity's small,
-///     single-purpose store interfaces the feature in question requires. Because this class talks
-///     to <see cref="IUserRepository" /> rather than to Entity Framework Core directly, the exact
-///     same class works whether the application is configured to use a relational database or
-///     MongoDB underneath.
+///     This class connects ASP.NET Core Identity to the storage-agnostic <see cref="UserEntity" />
+///     repository. <see cref="UserManager{TUser}" /> never touches a database itself; it goes
+///     through a store that implements the small Identity store interfaces each feature needs.
+///     Because this store uses <see cref="IUserRepository" /> rather than Entity Framework Core,
+///     it works with both the relational engines and MongoDB.
 ///     <para>
-///         Most of the methods below are simple property getters and setters on the in-memory
-///         <see cref="UserEntity" /> instance Identity is already holding; Identity always
-///         follows a mutating call with its own call to <see cref="UpdateAsync" />, which is
-///         where this store actually commits anything to storage.
+///         Most methods only get or set properties on the <see cref="UserEntity" /> Identity is
+///         holding. Identity follows every change with <see cref="UpdateAsync" />, which is where
+///         the store saves.
 ///     </para>
 /// </summary>
 /// <param name="userRepository">The repository this store reads users from and writes users to.</param>
@@ -48,14 +44,11 @@ public class NinlilDnsUserStore(
         IUserTwoFactorRecoveryCodeStore<UserEntity>
 {
     /// <summary>
-    ///     This constant contains the purpose string used to derive
-    ///     <see cref="_authenticatorKeyProtector" />. Exposed publicly (rather than kept a private
-    ///     literal) so that the cluster's own identity/RBAC federation mechanism
-    ///     (<c>Ninlil.Dns.Server.ClusterSync</c>'s <c>UserClusterSyncEventSubscriber</c>/
-    ///     <c>UserClusterConfigSyncApplier</c>) can derive the exact same protector from its own
-    ///     node's own <see cref="IDataProtectionProvider" /> to decrypt-at-sender/re-encrypt-at-
-    ///     receiver a TOTP authenticator key during a cluster sync, without duplicating this
-    ///     magic string in a second place that could drift out of sync with this one.
+    ///     This constant contains the purpose string of <see cref="_authenticatorKeyProtector" />. It is
+    ///     public so cluster identity sync in <c>Ninlil.Dns.Server.ClusterSync</c>
+    ///     (<c>UserClusterSyncEventSubscriber</c> and <c>UserClusterConfigSyncApplier</c>) can create the
+    ///     same protector on each node, decrypting a TOTP key on the sender and re-encrypting it on
+    ///     the receiver, without a second copy of the string.
     /// </summary>
     public const string AuthenticatorKeyProtectorPurpose =
         "Ninlil.Dns.Identity.TwoFactor.AuthenticatorKey";
@@ -69,36 +62,31 @@ public class NinlilDnsUserStore(
         "Ninlil.Dns.Identity.TwoFactor.RecoveryCodes";
 
     /// <summary>
-    ///     This property contains the protector used to encrypt and decrypt a user's TOTP
-    ///     authenticator key, so that the raw shared secret never sits in the database in plain
-    ///     text.
+    ///     This field contains the protector that encrypts a user's TOTP authenticator key, so the
+    ///     shared secret is never stored in plain text.
     /// </summary>
     private readonly IDataProtector _authenticatorKeyProtector =
         dataProtectionProvider.CreateProtector(AuthenticatorKeyProtectorPurpose);
 
     /// <summary>
-    ///     This property contains the protector used to encrypt and decrypt a user's own
-    ///     two-factor recovery codes, so the plain-text codes never sit in the database. A
-    ///     separate, dedicated purpose string from <see cref="_authenticatorKeyProtector" /> --
-    ///     one protector per secret type, per this project's own established convention -- since
-    ///     the two secrets protect genuinely independent things.
+    ///     This field contains the protector that encrypts a user's two-factor recovery codes, so
+    ///     they are never stored in plain text. It has its own purpose string, separate from
+    ///     <see cref="_authenticatorKeyProtector" />, as each secret type does.
     /// </summary>
     private readonly IDataProtector _recoveryCodesProtector =
         dataProtectionProvider.CreateProtector(RecoveryCodesProtectorPurpose);
 
     /// <summary>
-    ///     This constant is the delimiter <see cref="ReplaceCodesAsync" />/
-    ///     <see cref="RedeemCodeAsync" /> join and split a user's own recovery codes on before
-    ///     encrypting/after decrypting them -- the exact same delimiter ASP.NET Core Identity's
-    ///     own default <c>UserStore</c> uses for this feature, chosen here purely for
-    ///     familiarity/consistency with that convention, not because anything else depends on it.
+    ///     This constant is the delimiter <see cref="ReplaceCodesAsync" /> and
+    ///     <see cref="RedeemCodeAsync" /> use to join and split the recovery codes around encryption.
+    ///     It matches the default Identity <c>UserStore</c> for familiarity; nothing else depends on
+    ///     it.
     /// </summary>
     private const string RecoveryCodeDelimiter = ";";
 
     // ------------------------------------------------------------------------------------------
-    // IUserStore<UserEntity> -- the small set of operations every Identity store must support:
-    // reading and writing a user's identifier and name, and creating, updating, and deleting the
-    // user record itself.
+    // IUserStore<UserEntity>: identifier and name, and creating, updating and deleting the
+    // user.
     // ------------------------------------------------------------------------------------------
 
     /// <inheritdoc />
@@ -136,29 +124,25 @@ public class NinlilDnsUserStore(
     /// <inheritdoc />
     public async Task<IdentityResult> CreateAsync(UserEntity user, CancellationToken stoppingToken)
     {
-        // A freshly-created user needs its own identifier and creation timestamp.
         user.Id = user.Id == Guid.Empty ? Guid.NewGuid() : user.Id;
         user.CreatedAtUtc = DateTimeOffset.UtcNow;
 
         await userRepository.AddAsync(user, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
     /// <inheritdoc />
     public async Task<IdentityResult> UpdateAsync(UserEntity user, CancellationToken stoppingToken)
     {
-        // Record when this user was last modified.
         user.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        // This is the point where Identity always expects previously-staged changes -- a claim
-        // added, a role granted, an authenticator key set -- to actually be committed.
+        // Identity calls UpdateAsync after staging changes (a claim, a role, an authenticator
+        // key), so this saves those too.
         userRepository.Update(user);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
@@ -168,7 +152,6 @@ public class NinlilDnsUserStore(
         userRepository.Remove(user);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, report success.
         return IdentityResult.Success;
     }
 
@@ -187,8 +170,7 @@ public class NinlilDnsUserStore(
     /// <inheritdoc />
     public void Dispose()
     {
-        // Nothing here owns a disposable resource of its own; the repository, unit of work, and
-        // data protector are all owned and disposed of by the dependency injection container.
+        // Nothing to dispose; the container owns the dependencies.
     }
 
     // ------------------------------------------------------------------------------------------
@@ -473,9 +455,8 @@ public class NinlilDnsUserStore(
             stoppingToken
         );
 
-        // ASP.NET Core Identity's RoleManager-backed UserManager always verifies a role exists
-        // before asking the store to grant it, so reaching this point with no matching role
-        // means something upstream skipped that check.
+        // UserManager checks that the role exists before calling this, so a missing role
+        // means that check was skipped.
         if (role is null)
             throw new InvalidOperationException(
                 $"Cannot add user '{user.UserName}' to role '{normalizedRoleName}' because no role with that name exists."
@@ -496,7 +477,6 @@ public class NinlilDnsUserStore(
             stoppingToken
         );
 
-        // There is nothing to remove if the role does not exist in the first place.
         if (role is null)
             return;
 
@@ -536,9 +516,8 @@ public class NinlilDnsUserStore(
     ) => [.. await roleRepository.ListUsersInRoleAsync(normalizedRoleName, stoppingToken)];
 
     // ------------------------------------------------------------------------------------------
-    // IUserAuthenticatorKeyStore<UserEntity> -- the shared secret behind TOTP two-factor codes,
-    // defined by RFC 6238. Encrypted at rest so that a stolen database backup alone is not enough
-    // to mint valid authenticator codes for a user.
+    // IUserAuthenticatorKeyStore<UserEntity>: the shared secret behind TOTP codes (RFC 6238),
+    // encrypted at rest so a stolen database backup cannot produce valid codes.
     // ------------------------------------------------------------------------------------------
 
     /// <inheritdoc />
@@ -567,12 +546,10 @@ public class NinlilDnsUserStore(
         );
 
     // ------------------------------------------------------------------------------------------
-    // IUserTwoFactorRecoveryCodeStore<UserEntity> -- single-use fallback codes an operator can
-    // redeem in place of an authenticator/e-mailed code when their normal second factor is
-    // unavailable (a lost device, for example). Every method here follows the same in-memory-
-    // mutation-then-UpdateAsync shape every other mutating member of this store already follows;
-    // UserManager's own ReplaceCodesAsync/RedeemTwoFactorRecoveryCodeAsync callers always follow
-    // a store mutation with their own call to UpdateAsync, which is what actually persists it.
+    // IUserTwoFactorRecoveryCodeStore<UserEntity>: single-use codes a user can redeem instead
+    // of an authenticator or e-mailed code when the usual second factor is unavailable (a lost
+    // device, for example). Like the rest of the store, these only change the entity;
+    // UserManager then calls UpdateAsync to save.
     // ------------------------------------------------------------------------------------------
 
     /// <inheritdoc />
@@ -595,11 +572,8 @@ public class NinlilDnsUserStore(
     {
         string[] remainingCodes = GetRecoveryCodes(user);
 
-        // A recovery code is compared with an ordinal, case-sensitive match -- exactly the codes
-        // this project's own generator (Identity's default RecoveryCodeGenerator) produces them
-        // in, with no normalization of operator-entered case, since none of the codes this
-        // project generates are ever mixed-case-ambiguous by design (uppercase letters and
-        // digits only).
+        // Codes are compared ordinally and case-sensitively, as the default Identity generator
+        // produced them; entered text is not normalized.
         if (!remainingCodes.Contains(code, StringComparer.Ordinal))
             return Task.FromResult(false);
 
@@ -618,10 +592,9 @@ public class NinlilDnsUserStore(
 
     /// <summary>
     ///     This method decrypts and splits <see cref="UserEntity.TwoFactorRecoveryCodesEncrypted" />
-    ///     back into its individual codes, or an empty array if the user has never generated a
-    ///     batch (or has redeemed every one they were given).
+    ///     into codes, or returns an empty array if no batch was generated or every code was used.
     /// </summary>
-    /// <param name="user">The user whose own recovery codes are being read.</param>
+    /// <param name="user">The user whose recovery codes are read.</param>
     private string[] GetRecoveryCodes(UserEntity user)
     {
         if (string.IsNullOrEmpty(user.TwoFactorRecoveryCodesEncrypted))

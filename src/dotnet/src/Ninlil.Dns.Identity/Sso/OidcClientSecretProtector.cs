@@ -5,33 +5,23 @@ using Ninlil.Dns.Identity.Options;
 namespace Ninlil.Dns.Identity.Sso;
 
 /// <summary>
-///     This class encrypts and decrypts <c>OidcSsoOptions.ClientSecretEncrypted</c> via
-///     <see cref="IDataProtector" />, the same "encrypted at rest via ASP.NET Core Data
-///     Protection, never a custom crypto scheme, one purpose-scoped protector per secret type"
-///     pattern <c>Server.Webhooks.WebhookCredentialProtector</c>/<c>Server.Tsig.TsigSecretProtector</c>
-///     already establish (architectural invariant #5).
+///     This class encrypts and decrypts <c>OidcSsoOptions.ClientSecretEncrypted</c> with
+///     <see cref="IDataProtector" />, using one purpose-scoped protector per secret type as
+///     <c>Server.Webhooks.WebhookCredentialProtector</c> and <c>Server.Tsig.TsigSecretProtector</c>
+///     do. Secrets are encrypted with ASP.NET Core Data Protection, never custom cryptography.
 ///     <para>
-///         <b>This is the first <c>Options</c>-class secret field this project encrypts at rest
-///         before writing it into the runtime JSON configuration file.</b> Every prior runtime
-///         settings secret field follows one of two shapes: it lives on a database-backed entity
-///         (TSIG keys, DNSSEC keys, cloud credentials, webhook auth/HMAC secrets), where
-///         invariant #5 already applies, or it is an <c>Options</c>-bound configuration-file
-///         field written in plain text -- <c>EmailSenderOptions.Password</c>
-///         (<c>Web.Controllers.SmtpSettingsController</c>) is the standing example, and stays
-///         that way here: fixing that pre-existing gap is out of scope for this feature and is
-///         deliberately left alone, not silently swept in. <see cref="OidcSsoOptions.ClientSecretEncrypted" />
-///         does not repeat that gap -- it is the first configuration-file secret in this project
-///         encrypted the same way a database-backed one already is, closing the gap invariant #5
-///         calls for in general, for this one new field specifically.
+///         The client secret lives in the runtime JSON configuration file rather than the
+///         database, and is encrypted there like the database-backed secrets (TSIG, DNSSEC and
+///         cloud credentials, webhook secrets). <c>EmailSenderOptions.Password</c>, written by
+///         <c>Web.Controllers.SmtpSettingsController</c>, is still stored in plain text.
 ///     </para>
 /// </summary>
-/// <param name="dataProtectionProvider">The provider this protector derives its own purpose-scoped key from.</param>
+/// <param name="dataProtectionProvider">The provider this protector derives its purpose-scoped key from.</param>
 public sealed class OidcClientSecretProtector(IDataProtectionProvider dataProtectionProvider)
 {
     /// <summary>
-    ///     This property contains the dedicated, purpose-scoped protector used for this secret --
-    ///     a compromise of a different secret's own protector must never also compromise this
-    ///     one, since each is rotatable independently of the others.
+    ///     This field contains the protector for this secret. A separate purpose keeps it independent
+    ///     of the protectors for other secrets.
     /// </summary>
     private readonly IDataProtector _protector = dataProtectionProvider.CreateProtector(
         "Ninlil.Dns.Identity.Sso.ClientSecret"
@@ -45,9 +35,8 @@ public sealed class OidcClientSecretProtector(IDataProtectionProvider dataProtec
     public string Protect(string clientSecret) => _protector.Protect(clientSecret);
 
     /// <summary>
-    ///     This method decrypts a previously-encrypted <see cref="OidcSsoOptions.ClientSecretEncrypted" />
-    ///     value, ready to hand to the OpenID Connect middleware as its own real
-    ///     <c>OpenIdConnectOptions.ClientSecret</c>.
+    ///     This method decrypts an <see cref="OidcSsoOptions.ClientSecretEncrypted" /> value for use as
+    ///     <c>OpenIdConnectOptions.ClientSecret</c>. An empty value decrypts to an empty string.
     /// </summary>
     /// <param name="clientSecretEncrypted">An <see cref="OidcSsoOptions.ClientSecretEncrypted" /> value.</param>
     public string Unprotect(string clientSecretEncrypted) =>

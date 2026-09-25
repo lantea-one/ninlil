@@ -18,17 +18,13 @@ using Ninlil.Dns.Identity.Token;
 namespace Ninlil.Dns.Identity.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's authentication schemes: a JSON Web Token bearer scheme (RFC 7519 and RFC
-///     6750) for interactive sign-ins, Ninlil's own API token scheme for machine-to-machine
-///     callers, and (when configured) a generic, standards-compliant OpenID Connect scheme for
-///     admin-login federation against any real OIDC issuer. A single default scheme inspects each
-///     incoming request's <c>Authorization</c> header and forwards it to whichever of the first
-///     two actually applies, so a controller can simply write <c>[Authorize]</c> without caring
-///     which credential a given caller used; the OIDC scheme is never part of that forwarding
-///     selection at all, since it is only ever reached through an explicit browser challenge
-///     (<c>Web.Controllers.SsoController.Challenge</c>), never through an <c>Authorization</c>
-///     header.
+///     This class provides our <see cref="IServiceCollection" /> extension for the authentication
+///     schemes: JWT bearer (RFC 7519 and RFC 6750) for interactive sign-ins, the API token scheme
+///     for machine-to-machine callers, and, when configured, OpenID Connect for admin sign-in
+///     through an external provider. A default scheme looks at the <c>Authorization</c> header
+///     and forwards to the JWT or API token scheme, so controllers just use <c>[Authorize]</c>.
+///     The OIDC scheme is not part of that choice; it is reached only through a browser challenge
+///     (<c>Web.Controllers.SsoController.Challenge</c>).
 /// </summary>
 public static class ServiceCollectionAuthenticationExtension
 {
@@ -39,48 +35,38 @@ public static class ServiceCollectionAuthenticationExtension
     public const string DefaultScheme = "NinlilDns";
 
     /// <summary>
-    ///     This constant contains the name the OpenID Connect scheme is registered under, when
-    ///     <see cref="OidcSsoOptions" /> is configured enough to register it at all -- referenced
-    ///     by <c>Web.Controllers.SsoController</c> to check whether the scheme is currently
-    ///     registered and to issue its own real browser challenge against it.
+    ///     This constant contains the name of the OpenID Connect scheme, when it is registered.
+    ///     <c>Web.Controllers.SsoController</c> uses it to check whether the scheme exists and to
+    ///     issue the browser challenge.
     /// </summary>
     public const string OidcSchemeName = "Oidc";
 
     /// <summary>
-    ///     This constant names the authentication-properties item an OpenID Connect challenge
-    ///     carries the login page's "Remember me" choice in, from <c>Web.Controllers.SsoController</c>
-    ///     through the identity provider round trip to the sign-in handler below.
+    ///     This constant names the authentication-properties item that carries the sign-in page's
+    ///     "Remember me" choice from <c>Web.Controllers.SsoController</c>, through the identity
+    ///     provider round trip, to the handler below.
     /// </summary>
     public const string SsoRememberMeItemKey = "ninlil.rememberMe";
 
     /// <summary>
-    ///     This constant contains the name of the short-lived cookie authentication scheme the
-    ///     OpenID Connect middleware itself uses to carry its own correlation/nonce state across
-    ///     the redirect to the identity provider and back -- <b>not</b> a general-purpose
-    ///     session cookie, and never used by anything else in this project. This project's own
-    ///     sign-in model stays exactly as stateless/JWT-based as it always was; this cookie exists purely because the OIDC handshake
-    ///     itself is a multi-request redirect dance that needs somewhere short-lived to keep its
-    ///     own state, which ASP.NET Core's OpenID Connect middleware always expects a
-    ///     <see cref="Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationHandler" />-backed
-    ///     scheme to provide via <c>OpenIdConnectOptions.SignInScheme</c>. It is never set
-    ///     as this application's <see cref="Microsoft.AspNetCore.Authentication.AuthenticationOptions.DefaultScheme" />/
-    ///     <c>DefaultChallengeScheme</c>, so it has zero effect on any other, unrelated request.
+    ///     This constant contains the name of the short-lived cookie scheme the OpenID Connect
+    ///     middleware uses for its correlation and nonce state during the redirect round trip. It is
+    ///     <b>not</b> a session cookie; sign-in stays JWT-based. The middleware requires a
+    ///     <see cref="Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationHandler" /> scheme
+    ///     as <c>OpenIdConnectOptions.SignInScheme</c>. It is never the
+    ///     <see cref="Microsoft.AspNetCore.Authentication.AuthenticationOptions.DefaultScheme" /> or
+    ///     <c>DefaultChallengeScheme</c>, so it affects no other request.
     /// </summary>
     public const string OidcCorrelationCookieScheme = "OidcCorrelation";
 
     /// <summary>
-    ///     This method registers the JSON Web Token bearer scheme and the API token scheme,
-    ///     along with a default forwarding scheme that selects between them based on the
-    ///     incoming request's <c>Authorization</c> header. When <see cref="OidcSsoOptions" />'s own
-    ///     <see cref="OidcSsoOptions.Enable" /> is set and both <see cref="OidcSsoOptions.Authority" />/
-    ///     <see cref="OidcSsoOptions.ClientId" /> are non-blank, this method additionally registers
-    ///     a generic OpenID Connect scheme (<see cref="OidcSchemeName" />) plus the short-lived
-    ///     correlation cookie scheme it depends on (<see cref="OidcCorrelationCookieScheme" />) --
-    ///     skipped entirely otherwise, so an operator who flips <see cref="OidcSsoOptions.Enable" />
-    ///     on without finishing the rest of the setup can never crash this host at startup or on
-    ///     first challenge. See <see cref="OidcSsoOptions" />'s own doc comment for why this whole
-    ///     decision is made once here, at service-registration time, and therefore always needs a
-    ///     process restart to change.
+    ///     This method registers the JWT bearer and API token schemes and a default scheme that picks
+    ///     between them by the <c>Authorization</c> header. When <see cref="OidcSsoOptions.Enable" />
+    ///     is set and <see cref="OidcSsoOptions.Authority" /> and <see cref="OidcSsoOptions.ClientId" />
+    ///     are filled in, it also registers the OpenID Connect scheme (<see cref="OidcSchemeName" />)
+    ///     and its correlation cookie scheme (<see cref="OidcCorrelationCookieScheme" />). Otherwise
+    ///     they are skipped, so a half-finished SSO setup cannot crash the host. The decision is made
+    ///     once at registration, so changing it needs a restart (see <see cref="OidcSsoOptions" />).
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read JWT/SSO settings from.</param>
@@ -112,10 +98,9 @@ public static class ServiceCollectionAuthenticationExtension
                         string authorizationHeader =
                             context.Request.Headers.Authorization.ToString();
 
-                        // An API-token-prefixed header forwards to the API token scheme;
-                        // everything else (including no header at all) forwards to the JWT
-                        // bearer scheme, whose own validation reports the appropriate failure
-                        // for a missing or malformed token.
+                        // An "ApiToken" header goes to the API token scheme; everything else,
+                        // including no header, goes to JWT bearer, which reports a missing or
+                        // malformed token.
                         return authorizationHeader.StartsWith(
                             "ApiToken ",
                             StringComparison.OrdinalIgnoreCase
@@ -146,9 +131,7 @@ public static class ServiceCollectionAuthenticationExtension
                 _ => { }
             );
 
-        // Only register the OIDC scheme (and its own correlation cookie scheme) when it is both
-        // switched on and configured enough to actually work -- see this method's own doc
-        // comment.
+        // Register OIDC only when it is on and configured enough to work.
         bool oidcConfigured =
             ssoOptions.Enable
             && !string.IsNullOrWhiteSpace(ssoOptions.Authority)
@@ -162,9 +145,7 @@ public static class ServiceCollectionAuthenticationExtension
                 OidcSchemeName,
                 options =>
                 {
-                    // The OIDC handshake's own correlation/nonce state rides on the short-lived
-                    // cookie scheme above, never on this application's real, stateless JWT
-                    // sign-in -- see OidcCorrelationCookieScheme's own doc comment.
+                    // Handshake state only; see OidcCorrelationCookieScheme.
                     options.SignInScheme = OidcCorrelationCookieScheme;
 
                     options.Authority = ssoOptions.Authority;
@@ -172,11 +153,8 @@ public static class ServiceCollectionAuthenticationExtension
                     options.ResponseType = OpenIdConnectResponseType.Code;
                     options.GetClaimsFromUserInfoEndpoint = true;
 
-                    // Preserve every claim under its own real OIDC name ("sub", "email", and so
-                    // on) instead of ASP.NET Core's default renaming onto legacy
-                    // System.Security.Claims.ClaimTypes URIs -- the codebase's own bug catalog
-                    // entry 16 already documents the identical trap for the JWT bearer scheme
-                    // above; OidcUserProvisioningService reads claims by their real OIDC name.
+                    // Keep the OIDC claim names ("sub", "email", and so on) instead of mapping
+                    // them to ClaimTypes URIs; OidcUserProvisioningService reads the OIDC names.
                     options.MapInboundClaims = false;
 
                     options.Scope.Clear();
@@ -185,12 +163,9 @@ public static class ServiceCollectionAuthenticationExtension
 
                     options.Events = new OpenIdConnectEvents
                     {
-                        // The identity provider's own token just validated successfully -- find
-                        // or provision the matching local account, mint this application's own
-                        // access/refresh token pair for it (exactly like a completed local
-                        // sign-in would), and redirect the browser back into the Angular SPA with
-                        // those tokens, rather than ever completing the cookie-based sign-in the
-                        // OIDC middleware would otherwise perform by default.
+                        // The provider's token is valid: find or create the local account, issue
+                        // Ninlil access and refresh tokens as a local sign-in would, and redirect
+                        // to the admin console instead of doing the middleware's cookie sign-in.
                         OnTokenValidated = async context =>
                         {
                             IServiceProvider services = context.HttpContext.RequestServices;
@@ -208,8 +183,7 @@ public static class ServiceCollectionAuthenticationExtension
 
                             AccessTokenResult accessToken =
                                 await jwtTokenService.CreateAccessTokenAsync(user, stoppingToken);
-                            // "Remember me" from the login page rode through the identity
-                            // provider round trip in the challenge's own properties.
+                            // "Remember me" travels in the challenge properties.
                             bool rememberMe =
                                 context.Properties?.Items.TryGetValue(
                                     SsoRememberMeItemKey,
@@ -227,20 +201,17 @@ public static class ServiceCollectionAuthenticationExtension
                                     stoppingToken
                                 );
 
-                            // The refresh token goes only into the HttpOnly refresh cookie, the
-                            // same one a local browser sign-in gets -- never into the redirect.
+                            // The refresh token goes only into the HttpOnly cookie, as for a local
+                            // browser sign-in, never into the redirect.
                             RefreshTokenCookie.Write(
                                 context.HttpContext,
                                 refreshToken.RefreshToken,
                                 refreshToken.Session
                             );
 
-                            // Stop the OIDC middleware's own default handling (which would try to
-                            // complete a cookie sign-in and redirect to whatever page originally
-                            // triggered the challenge) and issue our own redirect instead. The
-                            // access token rides in the URL fragment, never the query string, so
-                            // it never lands in this server's own access logs or any intermediate
-                            // proxy's.
+                            // Skip the middleware's default handling and redirect ourselves. The
+                            // access token is in the URL fragment, not the query string, so it never
+                            // reaches server or proxy access logs.
                             context.HandleResponse();
                             context.Response.Redirect(
                                 "/sso-callback#access_token="
@@ -250,10 +221,9 @@ public static class ServiceCollectionAuthenticationExtension
                             );
                         },
 
-                        // A failed or cancelled identity-provider flow (the operator closed the
-                        // IdP's own login tab, a misconfigured Authority/ClientId, and so on)
-                        // lands the caller back on the login page with a visible error flag,
-                        // rather than an unhandled-exception page.
+                        // A failed or cancelled provider flow (a closed login tab, a wrong
+                        // Authority or ClientId, and so on) returns to the sign-in page with an
+                        // error flag instead of an exception page.
                         OnRemoteFailure = context =>
                         {
                             context.HandleResponse();
@@ -264,12 +234,9 @@ public static class ServiceCollectionAuthenticationExtension
                 }
             );
 
-            // OpenIdConnectOptions.ClientSecret is resolved lazily from a real
-            // IDataProtectionProvider once dependency injection has actually finished building
-            // the container -- AddOpenIdConnect itself runs while IServiceCollection is still
-            // being assembled, well before a provider could be resolved synchronously, and
-            // OidcSsoOptions.ClientSecretEncrypted is ciphertext, not the real secret the
-            // middleware itself needs at handshake time.
+            // The client secret is stored encrypted, and decrypting it needs the
+            // IDataProtectionProvider, which only exists once the container is built. So it is
+            // set here through the options pipeline rather than inside AddOpenIdConnect.
             instance
                 .AddOptions<OpenIdConnectOptions>(OidcSchemeName)
                 .Configure<IDataProtectionProvider>(
@@ -280,7 +247,6 @@ public static class ServiceCollectionAuthenticationExtension
                 );
         }
 
-        // We're done, return the IServiceCollection instance.
         return instance;
     }
 }

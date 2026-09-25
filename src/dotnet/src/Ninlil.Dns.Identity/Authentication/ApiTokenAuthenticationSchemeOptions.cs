@@ -15,9 +15,9 @@ public class ApiTokenAuthenticationSchemeOptions : AuthenticationSchemeOptions
     public string HeaderName { get; set; } = "Authorization";
 
     /// <summary>
-    ///     This property contains the scheme prefix a header value must start with -- for
-    ///     example, <c>Authorization: ApiToken &lt;token&gt;</c> -- distinguishing an API token
-    ///     from, say, a <c>Bearer</c>-prefixed JSON Web Token sharing the same header.
+    ///     This property contains the prefix a header value must start with, as in
+    ///     <c>Authorization: ApiToken &lt;token&gt;</c>. It tells an API token apart from a
+    ///     <c>Bearer</c> JWT in the same header.
     /// </summary>
     public string SchemePrefix { get; set; } = "ApiToken";
 }

@@ -39,25 +39,21 @@ public class JwtTokenService(
         CancellationToken stoppingToken = default
     )
     {
-        // Build the identity, role, and permission claims shared with API-token authentication,
-        // plus a token identifier unique to this specific access token.
+        // The same claims as API-token authentication, plus a unique token identifier.
         List<Claim> claims =
         [
             .. await claimsBuilder.BuildClaimsAsync(user, stoppingToken),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         ];
 
-        // Compute when this token expires.
         DateTime nowUtc = DateTime.UtcNow;
         DateTime expiresAtUtc = nowUtc.Add(_options.AccessTokenLifetime);
 
-        // Build the signing credentials from the configured shared secret.
         SigningCredentials signingCredentials = new(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey)),
             SecurityAlgorithms.HmacSha256
         );
 
-        // Build and sign the token.
         JwtSecurityToken token = new(
             _options.Issuer,
             _options.Audience,
@@ -67,7 +63,6 @@ public class JwtTokenService(
             signingCredentials
         );
 
-        // We're done, encode and return the signed token.
         return new AccessTokenResult(new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
     }
 
@@ -80,8 +75,7 @@ public class JwtTokenService(
         CancellationToken stoppingToken = default
     )
     {
-        // Generate the raw, secret refresh token value. This is the only moment its plain-text
-        // form ever exists; from here on, only its hash is kept.
+        // The plain-text token exists only here and in the result; only its hash is stored.
         string rawRefreshToken = CryptoRandom.CreateUniqueId(
             32,
             CryptoRandom.OutputFormat.Base64Url
@@ -106,7 +100,6 @@ public class JwtTokenService(
         await sessionRepository.AddAsync(session, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // We're done, return the raw token alongside the persisted session record.
         return new RefreshTokenResult(rawRefreshToken, session);
     }
 
@@ -116,8 +109,7 @@ public class JwtTokenService(
         CancellationToken stoppingToken = default
     )
     {
-        // No token at all (a cookie-mode refresh from a browser holding no refresh cookie) can
-        // never match a session.
+        // A missing token (a cookie-mode refresh without a cookie) matches no session.
         if (string.IsNullOrEmpty(rawRefreshToken))
             return null;
 
@@ -126,8 +118,6 @@ public class JwtTokenService(
             stoppingToken
         );
 
-        // The token is only valid if it matched a session, that session has not been revoked,
-        // and that session has not yet expired.
         return session is { RevokedAtUtc: null } && session.ExpiresAtUtc > DateTimeOffset.UtcNow
             ? session
             : null;
