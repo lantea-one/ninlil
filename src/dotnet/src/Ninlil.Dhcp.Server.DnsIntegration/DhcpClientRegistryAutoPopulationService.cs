@@ -12,52 +12,43 @@ using Ninlil.Dns.Server.Core.ClientIdentity;
 namespace Ninlil.Dhcp.Server.DnsIntegration;
 
 /// <summary>
-///     This class auto-populates Ninlil's own "known client" registry
-///     (<see cref="DnsClientEntity" />/<see cref="IDnsClientRepository" />) the first time a DHCP
-///     lease is granted for a client identifier the registry has never seen before -- a sibling
-///     reaction to <see cref="DhcpDnsRegistrationService" />'s own A/AAAA registration, not a
-///     replacement for it: this service runs regardless of whether the lease's own owning
-///     <see cref="DhcpScopeEntity" /> has DHCP-&gt;DNS integration configured at all
-///     (<see cref="DhcpScopeEntity.DnsZoneId" /> unset), since a known-client row is useful on its
-///     own even when no A/AAAA record is ever registered for it.
+///     This class adds DHCP clients to the client registry (<see cref="DnsClientEntity" />,
+///     <see cref="IDnsClientRepository" />) the first time a lease is granted for a client
+///     identifier the registry has not seen. It reacts to the same events as
+///     <see cref="DhcpDnsRegistrationService" /> but independently of it: it runs whether or not
+///     the scope has a <see cref="DhcpScopeEntity.DnsZoneId" />, since a registry entry is useful
+///     without a DNS record. Every grant is also reported to the presence recorder, if there is
+///     one.
 ///     <para>
-///         <b>An address row is created at most once per client identifier, never overwritten on a
-///         later renewal.</b> Once a <see cref="DnsClientAddressEntity" /> row exists for a given
-///         identifier/protocol pair, this service leaves its owning device's own
-///         <see cref="DnsClientEntity.DisplayName" /> alone forever afterward -- mirroring
-///         <see cref="DhcpReservationEntity.HostName" />'s own established "operator-supplied,
-///         independent of any later client-presented name" precedent exactly. An operator may have
-///         since renamed the client to something more meaningful than whatever host name it
-///         happened to present; a later DHCP renewal must never silently revert that.
+///         <b>Created once, never overwritten.</b> Once a <see cref="DnsClientAddressEntity" />
+///         exists for an identifier and protocol, later grants leave the device alone, including
+///         its <see cref="DnsClientEntity.DisplayName" />, which an operator may have changed, as
+///         an operator-supplied <see cref="DhcpReservationEntity.HostName" /> is independent of
+///         the client's name.
 ///     </para>
 ///     <para>
-///         <b>A previously-unseen identifier joins an existing device when it provably belongs to
-///         it, and creates a new device otherwise.</b> A dual-stack device presents a MAC-based
-///         identifier to DHCPv4 and a DUID to DHCPv6; <see cref="DhcpClientIdentifierLinkKeys" />
-///         recovers the MAC a DUID-LLT/DUID-LL embeds, and the DUID an RFC 4361 DHCPv4
-///         Client-identifier embeds, so the two can be recognized as one. When exactly one existing
-///         device already answers to an identifier sharing such a link key, the new identifier is
-///         added to that device (seeding its <see cref="DnsClientEntity.DisplayName" /> only if it
-///         has none yet). No match, or matches on more than one device, creates a new device as
-///         before -- an ambiguous merge is never guessed, and an operator can still link two
-///         identifiers by hand through the device's own address collection. Candidates are found
-///         by scanning every stored address in memory, which is fine at this project's homelab
-///         scale and runs only the first time an identifier is ever seen.
+///         <b>Linking dual-stack devices.</b> A dual-stack device presents a MAC-based identifier
+///         to DHCPv4 and a DUID to DHCPv6. <see cref="DhcpClientIdentifierLinkKeys" /> recovers the
+///         MAC inside a DUID-LLT or DUID-LL, and the DUID inside an RFC 4361 Client-identifier, so
+///         the two can be recognized. When exactly one device already has an identifier sharing a
+///         link key, the new identifier is added to it (and its <see cref="DnsClientEntity.DisplayName" />
+///         set only if empty). With no match, or matches on several devices, a new device is
+///         created; an ambiguous merge is never guessed, and an operator can link identifiers by
+///         hand. Candidates are found by loading every stored address, acceptable at home-network
+///         scale and only done for a new identifier.
 ///     </para>
 ///     <para>
-///         <b>Only a real lease grant creates a row.</b> A release or expiry is deliberately a
-///         no-op here -- unlike <see cref="DhcpDnsRegistrationService" />, which must remove its
-///         own A/AAAA record the moment a lease is no longer valid, the known-client registry
-///         describes a physical device, not a currently-active address binding, so the row this
-///         service created for that device is left alone even after its lease lapses.
+///         <b>Only grants count.</b> Releases and expiries change nothing here: the registry
+///         describes devices, not current address bindings, so an entry stays after the lease
+///         ends.
 ///     </para>
 /// </summary>
-/// <param name="leaseRepository">The repository used to re-read the lease this event names.</param>
-/// <param name="clientRepository">The repository this service reads and writes known devices through.</param>
-/// <param name="clientAddressRepository">The repository this service reads and writes a device's own addresses through.</param>
-/// <param name="unitOfWork">The unit of work a new row is committed through.</param>
-/// <param name="logger">The logger this service records skip decisions to.</param>
-/// <param name="presenceRecorder">The presence recorder every grant or renewal is reported to as a sighting, or <see langword="null" /> when presence tracking is not registered.</param>
+/// <param name="leaseRepository">The repository the lease named by the event is read from.</param>
+/// <param name="clientRepository">The repository devices are read and written through.</param>
+/// <param name="clientAddressRepository">The repository a device's identifiers are read and written through.</param>
+/// <param name="unitOfWork">The unit of work new rows are saved through.</param>
+/// <param name="logger">The logger skips and links are recorded to.</param>
+/// <param name="presenceRecorder">The presence recorder every grant is reported to as a sighting, or <see langword="null" /> when presence tracking is not registered.</param>
 public class DhcpClientRegistryAutoPopulationService(
     ILeaseRepository leaseRepository,
     IDnsClientRepository clientRepository,
@@ -68,22 +59,21 @@ public class DhcpClientRegistryAutoPopulationService(
 )
 {
     /// <summary>
-    ///     This method reacts to a single <c>DhcpLeaseChangedEvent</c>, re-reading the lease it
-    ///     names fresh (the event itself is id-only) and creating a known-client row for it if,
-    ///     and only if, the change is a real grant and no row for this identifier exists yet.
+    ///     This method handles one <c>DhcpLeaseChangedEvent</c>: for a grant it reads the lease
+    ///     (the event carries only its identifier), records the sighting, and adds the identifier
+    ///     to the registry if it is new, either under a linked device or as a new device.
     /// </summary>
     /// <param name="leaseId">The identifier of the lease that changed.</param>
-    /// <param name="changeKind">What actually happened to the lease.</param>
+    /// <param name="changeKind">What happened to the lease.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns><see langword="true" /> if a new row was created, <see langword="false" /> otherwise.</returns>
+    /// <returns><see langword="true" /> if a registry row was added, <see langword="false" /> otherwise.</returns>
     public async Task<bool> HandleLeaseChangeAsync(
         Guid leaseId,
         DhcpLeaseChangeKindEnum changeKind,
         CancellationToken stoppingToken = default
     )
     {
-        // A release or expiry never creates or touches a known-client row -- see this class's
-        // own doc comment for why.
+        // Releases and expiries change nothing (see the class summary).
         if (changeKind != DhcpLeaseChangeKindEnum.Granted)
             return false;
 
@@ -97,9 +87,8 @@ public class DhcpClientRegistryAutoPopulationService(
             return false;
         }
 
-        // Every grant -- including a renewal for an already-known device -- is proof the client
-        // is present right now. A Prefix Delegation lease's own address is a delegated prefix,
-        // not the client's address, so only its identity is recorded.
+        // Every grant, renewals included, shows the client is present. A prefix delegation
+        // lease holds a prefix, not the client's address, so only the identity is recorded.
         presenceRecorder?.RecordIdentity(
             lease.ClientIdentifier,
             lease.ProtocolVersion,
@@ -115,17 +104,15 @@ public class DhcpClientRegistryAutoPopulationService(
             stoppingToken
         );
 
-        // A device already answers to this identifier -- never overwrite its own DisplayName, and
-        // nothing else about a known-client row is derived from a lease at all.
+        // A device already has this identifier; leave it alone, DisplayName included.
         if (existing is not null)
             return false;
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         string hostName = string.IsNullOrWhiteSpace(lease.HostName) ? null : lease.HostName.Trim();
 
-        // A dual-stack device's other identifier may already be registered -- if exactly one
-        // device provably owns it, this identifier joins that device instead of creating a
-        // duplicate. See this class's own doc comment.
+        // If exactly one device has a linked identifier (the other side of a dual-stack device),
+        // add this identifier to it instead of creating a duplicate.
         DnsClientEntity sibling = await FindLinkedDeviceAsync(lease, stoppingToken);
         if (sibling is not null)
         {
@@ -134,7 +121,7 @@ public class DhcpClientRegistryAutoPopulationService(
                 stoppingToken
             );
 
-            // Only fill a name that was never set -- an existing name is never overwritten.
+            // Fill the name only if it was never set.
             if (sibling.DisplayName is null && hostName is not null)
             {
                 sibling.DisplayName = hostName;
@@ -169,11 +156,10 @@ public class DhcpClientRegistryAutoPopulationService(
     }
 
     /// <summary>
-    ///     This method finds the one existing device that already answers to an identifier
-    ///     sharing a link key with this lease's own identifier, or <see langword="null" /> when
-    ///     no device does, or more than one does.
+    ///     This method finds the one device with an identifier that shares a link key with the
+    ///     lease's identifier, or returns <see langword="null" /> when none or several do.
     /// </summary>
-    /// <param name="lease">The lease whose identifier has never been seen before.</param>
+    /// <param name="lease">The lease whose identifier is new to the registry.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The single linked device, or <see langword="null" />.</returns>
     private async Task<DnsClientEntity> FindLinkedDeviceAsync(
@@ -210,7 +196,7 @@ public class DhcpClientRegistryAutoPopulationService(
     }
 
     /// <summary>
-    ///     This method derives an identifier's link keys according to its own protocol version.
+    ///     This method derives an identifier's link keys for its protocol version.
     /// </summary>
     private static IReadOnlySet<string> LinkKeysFor(
         string clientIdentifier,
@@ -221,7 +207,7 @@ public class DhcpClientRegistryAutoPopulationService(
             : DhcpClientIdentifierLinkKeys.FromDhcpv4Identifier(clientIdentifier);
 
     /// <summary>
-    ///     This method builds the address row recording a lease's own identifier under a device.
+    ///     This method builds the row that records a lease's identifier under a device.
     /// </summary>
     private static DnsClientAddressEntity NewAddress(
         Guid clientId,

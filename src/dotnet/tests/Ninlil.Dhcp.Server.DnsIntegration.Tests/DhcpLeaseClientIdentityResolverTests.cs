@@ -15,10 +15,10 @@ using Xunit;
 namespace Ninlil.Dhcp.Server.DnsIntegration.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpLeaseClientIdentityResolver" /> against a real,
-///     SQLite-backed <see cref="ILeaseRepository" /> -- proving it genuinely resolves a source
-///     address to the identifier of whichever active lease currently holds it, across scopes,
-///     without a scope name being supplied.
+///     This class covers <see cref="DhcpLeaseClientIdentityResolver" /> on an
+///     <see cref="ILeaseRepository" /> over a temporary SQLite file: a source address resolves to
+///     the identifier of the active lease holding it, in any scope, and inactive leases and
+///     unknown addresses resolve to nothing.
 /// </summary>
 public sealed class DhcpLeaseClientIdentityResolverTests : IAsyncLifetime
 {
@@ -175,15 +175,11 @@ public sealed class DhcpLeaseClientIdentityResolverTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test is the regression proof for a real, previously-undiscovered bug 15c's own
-    ///     live end-to-end verification found: this project's own Plain DNS UDP listener is
-    ///     always a dual-stack socket bound to the IPv6 wildcard address, so a real IPv4 client's
-    ///     own source address arrives at this resolver as an IPv4-mapped IPv6 address
-    ///     ("::ffff:x.x.x.x") rather than the plain dotted-quad form a lease's own
-    ///     <see cref="LeaseEntity.IpAddress" /> column stores -- before this fix, the string
-    ///     equality lookup inside <see cref="DhcpLeaseClientIdentityResolver.ResolveAsync" />
-    ///     silently never matched a single real-world query's own address, no matter how many
-    ///     active leases existed.
+    ///     This test checks that an IPv4-mapped IPv6 source address ("::ffff:x.x.x.x"), which is
+    ///     how IPv4 clients arrive from the dual-stack DNS listeners, matches a lease stored in
+    ///     dotted-quad form in <see cref="LeaseEntity.IpAddress" />. Without unmapping in
+    ///     <see cref="DhcpLeaseClientIdentityResolver.ResolveAsync" />, no IPv4 query would ever
+    ///     resolve.
     /// </summary>
     [Fact]
     public async Task ResolveAsync_WithAnIPv4MappedIPv6Address_ResolvesTheSameAsItsPlainIPv4Form()

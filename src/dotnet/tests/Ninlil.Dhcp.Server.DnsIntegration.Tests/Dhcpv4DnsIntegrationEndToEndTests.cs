@@ -31,22 +31,16 @@ using Xunit;
 namespace Ninlil.Dhcp.Server.DnsIntegration.Tests;
 
 /// <summary>
-///     This test is this sub-phase's own "live-proven" evidence: a real client-to-server DHCPv4
-///     DORA exchange, driven directly against the real <see cref="IDhcpv4RequestHandler" />
-///     engine (the UDP socket layer itself is proven separately by
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c>/<c>Ninlil.Dhcp.Server.Core.Tests</c>), against a
-///     real, fully-wired combined host -- the real event bus (<c>AddNinlilDnsServerCore</c>), the
-///     real lease allocation engine (<c>AddNinlilDhcpServerCore</c>), and the real DHCP-&gt;DNS
-///     integration feature under test (<c>AddNinlilDhcpDnsIntegration</c>) -- proving a granted
-///     lease's own host name really becomes a real, resolvable A record (resolved through a
-///     freshly-loaded <see cref="AuthoritativeZoneCache" />/<see cref="AuthoritativeQueryResolver" />,
-///     the same classes that answer a real production query), and that releasing the lease
-///     really removes it again. Everything here runs through the real, asynchronous
-///     <c>DnsServerEventChangedEvent</c>-&gt;<c>DhcpLeaseChangedEvent</c> pipeline, not a direct
-///     method call bypassing it -- <see cref="DhcpDnsRegistrationServiceTests" /> already covers
-///     <see cref="DhcpDnsRegistrationService" />'s own business logic directly and exhaustively;
-///     this test's only job is proving the wiring between the DHCP engine, the shared event bus,
-///     and this feature's own subscriber genuinely works end to end.
+///     This test class checks the DHCP-to-DNS wiring end to end for DHCPv4. A host combines the
+///     event bus and dispatcher (<c>AddNinlilDnsServerCore</c>), the DHCPv4 engine
+///     (<c>AddNinlilDhcpServerCore</c>), <c>IZoneUpdateService</c> and the feature
+///     (<c>AddNinlilDhcpDnsIntegration</c>) over a temporary SQLite file. A DISCOVER-REQUEST
+///     exchange is sent to the <see cref="IDhcpv4RequestHandler" /> without a socket, the test
+///     waits for the published <see cref="DhcpLeaseChangedEvent" /> to reach the subscriber, and
+///     checks that the host name resolves as an A record through a freshly loaded
+///     <see cref="AuthoritativeZoneCache" /> and <see cref="AuthoritativeQueryResolver" /> (the
+///     classes that answer production queries); a RELEASE then removes it. The service's own
+///     rules are covered by <see cref="DhcpDnsRegistrationServiceTests" />.
 /// </summary>
 public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
 {
@@ -71,15 +65,13 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
             .Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration)
             .AddNinlilDhcpEntityFrameworkCore();
 
-        // The real event bus -- IDnsServerEventPublisher plus its background dispatcher -- so a
-        // lease event this test triggers travels the exact same asynchronous path a real
-        // production process uses, not a synchronous stand-in.
+        // The event bus (IDnsServerEventPublisher and its background dispatcher), so lease
+        // events take the same asynchronous path as in production.
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // The minimal slice of Server.Authoritative this test needs (IZoneUpdateService itself),
-        // mirroring PtrSyncServiceTests'/CaaRecordReconciliationServiceTests' own established
-        // shape rather than pulling in the whole AddNinlilDnsServerAuthoritative extension (cloud
-        // provider HTTP clients, zone transfer/notify/DNSSEC machinery) this test has no use for.
+        // Only IZoneUpdateService from Server.Authoritative, as in PtrSyncServiceTests and
+        // CaaRecordReconciliationServiceTests, rather than all of AddNinlilDnsServerAuthoritative
+        // (cloud providers, zone transfer, NOTIFY, DNSSEC).
         builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
         builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
 
@@ -92,9 +84,8 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
         NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
         await context.Database.EnsureCreatedAsync();
 
-        // Starts every hosted service, most importantly DnsServerEventDispatcher -- without this,
-        // a published event would simply sit in its channel forever, never reaching any
-        // subscriber at all.
+        // Start the hosted services, above all DnsServerEventDispatcher; without it events would
+        // stay in the channel and never reach a subscriber.
         await _host.StartAsync();
     }
 
@@ -147,22 +138,20 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
 
         string ownerName = $"e2e-workstation.{zoneName}";
 
-        // The grant above only *published* DhcpLeaseChangedEvent -- this polls for the real,
-        // asynchronous dispatcher -> subscriber -> DhcpDnsRegistrationService chain to actually
-        // finish writing the record, rather than assuming any particular timing.
+        // The grant only published DhcpLeaseChangedEvent; poll until the dispatcher, subscriber
+        // and DhcpDnsRegistrationService have written the record, instead of assuming a timing.
         RecordEntity aRecord = await WaitForManagedRecordAsync(zoneId, ownerName);
 
         Assert.NotNull(aRecord);
         Assert.Equal(DnsResourceRecordTypeEnum.A, aRecord.Type);
 
-        // Now prove it is genuinely *resolvable*, through the same real
-        // AuthoritativeZoneCache/AuthoritativeQueryResolver classes that answer a real production
-        // query -- not merely present as a row in the repository.
+        // Check it resolves through AuthoritativeZoneCache and AuthoritativeQueryResolver, not
+        // just that the row exists.
         DnsMessage response = await ResolveARecordAsync(ownerName);
         DnsResourceRecord answer = Assert.Single(response.Answers);
         Assert.Equal(new IPAddress(answer.Data), offer.YourIpAddress);
 
-        // Release the lease and prove the same real pipeline removes the record again.
+        // Release the lease and check the same path removes the record.
         Dhcpv4Message release = NewMessage(clientHardwareAddress, 0x1001);
         release.SetMessageType(Dhcpv4MessageTypeEnum.Release);
         release.ClientIpAddress = offer.YourIpAddress;
@@ -306,11 +295,10 @@ public sealed class Dhcpv4DnsIntegrationEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method resolves a real A query against a freshly-loaded
-    ///     <see cref="AuthoritativeZoneCache" />/<see cref="AuthoritativeQueryResolver" /> pair --
-    ///     built directly here, rather than through <c>AddNinlilDnsServerAuthoritative</c>, since
-    ///     that is the one part of the real production answering path this test actually needs to
-    ///     prove against, independent of everything else that extension also wires up.
+    ///     This method answers an A query with a freshly loaded <see cref="AuthoritativeZoneCache" />
+    ///     and <see cref="AuthoritativeQueryResolver" />, built here rather than through
+    ///     <c>AddNinlilDnsServerAuthoritative</c>, since only that part of the answering path is
+    ///     needed.
     /// </summary>
     private async Task<DnsMessage> ResolveARecordAsync(string ownerName)
     {

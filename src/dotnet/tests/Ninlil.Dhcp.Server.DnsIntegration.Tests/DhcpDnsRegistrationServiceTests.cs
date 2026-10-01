@@ -20,11 +20,10 @@ using Xunit;
 namespace Ninlil.Dhcp.Server.DnsIntegration.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpDnsRegistrationService" /> -- the DHCP-&gt;DNS
-///     integration engine -- against a real, SQLite-backed <see cref="IZoneUpdateService" />/
-///     repository stack, the same verification shape
-///     <c>Ninlil.Dns.Server.Authoritative.Tests.Ptr.PtrSyncServiceTests</c> already establishes
-///     for this project's own comparable reconciliation service.
+///     This class covers <see cref="DhcpDnsRegistrationService" />: registering, updating and
+///     removing records, the skip cases, and leaving unmanaged records alone. It calls the
+///     service directly on <see cref="IZoneUpdateService" /> and the repositories over a temporary
+///     SQLite file, like <c>Ninlil.Dns.Server.Authoritative.Tests.Ptr.PtrSyncServiceTests</c>.
 /// </summary>
 public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
 {
@@ -75,10 +74,9 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="DhcpDnsRegistrationService" /> against a fresh
-    ///     dependency-injection scope's own repositories, per call -- the same "fresh instance
-    ///     each time" discipline <c>PtrSyncServiceTests.CreateService</c> already establishes for
-    ///     the "EF Core identity-map staleness across scopes" shape.
+    ///     This method builds a <see cref="DhcpDnsRegistrationService" /> on the repositories of a
+    ///     new dependency injection scope for each call, as <c>PtrSyncServiceTests.CreateService</c>
+    ///     does, so no tracked entity from an earlier step is reused.
     /// </summary>
     private DhcpDnsRegistrationService CreateService()
     {
@@ -245,7 +243,7 @@ public sealed class DhcpDnsRegistrationServiceTests : IAsyncLifetime
 
         await CreateService().HandleLeaseChangeAsync(lease.Id, DhcpLeaseChangeKindEnum.Granted);
 
-        // The client renewed with a different address (e.g. the scope's own range changed).
+        // The client renewed with a different address (after a range change, for example).
         lease.IpAddress = "192.0.2.18";
         _leaseRepository.Update(lease);
         await _unitOfWork.SaveChangesAsync();

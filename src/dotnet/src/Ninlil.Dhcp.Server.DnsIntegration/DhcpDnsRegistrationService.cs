@@ -13,41 +13,35 @@ using Ninlil.Dns.Server.Authoritative.Journal;
 namespace Ninlil.Dhcp.Server.DnsIntegration;
 
 /// <summary>
-///     This class is Ninlil's actual DHCP-&gt;DNS integration engine: on a lease grant, it
-///     registers a real A (or, for a DHCPv6 lease, AAAA) record naming the client's own presented
-///     host name against the address it currently leases, in whichever zone the owning
-///     <see cref="DhcpScopeEntity.DnsZoneId" /> designates; on release or expiry, it removes that
-///     same record again. Every write goes through the same <see cref="IZoneUpdateService" />
-///     every other DNS-content-changing feature in this project already uses -- never a parallel,
-///     bespoke DNS-writing path -- and touches only records this feature created itself
-///     (<see cref="RecordEntity.ManagedByFeature" /> == <see cref="RecordManagedByFeatureEnum.Dhcp" />),
-///     the same provenance-marker discipline <see cref="Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService" />/
-///     <c>CaaRecordReconciliationService</c> already establish for their own automated writes.
+///     This class registers DHCP clients in DNS. When a lease is granted it adds an A record (AAAA
+///     for a DHCPv6 lease) for the client's host name and leased address in the zone named by the
+///     scope's <see cref="DhcpScopeEntity.DnsZoneId" />; when the lease is released or expires it
+///     removes the record. <see cref="DhcpLeaseDnsRegistrationEventSubscriber" /> calls it for each
+///     <c>DhcpLeaseChangedEvent</c>. Writes go through <see cref="IZoneUpdateService" />, like every
+///     other feature that changes zone content, and only records marked
+///     <see cref="RecordEntity.ManagedByFeature" /> = <see cref="RecordManagedByFeatureEnum.Dhcp" />
+///     are touched, as <see cref="Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncService" /> and
+///     <c>CaaRecordReconciliationService</c> do for theirs. Conflicts are checked only against
+///     these managed records: a client's name replaces another DHCP client's record of the same
+///     name, and is added next to a static record of the same name.
 ///     <para>
-///         <b>Reusing the existing PTR sync feature, rather than inventing a second
-///         reverse-zone mechanism</b>: this class writes only the forward A/AAAA record. A PTR
-///         record for that same address is a free side effect of the write above, not a second
-///         write this class performs itself: <see cref="IZoneUpdateService.ApplyChangesAsync" />
-///         already publishes <c>DnsZoneChangedEvent</c> on every real content change, and
-///         <c>PtrSyncEventSubscriber</c> already reacts to that same event for every zone,
-///         reconciling that zone's own implied PTR record set -- exactly the same event this
-///         class's own write already triggers. No new trigger point, and no direct call from this
-///         class into <c>PtrSyncService</c>, was needed at all.
+///         <b>PTR records.</b> Only the forward record is written here.
+///         <see cref="IZoneUpdateService.ApplyChangesAsync" /> publishes a <c>DnsZoneChangedEvent</c>,
+///         and <c>PtrSyncEventSubscriber</c> reconciles the PTR records for zones with PTR
+///         management on, so no separate PTR write is needed.
 ///     </para>
 ///     <para>
-///         <b>Why the designated zone is looked up per lease, not cached</b>: a lease event is
-///         rare compared to an ordinary DNS query (at most once per DHCP transaction, not once per
-///         resolution), so there is no hot-path performance reason to avoid a fresh repository
-///         read here, and a fresh read is always correct even immediately after an operator
-///         changes <see cref="DhcpScopeEntity.DnsZoneId" />.
+///         <b>No caching.</b> The scope and zone are read for every lease event. Lease events are
+///         rare compared with queries, and a fresh read picks up a changed
+///         <see cref="DhcpScopeEntity.DnsZoneId" /> at once.
 ///     </para>
 /// </summary>
-/// <param name="leaseRepository">The repository used to re-read the lease this event names.</param>
-/// <param name="scopeRepository">The repository used to look up the lease's own owning scope.</param>
-/// <param name="zoneRepository">The repository used to look up a scope's own designated DNS zone.</param>
-/// <param name="recordRepository">The repository this service's own managed-record lookups run against.</param>
-/// <param name="zoneUpdateService">The service every add/remove is actually applied through.</param>
-/// <param name="logger">The logger this service records skip/registration decisions to.</param>
+/// <param name="leaseRepository">The repository the lease named by the event is read from.</param>
+/// <param name="scopeRepository">The repository the lease's scope is read from.</param>
+/// <param name="zoneRepository">The repository the scope's DNS zone is read from.</param>
+/// <param name="recordRepository">The repository the zone's managed records are read from.</param>
+/// <param name="zoneUpdateService">The service every addition and removal is applied through.</param>
+/// <param name="logger">The logger failed zone updates are recorded to.</param>
 public class DhcpDnsRegistrationService(
     ILeaseRepository leaseRepository,
     IDhcpScopeRepository scopeRepository,
@@ -58,27 +52,25 @@ public class DhcpDnsRegistrationService(
 )
 {
     /// <summary>
-    ///     This constant contains the time-to-live, in seconds, every A/AAAA record this service
-    ///     creates is given -- deliberately shorter than
-    ///     <c>PtrSyncService</c>/<c>CaaRecordReconciliationService</c>'s own 3600-second default,
-    ///     since a DHCP client's own address binding changes far more often than a CAA policy or
-    ///     an ordinary PTR mapping, and a shorter TTL keeps a resolver from caching a departed
-    ///     client's stale address for as long.
+    ///     This constant contains the TTL, in seconds, of every A/AAAA record this service creates.
+    ///     It is shorter than the 3600 seconds <c>PtrSyncService</c> and
+    ///     <c>CaaRecordReconciliationService</c> use, because a client's address changes far more
+    ///     often, and resolvers should not cache a departed client's address for long.
     /// </summary>
     private const uint DhcpRecordTimeToLiveSeconds = 300;
 
     /// <summary>
-    ///     This method reacts to a single <c>DhcpLeaseChangedEvent</c>, re-reading the lease it
-    ///     names fresh (the event itself is id-only) and registering, updating, or removing its
-    ///     own A/AAAA record accordingly. A no-op whenever the owning scope has DHCP-&gt;DNS
-    ///     integration disabled (<see cref="DhcpScopeEntity.DnsZoneId" /> unset), names a zone
-    ///     this server does not itself own the content of, or the lease carries no usable host
-    ///     name at all.
+    ///     This method handles one <c>DhcpLeaseChangedEvent</c>: it reads the lease (the event
+    ///     carries only its identifier) and adds, replaces or removes its A/AAAA record. It does
+    ///     nothing when the scope has no <see cref="DhcpScopeEntity.DnsZoneId" />, the zone is
+    ///     missing or not a Primary or CloudPrimary zone, the address does not parse, or, for a
+    ///     grant, the lease has no usable host name. A release or expiry removes the managed
+    ///     record for the lease's address.
     /// </summary>
     /// <param name="leaseId">The identifier of the lease that changed.</param>
-    /// <param name="changeKind">What actually happened to the lease.</param>
+    /// <param name="changeKind">What happened to the lease.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>What this pass actually did, or why it did nothing at all.</returns>
+    /// <returns>What was done, or why nothing was done.</returns>
     public async Task<DhcpDnsRegistrationResult> HandleLeaseChangeAsync(
         Guid leaseId,
         DhcpLeaseChangeKindEnum changeKind,
@@ -167,9 +159,8 @@ public class DhcpDnsRegistrationService(
             && existingByName is null
             && NormalizeName(existingByAddress.Name) == NormalizeName(ownerName)
         )
-            // Already exactly correct -- no write at all, avoiding a pointless
-            // DnsZoneChangedEvent republish that would otherwise re-trigger every other zone
-            // change subscriber (most notably PtrSyncEventSubscriber) for nothing.
+            // Already correct: skip the write, which would publish a DnsZoneChangedEvent and
+            // set off PtrSyncEventSubscriber and the other zone subscribers for nothing.
             return DhcpDnsRegistrationResult.Unchanged(ownerName);
 
         List<RecordEntity> recordsToRemove = [];
@@ -185,13 +176,12 @@ public class DhcpDnsRegistrationService(
     }
 
     /// <summary>
-    ///     This method determines whether a zone's own <see cref="ZoneEntity.Type" /> is one this
-    ///     feature ever registers records into at all -- <see cref="ZoneTypeEnum.Primary" /> or
-    ///     <see cref="ZoneTypeEnum.CloudPrimary" />, the two zone types this server is itself the
-    ///     source of truth for. The same explicit, named, single-purpose check
-    ///     <c>PtrSyncService.IsEligibleZoneType</c>/<c>CaaRecordReconciliationService.IsEligibleZoneType</c>
-    ///     already establish: a zone-type filter written inline at each call site is easy to leave
-    ///     behind when a new answerable zone type is added, silently skipping that type.
+    ///     This method reports whether records are registered in a zone of this type: only
+    ///     <see cref="ZoneTypeEnum.Primary" /> and <see cref="ZoneTypeEnum.CloudPrimary" />, whose
+    ///     content this server owns. It is a named method, like
+    ///     <c>PtrSyncService.IsEligibleZoneType</c> and
+    ///     <c>CaaRecordReconciliationService.IsEligibleZoneType</c>, so a new zone type is not
+    ///     missed in an inline check.
     /// </summary>
     /// <param name="zoneType">The zone type to check.</param>
     /// <returns><see langword="true" /> if eligible, <see langword="false" /> otherwise.</returns>
@@ -199,11 +189,11 @@ public class DhcpDnsRegistrationService(
         zoneType == ZoneTypeEnum.Primary || zoneType == ZoneTypeEnum.CloudPrimary;
 
     /// <summary>
-    ///     This method applies a set of record additions/removals via <see cref="IZoneUpdateService" />,
-    ///     tolerating the one real, expected failure -- a zone with no SOA record yet to advance
-    ///     -- the same way <c>PtrSyncService</c>/<c>CaaRecordReconciliationService</c> already do:
-    ///     there is simply nothing to do yet, and the zone's very next real content change gives
-    ///     this feature another chance via a fresh <c>DnsZoneChangedEvent</c>.
+    ///     This method applies record additions and removals through
+    ///     <see cref="IZoneUpdateService" />. An <see cref="InvalidOperationException" />, expected
+    ///     when the zone has no SOA record to advance, is logged at debug level and ignored, as in
+    ///     <c>PtrSyncService</c>. Unlike PTR sync, nothing retries the change later: this service
+    ///     runs only on lease events, so the record appears at the client's next grant.
     /// </summary>
     private async Task ApplyAsync(
         Guid zoneId,
@@ -233,9 +223,8 @@ public class DhcpDnsRegistrationService(
     }
 
     /// <summary>
-    ///     This method decodes a stored A/AAAA record's own address and compares it against a
-    ///     lease's own current address, returning <see langword="false" /> (never matching) for a
-    ///     record whose data cannot be decoded at all.
+    ///     This method reports whether a stored A/AAAA record holds the lease's address; a record
+    ///     whose data cannot be decoded never matches.
     /// </summary>
     private static bool AddressEquals(RecordEntity record, IPAddress leaseAddress) =>
         RecordEntityCodec.DecodeTypedData(record) switch
@@ -246,7 +235,7 @@ public class DhcpDnsRegistrationService(
         };
 
     /// <summary>
-    ///     This method builds the single A/AAAA record this feature ever creates for a lease.
+    ///     This method builds the A/AAAA record for a lease, marked as managed by DHCP.
     /// </summary>
     private static RecordEntity BuildRecord(
         Guid zoneId,
@@ -277,19 +266,18 @@ public class DhcpDnsRegistrationService(
         };
 
     /// <summary>
-    ///     This method normalizes an owner name for case/trailing-dot-insensitive comparison,
-    ///     mirroring <c>PtrSyncService</c>'s own identically-named helper exactly.
+    ///     This method normalizes an owner name for comparison that ignores case and a trailing
+    ///     dot, like the helper of the same name in <c>PtrSyncService</c>.
     /// </summary>
     private static string NormalizeName(string name) => name.TrimEnd('.').ToLowerInvariant();
 
     /// <summary>
-    ///     This method converts a DHCP client's own free-form presented host name (RFC 2132
-    ///     Section 3.14's Host Name option) into a single, valid DNS label -- lower-cased, with
-    ///     every character outside <c>[a-z0-9-]</c> replaced with a hyphen, leading/trailing
-    ///     hyphens trimmed, and truncated to the 63-octet limit RFC 1035 Section 3.1 places on a
-    ///     single label. Returns <see langword="null" /> when nothing usable survives (an absent,
-    ///     blank, or entirely-punctuation host name), the signal this feature uses to skip
-    ///     registration entirely rather than register a nonsensical or empty name.
+    ///     This method turns a client's free-form host name (the RFC 2132 Section 3.14 Host Name
+    ///     option, or the first label of a DHCPv6 Client FQDN) into one DNS label: lower case,
+    ///     characters outside <c>[a-z0-9-]</c> replaced by hyphens, outer hyphens trimmed, and cut
+    ///     to the 63-octet label limit of RFC 1035 Section 3.1. It returns <see langword="null" />
+    ///     when nothing usable is left (no name, blank, or only punctuation), and registration is
+    ///     then skipped.
     /// </summary>
     private static string SanitizeHostNameLabel(string hostName)
     {

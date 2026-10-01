@@ -16,13 +16,13 @@ using Xunit;
 namespace Ninlil.Dhcp.Server.DnsIntegration.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpClientRegistryAutoPopulationService" /> -- the
-///     known-client registry's own DHCP-driven auto-population -- against a real, SQLite-backed
-///     repository stack, mirroring <see cref="DhcpDnsRegistrationServiceTests" />'s own "real
-///     database, direct service invocation, no event bus" verification shape exactly, since this
-///     service's own business logic is what needs proving here, not the asynchronous event-bus
-///     wiring <see cref="Dhcpv4DnsIntegrationEndToEndTests" /> already proves separately for the
-///     sibling DNS-registration feature.
+///     This class covers <see cref="DhcpClientRegistryAutoPopulationService" />: new devices,
+///     renewals that leave an operator's rename alone, linking a DHCPv6 identifier to a DHCPv4
+///     device, ambiguous links, and presence sightings. Like
+///     <see cref="DhcpDnsRegistrationServiceTests" />, it calls the service directly on the
+///     repositories over a temporary SQLite file, without the event bus (whose wiring
+///     <see cref="Dhcpv4DnsIntegrationEndToEndTests" /> covers), and uses a recording presence
+///     recorder.
 /// </summary>
 public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetime
 {
@@ -68,10 +68,10 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="DhcpClientRegistryAutoPopulationService" /> against
-    ///     a fresh dependency-injection scope's own repositories, per call -- the same "fresh
-    ///     instance each time" discipline <c>DhcpDnsRegistrationServiceTests.CreateService</c>
-    ///     already establishes for the "EF Core identity-map staleness across scopes" shape.
+    ///     This method builds a <see cref="DhcpClientRegistryAutoPopulationService" /> on the
+    ///     repositories of a new dependency injection scope for each call, as
+    ///     <c>DhcpDnsRegistrationServiceTests.CreateService</c> does, so no tracked entity from an
+    ///     earlier step is reused.
     /// </summary>
     private DhcpClientRegistryAutoPopulationService CreateService(
         IClientPresenceRecorder presenceRecorder = null
@@ -98,9 +98,8 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
     {
         Guid leaseId = Guid.NewGuid();
 
-        // Each lease this test seeds gets its own address -- LeaseEntity enforces a real
-        // (ScopeName, IpAddress) uniqueness constraint, and a renewal scenario deliberately seeds
-        // a second, distinct lease row for the same client identifier.
+        // Each seeded lease gets its own address, because of the (ScopeName, IpAddress) unique
+        // index.
         string ipAddress = $"192.0.2.{_nextLeaseAddressOctet++}";
 
         await _leaseRepository.AddAsync(
@@ -141,8 +140,8 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
         Assert.Equal("workstation-1", client.DisplayName);
         Assert.Equal(DnsClientOriginEnum.Dhcp, client.Origin);
 
-        // The device's own single address row was created alongside it, carrying the exact
-        // identifier the lease presented.
+        // The device's single identifier row was created with it, holding the lease's
+        // identifier.
         IReadOnlyList<DnsClientAddressEntity> addresses =
             await _clientAddressRepository.ListByClientIdAsync(client.Id);
         DnsClientAddressEntity address = Assert.Single(addresses);
@@ -182,7 +181,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
         );
         Assert.True(firstCreated);
 
-        // An operator renames the auto-discovered client to something more meaningful.
+        // An operator renames the discovered client.
         DnsClientEntity client = await _clientRepository.GetByClientIdentifierAsync(
             clientIdentifier,
             InternetProtocolVersionEnum.IPv4
@@ -191,9 +190,8 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
         _clientRepository.Update(client);
         await _unitOfWork.SaveChangesAsync();
 
-        // The same device renews its own lease -- a real renewal updates the same lease row in
-        // place (LeaseEntity enforces one lease per (ScopeName, ClientIdentifier)), presenting a
-        // different host name this time -- and the event fires again for that same lease id.
+        // The device renews: the same lease row is updated in place (one lease per scope and
+        // client) with a different host name, and the event fires again for that lease.
         LeaseEntity leaseToRenew = await _leaseRepository.GetByIdAsync(firstLeaseId);
         leaseToRenew.HostName = "totally-different-name";
         _leaseRepository.Update(leaseToRenew);
@@ -202,7 +200,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
         bool secondCreated = await CreateService()
             .HandleLeaseChangeAsync(firstLeaseId, DhcpLeaseChangeKindEnum.Granted);
 
-        // No new row was created, and the operator's own rename must survive untouched.
+        // No new row was created, and the operator's name is unchanged.
         Assert.False(secondCreated);
         DnsClientEntity afterRenewal = await _clientRepository.GetByClientIdentifierAsync(
             clientIdentifier,
@@ -332,7 +330,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
     }
 
     /// <summary>
-    ///     This method registers a device directly, bypassing auto-population's own linking.
+    ///     This method registers a device directly, without auto-population.
     /// </summary>
     private async Task SeedDeviceAsync(
         string clientIdentifier,
@@ -362,7 +360,7 @@ public sealed class DhcpClientRegistryAutoPopulationServiceTests : IAsyncLifetim
         IdentityRecorder recorder = new();
         const string mac = "aa:bb:cc:dd:ee:20";
 
-        // A renewal re-grants the very same lease row, publishing Granted again.
+        // A renewal grants the same lease row again.
         Guid leaseId = await SeedGrantedLeaseAsync(mac, "tv");
         await CreateService(recorder)
             .HandleLeaseChangeAsync(leaseId, DhcpLeaseChangeKindEnum.Granted);

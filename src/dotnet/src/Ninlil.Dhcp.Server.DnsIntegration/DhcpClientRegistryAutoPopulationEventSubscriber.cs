@@ -6,28 +6,20 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.DnsIntegration;
 
 /// <summary>
-///     This class bridges <see cref="DhcpLeaseChangedEvent" /> to
-///     <see cref="DhcpClientRegistryAutoPopulationService" /> -- a sibling subscriber to
-///     <see cref="DhcpLeaseDnsRegistrationEventSubscriber" />, registered against the exact same
-///     event, since <c>DnsServerEventDispatcher</c> already invokes every registered
-///     <c>IDnsServerEventSubscriber&lt;TEvent&gt;</c> for a given event type (see its own
-///     <c>scope.ServiceProvider.GetServices(subscriberInterface)</c> loop) rather than just the
-///     first one found. A separate subscriber, rather than folding this into the existing one, is
-///     deliberate: <see cref="DhcpDnsRegistrationService" />'s own early-return skip paths (no DNS
-///     zone designated, an ineligible zone type, and so on) have nothing to do with whether a
-///     known-client row should exist -- that decision only ever depends on the lease itself, never
-///     on the owning scope's own DHCP-&gt;DNS integration configuration.
+///     This class passes each <see cref="DhcpLeaseChangedEvent" /> to
+///     <see cref="DhcpClientRegistryAutoPopulationService" />. It subscribes to the same event as
+///     <see cref="DhcpLeaseDnsRegistrationEventSubscriber" />; <c>DnsServerEventDispatcher</c> calls
+///     every registered subscriber for an event type. It is a separate subscriber because the
+///     reasons <see cref="DhcpDnsRegistrationService" /> skips a lease (no DNS zone, an ineligible
+///     zone) do not apply to the registry.
 ///     <para>
-///         Reconciliation runs in a detached background task, not awaited directly from
-///         <see cref="HandleAsync" />, mirroring <see cref="DhcpLeaseDnsRegistrationEventSubscriber" />'s
-///         own reasoning exactly: this subscriber's own work involves real repository/database I/O,
-///         so it must never block <c>DnsServerEventDispatcher</c>'s one-event-at-a-time processing
-///         of every other subscriber for every other event. The background task opens its own
-///         dependency injection scope for the same reason.
+///         As in <see cref="DhcpLeaseDnsRegistrationEventSubscriber" />, the work runs in a task
+///         that is not awaited, with its own dependency injection scope, so database I/O does not
+///         hold up the dispatcher.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped <see cref="DhcpClientRegistryAutoPopulationService" /> per event.</param>
-/// <param name="logger">The logger this subscriber records failures to.</param>
+/// <param name="scopeFactory">The factory that creates a scope, and a <see cref="DhcpClientRegistryAutoPopulationService" />, per event.</param>
+/// <param name="logger">The logger failures are recorded to.</param>
 public class DhcpClientRegistryAutoPopulationEventSubscriber(
     IServiceScopeFactory scopeFactory,
     ILogger<DhcpClientRegistryAutoPopulationEventSubscriber> logger
@@ -41,10 +33,8 @@ public class DhcpClientRegistryAutoPopulationEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work: opening a fresh scope and delegating to
-    ///     <see cref="DhcpClientRegistryAutoPopulationService" />, with every exception (other
-    ///     than cancellation) caught and logged so one lease's own auto-population failure never
-    ///     propagates back into <c>DnsServerEventDispatcher</c>.
+    ///     This method creates a scope and calls <see cref="DhcpClientRegistryAutoPopulationService" />.
+    ///     Every exception except cancellation is caught and logged, since nothing awaits this task.
     /// </summary>
     private async Task AutoPopulateAsync(
         DhcpLeaseChangedEvent domainEvent,

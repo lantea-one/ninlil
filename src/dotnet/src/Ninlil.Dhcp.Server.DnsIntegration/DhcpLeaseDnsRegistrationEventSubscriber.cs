@@ -6,20 +6,17 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.DnsIntegration;
 
 /// <summary>
-///     This class bridges <see cref="DhcpLeaseChangedEvent" /> to <see cref="DhcpDnsRegistrationService" />
-///     -- the one subscriber that keeps a DHCP client's own A/AAAA registration in sync with its
-///     lease's real lifecycle. Reconciliation runs in a detached background task, not awaited
-///     directly from <see cref="HandleAsync" />, mirroring
-///     <c>Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncEventSubscriber</c>'s own reasoning exactly:
-///     this subscriber's own work involves real repository/database I/O, so it must never block
-///     <c>DnsServerEventDispatcher</c>'s one-event-at-a-time processing of every other subscriber
-///     for every other event. The background task opens its own dependency injection scope for
-///     the same reason -- the scope <see cref="HandleAsync" /> was invoked in is disposed as soon
-///     as every subscriber's own <see cref="System.Threading.Tasks.ValueTask" /> completes, well
-///     before this detached work is done.
+///     This class passes each <see cref="DhcpLeaseChangedEvent" /> to
+///     <see cref="DhcpDnsRegistrationService" />, keeping a client's A/AAAA record in step with its
+///     lease. The work runs in a task that <see cref="HandleAsync" /> does not await, as in
+///     <c>Ninlil.Dns.Server.Authoritative.Ptr.PtrSyncEventSubscriber</c>: it does database I/O and
+///     must not hold up <c>DnsServerEventDispatcher</c>, which handles one event at a time. The
+///     task creates its own dependency injection scope, since the dispatcher's scope is disposed
+///     once <see cref="HandleAsync" /> returns. Concurrent events for leases in the same zone run
+///     in parallel.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped <see cref="DhcpDnsRegistrationService" /> per event.</param>
-/// <param name="logger">The logger this subscriber records registration failures to.</param>
+/// <param name="scopeFactory">The factory that creates a scope, and a <see cref="DhcpDnsRegistrationService" />, per event.</param>
+/// <param name="logger">The logger registration failures are recorded to.</param>
 public class DhcpLeaseDnsRegistrationEventSubscriber(
     IServiceScopeFactory scopeFactory,
     ILogger<DhcpLeaseDnsRegistrationEventSubscriber> logger
@@ -33,10 +30,8 @@ public class DhcpLeaseDnsRegistrationEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work: opening a fresh scope and delegating to
-    ///     <see cref="DhcpDnsRegistrationService" />, with every exception (other than
-    ///     cancellation) caught and logged so one lease's own registration failure never
-    ///     propagates back into <c>DnsServerEventDispatcher</c>.
+    ///     This method creates a scope and calls <see cref="DhcpDnsRegistrationService" />. Every
+    ///     exception except cancellation is caught and logged, since nothing awaits this task.
     /// </summary>
     private async Task RegisterAsync(
         DhcpLeaseChangedEvent domainEvent,

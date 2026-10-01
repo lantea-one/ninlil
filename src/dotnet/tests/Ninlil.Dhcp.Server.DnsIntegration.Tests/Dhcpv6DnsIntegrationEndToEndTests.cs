@@ -32,18 +32,14 @@ using Xunit;
 namespace Ninlil.Dhcp.Server.DnsIntegration.Tests;
 
 /// <summary>
-///     This test is the DHCPv6 analogue of <see cref="Dhcpv4DnsIntegrationEndToEndTests" />,
-///     proving both halves of Phase 14l-3's own real scope end to end against the same kind of
-///     fully-wired combined host that test already establishes: a real SOLICIT/REQUEST/RELEASE
-///     exchange, driven directly against the real <see cref="IDhcpv6RequestHandler" /> engine,
-///     carrying a real RFC 4704 Client FQDN option, produces a real, resolvable AAAA record (not
-///     an A record -- <see cref="DhcpDnsRegistrationService" /> itself already branches on
-///     <see cref="LeaseEntity.ProtocolVersion" />, needing no change of its own for this sub-phase
-///     at all), and that releasing the lease removes it again. This test also confirms this
-///     server's own reply carries a correctly-flagged Client FQDN option reporting that outcome,
-///     including the "O" (override) bit RFC 4704 Section 4.1 requires when this server's fixed
-///     "always perform the AAAA update myself" policy disagrees with what the client's own "S" bit
-///     asked for.
+///     This test class is the DHCPv6 counterpart of <see cref="Dhcpv4DnsIntegrationEndToEndTests" />,
+///     on the same kind of combined host with the DHCPv6 engine. A SOLICIT, a REQUEST with an RFC
+///     4704 Client FQDN option, and a RELEASE are sent to the <see cref="IDhcpv6RequestHandler" />;
+///     the test checks that the name resolves as an AAAA record
+///     (<see cref="DhcpDnsRegistrationService" /> chooses the type from
+///     <see cref="LeaseEntity.ProtocolVersion" />), that the RELEASE removes it, and that the
+///     reply's Client FQDN option says the server performs the update (S=1) and, since the client
+///     sent S=0, sets the override bit (O=1) as RFC 4704 Section 4.1 requires.
 /// </summary>
 public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
 {
@@ -65,15 +61,12 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
             .Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration)
             .AddNinlilDhcpEntityFrameworkCore();
 
-        // The real event bus, exactly as Dhcpv4DnsIntegrationEndToEndTests already establishes,
-        // so this test's own lease events travel the same asynchronous dispatcher path a real
-        // production process uses.
+        // The event bus, as in Dhcpv4DnsIntegrationEndToEndTests, so lease events take the
+        // production path.
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // The minimal slice of Server.Authoritative this test needs -- see
-        // Dhcpv4DnsIntegrationEndToEndTests's own doc comment for why this mirrors
-        // PtrSyncServiceTests'/CaaRecordReconciliationServiceTests' own established shape rather
-        // than the whole AddNinlilDnsServerAuthoritative extension.
+        // Only IZoneUpdateService from Server.Authoritative, as in
+        // Dhcpv4DnsIntegrationEndToEndTests.
         builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
         builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
 
@@ -86,9 +79,8 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
         NinlilDnsContext context = scope.ServiceProvider.GetRequiredService<NinlilDnsContext>();
         await context.Database.EnsureCreatedAsync();
 
-        // Starts every hosted service, most importantly DnsServerEventDispatcher -- without this,
-        // a published event would simply sit in its channel forever, never reaching any
-        // subscriber at all.
+        // Start the hosted services, above all DnsServerEventDispatcher; without it events would
+        // stay in the channel and never reach a subscriber.
         await _host.StartAsync();
     }
 
@@ -112,8 +104,8 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
 
         IDhcpv6RequestHandler handler = _host.Services.GetRequiredService<IDhcpv6RequestHandler>();
 
-        // SOLICIT: an ordinary (non-Rapid-Commit) tentative offer -- no Client FQDN option yet,
-        // mirroring how a real client typically waits until REQUEST to present one.
+        // SOLICIT without Rapid Commit and without a Client FQDN option, which clients usually
+        // send only with the REQUEST.
         Dhcpv6Message solicit = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.Solicit,
@@ -139,11 +131,9 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
         );
         IPAddress offeredAddress = Assert.Single(advertised).Addresses[0].Address;
 
-        // REQUEST: names the offered address and presents a partial (unqualified) RFC 4704 Client
-        // FQDN, deliberately with the client's own "S" bit clear (the client claims it will
-        // perform its own AAAA update) -- this project's own fixed policy always takes that
-        // responsibility itself regardless, so the reply below must carry S=1 and O=1 (RFC 4704
-        // Section 4.1's own override signal).
+        // REQUEST: names the offered address and sends a partial RFC 4704 Client FQDN with S=0
+        // (the client says it will update AAAA itself). The server takes the update anyway, so
+        // the reply must carry S=1 and the override bit O=1 (RFC 4704 Section 4.1).
         Dhcpv6Message request = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.Request,
@@ -180,10 +170,9 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
         );
         Assert.Equal(offeredAddress, Assert.Single(committed).Addresses[0].Address);
 
-        // The server's own reply must honestly report that it took responsibility for the AAAA
-        // update (S=1), that doing so overrode the client's own stated preference (O=1, since the
-        // client sent S=0), and must echo the client's own domain name/qualification back
-        // verbatim (RFC 4704 Section 6's own "MAY simply copy" allowance).
+        // The reply must say the server performs the AAAA update (S=1), that this overrides the
+        // client (O=1), and copy the client's domain name and qualification (RFC 4704 Section 6
+        // allows copying).
         Assert.True(
             reply.TryGetClientFqdn(
                 out bool replyN,
@@ -201,22 +190,18 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
 
         string ownerName = $"e2e-workstation-v6.{zoneName}";
 
-        // The grant above only *published* DhcpLeaseChangedEvent -- this polls for the real,
-        // asynchronous dispatcher -> subscriber -> DhcpDnsRegistrationService chain to actually
-        // finish writing the record, rather than assuming any particular timing.
+        // The grant only published DhcpLeaseChangedEvent; poll until the record is written.
         RecordEntity aaaaRecord = await WaitForManagedRecordAsync(zoneId, ownerName);
 
         Assert.NotNull(aaaaRecord);
         Assert.Equal(DnsResourceRecordTypeEnum.Aaaa, aaaaRecord.Type);
 
-        // Now prove it is genuinely *resolvable*, through the same real
-        // AuthoritativeZoneCache/AuthoritativeQueryResolver classes that answer a real production
-        // query -- not merely present as a row in the repository.
+        // Check it resolves through AuthoritativeZoneCache and AuthoritativeQueryResolver.
         DnsMessage response = await ResolveAaaaRecordAsync(ownerName);
         DnsResourceRecord answer = Assert.Single(response.Answers);
         Assert.Equal(offeredAddress, new IPAddress(answer.Data));
 
-        // Release the lease and prove the same real pipeline removes the record again.
+        // Release the lease and check the same path removes the record.
         Dhcpv6Message release = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.Release,
@@ -237,7 +222,7 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
             RemoteEndPoint,
             CancellationToken.None
         );
-        // Unlike DHCPv4's own RELEASE, RFC 8415 Section 18.3.6 always has a DHCPv6 server reply.
+        // Unlike DHCPv4, a DHCPv6 server replies to a RELEASE (RFC 8415).
         Assert.NotNull(releaseReply);
         Assert.True(
             releaseReply.TryGetIdentityAssociationsForNonTemporaryAddresses(
@@ -384,11 +369,8 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method resolves a real AAAA query against a freshly-loaded
-    ///     <see cref="AuthoritativeZoneCache" />/<see cref="AuthoritativeQueryResolver" /> pair --
-    ///     see <see cref="Dhcpv4DnsIntegrationEndToEndTests.ResolveARecordAsync" />'s own doc
-    ///     comment for why this is built directly here rather than through
-    ///     <c>AddNinlilDnsServerAuthoritative</c>.
+    ///     This method answers an AAAA query with a freshly loaded cache and resolver, as
+    ///     <see cref="Dhcpv4DnsIntegrationEndToEndTests.ResolveARecordAsync" /> does for A.
     /// </summary>
     private async Task<DnsMessage> ResolveAaaaRecordAsync(string ownerName)
     {
