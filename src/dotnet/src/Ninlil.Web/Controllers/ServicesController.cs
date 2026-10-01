@@ -11,45 +11,33 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers Service Lifecycle Management's own <c>/api/services</c>
-///     surface: a real, in-process hot start/stop/restart lifecycle for every DNS transport
-///     listener and background maintenance loop <see cref="IManagedServiceRegistry" /> tracks --
-///     stopping a transport genuinely unbinds its socket right now, in this running process, and
-///     starting it again genuinely rebinds it, with no process restart involved (see
-///     <see cref="ManagedServiceRegistry" />'s own doc comment for exactly how this controller's
-///     calls reach the identical instances the ASP.NET Core generic host itself manages, not an
-///     independent copy).
+///     This controller serves <c>/api/services</c>: starting, stopping and restarting the DNS
+///     transport listeners and background maintenance loops that
+///     <see cref="IManagedServiceRegistry" /> tracks, inside the running process. Stopping a
+///     transport unbinds its socket at once and starting it rebinds it, with no process restart.
+///     The calls reach the same instances the ASP.NET Core host runs (see
+///     <see cref="ManagedServiceRegistry" />).
 ///     <para>
-///         <b>This is one of the most operationally dangerous endpoints in this entire REST API</b>,
-///         a deliberate design consideration, not an afterthought: stopping the wrong transport
-///         cuts off real client DNS resolution immediately, and stopping the wrong background
-///         loop can leave a zone's DNSSEC signatures to silently expire, a secondary zone to drift
-///         stale, or a filter list to stop refreshing -- all with no other guardrail in front of
-///         it. For that reason, every write action here (<see cref="Start" />/<see cref="Stop" />/
-///         <see cref="Restart" />) is gated by a dedicated <c>services:manage</c> permission,
-///         deliberately named apart from this project's usual <c>&lt;resource&gt;:write</c>
-///         convention (every other controller's own two-permission split, most recently
-///         <see cref="BackupController" />'s own <c>backup:read</c>/<c>backup:write</c> pair for
-///         reasoning of a similar shape) -- so an operator can grant a role broad ordinary write
-///         access across this server's configuration (zones, records, filter lists, and so on)
-///         without that same grant silently also handing out the ability to take real DNS
-///         resolution offline. <see cref="List" /> itself only reveals which services exist and
-///         whether each is currently running -- no secret or configuration data -- so it is gated
-///         by the lighter <c>services:read</c> instead, the same "read reveals nothing dangerous"
-///         reasoning <see cref="PermissionsController" />'s own doc comment already applies
-///         elsewhere.
+///         <b>This is one of the most dangerous endpoints in the API.</b> Stopping the wrong
+///         transport cuts off client DNS resolution immediately, and stopping the wrong
+///         background loop can let a zone's DNSSEC signatures expire, a secondary zone go stale or
+///         a filter list stop refreshing, with no other safeguard. So <see cref="Start" />,
+///         <see cref="Stop" /> and <see cref="Restart" /> need a separate
+///         <c>services:manage</c> permission rather than the usual <c>resource:write</c>, and a
+///         role can be given broad configuration write access without the power to take DNS
+///         offline. <see cref="List" /> reveals only which services exist and whether each is
+///         running, so it needs only <c>services:read</c>.
 ///     </para>
 /// </summary>
-/// <param name="registry">The registry this controller starts, stops, and lists services through.</param>
+/// <param name="registry">The registry used to list, start and stop services.</param>
 [ApiController]
 [Route("api/services")]
 public class ServicesController(IManagedServiceRegistry registry) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every service this server runs, along with whether each is currently
-    ///     running -- sorted by category, then by name, for a stable, predictable presentation
-    ///     order (this registry's own <see cref="IManagedServiceRegistry.Services" /> makes no
-    ///     ordering guarantee of its own).
+    ///     This action lists every managed service and whether it is running, sorted by category
+    ///     and then by name (the registry itself guarantees no order). Requires
+    ///     <c>services:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("services:read")]
@@ -64,11 +52,10 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
         );
 
     /// <summary>
-    ///     This action starts a single service -- binding a transport's own socket, or resuming a
-    ///     background loop -- right now, in this running process. Starting a service that is
-    ///     already running simply re-invokes the same underlying start logic every service in
-    ///     this project was already confirmed safe to call again by a dedicated restart-safety
-    ///     audit.
+    ///     This action starts one service now: it binds a transport's socket or resumes a
+    ///     background loop. It does not check whether the service is already running; the service's
+    ///     start logic is called either way. Returns 404 for an unknown name. Requires
+    ///     <c>services:manage</c>.
     /// </summary>
     /// <param name="name">The service to start.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -86,9 +73,9 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
     }
 
     /// <summary>
-    ///     This action stops a single service -- unbinding a transport's own socket, or halting a
-    ///     background loop -- right now, in this running process, leaving every other service
-    ///     this server runs untouched.
+    ///     This action stops one service now, unbinding a transport's socket or halting a
+    ///     background loop, and leaves every other service running. Returns 404 for an unknown
+    ///     name. Requires <c>services:manage</c>.
     /// </summary>
     /// <param name="name">The service to stop.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -106,15 +93,12 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
     }
 
     /// <summary>
-    ///     This action restarts a single service -- stopping it, then immediately starting it
-    ///     again, right now, in this running process. Exactly the sequence a genuine "reload"
-    ///     request means for a service whose own <see cref="IManagedServiceRegistration.StartAsync" />
-    ///     re-seeds its state fresh every call (<c>AuthoritativeZoneCache</c>/
-    ///     <c>SignedZoneCache</c> reload their entire in-memory snapshot from storage on every
-    ///     start, for example) -- for those two specifically, a restart is the only one of these
-    ///     three actions with any externally observable effect at all, since their own
-    ///     <see cref="IManagedServiceRegistration.StopAsync" /> deliberately leaves the
-    ///     already-loaded snapshot in place and keeps answering from it.
+    ///     This action stops one service and starts it again. Services that reload their state on
+    ///     every start pick up changes this way: <c>AuthoritativeZoneCache</c> and
+    ///     <c>SignedZoneCache</c> reload their whole in-memory snapshot from storage, and their
+    ///     stop leaves the loaded snapshot answering, so for them only a restart has a visible
+    ///     effect. A transport listener re-reads its port, certificate and tuning settings. Returns
+    ///     404 for an unknown name. Requires <c>services:manage</c>.
     /// </summary>
     /// <param name="name">The service to restart.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -133,14 +117,14 @@ public class ServicesController(IManagedServiceRegistry registry) : ControllerBa
     }
 
     /// <summary>
-    ///     This method looks up a registered service by name, throwing
-    ///     <see cref="NotFoundException" /> when no service is registered under it.
+    ///     This method finds a registered service by name, or throws
+    ///     <see cref="NotFoundException" /> (404) when there is none.
     /// </summary>
     private IManagedServiceRegistration Require(string name) =>
         registry.Find(name) ?? throw new NotFoundException("ManagedService", name);
 
     /// <summary>
-    ///     This method converts a registration into its REST representation.
+    ///     This method converts a registration to its API summary.
     /// </summary>
     private static ManagedServiceSummary ToSummary(IManagedServiceRegistration service) =>
         new(service.Name, service.Category, service.IsRunning);

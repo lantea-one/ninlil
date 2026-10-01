@@ -17,39 +17,29 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="WebListenOptions" /> -- the
-///     admin web listener's own port/certificate configuration, shared by the REST API, the
-///     SignalR hub, and DNS-over-HTTPS -- `appsettings.json`-only until this pass: setting it up
-///     required hand-editing the configuration file's own <c>DnsServer:Web</c> section and
-///     restarting. That is still true after this controller exists -- see this class's own doc
-///     comment on why. Every action requires the <c>weblistensettings:read</c> or
-///     <c>weblistensettings:write</c> permission.
+///     This controller reads and writes <see cref="WebListenOptions" />: the ports, listen
+///     addresses and certificate of the web listener that serves the REST API, the admin
+///     console, the SignalR hub and DNS-over-HTTPS. Reading needs
+///     <c>weblistensettings:read</c> and writing needs <c>weblistensettings:write</c>.
 ///     <para>
-///         <b>Confirm-then-apply-on-restart, never live-apply -- confirmed via <c>AskUserQuestion</c>,
-///         2026-09-01.</b> A <see cref="Patch" /> write persists to the configuration file
-///         immediately, exactly like every other settings controller in this project, but it can
-///         never take effect on this already-running process: <see cref="WebListenOptions" /> is
-///         read exactly once, at the very top of <c>Program.cs</c>, before <c>Build()</c> even
-///         runs, to bind Kestrel's own HTTP/HTTPS sockets -- including the very socket this
-///         request is itself answered through. Unlike a DoT/DoQ/DNSCrypt transport listener, there
-///         is no <see cref="Web.Services.IManagedServiceRegistry" /> entry that could restart only
-///         this one listener in isolation, so <see cref="RuntimeSettingsWriteResult.WebListenRestartRequiredNote" />
-///         always names a full process restart, with no partial alternative. An in-process Kestrel
-///         rebind attempt was considered and deliberately rejected: a bad port or certificate value
-///         could strand the very session making the change, with no automatic recovery -- the
-///         Angular UI is required to show a clear, impossible-to-miss confirmation dialog before
-///         ever submitting a write here, warning the operator they will need to reconnect at the
-///         new address only after a manual restart.
+///         <b>A write is saved now and applied at the next restart, never live.</b>
+///         <c>Program.cs</c> reads <see cref="WebListenOptions" /> once, before <c>Build()</c>, to
+///         bind Kestrel's HTTP and HTTPS sockets, including the one serving this request. Unlike
+///         the DNS-over-TLS, DNS-over-QUIC and DNSCrypt listeners, it has no
+///         <see cref="Web.Services.IManagedServiceRegistry" /> entry that could restart just this
+///         listener, so <see cref="RuntimeSettingsWriteResult.WebListenRestartRequiredNote" />
+///         always asks for a full process restart. Rebinding Kestrel in-process is not attempted,
+///         because a bad port or certificate could cut off the session making the change with no
+///         way back. The admin console therefore shows a confirmation dialog before a write,
+///         warning that the operator must reconnect at the new address after restarting.
 ///     </para>
 /// </summary>
 /// <param name="webListenOptions">
-///     This host's own <see cref="WebListenOptions" /> as it was at process startup -- registered
-///     directly as a singleton instance in <c>Program.cs</c> (the same instance
-///     <c>ReloadableTlsCertificateProvider</c>/<c>SystemBackupService</c> already share), not
-///     rebuilt from live configuration, since it is by definition never live: see this class's own
-///     doc comment.
+///     The <see cref="WebListenOptions" /> instance <c>Program.cs</c> built at startup and
+///     registered as a singleton, which also configured Kestrel. It is never rebuilt from the
+///     file, since these settings are never live.
 /// </param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/web-listen-settings")]
 public class WebListenSettingsController(
@@ -58,9 +48,9 @@ public class WebListenSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own web listener configuration as it was at process
-    ///     startup -- see this class's own doc comment for why this can never be "live" the way
-    ///     every other settings controller's own <c>Get</c> action is.
+    ///     This action returns the web listener settings as they were at startup; a saved change
+    ///     shows here only after a restart. The certificate password is never returned, only
+    ///     whether one is set. Requires <c>weblistensettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("weblistensettings:read")]
@@ -76,10 +66,11 @@ public class WebListenSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Web</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Written to the configuration file immediately, but never applied
-    ///     to this already-running process -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Web</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change is written to
+    ///     the file and applied only after a full restart. Returns 400 for a port outside 1-65535,
+    ///     an invalid listen address, a malformed duration or an unknown TLS protocol name.
+    ///     Requires <c>weblistensettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("weblistensettings:write")]
@@ -147,12 +138,11 @@ public class WebListenSettingsController(
     }
 
     /// <summary>
-    ///     This method validates a <c>listenAddresses</c> merge-patch field -- a JSON array of IP
-    ///     address literals, empty meaning every address -- and returns the comma-separated form
-    ///     the configuration file stores, the same rules the DNS transports' own
-    ///     <c>listenAddresses</c> follow (see <see cref="ListenAddressList" />). A malformed entry
-    ///     is a 400 naming it, rather than an address saved to the file that the listener would
-    ///     have to skip at the next start.
+    ///     This method checks a <c>listenAddresses</c> field (a JSON array of IP address literals;
+    ///     empty means every address) and returns the comma-separated form the configuration file
+    ///     stores, using the same rules as the DNS transports' <c>listenAddresses</c> (see
+    ///     <see cref="ListenAddressList" />). A malformed entry returns 400 naming it, rather than
+    ///     being saved and skipped by the listener at the next start.
     /// </summary>
     private static string ValidateListenAddresses(JsonElement element)
     {
@@ -178,13 +168,10 @@ public class WebListenSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="TlsCertificateSettingsDetail" /> from a
-    ///     <see cref="TlsCertificateOptions" /> snapshot -- the identical shape
-    ///     <see cref="TransportSettingsController" />'s own <c>ToCertificateDetail</c> already
-    ///     establishes for DNS-over-TLS/DNS-over-QUIC, duplicated here rather than shared, per this
-    ///     project's own established convention of a small, controller-local helper over a shared
-    ///     one (see <c>TryGetDuration</c>'s own four independent copies across this project's
-    ///     settings controllers).
+    ///     This method builds <see cref="TlsCertificateSettingsDetail" /> from
+    ///     <see cref="TlsCertificateOptions" />. <see cref="TransportSettingsController" /> has its
+    ///     own copy for DNS-over-TLS and DNS-over-QUIC; these small helpers are kept per
+    ///     controller.
     /// </summary>
     private static TlsCertificateSettingsDetail ToCertificateDetail(
         TlsCertificateOptions options
@@ -205,15 +192,10 @@ public class WebListenSettingsController(
         );
 
     /// <summary>
-    ///     This method parses an optional <c>certificate</c> merge-patch sub-object into every
-    ///     setting it touches under <c>DnsServer:Web:Certificate</c> -- the identical shape
-    ///     <see cref="TransportSettingsController" />'s own <c>AddCertificateSettings</c> already
-    ///     establishes, duplicated here per this class's own doc comment on
-    ///     <see cref="ToCertificateDetail" />. Unlike that controller's own version, this one never
-    ///     tracks "did this field require a restart" separately -- every field on this options
-    ///     class already does, unconditionally, so this controller's own <see cref="Patch" /> always
-    ///     returns <see cref="RuntimeSettingsWriteResult.WebListenRestartRequiredNote" /> regardless
-    ///     of which fields a write actually touched.
+    ///     This method adds a setting under <c>DnsServer:Web:Certificate</c> for each field present
+    ///     in the <c>certificate</c> sub-object, like the <c>AddCertificateSettings</c> helper in
+    ///     <see cref="TransportSettingsController" />. Unlike that version, it does not track which
+    ///     fields need a restart: every field here does.
     /// </summary>
     private static void AddCertificateSettings(
         JsonElement certificateElement,
@@ -306,12 +288,11 @@ public class WebListenSettingsController(
     }
 
     /// <summary>
-    ///     This method parses an <c>allowedProtocols</c> merge-patch field (a JSON array of TLS
-    ///     protocol names) into the single, comma-joined flags string
-    ///     <see cref="TlsCertificateOptions.AllowedProtocols" /> actually binds from -- the
-    ///     identical logic <see cref="TransportSettingsController" />'s own version already
-    ///     establishes, duplicated here per this class's own doc comment on
-    ///     <see cref="ToCertificateDetail" />.
+    ///     This method combines an <c>allowedProtocols</c> field (a JSON array of TLS protocol
+    ///     names) into the comma-joined flags string
+    ///     <see cref="TlsCertificateOptions.AllowedProtocols" /> binds from, as the copy in
+    ///     <see cref="TransportSettingsController" /> does. An empty array stores <c>None</c>,
+    ///     which lets the runtime choose.
     /// </summary>
     private static string ParseAllowedProtocols(JsonElement element)
     {

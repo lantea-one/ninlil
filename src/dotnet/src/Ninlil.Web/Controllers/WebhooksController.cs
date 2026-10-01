@@ -17,23 +17,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own outbound subscribable webhooks -- a
-///     "think SendGrid's Event Webhook" feature. It owns the schema, the event catalog, and this
-///     REST management surface; a subscription created, updated, or deleted here is picked up
-///     directly by <c>Server.Webhooks</c>'s own delivery engine, which subscribes to the curated
-///     "noteworthy" event set and POSTs to each matching subscription's own <c>TargetUrl</c>.
-///     Every action requires the <c>webhooks:read</c> or <c>webhooks:write</c> permission.
+///     This controller manages outbound webhook subscriptions: an operator names an HTTP(S)
+///     endpoint and a set of event types, and the delivery engine in <c>Server.Webhooks</c> POSTs
+///     each matching event there, with optional Bearer or Basic authentication and an optional
+///     HMAC signature. Changes made here are picked up by that engine directly. Reads need
+///     <c>webhooks:read</c> and changes need <c>webhooks:write</c>.
 /// </summary>
-/// <param name="subscriptionRepository">The repository this controller reads and writes subscriptions through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="subscriptionRepository">Reads and writes subscriptions.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="credentialProtector">
-///     The protector this controller encrypts a subscription's own auth credential(s) and HMAC
-///     signing secret through before either is ever persisted.
+///     Encrypts a subscription's authentication credentials and HMAC signing secret before they
+///     are stored.
 /// </param>
 /// <param name="attemptRepository">
-///     The repository this controller reads a subscription's own persisted delivery-attempt
-///     history through -- written exclusively by <c>Server.Webhooks</c>'s own delivery engine,
-///     never by this controller (see <see cref="ListDeliveryAttempts" />'s own doc comment).
+///     Reads a subscription's delivery-attempt history, which only the delivery engine writes
+///     (see <see cref="ListDeliveryAttempts" />).
 /// </param>
 [ApiController]
 [Route("api/webhooks")]
@@ -45,14 +43,15 @@ public class WebhooksController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This constant contains the length, in bytes, of a server-generated HMAC signing
-    ///     secret -- matching HMAC-SHA256's own 256-bit block size, the same length
-    ///     <c>TsigKeysController</c>'s own server-generated shared secret already uses.
+    ///     This constant contains the length, in bytes, of a generated HMAC signing secret: 256
+    ///     bits, the HMAC-SHA256 output size, and the same length <c>TsigKeysController</c>
+    ///     generates.
     /// </summary>
     private const int GeneratedHmacSigningSecretLengthBytes = 32;
 
     /// <summary>
-    ///     This action lists every outbound webhook subscription this server knows about.
+    ///     This action lists webhook subscriptions, one page at a time, without their credentials
+    ///     or signing secrets. Requires <c>webhooks:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("webhooks:read")]
@@ -67,11 +66,9 @@ public class WebhooksController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every subscription into memory first. This is a search of the
-        // subscription set itself, distinct from ListDeliveryAttempts's own separate,
-        // per-subscription delivery-history listing further down this controller.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every subscription into
+        // memory.
         IReadOnlyList<WebhookSubscriptionEntity> subscriptions =
             await subscriptionRepository.SearchAsync(skip, take, stoppingToken);
         int totalCount = await subscriptionRepository.CountAsync(stoppingToken);
@@ -87,7 +84,8 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action looks up a single outbound webhook subscription by its identifier.
+    ///     This action returns one webhook subscription, without its credentials or signing
+    ///     secret. Returns 404 for an unknown id. Requires <c>webhooks:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("webhooks:read")]
@@ -108,9 +106,12 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action creates a new outbound webhook subscription. The plaintext auth
-    ///     credential(s) and (if enabled) HMAC signing secret are returned exactly once, in this
-    ///     action's own response -- every later request for this subscription omits both.
+    ///     This action creates a webhook subscription. When HMAC signing is enabled and no secret
+    ///     is supplied, a random 32-byte secret is generated. The plaintext credentials and signing
+    ///     secret are returned in this response only; later reads never include them. Returns 400
+    ///     for a missing name, a target that is not an absolute http(s) URL, an unknown event type,
+    ///     credentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when
+    ///     the name is taken. Requires <c>webhooks:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("webhooks:write")]
@@ -201,9 +202,10 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing webhook subscription's metadata and auth
-    ///     credentials. The subscription's own HMAC signing secret is left untouched -- see
-    ///     <see cref="WebhookSubscriptionWriteRequest" /> for why.
+    ///     This action replaces a webhook subscription's settings and authentication credentials.
+    ///     The HMAC signing secret is left unchanged (see
+    ///     <see cref="WebhookSubscriptionWriteRequest" />). Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>webhooks:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("webhooks:write")]
@@ -276,11 +278,10 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing webhook subscription via RFC 7396 JSON
-    ///     Merge Patch: a field absent from the patch document is left untouched, a field present
-    ///     with a JSON <c>null</c> clears it (where the underlying field is itself nullable), and
-    ///     any other present field overwrites it. As with <see cref="Replace" />, this
-    ///     subscription's own HMAC signing secret cannot be changed this way.
+    ///     This action updates a webhook subscription as an RFC 7396 merge patch: an absent field
+    ///     is unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces
+    ///     it. Changing <c>authMode</c> requires a matching <c>authCredentials</c> in the same
+    ///     patch. The HMAC signing secret cannot be changed. Requires <c>webhooks:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("webhooks:write")]
@@ -365,10 +366,9 @@ public class WebhooksController(
         }
         else if (authMode != subscription.AuthMode)
         {
-            // The auth mode changed without new credentials to match it -- the existing,
-            // still-encrypted credentials almost certainly do not have the right shape for the
-            // new mode, so this is rejected rather than silently accepted, mirroring
-            // CloudProviderCredentialsController's own identical guard for 'providerType'.
+            // The stored credentials almost certainly do not fit the new mode, so a mode change
+            // without new credentials is rejected, as CloudProviderCredentialsController does for
+            // 'providerType'.
             throw new ValidationException(
                 "'authMode' cannot be changed without also supplying a matching 'authCredentials' object."
             );
@@ -403,14 +403,12 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action lists a single webhook subscription's own persisted delivery-attempt
-    ///     history, most-recently-created first -- every real delivery
-    ///     <c>WebhookDeliveryService</c>/<c>WebhookDeliveryRetrySweepService</c> has ever recorded
-    ///     for it, from its very first attempt through to whichever terminal outcome (or ongoing
-    ///     retry) it currently stands at. This is a read-only view: there is no action anywhere on
-    ///     this controller to create, edit, or manually trigger a retry of a delivery attempt --
-    ///     a row here is written exclusively by the delivery engine itself, on the server's own
-    ///     schedule, never by an operator.
+    ///     This action lists one subscription's delivery attempts, newest first, one page at a
+    ///     time: every delivery <c>WebhookDeliveryService</c> and
+    ///     <c>WebhookDeliveryRetrySweepService</c> have recorded for it, from the first try to its
+    ///     final outcome or pending retry. It is read only; the API has no way to create, edit or
+    ///     retry an attempt. Returns 404 for an unknown subscription. Requires
+    ///     <c>webhooks:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/delivery-attempts")]
     [RequirePermission("webhooks:read")]
@@ -433,13 +431,9 @@ public class WebhooksController(
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Pushed down as a real, indexed WHERE-filtered query on both supported storage engines
-        // (see WebhookDeliveryAttemptRepository/WebhookDeliveryAttemptMongoRepository, the latter
-        // carrying a dedicated SubscriptionId index for exactly this lookup shape) -- never a
-        // full-collection scan materialized into memory first. The final skip/take page slice
-        // itself is still done in memory; pushing the pagination down into the repository query
-        // as well, as every other paged list endpoint already does, is a known, deferred
-        // improvement.
+        // The filter by subscription runs in the storage engine, on an index (see
+        // WebhookDeliveryAttemptRepository and WebhookDeliveryAttemptMongoRepository), but ordering
+        // and the page slice happen in memory, unlike the other paged lists.
         IReadOnlyList<WebhookDeliveryAttemptEntity> attempts = await attemptRepository.ListAsync(
             attempt => attempt.SubscriptionId == id,
             stoppingToken
@@ -461,7 +455,8 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This action permanently deletes an outbound webhook subscription.
+    ///     This action deletes a webhook subscription. Returns 404 for an unknown id. Requires
+    ///     <c>webhooks:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("webhooks:write")]
@@ -481,9 +476,8 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This method validates a caller-supplied target URL: it must parse as an absolute
-    ///     <c>http</c>/<c>https</c> URL -- anything else could never actually receive an
-    ///     outbound POST from the delivery engine.
+    ///     This method checks that a target URL is an absolute <c>http</c> or <c>https</c> URL, the
+    ///     only kind the delivery engine can POST to.
     /// </summary>
     private static bool TryValidateTargetUrl(string targetUrl, out string error)
     {
@@ -508,13 +502,9 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This method validates a caller-supplied event type name list against the real,
-    ///     registered <see cref="DnsServerEventTypeRegistry" /> -- rejecting an unknown name with
-    ///     an immediate, specific <c>400</c> rather than persisting a subscription the delivery
-    ///     engine could never actually match against anything, the same
-    ///     "validate against the real registry/parser" discipline
-    ///     <see cref="ForwardersController" />'s own <c>definitionString</c> check already
-    ///     applies.
+    ///     This method checks every event type name against
+    ///     <see cref="DnsServerEventTypeRegistry" />, so an unknown name returns 400 at once
+    ///     instead of saving a subscription that could never match an event.
     /// </summary>
     private static bool TryValidateEventTypeNames(List<string> eventTypeNames, out string error)
     {
@@ -543,10 +533,10 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This method validates that a subscription's own auth credentials match what its
-    ///     declared auth mode actually requires, mirroring
-    ///     <c>CloudProviderCredentialsController.TryValidateCredentials</c>'s own shape for a
-    ///     different secret-bearing entity type.
+    ///     This method checks that the credentials fit the auth mode: nothing for <c>None</c>, a
+    ///     <c>BearerToken</c> for <c>Bearer</c>, a <c>Username</c> and <c>Password</c> for
+    ///     <c>Basic</c>. <c>CloudCredentialValidator</c> does the same for cloud provider
+    ///     credentials.
     /// </summary>
     private static bool TryValidateAuthCredentials(
         WebhookAuthModeEnum authMode,
@@ -596,8 +586,8 @@ public class WebhooksController(
     }
 
     /// <summary>
-    ///     This method converts a webhook subscription entity into its REST representation,
-    ///     deliberately never including its own auth credentials or HMAC signing secret.
+    ///     This method converts a subscription entity to its API representation, which never
+    ///     includes the credentials or the signing secret, only whether a secret is set.
     /// </summary>
     private static WebhookSubscriptionDetail ToDetail(WebhookSubscriptionEntity subscription) =>
         new(
@@ -615,7 +605,7 @@ public class WebhooksController(
         );
 
     /// <summary>
-    ///     This method converts a persisted delivery-attempt entity into its REST representation.
+    ///     This method converts a delivery-attempt entity to its API representation.
     /// </summary>
     private static WebhookDeliveryAttemptDetail ToDeliveryAttemptDetail(
         WebhookDeliveryAttemptEntity attempt

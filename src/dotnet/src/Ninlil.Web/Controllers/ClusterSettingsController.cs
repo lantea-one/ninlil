@@ -18,38 +18,33 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this node's own <see cref="ClusterOptions" /> -- whether
-///     clustering is on at all, this node's own advertised address, and the heartbeat engine's
-///     own tuning. This is the settings surface a peer-management workflow
-///     (<see cref="ClusterController" />) is otherwise unreachable without: an operator must set
-///     <see cref="ClusterOptions.Enable" />/<see cref="ClusterOptions.AdvertisedHost" /> here
-///     before either <see cref="ClusterController.CreateInvite" /> or
-///     <see cref="ClusterController.Join" /> can succeed, since both throw a
-///     <see cref="ValidationException" /> while either is unset. Every action requires the
-///     <c>clustersettings:read</c> or <c>clustersettings:write</c> permission.
+///     This controller reads and writes this node's <see cref="ClusterOptions" />: whether
+///     clustering is on, the address this node advertises to peers, and heartbeat tuning. An
+///     operator must set <see cref="ClusterOptions.Enable" /> and
+///     <see cref="ClusterOptions.AdvertisedHost" /> here before
+///     <see cref="ClusterController.CreateInvite" /> or <see cref="ClusterController.Join" /> can
+///     succeed; both return 400 while either is unset. Reading needs
+///     <c>clustersettings:read</c> and writing needs <c>clustersettings:write</c>.
 ///     <para>
-///         Most fields take effect immediately, with no restart -- <see cref="ClusterOptions" />
-///         is read via <see cref="IOptionsMonitor{TOptions}" /> throughout <c>Server.Cluster</c>,
-///         the same live-reload shape <see cref="RecursiveSettingsController" /> already
-///         establishes. <see cref="ClusterOptions.HeartbeatInterval" /> is the one exception:
-///         <c>ClusterHeartbeatBackgroundService</c> reads it once, into its own
-///         <see cref="PeriodicTimer" />, at startup -- see that class's own doc comment.
-///         <see cref="ClusterOptions.NodeId" /> is never writable here at all; see that
-///         property's own doc comment for why. This controller also folds in the one field of
-///         <see cref="CatalogSyncOptions" /> (<see cref="CatalogSyncOptions.AddressReconcileInterval" />)
-///         -- a genuinely distinct options class, but cluster-adjacent enough (it exists purely to
-///         keep a catalog-managed zone's own address lists reconciled against this node's own live
-///         cluster membership) that a whole separate controller/page for one
-///         <see cref="TimeSpan" /> field was judged overkill; see
-///         <see cref="ClusterSettingsDetail" />'s own doc comment. Like
-///         <see cref="ClusterOptions.HeartbeatInterval" />, this field also needs a restart:
-///         <c>CatalogClusterAddressSyncService</c> reads it once, into its own
-///         <see cref="PeriodicTimer" />, at startup too.
+///         Most fields take effect at once, because <c>Server.Cluster</c> reads
+///         <see cref="ClusterOptions" /> through <see cref="IOptionsMonitor{TOptions}" />.
+///         <see cref="ClusterOptions.HeartbeatInterval" /> needs a restart, because
+///         <c>ClusterHeartbeatBackgroundService</c> builds its <see cref="PeriodicTimer" /> from
+///         it at startup. <see cref="ClusterOptions.NodeId" /> is generated once and cannot be
+///         written here.
+///     </para>
+///     <para>
+///         This controller also carries the one field of <see cref="CatalogSyncOptions" />,
+///         <see cref="CatalogSyncOptions.AddressReconcileInterval" />, which controls how often
+///         catalog-managed zones' address lists are reconciled with the cluster membership (see
+///         <see cref="ClusterSettingsDetail" />). It too needs a restart, since
+///         <c>CatalogClusterAddressSyncService</c> builds its <see cref="PeriodicTimer" /> at
+///         startup.
 ///     </para>
 /// </summary>
-/// <param name="clusterOptions">This node's own currently-effective (live) cluster settings.</param>
-/// <param name="catalogSyncOptions">This node's own currently-effective (live) catalog address-reconciliation settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="clusterOptions">This node's current cluster settings.</param>
+/// <param name="catalogSyncOptions">This node's current catalog address-reconciliation settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/cluster-settings")]
 public class ClusterSettingsController(
@@ -59,7 +54,8 @@ public class ClusterSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this node's own currently-effective (live) cluster settings.
+    ///     This action returns this node's current cluster settings, including its node id.
+    ///     Requires <c>clustersettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clustersettings:read")]
@@ -83,11 +79,13 @@ public class ClusterSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>Cluster</c> (and, for
-    ///     <c>addressReconcileInterval</c>, the separate <c>CatalogSync</c> section) via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. <see cref="ClusterOptions.NodeId" /> has no field here at all --
-    ///     it is generated once, automatically, and never operator-editable.
+    ///     This action merges a partial update into the <c>Cluster</c> section (and, for
+    ///     <c>addressReconcileInterval</c>, the <c>CatalogSync</c> section) as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. There is no <c>nodeId</c>
+    ///     field. The response note says whether the change applies at once or needs a restart.
+    ///     Returns 400 for a port outside 0-65535 (0 means the shared HTTPS port), a
+    ///     missed-heartbeat threshold below 1, or a duration that is not a valid TimeSpan. Requires
+    ///     <c>clustersettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("clustersettings:write")]
@@ -255,10 +253,9 @@ public class ClusterSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller -- the
-    ///     same helper shape <see cref="RecursiveSettingsController" />'s own equivalent already
-    ///     establishes.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed, as the equivalent
+    ///     helper in <see cref="RecursiveSettingsController" /> does.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,

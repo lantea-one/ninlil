@@ -16,25 +16,24 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller exposes <see cref="MacVendorLookupOptions" /> -- whether and how often the
-///     IEEE MAC address block registries are re-downloaded, and from where -- as a readable and
-///     merge-patchable REST resource, alongside a read-only report of the vendor data currently
-///     loaded and an on-demand refresh action. Reading requires <c>macvendorsettings:read</c>,
-///     patching <c>macvendorsettings:write</c>, and triggering a refresh
-///     <c>macvendorsettings:manage</c> -- this project's established naming for a permission that
-///     performs a real, immediate action rather than reading or writing configuration.
+///     This controller exposes <see cref="MacVendorLookupOptions" /> (whether, how often and from
+///     where the IEEE MAC address block registries are re-downloaded) as a readable,
+///     merge-patchable resource, with a report of the vendor data currently loaded and an
+///     on-demand refresh. Reading needs <c>macvendorsettings:read</c>, patching
+///     <c>macvendorsettings:write</c>, and a refresh <c>macvendorsettings:manage</c>, the naming
+///     used for permissions that trigger an action rather than read or write settings.
 ///     <para>
-///         Every patchable value is read live through <see cref="IOptionsMonitor{TOptions}" />, so
-///         a write takes effect on the refresh loop's next wake-up with no restart.
-///         <see cref="MacVendorLookupOptions.DataFilePath" /> is reported but never patchable: it
-///         is an on-disk path, read once at startup, and configuration-file-only like every other
-///         state path.
+///         Every patchable value is read through <see cref="IOptionsMonitor{TOptions}" />, so a
+///         write takes effect at the refresh loop's next wake-up with no restart.
+///         <see cref="MacVendorLookupOptions.DataFilePath" /> is reported but cannot be patched:
+///         it is an on-disk path read once at startup, and like other state paths it is set only
+///         in the configuration file.
 ///     </para>
 /// </summary>
-/// <param name="vendorOptions">The live vendor lookup options.</param>
+/// <param name="vendorOptions">The current vendor lookup options.</param>
 /// <param name="lookupService">The lookup service whose loaded table is reported.</param>
-/// <param name="refreshService">The refresh service whose history is reported and which an on-demand refresh runs through.</param>
-/// <param name="runtimeConfigurationOptions">Where the runtime configuration file a patch is written to lives.</param>
+/// <param name="refreshService">The refresh service whose history is reported and which runs an on-demand refresh.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a patch is merged into.</param>
 [ApiController]
 [Route("api/mac-vendor-settings")]
 public class MacVendorSettingsController(
@@ -52,7 +51,8 @@ public class MacVendorSettingsController(
     private static readonly TimeSpan MinimumRefreshInterval = TimeSpan.FromDays(1);
 
     /// <summary>
-    ///     This action returns the currently-effective settings and the loaded vendor data's status.
+    ///     This action returns the current settings and the status of the loaded vendor data.
+    ///     Requires <c>macvendorsettings:read</c>.
     /// </summary>
     /// <returns>The current settings and status.</returns>
     [HttpGet]
@@ -75,9 +75,10 @@ public class MacVendorSettingsController(
     }
 
     /// <summary>
-    ///     This action applies a JSON merge patch to the vendor refresh settings.
-    ///     <c>refreshInterval</c> must be at least one day; each registry URL must be an absolute
-    ///     HTTP or HTTPS URL (shape-checked only, never fetched here).
+    ///     This action applies an RFC 7396 merge patch to the vendor refresh settings. Returns 400
+    ///     when <c>refreshInterval</c> is under one day or a registry URL is not an absolute
+    ///     http(s) URL (URLs are only checked for shape, not fetched). Requires
+    ///     <c>macvendorsettings:write</c>.
     /// </summary>
     /// <param name="patch">The merge patch.</param>
     /// <returns>A note describing how the change takes effect.</returns>
@@ -162,10 +163,10 @@ public class MacVendorSettingsController(
     }
 
     /// <summary>
-    ///     This action re-downloads the registries right now, regardless of schedule or of
-    ///     whether automatic refresh is enabled, waits for it to finish, and returns the resulting
-    ///     status. A failed or implausible download is reported in the status, never as an error
-    ///     response, and never replaces the data already loaded.
+    ///     This action re-downloads the registries now, whatever the schedule and even with
+    ///     automatic refresh off, waits for it to finish, and returns the resulting status. A
+    ///     failed or implausible download is reported in the status, never as an error response,
+    ///     and never replaces the data already loaded. Requires <c>macvendorsettings:manage</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The status after the refresh.</returns>

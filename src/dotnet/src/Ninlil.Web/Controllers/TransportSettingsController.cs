@@ -25,102 +25,72 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes every DNS transport's own configuration under one
-///     thematic REST surface, one sub-resource per transport -- the closest existing precedent is
-///     <see cref="ReverseProxySettingsController" />'s own single controller covering more than one
-///     related-but-distinct configuration section. Every action requires the
-///     <c>transportsettings:read</c> or <c>transportsettings:write</c> permission, uniformly across
-///     all five transports (this project's own regex-enforced permission convention,
-///     <c>^[a-z]+:(read|write|manage)$</c>, rules out a hyphenated or per-transport name).
+///     This controller reads and writes the settings of every DNS transport, one sub-resource
+///     per transport: plain DNS, DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC and DNSCrypt.
+///     Reading needs <c>transportsettings:read</c> and writing needs
+///     <c>transportsettings:write</c> for all five; permission names follow the
+///     <c>resource:read|write|manage</c> pattern that <c>PermissionsEndpointTests</c> enforces,
+///     so there are no per-transport names.
 ///     <para>
-///         <b>Plain DNS has no <c>enable</c> field at all</b> -- see <c>PlainTransportSettingsDetail</c>'s
-///         own doc comment -- so <see cref="GetPlain" />/<see cref="PatchPlain" /> only ever report
+///         <b>Plain DNS has no <c>enable</c> field</b> (see <c>PlainTransportSettingsDetail</c>),
+///         so <see cref="PatchPlain" /> always returns
 ///         <see cref="RuntimeSettingsWriteResult.TransportRestartRequiredNote" />.
 ///     </para>
 ///     <para>
-///         <b>Every other transport's own <c>enable</c> field is genuinely live, with no restart</b>:
-///         toggling it writes the configuration file (so the new value survives a future restart)
-///         <em>and</em> starts or stops the real, already-running listener(s) this host constructs,
-///         through <see cref="IManagedServiceRegistry" /> -- the same registry
-///         <c>ServicesController</c> exposes at <c>/api/services</c>, reused here rather than
-///         building a second, parallel "is this transport running" concept. Making that genuinely
-///         work needed one real fix per transport, not just wiring: <c>DnsOverTlsListener</c>,
-///         <c>DnsOverQuicListener</c>, <c>DnsCryptUdpListener</c>/<c>DnsCryptTcpListener</c>, and
-///         <c>DnsCryptCertificateRotationService</c> all used to read their own <c>Enable</c> flag
-///         via a fixed <see cref="IOptions{TOptions}" /> snapshot, computed once and cached for the
-///         life of the process -- calling their own <c>StartAsync</c> again after a configuration
-///         write would still see whatever <c>Enable</c> was at process startup, exactly the same
-///         shape of gap this phase's own predecessor found and fixed for
-///         <c>RecursiveServerOptions</c>. All five were converted to
-///         <see cref="IOptionsMonitor{TOptions}" />, read fresh every time each one's own
-///         <c>ExecuteAsync</c> (re)starts. DNS-over-HTTPS needed a second, structural fix: since it
-///         rides this host's own shared Kestrel instance rather than binding a socket of its own,
-///         its GET/POST routes used to be mapped only when <c>Enable</c> was already
-///         <see langword="true" /> at process startup -- ASP.NET Core's Minimal API routing has no
-///         supported "map this route later" operation, so an installation that started with
-///         DNS-over-HTTPS off (this project's own default) could never have actually turned it on
-///         at runtime, no matter what this controller wrote. See
-///         <see cref="Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />'s
-///         own doc comment for the fix: the routes are now always mapped, gated entirely by
-///         <c>DnsOverHttpsTransportGate</c> instead.
+///         <b>Every other transport's <c>enable</c> field takes effect at once.</b> A toggle writes
+///         the configuration file, so it survives a restart, and starts or stops the running
+///         listener through <see cref="IManagedServiceRegistry" />, the registry
+///         <c>ServicesController</c> exposes at <c>/api/services</c>. The listeners read their
+///         settings through <see cref="IOptionsMonitor{TOptions}" /> each time they start, so a
+///         restarted listener sees the new value. DNS-over-HTTPS shares the Kestrel listener rather
+///         than binding its own socket, so its routes are always mapped and
+///         <c>DnsOverHttpsTransportGate</c> turns them on and off (see
+///         <see cref="Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps" />).
 ///     </para>
 ///     <para>
-///         <b>DNSCrypt's own <c>enable</c> toggle starts/stops three registered services, not
-///         one</b>: <c>dnscrypt-udp</c>, <c>dnscrypt-tcp</c>, <em>and</em>
-///         <c>dnscrypt-certificate-rotation</c> -- a listener with no valid certificate to serve
-///         can accept a connection but never actually answer a real encrypted query, so enabling
-///         DNSCrypt live without also starting the background loop that issues its certificates
-///         would silently leave it deaf.
+///         <b>DNSCrypt's toggle starts or stops three services:</b> <c>dnscrypt-udp</c>,
+///         <c>dnscrypt-tcp</c> and <c>dnscrypt-certificate-rotation</c>. A listener without a
+///         valid certificate can accept a connection but cannot answer an encrypted query, so the
+///         loop that issues certificates must run with it.
 ///     </para>
 ///     <para>
-///         <b>Guarding against a stale read, not just a double start/stop.</b> Writing the
-///         configuration file and then immediately calling a listener's own <c>StartAsync</c> is
-///         not, by itself, safe: <see cref="IOptionsMonitor{TOptions}" /> only reflects a file
-///         write once the underlying JSON configuration provider's own change notification fires,
-///         which is debounced by the file system watcher backing it (worse, a slow poll-based
-///         fallback in some container environments) rather than instant. Every live toggle below
-///         calls <see cref="WaitForOptionsReloadAsync{TOptions}" /> first, to actually observe that
-///         reload (bounded by a real timeout, not an indefinite wait) -- see that method's own doc
-///         comment for the full reasoning. Skipping this step would make the "genuinely live, no
-///         restart" claim this class makes intermittently false, in a way that would be very
-///         difficult to reproduce on demand.
+///         <b>Waiting for the reload.</b> <see cref="IOptionsMonitor{TOptions}" /> sees a file
+///         write only after the JSON configuration provider's change notification fires, which is
+///         debounced and can be slower still where the file watcher falls back to polling. Each
+///         toggle therefore calls <see cref="WaitForOptionsReloadAsync{TOptions}" /> before
+///         starting or stopping anything, so the listener does not read the old value.
 ///     </para>
 ///     <para>
-///         <b>Guarding against a double start/stop.</b> Every live toggle here only calls
-///         <see cref="IManagedServiceRegistration.StartAsync" />/<see cref="IManagedServiceRegistration.StopAsync" />
-///         when the target service's own <see cref="IManagedServiceRegistration.IsRunning" />
-///         actually disagrees with the requested state -- calling <c>StartAsync</c> a second time
-///         on an already-running socket-based listener would attempt to bind the same port twice
-///         and fail with a real, unhandled <see cref="System.Net.Sockets.SocketException" />, not a
-///         harmless no-op.
+///         <b>No double start or stop.</b> A toggle calls
+///         <see cref="IManagedServiceRegistration.StartAsync" /> or
+///         <see cref="IManagedServiceRegistration.StopAsync" /> only when
+///         <see cref="IManagedServiceRegistration.IsRunning" /> disagrees with the requested
+///         state. Starting a running socket listener again would try to bind the same port twice
+///         and throw a <see cref="System.Net.Sockets.SocketException" />.
 ///     </para>
 ///     <para>
-///         <b>Every other field on every transport is restart-required</b>, honestly reported as
-///         such: a port, certificate, or protocol-tuning value is read once when that specific
-///         listener (re)starts, not on every request -- rebinding a socket to a new port
-///         fundamentally cannot happen without at least that listener restarting, whether or not
-///         the whole process does. A write touching only these fields returns
-///         <see cref="RuntimeSettingsWriteResult.TransportRestartRequiredNote" />; a write touching both
-///         <c>enable</c> and at least one of these returns
-///         <see cref="RuntimeSettingsWriteResult.TransportMixedReloadNote" /> instead.
+///         <b>Every other field needs a restart.</b> Ports, certificates and tuning values are
+///         read when a listener starts, so they apply after that listener is restarted (through
+///         <c>/api/services</c>) or the process restarts. A write touching only these fields
+///         returns <see cref="RuntimeSettingsWriteResult.TransportRestartRequiredNote" />; one
+///         touching <c>enable</c> as well returns
+///         <see cref="RuntimeSettingsWriteResult.TransportMixedReloadNote" />.
 ///     </para>
 ///     <para>
-///         <b>Certificate handling is a path/reference, never raw key material.</b> Every TLS-based
-///         transport's own <see cref="TlsCertificateOptions" /> already models "an operator-provided
-///         PFX file path, or a self-managed self-signed certificate" -- this controller reflects
-///         that exact same shape over REST (<see cref="TlsCertificateSettingsDetail" />) rather than
-///         inventing a raw-certificate-upload flow. <c>PfxPassword</c> is never returned by a
-///         <c>GET</c>, only whether one is currently configured, the same reveal-once posture every
-///         other secret-bearing setting in this project already follows.
+///         <b>Certificates are referenced by path, never uploaded.</b>
+///         <see cref="TlsCertificateOptions" /> describes either a PFX file path or a
+///         self-signed certificate the server manages, and
+///         <see cref="TlsCertificateSettingsDetail" /> exposes the same shape. A GET never returns
+///         the PFX password, only whether one is set.
 ///     </para>
 /// </summary>
-/// <param name="plainOptions">Plain DNS's own currently-effective settings, live.</param>
-/// <param name="dnsOverTlsOptions">DNS-over-TLS's own currently-effective settings, live.</param>
-/// <param name="dnsOverHttpsOptions">DNS-over-HTTPS's own currently-effective settings, live.</param>
-/// <param name="dnsOverQuicOptions">DNS-over-QUIC's own currently-effective settings, live.</param>
-/// <param name="dnsCryptOptions">DNSCrypt's own currently-effective settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
-/// <param name="registry">The registry a live <c>enable</c> toggle starts/stops the real listener(s) through.</param>
+/// <param name="plainOptions">The current plain DNS settings.</param>
+/// <param name="dnsOverTlsOptions">The current DNS-over-TLS settings.</param>
+/// <param name="dnsOverHttpsOptions">The current DNS-over-HTTPS settings.</param>
+/// <param name="dnsOverQuicOptions">The current DNS-over-QUIC settings.</param>
+/// <param name="dnsCryptOptions">The current DNSCrypt settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
+/// <param name="registry">Starts and stops the listeners when <c>enable</c> is toggled.</param>
 [ApiController]
 [Route("api/transport-settings")]
 public class TransportSettingsController(
@@ -133,7 +103,9 @@ public class TransportSettingsController(
     IManagedServiceRegistry registry
 ) : ControllerBase
 {
-    /// <summary>This action reads Plain DNS's own currently-effective settings.</summary>
+    /// <summary>
+    ///     This action returns the plain DNS settings. Requires <c>transportsettings:read</c>.
+    /// </summary>
     [HttpGet("plain")]
     [RequirePermission("transportsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(PlainTransportSettingsDetailExample))]
@@ -141,8 +113,9 @@ public class TransportSettingsController(
         Ok(ToDetail(plainOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Protocol:Plain</c>. Every field
-    ///     here is restart-required -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Protocol:Plain</c> as an RFC 7396
+    ///     merge patch. Every field needs a listener or process restart. Returns 400 for an invalid
+    ///     listen address or duration. Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("plain")]
     [RequirePermission("transportsettings:write")]
@@ -163,8 +136,7 @@ public class TransportSettingsController(
                 )
             );
 
-        // Every Plain DNS field is restart-required, so the "touched a restart-required field"
-        // flag the helper sets has nothing to decide here.
+        // Every plain DNS field needs a restart, so the flag the helper sets is not used here.
         bool touchedRestartRequiringField = false;
         AddListenAddressesSetting(
             patch,
@@ -220,7 +192,9 @@ public class TransportSettingsController(
         );
     }
 
-    /// <summary>This action reads DNS-over-TLS's own currently-effective settings.</summary>
+    /// <summary>
+    ///     This action returns the DNS-over-TLS settings. Requires <c>transportsettings:read</c>.
+    /// </summary>
     [HttpGet("dns-over-tls")]
     [RequirePermission("transportsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsOverTlsSettingsDetailExample))]
@@ -228,8 +202,11 @@ public class TransportSettingsController(
         Ok(ToDetail(dnsOverTlsOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverTls</c>. See this
-    ///     class's own doc comment for which field is genuinely live and which is restart-required.
+    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverTls</c> as an
+    ///     RFC 7396 merge patch. <c>enable</c> starts or stops the listener at once; every other
+    ///     field needs a listener restart. The response note says which applies. Returns 400 for an
+    ///     invalid listen address, duration or TLS protocol name. Requires
+    ///     <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-tls")]
     [RequirePermission("transportsettings:write")]
@@ -348,7 +325,9 @@ public class TransportSettingsController(
         );
     }
 
-    /// <summary>This action reads DNS-over-HTTPS's own currently-effective settings.</summary>
+    /// <summary>
+    ///     This action returns the DNS-over-HTTPS settings. Requires <c>transportsettings:read</c>.
+    /// </summary>
     [HttpGet("dns-over-https")]
     [RequirePermission("transportsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsOverHttpsSettingsDetailExample))]
@@ -356,11 +335,11 @@ public class TransportSettingsController(
         Ok(ToDetail(dnsOverHttpsOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverHttps</c>. See
-    ///     this class's own doc comment for which field is genuinely live and which needs a full
-    ///     process restart -- <see cref="DnsOverHttpsSettingsDetail" />'s own doc comment explains
-    ///     why <c>path</c>/<c>maxMessageSizeBytes</c> specifically need the whole process to
-    ///     restart, not merely this one transport.
+    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverHttps</c> as an
+    ///     RFC 7396 merge patch. <c>enable</c> takes effect at once; <c>path</c> and
+    ///     <c>maxMessageSizeBytes</c> need a full process restart (see
+    ///     <see cref="DnsOverHttpsSettingsDetail" /> for why). Returns 400 for a path that does not
+    ///     start with <c>/</c>. Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-https")]
     [RequirePermission("transportsettings:write")]
@@ -441,7 +420,9 @@ public class TransportSettingsController(
         );
     }
 
-    /// <summary>This action reads DNS-over-QUIC's own currently-effective settings.</summary>
+    /// <summary>
+    ///     This action returns the DNS-over-QUIC settings. Requires <c>transportsettings:read</c>.
+    /// </summary>
     [HttpGet("dns-over-quic")]
     [RequirePermission("transportsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsOverQuicSettingsDetailExample))]
@@ -449,8 +430,10 @@ public class TransportSettingsController(
         Ok(ToDetail(dnsOverQuicOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverQuic</c>. See this
-    ///     class's own doc comment for which field is genuinely live and which is restart-required.
+    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsOverQuic</c> as an
+    ///     RFC 7396 merge patch. <c>enable</c> starts or stops the listener at once; every other
+    ///     field needs a listener restart. Returns 400 for an invalid listen address, duration or
+    ///     TLS protocol name. Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dns-over-quic")]
     [RequirePermission("transportsettings:write")]
@@ -569,7 +552,9 @@ public class TransportSettingsController(
         );
     }
 
-    /// <summary>This action reads DNSCrypt's own currently-effective settings.</summary>
+    /// <summary>
+    ///     This action returns the DNSCrypt settings. Requires <c>transportsettings:read</c>.
+    /// </summary>
     [HttpGet("dnscrypt")]
     [RequirePermission("transportsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DnsCryptSettingsDetailExample))]
@@ -577,9 +562,11 @@ public class TransportSettingsController(
         Ok(ToDetail(dnsCryptOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsCrypt</c>. See this
-    ///     class's own doc comment for which field is genuinely live (and why a live enable toggle
-    ///     here starts/stops three registered services, not one) and which is restart-required.
+    ///     This action merges a partial update into <c>DnsServer:Protocol:DnsCrypt</c> as an
+    ///     RFC 7396 merge patch. <c>enable</c> starts or stops the UDP and TCP listeners and the
+    ///     certificate rotation loop at once; every other field needs a restart of those services.
+    ///     Returns 400 for an invalid listen address, duration or cipher name, or an empty cipher
+    ///     list. Requires <c>transportsettings:write</c>.
     /// </summary>
     [HttpPatch("dnscrypt")]
     [RequirePermission("transportsettings:write")]
@@ -790,23 +777,16 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method waits until <paramref name="monitor" /> itself has observed the write this
-    ///     action just made -- closing a real timing race, not a hypothetical one: <see cref="PresetConfigurationFileApplier.ApplyAsync(IReadOnlyList{PresetConfigurationSetting},string)" />
-    ///     returns the instant the configuration file's own atomic rename completes, but
-    ///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> only reflects that write once the
-    ///     underlying JSON configuration provider's own file-change notification actually fires --
-    ///     debounced by a few hundred milliseconds under a native file-system watcher, or, in a
-    ///     container environment where that watcher falls back to polling, potentially several
-    ///     seconds. Calling this transport's own listener <c>StartAsync</c> immediately after the
-    ///     write, with no synchronization at all, would race that notification: the listener's own
-    ///     <c>ExecuteAsync</c> could read <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> a
-    ///     moment too early and see the value from <em>before</em> this write, silently declining
-    ///     to start (or stop) exactly when a caller most needs it to. Bounded by a generous, but
-    ///     real, timeout -- if the reload genuinely never arrives within it (a still-slower
-    ///     environment than anticipated), this method gives up and proceeds anyway rather than
-    ///     hanging a request forever; the configuration file write itself already succeeded
-    ///     regardless, so the only cost of a timeout here is this one live-toggle attempt possibly
-    ///     needing a second call (or the next real restart) to actually take hold.
+    ///     This method waits until <paramref name="monitor" /> reflects the write just made.
+    ///     <see cref="PresetConfigurationFileApplier.ApplyAsync(IReadOnlyList{PresetConfigurationSetting},string)" />
+    ///     returns as soon as the file's atomic rename completes, but
+    ///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> changes only when the JSON
+    ///     configuration provider's change notification fires: a few hundred milliseconds later
+    ///     with a native file watcher, possibly several seconds where it falls back to polling
+    ///     (some containers). A listener started before then would read the old value in
+    ///     <c>ExecuteAsync</c> and not start (or stop). The wait gives up after 10 seconds rather
+    ///     than hang the request; the file is already written, so at worst the toggle needs a
+    ///     second call or a restart to take hold.
     /// </summary>
     /// <param name="monitor">The options monitor to wait on.</param>
     /// <param name="isReloaded">Whether a given value already reflects the write this action just made.</param>
@@ -828,9 +808,8 @@ public class TransportSettingsController(
                 reloaded.TrySetResult();
         });
 
-        // Re-check right after subscribing, in case the real reload happened in the narrow
-        // window between this method's own first check above and the subscription actually
-        // being registered.
+        // Check again after subscribing, in case the reload landed between the first check and the
+        // subscription.
         if (isReloaded(monitor.CurrentValue))
             return;
 
@@ -844,16 +823,14 @@ public class TransportSettingsController(
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Best-effort only -- see this method's own doc comment for why proceeding past a
-            // timeout here is the right behavior, not a bug being swallowed.
+            // The wait is best-effort (see the summary), so a timeout is not an error.
         }
     }
 
     /// <summary>
-    ///     This method starts or stops a single registered service to match
-    ///     <paramref name="desiredEnabled" />, but only when its own current
-    ///     <see cref="IManagedServiceRegistration.IsRunning" /> actually disagrees with it -- see
-    ///     this class's own doc comment for why a redundant call is never made.
+    ///     This method starts or stops one registered service to match
+    ///     <paramref name="desiredEnabled" />, only when its
+    ///     <see cref="IManagedServiceRegistration.IsRunning" /> disagrees (see the class summary).
     /// </summary>
     /// <param name="serviceName">The registered service to start or stop.</param>
     /// <param name="desiredEnabled">Whether this service should end up running.</param>
@@ -866,10 +843,8 @@ public class TransportSettingsController(
     {
         IManagedServiceRegistration service = registry.Find(serviceName);
 
-        // Every name passed here is a compile-time constant matching one of
-        // ManagedServiceRegistry's own real registrations -- a null result would mean that
-        // registry's own composition has drifted out of sync with this controller, not a
-        // legitimate runtime condition to report to a caller as a 404.
+        // Every name passed here is a constant matching a registration in ManagedServiceRegistry,
+        // so a null result means the two have drifted apart, not something to report to the caller.
         if (service is null)
             return;
 
@@ -880,9 +855,8 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method chooses the right <see cref="RuntimeSettingsWriteResult" /> note for a
-    ///     single transport's own write, based on which categories of field it touched -- see this
-    ///     class's own doc comment for the full reasoning.
+    ///     This method picks the <see cref="RuntimeSettingsWriteResult" /> note for a transport
+    ///     write from which kinds of field it touched (see the class summary).
     /// </summary>
     private static string NoteFor(bool touchedEnable, bool touchedRestartRequiringField) =>
         (touchedEnable, touchedRestartRequiringField) switch
@@ -893,13 +867,12 @@ public class TransportSettingsController(
         };
 
     /// <summary>
-    ///     This method reads an optional <c>listenAddresses</c> merge-patch field -- a JSON array of
-    ///     IP address literals, empty meaning "every address" -- validates it, and adds the setting
-    ///     to write. Stored as one comma-separated string (see
-    ///     <see cref="ListenAddressList" /> for why), so the transport's <c>NINLIL_</c>
-    ///     environment variable can hold the same value. A malformed address, or one already
-    ///     covered by a wildcard in the same list, is a 400 naming the entry, rather than a value
-    ///     written to disk that the listener would then have to skip at startup.
+    ///     This method reads an optional <c>listenAddresses</c> field (a JSON array of IP address
+    ///     literals; empty means every address), checks it, and adds the setting. It is stored as
+    ///     one comma-separated string (see <see cref="ListenAddressList" />) so the transport's
+    ///     <c>NINLIL_</c> environment variable can hold the same value. A malformed address, or one
+    ///     already covered by a wildcard in the same list, returns 400 naming the entry rather than
+    ///     being saved and skipped by the listener at startup.
     /// </summary>
     private static void AddListenAddressesSetting(
         JsonElement patch,
@@ -940,17 +913,16 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method turns a configured <c>ListenAddresses</c> string into the array the REST
-    ///     API reports, entry by entry as written -- including any entry the listener had to skip,
-    ///     so an operator can see and fix it.
+    ///     This method turns a configured <c>ListenAddresses</c> string into the array the API
+    ///     returns, entry by entry as written, including any entry the listener had to skip, so an
+    ///     operator can see and fix it.
     /// </summary>
     private static List<string> ToListenAddressList(string configured) =>
         [.. ListenAddressList.Split(configured)];
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller -- the
-    ///     same helper <see cref="RecursiveSettingsController" /> already establishes.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,
@@ -966,10 +938,10 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method parses an optional <c>certificate</c> merge-patch sub-object into every
-    ///     setting it touches under <paramref name="certificateSectionPath" />, shared by
-    ///     DNS-over-TLS's and DNS-over-QUIC's own <see cref="PatchDnsOverTls" />/<see cref="PatchDnsOverQuic" />
-    ///     actions -- both transports bind an identically-shaped <see cref="TlsCertificateOptions" />.
+    ///     This method adds a setting under <paramref name="certificateSectionPath" /> for each
+    ///     field present in a <c>certificate</c> sub-object. <see cref="PatchDnsOverTls" /> and
+    ///     <see cref="PatchDnsOverQuic" /> share it, since both bind a
+    ///     <see cref="TlsCertificateOptions" />.
     /// </summary>
     private static void AddCertificateSettings(
         JsonElement certificateElement,
@@ -1069,12 +1041,12 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method parses an <c>allowedProtocols</c> merge-patch field (a JSON array of TLS
-    ///     protocol names) into the single, comma-joined flags string
-    ///     <see cref="TlsCertificateOptions.AllowedProtocols" /> actually binds from -- written as
-    ///     one scalar configuration leaf, not a JSON array, since that scalar
-    ///     <see cref="SslProtocols" /> property (unlike a genuine <see cref="List{T}" />
-    ///     property) is what .NET's own configuration binder expects there.
+    ///     This method combines an <c>allowedProtocols</c> field (a JSON array of TLS protocol
+    ///     names) into the comma-joined flags string
+    ///     <see cref="TlsCertificateOptions.AllowedProtocols" /> binds from. It is written as one
+    ///     scalar value, not an array, because the configuration binder expects a scalar for an
+    ///     <see cref="SslProtocols" /> property. An empty array stores <c>None</c>, which lets the
+    ///     runtime choose.
     /// </summary>
     private static string ParseAllowedProtocols(JsonElement element)
     {
@@ -1104,12 +1076,9 @@ public class TransportSettingsController(
     }
 
     /// <summary>
-    ///     This method parses an <c>enabledEsVersions</c> merge-patch field (a JSON array of
-    ///     DNSCrypt cipher names) into the validated name list
-    ///     <see cref="DnsCryptOptions.EnabledEsVersions" /> binds from -- a genuine
-    ///     <see cref="List{T}" /> property, so (unlike <see cref="ParseAllowedProtocols" />'s own
-    ///     scalar flags enum) a JSON array is exactly the shape .NET's own configuration binder
-    ///     expects here.
+    ///     This method checks an <c>enabledEsVersions</c> field (a JSON array of DNSCrypt cipher
+    ///     names) and returns the list <see cref="DnsCryptOptions.EnabledEsVersions" /> binds from.
+    ///     That property is a <see cref="List{T}" />, so it is written as an array.
     /// </summary>
     private static List<string> ParseEsVersions(JsonElement element)
     {
@@ -1140,7 +1109,8 @@ public class TransportSettingsController(
         return parsed;
     }
 
-    /// <summary>This method builds <see cref="PlainTransportSettingsDetail" /> from a live snapshot.</summary>
+    /// <summary>This method builds <see cref="PlainTransportSettingsDetail" /> from the current
+    /// settings.</summary>
     private static PlainTransportSettingsDetail ToDetail(PlainProtocolOptions options) =>
         new(
             options.Port,
@@ -1149,7 +1119,8 @@ public class TransportSettingsController(
             options.MaxConcurrentTcpConnections
         );
 
-    /// <summary>This method builds <see cref="DnsOverTlsSettingsDetail" /> from a live snapshot.</summary>
+    /// <summary>This method builds <see cref="DnsOverTlsSettingsDetail" /> from the current
+    /// settings.</summary>
     private static DnsOverTlsSettingsDetail ToDetail(DnsOverTlsOptions options) =>
         new(
             options.Enable,
@@ -1160,11 +1131,13 @@ public class TransportSettingsController(
             ToCertificateDetail(options.Certificate)
         );
 
-    /// <summary>This method builds <see cref="DnsOverHttpsSettingsDetail" /> from a live snapshot.</summary>
+    /// <summary>This method builds <see cref="DnsOverHttpsSettingsDetail" /> from the current
+    /// settings.</summary>
     private static DnsOverHttpsSettingsDetail ToDetail(DnsOverHttpsOptions options) =>
         new(options.Enable, options.Path, options.MaxMessageSizeBytes);
 
-    /// <summary>This method builds <see cref="DnsOverQuicSettingsDetail" /> from a live snapshot.</summary>
+    /// <summary>This method builds <see cref="DnsOverQuicSettingsDetail" /> from the current
+    /// settings.</summary>
     private static DnsOverQuicSettingsDetail ToDetail(DnsOverQuicOptions options) =>
         new(
             options.Enable,
@@ -1175,7 +1148,8 @@ public class TransportSettingsController(
             ToCertificateDetail(options.Certificate)
         );
 
-    /// <summary>This method builds <see cref="DnsCryptSettingsDetail" /> from a live snapshot.</summary>
+    /// <summary>This method builds <see cref="DnsCryptSettingsDetail" /> from the current
+    /// settings.</summary>
     private static DnsCryptSettingsDetail ToDetail(DnsCryptOptions options) =>
         new(
             options.Enable,
@@ -1191,10 +1165,9 @@ public class TransportSettingsController(
         );
 
     /// <summary>
-    ///     This method builds <see cref="TlsCertificateSettingsDetail" /> from a live
-    ///     <see cref="TlsCertificateOptions" /> snapshot, shared by DNS-over-TLS's and
-    ///     DNS-over-QUIC's own <see cref="ToDetail(DnsOverTlsOptions)" />/
-    ///     <see cref="ToDetail(DnsOverQuicOptions)" />.
+    ///     This method builds <see cref="TlsCertificateSettingsDetail" /> from
+    ///     <see cref="TlsCertificateOptions" />, for <see cref="ToDetail(DnsOverTlsOptions)" /> and
+    ///     <see cref="ToDetail(DnsOverQuicOptions)" />. The password itself is never included.
     /// </summary>
     private static TlsCertificateSettingsDetail ToCertificateDetail(
         TlsCertificateOptions options

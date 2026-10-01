@@ -9,17 +9,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads the self-update checker's own currently-known status, and lets an
-///     operator trigger a real, immediate re-check on demand. It deliberately has **no** "apply
-///     the update now" action -- see this class's own doc comment on <see cref="Get" /> for why.
-///     Reading the status requires <c>selfupdate:read</c>; triggering a manual check requires
-///     <c>selfupdate:manage</c>, this project's own established naming for a permission that
-///     triggers a real, immediate action rather than merely reading or writing configuration (the
-///     same split <c>ServicesController</c>'s own <c>services:manage</c> and
-///     <c>StorageController</c>'s own <c>storage:manage</c> already establish).
+///     This controller reports what the self-update checker knows about newer releases and lets
+///     an operator run a check on demand. It has no "apply the update" action (see
+///     <see cref="Get" />). Reading needs <c>selfupdate:read</c>; running a check needs
+///     <c>selfupdate:manage</c>, the naming used for permissions that trigger an action rather
+///     than read or write settings (as with <c>services:manage</c> and <c>storage:manage</c>).
 /// </summary>
-/// <param name="checkService">The service this controller asks to run an immediate, on-demand check.</param>
-/// <param name="statusCache">The cache this controller reads the currently-known status from.</param>
+/// <param name="checkService">Runs an on-demand check.</param>
+/// <param name="statusCache">Holds the result of the latest check.</param>
 [ApiController]
 [Route("api/self-update")]
 public class SelfUpdateController(
@@ -28,21 +25,14 @@ public class SelfUpdateController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads the self-update checker's own currently-known status -- whatever the
-    ///     most recent check (automatic or manually triggered) last recorded, never a fresh check
-    ///     of its own. See <see cref="Check" /> to trigger a fresh one.
+    ///     This action returns the result of the latest check, automatic or manual, without
+    ///     checking again; <see cref="Check" /> runs a new one. Requires <c>selfupdate:read</c>.
     ///     <para>
-    ///         <b>Why there is no "apply now" button.</b> This server has no real, safe, in-process
-    ///         way to replace its own running binary -- there is no installer, no systemd-unit
-    ///         management, and no established release-artifact packaging for this project yet
-    ///         (<see cref="SelfUpdateOptions" />'s own doc comment covers the parallel gap on the
-    ///         feed side). Building a fake button that reports success without genuinely
-    ///         re-executing a new binary would be actively dishonest, and building a real one
-    ///         without that missing infrastructure would risk leaving a homelab DNS server
-    ///         half-replaced or simply dead, with nobody around to notice. Instead,
-    ///         <see cref="SelfUpdateStatusDetail.UpdateInstructions" /> tells an operator, in plain
-    ///         language, exactly what to do by hand -- an honest instruction rather than an action
-    ///         this project cannot yet perform safely.
+    ///         <b>Why there is no "apply now" action.</b> The server does not replace its own
+    ///         running binary: it is installed from a package, container or install script, and a
+    ///         failed in-place update could leave a home DNS server broken with nobody watching.
+    ///         Instead, <see cref="SelfUpdateStatusDetail.UpdateInstructions" /> tells the operator
+    ///         what to do by hand.
     ///     </para>
     /// </summary>
     [HttpGet]
@@ -51,10 +41,9 @@ public class SelfUpdateController(
     public ActionResult<SelfUpdateStatusDetail> Get() => Ok(ToDetail(statusCache.Current));
 
     /// <summary>
-    ///     This action triggers a real, immediate check against the currently-configured release
-    ///     feed, waits for it to finish, and returns the fresh result -- the same underlying check
-    ///     <see cref="SelfUpdateCheckService" />'s own periodic loop runs automatically, just run
-    ///     on demand rather than waited out.
+    ///     This action checks the configured release feed now, waits for the result and returns
+    ///     it. It runs the same check as the periodic loop in
+    ///     <see cref="SelfUpdateCheckService" />. Requires <c>selfupdate:manage</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpPost("check")]
@@ -67,10 +56,9 @@ public class SelfUpdateController(
     }
 
     /// <summary>
-    ///     This method builds the REST-facing <see cref="SelfUpdateStatusDetail" /> from an
-    ///     internal <see cref="SelfUpdateStatus" /> snapshot, including the plain-language
-    ///     <see cref="SelfUpdateStatusDetail.UpdateInstructions" /> text -- see <see cref="Get" />'s
-    ///     own doc comment for why this project surfaces an instruction rather than a button.
+    ///     This method builds the API's <see cref="SelfUpdateStatusDetail" /> from a
+    ///     <see cref="SelfUpdateStatus" />, including the plain-language
+    ///     <see cref="SelfUpdateStatusDetail.UpdateInstructions" />.
     /// </summary>
     private static SelfUpdateStatusDetail ToDetail(SelfUpdateStatus status) =>
         new(
@@ -86,8 +74,8 @@ public class SelfUpdateController(
         );
 
     /// <summary>
-    ///     This method builds the plain-language instructions an operator sees for the current
-    ///     status -- what, if anything, they should actually do about it.
+    ///     This method builds the plain-language instructions for the current status: what, if
+    ///     anything, the operator should do.
     /// </summary>
     private static string BuildInstructions(SelfUpdateStatus status)
     {

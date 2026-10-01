@@ -17,33 +17,23 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="WebhookDeliveryOptions" /> --
-///     the shared retry/backoff timing and outbound HTTP timeout every webhook subscription's own
-///     deliveries use -- `appsettings.json`-only until this pass. Every action requires the
-///     <c>webhookdeliverysettings:read</c> or <c>webhookdeliverysettings:write</c> permission.
-///     This is deliberately separate from <c>WebhookSubscriptionsController</c>, which manages
-///     each subscription's own <c>MaxDeliveryAttempts</c>; this controller manages the shared
-///     timing tuning every subscription's own retries use alike.
+///     This controller reads and writes <see cref="WebhookDeliveryOptions" />: the retry backoff
+///     and outbound HTTP timeout shared by every webhook subscription's deliveries. Each
+///     subscription's attempt limit (<c>MaxDeliveryAttempts</c>) is managed separately, through
+///     <see cref="WebhooksController" />. Reading needs <c>webhookdeliverysettings:read</c> and
+///     writing needs <c>webhookdeliverysettings:write</c>.
 ///     <para>
-///         <b><c>InitialRetryDelay</c>/<c>MaxRetryDelay</c> take effect immediately, with no
-///         restart; <c>RequestTimeout</c> is a partial exception.</b> <c>WebhookDeliveryService</c>
-///         and its own <c>ConfigureHttpClient</c> registration used to read
-///         <see cref="WebhookDeliveryOptions" /> via the snapshotted <see cref="IOptions{TOptions}" />,
-///         cached for the life of the process the first time it was read -- a real functional gap
-///         beyond REST/UI exposure, the same shape already found and fixed elsewhere in this
-///         project for other options classes, converted here the same way to
-///         <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c>. Every field is now
-///         read fresh on every single delivery attempt, except <see cref="WebhookDeliveryOptions.RequestTimeout" />,
-///         which is only ever applied to a new <see cref="System.Net.Http.HttpClient" /> handler
-///         <see cref="IHttpClientFactory" /> builds for the named webhook client -- an
-///         already-pooled handler keeps using whatever timeout was in effect when it was built,
-///         for the rest of that handler's own lifetime (roughly two minutes by that factory's own
-///         default). Neither a restart nor a true hot-reload: no operator action is needed, but
-///         the change is not instant either.
+///         <b><c>InitialRetryDelay</c> and <c>MaxRetryDelay</c> take effect at once;
+///         <c>RequestTimeout</c> takes effect gradually.</b> <c>WebhookDeliveryService</c> and its
+///         <c>ConfigureHttpClient</c> registration read <see cref="IOptionsMonitor{TOptions}" />'s
+///         <c>CurrentValue</c> on every delivery attempt. The timeout, though, is applied only when
+///         <see cref="IHttpClientFactory" /> builds a new handler for the webhook client; a pooled
+///         handler keeps its old timeout until it is replaced (about two minutes by default). No
+///         restart is needed.
 ///     </para>
 /// </summary>
-/// <param name="webhookDeliveryOptions">This host's own currently-effective webhook-delivery-timing settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="webhookDeliveryOptions">The current webhook delivery settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/webhook-delivery-settings")]
 public class WebhookDeliverySettingsController(
@@ -52,8 +42,8 @@ public class WebhookDeliverySettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     webhook-delivery-timing settings.
+    ///     This action returns the current webhook delivery settings. Requires
+    ///     <c>webhookdeliverysettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("webhookdeliverysettings:read")]
@@ -68,11 +58,11 @@ public class WebhookDeliverySettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Webhooks:Delivery</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. The response note names exactly which of the three notes this
-    ///     class's own doc comment describes applies, depending on whether <c>requestTimeout</c>
-    ///     was touched alone, alongside another field, or not at all.
+    ///     This action merges a partial update into <c>DnsServer:Webhooks:Delivery</c> as an RFC
+    ///     7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The response
+    ///     note depends on whether <c>requestTimeout</c> was changed alone, with another field, or
+    ///     not at all. Returns 400 for a value that is not a positive TimeSpan. Requires
+    ///     <c>webhookdeliverysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("webhookdeliverysettings:write")]
@@ -144,10 +134,8 @@ public class WebhookDeliverySettingsController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch field expected to be a positive <see cref="TimeSpan" />,
-    ///     matching this project's own established convention of a small, controller-local helper
-    ///     over a shared one (see <c>TryGetDuration</c>'s own several independent copies already
-    ///     in this codebase).
+    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
+    ///     <see cref="ValidationException" /> naming the field.
     /// </summary>
     private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
     {

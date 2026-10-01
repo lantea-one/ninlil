@@ -11,60 +11,46 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller creates and restores a full-system, passphrase-encrypted backup archive
-///     via <see cref="IBackupService" /> -- every entity this server persists, the Data
-///     Protection key ring, the shared TLS certificate, and the runtime configuration file,
-///     bundled together. This is a flat, top-level, non-nested resource, and, unlike every other
-///     resource this project's REST API exposes, is deliberately gated by two <em>different</em>
-///     permission claims across its own two actions rather than one <c>backup:read</c>/
-///     <c>backup:write</c> pair applied the usual "read the resource" versus "mutate the
-///     resource" way: creating a backup is gated by <c>backup:read</c> (it fundamentally reads
-///     and exports the entire system, the same "GET-shaped" reasoning behind every other
-///     controller's own <c>:read</c> claim, even though the actual HTTP verb here is
-///     <c>POST</c>, since a body -- the passphrase -- is required); restoring one is gated by
-///     <c>backup:write</c> (the single most destructive write action this REST API exposes,
-///     wiping and replacing every entity this server persists).
+///     This controller creates and restores full-system backup archives through
+///     <see cref="IBackupService" />: the database (apart from history tables), the Data
+///     Protection key ring, the shared TLS certificate and the runtime configuration file.
+///     Creating a backup needs <c>backup:read</c>, because it reads and exports the whole system
+///     (the verb is POST only because the passphrase travels in a body). Restoring needs
+///     <c>backup:write</c>, since it wipes and replaces all stored data, the most destructive
+///     write in the API.
 ///     <para>
-///         <see cref="IBackupService" />'s own dedicated failure types --
-///         <see cref="BackupDecryptionFailedException" />/<see cref="BackupArchiveInvalidException" /> --
-///         are deliberately left completely untouched, not folded into or replaced by this
-///         project's own <c>NotFoundException</c>/<c>ConflictException</c>/<c>ValidationException</c>
-///         hierarchy: they already carry a clear, safe-to-return message and a name specific to
-///         the exact failure mode, and <c>Server.Backup</c>'s own permanent test suite already
-///         asserts against their exact concrete types directly. This controller instead catches
-///         each one here, at the REST boundary, and translates it into a
-///         <see cref="Ninlil.Dns.Common.Exceptions.ValidationException" /> carrying the exact
-///         same message -- the same "leave a shared/independently-owned exception type alone,
-///         translate only where a REST response is actually produced" precedent
-///         <c>RecordsController</c>'s own <c>TranslateZoneUpdateFailure</c> helper already
-///         established for <c>IZoneUpdateService</c>'s own <see cref="InvalidOperationException" />.
+///         <see cref="BackupDecryptionFailedException" /> and
+///         <see cref="BackupArchiveInvalidException" /> stay as <c>Server.Backup</c> defines
+///         them, since they carry safe messages and its tests assert on those types. This
+///         controller translates them, and the service's <see cref="ArgumentException" />, into a
+///         <see cref="Ninlil.Dns.Common.Exceptions.ValidationException" /> (400) with the same
+///         message, as <c>RecordsController.TranslateZoneUpdateFailure</c> does for
+///         <c>IZoneUpdateService</c>.
 ///     </para>
 /// </summary>
-/// <param name="backupService">The service this controller creates and restores an archive through.</param>
-/// <param name="logger">The logger this controller records a rejected restore attempt to.</param>
+/// <param name="backupService">Creates and restores archives.</param>
+/// <param name="logger">Records rejected restore attempts.</param>
 [ApiController]
 [Route("api/backup")]
 public class BackupController(IBackupService backupService, ILogger<BackupController> logger)
     : ControllerBase
 {
     /// <summary>
-    ///     This constant contains the maximum size, in bytes, of an uploaded restore archive this
-    ///     action accepts -- 2 gibibytes, generously sized for this project's own stated homelab/
-    ///     small-org target scale (the entire archive is buffered in memory during both creation
-    ///     and restoration, an accepted limitation at that scale, the same "in-memory, not
-    ///     streaming" tradeoff this project already accepts for its own whole-table-scan and
-    ///     in-memory-pagination code paths elsewhere), well above Kestrel's own default request
-    ///     body size limit, which this attribute overrides for this one action only.
+    ///     This constant contains the largest request body, in bytes, either action accepts: 2 GiB,
+    ///     well above Kestrel's default limit, which <c>[RequestSizeLimit]</c> overrides for these
+    ///     actions only. The whole archive is held in memory while it is created or restored, which
+    ///     is acceptable at homelab and small-office scale.
     /// </summary>
     private const long MaximumArchiveSizeBytes = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
-    ///     This action creates a complete backup archive and streams it back as a downloadable
-    ///     file -- never a JSON response body, since the archive itself is the whole point of
-    ///     this action. Encrypted when <see cref="BackupCreateRequest.Passphrase" /> is supplied,
-    ///     or deliberately, clearly-markedly unencrypted when it is not.
+    ///     This action builds a complete backup archive and returns it as a file download
+    ///     (<c>application/octet-stream</c>, <c>ninlil-backup-*.ltbk</c>), not JSON. With
+    ///     <see cref="BackupCreateRequest.Passphrase" /> the archive is encrypted with AES-256-GCM;
+    ///     without one it is unencrypted and marked as such in its header. Returns 400 when the
+    ///     passphrase is too short. Requires <c>backup:read</c>.
     /// </summary>
-    /// <param name="request">The passphrase to encrypt the archive with, or omit to skip encryption.</param>
+    /// <param name="request">The passphrase to encrypt the archive with; omit it for no encryption.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpPost]
     [RequirePermission("backup:read")]
@@ -92,18 +78,17 @@ public class BackupController(IBackupService backupService, ILogger<BackupContro
     }
 
     /// <summary>
-    ///     This action restores this server's own full database, Data Protection key ring, TLS
-    ///     certificate, and runtime configuration file from a previously created archive, of
-    ///     either kind -- encrypted or, per its own envelope header, deliberately unencrypted.
-    ///     Every entity currently persisted is wiped and replaced -- there is no partial or merge
-    ///     restore. The archive is fully decrypted (if encrypted) and structurally validated
-    ///     before any of that happens, so a rejected request (wrong or missing passphrase,
-    ///     corrupted or tampered archive, unrecognized format) is guaranteed to have left this
-    ///     server's own data completely untouched.
+    ///     This action restores the database, Data Protection key ring, TLS certificate and runtime
+    ///     configuration file from an archive, encrypted or not. All stored data is wiped and
+    ///     replaced; there is no partial or merge restore. The archive is decrypted and checked
+    ///     before anything is written, so a wrong or missing passphrase or a corrupted, tampered or
+    ///     unrecognized archive returns 400 and leaves the server's data untouched. The server must
+    ///     be restarted afterwards to pick up the restored key ring, certificate and settings.
+    ///     Requires <c>backup:write</c>.
     /// </summary>
     /// <param name="request">
-    ///     The archive to restore from, and the passphrase it was encrypted with -- left
-    ///     null/blank when restoring an archive that was itself created without one.
+    ///     The archive to restore and the passphrase it was encrypted with; leave the passphrase
+    ///     empty for an unencrypted archive.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpPost("restore")]

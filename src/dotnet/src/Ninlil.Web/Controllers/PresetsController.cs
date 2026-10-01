@@ -11,23 +11,22 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller gives <see cref="DnsServerPresetCatalog" />/<see cref="PresetApplier" />
-///     the invocation surface neither has anywhere else -- there is no CLI or config flag that
-///     applies a preset, only this REST endpoint. Every action requires the <c>presets:read</c>
-///     or <c>presets:write</c> permission.
+///     This controller lists the built-in presets in <see cref="DnsServerPresetCatalog" /> and
+///     applies one through <see cref="PresetApplier" />. It is the only way to apply a preset;
+///     there is no CLI command or setting for it. Listing needs <c>presets:read</c> and applying
+///     needs <c>presets:write</c>.
 ///     <para>
-///         <b>Applying a preset does not necessarily take effect immediately.</b> This mechanism
-///         merges settings into the same JSON file <c>Program.cs</c> reads at startup -- a
-///         consumer bound via <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />
-///         picks the change up live (.NET's own default JSON configuration provider reloads on
-///         change), but most of this project's option classes are bound via the non-hot-reloading
-///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> instead, so a restart is
-///         the honest general answer for those.
+///         <b>Applying a preset does not always take effect immediately.</b> The settings are
+///         merged into the JSON file <c>Program.cs</c> reads at startup. Consumers bound through
+///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> see the change
+///         at once, because the JSON configuration provider reloads on change, but most option
+///         classes are bound through <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />
+///         and need a restart.
 ///     </para>
 /// </summary>
-/// <param name="presetApplier">The applier this controller invokes to actually apply a preset.</param>
+/// <param name="presetApplier">The service that applies a preset.</param>
 /// <param name="runtimeConfigurationOptions">
-///     The JSON configuration file a preset's own settings are merged into.
+///     Names the JSON configuration file that preset settings are merged into.
 /// </param>
 [ApiController]
 [Route("api/presets")]
@@ -37,7 +36,8 @@ public class PresetsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every built-in preset this server can apply.
+    ///     This action lists the built-in presets this server can apply. Requires
+    ///     <c>presets:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("presets:read")]
@@ -55,10 +55,10 @@ public class PresetsController(
         );
 
     /// <summary>
-    ///     This action applies a named preset -- both halves, its configuration-file merge and its
-    ///     filter-list subscriptions -- via <see cref="PresetApplier.ApplyAsync" />, exactly the
-    ///     deliberate "overwrite-then-editable" semantics: only the specific leaves this preset
-    ///     names are overwritten, and every setting stays fully editable afterward.
+    ///     This action applies the named preset: it merges its settings into the configuration file
+    ///     and adds its filter-list subscriptions. Only the settings the preset names are
+    ///     overwritten, and all of them stay editable afterwards. Returns 404 for an unknown
+    ///     preset. Requires <c>presets:write</c>.
     /// </summary>
     [HttpPost("{name}/apply")]
     [RequirePermission("presets:write")]

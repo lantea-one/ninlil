@@ -24,33 +24,32 @@ using RabbitMqBrokerOptions = Ninlil.Dns.Server.Events.RabbitMq.RabbitMqEventBro
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own message-broker event-transport
-///     configuration -- <see cref="DnsServerEventPublisherOptions" /> and whichever of
-///     <see cref="RabbitMqBrokerOptions" />/<see cref="ActiveMqEventBrokerOptions" /> it names.
-///     <c>Program.cs</c> conditionally references and registers whichever broker project
-///     <see cref="DnsServerEventPublisherOptions.Transport" /> actually names, so configuring one
-///     in <c>appsettings.json</c> takes effect in this host on the next start. Every action
-///     requires the <c>eventbroker:read</c> or <c>eventbroker:write</c> permission.
+///     This controller reads and writes the message-broker event transport:
+///     <see cref="DnsServerEventPublisherOptions" /> and the settings of the broker it names,
+///     <see cref="RabbitMqBrokerOptions" /> or <see cref="ActiveMqEventBrokerOptions" />.
+///     <c>Program.cs</c> registers only the broker that
+///     <see cref="DnsServerEventPublisherOptions.Transport" /> names. Reading needs
+///     <c>eventbroker:read</c> and writing needs <c>eventbroker:write</c>. A write is also
+///     replicated to the other cluster nodes.
 ///     <para>
-///         <b>Switching transports always needs a restart</b>: which broker project's own
-///         extension method runs at all is decided once, in <c>Program.cs</c>, before this host's
-///         dependency injection container is even built -- a <c>PATCH</c> here only rewrites the
-///         configuration file <c>Program.cs</c> reads on its <em>next</em> start.
+///         <b>Every change needs a restart.</b> The settings are read through
+///         <see cref="IOptions{TOptions}" />, and which broker is registered at all is decided in
+///         <c>Program.cs</c> before the dependency injection container is built, so a PATCH only
+///         rewrites the configuration file for the next start.
 ///     </para>
 /// </summary>
-/// <param name="serviceProvider">The provider this controller resolves an optionally-registered <see cref="IDnsServerEventBrokerTransport" /> from.</param>
-/// <param name="publisherOptions">This host's own currently-effective event transport selection.</param>
-/// <param name="rabbitMqOptions">This host's own currently-effective RabbitMQ connection settings.</param>
-/// <param name="activeMqOptions">This host's own currently-effective ActiveMQ connection settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="serviceProvider">Resolves the broker transport, if one is registered, to report its connection state.</param>
+/// <param name="publisherOptions">The event transport selection loaded at startup.</param>
+/// <param name="rabbitMqOptions">The RabbitMQ connection settings loaded at startup.</param>
+/// <param name="activeMqOptions">The ActiveMQ connection settings loaded at startup.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 /// <param name="clusterSyncRecorder">
-///     The cluster config-sync helper this controller calls after a successful write so the change
-///     propagates to every cluster peer -- see <see cref="ClusterConfigSyncSettingsRecorder" />'s
-///     own doc comment.
+///     Records a successful write and sends it to every cluster peer (see
+///     <see cref="ClusterConfigSyncSettingsRecorder" />).
 /// </param>
 /// <param name="stateRepository">
-///     The repository <see cref="Get" /> reads this section's own last-write-wins bookkeeping
-///     from, to surface <see cref="EventBrokerSettingsDetail.LastModifiedUtc" />/
+///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
+///     <see cref="EventBrokerSettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="EventBrokerSettingsDetail.OriginatingNodeId" />.
 /// </param>
 [ApiController]
@@ -66,8 +65,10 @@ public class EventBrokerSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (that is, live and running, not
-    ///     merely written to the configuration file) message-broker settings.
+    ///     This action returns the broker settings the running server uses (as loaded at startup,
+    ///     not later file changes), whether the broker is connected (null for the in-memory
+    ///     transport), and which node last changed the settings. Passwords are never returned. Only
+    ///     the active broker's settings are filled in. Requires <c>eventbroker:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("eventbroker:read")]
@@ -126,14 +127,14 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Events</c>/
-    ///     <c>DnsServer:Events:RabbitMq</c>/<c>DnsServer:Events:ActiveMq</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style at every level: a field absent from <paramref name="patch" /> (at
-    ///     either the top level or within <c>rabbitMq</c>/<c>activeMq</c>) is left exactly as it was
-    ///     in the file, including <c>password</c> -- letting an operator change, say, only
-    ///     <c>hostName</c> without ever having to resupply a credential this endpoint's own
-    ///     <see cref="Get" /> action never reveals back to them.
+    ///     This action merges a partial update into <c>DnsServer:Events</c>,
+    ///     <c>DnsServer:Events:RabbitMq</c> and <c>DnsServer:Events:ActiveMq</c> as an RFC 7396
+    ///     merge patch at every level, through <see cref="PresetConfigurationFileApplier" />. A
+    ///     field absent at the top level or within <c>rabbitMq</c> or <c>activeMq</c> keeps its
+    ///     value, including <c>password</c>, so an operator can change only <c>hostName</c> without
+    ///     resupplying a password <see cref="Get" /> never shows. The change needs a restart.
+    ///     Returns 400 for an unknown transport or a malformed duration. Requires
+    ///     <c>eventbroker:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("eventbroker:write")]
@@ -310,10 +311,8 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This method validates every <see cref="TimeSpan" />-shaped field within a broker's own
-    ///     sub-object up front, before any setting from it is added to the write list, so a `PATCH`
-    ///     either fully succeeds or writes nothing at all rather than partially applying a request
-    ///     that turned out to contain one malformed duration.
+    ///     This method checks every TimeSpan field in a broker's sub-object before any of its
+    ///     settings are added, so a PATCH with one malformed duration writes nothing.
     /// </summary>
     private static bool TryReadTimeSpanSettings(JsonElement brokerElement, out string error)
     {
@@ -344,9 +343,8 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This method appends a string-valued setting to <paramref name="settings" /> when
-    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />'s own merge
-    ///     patch, or does nothing when it is absent.
+    ///     This method adds a string setting to <paramref name="settings" /> when
+    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />.
     /// </summary>
     private static void AddStringField(
         List<PresetConfigurationSetting> settings,
@@ -363,9 +361,8 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This method appends an integer-valued setting to <paramref name="settings" /> when
-    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />'s own merge
-    ///     patch, or does nothing when it is absent.
+    ///     This method adds an integer setting to <paramref name="settings" /> when
+    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />.
     /// </summary>
     private static void AddIntField(
         List<PresetConfigurationSetting> settings,
@@ -382,11 +379,9 @@ public class EventBrokerSettingsController(
     }
 
     /// <summary>
-    ///     This method appends a <see cref="TimeSpan" />-valued setting to
-    ///     <paramref name="settings" /> when <paramref name="jsonFieldName" /> is present in
-    ///     <paramref name="source" />'s own merge patch, or does nothing when it is absent. Assumes
-    ///     the value has already passed <see cref="TryReadTimeSpanSettings" />'s own up-front
-    ///     validation.
+    ///     This method adds a TimeSpan setting to <paramref name="settings" /> when
+    ///     <paramref name="jsonFieldName" /> is present in <paramref name="source" />. The value
+    ///     must already have passed <see cref="TryReadTimeSpanSettings" />.
     /// </summary>
     private static void AddTimeSpanField(
         List<PresetConfigurationSetting> settings,

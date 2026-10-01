@@ -15,24 +15,20 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own cloud DNS provider credential sets --
-///     the Cloudflare/Route 53/DigitalOcean API credentials a <c>CloudPrimary</c>/
-///     <c>CloudSecondary</c> zone's own <c>CloudSync/</c> connector authenticates through (see
-///     <c>CloudDnsZoneSyncService</c>). A credential set is not scoped to any one zone -- multiple
-///     zones may share a single operator account's own credentials -- so, exactly like
-///     <see cref="TsigKeysController" />'s own relationship to <c>ZoneEntity.TsigKeyName</c>, a
-///     zone references one by identifier, through its own <c>CloudProviderCredentialId</c> field
-///     (see <see cref="ZonesController" />), rather than through containment. Every action
-///     requires the <c>cloudprovidercredentials:read</c> or <c>cloudprovidercredentials:write</c>
-///     permission.
+///     This controller manages cloud DNS provider credential sets: the Cloudflare, Route 53 or
+///     DigitalOcean API credentials that a <c>CloudPrimary</c> or <c>CloudSecondary</c> zone's
+///     connector uses (see <c>CloudDnsZoneSyncService</c>). A credential set belongs to no single
+///     zone; several zones can share one account's credentials, and each refers to it by id
+///     through its <c>CloudProviderCredentialId</c> (see <see cref="ZonesController" />), as zones
+///     refer to <see cref="TsigKeysController" /> keys by name. Secrets are encrypted at rest and
+///     returned only when created. Reads need <c>cloudprovidercredentials:read</c> and changes
+///     need <c>cloudprovidercredentials:write</c>.
 /// </summary>
-/// <param name="credentialRepository">The repository this controller reads and writes credential sets through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="credentialRepository">Reads and writes credential sets.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="protector">
-///     The protector this controller encrypts a new or rotated credential set's own secret
-///     material through before it is ever persisted, and decrypts it back through when a caller
-///     rotates only part of it via <c>PATCH</c> -- the same protector <c>CloudDnsZoneSyncService</c>
-///     itself decrypts a credential set through at sync time.
+///     Encrypts a credential set's secrets before they are stored; <c>CloudDnsZoneSyncService</c>
+///     decrypts them with the same protector at sync time.
 /// </param>
 [ApiController]
 [Route("api/cloud-provider-credentials")]
@@ -43,7 +39,8 @@ public class CloudProviderCredentialsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every cloud DNS provider credential set this server knows about.
+    ///     This action lists credential sets, one page at a time, without their secrets. Requires
+    ///     <c>cloudprovidercredentials:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("cloudprovidercredentials:read")]
@@ -58,9 +55,9 @@ public class CloudProviderCredentialsController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every credential set into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every credential set into
+        // memory.
         IReadOnlyList<CloudDnsProviderCredentialEntity> credentials =
             await credentialRepository.SearchAsync(skip, take, stoppingToken);
         int totalCount = await credentialRepository.CountAsync(stoppingToken);
@@ -76,7 +73,8 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This action looks up a single cloud DNS provider credential set by its identifier.
+    ///     This action returns one credential set, without its secrets. Returns 404 for an unknown
+    ///     id. Requires <c>cloudprovidercredentials:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("cloudprovidercredentials:read")]
@@ -97,9 +95,10 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This action creates a new cloud DNS provider credential set. The plaintext secret
-    ///     material supplied here is returned exactly once, in this action's own response --
-    ///     every later request for this credential set omits it entirely.
+    ///     This action creates a credential set. The plaintext secrets are echoed back in this
+    ///     response only; later reads never include them. Returns 400 for a missing name or
+    ///     credentials that do not fit the provider type, and 409 when the name is taken. Requires
+    ///     <c>cloudprovidercredentials:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("cloudprovidercredentials:write")]
@@ -148,10 +147,11 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing cloud DNS provider credential set, including
-    ///     its own secret material -- see <see cref="CloudProviderCredentialWriteRequest" /> for
-    ///     why this is deliberately different from how <see cref="TsigKeysController.Replace" />
-    ///     handles a TSIG key's own shared secret.
+    ///     This action replaces a credential set, secrets included (see
+    ///     <see cref="CloudProviderCredentialWriteRequest" /> for how this differs from
+    ///     <see cref="TsigKeysController.Replace" />). Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires
+    ///     <c>cloudprovidercredentials:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("cloudprovidercredentials:write")]
@@ -198,13 +198,12 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing cloud DNS provider credential set via RFC
-    ///     7396 JSON Merge Patch: a field absent from the patch document is left untouched, and
-    ///     any other present field overwrites it. When <c>credentials</c> is present, it replaces
-    ///     the entire stored secret-material object atomically (this project treats it as one
-    ///     opaque value, not a deep-merged one, matching <see cref="CloudDnsProviderCredentialEntity.CredentialsEncrypted" />'s
-    ///     own "opaque payload" shape) -- omit it to rotate only metadata (name, provider type,
-    ///     disabled, comments) without touching the stored credentials at all.
+    ///     This action updates a credential set as an RFC 7396 merge patch: an absent field is
+    ///     unchanged and a present one replaces it. <c>credentials</c>, when present, replaces the
+    ///     whole stored secret object, which is treated as one opaque value and never merged; omit
+    ///     it to change only the name, disabled flag or comments. Changing <c>providerType</c>
+    ///     requires matching <c>credentials</c> in the same patch. Requires
+    ///     <c>cloudprovidercredentials:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("cloudprovidercredentials:write")]
@@ -257,9 +256,8 @@ public class CloudProviderCredentialsController(
         }
         else if (providerType != credential.ProviderType)
         {
-            // The provider type changed without new credentials to match it -- the existing,
-            // still-encrypted credentials almost certainly do not have the right shape for the
-            // new provider, so this is rejected rather than silently accepted.
+            // The stored credentials almost certainly do not fit the new provider, so a provider
+            // change without new credentials is rejected.
             throw new ValidationException(
                 "'providerType' cannot be changed without also supplying a matching 'credentials' object."
             );
@@ -280,12 +278,10 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a cloud DNS provider credential set. Any zone still
-    ///     referencing it by identifier (see <see cref="ZonesController" />'s own
-    ///     <c>CloudProviderCredentialId</c>) simply stops being able to sync against it -- this
-    ///     project does not track or block on that soft reference, the same laxness
-    ///     <see cref="TsigKeysController.Delete" /> already accepts for a TSIG key's own
-    ///     <c>TsigKeyName</c> reference.
+    ///     This action deletes a credential set. Zones that still refer to it by
+    ///     <c>CloudProviderCredentialId</c> are not checked or blocked; they simply can no longer
+    ///     sync, as with a deleted TSIG key (see <see cref="TsigKeysController.Delete" />).
+    ///     Requires <c>cloudprovidercredentials:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("cloudprovidercredentials:write")]
@@ -305,8 +301,8 @@ public class CloudProviderCredentialsController(
     }
 
     /// <summary>
-    ///     This method converts a cloud DNS provider credential entity into its REST
-    ///     representation, deliberately never including its own secret material.
+    ///     This method converts a credential entity to its API representation, which never
+    ///     includes the secrets.
     /// </summary>
     private static CloudProviderCredentialDetail ToDetail(
         CloudDnsProviderCredentialEntity credential

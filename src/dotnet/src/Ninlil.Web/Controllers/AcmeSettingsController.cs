@@ -17,49 +17,34 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="AcmeOptions" /> (RFC 8555
-///     ACME issuance/renewal) and <see cref="CaaAutoManagementOptions" /> (the global default for
-///     CAA auto-management -- the per-zone override already exists directly on
-///     <c>ZonesController</c>, not duplicated here), plus a real, per-domain certificate
-///     inventory and a manual "issue/renew now" trigger -- closing the "LE Certs" configuration
-///     and visibility gap entirely: before this controller existed, both were unconfigurable and
-///     unobservable short of hand-editing the configuration file and reading log output. Every
-///     action requires the <c>acmesettings:read</c>, <c>acmesettings:write</c>, or
-///     <c>acmesettings:manage</c> permission -- the same three-tier split
-///     <c>ServicesController</c> already establishes for an endpoint whose write actions have a
-///     real, external, operationally significant effect (there, taking a live DNS transport
-///     offline; here, spending a request against Let's Encrypt's own real, rate-limited issuance
-///     quota): <see cref="Get" />/<see cref="Certificates" /> only ever reveal already-known,
-///     non-secret configuration and state, so both are gated by the lighter
-///     <c>acmesettings:read</c>; <see cref="Patch" /> is gated by the ordinary
-///     <c>acmesettings:write</c>; <see cref="IssueOrRenewNow" /> gets its own, deliberately
-///     separate <c>acmesettings:manage</c>, so a role with broad ordinary settings-write access
-///     does not also silently gain the ability to trigger a real external CA request on demand.
+///     This controller reads and writes <see cref="AcmeOptions" /> (RFC 8555 ACME certificate
+///     issuance and renewal) and <see cref="CaaAutoManagementOptions" /> (the server-wide default
+///     for CAA record management; the per-zone override is on <c>ZonesController</c>), lists the
+///     certificate state of each configured domain, and can issue or renew one on demand.
+///     <para>
+///         Permissions come in three tiers. <see cref="Get" /> and <see cref="Certificates" />
+///         reveal only non-secret settings and state and need <c>acmesettings:read</c>;
+///         <see cref="Patch" /> needs <c>acmesettings:write</c>. <see cref="IssueOrRenewNow" />
+///         needs a separate <c>acmesettings:manage</c>, as <c>ServicesController</c> does for its
+///         actions, because it sends a request to an external, rate-limited certificate
+///         authority, and broad settings-write access should not include that.
+///     </para>
 ///     <para>
 ///         <b>Every field except <see cref="AcmeSettingsDetail.AccountStateFilePath" /> takes
-///         effect immediately, with no restart.</b> <see cref="AcmeOptions" /> is read via
-///         <see cref="IOptionsMonitor{TOptions}" /> everywhere it actually matters for a live
-///         issuance/renewal attempt (<c>AcmeCertificateRenewalService</c>'s own poll loop and its
-///         shared <c>RenewOneDomainAsync</c>, and <c>AcmeCertificateIssuer</c> itself) rather than
-///         the once-cached <see cref="IOptions{TOptions}" /> every one of those classes used
-///         previously -- the same hot-reload gap already closed elsewhere in this project for
-///         other recursive-resolver and transport-settings singletons.
-///         <see cref="CaaAutoManagementOptions" /> is likewise read live by
-///         <c>CaaRecordReconciliationService</c>. <b>Exactly one field is the deliberate
-///         exception</b>: <see cref="AcmeSettingsDetail.AccountStateFilePath" /> is only ever read
-///         by <c>FileAcmeAccountStore</c>, which caches its own in-memory state the first time it
-///         is asked to load it (typically at or shortly after startup) -- relocating the path
-///         afterward would only move *future* writes to the new location without ever actually
-///         reading back whatever already exists there, so this one field still needs a restart to
-///         take real effect, exactly like <c>RecursiveSettingsController</c>'s own two
-///         override-list exceptions. <see cref="Patch" /> reports which note applies.
+///         effect without a restart.</b> <c>AcmeCertificateRenewalService</c> and
+///         <c>AcmeCertificateIssuer</c> read <see cref="AcmeOptions" /> through
+///         <see cref="IOptionsMonitor{TOptions}" />, and <c>CaaRecordReconciliationService</c>
+///         reads <see cref="CaaAutoManagementOptions" /> the same way; a new poll interval
+///         applies after the current wait ends. <c>FileAcmeAccountStore</c> reads the account
+///         state path through <see cref="IOptions{TOptions}" />, so changing it needs a restart.
+///         <see cref="Patch" /> returns the matching note.
 ///     </para>
 /// </summary>
-/// <param name="acmeOptions">This host's own currently-effective ACME settings, live.</param>
-/// <param name="caaOptions">This host's own currently-effective global CAA auto-management defaults, live.</param>
-/// <param name="accountStore">The store this controller reads every domain's own certificate state and most recent failure from.</param>
-/// <param name="renewalService">The service <see cref="IssueOrRenewNow" /> drives a single domain's own on-demand issuance/renewal through.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="acmeOptions">The current ACME settings.</param>
+/// <param name="caaOptions">The current server-wide CAA management defaults.</param>
+/// <param name="accountStore">Supplies each domain's certificate state and latest failure.</param>
+/// <param name="renewalService">Issues or renews one domain's certificate for <see cref="IssueOrRenewNow" />.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/acme-settings")]
 public class AcmeSettingsController(
@@ -71,8 +56,8 @@ public class AcmeSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live) ACME and global CAA
-    ///     auto-management settings.
+    ///     This action returns the current ACME and server-wide CAA management settings. Requires
+    ///     <c>acmesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("acmesettings:read")]
@@ -81,11 +66,13 @@ public class AcmeSettingsController(
         Ok(ToDetail(acmeOptions.CurrentValue, caaOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Acme</c>/
-    ///     <c>DnsServer:Acme:CaaAutoManagement</c> via <see cref="PresetConfigurationFileApplier" />'s
-    ///     own generic settings-list overload, RFC 7396 merge-patch style: a field absent from
-    ///     <paramref name="patch" /> is left exactly as it was in the file. See this class's own
-    ///     doc comment for which field needs a restart.
+    ///     This action merges a partial update into <c>DnsServer:Acme</c> and
+    ///     <c>DnsServer:Acme:CaaAutoManagement</c> as an RFC 7396 merge patch, through
+    ///     <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
+    ///     needed. Returns 400 for an invalid directory URL, domain, contact address or duration, a
+    ///     non-positive interval, or an empty path or organization. Requires
+    ///     <c>acmesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("acmesettings:write")]
@@ -331,13 +318,10 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This action returns a real, per-domain certificate inventory: every domain
-    ///     <see cref="AcmeOptions.Domains" /> currently names, alongside whatever
-    ///     <see cref="IAcmeAccountStore" /> actually knows about it -- whether it has ever had a
-    ///     certificate successfully issued (a real, distinct state from "issued, but not due for
-    ///     renewal yet"), its issued/expiry dates, whether it is currently due for renewal, and
-    ///     its most recent renewal failure, if any. Returned in <see cref="AcmeOptions.Domains" />'s
-    ///     own configured order.
+    ///     This action lists every domain in <see cref="AcmeOptions.Domains" />, in configured
+    ///     order, with what <see cref="IAcmeAccountStore" /> knows about it: whether a certificate
+    ///     has ever been issued, its issue and expiry dates, whether it is due for renewal, and its
+    ///     latest renewal failure, if any. Requires <c>acmesettings:read</c>.
     /// </summary>
     [HttpGet("certificates")]
     [RequirePermission("acmesettings:read")]
@@ -352,18 +336,13 @@ public class AcmeSettingsController(
         );
 
     /// <summary>
-    ///     This action issues or renews a single, configured domain's own certificate right now,
-    ///     outside <c>AcmeCertificateRenewalService</c>'s own poll loop timing -- driven directly
-    ///     through <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" />, the exact
-    ///     same scope-per-attempt construction that service's own background loop already uses
-    ///     (see that method's own doc comment for why it is the one, shared implementation rather
-    ///     than a second copy here). The real attempt's own outcome (success or failure) is
-    ///     always reflected in the returned inventory entry -- a genuine issuance/renewal failure
-    ///     (a CA outage, a challenge that failed to validate) is not reported as an HTTP error
-    ///     here, the same "one item's own failure must not be treated as the request itself
-    ///     failing" reasoning the background loop already applies, since the failure itself is
-    ///     already logged and durably recorded by the time this action returns; only a domain
-    ///     this server does not currently have configured at all is a genuine <c>404</c>.
+    ///     This action issues or renews one configured domain's certificate now, outside the
+    ///     renewal service's schedule, through
+    ///     <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" />, the same method the
+    ///     background loop uses. A failed attempt (a certificate authority outage, a challenge that
+    ///     did not validate) is not an HTTP error: it is logged and recorded, and the returned
+    ///     entry shows it. Returns 404 when the domain is not configured. Requires
+    ///     <c>acmesettings:manage</c>.
     /// </summary>
     /// <param name="domain">The configured domain to issue or renew a certificate for.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -384,17 +363,16 @@ public class AcmeSettingsController(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // RenewOneDomainAsync has already logged this failure and durably recorded it via
-            // IAcmeAccountStore.SaveDomainFailure -- the returned inventory entry below already
-            // reflects it, so there is nothing further to do with the exception itself here.
+            // RenewOneDomainAsync has already logged the failure and saved it through
+            // IAcmeAccountStore.SaveDomainFailure, so the entry returned below shows it.
         }
 
         return Ok(ToInventoryEntry(domain, acmeOptions.CurrentValue.RenewBeforeExpiration));
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,
@@ -410,8 +388,8 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch field expected to hold a JSON array of strings,
-    ///     validating each entry with <paramref name="validateEntry" /> along the way.
+    ///     This method parses a merge-patch field that must hold a JSON array of strings, checking
+    ///     each entry with <paramref name="validateEntry" />.
     /// </summary>
     private static List<string> ParseStringArray(
         JsonElement element,
@@ -438,10 +416,9 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method validates a single <c>domains</c> entry the same way this server would
-    ///     actually need it to parse to ever act on it -- a syntactically valid DNS name, via
-    ///     <see cref="DnsName.TryParse(string,out DnsName)" />, the exact parser every real
-    ///     domain-name-shaped field elsewhere in this REST API already validates against.
+    ///     This method checks that a <c>domains</c> entry is a valid DNS name, using
+    ///     <see cref="DnsName.TryParse(string,out DnsName)" /> like the API's other domain-name
+    ///     fields.
     /// </summary>
     private static void ValidateDomain(string domain)
     {
@@ -450,11 +427,9 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method applies a lightweight, non-exhaustive sanity check to a single
-    ///     <c>contactEmails</c> entry -- the real, authoritative validation of an ACME contact
-    ///     address happens CA-side, the moment <c>AcmeCertificateIssuer</c> actually registers or
-    ///     reuses an account with it, so this check exists only to catch an obviously-malformed
-    ///     value early, not to fully replicate RFC 5322.
+    ///     This method applies a light check to a <c>contactEmails</c> entry to catch obviously
+    ///     malformed values early. The certificate authority does the full validation when
+    ///     <c>AcmeCertificateIssuer</c> registers an account with the address.
     /// </summary>
     private static void ValidateContactEmail(string email)
     {
@@ -468,8 +443,8 @@ public class AcmeSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="AcmeSettingsDetail" /> from a live
-    ///     <see cref="AcmeOptions" />/<see cref="CaaAutoManagementOptions" /> snapshot.
+    ///     This method builds <see cref="AcmeSettingsDetail" /> from the current
+    ///     <see cref="AcmeOptions" /> and <see cref="CaaAutoManagementOptions" />.
     /// </summary>
     private static AcmeSettingsDetail ToDetail(AcmeOptions acme, CaaAutoManagementOptions caa) =>
         new(
@@ -486,8 +461,8 @@ public class AcmeSettingsController(
         );
 
     /// <summary>
-    ///     This method builds a single domain's own <see cref="AcmeCertificateInventoryEntry" />
-    ///     from <see cref="IAcmeAccountStore" />'s own currently-known state.
+    ///     This method builds one domain's <see cref="AcmeCertificateInventoryEntry" /> from what
+    ///     <see cref="IAcmeAccountStore" /> currently knows.
     /// </summary>
     private AcmeCertificateInventoryEntry ToInventoryEntry(
         string domain,

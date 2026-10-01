@@ -17,28 +17,23 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this node's own cluster membership: listing, renaming, and
-///     removing known peers, and running both halves of the invite-code join handshake (see
-///     <see cref="ClusterInviteService" />/<see cref="ClusterJoinService" /> for the real
-///     handshake logic this controller is thin sugar over). This is the human-operator-facing
-///     surface -- JWT-authenticated like every other administrative controller in this project --
-///     distinct from <see cref="ClusterChannelController" />, the peer-to-peer, TSIG-authenticated
-///     surface a joined peer's own background services call. Every action requires the
-///     <c>clusternodes:read</c> or <c>clusternodes:write</c> permission.
+///     This controller manages this node's cluster membership for an operator: listing, renaming
+///     and removing known peers, both halves of the invite-code join handshake (the logic lives in
+///     <see cref="ClusterInviteService" /> and <see cref="ClusterJoinService" />), and the
+///     cluster query-stats dashboard. It uses the usual admin sign-in. Peers talk to each other
+///     through <see cref="ClusterChannelController" /> instead, which uses TSIG. Reads need
+///     <c>clusternodes:read</c> and changes need <c>clusternodes:write</c>.
 /// </summary>
-/// <param name="clusterNodeRepository">The repository this controller reads and writes peer rows through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="inviteService">The service this controller delegates invite creation to.</param>
-/// <param name="joinService">The service this controller delegates join-handshake consumption to.</param>
-/// <param name="queryLogRepository">
-///     Read directly by <see cref="Stats" /> to build this node's own row in the aggregate
-///     query-stats response -- see that action's own doc comment.
-/// </param>
+/// <param name="clusterNodeRepository">Reads and writes peer rows.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="inviteService">Creates invites.</param>
+/// <param name="joinService">Completes a join with an invite code.</param>
+/// <param name="queryLogRepository">Supplies this node's counts for <see cref="Stats" />.</param>
 /// <param name="queryStatsAggregator">
-///     The collector <see cref="Stats" /> delegates every peer's own row to -- see
-///     <see cref="IClusterQueryStatsAggregator" />'s own doc comment.
+///     Collects each peer's counts for <see cref="Stats" /> (see
+///     <see cref="IClusterQueryStatsAggregator" />).
 /// </param>
-/// <param name="clusterOptions">This node's own cluster configuration, read for <see cref="Stats" />'s own node identity.</param>
+/// <param name="clusterOptions">This node's cluster settings, read by <see cref="Stats" /> to label this node's row.</param>
 [ApiController]
 [Route("api/cluster/nodes")]
 public class ClusterController(
@@ -52,7 +47,8 @@ public class ClusterController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every peer node currently in this node's own registry.
+    ///     This action lists the peer nodes in this node's registry, one page at a time. Requires
+    ///     <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clusternodes:read")]
@@ -64,9 +60,8 @@ public class ClusterController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every peer into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every peer into memory.
         IReadOnlyList<ClusterNodeEntity> nodes = await clusterNodeRepository.SearchAsync(
             skip,
             take,
@@ -80,7 +75,8 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action looks up a single peer node by its own local registry row identifier.
+    ///     This action returns one peer by its local registry id. Returns 404 for an unknown id.
+    ///     Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clusternodes:read")]
@@ -95,9 +91,10 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action partially updates a peer's own display name and/or notes via RFC 7396 JSON
-    ///     Merge Patch -- see <see cref="ClusterNodeWriteRequest" /> for why every other field is
-    ///     fixed once a peer row exists.
+    ///     This action updates a peer's display name and notes as an RFC 7396 merge patch; a field
+    ///     that is absent or null is left unchanged. The other fields are fixed once a peer exists
+    ///     (see <see cref="ClusterNodeWriteRequest" />). Returns 404 for an unknown id. Requires
+    ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("clusternodes:write")]
@@ -125,11 +122,10 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action removes a peer node from this node's own registry -- purely local: it does
-    ///     not notify the peer, and does not affect the peer's own registry entry for this node
-    ///     (an operator who wants a clean, two-sided break must remove the relationship from both
-    ///     nodes' own "Cluster" pages, a deliberate "no cross-node cleanup" posture documented as
-    ///     an accepted limitation).
+    ///     This action removes a peer from this node's registry only. The peer is not told and
+    ///     keeps its own entry for this node, so a clean two-sided break means removing the
+    ///     relationship on both nodes. Returns 404 for an unknown id. Requires
+    ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clusternodes:write")]
@@ -146,8 +142,8 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action creates a fresh cluster invite -- see <see cref="ClusterInviteService" />
-    ///     for the real generation logic this delegates to.
+    ///     This action creates a cluster invite and returns its code and expiry time (see
+    ///     <see cref="ClusterInviteService" />). Requires <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("invite")]
     [RequirePermission("clusternodes:write")]
@@ -167,9 +163,9 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action consumes an invite code, completing the join handshake against the
-    ///     inviting node -- see <see cref="ClusterJoinService" /> for the real handshake logic
-    ///     this delegates to.
+    ///     This action uses an invite code from another node to complete the join handshake with
+    ///     that node, and returns the new peer (see <see cref="ClusterJoinService" />). Requires
+    ///     <c>clusternodes:write</c>.
     /// </summary>
     [HttpPost("join")]
     [RequirePermission("clusternodes:write")]
@@ -190,14 +186,13 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This action serves the aggregate cluster dashboard: this node's own live
-    ///     query-stats snapshot, plus one row per known peer, each peer's own row collected live
-    ///     over the existing TSIG-authenticated + TLS-encrypted cluster channel via
-    ///     <see cref="IClusterQueryStatsAggregator" />. A peer that could not be reached is still
-    ///     included in the response, marked unreachable with every count <see langword="null" /> --
-    ///     never silently omitted, so an operator can tell "this peer has no query traffic" apart
-    ///     from "this node could not reach this peer right now." Returns an empty peer list (this
-    ///     node's own row only) when clustering is disabled or no peer is currently known.
+    ///     This action serves the cluster dashboard: a row with this node's query counts (last
+    ///     hour, last 24 hours, all retained), then one row per known peer, collected live over the
+    ///     TSIG-authenticated, TLS-encrypted cluster channel by
+    ///     <see cref="IClusterQueryStatsAggregator" />. A peer that cannot be reached is still
+    ///     listed, marked unreachable with null counts, so "no traffic" and "unreachable" look
+    ///     different. With clustering disabled or no known peers, only this node's row is returned.
+    ///     Requires <c>clusternodes:read</c>.
     /// </summary>
     [HttpGet("stats")]
     [RequirePermission("clusternodes:read")]
@@ -253,7 +248,7 @@ public class ClusterController(
     }
 
     /// <summary>
-    ///     This method converts a peer node entity into its REST representation.
+    ///     This method converts a peer entity to its API representation.
     /// </summary>
     private static ClusterNodeDetail ToDetail(ClusterNodeEntity node) =>
         new(

@@ -16,22 +16,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="SelfUpdateOptions" /> -- the
-///     REST management surface for whether, how often, and against what feed this server checks
-///     for a newer release of itself. See <see cref="SelfUpdateOptions" />'s own doc comment for
-///     why checking defaults on but has nothing to check against until an operator sets
-///     <see cref="SelfUpdateOptions.ReleaseFeedUrl" />. No secret material is involved. Every
-///     action requires the <c>selfupdatesettings:read</c> or <c>selfupdatesettings:write</c>
-///     permission.
+///     This controller reads and writes <see cref="SelfUpdateOptions" />: whether, how often and
+///     against which feed the server checks for a newer release. Checking is on by default but
+///     does nothing until <see cref="SelfUpdateOptions.ReleaseFeedUrl" /> is set (see
+///     <see cref="SelfUpdateOptions" />). Reading needs <c>selfupdatesettings:read</c> and
+///     writing needs <c>selfupdatesettings:write</c>.
 ///     <para>
-///         Every field takes effect on the very next check tick, with no restart:
-///         <see cref="SelfUpdateOptions" /> is read via <see cref="IOptionsMonitor{TOptions}" />
-///         by <see cref="SelfUpdateCheckService" />, the same live-reload shape
-///         <see cref="Dns64SettingsController" /> already establishes for its own fields.
+///         Every field takes effect at the checker's next tick, with no restart:
+///         <see cref="SelfUpdateCheckService" /> reads <see cref="SelfUpdateOptions" /> through
+///         <see cref="IOptionsMonitor{TOptions}" />.
 ///     </para>
 /// </summary>
-/// <param name="selfUpdateOptions">This host's own currently-effective self-update settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="selfUpdateOptions">The current self-update settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/self-update-settings")]
 public class SelfUpdateSettingsController(
@@ -40,7 +37,8 @@ public class SelfUpdateSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live) self-update settings.
+    ///     This action returns the current self-update settings. Requires
+    ///     <c>selfupdatesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("selfupdatesettings:read")]
@@ -55,13 +53,12 @@ public class SelfUpdateSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:SelfUpdate</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. <c>releaseFeedUrl</c> is validated as either blank (clearing it back
-    ///     to "nothing to check against") or a well-formed absolute HTTP/HTTPS URL -- never
-    ///     followed or fetched here, only shape-checked, so a typo is caught immediately rather
-    ///     than surfacing only as a repeatedly-failing background check.
+    ///     This action merges a partial update into <c>DnsServer:SelfUpdate</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. <c>releaseFeedUrl</c> must be blank (no feed)
+    ///     or an absolute http(s) URL; it is only checked for shape, not fetched, so a typo is
+    ///     caught here rather than as a failing background check. Returns 400 for a bad URL or a
+    ///     non-positive <c>checkInterval</c>. Requires <c>selfupdatesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("selfupdatesettings:write")]

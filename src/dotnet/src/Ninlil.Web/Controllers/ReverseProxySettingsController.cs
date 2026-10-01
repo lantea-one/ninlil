@@ -21,37 +21,34 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="ReverseProxyOptions" /> --
-///     whether the shared Kestrel HTTP/HTTPS listener trusts a reverse proxy's own
-///     <c>X-Forwarded-For</c>/<c>X-Forwarded-Proto</c> headers, and which addresses/networks (plus
-///     an optional shared secret) are trusted to send them -- and, alongside it, DNS-over-TLS's
-///     own, entirely separate <see cref="ProxyProtocolOptions" /> (see
-///     <see cref="DnsOverTlsProxyProtocolSettingsDetail" />'s own doc comment for why a raw TCP
-///     transport needs a genuinely different trust mechanism from an HTTP one). Every action
-///     requires the <c>reverseproxy:read</c> or <c>reverseproxy:write</c> permission.
+///     This controller reads and writes <see cref="ReverseProxyOptions" />: whether the shared
+///     Kestrel HTTP/HTTPS listener honors a reverse proxy's <c>X-Forwarded-For</c> and
+///     <c>X-Forwarded-Proto</c> headers, which addresses and networks may send them, and an
+///     optional shared secret header. It also manages the separate PROXY protocol settings of
+///     DNS-over-TLS (<see cref="ProxyProtocolOptions" />), since a raw TCP transport needs a
+///     different trust mechanism from HTTP (see
+///     <see cref="DnsOverTlsProxyProtocolSettingsDetail" />). Reading needs
+///     <c>reverseproxy:read</c> and writing needs <c>reverseproxy:write</c>. A write is also
+///     replicated to the other cluster nodes.
 ///     <para>
-///         <b>Switching whether forwarded headers/a PROXY protocol header are honored, or changing
-///         either allowlist, always needs a restart</b>: <see cref="Middleware.ReverseProxyTrustGatingMiddleware" />,
-///         <see cref="Microsoft.AspNetCore.Builder.ForwardedHeadersExtensions.UseForwardedHeaders(Microsoft.AspNetCore.Builder.IApplicationBuilder)" />,
-///         and <c>DnsOverTlsListener</c>'s own PROXY protocol check are each only ever configured
-///         once, when <c>Program.cs</c>/<c>DnsOverTlsListener.ExecuteAsync</c> first read their own
-///         options, before this host's dependency injection container is even built (or, for the
-///         listener, before it starts accepting connections at all) -- a <c>PATCH</c> here only
-///         rewrites the configuration file each reads on its <em>next</em> start, the same
-///         restart-required posture every other runtime settings controller in this project
-///         already has.
+///         <b>Changes need a restart.</b> <c>Program.cs</c> decides whether to add
+///         <see cref="Middleware.ReverseProxyTrustGatingMiddleware" /> and
+///         <see cref="Microsoft.AspNetCore.Builder.ForwardedHeadersExtensions.UseForwardedHeaders(Microsoft.AspNetCore.Builder.IApplicationBuilder)" />
+///         once, at startup, so the HTTP settings apply after a process restart.
+///         <c>DnsOverTlsListener</c> reads its trusted PROXY protocol sources when it starts, so
+///         those apply after that listener is restarted (through <c>/api/services</c>) or the
+///         process restarts; its PROXY protocol on/off switch is read on every connection.
 ///     </para>
 /// </summary>
-/// <param name="reverseProxyOptions">This host's own currently-effective reverse-proxy trust settings.</param>
-/// <param name="dnsOverTlsOptions">This host's own currently-effective DNS-over-TLS transport settings, including its own PROXY protocol trust configuration.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="reverseProxyOptions">The reverse-proxy trust settings loaded at startup.</param>
+/// <param name="dnsOverTlsOptions">The DNS-over-TLS settings loaded at startup, including its PROXY protocol trust.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 /// <param name="clusterSyncRecorder">
-///     The cluster config-sync helper this controller calls after a successful write so the change
-///     propagates to every cluster peer.
+///     Records a successful write and sends it to every cluster peer.
 /// </param>
 /// <param name="stateRepository">
-///     The repository <see cref="Get" /> reads this section's own last-write-wins bookkeeping
-///     from, to surface <see cref="ReverseProxySettingsDetail.LastModifiedUtc" />/
+///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
+///     <see cref="ReverseProxySettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="ReverseProxySettingsDetail.OriginatingNodeId" />.
 /// </param>
 [ApiController]
@@ -65,10 +62,11 @@ public class ReverseProxySettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live and running) reverse-proxy
-    ///     trust settings, for both the shared HTTP listener and DNS-over-TLS.
-    ///     <see cref="ReverseProxyOptions.SharedSecret" /> itself is never returned -- only whether
-    ///     one is currently configured at all, via <see cref="ReverseProxySettingsDetail.SharedSecretConfigured" />.
+    ///     This action returns the reverse-proxy trust settings for the HTTP listener and
+    ///     DNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret
+    ///     is never returned, only whether one is set
+    ///     (<see cref="ReverseProxySettingsDetail.SharedSecretConfigured" />). Requires
+    ///     <c>reverseproxy:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("reverseproxy:read")]
@@ -99,24 +97,15 @@ public class ReverseProxySettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:ReverseProxy</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly
-    ///     as it was in the file -- including <c>sharedSecret</c>, which is always
-    ///     operator-supplied (there is no server-generated value the way a TSIG key's secret can
-    ///     be), so it is rotatable in place with no reveal-once problem, the same posture a cloud
-    ///     provider credential's own secret already follows. <c>knownProxies</c>/
-    ///     <c>knownNetworks</c> are each treated as one atomic field: present replaces the whole
-    ///     array, absent leaves the stored list completely untouched -- matching
-    ///     <c>CloudProviderCredentialsController</c>'s own "whole-object replacement, not a deep
-    ///     merge" precedent for a field whose own shape is a collection rather than a scalar. A
-    ///     <c>dnsOverTls</c> sub-object, when present, merges into the entirely separate
-    ///     <c>DnsServer:Protocol:DnsOverTls:ProxyProtocol</c> section the identical way -- present
-    ///     replaces the whole <c>knownProxies</c>/<c>knownNetworks</c> array, absent leaves it
-    ///     untouched, mirroring <c>EventBrokerSettingsController</c>'s own <c>rabbitMq</c>/
-    ///     <c>activeMq</c> nested-sub-object precedent for merging more than one configuration
-    ///     section from a single <c>PATCH</c> body. There is no <c>sharedSecret</c> field inside
-    ///     it at all -- see <c>DnsOverTlsProxyProtocolSettingsDetail</c>'s own doc comment for why.
+    ///     This action merges a partial update into <c>DnsServer:ReverseProxy</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value, including <c>sharedSecret</c>, which is
+    ///     always operator-supplied and so can be replaced in place. <c>knownProxies</c> and
+    ///     <c>knownNetworks</c> are each replaced as a whole array when present. An optional
+    ///     <c>dnsOverTls</c> sub-object is merged the same way into
+    ///     <c>DnsServer:Protocol:DnsOverTls:ProxyProtocol</c>; it has no shared secret (see
+    ///     <c>DnsOverTlsProxyProtocolSettingsDetail</c>). Returns 400 for an invalid IP address or
+    ///     CIDR network. Requires <c>reverseproxy:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("reverseproxy:write")]
@@ -278,10 +267,8 @@ public class ReverseProxySettingsController(
     }
 
     /// <summary>
-    ///     This method validates every entry of a submitted <c>knownProxies</c> array against
-    ///     <see cref="IPAddress.TryParse(string, out IPAddress)" /> before it is ever persisted --
-    ///     the same "validate against the real parser, don't just accept a string" discipline
-    ///     <c>ForwardersController</c>'s own <c>definitionString</c> field already applies.
+    ///     This method checks each entry of a <c>knownProxies</c> array with
+    ///     <see cref="IPAddress.TryParse(string, out IPAddress)" /> before anything is saved.
     /// </summary>
     private static bool TryReadValidatedAddressList(
         JsonElement arrayElement,
@@ -309,10 +296,9 @@ public class ReverseProxySettingsController(
     }
 
     /// <summary>
-    ///     This method validates every entry of a submitted <c>knownNetworks</c> array against
-    ///     <see cref="IPNetwork.TryParse(string, out IPNetwork)" /> before it is ever persisted,
-    ///     the same parser <c>ClientGroupNetworksController</c> already validates a client
-    ///     group's own network entries with.
+    ///     This method checks each entry of a <c>knownNetworks</c> array with
+    ///     <see cref="IPNetwork.TryParse(string, out IPNetwork)" />, the parser
+    ///     <c>ClientGroupNetworksController</c> also uses, before anything is saved.
     /// </summary>
     private static bool TryReadValidatedNetworkList(
         JsonElement arrayElement,
