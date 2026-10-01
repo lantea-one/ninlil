@@ -8,12 +8,12 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real DHCPv4 server engine's own message-type state machine end to
-///     end, driving <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> directly (bypassing the
-///     real UDP socket layer, which <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c> and this project's own
-///     <see cref="Dhcpv4UdpRoundTripTests" /> already prove separately) against a real,
-///     SQLite-backed <see cref="Dhcpv4EngineTestHost" /> -- real repositories, real
-///     <c>SaveChangesAsync</c> commits, real reads back from storage, not mocked collaborators.
+///     This test class covers the DHCPv4 engine's message handling (DISCOVER, the REQUEST cases,
+///     NAKs, lease times, reservations, RELEASE, DECLINE, INFORM) by calling
+///     <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> directly, without a socket (see
+///     <see cref="Dhcpv4UdpRoundTripTests" /> for that), on a <see cref="Dhcpv4EngineTestHost" />
+///     with the Entity Framework Core repositories and a temporary SQLite file, so every change is
+///     saved and read back.
 /// </summary>
 public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
 {
@@ -83,7 +83,7 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
     {
         DhcpScopeEntity scope = await _host.SeedScopeAsync("full", "192.0.2.20", "192.0.2.20");
 
-        // Fill the pool's only address with a different, already-active client first.
+        // First give the pool's only address to another client.
         await ConfirmAddressForNewClientAsync(scope, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
 
         Dhcpv4Message discover = NewMessage([0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f], 0x2000);
@@ -150,8 +150,8 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
         request.SetServerIdentifier(serverIdentifier);
         request.SetRequestedIpAddress(offer.YourIpAddress);
 
-        // The client asks for a shorter lease than the scope's own default -- RFC 2131 Section
-        // 4.3.1 says the server must not extend it beyond what was requested.
+        // The client asks for less than the scope default; the server grants what was asked
+        // (Dhcpv4LeaseTimeNegotiator).
         request.SetIpAddressLeaseTime(TimeSpan.FromMinutes(30));
 
         Dhcpv4Message ack = await _host.Handler.HandleRequestAsync(
@@ -243,8 +243,7 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
 
         await ConfirmAddressForNewClientAsync(scope, [0x55, 0x55, 0x55, 0x55, 0x55, 0x55]);
 
-        // A different client claims (via INIT-REBOOT) the exact address the first client already
-        // actively holds.
+        // Another client claims, by INIT-REBOOT, the address the first client holds.
         byte[] otherClientHardwareAddress = [0x66, 0x66, 0x66, 0x66, 0x66, 0x66];
         Dhcpv4Message request = NewMessage(otherClientHardwareAddress, 0x7000);
         request.SetMessageType(Dhcpv4MessageTypeEnum.Request);
@@ -283,7 +282,7 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
         );
         Assert.Null(reply); // RFC 2131: no reply to a RELEASE.
 
-        // The one-address pool is now free again for a brand-new client.
+        // The one-address pool is free again for a new client.
         Dhcpv4Message discover = NewMessage([0x88, 0x88, 0x88, 0x88, 0x88, 0x88], 0x9000);
         discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
         Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
@@ -324,8 +323,8 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
         );
         Assert.Null(declineReply); // RFC 2131: no reply to a DECLINE.
 
-        // The pool's only address is now quarantined -- even the declining client itself gets no
-        // new offer immediately afterward.
+        // The pool's only address is quarantined, so even the declining client gets no offer
+        // (there is no other free address to move its row to).
         Dhcpv4Message secondDiscover = NewMessage(clientHardwareAddress, 0xA001);
         secondDiscover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
         Dhcpv4Message secondOffer = await _host.Handler.HandleRequestAsync(
@@ -367,10 +366,8 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method drives a real DISCOVER-then-REQUEST(selecting) exchange for a brand-new
-    ///     client, returning its own now-active lease -- a small, shared setup step several tests
-    ///     above use to put an address genuinely in use before testing a second scenario against
-    ///     it.
+    ///     This method runs a DISCOVER and a selecting REQUEST for a new client and returns its
+    ///     active lease, so tests can start with an address in use.
     /// </summary>
     private async Task<LeaseEntity> ConfirmAddressForNewClientAsync(
         DhcpScopeEntity scope,
@@ -398,7 +395,7 @@ public sealed class Dhcpv4RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds the common shape every test message in this class shares.
+    ///     This method builds a request message with the fields every test sets.
     /// </summary>
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>
         new()

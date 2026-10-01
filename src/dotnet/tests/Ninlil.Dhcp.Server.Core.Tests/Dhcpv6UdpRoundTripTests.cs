@@ -6,18 +6,18 @@ using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Dns.Common.Enum;
-// See Dhcpv4UdpRoundTripTests's own doc comment on this same alias for why it is needed.
+// The alias is needed for the reason given in Dhcpv4UdpRoundTripTests.
 using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real DHCPv6 engine (<see cref="Dhcpv6RequestHandler" />) and the real
-///     UDP transport (<see cref="Dhcpv6UdpListener" />) genuinely work together over a real
-///     socket: a full SOLICIT-Advertise-Request-Reply exchange followed by a RELEASE, against a
-///     real, SQLite-backed <see cref="Dhcpv6EngineTestHost" /> -- the DHCPv6 analogue of
-///     <see cref="Dhcpv4UdpRoundTripTests" />.
+///     This test class checks the DHCPv6 engine (<see cref="Dhcpv6RequestHandler" />) together with
+///     the UDP transport (<see cref="Dhcpv6UdpListener" />) over IPv6 loopback on high ports: a
+///     SOLICIT-ADVERTISE-REQUEST-REPLY exchange followed by a RELEASE, and a server-address tag
+///     rule option surviving the round trip. It uses a <see cref="Dhcpv6EngineTestHost" /> and is
+///     the counterpart of <see cref="Dhcpv4UdpRoundTripTests" />.
 /// </summary>
 public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
 {
@@ -153,12 +153,10 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
             "2001:db8:9998::11"
         );
 
-        // Code 23 (DNS Recursive Name Server) is a real, server-address-eligible catalog option --
-        // deliberately not configured on the scope's own DnsServerAddresses at all, so this reply's
-        // own option 23 can only have come from the ServerAddress substitution. This is the
-        // genuine, real-socket counterpart to
-        // Dhcpv6OptionOverlayServiceTests.Solicit_WithServerAddressTagRuleOption_DeliversThisServersOwnAddress,
-        // proving the same substitution survives a real UDP encode/decode round trip.
+        // Code 23 (DNS Recursive Name Server) is server-address eligible. The scope has no
+        // DnsServerAddresses, so option 23 in the reply can only come from the substitution.
+        // This is the socket counterpart of
+        // Dhcpv6OptionOverlayServiceTests.Solicit_WithServerAddressTagRuleOption_DeliversThisServersOwnAddress.
         await _host.SeedTagRuleAsync(
             "DNS via this server",
             new Dictionary<byte, string> { [23] = string.Empty },
@@ -219,9 +217,8 @@ public sealed class Dhcpv6UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged IPv6 UDP port, the same way
-    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> already
-    ///     does.
+    ///     This method gets an unused high IPv6 UDP port, as
+    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
     /// </summary>
     private static int GetFreeUdpPort()
     {

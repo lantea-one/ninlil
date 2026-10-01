@@ -8,13 +8,12 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real DHCPv6 server engine's own message-type state machine end to
-///     end, driving <see cref="Dhcpv6RequestHandler.HandleRequestAsync" /> directly (bypassing the
-///     real UDP socket layer, which <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests</c> and this project's own
-///     <see cref="Dhcpv6UdpRoundTripTests" /> already prove separately) against a real,
-///     SQLite-backed <see cref="Dhcpv6EngineTestHost" /> -- real repositories, real
-///     <c>SaveChangesAsync</c> commits, real reads back from storage, not mocked collaborators --
-///     the DHCPv6 analogue of <see cref="Dhcpv4RequestHandlerTests" />.
+///     This test class covers the DHCPv6 engine's message handling (SOLICIT with and without
+///     Rapid Commit, REQUEST, RENEW, REBIND, RELEASE, DECLINE, CONFIRM, INFORMATION-REQUEST,
+///     prefix delegation and Client FQDN) by calling
+///     <see cref="Dhcpv6RequestHandler.HandleRequestAsync" /> directly, without a socket (see
+///     <see cref="Dhcpv6UdpRoundTripTests" />), on a <see cref="Dhcpv6EngineTestHost" /> with a
+///     temporary SQLite file. It is the counterpart of <see cref="Dhcpv4RequestHandlerTests" />.
 /// </summary>
 public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
 {
@@ -330,7 +329,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
             CancellationToken.None
         );
 
-        Assert.NotNull(reply); // Unlike DHCPv4, RFC 8415 always replies to a RELEASE.
+        Assert.NotNull(reply); // Unlike DHCPv4, a DHCPv6 server replies to a RELEASE.
         reply.TryGetIdentityAssociationsForNonTemporaryAddresses(
             out IReadOnlyList<Dhcpv6IdentityAssociationForNonTemporaryAddresses> associations
         );
@@ -340,7 +339,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         );
         Assert.Equal(Dhcpv6StatusCodeEnum.Success, statusCode);
 
-        // The one-address pool is now free again for a brand-new client.
+        // The one-address pool is free again for a new client.
         Dhcpv6Message solicit = NewSolicit(
             [0x00, 0x01, 0x00, 0x01, 0xbb, 0xbb, 0xbb, 0xbb, 0x00, 0x02],
             0x9002
@@ -382,10 +381,10 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
             RemoteEndPoint,
             CancellationToken.None
         );
-        Assert.NotNull(declineReply); // Unlike DHCPv4, RFC 8415 always replies to a DECLINE.
+        Assert.NotNull(declineReply); // Unlike DHCPv4, a DHCPv6 server replies to a DECLINE.
 
-        // The pool's only address is now quarantined -- even the declining client itself gets no
-        // new offer immediately afterward.
+        // The pool's only address is quarantined, so even the declining client gets no offer
+        // (there is no other free address to move its row to).
         Dhcpv6Message secondSolicit = NewSolicit(clientDuid, 0xA002);
         secondSolicit.AddIdentityAssociationForNonTemporaryAddresses(NewNaRequest(1));
         Dhcpv6Message secondAdvertise = await _host.Handler.HandleRequestAsync(
@@ -575,9 +574,8 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method drives a real SOLICIT-then-REQUEST exchange for a brand-new client,
-    ///     returning its own now-active lease -- a small, shared setup step several tests above
-    ///     use to put an address genuinely in use before testing a second scenario against it.
+    ///     This method runs a SOLICIT and a REQUEST for a new client and returns its active lease,
+    ///     so tests can start with an address in use.
     /// </summary>
     private async Task<LeaseEntity> ConfirmAddressForNewClientAsync(
         DhcpScopeEntity scope,
@@ -609,10 +607,8 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method resolves this test host's own current Server Identifier, by round-tripping
-    ///     an INFORMATION-REQUEST (which always replies, needs no scope match, and carries no
-    ///     state of its own to disturb) -- a small helper for a test that needs the real server
-    ///     DUID without an already-in-hand ADVERTISE/REPLY to read it from.
+    ///     This method gets the server DUID from the reply to an INFORMATION-REQUEST, which is
+    ///     always answered, needs no scope and changes no state.
     /// </summary>
     private async Task<byte[]> GetServerDuidAsync()
     {
@@ -631,9 +627,8 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds the common shape every SOLICIT this class sends shares -- a SOLICIT
-    ///     always needs an Elapsed Time option (RFC 8415 Section 15.1) alongside its Client
-    ///     Identifier, unlike every other message type this class builds directly via
+    ///     This method builds a SOLICIT with a Client Identifier and an Elapsed Time option, which
+    ///     clients include in their messages (RFC 8415); other messages use
     ///     <see cref="NewMessage" />.
     /// </summary>
     private static Dhcpv6Message NewSolicit(byte[] clientDuid, uint transactionId)
@@ -648,7 +643,8 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds the common shape every test message in this class shares.
+    ///     This method builds a message of the given type with a transaction ID and Client
+    ///     Identifier.
     /// </summary>
     private static Dhcpv6Message NewMessage(
         Dhcpv6MessageTypeEnum messageType,
@@ -662,25 +658,25 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds an IA_NA carrying nothing but an IAID and no address hint -- what a
-    ///     client's own first-ever SOLICIT for a given IAID looks like.
+    ///     This method builds an IA_NA with only an IAID and no address hint, as in a client's
+    ///     first SOLICIT.
     /// </summary>
     private static Dhcpv6IdentityAssociationForNonTemporaryAddresses NewNaRequest(
         uint identityAssociationId
     ) => new() { IdentityAssociationId = identityAssociationId };
 
     /// <summary>
-    ///     This method builds an IA_PD carrying nothing but an IAID and no prefix hint -- the
-    ///     Prefix Delegation analogue of <see cref="NewNaRequest" />.
+    ///     This method builds an IA_PD with only an IAID and no prefix hint, like
+    ///     <see cref="NewNaRequest" />.
     /// </summary>
     private static Dhcpv6IdentityAssociationForPrefixDelegation NewPdRequest(
         uint identityAssociationId
     ) => new() { IdentityAssociationId = identityAssociationId };
 
     /// <summary>
-    ///     This method formats raw DUID bytes the same colon-separated lowercase hexadecimal way
-    ///     <c>Dhcpv6ClientIdentifier</c> does, so a test can look a lease up by client identifier
-    ///     without depending on that internal class directly.
+    ///     This method formats DUID bytes as colon-separated lowercase hex, as
+    ///     <c>Dhcpv6ClientIdentifier</c> does, so tests can look leases up without using that
+    ///     internal class.
     /// </summary>
     private static string FormatDuid(byte[] duid) =>
         string.Join(':', duid.Select(b => b.ToString("x2")));

@@ -12,12 +12,11 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves <see cref="Administration.IDhcpLeaseAdministrationService.ForceReleaseAsync" />
-///     against a real, granted lease -- the real DHCPv4 allocation engine grants it through a
-///     genuine DISCOVER/REQUEST exchange (mirroring <see cref="Dhcpv4RequestHandlerTests" />), this
-///     service force-releases it, and a fresh DISCOVER from a different client proves the address
-///     is genuinely available for reallocation again, not merely that the lease row's own
-///     <c>State</c> column changed.
+///     This test class covers <see cref="Administration.IDhcpLeaseAdministrationService.ForceReleaseAsync" />
+///     on a <see cref="Dhcpv4EngineTestHost" />: the engine grants a lease through DISCOVER and
+///     REQUEST, the service releases it and publishes the released event, and a DISCOVER from
+///     another client is then offered the same address, which shows the address is free and
+///     not just that <c>State</c> changed. It also checks unknown and already-released leases.
 /// </summary>
 public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
 {
@@ -67,7 +66,7 @@ public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
         Assert.NotNull(grantedLease);
         Assert.Equal(LeaseStateEnum.Active, grantedLease.State);
 
-        // The scope's only address is fully occupied -- a second client gets no offer at all.
+        // The scope's only address is taken, so a second client gets no offer.
         byte[] secondClient = [0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb];
         Dhcpv4Message discoverBeforeRelease = NewMessage(secondClient, 0x1001);
         discoverBeforeRelease.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -85,17 +84,15 @@ public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
         Assert.NotNull(released);
         Assert.Equal(LeaseStateEnum.Released, released.State);
 
-        // The exact same DhcpLeaseChangedEvent(Released) a real client-initiated release already
-        // publishes -- proving DNS auto-registration cleanup (which subscribes to this event) is
-        // triggered identically.
+        // The same DhcpLeaseChangedEvent(Released) a client release publishes, so DNS record
+        // cleanup (which subscribes to it) runs the same way.
         DhcpLeaseChangedEvent publishedEvent =
             Assert.Single(_host.PublishedEvents) as DhcpLeaseChangedEvent;
         Assert.NotNull(publishedEvent);
         Assert.Equal(grantedLease.Id, publishedEvent.LeaseId);
         Assert.Equal(DhcpLeaseChangeKindEnum.Released, publishedEvent.ChangeKind);
 
-        // The genuine proof: a second client's own DISCOVER now succeeds against the real
-        // allocation engine, offered the exact same address.
+        // A second client's DISCOVER now succeeds and is offered the same address.
         Dhcpv4Message discoverAfterRelease = NewMessage(secondClient, 0x1002);
         discoverAfterRelease.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
         Dhcpv4Message offerAfterRelease = await _host.Handler.HandleRequestAsync(
@@ -119,8 +116,8 @@ public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
         LeaseEntity lease = await _host.ForceReleaseLeaseAsync(Guid.NewGuid());
         Assert.Null(lease);
 
-        // Seed an already-released lease directly, then force-release it twice -- neither call
-        // should publish a second event.
+        // Save an already-released lease, then force-release it twice; neither call should
+        // publish an event.
         Guid leaseId = Guid.NewGuid();
         await using (AsyncServiceScope seedScope = _host.Host.Services.CreateAsyncScope())
         {
@@ -157,8 +154,8 @@ public sealed class DhcpLeaseAdministrationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds the common message shape every test in this class shares -- mirrors
-    ///     <see cref="Dhcpv4RequestHandlerTests" />'s own helper exactly.
+    ///     This method builds a request message, as the helper in
+    ///     <see cref="Dhcpv4RequestHandlerTests" /> does.
     /// </summary>
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>
         new()

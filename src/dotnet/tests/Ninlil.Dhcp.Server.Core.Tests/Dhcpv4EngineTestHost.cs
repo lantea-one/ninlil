@@ -18,22 +18,21 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This class builds a real, throwaway SQLite-backed dependency injection host wiring up the
-///     real DHCPv4 server engine (<see cref="ServiceCollectionDhcpServerCoreExtension
-///     .AddNinlilDhcpServerCore" />) on top of the real Entity Framework Core repository
-///     implementations -- the same shape <c>Ninlil.Dhcp.Data.EntityFrameworkCore.Tests</c>'s own
-///     <c>DhcpRepositorySearchTestHost</c> establishes, extended with a fixed, deterministic
-///     <see cref="DhcpServerOptions" /> configuration (an explicit Server Identifier address, and
-///     short offer-hold/decline-quarantine windows) so a test never depends on this sandboxed
-///     environment's own real network interfaces or needs to wait out this project's own
-///     production-sized default timers.
+///     This class builds a dependency injection host for the DHCPv4 engine tests: the engine
+///     (<see cref="ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpServerCore" />), the lease
+///     administration services and the expiry sweep, on the Entity Framework Core repositories and
+///     a temporary SQLite database file, like <c>DhcpRepositorySearchTestHost</c> in
+///     <c>Ninlil.Dhcp.Data.EntityFrameworkCore.Tests</c>. <see cref="DhcpServerOptions" /> get a
+///     fixed Server Identifier and short offer-hold and quarantine times, so tests do not depend
+///     on the machine's interfaces or wait for the default timers. Events go to a recording fake
+///     publisher. The host is built but not started, so hosted services do not run.
 /// </summary>
 public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
 {
     /// <summary>
-    ///     This constant contains the fixed Server Identifier address every test in this project
-    ///     configures this host with, so a test can assert against it directly rather than reading
-    ///     it back through <see cref="Identity.IDhcpServerIdentifierProvider" /> first.
+    ///     This constant contains the Server Identifier address the host is configured with, so
+    ///     tests can assert against it without asking
+    ///     <see cref="Identity.IDhcpServerIdentifierProvider" />.
     /// </summary>
     public const string ServerIdentifierAddress = "192.0.2.1";
 
@@ -43,39 +42,29 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     );
 
     /// <summary>
-    ///     This property contains the real dependency injection container this test's own scopes
-    ///     are created against.
+    ///     This property contains the host whose services the tests use.
     /// </summary>
     public IHost Host { get; private set; }
 
     /// <summary>
-    ///     This property resolves the real, singleton <see cref="IDhcpv4RequestHandler" /> every
-    ///     test in this project drives directly, bypassing the real UDP socket layer (already
-    ///     proven separately by <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c> and, for this sub-phase's
-    ///     own engine, by <see cref="Dhcpv4UdpRoundTripTests" />) to test the engine's own decision
-    ///     logic directly and quickly.
+    ///     This property resolves the singleton <see cref="IDhcpv4RequestHandler" />, which the
+    ///     tests call directly without a socket. The socket path is covered by
+    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c> and <see cref="Dhcpv4UdpRoundTripTests" />.
     /// </summary>
     public IDhcpv4RequestHandler Handler =>
         Host.Services.GetRequiredService<IDhcpv4RequestHandler>();
 
     /// <summary>
-    ///     This property contains every <see cref="DhcpLeaseChangedEvent" /> (and any other
-    ///     <see cref="IDnsServerEvent" />) published so far --
-    ///     <see cref="Allocation.Dhcpv4LeaseAllocationService" />
-    ///     and <see cref="Dhcpv4LeaseExpirySweepService" /> both need a real
-    ///     <see cref="IDnsServerEventPublisher" /> injected, and this fake, recording
-    ///     implementation lets a test assert exactly what was published without needing the real,
-    ///     full <c>Ninlil.Dns.Server.Core</c> event dispatcher/channel machinery running at all --
-    ///     this project's own engine tests care only about what gets published, never about
-    ///     asynchronous delivery to a subscriber (proven separately, end to end, by
-    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.Tests</c>).
+    ///     This property contains every event published so far, such as
+    ///     <see cref="DhcpLeaseChangedEvent" />. A recording fake replaces the
+    ///     <c>Ninlil.Dns.Server.Core</c> event bus, since these tests check what is published, not
+    ///     delivery to subscribers (which <c>Ninlil.Dhcp.Server.DnsIntegration.Tests</c> covers).
     /// </summary>
     public List<IDnsServerEvent> PublishedEvents { get; } = [];
 
     /// <summary>
-    ///     This method builds and starts the host, applying the entity model directly (via
-    ///     <c>EnsureCreatedAsync</c>) rather than the real relational migrations, the same
-    ///     shortcut this project's own comparable write-path service tests already take.
+    ///     This method builds the host (without starting it) and creates the schema with
+    ///     <c>EnsureCreatedAsync</c> instead of running the migrations.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -90,23 +79,18 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
             .Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration)
             .AddNinlilDhcpEntityFrameworkCore();
 
-        // A fake, recording publisher rather than the real Ninlil.Dns.Server.Core event bus --
-        // see PublishedEvents's own doc comment for why.
+        // A recording fake instead of the event bus (see PublishedEvents).
         builder.Services.AddSingleton<IDnsServerEventPublisher>(
             new RecordingEventPublisher(PublishedEvents)
         );
 
         builder.Services.AddNinlilDhcpServerCore(builder.Configuration);
 
-        // Registered directly here, mirroring Program.cs's own composition root: the real sweep
-        // service is no longer registered inside AddNinlilDhcpServerCore itself, since it must
-        // also run when the mutually exclusive relay-agent engine (which never calls that method)
-        // is active instead -- see Dhcpv4LeaseExpirySweepService's own doc comment.
+        // Registered here, as in Program.cs, rather than by AddNinlilDhcpServerCore, since it also
+        // runs when the relay agent replaces the engine (see Dhcpv4LeaseExpirySweepService).
         builder.Services.AddHostedService<Dhcpv4LeaseExpirySweepService>();
 
-        // The two protocol-agnostic operator-facing DHCP services (lease force-release, scope
-        // statistics) -- registered the same unconditional way Program.cs registers them, for the
-        // identical reason the sweep service immediately above is.
+        // Lease force-release and scope statistics, registered as Program.cs does.
         builder.Services.AddNinlilDhcpLeaseAdministration();
 
         Host = builder.Build();
@@ -117,11 +101,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a scope directly through the real repository, in its own fresh scope,
-    ///     so a test always exercises the engine against genuinely persisted, freshly-read data
-    ///     rather than a tracked in-memory instance the engine's own later scope could see stale
-    ///     (Entity Framework Core's identity map would otherwise hand a later scope a stale
-    ///     tracked instance).
+    ///     This method saves a scope through the repository in a separate dependency injection
+    ///     scope, so the engine later reads it from the database rather than a tracked instance.
     /// </summary>
     public async Task<DhcpScopeEntity> SeedScopeAsync(
         string name,
@@ -163,8 +144,7 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a reservation directly through the real repository, in its own fresh
-    ///     scope.
+    ///     This method saves a reservation through the repository in a separate scope.
     /// </summary>
     public async Task<DhcpReservationEntity> SeedReservationAsync(
         Guid scopeId,
@@ -191,9 +171,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method reads back the current lease (if any) a client holds in a scope, in its own
-    ///     fresh scope, so a test always observes whatever the engine most recently wrote rather
-    ///     than a stale tracked instance.
+    ///     This method reads a client's lease in a scope, if any, in a separate scope, so the test
+    ///     sees what the engine last saved.
     /// </summary>
     public async Task<LeaseEntity> FindLeaseAsync(string scopeName, string clientIdentifier)
     {
@@ -203,8 +182,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method force-releases a lease through the real <see cref="IDhcpLeaseAdministrationService" />,
-    ///     in its own fresh scope.
+    ///     This method force-releases a lease through <see cref="IDhcpLeaseAdministrationService" />
+    ///     in a separate scope.
     /// </summary>
     public async Task<LeaseEntity> ForceReleaseLeaseAsync(Guid leaseId)
     {
@@ -215,8 +194,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method computes a scope's own current utilization through the real
-    ///     <see cref="IDhcpScopeStatisticsService" />, in its own fresh scope.
+    ///     This method computes a scope's utilization through
+    ///     <see cref="IDhcpScopeStatisticsService" /> in a separate scope.
     /// </summary>
     public async Task<DhcpScopeStatistics> ComputeStatisticsAsync(DhcpScopeEntity scope)
     {
@@ -227,8 +206,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a scope's own operator-configured custom option directly through the
-    ///     real repository, in its own fresh scope.
+    ///     This method saves a custom option for a scope through the repository in a separate
+    ///     scope.
     /// </summary>
     public async Task<DhcpScopeCustomOptionEntity> SeedCustomOptionAsync(
         Guid scopeId,
@@ -259,8 +238,9 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This method seeds a tag-based conditional option delivery rule, plus every option it
-    ///     contributes, directly through the real repositories, in its own fresh scope.
+    ///     This method saves a tag rule and its options through the repositories in separate
+    ///     scopes. Tags listed in <c>serverAddressOptionTags</c> get the
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> value source.
     /// </summary>
     public async Task<DhcpTagRuleEntity> SeedTagRuleAsync(
         string name,
@@ -343,9 +323,8 @@ public sealed class Dhcpv4EngineTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    ///     This class is the fake <see cref="IDnsServerEventPublisher" /> backing
-    ///     <see cref="PublishedEvents" /> -- see that property's own doc comment for why a fake,
-    ///     rather than the real event bus, is registered here.
+    ///     This class is the fake <see cref="IDnsServerEventPublisher" /> that records into
+    ///     <see cref="PublishedEvents" />.
     /// </summary>
     private sealed class RecordingEventPublisher(List<IDnsServerEvent> events)
         : IDnsServerEventPublisher

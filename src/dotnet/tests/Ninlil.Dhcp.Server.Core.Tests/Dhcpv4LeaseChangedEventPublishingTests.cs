@@ -9,13 +9,11 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real DHCPv4 engine publishes <see cref="DhcpLeaseChangedEvent" />
-///     exactly where it should: a granted (confirmed) lease and a released one, never a merely
-///     tentative offer or a declined address -- see
-///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.Dhcpv4LeaseAllocationService" />'s own doc
-///     comment for why. <c>Ninlil.Dhcp.Server.DnsIntegration.Tests</c>'s own end-to-end test
-///     separately proves a published event genuinely reaches a real subscriber through the real
-///     event bus; this test's only job is proving the DHCP engine's own publish decisions.
+///     This test class checks where the DHCPv4 engine publishes <see cref="DhcpLeaseChangedEvent" />:
+///     for a granted lease and a release, never for an offer or a decline (see
+///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.Dhcpv4LeaseAllocationService" />). It reads
+///     the recording publisher of a <see cref="Dhcpv4EngineTestHost" />; delivery to subscribers
+///     through the event bus is tested in <c>Ninlil.Dhcp.Server.DnsIntegration.Tests</c>.
 /// </summary>
 public sealed class Dhcpv4LeaseChangedEventPublishingTests : IAsyncLifetime
 {

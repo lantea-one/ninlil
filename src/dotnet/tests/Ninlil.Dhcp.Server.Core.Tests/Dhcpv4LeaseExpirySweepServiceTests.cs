@@ -10,9 +10,9 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv4LeaseExpirySweepService" /> -- the one mechanism that
-///     ever detects a lease's own natural expiry -- against a real, SQLite-backed
-///     <see cref="Dhcpv4EngineTestHost" />.
+///     This test class covers <see cref="Dhcpv4LeaseExpirySweepService" />, which marks expired
+///     active leases and publishes their events, by calling <c>SweepAsync</c> directly on a
+///     <see cref="Dhcpv4EngineTestHost" /> with a temporary SQLite file.
 /// </summary>
 public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
 {
@@ -114,12 +114,11 @@ public sealed class Dhcpv4LeaseExpirySweepServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method resolves the real, singleton <see cref="Dhcpv4LeaseExpirySweepService" />
-    ///     -- registered only as an <see cref="IHostedService" /> (via <c>AddHostedService</c>,
-    ///     never under its own concrete type), so it must be found among every registered hosted
-    ///     service rather than resolved directly -- the same pattern
+    ///     This method finds the <see cref="Dhcpv4LeaseExpirySweepService" /> among the registered
+    ///     <see cref="IHostedService" /> instances, since <c>AddHostedService</c> does not register
+    ///     it under its own type, as
     ///     <c>Ninlil.Dns.Server.Webhooks.Tests.WebhookDeliveryRetrySweepServiceTests.GetSweepService</c>
-    ///     already establishes for its own comparable sweep service.
+    ///     does.
     /// </summary>
     private Dhcpv4LeaseExpirySweepService GetSweepService() =>
         _host

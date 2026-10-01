@@ -7,12 +7,12 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real Phase 14d-2 option-overlay engine end to end: a scope's own
-///     custom options and every kind of tag-based conditional option delivery rule
-///     (Vendor Class Identifier, User Class, Relay Agent Circuit ID/Remote ID), each driven
-///     through <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> directly against a real,
-///     SQLite-backed <see cref="Dhcpv4EngineTestHost" /> -- real repositories, real
-///     <c>SaveChangesAsync</c> commits, real reads back from storage.
+///     This test class covers <see cref="Options.Dhcpv4OptionOverlayService" />: scope custom
+///     options (including overriding a standard option and the server-address value source) and
+///     tag rules on each criterion (Vendor Class Identifier, User Class, Agent Circuit ID and
+///     Remote ID), scope eligibility and priority order. Each test calls
+///     <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> on a <see cref="Dhcpv4EngineTestHost" />
+///     with a temporary SQLite file.
 /// </summary>
 public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
 {
@@ -40,8 +40,7 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             gatewayAddresses: ["192.0.2.1"]
         );
 
-        // Tag 66 (TFTP Server Name) has no standard mapping in this project -- exactly the "no
-        // dedicated accessor yet" case this feature exists for.
+        // Tag 66 (TFTP Server Name) gets no standard value here, since the scope has no boot file.
         await _host.SeedCustomOptionAsync(scope.Id, 66, "746674702e6578616d706c65");
 
         Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
@@ -54,8 +53,8 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
         Assert.True(offer.TryGetRawOption(66, out byte[] rawValue));
         Assert.Equal("tftp.example", System.Text.Encoding.ASCII.GetString(rawValue));
 
-        // The standard Router option this scope was also configured with must still be present --
-        // a custom option is a pure addition, not a replacement of the standard-option pipeline.
+        // The scope's standard Router option must still be there: a custom option for another
+        // tag adds to the standard options.
         Assert.True(offer.TryGetRouters(out IReadOnlyList<IPAddress> routers));
         Assert.Equal(IPAddress.Parse("192.0.2.1"), Assert.Single(routers));
     }
@@ -70,9 +69,8 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             subnetPrefixLength: 24
         );
 
-        // Tag 1 is Subnet Mask, a standard option this scope's own SubnetPrefixLength already
-        // computes as 255.255.255.0 -- the custom override must win, per
-        // DhcpScopeCustomOptionEntity's own documented precedence rule.
+        // Tag 1 is Subnet Mask, which SubnetPrefixLength would give as 255.255.255.0; the custom
+        // value must win (see DhcpScopeCustomOptionEntity).
         await _host.SeedCustomOptionAsync(scope.Id, 1, "fffffe00");
 
         Dhcpv4Message offer = await _host.Handler.HandleRequestAsync(
@@ -95,10 +93,8 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             "192.0.2.172"
         );
 
-        // Tag 6 (Domain Name Server) is a real, server-address-eligible catalog option -- the
-        // stored valueHex is deliberately left blank, exactly as an operator choosing
-        // ServerAddress via the future Angular UI (Phase 17f) would leave it, per
-        // DhcpScopeCustomOptionEntity.ValueHex's own doc comment.
+        // Tag 6 (Domain Name Server) is server-address eligible. ValueHex is blank, as it is when
+        // an operator picks ServerAddress (see DhcpScopeCustomOptionEntity.ValueHex).
         await _host.SeedCustomOptionAsync(
             scope.Id,
             6,
@@ -129,9 +125,8 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             "192.0.2.182"
         );
 
-        // Tag 42 (Network Time Protocol Servers) is also a real, server-address-eligible catalog
-        // option -- exercised here via a tag rule rather than a scope custom option, to prove the
-        // ValueSource substitution is shared by both delivery paths.
+        // Tag 42 (Network Time Protocol Servers) is also server-address eligible. Using a tag rule
+        // here shows the substitution works for rule options as well as custom options.
         await _host.SeedTagRuleAsync(
             "NTP via this server",
             new Dictionary<byte, string> { [42] = string.Empty },
@@ -334,9 +329,8 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             "192.0.2.132"
         );
 
-        // Both rules match every client of this scope (no criteria set at all beyond ScopeId).
-        // The higher-Priority rule's own value for tag 60 must win, per DhcpTagRuleEntity's own
-        // documented last-applied-wins evaluation order.
+        // Both rules match every client of the scope (no criteria besides ScopeId). The rule
+        // with the higher Priority is applied last, so its value for tag 60 must win.
         await _host.SeedTagRuleAsync(
             "Low priority",
             new Dictionary<byte, string> { [200] = "01" },
@@ -370,7 +364,7 @@ public sealed class Dhcpv4OptionOverlayServiceTests : IAsyncLifetime
             "192.0.2.142"
         );
 
-        // scopeId left null -- eligible against a client resolved into any scope.
+        // No scopeId: eligible in every scope.
         await _host.SeedTagRuleAsync(
             "Everyone, everywhere",
             new Dictionary<byte, string> { [201] = "01" }

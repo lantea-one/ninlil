@@ -7,13 +7,12 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves PXE boot-option delivery (<c>Dhcpv4OptionDeliveryService.ApplyPxeBootOptions</c>)
-///     end to end: a scope's own <see cref="DhcpScopeEntity.BootFileName" />/
-///     <see cref="DhcpScopeEntity.NextServerAddress" /> configuration lands in a real OFFER/ACK's
-///     own fixed "file"/"siaddr" header fields unconditionally, plus the RFC 2132 §9.4/§9.5
-///     TFTP Server Name/Bootfile Name options when the client's own Parameter Request List asks
-///     for them -- driven through <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> directly
-///     against a real, SQLite-backed <see cref="Dhcpv4EngineTestHost" />.
+///     This test class covers PXE boot delivery (<c>Dhcpv4OptionDeliveryService.ApplyPxeBootOptions</c>):
+///     <see cref="DhcpScopeEntity.BootFileName" /> and <see cref="DhcpScopeEntity.NextServerAddress" />
+///     always fill the "file" and "siaddr" header fields of an OFFER or ACK, and the RFC 2132
+///     §9.4 and §9.5 TFTP Server Name and Bootfile Name options follow the Parameter Request
+///     List. Each test calls <see cref="Dhcpv4RequestHandler.HandleRequestAsync" /> on a
+///     <see cref="Dhcpv4EngineTestHost" />.
 /// </summary>
 public sealed class Dhcpv4PxeBootOptionDeliveryTests : IAsyncLifetime
 {
@@ -133,10 +132,8 @@ public sealed class Dhcpv4PxeBootOptionDeliveryTests : IAsyncLifetime
     [Fact]
     public async Task Discover_WithAParameterRequestListOmittingBootOptions_StillGetsTheFixedFields()
     {
-        // The fixed "file"/"siaddr" header fields are always present on every reply, per RFC
-        // 2131 §2 -- never gated by a client's own Parameter Request List the way an RFC 2132
-        // option is, unlike the option-66/67 alternative encoding this same test also proves is
-        // correctly *omitted* when not requested.
+        // The "file" and "siaddr" header fields (RFC 2131 §2) are always filled, while options
+        // 66 and 67 are left out because the Parameter Request List does not ask for them.
         await _host.SeedScopeAsync(
             "pxe-prl-scope",
             "192.0.2.190",

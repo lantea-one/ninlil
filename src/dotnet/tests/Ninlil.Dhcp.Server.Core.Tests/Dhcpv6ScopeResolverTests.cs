@@ -9,13 +9,12 @@ using Ninlil.Dhcp.Server.Core.Scope;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv6ScopeResolver" />'s own new relay-link-address subnet
-///     containment resolution step (this sub-phase's own addition), driving
-///     <see cref="IDhcpv6ScopeResolver.ResolveAsync" /> directly against a real, SQLite-backed
-///     <see cref="Dhcpv6EngineTestHost" /> -- real repositories, not mocked collaborators.
-///     <see cref="Dhcpv6RequestHandlerTests" /> already covers this resolver's own
-///     reservation/lease resolution steps indirectly; this class is scoped specifically to the new
-///     step this sub-phase introduces.
+///     This test class covers the relay link-address step of <see cref="Dhcpv6ScopeResolver" />:
+///     choosing the scope whose subnet contains the link address, resolving nothing when the
+///     address matches no scope and there are several, and a reservation winning over the link
+///     address. It calls <see cref="IDhcpv6ScopeResolver.ResolveAsync" /> on a
+///     <see cref="Dhcpv6EngineTestHost" />. The reservation and lease steps are covered through
+///     <see cref="Dhcpv6RequestHandlerTests" />.
 /// </summary>
 public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 {
@@ -47,8 +46,8 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier([0x00, 0x01, 0x00, 0x01, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        // No reservation, no lease -- the only signal this request carries at all is its own
-        // relay-link-address, which falls inside scope B's own /64 but nowhere near scope A's.
+        // No reservation or lease; the only hint is the relay link address, inside scope B's /64
+        // and not scope A's.
         request.RelayLinkAddress = IPAddress.Parse("2001:db8:bbbb::1");
 
         DhcpScopeEntity resolved = await ResolveAsync(request);
@@ -74,8 +73,8 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier([0x00, 0x01, 0x00, 0x01, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F]);
-        // Matches neither configured scope's own /64, and with two scopes configured there is no
-        // single-scope fallback to reach either -- a genuinely ambiguous request resolves nothing.
+        // Matches neither scope's /64, and with two scopes there is no single-scope fallback, so
+        // nothing resolves.
         request.RelayLinkAddress = IPAddress.Parse("2001:db8:ffff::1");
 
         DhcpScopeEntity resolved = await ResolveAsync(request);
@@ -103,9 +102,8 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
 
         Dhcpv6Message request = new();
         request.SetClientIdentifier(clientDuid);
-        // The relay-link-address points at the *other* scope's own subnet -- the reservation must
-        // still win, since it is resolved before this new step, exactly mirroring
-        // Dhcpv4ScopeResolver's own precedence.
+        // The link address points at the other scope's subnet, but the reservation is checked
+        // first and wins, as in Dhcpv4ScopeResolver.
         request.RelayLinkAddress = IPAddress.Parse("2001:db8:1111::1");
 
         DhcpScopeEntity resolved = await ResolveAsync(request);
@@ -115,8 +113,8 @@ public sealed class Dhcpv6ScopeResolverTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method resolves an address-assignment scope for a request, in its own fresh
-    ///     dependency injection scope, mirroring how the real engine itself always resolves one.
+    ///     This method resolves an address-assignment scope for a request in a new dependency
+    ///     injection scope, as the engine does.
     /// </summary>
     private async Task<DhcpScopeEntity> ResolveAsync(Dhcpv6Message request)
     {

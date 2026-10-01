@@ -6,30 +6,22 @@ using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Protocol.Dhcpv4;
 using Ninlil.Dns.Common.Enum;
-// This test's own namespace (Ninlil.Dhcp.Server.Core.Tests) sits directly beneath
-// Ninlil.Dhcp.Server.Core, which itself has a nested Options namespace
-// (Ninlil.Dhcp.Server.Core.Options) -- C#'s own namespace lookup finds that sibling namespace
-// ahead of Microsoft.Extensions.Options.Options for the bare name "Options", so this alias reaches
-// the real factory method unambiguously rather than relying on a using directive alone.
+// Inside Ninlil.Dhcp.Server.Core.Tests, the bare name "Options" resolves to the namespace
+// Ninlil.Dhcp.Server.Core.Options before Microsoft.Extensions.Options.Options, so an alias is
+// needed to reach the factory method.
 using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real DHCPv4 engine (<see cref="Dhcpv4RequestHandler" />) and the real
-///     UDP transport (<see cref="Dhcpv4UdpListener" />) genuinely work together over a real
-///     socket: a full DISCOVER-Offer-Request-Ack exchange, a DECLINE that quarantines an address
-///     with no reply, and a RELEASE that frees an address with no reply, all against a real,
-///     SQLite-backed <see cref="Dhcpv4EngineTestHost" />.
-///     <para>
-///         This is this sub-phase's own committed port of the throwaway scratchpad console app's
-///         real, privileged-port (67/68) proof -- the same "prove it live once with real ports,
-///         then commit the durable, unprivileged-port version" convention
-///         <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c>'s own <c>Dhcpv4UdpRoundTripTests</c> already
-///         established for the wire transport alone; this class proves the same shape one layer
-///         higher, with the real engine plugged in as the handler instead of a canned stub.
-///     </para>
+///     This test class checks the DHCPv4 engine (<see cref="Dhcpv4RequestHandler" />) together with
+///     the UDP transport (<see cref="Dhcpv4UdpListener" />) over loopback sockets on high ports: a
+///     DISCOVER-OFFER-REQUEST-ACK exchange, a RELEASE and a DECLINE that get no reply, and a
+///     server-address custom option surviving the round trip. It uses a
+///     <see cref="Dhcpv4EngineTestHost" /> with a temporary SQLite file. It is the engine-level
+///     counterpart of <c>Dhcpv4UdpRoundTripTests</c> in <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c>,
+///     which uses a stub handler.
 /// </summary>
 public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
 {
@@ -128,10 +120,9 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
         Assert.NotNull(secondOffer);
         Assert.Equal(ack.YourIpAddress, secondOffer.YourIpAddress);
 
-        // 4. DECLINE the second client's own newly offered address -> no reply, and the address is
-        // now quarantined (this scope's own pool has exactly two addresses; the first is free
-        // again since it was never confirmed by a REQUEST here -- this decline targets the second
-        // one specifically to prove quarantine without depending on pool-scan order).
+        // 4. DECLINE the second client's offered address -> no reply, and the address is
+        // quarantined. The pool has two addresses and the first is free again, so declining the
+        // second shows the quarantine without depending on the pool scan order.
         Dhcpv4Message decline = NewMessage(secondClientHardwareAddress, 0x3333);
         decline.SetMessageType(Dhcpv4MessageTypeEnum.Decline);
         decline.SetRequestedIpAddress(secondOffer.YourIpAddress);
@@ -151,11 +142,9 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
             gatewayAddresses: ["198.51.100.1"]
         );
 
-        // Tag 6 (Domain Name Server) is a real, server-address-eligible catalog option -- this is
-        // the genuine, real-socket counterpart to
-        // Dhcpv4OptionOverlayServiceTests.Discover_WithServerAddressCustomOption_DeliversThisServersOwnAddress,
-        // proving the same substitution survives a real UDP encode/decode round trip, not just an
-        // in-process handler call.
+        // Tag 6 (Domain Name Server) is server-address eligible. This is the socket counterpart
+        // of Dhcpv4OptionOverlayServiceTests.Discover_WithServerAddressCustomOption_DeliversThisServersOwnAddress,
+        // showing the substitution survives UDP encoding and decoding.
         await _host.SeedCustomOptionAsync(
             scope.Id,
             6,
@@ -201,7 +190,7 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method sends one encoded request datagram to this test's own listener, at loopback.
+    ///     This method sends one encoded request to the listener on loopback.
     /// </summary>
     private async Task SendAsync(UdpClient client, Dhcpv4Message request)
     {
@@ -214,9 +203,8 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method confirms that no reply arrives within a short window -- used to prove RFC
-    ///     2131's "no reply" contract for DECLINE/RELEASE actually holds over the real socket, not
-    ///     merely at the in-process handler level.
+    ///     This method checks that no reply arrives within a short window, to show that DECLINE
+    ///     and RELEASE get no reply over the socket (RFC 2131).
     /// </summary>
     private static async Task AssertNoReplyArrivesAsync(UdpClient client)
     {
@@ -228,8 +216,8 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port, the same way
-    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c> already does.
+    ///     This method gets an unused high UDP port, as
+    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c> does.
     /// </summary>
     private static int GetFreeUdpPort()
     {
@@ -238,13 +226,11 @@ public sealed class Dhcpv4UdpRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds the common shape every test message in this class shares. Every
-    ///     message sets <see cref="Dhcpv4Message.ClientIpAddress" /> to loopback, the same
-    ///     deliberate simplification <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c>
-    ///     documents: it forces a deterministic unicast reply rather than depending on this
-    ///     sandboxed environment's own, possibly restricted, UDP broadcast delivery behavior. A
-    ///     RELEASE overwrites this same field with its own real, previously-leased address, per RFC
-    ///     2131 Section 4.3.6's own requirement that <c>ciaddr</c> carry it.
+    ///     This method builds a request message with the fields every test sets.
+    ///     <see cref="Dhcpv4Message.ClientIpAddress" /> is loopback, as in
+    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c>, to force a unicast
+    ///     reply instead of relying on broadcast delivery. A RELEASE replaces it with the leased
+    ///     address, which RFC 2131 Section 4.3.6 puts in <c>ciaddr</c>.
     /// </summary>
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>
         new()

@@ -4,24 +4,21 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
-// See Dhcpv4UdpRoundTripTests's own doc comment on this same alias for why it is needed.
+// The alias is needed for the reason given in Dhcpv4UdpRoundTripTests.
 using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real, receiving side of this project's own single-relay-hop DHCPv6
-///     relay support end to end: a hand-built RELAY-FORW datagram, standing in for one a genuine
-///     external relay agent would have sent, is sent to a real <see cref="Dhcpv6UdpListener" />
-///     bound to the real <see cref="Dhcpv6RequestHandler" /> engine (against a real, SQLite-backed
-///     <see cref="Dhcpv6EngineTestHost" />), and this test asserts the resulting RELAY-REPL is both
-///     correctly scoped (the offered address comes from the one scope whose own subnet contains
-///     the RELAY-FORW's own link-address -- <see cref="Dhcpv6ScopeResolverTests" /> already proves
-///     that resolution step in isolation; this test proves it reached end to end through the real
-///     socket/listener/engine path) and correctly wrapped (hop-count/link-address/peer-address
-///     copied unchanged, per RFC 8415 Section 16). The genuinely different "forwarding side" --
-///     this server itself acting as a relay agent -- is proven separately, in
+///     This test class covers the receiving side of DHCPv6 relay support over IPv6 loopback: a
+///     hand-built RELAY-FORW, as an external relay agent would send, goes to a
+///     <see cref="Dhcpv6UdpListener" /> with the <see cref="Dhcpv6RequestHandler" /> engine on a
+///     <see cref="Dhcpv6EngineTestHost" />, and the test checks the RELAY-REPL: hop count, link
+///     address and peer address copied, Interface-ID echoed, and an address offered from the
+///     scope. Only one scope exists, so this does not tell link-address resolution apart from the
+///     single-scope fallback; <see cref="Dhcpv6ScopeResolverTests" /> covers that step. The
+///     forwarding side (Ninlil as relay agent) is tested in
 ///     <c>Ninlil.Dhcp.Server.Relay.Tests.Dhcpv6RelayRoundTripTests</c>.
 /// </summary>
 public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
@@ -39,8 +36,7 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         _host = new Dhcpv6EngineTestHost();
         await _host.InitializeAsync();
 
-        // The one scope this relayed request should resolve to -- its own /64 contains
-        // RelayLinkAddress, exactly the signal Dhcpv6ScopeResolver's new relay step reads.
+        // The scope the relayed request should resolve to; its /64 contains RelayLinkAddress.
         await _host.SeedAddressScopeAsync(
             "relay-receiving-scope",
             "2001:db8:9999::10",
@@ -50,10 +46,8 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         _serverPort = GetFreeUdpPort();
         Dhcpv6ProtocolOptions options = new() { Enable = true, ServerPort = _serverPort };
 
-        // The service provider is the real, full dependency injection container
-        // Dhcpv6EngineTestHost already built -- IDhcpv6RelayMessageHandler resolves to the exact
-        // same Dhcpv6RequestHandler singleton IDhcpv6RequestHandler already does (see
-        // ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore's own registration).
+        // Pass the host's service provider so the listener finds IDhcpv6RelayMessageHandler,
+        // which is the same Dhcpv6RequestHandler singleton (see AddNinlilDhcpv6ServerCore).
         _listener = new Dhcpv6UdpListener(
             _host.Handler,
             MicrosoftOptions.Create(options),
@@ -130,11 +124,11 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
             failureReason
         );
         Assert.Equal(Dhcpv6MessageTypeEnum.RelayReply, relayReply.MessageType);
-        // RFC 8415 Section 16: hop-count/link-address/peer-address copied unchanged.
+        // Hop count, link address and peer address are copied unchanged (RFC 8415).
         Assert.Equal(relayForward.HopCount, relayReply.HopCount);
         Assert.Equal(RelayLinkAddress, relayReply.LinkAddress);
         Assert.Equal(ClientPeerAddress, relayReply.PeerAddress);
-        // The Interface-ID the (simulated) relay agent sent must be echoed back unchanged.
+        // The Interface-ID the relay agent sent must be echoed unchanged.
         Assert.True(relayReply.TryGetInterfaceId(out byte[] echoedInterfaceId));
         Assert.Equal([0x65, 0x74, 0x68, 0x30], echoedInterfaceId);
 
@@ -157,15 +151,14 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         );
         Assert.Single(offered);
         Assert.Single(offered[0].Addresses);
-        // The offered address must come from relay-receiving-scope's own pool -- proving the
-        // request really was resolved by RelayLinkAddress's own subnet containment, not some other
-        // fallback.
+        // The offered address comes from relay-receiving-scope's pool (with one scope, the
+        // single-scope fallback would also choose it).
         Assert.Equal(IPAddress.Parse("2001:db8:9999::10"), offered[0].Addresses[0].Address);
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged IPv6 UDP port, the same convention
-    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> already establishes.
+    ///     This method gets an unused high IPv6 UDP port, as
+    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
     /// </summary>
     private static int GetFreeUdpPort()
     {

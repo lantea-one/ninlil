@@ -7,15 +7,12 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves the real Phase 16d DHCPv6 tag-based conditional option delivery engine
-///     end to end: every kind of DHCPv6-relevant match criterion (Vendor Class/vendor-class-data,
-///     Vendor Class Enterprise Number, User Class, relayed Interface-ID, relayed Remote-ID), each
-///     driven through <see cref="Dhcpv6RequestHandler.HandleRequestAsync" />/
-///     <see cref="Dhcpv6RequestHandler.HandleRelayMessageAsync" /> directly against a real,
-///     SQLite-backed <see cref="Dhcpv6EngineTestHost" /> -- real repositories, real
-///     <c>SaveChangesAsync</c> commits, real reads back from storage -- mirroring
-///     <see cref="Dhcpv4OptionOverlayServiceTests" />'s own shape for its DHCPv6 analogue,
-///     <see cref="Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService" />.
+///     This test class covers <see cref="Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService" />
+///     on each DHCPv6 criterion (vendor-class-data, enterprise number, user class, relayed
+///     Interface-ID and Remote-ID), the server-address value source and priority order. Each
+///     test calls <see cref="Dhcpv6RequestHandler.HandleRequestAsync" /> or
+///     <see cref="Dhcpv6RequestHandler.HandleRelayMessageAsync" /> on a
+///     <see cref="Dhcpv6EngineTestHost" />, like <see cref="Dhcpv4OptionOverlayServiceTests" />.
 /// </summary>
 public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
 {
@@ -106,9 +103,8 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
             "2001:db8:3::12"
         );
 
-        // No vendor-class-data text at all -- "any vendor class from enterprise 32473" alone is
-        // still a real, meaningful criterion (DhcpTagRuleEntity.VendorClassEnterpriseNumber's own
-        // doc comment).
+        // No vendor-class-data text: the enterprise number alone means "any vendor class from
+        // enterprise 32473" (see DhcpTagRuleEntity.VendorClassEnterpriseNumber).
         await _host.SeedTagRuleAsync(
             "Enterprise-only match",
             new Dictionary<byte, string> { [67] = "70786574" },
@@ -171,9 +167,8 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
             "2001:db8:c::12"
         );
 
-        // Code 23 (DNS Recursive Name Server) is a real, server-address-eligible catalog option --
-        // deliberately not configured on the scope's own DnsServerAddresses at all, so this
-        // reply's own option 23 can only have come from the ServerAddress substitution.
+        // Code 23 (DNS Recursive Name Server) is server-address eligible. The scope has no
+        // DnsServerAddresses, so option 23 can only come from the substitution.
         await _host.SeedTagRuleAsync(
             "DNS via this server",
             new Dictionary<byte, string> { [23] = string.Empty },
@@ -292,7 +287,7 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
             innerSolicit,
             IPAddress.Parse("2001:db8:7::1")
         );
-        relayForward.SetInterfaceId([0x65, 0x74, 0x68, 0x31]); // "eth1" -- does not match
+        relayForward.SetInterfaceId([0x65, 0x74, 0x68, 0x31]); // "eth1", which does not match
 
         Dhcpv6RelayMessage relayReply = await _host.RelayHandler.HandleRelayMessageAsync(
             relayForward,
@@ -344,7 +339,7 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
             "2001:db8:9::12"
         );
 
-        // RFC 4649's own wire shape: a 4-octet enterprise number followed by the remote-id value.
+        // RFC 4649 format: a 4-octet enterprise number followed by the remote-id value.
         byte[] remoteId = [0x00, 0x00, 0x7E, 0xD9, 0xAA, 0xBB];
         await _host.SeedTagRuleAsync(
             "Remote-ID match",
@@ -379,7 +374,7 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
     {
         await _host.SeedAddressScopeAsync("priority-scope", "2001:db8:a::10", "2001:db8:a::12");
 
-        // Both rules match every client of any scope (no criteria set at all beyond ScopeId).
+        // Both rules have no criteria, so they match every eligible client.
         await _host.SeedTagRuleAsync(
             "Low priority",
             new Dictionary<byte, string> { [210] = "01" },
@@ -453,9 +448,8 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
     ) => new() { IdentityAssociationId = identityAssociationId };
 
     /// <summary>
-    ///     This method wraps an inner client message in a RELAY-FORW envelope, the same shape
-    ///     <see cref="Dhcpv6RelayReceivingRoundTripTests" /> already establishes, standing in for
-    ///     one a genuine external relay agent would have sent.
+    ///     This method wraps a client message in a RELAY-FORW, as an external relay agent would,
+    ///     like <see cref="Dhcpv6RelayReceivingRoundTripTests" />.
     /// </summary>
     private static Dhcpv6RelayMessage NewRelayForward(Dhcpv6Message inner, IPAddress linkAddress)
     {
@@ -471,7 +465,7 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method unwraps a RELAY-REPL's own inner reply message.
+    ///     This method decodes the reply inside a RELAY-REPL.
     /// </summary>
     private static Dhcpv6Message UnwrapInnerReply(Dhcpv6RelayMessage relayReply)
     {

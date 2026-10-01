@@ -10,11 +10,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Server.Core.Tests;
 
 /// <summary>
-///     This test proves <see cref="IDhcpScopeStatisticsService.ComputeAsync" /> against real,
-///     persisted lease/reservation rows across both DHCPv4 (a small, hand-countable
-///     <c>AddressAssignment</c> pool) and DHCPv6 (an <c>AddressAssignment</c> pool, plus a
-///     <c>PrefixDelegation</c> pool exercising this service's own <see cref="BigInteger" />
-///     block-alignment arithmetic).
+///     This test class covers <see cref="IDhcpScopeStatisticsService.ComputeAsync" /> with lease
+///     and reservation rows saved in temporary SQLite databases: a small DHCPv4 pool counted by
+///     hand, a narrowed range that must clamp at zero, a DHCPv6 <c>/64</c> address pool, and a
+///     prefix delegation pool that exercises the <see cref="BigInteger" /> prefix count.
 /// </summary>
 public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
 {
@@ -77,8 +76,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
                 }
             );
 
-            // A lease whose own expiry has already passed no longer blocks the pool, even though
-            // its own State column has not yet been swept to Expired.
+            // A lease past its expiry no longer blocks the pool, although the sweep has not yet
+            // set its State to Expired.
             await leaseRepository.AddAsync(
                 new LeaseEntity
                 {
@@ -113,16 +112,16 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
         Assert.Equal(new BigInteger(10), populated.TotalSlots);
         Assert.Equal(1, populated.LeasedCount);
         Assert.Equal(1, populated.ReservedCount);
-        // 10 total, minus 2 genuinely occupied slots (the still-active lease and the reservation)
-        // -- the already-expired-but-not-yet-swept lease does not count.
+        // 10 total minus 2 occupied (the active lease and the reservation); the expired but
+        // unswept lease does not count.
         Assert.Equal(new BigInteger(8), populated.AvailableSlots);
     }
 
     [Fact]
     public async Task ComputeAsync_ForAnOverCommittedScope_NeverReportsNegativeAvailability()
     {
-        // A range narrowed to a single address after a lease already outside it was granted --
-        // TotalSlots is 1, but the occupied set can still exceed that; Available must clamp at 0.
+        // A range narrowed to one address after leases were granted: TotalSlots is 1, the
+        // occupied set can be larger, and Available must clamp at 0.
         DhcpScopeEntity scope = await _v4Host.SeedScopeAsync(
             "stats-overcommit-scope",
             "192.0.2.50",
@@ -153,9 +152,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
                     CreatedAtUtc = DateTimeOffset.UtcNow,
                     ScopeId = scope.Id,
                     ClientIdentifier = "aa:bb:cc:dd:ee:11",
-                    // Deliberately outside the (narrowed) range -- a reservation may legitimately
-                    // sit outside a scope's own dynamic pool, so this must be excluded entirely
-                    // rather than ever pushing Available negative.
+                    // Outside the narrowed range. A reservation may lie outside the pool, and it
+                    // must not count against Available.
                     IpAddress = "192.0.2.99",
                     IsDisabled = false,
                 }
@@ -166,8 +164,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
 
         DhcpScopeStatistics statistics = await _v4Host.ComputeStatisticsAsync(scope);
         Assert.Equal(BigInteger.One, statistics.TotalSlots);
-        // Both reservations count toward ReservedCount (it is not range-filtered), but only the
-        // in-range one occupies Available's own accounting.
+        // Both reservations count toward ReservedCount (not filtered by range), but only the
+        // in-range one counts against Available.
         Assert.Equal(2, statistics.ReservedCount);
         Assert.Equal(BigInteger.Zero, statistics.AvailableSlots);
     }
@@ -175,8 +173,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
     [Fact]
     public async Task ComputeAsync_ForAnIPv6AddressAssignmentScope_UsesBigIntegerArithmetic()
     {
-        // An ordinary /64 -- 2^64 addresses, far larger than any built-in integer type, proving
-        // this is genuine BigInteger arithmetic rather than a truncated approximation.
+        // A /64 holds 2^64 addresses, one more than ulong can hold, so this checks the
+        // BigInteger arithmetic.
         DhcpScopeEntity scope = await _v6Host.SeedAddressScopeAsync(
             "stats-v6-scope",
             "2001:db8:1::",
@@ -196,9 +194,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
     [Fact]
     public async Task ComputeAsync_ForAPrefixDelegationScope_CountsBlockAlignedPrefixes()
     {
-        // A pool delegating whole /64 blocks (delegatedPrefixLength=64, so each block is exactly
-        // one ordinary /64 -- easy to reason about by hand), spanning a /62 range
-        // (2001:db8:2:0::/64 through 2001:db8:2:3::/64) -- exactly 4 delegable blocks.
+        // A pool delegating /64s (easy to count by hand) over a /62 range, 2001:db8:2:0::/64 to
+        // 2001:db8:2:3::/64: 4 prefixes.
         DhcpScopeEntity scope = await _v6Host.SeedPrefixDelegationScopeAsync(
             "stats-v6-pd-scope",
             "2001:db8:2::",
@@ -211,9 +208,8 @@ public sealed class DhcpScopeStatisticsServiceTests : IAsyncLifetime
         Assert.Equal(new BigInteger(4), empty.TotalSlots);
         Assert.Equal(new BigInteger(4), empty.AvailableSlots);
 
-        // Grant a real delegated prefix through the actual DHCPv6 stateful allocation engine to
-        // confirm the statistics service's own dedup logic reaches a genuinely-block-aligned
-        // lease row correctly.
+        // Delegate a prefix through the DHCPv6 engine so the statistics see a lease row written
+        // by the allocation service.
         await using (AsyncServiceScope diScope = _v6Host.Host.Services.CreateAsyncScope())
         {
             ILeaseRepository leaseRepository =
