@@ -5,17 +5,15 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the real, pushed-down
-///     paging a scope's own custom-option list needs -- the same "scoped to a parent" shape
-///     <see cref="IDhcpReservationRepository" /> already establishes for a scope's reservations.
+///     This interface extends <see cref="IRepository{TEntity}" /> with a scope's custom options:
+///     paged listing (in the database) for <c>DhcpScopeCustomOptionsController</c>, and the
+///     unpaged list of enabled options for <c>Dhcpv4OptionOverlayService</c>.
 /// </summary>
 public interface IDhcpScopeCustomOptionRepository : IRepository<DhcpScopeCustomOptionEntity>
 {
     /// <summary>
-    ///     This method lists one page of the custom options stored in a scope, ordered by option
-    ///     tag -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB
-    ///     equivalent) scoped to <paramref name="scopeId" /> rather than an in-memory
-    ///     sort/skip/take over the scope's full custom-option set.
+    ///     This method lists one page of a scope's custom options, ordered by option tag, with
+    ///     sorting and paging in the database.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope whose custom options should be listed.</param>
     /// <param name="skip">The number of matching custom options to skip, for paging.</param>
@@ -30,9 +28,8 @@ public interface IDhcpScopeCustomOptionRepository : IRepository<DhcpScopeCustomO
     );
 
     /// <summary>
-    ///     This method counts every custom option stored in a scope, without materializing them --
-    ///     the total <see cref="SearchByScopeIdAsync" />'s own paged response reports alongside its
-    ///     current page.
+    ///     This method counts a scope's custom options without loading them, for the total that
+    ///     accompanies a <see cref="SearchByScopeIdAsync" /> page.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope whose custom options should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -40,10 +37,8 @@ public interface IDhcpScopeCustomOptionRepository : IRepository<DhcpScopeCustomO
     Task<int> CountByScopeIdAsync(Guid scopeId, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method lists every enabled custom option configured for a scope, unpaged -- used
-    ///     by the option-delivery engine at real request time, where a scope's own full,
-    ///     realistically small custom-option set (not a paged, operator-facing listing) must be
-    ///     consulted in full for every reply.
+    ///     This method lists every enabled custom option of a scope, unpaged. The DHCPv4 overlay
+    ///     service calls it for every reply; the set is small.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope whose enabled custom options are needed.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

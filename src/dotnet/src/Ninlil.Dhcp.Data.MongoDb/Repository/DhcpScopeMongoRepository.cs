@@ -8,10 +8,9 @@ using Ninlil.Dns.Data.MongoDb.Repository;
 namespace Ninlil.Dhcp.Data.MongoDb.Repository;
 
 /// <summary>
-///     This class implements <see cref="IDhcpScopeRepository" /> against MongoDB, reusing the
-///     shared <see cref="NinlilDnsMongoContext" /> and its generic
-///     <see cref="MongoRepositoryBase{TEntity}" /> the same way every DNS Mongo repository already
-///     does.
+///     This class implements <see cref="IDhcpScopeRepository" /> against MongoDB, on the shared
+///     <see cref="NinlilDnsMongoContext" /> and <see cref="MongoRepositoryBase{TEntity}" />, like
+///     the DNS Mongo repositories.
 /// </summary>
 /// <param name="context">The context to read collections from.</param>
 /// <param name="changeTracker">The change tracker to stage writes onto.</param>

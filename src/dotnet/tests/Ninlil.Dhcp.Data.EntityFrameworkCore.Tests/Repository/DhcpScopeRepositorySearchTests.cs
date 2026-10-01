@@ -8,12 +8,10 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.DhcpScopeRepository" />'s
-///     real, pushed-down <c>SearchAsync</c>/<c>CountAsync</c> pagination against a real
-///     SQLite-backed database, proving from this sub-phase's own first commit that a future
-///     scope-listing REST action never has to materialize every scope into memory before slicing
-///     a page out of it -- the exact mistake this project's own DNS-side repositories originally
-///     made and later had to sweep back through.
+///     This class covers the <c>SearchAsync</c> and <c>CountAsync</c> paging of
+///     <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.DhcpScopeRepository" />
+///     against a temporary SQLite database file (<see cref="DhcpRepositorySearchTestHost" />):
+///     ordering by name, page boundaries and the total count.
 /// </summary>
 public sealed class DhcpScopeRepositorySearchTests : IAsyncLifetime
 {
@@ -24,9 +22,8 @@ public sealed class DhcpScopeRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds five scopes with names deliberately out of alphabetical creation
-    ///     order, so a passing ordering assertion can only be explained by a real <c>ORDER BY</c>
-    ///     translated at the database, not by creation/insertion order happening to already match.
+    ///     This method seeds five scopes whose insertion order is not alphabetical, so a passing
+    ///     ordering assertion shows the database sorted them.
     /// </summary>
     private async Task SeedAsync()
     {

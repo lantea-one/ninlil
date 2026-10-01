@@ -12,14 +12,13 @@ namespace Ninlil.Dhcp.Data.MongoDb.Extension;
 public static class ServiceCollectionMongoDbExtension
 {
     /// <summary>
-    ///     This method registers every DHCP repository this project implements. Unlike
+    ///     This method registers the six DHCP repositories as scoped services. Unlike
     ///     <c>Ninlil.Dns.Data.MongoDb.Extension.ServiceCollectionMongoDbExtension
-    ///     .AddNinlilDnsMongoDb</c>, this method takes no
-    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> and does not register
-    ///     the MongoDB client, <c>NinlilDnsMongoContext</c>, change tracker, or unit of work
-    ///     itself -- DHCP's own data lives in collections on that one already-shared context, so
-    ///     the caller must invoke that method first; this one only layers the DHCP-specific
-    ///     repositories on top of what it already registered.
+    ///     .AddNinlilDnsMongoDb</c>, it takes no
+    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> and registers neither
+    ///     the MongoDB client, <c>NinlilDnsMongoContext</c>, the change tracker nor the unit of
+    ///     work: the DHCP collections live on that shared context, so the caller must call that
+    ///     method first.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

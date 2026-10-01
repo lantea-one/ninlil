@@ -12,14 +12,12 @@ namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Extension;
 public static class ServiceCollectionEntityFrameworkCoreExtension
 {
     /// <summary>
-    ///     This method registers every DHCP repository this project implements. Unlike
+    ///     This method registers the six DHCP repositories as scoped services. Unlike
     ///     <c>Ninlil.Dns.Data.EntityFrameworkCore.Extension.ServiceCollectionEntityFrameworkCoreExtension
-    ///     .AddNinlilDnsEntityFrameworkCore</c>, this method takes no
-    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> and does not register
-    ///     <c>NinlilDnsContext</c> itself or select a relational provider -- DHCP's own data is
-    ///     mapped entity types within that one already-shared model, so the caller must invoke
-    ///     that method first; this one only layers the DHCP-specific repositories on top of the
-    ///     context and unit of work it already registered.
+    ///     .AddNinlilDnsEntityFrameworkCore</c>, it takes no
+    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> and registers neither
+    ///     <c>NinlilDnsContext</c> nor a provider: the DHCP entities live in that shared model, so
+    ///     the caller must call that method first.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

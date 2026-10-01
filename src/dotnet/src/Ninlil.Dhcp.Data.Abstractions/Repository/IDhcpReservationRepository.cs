@@ -5,21 +5,22 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the lookups a DHCP server
-///     needs once it has already found the scope a request belongs to: finding the reservation
-///     (if any) for a specific client or address, and listing/paging a scope's own reservation
-///     set -- the same "scoped to a parent, real pushed-down paging" shape <c>IRecordRepository</c>
-///     already establishes for a zone's own records.
+///     This interface extends <see cref="IRepository{TEntity}" /> with reservation lookups within
+///     a scope: by client or by address for the lease allocation services, and paged listing for
+///     <c>DhcpReservationsController</c>. Paging runs in the database, as
+///     <c>IRecordRepository</c> does for a zone's records.
 /// </summary>
 public interface IDhcpReservationRepository : IRepository<DhcpReservationEntity>
 {
     /// <summary>
-    ///     This method looks up the reservation (if any) held by a specific client within a
-    ///     specific scope.
+    ///     This method looks up the reservation (if any) for a client within a scope. The
+    ///     identifier is compared by exact string equality, so callers pass the normalized form
+    ///     (see <see cref="DhcpReservationEntity.ClientIdentifier" />).
     /// </summary>
     /// <param name="scopeId">The identifier of the scope to search within.</param>
     /// <param name="clientIdentifier">
-    ///     The client's identifier: a MAC address for DHCPv4, or a DUID for DHCPv6.
+    ///     The client's identifier: the MAC address or Client-identifier for DHCPv4, the DUID for
+    ///     DHCPv6.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The matching reservation, or <see langword="null" /> if none exists.</returns>
@@ -30,9 +31,9 @@ public interface IDhcpReservationRepository : IRepository<DhcpReservationEntity>
     );
 
     /// <summary>
-    ///     This method looks up the reservation (if any) that fixes a specific IP address within a
-    ///     specific scope, regardless of which client it is reserved for -- used to check whether
-    ///     an address is available for the scope's own ordinary pool before offering it.
+    ///     This method looks up the reservation (if any) for an IP address within a scope,
+    ///     whichever client it belongs to. It is used to check that an address is not reserved
+    ///     for someone else before offering it.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope to search within.</param>
     /// <param name="ipAddress">The IP address to look up.</param>
@@ -45,10 +46,9 @@ public interface IDhcpReservationRepository : IRepository<DhcpReservationEntity>
     );
 
     /// <summary>
-    ///     This method lists one page of the reservations stored in a scope, ordered by client
-    ///     identifier -- a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the
-    ///     MongoDB equivalent) scoped to <paramref name="scopeId" /> rather than an in-memory
-    ///     sort/skip/take over the scope's full reservation set.
+    ///     This method lists one page of a scope's reservations, ordered by client identifier.
+    ///     Sorting and paging run in the database (<c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c>, or
+    ///     the MongoDB equivalent), not in memory.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope whose reservations should be listed.</param>
     /// <param name="skip">The number of matching reservations to skip, for paging.</param>
@@ -63,9 +63,8 @@ public interface IDhcpReservationRepository : IRepository<DhcpReservationEntity>
     );
 
     /// <summary>
-    ///     This method counts every reservation stored in a scope, without materializing them --
-    ///     the total <see cref="SearchByScopeIdAsync" />'s own paged response reports alongside
-    ///     its current page.
+    ///     This method counts a scope's reservations without loading them, for the total that
+    ///     accompanies a <see cref="SearchByScopeIdAsync" /> page.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope whose reservations should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

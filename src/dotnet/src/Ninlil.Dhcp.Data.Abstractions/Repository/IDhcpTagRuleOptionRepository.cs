@@ -5,18 +5,16 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the real, pushed-down
-///     paging a rule's own option list needs -- the same "scoped to a parent" shape
-///     <see cref="IDhcpScopeCustomOptionRepository" /> already establishes for a scope's custom
-///     options -- plus the unpaged lookup the option-delivery engine needs at real request time.
+///     This interface extends <see cref="IRepository{TEntity}" /> with a tag rule's options:
+///     paged listing (in the database) for the REST API, like
+///     <see cref="IDhcpScopeCustomOptionRepository" />, and the unpaged list the overlay services
+///     apply when a rule matches.
 /// </summary>
 public interface IDhcpTagRuleOptionRepository : IRepository<DhcpTagRuleOptionEntity>
 {
     /// <summary>
-    ///     This method lists one page of the options a rule contributes, ordered by option tag --
-    ///     a real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB
-    ///     equivalent) scoped to <paramref name="tagRuleId" /> rather than an in-memory
-    ///     sort/skip/take over the rule's full option set.
+    ///     This method lists one page of a rule's options, ordered by option tag, with sorting and
+    ///     paging in the database.
     /// </summary>
     /// <param name="tagRuleId">The identifier of the rule whose options should be listed.</param>
     /// <param name="skip">The number of matching options to skip, for paging.</param>
@@ -31,9 +29,8 @@ public interface IDhcpTagRuleOptionRepository : IRepository<DhcpTagRuleOptionEnt
     );
 
     /// <summary>
-    ///     This method counts every option a rule contributes, without materializing them -- the
-    ///     total <see cref="SearchByTagRuleIdAsync" />'s own paged response reports alongside its
-    ///     current page.
+    ///     This method counts a rule's options without loading them, for the total that
+    ///     accompanies a <see cref="SearchByTagRuleIdAsync" /> page.
     /// </summary>
     /// <param name="tagRuleId">The identifier of the rule whose options should be counted.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -41,10 +38,8 @@ public interface IDhcpTagRuleOptionRepository : IRepository<DhcpTagRuleOptionEnt
     Task<int> CountByTagRuleIdAsync(Guid tagRuleId, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method lists every option a rule contributes, unpaged -- used by the
-    ///     option-delivery engine at real request time, where a rule's own full, realistically
-    ///     small option set (not a paged, operator-facing listing) must be applied in full once the
-    ///     rule is found to match.
+    ///     This method lists all of a rule's options, unpaged. The overlay services call it when
+    ///     the rule matches a request; the set is small.
     /// </summary>
     /// <param name="tagRuleId">The identifier of the rule whose options are needed.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

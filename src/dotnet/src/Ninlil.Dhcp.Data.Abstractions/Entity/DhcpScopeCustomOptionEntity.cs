@@ -5,36 +5,25 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single operator-configured, arbitrary DHCPv4 option -- a raw
-///     option tag plus its raw value bytes -- sent to every client of a
-///     <see cref="DhcpScopeEntity" /> alongside whatever standard options
-///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv4OptionDeliveryService</c> already computes for it
-///     (Subnet Mask, Router, Domain Name Server, and so on). This exists for the option tags this
-///     project has no dedicated, strongly-typed mapping for at all -- a vendor-specific option
-///     (RFC 2132 Section 8.4's own "site-specific"/vendor-extension range), NTP servers, TFTP
-///     server name, or any other tag an operator's own network needs -- without this project
-///     needing to grow a first-class accessor and scope-entity property for every conceivable
-///     option before an operator can use it.
+///     This class represents an operator-configured DHCPv4 option for a
+///     <see cref="DhcpScopeEntity" />: a raw tag and value sent to every client of the scope, on
+///     top of the standard options <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv4OptionDeliveryService</c>
+///     computes (Subnet Mask, Router, Domain Name Server and so on). It covers options with no
+///     dedicated scope field, such as vendor-specific options (RFC 2132 Section 8.4), NTP servers
+///     or anything else a network needs. <c>DhcpScopeCustomOptionsController</c> manages the
+///     rows and <c>Dhcpv4OptionOverlayService</c> delivers them. Only the DHCPv4 engine reads
+///     them; the DHCPv6 engine does not deliver custom options.
 ///     <para>
-///         <b>Precedence over a standard option for the same tag</b>: when a scope's own custom
-///         option happens to name the same tag one of the standard options already computes (for
-///         example, tag 1, Subnet Mask), the custom option always wins. An operator who
-///         deliberately configures a custom value for a tag that already has a standard mapping is
-///         doing so specifically to override the standard-computed value, not to have it silently
-///         discarded in favor of the value this project would have derived automatically --
-///         <c>Dhcpv4OptionDeliveryService</c> applies every scope's own custom options strictly
-///         after its standard ones for exactly this reason.
+///         <b>Precedence.</b> When a custom option uses the same tag as a standard option (tag 1,
+///         Subnet Mask, for example), the custom option wins: the overlay service applies custom
+///         options after the standard ones, replacing them.
 ///     </para>
 ///     <para>
-///         Unlike the three optional standard options (Subnet Mask/Router/Domain Name Server),
-///         which honor a client's own Parameter Request List per RFC 2132 Section 3.5's "SHOULD
-///         include" guidance for values a server merely happens to have on hand, a configured
-///         custom option is always delivered regardless of whether the client's own Parameter
-///         Request List names its tag. It exists because an operator explicitly decided a client
-///         needs it -- many embedded/IoT/PXE-style clients never list a vendor-specific or
-///         boot-related tag on their own Parameter Request List even though they still expect a
-///         server to supply it, and a client's own incomplete request list must not silently
-///         defeat deliberate operator configuration.
+///         <b>Parameter Request List.</b> The standard Subnet Mask, Router and Domain Name Server
+///         options are filtered by the client's Parameter Request List (RFC 2131 Section 3.5
+///         says a server "SHOULD" include the requested parameters it has). A custom option is
+///         always sent, whether or not the list names its tag, because many embedded and PXE
+///         clients expect vendor or boot options they never request.
 ///     </para>
 /// </summary>
 public class DhcpScopeCustomOptionEntity : AuditableEntityBase
@@ -46,39 +35,32 @@ public class DhcpScopeCustomOptionEntity : AuditableEntityBase
     public Guid ScopeId { get; set; }
 
     /// <summary>
-    ///     This property contains the option's own raw numeric tag (0-255) -- the same value RFC
-    ///     2132/<see cref="Ninlil.Dhcp.Common.Wire.Dhcpv4Option.Tag" /> uses, whether or not this
-    ///     project also happens to know the tag under a named <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv4OptionTagEnum" />
-    ///     member.
+    ///     This property contains the option tag (0-255), as in
+    ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv4Option.Tag" />, whether or not it has a
+    ///     <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv4OptionTagEnum" /> member.
     /// </summary>
     public byte OptionTag { get; set; }
 
     /// <summary>
-    ///     This property contains the option's own raw value bytes, encoded as an uppercase
-    ///     hexadecimal string (<see cref="System.Convert.ToHexString(byte[])" />) -- the same
-    ///     "raw bytes as hex text" convention this project's own DNSSEC key material already uses,
-    ///     chosen over Base64 purely for how much easier a hex string is for an operator to
-    ///     hand-verify against a vendor's own published option-value documentation (which is
-    ///     itself almost always expressed in hex). Ignored entirely at delivery time when
-    ///     <see cref="ValueSource" /> is <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> --
-    ///     may be left blank in that case, and a blank value is deliberately tolerated by write-time
-    ///     validation for exactly that reason (see <c>DhcpScopeCustomOptionsController</c>'s own
-    ///     <c>TryValidate</c> method).
+    ///     This property contains the option value as an uppercase hexadecimal string
+    ///     (<see cref="System.Convert.ToHexString(byte[])" />). Hex rather than Base64 makes it
+    ///     easy to compare with vendor documentation, which usually gives values in hex. It is
+    ///     ignored when <see cref="ValueSource" /> is
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" />, and may then be blank
+    ///     (<c>DhcpScopeCustomOptionsController.TryValidate</c> allows that).
     /// </summary>
     public string ValueHex { get; set; }
 
     /// <summary>
-    ///     This property indicates where this custom option's own delivered value actually comes
-    ///     from -- see <see cref="DhcpOptionValueSourceEnum" />'s own doc comment. Defaults to
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, the only value source that existed
-    ///     before this property did, so every row created before this property existed keeps
-    ///     delivering its own already-configured <see cref="ValueHex" /> unchanged.
+    ///     This property indicates where the delivered value comes from (see
+    ///     <see cref="DhcpOptionValueSourceEnum" />). The default,
+    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, delivers <see cref="ValueHex" />.
     /// </summary>
     public DhcpOptionValueSourceEnum ValueSource { get; set; } = DhcpOptionValueSourceEnum.Custom;
 
     /// <summary>
-    ///     This property indicates whether this custom option is currently disabled. A disabled
-    ///     custom option is kept on record but not delivered to any client.
+    ///     This property indicates whether this custom option is disabled. A disabled custom
+    ///     option is kept but not delivered.
     /// </summary>
     public bool IsDisabled { get; set; }
 

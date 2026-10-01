@@ -8,12 +8,12 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.DhcpReservationRepository" />'s
-///     real, pushed-down <c>SearchByScopeIdAsync</c>/<c>CountByScopeIdAsync</c> pagination against
-///     a real SQLite-backed database, and that the scope-scoping filter itself is applied
-///     correctly alongside paging (a second, unrelated scope's own reservations must never leak
-///     into another scope's page) -- the same rigor <c>RecordRepositorySearchTests</c> already
-///     establishes for a zone's own records.
+///     This class covers the <c>SearchByScopeIdAsync</c> and <c>CountByScopeIdAsync</c> paging
+///     and the client and address lookups of
+///     <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.DhcpReservationRepository" />
+///     against a temporary SQLite database file (<see cref="DhcpRepositorySearchTestHost" />),
+///     including that another scope's reservations never appear in a scope's page, as
+///     <c>RecordRepositorySearchTests</c> does for zone records.
 /// </summary>
 public sealed class DhcpReservationRepositorySearchTests : IAsyncLifetime
 {
@@ -26,8 +26,8 @@ public sealed class DhcpReservationRepositorySearchTests : IAsyncLifetime
     public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
 
     /// <summary>
-    ///     This method seeds one scope with five reservations at deliberately out-of-order client
-    ///     identifiers, plus a second, unrelated scope with its own reservation.
+    ///     This method seeds one scope with five reservations inserted out of client-identifier
+    ///     order, plus another scope with one reservation.
     /// </summary>
     private async Task SeedAsync()
     {
@@ -59,7 +59,7 @@ public sealed class DhcpReservationRepositorySearchTests : IAsyncLifetime
                 NewReservation(_scopeId, clientIdentifier, $"192.0.2.{lastOctet++}")
             );
 
-        // A reservation in a different scope -- must never appear in a search scoped to _scopeId.
+        // A reservation in a different scope, which must not appear in a search scoped to _scopeId.
         await reservationRepository.AddAsync(
             NewReservation(_otherScopeId, "00:00:00:00:00:99", "192.0.2.99")
         );
@@ -187,9 +187,8 @@ public sealed class DhcpReservationRepositorySearchTests : IAsyncLifetime
         );
         Assert.NotNull(byClient);
 
-        // Round-trip through FindByIpAddressAsync using the address just found, rather than a
-        // hand-computed address, so this assertion can never drift from SeedAsync's own
-        // client-identifier-to-address assignment.
+        // Look up the address just found rather than a hand-computed one, so the test cannot
+        // drift from SeedAsync's identifier-to-address assignment.
         DhcpReservationEntity byAddress = await repository.FindByIpAddressAsync(
             _scopeId,
             byClient.IpAddress

@@ -9,9 +9,8 @@ namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Repository;
 
 /// <summary>
 ///     This class implements <see cref="IDhcpScopeRepository" /> against the shared
-///     <see cref="NinlilDnsContext" /> -- the same context every DNS repository already reads
-///     from and writes to, since a DHCP scope is a mapped entity type within that one model
-///     rather than a second, separate database.
+///     <see cref="NinlilDnsContext" />. DHCP entities are mapped in the same model as the DNS
+///     entities, not in a separate database.
 /// </summary>
 /// <param name="context">The database context to operate against.</param>
 public class DhcpScopeRepository(NinlilDnsContext context)

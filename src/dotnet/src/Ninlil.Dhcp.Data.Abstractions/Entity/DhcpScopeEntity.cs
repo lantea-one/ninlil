@@ -6,18 +6,20 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single DHCP scope -- a named address pool a DHCP server hands
-///     leases out from, along with the lease-timing rules that apply to every lease drawn from
-///     it. The same shape is shared by a DHCPv4 scope (a pool of ordinary IPv4 addresses) and a
-///     DHCPv6 scope (a pool of IPv6 addresses handed out via RFC 8415 stateful assignment);
-///     <see cref="ProtocolVersion" /> says which protocol this scope serves.
+///     This class represents a DHCP scope: a named pool the server hands out leases from, with
+///     its lease times and the options sent with each lease. DHCPv4 scopes (IPv4 addresses) and
+///     DHCPv6 scopes (RFC 8415 stateful addresses, or delegated prefixes when <see cref="Kind" />
+///     is <see cref="DhcpScopeKindEnum.PrefixDelegation" />) share this shape;
+///     <see cref="ProtocolVersion" /> says which one this is. The scope resolvers in
+///     <c>Ninlil.Dhcp.Server.Core</c> pick the scope for a request, and
+///     <c>DhcpScopesController</c> manages scopes.
 /// </summary>
 public class DhcpScopeEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the scope's own operator-chosen, unique name -- the same value
-    ///     <see cref="LeaseEntity.ScopeName" /> and <see cref="DhcpReservationEntity.ScopeId" />
-    ///     use to say which scope they belong to.
+    ///     This property contains the scope's operator-chosen, unique name. Leases refer to their
+    ///     scope by this name (<see cref="LeaseEntity.ScopeName" />); reservations and options
+    ///     refer to it by identifier (<see cref="DhcpReservationEntity.ScopeId" />).
     /// </summary>
     public string Name { get; set; }
 
@@ -27,10 +29,9 @@ public class DhcpScopeEntity : AuditableEntityBase
     public InternetProtocolVersionEnum ProtocolVersion { get; set; }
 
     /// <summary>
-    ///     This property indicates what this scope actually hands out -- see
-    ///     <see cref="DhcpScopeKindEnum" />'s own doc comment. Defaults to
-    ///     <see cref="DhcpScopeKindEnum.AddressAssignment" />, the only value a DHCPv4 scope ever
-    ///     legitimately has.
+    ///     This property indicates what this scope hands out (see <see cref="DhcpScopeKindEnum" />).
+    ///     The default, <see cref="DhcpScopeKindEnum.AddressAssignment" />, is the only valid value
+    ///     for a DHCPv4 scope.
     /// </summary>
     public DhcpScopeKindEnum Kind { get; set; } = DhcpScopeKindEnum.AddressAssignment;
 
@@ -51,55 +52,51 @@ public class DhcpScopeEntity : AuditableEntityBase
     public string RangeEndAddress { get; set; }
 
     /// <summary>
-    ///     This property contains the length, in bits, of each individual prefix this scope
-    ///     delegates to a client -- for example, <c>60</c> to delegate a <c>/60</c> out of a
-    ///     <c>/48</c> pool. Meaningful, and required, only when <see cref="Kind" /> is
-    ///     <see cref="DhcpScopeKindEnum.PrefixDelegation" />; <see langword="null" /> (the default)
-    ///     for an <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope, which has no delegated
-    ///     prefix length of its own to speak of.
+    ///     This property contains the length, in bits, of each prefix this scope delegates (for
+    ///     example <c>60</c> to delegate <c>/60</c>s out of a <c>/48</c> pool). It is required
+    ///     when <see cref="Kind" /> is <see cref="DhcpScopeKindEnum.PrefixDelegation" /> and
+    ///     <see langword="null" /> (the default) otherwise.
     /// </summary>
     public int? DelegatedPrefixLength { get; set; }
 
     /// <summary>
-    ///     This property contains the CIDR prefix length, in bits, of the network
-    ///     <see cref="RangeStartAddress" />/<see cref="RangeEndAddress" /> both belong to -- for
-    ///     example, <c>24</c> for an ordinary IPv4 <c>/24</c> subnet, or <c>64</c> for the IPv6
-    ///     <c>/64</c> a stateful DHCPv6 scope conventionally serves.
+    ///     This property contains the CIDR prefix length of the network that
+    ///     <see cref="RangeStartAddress" /> and <see cref="RangeEndAddress" /> belong to, for
+    ///     example <c>24</c> for an IPv4 <c>/24</c> or <c>64</c> for the usual IPv6 <c>/64</c>.
+    ///     For DHCPv4 it also produces the Subnet Mask option.
     /// </summary>
     public int SubnetPrefixLength { get; set; }
 
     /// <summary>
-    ///     This property contains the lease duration granted to a client that does not itself
-    ///     request a specific one.
+    ///     This property contains the lease duration granted to a client that does not request
+    ///     one. The default is 24 hours.
     /// </summary>
     public TimeSpan DefaultLeaseDuration { get; set; } = TimeSpan.FromHours(24);
 
     /// <summary>
-    ///     This property contains the longest lease duration this scope ever grants, even when a
-    ///     client explicitly requests a longer one.
+    ///     This property contains the longest lease duration this scope grants, even when a
+    ///     client requests longer. The default is 7 days.
     /// </summary>
     public TimeSpan MaxLeaseDuration { get; set; } = TimeSpan.FromDays(7);
 
     /// <summary>
-    ///     This property indicates whether this scope is currently disabled. A disabled scope
-    ///     keeps its configuration, and any leases already granted from it, but stops offering new
-    ///     leases.
+    ///     This property indicates whether this scope is disabled. A disabled scope keeps its
+    ///     configuration and existing leases but offers no new leases.
     /// </summary>
     public bool IsDisabled { get; set; }
 
     /// <summary>
-    ///     This property contains the router (default gateway) addresses this scope hands out to
-    ///     every client, in order of preference -- RFC 2132 Section 3.5's Router option (tag 3).
-    ///     Empty by default (no gateway advertised). Only meaningful for a DHCPv4 scope; a stateful
-    ///     DHCPv6 scope conveys its own default-route information via Router Advertisement instead,
-    ///     a later sub-phase's own concern.
+    ///     This property contains the router (default gateway) addresses sent to every client, in
+    ///     order of preference, as RFC 2132 Section 3.5's Router option (tag 3). Empty by default
+    ///     (no gateway advertised). It applies to DHCPv4 only; IPv6 hosts learn their default
+    ///     route from Router Advertisements (<c>Ninlil.Dhcp.Server.Ra</c>), not DHCPv6.
     /// </summary>
     public List<string> GatewayAddresses { get; set; } = [];
 
     /// <summary>
-    ///     This property contains the DNS server addresses this scope hands out to every client,
-    ///     in order of preference -- RFC 2132 Section 3.8's Domain Name Server option (tag 6).
-    ///     Empty by default (no DNS server advertised).
+    ///     This property contains the DNS server addresses sent to every client, in order of
+    ///     preference: RFC 2132 Section 3.8's Domain Name Server option (tag 6) for DHCPv4, the
+    ///     RFC 3646 DNS Recursive Name Server option for DHCPv6. Empty by default (none sent).
     /// </summary>
     public List<string> DnsServerAddresses { get; set; } = [];
 
@@ -109,42 +106,35 @@ public class DhcpScopeEntity : AuditableEntityBase
     public string Comments { get; set; }
 
     /// <summary>
-    ///     This property contains the identifier of the DNS zone a lease drawn from this scope
-    ///     should auto-register an A/AAAA record for its own presented host name into, or
-    ///     <see langword="null" /> (the default) when this scope has DHCP-&gt;DNS integration
-    ///     disabled. Unlike <c>ZoneEntity.AutoManageCaaRecords</c>/<c>AutoManagePtrRecords</c>,
-    ///     there is no global default this falls back to: a designated zone is inherently
-    ///     scope-specific (different scopes plausibly belong to entirely different networks/
-    ///     domains), so there is no sensible zone-agnostic "on by default" value to inherit --
-    ///     the feature is simply off for a scope until an operator names a real zone here.
-    ///     Deliberately not validated for zone-type eligibility at write time
-    ///     (<c>DhcpScopesController</c> only confirms the zone exists) -- the same
-    ///     "enforced at the reconciliation-service level, not the REST layer" precedent
-    ///     <c>ZoneEntity.AutoManageCaaRecords</c>/<c>AutoManagePtrRecords</c> already establish,
-    ///     reused rather than reinvented for a third automated feature.
+    ///     This property contains the identifier of the DNS zone into which leases from this scope
+    ///     register an A/AAAA record for the client's host name, or <see langword="null" /> (the
+    ///     default) to turn DHCP-to-DNS registration off for this scope. Unlike
+    ///     <c>ZoneEntity.AutoManageCaaRecords</c> and <c>AutoManagePtrRecords</c> there is no
+    ///     global default, since the right zone depends on the scope's network.
+    ///     <c>DhcpScopesController</c> checks only that the zone exists; whether its type is
+    ///     eligible (Primary or CloudPrimary) is checked by
+    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c>, as the CAA and PTR
+    ///     features do in their services.
     /// </summary>
     public Guid? DnsZoneId { get; set; }
 
     /// <summary>
-    ///     This property contains the name of the boot file a PXE (or any other BOOTP-aware)
-    ///     client drawing a lease from this scope should request -- RFC 2131 §2's own "file"
-    ///     header field (<c>Dhcpv4Message.BootFileName</c>), and, when the client's own Parameter
-    ///     Request List asks for it, also delivered as RFC 2132 §9.5's Bootfile Name option (tag
-    ///     67). <see langword="null" /> (the default) leaves this scope's own leases with no boot
-    ///     file at all -- ordinary DHCP behavior, no PXE netboot offered.
+    ///     This property contains the boot file a PXE (or other BOOTP-aware) client of this DHCPv4
+    ///     scope should request. It is sent in the RFC 2131 §2 "file" header field
+    ///     (<c>Dhcpv4Message.BootFileName</c>) and, when the client sends no Parameter Request List
+    ///     or its list asks for it, as RFC 2132 §9.5's Bootfile Name option (tag 67).
+    ///     <see langword="null" /> (the default) offers no network boot.
     /// </summary>
     public string BootFileName { get; set; }
 
     /// <summary>
     ///     This property contains the address of the TFTP (or other boot) server a PXE client
-    ///     drawing a lease from this scope should contact for <see cref="BootFileName" /> -- RFC
-    ///     2131 §2's own "siaddr" header field (<c>Dhcpv4Message.ServerIpAddress</c>), and, when
-    ///     requested, also delivered as RFC 2132 §9.4's TFTP Server Name option (tag 66).
-    ///     Meaningless, and never applied, when <see cref="BootFileName" /> is unset.
-    ///     <see langword="null" /> (the default) falls back to this server's own Server Identifier
-    ///     address -- the common case of a homelab boot/TFTP server colocated with the DHCP
-    ///     server itself, the same default dnsmasq's own <c>dhcp-boot</c> directive assumes when
-    ///     no explicit server address is given.
+    ///     should fetch <see cref="BootFileName" /> from. It is sent in the RFC 2131 §2 "siaddr"
+    ///     header field (<c>Dhcpv4Message.ServerIpAddress</c>) and, under the same Parameter
+    ///     Request List rule, as RFC 2132 §9.4's TFTP Server Name option (tag 66, in text form).
+    ///     It is ignored when <see cref="BootFileName" /> is unset. <see langword="null" /> (the
+    ///     default), or a value that does not parse, uses this server's Server Identifier address,
+    ///     for the common case of a TFTP server on the same host.
     /// </summary>
     public string NextServerAddress { get; set; }
 }

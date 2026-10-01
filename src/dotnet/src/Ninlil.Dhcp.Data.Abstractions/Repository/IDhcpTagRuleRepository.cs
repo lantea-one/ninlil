@@ -5,20 +5,17 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.Abstractions.Repository;
 
 /// <summary>
-///     This interface extends <see cref="IRepository{TEntity}" /> with the real, pushed-down
-///     paging a future rule-listing REST action needs -- the same unscoped "one flat,
-///     operator-managed set" shape <see cref="IDhcpScopeRepository" /> already establishes for
-///     scopes, since a tag rule is not itself owned by exactly one scope (<see cref="DhcpTagRuleEntity.ScopeId" />
-///     is optional) -- plus the unpaged lookup the option-delivery engine needs at real request
-///     time.
+///     This interface extends <see cref="IRepository{TEntity}" /> with paged listing of all tag
+///     rules (in the database) for <c>DhcpTagRulesController</c>, like
+///     <see cref="IDhcpScopeRepository" /> (a rule need not belong to a scope, since
+///     <see cref="DhcpTagRuleEntity.ScopeId" /> is optional), and the unpaged list of rules
+///     eligible for a scope that the overlay services evaluate.
 /// </summary>
 public interface IDhcpTagRuleRepository : IRepository<DhcpTagRuleEntity>
 {
     /// <summary>
-    ///     This method lists one page of every tag rule this server manages, ordered by name -- a
-    ///     real, translated <c>ORDER BY</c>/<c>OFFSET</c>/<c>LIMIT</c> (or the MongoDB equivalent)
-    ///     rather than an in-memory sort/skip/take over a fully materialized
-    ///     <see cref="IRepository{TEntity}.ListAsync" /> result.
+    ///     This method lists one page of tag rules ordered by name, with sorting and paging in the
+    ///     database.
     /// </summary>
     /// <param name="skip">The number of matching rules to skip, for paging.</param>
     /// <param name="take">The maximum number of rules to return.</param>
@@ -31,22 +28,19 @@ public interface IDhcpTagRuleRepository : IRepository<DhcpTagRuleEntity>
     );
 
     /// <summary>
-    ///     This method counts every tag rule this server manages, without materializing them --
-    ///     the total <see cref="SearchAsync" />'s own paged response reports alongside its current
-    ///     page.
+    ///     This method counts all tag rules without loading them, for the total that accompanies
+    ///     a <see cref="SearchAsync" /> page.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of tag rules.</returns>
     Task<int> CountAsync(CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method lists every enabled tag rule eligible for a specific scope -- one whose own
-    ///     <see cref="DhcpTagRuleEntity.ScopeId" /> either names <paramref name="scopeId" /> exactly
-    ///     or is <see langword="null" /> (a globally-eligible rule) -- unpaged, since the
-    ///     option-delivery engine must evaluate every eligible rule for every request, not a page
-    ///     of them. The result is not pre-sorted into evaluation order; the caller applies
-    ///     <see cref="DhcpTagRuleEntity" />'s own documented priority/creation-time/identifier
-    ///     ordering itself.
+    ///     This method lists every enabled tag rule eligible for a scope: those whose
+    ///     <see cref="DhcpTagRuleEntity.ScopeId" /> is <paramref name="scopeId" /> or
+    ///     <see langword="null" /> (global). It is unpaged, since every eligible rule is evaluated
+    ///     for each request, and unsorted; the caller applies the order described on
+    ///     <see cref="DhcpTagRuleEntity" />.
     /// </summary>
     /// <param name="scopeId">The identifier of the scope a request was resolved into.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>

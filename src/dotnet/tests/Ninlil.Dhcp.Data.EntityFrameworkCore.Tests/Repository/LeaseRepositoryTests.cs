@@ -8,13 +8,11 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Tests.Repository;
 
 /// <summary>
-///     This class covers <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.LeaseRepository" />'s
-///     real round-trip against a real SQLite-backed database -- proving <see cref="LeaseEntity" />
-///     genuinely still works, under the same shared <c>NinlilDnsContext</c>, now that it has moved
-///     from <c>Ninlil.Dns.Data.Abstractions</c>/<c>Ninlil.Dns.Data.EntityFrameworkCore</c> into
-///     this project's own <c>Ninlil.Dhcp.Data.Abstractions</c>/
-///     <c>Ninlil.Dhcp.Data.EntityFrameworkCore</c> and its backing table renamed from
-///     <c>NinlilDnsLeases</c> to <c>NinlilDhcpLeases</c>.
+///     This class covers <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Repository.LeaseRepository" />
+///     against a temporary SQLite database file (<see cref="DhcpRepositorySearchTestHost" />):
+///     that a <see cref="LeaseEntity" /> round-trips every field through the shared
+///     <c>NinlilDnsContext</c>, and that the client, address and scope lookups find the right
+///     rows.
 /// </summary>
 public sealed class LeaseRepositoryTests : IAsyncLifetime
 {
@@ -56,8 +54,8 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
             await unitOfWork.SaveChangesAsync();
         }
 
-        // Read back from a fresh scope, so the assertions prove a real round trip through SQLite
-        // rather than merely returning the same tracked in-memory instance just written.
+        // Read back in a new scope so the row comes from SQLite, not the tracked instance just
+        // written.
         await using AsyncServiceScope readScope = _testHost.Host.Services.CreateAsyncScope();
         ILeaseRepository readRepository =
             readScope.ServiceProvider.GetRequiredService<ILeaseRepository>();
@@ -110,7 +108,7 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
                     State = LeaseStateEnum.Active,
                 }
             );
-            // A lease in a different scope -- must never appear in a lookup scoped to scopeName.
+            // A lease in a different scope, which must not appear in a lookup scoped to scopeName.
             await repository.AddAsync(
                 new LeaseEntity
                 {

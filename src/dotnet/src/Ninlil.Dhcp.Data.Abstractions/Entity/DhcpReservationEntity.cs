@@ -4,13 +4,11 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single DHCP static reservation -- a fixed IP address permanently
-///     assigned to one specific client within a <see cref="DhcpScopeEntity" />, identified by
-///     whichever client identifier that scope's own <see cref="DhcpScopeEntity.ProtocolVersion" />
-///     actually uses (a MAC address for DHCPv4, a DHCP Unique Identifier for DHCPv6). A
-///     reservation exists independently of any lease ever having been granted for it; the
-///     server consults it the moment a matching client is seen, before drawing from the scope's
-///     own free-address pool at all.
+///     This class represents a DHCP static reservation: a fixed IP address for one client within
+///     a <see cref="DhcpScopeEntity" />, matched by the client identifier that the scope's
+///     <see cref="DhcpScopeEntity.ProtocolVersion" /> uses (see <see cref="ClientIdentifier" />).
+///     A reservation exists whether or not a lease has been granted; the lease allocation
+///     services check it before picking a free address from the pool.
 /// </summary>
 public class DhcpReservationEntity : AuditableEntityBase
 {
@@ -21,8 +19,12 @@ public class DhcpReservationEntity : AuditableEntityBase
     public Guid ScopeId { get; set; }
 
     /// <summary>
-    ///     This property contains the client's identifier: a MAC address for a DHCPv4
-    ///     reservation, or a DHCP Unique Identifier (DUID) for a DHCPv6 reservation.
+    ///     This property contains the client's identifier: for DHCPv4 the MAC address (or the
+    ///     Client-identifier option bytes, for a client that sends one), for DHCPv6 the DHCP
+    ///     Unique Identifier (DUID). The lease allocation services look reservations up with
+    ///     <see cref="Repository.IDhcpReservationRepository.FindByClientIdentifierAsync" />, an
+    ///     exact string match against the lowercase, colon-separated hex form
+    ///     <c>Dhcpv4ClientIdentifier</c> produces (for example <c>aa:bb:cc:dd:ee:ff</c>).
     /// </summary>
     public string ClientIdentifier { get; set; }
 
@@ -32,16 +34,15 @@ public class DhcpReservationEntity : AuditableEntityBase
     public string IpAddress { get; set; }
 
     /// <summary>
-    ///     This property contains an operator-supplied host name for this reservation, if any --
-    ///     independent of whatever host name a client itself later presents when it actually
-    ///     leases the address.
+    ///     This property contains an operator-supplied host name for this reservation, if any,
+    ///     separate from any host name the client presents when it leases the address.
     /// </summary>
     public string HostName { get; set; }
 
     /// <summary>
-    ///     This property indicates whether this reservation is currently disabled. A disabled
-    ///     reservation is kept on record but not honored -- the reserved address returns to the
-    ///     scope's own ordinary free-address pool until the reservation is re-enabled.
+    ///     This property indicates whether this reservation is disabled. A disabled reservation
+    ///     is kept but not honored, and its address can be handed out from the pool until it is
+    ///     re-enabled.
     /// </summary>
     public bool IsDisabled { get; set; }
 

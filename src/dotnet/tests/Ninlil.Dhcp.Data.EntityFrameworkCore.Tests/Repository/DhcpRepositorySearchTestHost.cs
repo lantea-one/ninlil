@@ -8,14 +8,12 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 namespace Ninlil.Dhcp.Data.EntityFrameworkCore.Tests.Repository;
 
 /// <summary>
-///     This class builds a real, throwaway SQLite-backed dependency injection host for this
-///     project's own repository tests to resolve DHCP repositories against -- the same shape
-///     <c>Ninlil.Dns.Server.Authoritative.Tests.Repository.RepositorySearchTestHost</c> already
-///     establishes, extended with <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Extension
-///     .ServiceCollectionEntityFrameworkCoreExtension.AddNinlilDhcpEntityFrameworkCore" /> to
-///     prove that the DHCP repositories genuinely work
-///     once layered on top of the shared <see cref="NinlilDnsContext" /> the DNS extension method
-///     registers, exactly the two-call composition order a real host is expected to use.
+///     This class builds a dependency injection host on a temporary SQLite database file for the
+///     repository tests in this project, like
+///     <c>Ninlil.Dns.Server.Authoritative.Tests.Repository.RepositorySearchTestHost</c>. It
+///     registers the DNS context first and then <see cref="Ninlil.Dhcp.Data.EntityFrameworkCore.Extension
+///     .ServiceCollectionEntityFrameworkCoreExtension.AddNinlilDhcpEntityFrameworkCore" />, the
+///     order the application uses, and deletes the file on disposal.
 /// </summary>
 public sealed class DhcpRepositorySearchTestHost : IAsyncDisposable
 {
@@ -25,15 +23,14 @@ public sealed class DhcpRepositorySearchTestHost : IAsyncDisposable
     );
 
     /// <summary>
-    ///     This property contains the real dependency injection container this test's own scopes
-    ///     are created against.
+    ///     This property contains the host whose services the tests create scopes from.
     /// </summary>
     public IHost Host { get; private set; }
 
     /// <summary>
-    ///     This method builds and starts the host, applying the entity model directly (via
-    ///     <c>EnsureCreatedAsync</c>) rather than the real relational migrations, the same
-    ///     shortcut this project's own comparable write-path service tests already take.
+    ///     This method builds the host and creates the schema from the model with
+    ///     <c>EnsureCreatedAsync</c> instead of running the migrations, as other repository tests
+    ///     do.
     /// </summary>
     public async Task InitializeAsync()
     {

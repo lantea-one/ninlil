@@ -5,12 +5,11 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Data.Abstractions.Entity;
 
 /// <summary>
-///     This class represents a single option a <see cref="DhcpTagRuleEntity" /> contributes when
-///     it matches a request -- a raw option tag plus its raw value bytes, applied onto the reply
-///     the same way <see cref="DhcpScopeCustomOptionEntity" /> is, but only when the owning rule's
-///     own match criteria are satisfied. See <see cref="DhcpTagRuleEntity" />'s own doc comment for
-///     the full evaluation-order/conflict-resolution rule governing how several rules' own options
-///     combine when more than one matches the same client.
+///     This class represents one option a <see cref="DhcpTagRuleEntity" /> sends when it
+///     matches: a raw tag and value, applied like a <see cref="DhcpScopeCustomOptionEntity" />.
+///     See <see cref="DhcpTagRuleEntity" /> for how options from several matching rules combine.
+///     For a DHCPv6 request the tag is used as the DHCPv6 option code, so only codes 0-255 can
+///     be set.
 /// </summary>
 public class DhcpTagRuleOptionEntity : AuditableEntityBase
 {
@@ -21,25 +20,22 @@ public class DhcpTagRuleOptionEntity : AuditableEntityBase
     public Guid TagRuleId { get; set; }
 
     /// <summary>
-    ///     This property contains the option's own raw numeric tag (0-255), the same meaning
-    ///     <see cref="DhcpScopeCustomOptionEntity.OptionTag" /> already documents.
+    ///     This property contains the option tag (0-255), as in
+    ///     <see cref="DhcpScopeCustomOptionEntity.OptionTag" />.
     /// </summary>
     public byte OptionTag { get; set; }
 
     /// <summary>
-    ///     This property contains the option's own raw value bytes, encoded as an uppercase
-    ///     hexadecimal string, the same convention <see cref="DhcpScopeCustomOptionEntity.ValueHex" />
-    ///     already documents, including that it is ignored entirely (and may be left blank) when
-    ///     <see cref="ValueSource" /> is <see cref="DhcpOptionValueSourceEnum.ServerAddress" />.
+    ///     This property contains the option value as an uppercase hexadecimal string, as in
+    ///     <see cref="DhcpScopeCustomOptionEntity.ValueHex" />; it is ignored (and may be blank)
+    ///     when <see cref="ValueSource" /> is <see cref="DhcpOptionValueSourceEnum.ServerAddress" />.
     /// </summary>
     public string ValueHex { get; set; }
 
     /// <summary>
-    ///     This property indicates where this option's own delivered value actually comes from --
-    ///     the same meaning <see cref="DhcpScopeCustomOptionEntity.ValueSource" /> already
-    ///     documents, defaulting the same way to <see cref="DhcpOptionValueSourceEnum.Custom" /> so
-    ///     every row created before this property existed keeps delivering its own
-    ///     already-configured <see cref="ValueHex" /> unchanged.
+    ///     This property indicates where the delivered value comes from, as in
+    ///     <see cref="DhcpScopeCustomOptionEntity.ValueSource" />. The default is
+    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />.
     /// </summary>
     public DhcpOptionValueSourceEnum ValueSource { get; set; } = DhcpOptionValueSourceEnum.Custom;
 }
