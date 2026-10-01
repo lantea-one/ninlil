@@ -7,15 +7,14 @@ using Ninlil.Common.Serializer;
 namespace Ninlil.Dns.Server.Acme;
 
 /// <summary>
-///     This class implements <see cref="IAcmeAccountStore" /> as a single JSON file on disk,
-///     encrypted at rest via <see cref="IDataProtector" /> -- the load-or-seed convention this
-///     project already uses for the RFC 5011 trust anchor store and DNSCrypt's own certificate
-///     store, plus the same encrypted-JSON-blob-on-disk shape <c>Server.DnsCrypt</c> does not
-///     need but this class does, since an ACME account key is genuinely security-sensitive (see
-///     the reasoning on <see cref="AcmeOptions.AccountStateFilePath" />).
+///     This class implements <see cref="IAcmeAccountStore" /> as one file at
+///     <see cref="AcmeOptions.AccountStateFilePath" /> holding the JSON state encrypted with
+///     <see cref="IDataProtector" /> (see that property for why it is encrypted). Like the RFC
+///     5011 trust anchor store and the DNSCrypt certificate store, it loads the file or starts
+///     empty; here that happens on first use. Every change rewrites the whole file.
 /// </summary>
-/// <param name="dataProtectionProvider">The provider this store derives its own purpose-scoped key from.</param>
-/// <param name="options">This store's own configured file path.</param>
+/// <param name="dataProtectionProvider">The provider the store's purpose-scoped protector is created from.</param>
+/// <param name="options">The ACME settings, read for the state file path.</param>
 /// <param name="logger">The logger this store records a corrupt or unreadable state file to.</param>
 public sealed class FileAcmeAccountStore(
     IDataProtectionProvider dataProtectionProvider,
@@ -108,8 +107,9 @@ public sealed class FileAcmeAccountStore(
     }
 
     /// <summary>
-    ///     This method loads this store's state file, or seeds a brand-new, empty one if the
-    ///     file does not exist yet, or cannot be read at all.
+    ///     This method loads the state file, or returns an empty state when the file does not
+    ///     exist or fails with an I/O, format or decryption error (for example after the key ring
+    ///     was lost). The next write then replaces the old file. Malformed JSON is not caught.
     /// </summary>
     private AcmeAccountState LoadOrSeed()
     {
@@ -144,8 +144,8 @@ public sealed class FileAcmeAccountStore(
     }
 
     /// <summary>
-    ///     This method persists this store's state to disk, creating its containing directory
-    ///     if it does not exist yet.
+    ///     This method encrypts and writes the state file, creating its directory if needed, and
+    ///     restricts it to owner read/write on Unix.
     /// </summary>
     private void WriteFile(AcmeAccountState state)
     {
@@ -166,10 +166,8 @@ public sealed class FileAcmeAccountStore(
         }
         catch (IOException exception)
         {
-            // A failed write leaves the in-memory state (already updated by the caller) usable
-            // for the rest of this process's lifetime; only a future restart would lose it,
-            // which is an availability concern, not a security or correctness one -- a warning,
-            // not fatal.
+            // The in-memory state stays usable for this process, so a failed write is only a
+            // warning; the change is lost at the next restart.
             logger.LogWarning(
                 exception,
                 "Failed to persist the ACME account state file at '{Path}'.",

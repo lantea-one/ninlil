@@ -8,11 +8,11 @@ using Ninlil.Dns.Server.Acme;
 namespace Ninlil.Dns.Server.Acme.Tests;
 
 /// <summary>
-///     This class covers <see cref="FileAcmeAccountStore" />'s own encrypted-at-rest load-or-seed
-///     behavior, sharing a single <see cref="IDataProtectionProvider" /> instance between
-///     whatever writes and whatever later reads -- the same
-///     <see cref="EphemeralDataProtectionProvider" />-generates-a-fresh-key-per-instance gotcha
-///     already documented for the cloud connectors' own smoke test.
+///     This class tests <see cref="FileAcmeAccountStore" /> with a state file in a temporary
+///     directory: what is saved is reloaded by a new instance, the file is encrypted, and an
+///     unreadable file starts an empty state. Writer and reader share one
+///     <see cref="IDataProtectionProvider" />, because each
+///     <see cref="EphemeralDataProtectionProvider" /> has its own random key.
 /// </summary>
 public sealed class FileAcmeAccountStoreTests : IDisposable
 {
@@ -96,11 +96,10 @@ public sealed class FileAcmeAccountStoreTests : IDisposable
     [Fact]
     public void AnIndependentDataProtectionProviderTreatsAnUndecryptableFileAsFreshSeedRatherThanThrowing()
     {
-        // Unlike CloudCredentialProtector (which lets an IDataProtector decrypt failure
-        // propagate), FileAcmeAccountStore.LoadOrSeed deliberately catches
-        // CryptographicException and falls back to a fresh, empty state -- the same
-        // "corrupt/unreadable state file, reseed rather than crash" convention this project's
-        // other file-backed stores (FileTrustAnchorStore, FileDnscryptCertificateStore) use.
+        // Unlike CloudCredentialProtector, which lets a decryption failure propagate,
+        // FileAcmeAccountStore.LoadOrSeed catches CryptographicException and starts from an
+        // empty state, as the other file-backed stores (FileTrustAnchorStore,
+        // FileDnsCryptCertificateStore) do for an unreadable file.
         CreateStore(new EphemeralDataProtectionProvider()).SaveAccountKey("some-key");
 
         FileAcmeAccountStore otherProviderStore = CreateStore(

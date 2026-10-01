@@ -6,28 +6,20 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Acme.Caa;
 
 /// <summary>
-///     This class keeps a zone's CAA record set reconciled whenever
-///     <see cref="DnsZoneChangedEvent" /> reports that it changed -- most importantly, when a
-///     zone's own <c>AutoManageCaaRecords</c>/<c>CaaIssuerDomain</c> fields themselves are
-///     changed via the REST API's <c>ZonesController</c> (which already fires this same event on
-///     every zone metadata write), but also, harmlessly, on every other zone content change,
-///     since <see cref="CaaRecordReconciliationService" />'s own reconciliation is a cheap,
-///     idempotent no-op once a zone's CAA record set already matches its desired state.
+///     This class reconciles a zone's CAA records whenever <see cref="DnsZoneChangedEvent" />
+///     reports a change: above all when the zone's <c>AutoManageCaaRecords</c> or
+///     <c>CaaIssuerDomain</c> is changed through <c>ZonesController</c>, which raises the event,
+///     but also on every other change to the zone. That is cheap, because a pass that finds the
+///     records already correct writes nothing (and so raises no new event).
 ///     <para>
-///         Reconciliation runs in a detached background task, not awaited directly from
-///         <see cref="HandleAsync" />, mirroring
-///         <c>Ninlil.Dns.Server.Authoritative.Notify.ZoneNotifyEventSubscriber</c>'s own
-///         reasoning exactly: this subscriber's own work involves real repository/database I/O
-///         (unlike <c>SignedZoneChangedEventSubscriber</c>'s purely-local in-memory re-sign), so
-///         it must never block <c>DnsServerEventDispatcher</c>'s one-event-at-a-time processing of
-///         every other subscriber for every other event. The background task opens its own
-///         dependency injection scope for the same reason -- the scope <see cref="HandleAsync" />
-///         was invoked in is disposed as soon as every subscriber's own
-///         <see cref="System.Threading.Tasks.ValueTask" /> completes, well before this detached
-///         work is done.
+///         <see cref="HandleAsync" /> starts the work on a detached task, like
+///         <c>ZoneNotifyEventSubscriber</c>: it does database I/O and must not hold up
+///         <c>DnsServerEventDispatcher</c>, which handles one event at a time. The task opens its
+///         own dependency injection scope, because the dispatcher's scope is disposed once every
+///         subscriber has returned.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped <see cref="CaaRecordReconciliationService" /> per event.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and a <see cref="CaaRecordReconciliationService" />, per event.</param>
 /// <param name="logger">The logger this subscriber records reconciliation failures to.</param>
 public class CaaRecordReconciliationEventSubscriber(
     IServiceScopeFactory scopeFactory,
@@ -42,10 +34,8 @@ public class CaaRecordReconciliationEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work: opening a fresh scope and delegating to
-    ///     <see cref="CaaRecordReconciliationService" />, with every exception (other than
-    ///     cancellation) caught and logged so one zone's own reconciliation failure never
-    ///     propagates back into <c>DnsServerEventDispatcher</c>.
+    ///     This method opens a scope and calls <see cref="CaaRecordReconciliationService" />,
+    ///     logging any exception other than cancellation, since nothing awaits this task.
     /// </summary>
     private async Task ReconcileAsync(
         DnsZoneChangedEvent domainEvent,

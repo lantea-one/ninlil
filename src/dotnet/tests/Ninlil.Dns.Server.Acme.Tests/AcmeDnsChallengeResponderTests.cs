@@ -19,9 +19,10 @@ using Ninlil.Dns.Server.Core.Extension;
 namespace Ninlil.Dns.Server.Acme.Tests;
 
 /// <summary>
-///     This class covers <see cref="AcmeDnsChallengeResponder" /> against a real, SQLite-backed
-///     <see cref="AuthoritativeZoneCache" /> -- the piece of this project's own ACME integration
-///     that does not require a live or fake CA to verify.
+///     This class tests <see cref="AcmeDnsChallengeResponder" /> against SQLite-backed storage
+///     and an <see cref="AuthoritativeZoneCache" />, the part of the ACME support that needs
+///     no CA: publishing and removing the challenge record, and refusing domains not hosted
+///     here.
 /// </summary>
 public sealed class AcmeDnsChallengeResponderTests : IAsyncLifetime
 {

@@ -1,15 +1,13 @@
 using Microsoft.Extensions.Options;
 
+// Define our namespace.
 namespace Ninlil.Dns.Server.Acme.Tests.Fakes;
 
 /// <summary>
-///     This class stands in for a real, DI-built <see cref="IOptionsMonitor{TOptions}" />: it
-///     always reports the same, fixed <see cref="CurrentValue" /> and never actually fires
-///     <see cref="OnChange" />, mirroring every sibling test project's own identically-named fake
-///     (for example <c>Ninlil.Dns.Server.Recursive.Tests.Fakes.StaticOptionsMonitor{TOptions}</c>)
-///     -- the minimal double a unit test needs to exercise a class that reads live configuration
-///     (<c>CaaRecordReconciliationServiceTests</c>, in this project) without spinning up the real
-///     configuration-reload machinery.
+///     This class is an <see cref="IOptionsMonitor{TOptions}" /> that always reports the same
+///     <see cref="CurrentValue" /> and never calls <see cref="OnChange" /> listeners, like the
+///     fakes of the same name in other test projects. <c>CaaRecordReconciliationServiceTests</c>
+///     uses it to give the service fixed settings without the configuration system.
 /// </summary>
 /// <param name="value">The fixed value this monitor always reports.</param>
 public sealed class StaticOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>

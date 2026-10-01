@@ -8,42 +8,32 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Acme;
 
 /// <summary>
-///     This class keeps every configured domain's own certificate issued and renewed with no
-///     operator action needed, mirroring
-///     <c>Ninlil.Dns.Server.Authoritative.Dnssec.DnssecResigningBackgroundService</c>'s own
-///     poll-and-check-each-item-against-its-own-expiry-margin shape, and, more broadly, this
-///     project's own RFC 5011 automatic trust-anchor rollover precedent of automating exactly
-///     this kind of maintenance-burden task for its homelab/home-router deployment target.
+///     This hosted service keeps every domain in <see cref="AcmeOptions.Domains" /> issued and
+///     renewed without operator action. Every <see cref="AcmeOptions.PollInterval" /> it issues a
+///     certificate for each domain that has none or whose certificate is within
+///     <see cref="AcmeOptions.RenewBeforeExpiration" /> of expiry, like
+///     <c>DnssecResigningBackgroundService</c> does for signatures.
 ///     <para>
-///         Also exposes <see cref="RenewOneDomainAsync" /> as a real, callable-on-demand
-///         operation -- driven directly by <c>AcmeSettingsController</c>'s own manual
-///         "issue/renew now" REST action, which needs the exact same
-///         scope-per-attempt/success-event/failure-event/failure-persistence behavior this
-///         class's own poll loop already has, not a second, independently-maintained copy of it.
-///         Registered as a real, directly-resolvable singleton (not only through the generic
-///         <see cref="IHostedService" /> collection) for exactly that reason -- see
-///         <c>ServiceCollectionAcmeExtension</c>'s own doc comment.
+///         <see cref="RenewOneDomainAsync" /> is public because <c>AcmeSettingsController</c>'s
+///         "issue/renew now" action uses it, so both paths share the scope, events and failure
+///         recording. For that the service is also registered as a singleton of its
+///         concrete type (see <c>ServiceCollectionAcmeExtension</c>).
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a scoped <see cref="AcmeCertificateIssuer" /> per domain, per attempt.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and an <see cref="AcmeCertificateIssuer" />, per attempt.</param>
 /// <param name="accountStore">
-///     The store this service reads each domain's own current certificate state from, and
-///     records each attempt's own success/failure outcome to.
+///     The store this service reads certificate state from and records failures in.
 /// </param>
 /// <param name="options">
-///     This service's own configured domain list and renewal margin, read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> (rather than the once-cached
-///     <see cref="IOptions{TOptions}" /> this class used before) -- <see cref="ExecuteAsync" />'s
-///     own doc comment explains exactly why a singleton <see cref="BackgroundService" /> needs
-///     that to actually observe a live <c>AcmeSettingsController.Patch</c> write.
+///     The ACME settings, read through <see cref="IOptionsMonitor{TOptions}" /> on every pass so
+///     changes saved by <c>AcmeSettingsController.Patch</c> apply without a restart (see
+///     <see cref="ExecuteAsync" />).
 /// </param>
 /// <param name="logger">The logger this service records per-domain issuance/renewal failures to.</param>
 /// <param name="eventPublisher">
-///     The publisher this service raises <see cref="AcmeCertificateRenewalSucceededEvent" />/
-///     <see cref="AcmeCertificateRenewalFailedEvent" /> through, per domain, per attempt --
-///     optional, defaulting to <see langword="null" />, the same pattern
-///     <c>SignedZoneCache</c>'s own new <c>eventPublisher</c> parameter follows, so every
-///     pre-existing caller/test keeps compiling and behaving unchanged.
+///     The publisher this service raises <see cref="AcmeCertificateRenewalSucceededEvent" /> and
+///     <see cref="AcmeCertificateRenewalFailedEvent" /> through, once per attempt. It is optional
+///     (like the one in <c>SignedZoneCache</c>); without it no events are published.
 /// </param>
 public sealed class AcmeCertificateRenewalService(
     IServiceScopeFactory scopeFactory,
@@ -54,18 +44,12 @@ public sealed class AcmeCertificateRenewalService(
 ) : BackgroundService
 {
     /// <summary>
-    ///     This method runs this service's own real poll loop for as long as this host is
-    ///     running. Unlike a <see langword="return" />-once-and-exit gate checked only before
-    ///     entering the loop, <see cref="AcmeOptions.Enable" /> is re-read fresh (via
-    ///     <c>options.CurrentValue</c>) on every iteration, mirroring
-    ///     <c>TrustAnchorRolloverService.ExecuteAsync</c>'s own established pattern for exactly
-    ///     this bug class -- an early <see langword="return" /> when <see cref="AcmeOptions.Enable" />
-    ///     started out <see langword="false" /> could never later observe a live
-    ///     <c>AcmeSettingsController.Patch</c> write turning it back on, since
-    ///     <see cref="BackgroundService.ExecuteAsync" /> only ever runs once per process. The poll
-    ///     interval itself is also re-read every iteration, so a shortened
-    ///     <see cref="AcmeOptions.PollInterval" /> takes effect on the very next wait, not just
-    ///     the one after a restart.
+    ///     This method runs the poll loop for the lifetime of the host. The loop keeps running
+    ///     while ACME is off and reads <see cref="AcmeOptions.Enable" /> on every pass, like
+    ///     <c>TrustAnchorRolloverService.ExecuteAsync</c>: <see cref="BackgroundService.ExecuteAsync" />
+    ///     runs once per process, so returning early while disabled would ignore a later enable.
+    ///     <see cref="AcmeOptions.PollInterval" /> is also read on every pass, so a shorter
+    ///     interval applies to the next wait.
     /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -93,8 +77,8 @@ public sealed class AcmeCertificateRenewalService(
     }
 
     /// <summary>
-    ///     This method checks every configured domain, issuing or renewing whichever ones have
-    ///     no certificate yet, or whose current one is inside its own renewal margin.
+    ///     This method checks every configured domain and issues or renews those that have no
+    ///     certificate or whose certificate is inside the renewal margin, one at a time.
     /// </summary>
     private async Task RenewDueDomainsAsync(CancellationToken stoppingToken)
     {
@@ -119,32 +103,25 @@ public sealed class AcmeCertificateRenewalService(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // RenewOneDomainAsync has already logged, recorded, and published this failure;
-                // one domain's own failure must never block every other configured domain's own
-                // check within the same pass -- there is always another attempt, at worst
-                // PollInterval later.
+                // RenewOneDomainAsync has logged, recorded and published the failure. One domain
+                // must not stop the others; it is tried again at the next poll.
             }
         }
     }
 
     /// <summary>
-    ///     This method attempts a single domain's own issuance or renewal, right now, outside
-    ///     this service's own poll loop timing -- the one shared implementation both
-    ///     <see cref="RenewDueDomainsAsync" /> (automatic, per configured domain, per poll tick)
-    ///     and <c>AcmeSettingsController</c>'s own manual "issue/renew now" REST action (a single,
-    ///     operator-requested domain, right now) drive, so a success/failure's own event-publish
-    ///     and durable-failure-recording behavior can never drift between the two call sites.
+    ///     This method issues or renews the certificate for one domain now, in a new scope. Both
+    ///     <see cref="RenewDueDomainsAsync" /> and <c>AcmeSettingsController</c>'s "issue/renew
+    ///     now" action use it, so both publish the same events and record failures the same way.
     /// </summary>
     /// <param name="domain">The domain to issue or renew a certificate for.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The newly issued or renewed certificate's own state.</returns>
+    /// <returns>The state of the issued certificate.</returns>
     /// <exception cref="Exception">
-    ///     Re-thrown after being logged, published as <see cref="AcmeCertificateRenewalFailedEvent" />,
-    ///     and durably recorded via <see cref="IAcmeAccountStore.SaveDomainFailure" /> -- a caller
-    ///     that only cares about the side effects already performed here (the automatic poll
-    ///     loop) can safely swallow it; a caller that needs to report the outcome back to its own
-    ///     caller (the manual REST trigger) can catch it and inspect the message, or simply let
-    ///     the already-recorded failure state speak for itself on the next inventory read.
+    ///     Any failure other than cancellation, rethrown after it has been logged, published as
+    ///     <see cref="AcmeCertificateRenewalFailedEvent" /> and recorded with
+    ///     <see cref="IAcmeAccountStore.SaveDomainFailure" />. The poll loop ignores it; the REST
+    ///     action reports it.
     /// </exception>
     public async Task<AcmeDomainCertificateState> RenewOneDomainAsync(
         string domain,
@@ -161,8 +138,7 @@ public sealed class AcmeCertificateRenewalService(
                 stoppingToken
             );
 
-            // A later success clears any previously recorded failure for the same domain -- a
-            // domain that has recovered must not keep showing a stale failure forever.
+            // A success clears the domain's recorded failure.
             accountStore.ClearDomainFailure(domain);
 
             eventPublisher?.Publish(
@@ -177,12 +153,9 @@ public sealed class AcmeCertificateRenewalService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // One domain's own issuance/renewal failure (a CA outage, a challenge that failed to
-            // validate, a domain no longer locally hosted) must never take this whole background
-            // service down, and must be visible somewhere durable a later REST read can actually
-            // find -- AcmeCertificateRenewalFailedEvent alone is published only to the in-process
-            // event bus, with no subscriber persisting it (see AcmeDomainRenewalFailure's own doc
-            // comment), so this is the one place that failure state is actually saved.
+            // A failure (a CA outage, a challenge that did not validate, a domain no longer
+            // hosted) is recorded in the store, where the ACME settings API reads it; the event
+            // alone is not stored (see AcmeDomainRenewalFailure).
             logger.LogError(
                 exception,
                 "Failed to issue or renew an ACME certificate for '{Domain}'.",
@@ -207,12 +180,11 @@ public sealed class AcmeCertificateRenewalService(
     }
 
     /// <summary>
-    ///     This method determines whether a domain's own certificate needs issuing or renewing --
-    ///     shared by <see cref="RenewDueDomainsAsync" /> and <c>AcmeSettingsController</c>'s own
-    ///     certificate-inventory read, so "is this domain due" can never drift between the
-    ///     background loop's own decision and what the inventory reports to an operator.
+    ///     This method decides whether a domain's certificate needs issuing or renewing. Both
+    ///     <see cref="RenewDueDomainsAsync" /> and the certificate list in
+    ///     <c>AcmeSettingsController</c> use it, so they agree.
     /// </summary>
-    /// <param name="state">The domain's own current certificate state, or <see langword="null" /> if it has never been issued one.</param>
+    /// <param name="state">The domain's current certificate state, or <see langword="null" /> if none was ever issued.</param>
     /// <param name="now">The current date and time to evaluate the renewal margin against.</param>
     /// <param name="renewBeforeExpiration">How long before expiry a certificate is considered due for renewal.</param>
     public static bool IsDomainDue(

@@ -11,30 +11,25 @@ using Ninlil.Dns.Server.Acme.Caa;
 namespace Ninlil.Dns.Server.Acme;
 
 /// <summary>
-///     This class drives a single domain's own RFC 8555 issuance (or renewal -- there is no
-///     protocol-level distinction; a renewal is just another order for the same domain) end to
-///     end, through Certes: register an account if none exists yet, open an order, publish and
-///     validate the DNS-01 challenge, finalize with a CSR, and persist the resulting certificate.
+///     This class runs one RFC 8555 issuance for one domain through Certes. A renewal is the
+///     same thing, a new order for the same domain. It registers an account if there is none,
+///     opens an order, publishes and validates the DNS-01 challenge, finalizes with a CSR for a
+///     new ECDSA P-256 key, writes the PFX, records the state and reconciles the zone's CAA
+///     records. <see cref="AcmeCertificateRenewalService" /> calls it in a new scope.
 /// </summary>
-/// <param name="accountStore">The store this domain's own account key and certificate state are read from and written to.</param>
-/// <param name="challengeResponder">The responder used to publish and remove this domain's own DNS-01 challenge record.</param>
+/// <param name="accountStore">The store the account key and certificate state are read from and written to.</param>
+/// <param name="challengeResponder">The responder that publishes and removes the DNS-01 challenge record.</param>
 /// <param name="caaReconciliationService">
-///     The service used to reconcile this domain's own zone's CAA record set immediately after a
-///     successful issuance/renewal -- "whenever a zone's ACME enrollment or CA selection
-///     changes" is the trigger this reconciliation ought to run on, and a completed issuance/
-///     renewal is the one concrete moment in this project's actual code where that really
-///     happens (there is no separate, independent "enrollment changed" event/signal anywhere
-///     else to hook into instead).
+///     The service that reconciles the zone's CAA records after a successful issuance. There
+///     is no separate "ACME enrollment changed" signal, so a completed issuance is used as the
+///     trigger, besides zone changes (see <see cref="CaaRecordReconciliationEventSubscriber" />).
 /// </param>
 /// <param name="options">
-///     This issuer's own configured directory, contact, and file-path settings, read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> (rather than the once-cached
-///     <see cref="IOptions{TOptions}" /> this class used before) so a write to
-///     <c>AcmeSettingsController.Patch</c> takes effect on this domain's very next issuance/
-///     renewal attempt, with no restart -- see that controller's own doc comment for exactly
-///     which of <see cref="AcmeOptions" />'s fields this actually matters for.
+///     The directory, contact, CSR and certificate directory settings, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> so a change saved by
+///     <c>AcmeSettingsController.Patch</c> applies to the next attempt without a restart.
 /// </param>
-/// <param name="logger">The logger this issuer records its own progress and failures to.</param>
+/// <param name="logger">The logger this issuer records progress and failures to.</param>
 public sealed class AcmeCertificateIssuer(
     IAcmeAccountStore accountStore,
     AcmeDnsChallengeResponder challengeResponder,
@@ -44,18 +39,20 @@ public sealed class AcmeCertificateIssuer(
 )
 {
     /// <summary>
-    ///     This constant contains how many times, at most, this issuer polls the CA for a
-    ///     DNS-01 challenge's own validation outcome before giving up.
+    ///     This constant contains how many times, at most, the CA is polled for the outcome of a
+    ///     DNS-01 challenge before giving up.
     /// </summary>
     private const int MaximumChallengePollAttempts = 20;
 
     /// <summary>
-    ///     This constant contains how long this issuer waits between each challenge poll.
+    ///     This field contains how long to wait between challenge polls.
     /// </summary>
     private static readonly TimeSpan ChallengePollInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    ///     This method issues (or renews) a single domain's own certificate.
+    ///     This method issues (or renews) the certificate for one domain. The challenge record is
+    ///     removed afterwards whether or not issuance succeeded. A CAA reconciliation failure is
+    ///     logged and does not fail the issuance.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     ///     Thrown when <paramref name="domain" /> is not a zone this server hosts, or the CA
@@ -90,10 +87,10 @@ public sealed class AcmeCertificateIssuer(
 
         try
         {
-            // A moment for the freshly-added TXT record to actually be answerable before asking
-            // the CA to go query for it -- the record's own write only needs to reach this
-            // process's in-memory zone cache, which is effectively immediate, but this margin
-            // costs nothing against a CA's own multi-second validation round trip regardless.
+            // A short pause before asking the CA to validate. The record only has to reach this
+            // process's zone cache, which is nearly immediate, and the pause is small next to the
+            // CA's validation time. The record is excluded from sync (see
+            // AcmeDnsChallengeResponder), so only this server answers it.
             await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
 
             await dnsChallenge.Validate();
@@ -119,9 +116,8 @@ public sealed class AcmeCertificateIssuer(
             );
             await File.WriteAllBytesAsync(pfxPath, pfxBytes, stoppingToken);
 
-            // Read the real, issued certificate's own expiry back out, rather than assuming
-            // Let's Encrypt's usual 90-day lifetime -- any ACME-compliant CA's own actual policy
-            // is authoritative here, not a hardcoded assumption about one particular CA.
+            // Read the expiry from the issued certificate instead of assuming the Let's Encrypt
+            // 90-day lifetime, since other CAs differ.
             using X509Certificate2 issuedCertificate = X509CertificateLoader.LoadPkcs12(
                 pfxBytes,
                 ""
@@ -143,10 +139,7 @@ public sealed class AcmeCertificateIssuer(
 
             try
             {
-                // A CAA reconciliation failure must never fail (or roll back) a certificate
-                // that was, itself, genuinely and successfully issued -- the same "one item's
-                // own failure must not block/undo an unrelated success" reasoning
-                // AcmeCertificateRenewalService.RenewDueDomainsAsync already applies per domain.
+                // A CAA reconciliation failure must not fail a certificate that was issued.
                 await caaReconciliationService.ReconcileDomainAsync(domain, stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -168,9 +161,9 @@ public sealed class AcmeCertificateIssuer(
     }
 
     /// <summary>
-    ///     This method builds an <see cref="AcmeContext" /> against this resolver's own
-    ///     persisted account key, registering a brand-new account with the CA (and persisting
-    ///     its key) the first time this is ever called.
+    ///     This method builds an <see cref="AcmeContext" /> with the stored account key. When
+    ///     there is none, it registers a new account with the CA, agreeing to its terms of
+    ///     service, using the first contact email (or <c>admin@localhost</c>), and stores the key.
     /// </summary>
     private async Task<AcmeContext> CreateContextAsync(CancellationToken stoppingToken)
     {
@@ -194,8 +187,8 @@ public sealed class AcmeCertificateIssuer(
     }
 
     /// <summary>
-    ///     This method polls a DNS-01 challenge's own status until the CA reports it as valid,
-    ///     invalid, or this issuer gives up waiting.
+    ///     This method polls a DNS-01 challenge until the CA reports it valid or invalid, or
+    ///     <see cref="MaximumChallengePollAttempts" /> polls have passed.
     /// </summary>
     private static async Task WaitForChallengeAsync(
         IChallengeContext challenge,

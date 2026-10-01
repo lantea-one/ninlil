@@ -17,11 +17,11 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.Acme.Tests.Caa;
 
 /// <summary>
-///     This class covers <see cref="CaaRecordReconciliationService" /> -- its actual CAA
-///     (RFC 8659) reconciliation logic -- against a real, SQLite-backed
-///     <see cref="IZoneUpdateService" />/repository stack, the same verification shape
-///     <c>AcmeDnsChallengeResponderTests</c> and <c>ZoneUpdateServiceRecordEditTests</c> already
-///     use for this project's own write-path services.
+///     This class tests <see cref="CaaRecordReconciliationService" /> against SQLite-backed
+///     repositories and the real <see cref="IZoneUpdateService" />, like
+///     <c>AcmeDnsChallengeResponderTests</c> and <c>ZoneUpdateServiceRecordEditTests</c>. It covers
+///     adding, keeping and replacing the managed record, leaving operator records alone, zone
+///     eligibility, the skip cases, and the per-zone and global settings.
 /// </summary>
 public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
 {
@@ -66,10 +66,9 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="CaaRecordReconciliationService" /> against a
-    ///     fresh dependency-injection scope's own repositories, so every test observes writes
-    ///     made by a previous call the same way a fresh <c>DnsZoneChangedEvent</c>-triggered
-    ///     reconciliation would.
+    ///     This method builds a <see cref="CaaRecordReconciliationService" /> in a new dependency
+    ///     injection scope, so it sees earlier writes the way a reconciliation started by a new
+    ///     <c>DnsZoneChangedEvent</c> would.
     /// </summary>
     private CaaRecordReconciliationService CreateService(
         bool defaultEnabled = true,
@@ -93,9 +92,9 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method seeds a zone plus its own SOA record (a prerequisite
-    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" /> needs to bump a serial at all) and
-    ///     returns the zone's own identifier.
+    ///     This method seeds a zone and its SOA record (which
+    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" /> needs to advance the serial) and
+    ///     returns the zone identifier.
     /// </summary>
     private async Task<Guid> SeedZoneAsync(
         string name,
@@ -253,14 +252,10 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
         _zoneRepository.Update(zone);
         await _unitOfWork.SaveChangesAsync();
 
-        // A fresh CaaRecordReconciliationService instance is created here deliberately, rather
-        // than reusing the one above -- each instance's own constructor-injected repositories
-        // are bound to one dependency-injection scope (one EF Core DbContext) for that
-        // instance's whole lifetime, exactly like a real per-event subscriber scope. Reusing the
-        // same instance would read the zone back through its own already-tracked, now-stale
-        // in-memory copy (still showing the *old* CaaIssuerDomain) rather than the real row this
-        // test just updated through a completely different context -- the exact "EF Core
-        // identity-map staleness across scopes" shape.
+        // A new service instance, because each instance's repositories share one DbContext for
+        // its lifetime, like a per-event scope. The old instance would read its tracked copy
+        // of the zone, still with the old CaaIssuerDomain, not the row just updated through
+        // another context.
         await CreateService().ReconcileZoneAsync(zoneId);
 
         IReadOnlyList<RecordEntity> afterRotation = await GetCaaRecordsAsync(
@@ -275,8 +270,7 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
         );
         Assert.Equal("new-ca.example.net", data.Value);
 
-        // The old, no-longer-desired record must actually be gone, not merely superseded by a
-        // second record left behind alongside it.
+        // The old record must be removed, not left next to the new one.
         Assert.DoesNotContain(afterRotation, record => record.Id == oldRecordId);
     }
 
@@ -302,7 +296,7 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
                 typeof(CaaRecordData),
                 new CaaRecordData(true, "issue", "some-other-ca.example.org")
             ),
-            // ManagedByFeature is deliberately left null -- this is an operator-authored record.
+            // ManagedByFeature is left null: this is an operator's record.
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         await _recordRepository.AddAsync(operatorRecord);
@@ -315,7 +309,7 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
             "caa-operator.example.com"
         );
 
-        // The operator's own record is still there, completely unchanged.
+        // The operator's record is still there, unchanged.
         RecordEntity stillPresentOperatorRecord = Assert.Single(
             caaRecords,
             record => record.Id == operatorRecord.Id
@@ -327,7 +321,7 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
         Assert.Equal("some-other-ca.example.org", operatorData.Value);
         Assert.True(operatorData.IsCritical);
 
-        // ... and this feature's own managed record was still added alongside it.
+        // ... and the managed record was added next to it.
         RecordEntity managedRecord = Assert.Single(
             caaRecords,
             record => record.ManagedByFeature == RecordManagedByFeatureEnum.Caa
@@ -361,10 +355,8 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
         );
         await _unitOfWork.SaveChangesAsync();
 
-        // Deliberately no SOA record seeded for this zone at all -- if this method ever
-        // regresses and stops skipping an ineligible zone type before reaching
-        // IZoneUpdateService, it would throw here (no SOA to advance) rather than silently
-        // writing a record, making a real regression impossible to miss.
+        // No SOA record is seeded, so if an ineligible zone type ever reached IZoneUpdateService
+        // the call would throw (no SOA to advance) instead of quietly writing a record.
         await CreateService().ReconcileZoneAsync(zoneId);
 
         IReadOnlyList<RecordEntity> allRecords = await _recordRepository.ListByZoneIdAsync(zoneId);
@@ -399,9 +391,8 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
             autoManageCaaRecords: true
         );
 
-        // No per-zone CaaIssuerDomain, and the service's own global default is also empty
-        // (CreateService()'s own default parameter value) -- reconciliation must be a
-        // documented, logged no-op here, never an exception.
+        // No per-zone CaaIssuerDomain and an empty global default (the CreateService default):
+        // the pass must be a logged skip, not an exception.
         await CreateService(defaultIssuerDomain: "").ReconcileZoneAsync(zoneId);
 
         IReadOnlyList<RecordEntity> caaRecords = await GetCaaRecordsAsync(
@@ -518,12 +509,10 @@ public sealed class CaaRecordReconciliationServiceTests : IAsyncLifetime
     ) => Assert.Equal(expected, CaaRecordReconciliationService.IsEligibleZoneType(zoneType));
 
     /// <summary>
-    ///     This class stands in for the real, channel-backed <c>DnsServerEventPublisher</c> --
-    ///     this test suite exercises <see cref="CaaRecordReconciliationService" /> directly rather
-    ///     than through the event bus, so <see cref="IZoneUpdateService" />'s own dependency on
-    ///     <see cref="IDnsServerEventPublisher" /> only needs a registration that does not throw,
-    ///     the same reasoning <c>ZoneUpdateServiceRecordEditTests</c>'s own capturing publisher
-    ///     is built on.
+    ///     This class replaces <c>DnsServerEventPublisher</c> and discards every event. The tests
+    ///     call <see cref="CaaRecordReconciliationService" /> directly, so the
+    ///     <see cref="IDnsServerEventPublisher" /> that <see cref="IZoneUpdateService" /> needs only
+    ///     has to exist.
     /// </summary>
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {

@@ -6,7 +6,10 @@ namespace Ninlil.Dns.Server.Acme;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Acme</c> section of the application's configuration
-///     and controls how <see cref="AcmeCertificateRenewalService" /> behaves.
+///     and configures <see cref="AcmeCertificateRenewalService" />, <see cref="AcmeCertificateIssuer" />
+///     and <see cref="FileAcmeAccountStore" />. <c>AcmeSettingsController</c> edits it at runtime;
+///     the services read it through <c>IOptionsMonitor</c>, so changes apply without a restart,
+///     except <see cref="AccountStateFilePath" />, which the store reads through <c>IOptions</c>.
 /// </summary>
 public class AcmeOptions
 {
@@ -16,75 +19,69 @@ public class AcmeOptions
     public const string SectionName = "DnsServer:Acme";
 
     /// <summary>
-    ///     This property controls whether ACME issuance/renewal runs at all. Off by default,
-    ///     the same reasoning as every other capability-expanding toggle in this project -- an
-    ///     operator must explicitly opt in and list which domains to request certificates for.
+    ///     This property controls whether automatic issuance and renewal runs. It is off by
+    ///     default, like other features that add capability: the operator opts in and lists the
+    ///     domains.
     /// </summary>
     public bool Enable { get; set; }
 
     /// <summary>
-    ///     This property contains the ACME server's own directory URL. Defaults to Let's
-    ///     Encrypt's real, rate-limited production directory -- matching how other real-world
-    ///     tools with built-in ACME support (Caddy, Traefik) default -- rather than its staging
-    ///     directory; an operator experimenting with this feature for the first time should
-    ///     override this to <see cref="WellKnownServers.LetsEncryptStagingV2" /> themselves.
+    ///     This property contains the ACME server's directory URL. The default is the Let's Encrypt
+    ///     production directory, which is rate-limited, as in Caddy and Traefik. An operator trying
+    ///     the feature for the first time should use
+    ///     <see cref="WellKnownServers.LetsEncryptStagingV2" />.
     /// </summary>
     public Uri DirectoryUri { get; set; } = WellKnownServers.LetsEncryptV2;
 
     /// <summary>
-    ///     This property contains the contact email address(es) registered with the ACME
-    ///     account, used only for the CA's own expiry/incident notifications.
+    ///     This property contains contact email addresses for the ACME account. Only the first is
+    ///     registered, and only when the account is created; with none, <c>admin@localhost</c> is
+    ///     used.
     /// </summary>
     public List<string> ContactEmails { get; set; } = [];
 
     /// <summary>
     ///     This property contains every domain a certificate should be issued and kept renewed
-    ///     for. Each one must be a name this server itself is authoritative for -- ACME
-    ///     integration is deliberately scoped to Ninlil-hosted zones only, with no coupling
-    ///     to the cloud zone connectors' own provider credentials.
+    ///     for. Each must be inside a zone this server hosts, because the DNS-01 challenge record
+    ///     is added to that zone; the cloud zone connectors' credentials are not used.
     /// </summary>
     public List<string> Domains { get; set; } = [];
 
     /// <summary>
-    ///     This property contains how long before a certificate's own expiry
-    ///     <see cref="AcmeCertificateRenewalService" /> requests a fresh one -- 30 days, roughly
-    ///     a third of Let's Encrypt's own 90-day certificate lifetime, the same conservative
-    ///     margin most ACME clients use.
+    ///     This property contains how long before a certificate's expiry
+    ///     <see cref="AcmeCertificateRenewalService" /> requests a new one: 30 days, a third of
+    ///     the Let's Encrypt 90-day lifetime, the margin most ACME clients use.
     /// </summary>
     public TimeSpan RenewBeforeExpiration { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
     ///     This property contains how often <see cref="AcmeCertificateRenewalService" /> checks
-    ///     whether any configured domain's certificate needs issuing or renewing.
+    ///     whether any configured domain's certificate needs issuing or renewing. A failed attempt
+    ///     is retried at the next check.
     /// </summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromHours(12);
 
     /// <summary>
-    ///     This property contains where this resolver's own ACME account key and per-domain
-    ///     certificate state are persisted, encrypted at rest via <c>IDataProtector</c> -- the
-    ///     same established pattern already used for TSIG shared secrets and DNSSEC private
-    ///     keys, per the explicit decision that this state (unlike the self-signed TLS
-    ///     certificate's own private key, or DNSCrypt's provider key) is security-sensitive
-    ///     enough to warrant it: an attacker with this account's key could request certificates
-    ///     against the real CA under this server's own registered account.
+    ///     This property contains the file where the ACME account key and per-domain state are
+    ///     kept, encrypted with <c>IDataProtector</c> like TSIG secrets and DNSSEC private keys.
+    ///     Unlike the self-signed TLS key or the DNSCrypt provider key, this is encrypted because
+    ///     someone with the account key could request certificates from the CA under this
+    ///     server's account.
     /// </summary>
     public string AccountStateFilePath { get; set; } =
         Path.Combine(AppContext.BaseDirectory, "data", "acme-account.json");
 
     /// <summary>
-    ///     This property contains the directory each domain's own issued certificate is written
-    ///     to, as <c>&lt;domain&gt;.pfx</c>. Pointing a transport's own
-    ///     <c>TlsCertificateOptions.PfxPath</c> at one of these files is how that transport
-    ///     actually starts using an ACME-issued certificate -- <c>TlsCertificateLoader</c> itself
-    ///     needed no changes at all, since it already treats <c>PfxPath</c> as nothing more than
-    ///     "a PKCS#12 file on disk," regardless of who wrote it.
+    ///     This property contains the directory each issued certificate is written to, as
+    ///     <c>&lt;domain&gt;.pfx</c> with an empty password. A transport uses an ACME certificate
+    ///     when <c>TlsCertificateOptions.PfxPath</c> points at one of these files;
+    ///     <c>TlsCertificateLoader</c> loads any PKCS#12 file.
     /// </summary>
     public string CertificateDirectoryPath { get; set; } =
         Path.Combine(AppContext.BaseDirectory, "data", "acme-certificates");
 
     /// <summary>
-    ///     This property contains the organization name every issued certificate's own CSR is
-    ///     built with.
+    ///     This property contains the organization name put in every certificate signing request.
     /// </summary>
     public string CsrOrganization { get; set; } = "Ninlil";
 }

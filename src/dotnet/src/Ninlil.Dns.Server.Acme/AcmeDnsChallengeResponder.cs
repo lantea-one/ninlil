@@ -11,16 +11,16 @@ using Ninlil.Dns.Server.Authoritative.Journal;
 namespace Ninlil.Dns.Server.Acme;
 
 /// <summary>
-///     This class publishes and removes the one DNS record RFC 8555 §8.4's DNS-01 challenge
-///     needs: a TXT record at <c>_acme-challenge.&lt;domain&gt;</c> carrying the CA-computed key
-///     authorization digest. Scoped, deliberately, to domains this server is itself
-///     authoritative for -- <see cref="AuthoritativeZoneCache.FindZone" /> is checked first, and
-///     a domain that is not actually locally hosted is refused rather than silently doing
-///     nothing useful.
+///     This class publishes and removes the record the RFC 8555 §8.4 DNS-01 challenge needs: a
+///     TXT record at <c>_acme-challenge.&lt;domain&gt;</c> holding the key authorization digest.
+///     It works only for domains inside a zone this server hosts
+///     (<see cref="AuthoritativeZoneCache.FindZone" />); any other domain is refused. The
+///     record is marked <c>ExcludeFromSync</c>, so zone transfers and cloud sync never carry
+///     it, and the challenge can only succeed if the CA queries this server.
 /// </summary>
-/// <param name="zoneCache">The cache used to confirm a domain is actually locally hosted.</param>
-/// <param name="recordRepository">The repository any previously published challenge record is looked up through, to remove it.</param>
-/// <param name="zoneUpdateService">The service every add/remove is actually applied through.</param>
+/// <param name="zoneCache">The cache used to find the zone that holds a domain.</param>
+/// <param name="recordRepository">The repository the challenge records are looked up in for removal.</param>
+/// <param name="zoneUpdateService">The service every add and remove goes through.</param>
 /// <param name="logger">The logger this responder records a domain that is not locally hosted to.</param>
 public sealed class AcmeDnsChallengeResponder(
     AuthoritativeZoneCache zoneCache,
@@ -30,14 +30,15 @@ public sealed class AcmeDnsChallengeResponder(
 )
 {
     /// <summary>
-    ///     This method publishes a domain's own DNS-01 challenge TXT record.
+    ///     This method publishes the DNS-01 challenge TXT record for a domain, with a 60-second
+    ///     TTL.
     /// </summary>
     /// <param name="domain">The domain a certificate is being requested for.</param>
     /// <param name="dnsTxtValue">The key authorization digest the CA computed, from <c>AcmeContext.AccountKey.DnsTxt(token)</c>.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     A <see langword="bool" /> indicating whether <paramref name="domain" /> is actually a
-    ///     zone this server hosts -- publishing only ever happens when this is <see langword="true" />.
+    ///     <see langword="true" /> if <paramref name="domain" /> is in a zone this server hosts and
+    ///     the record was published, otherwise <see langword="false" />.
     /// </returns>
     public async Task<bool> PublishChallengeAsync(
         string domain,
@@ -70,9 +71,8 @@ public sealed class AcmeDnsChallengeResponder(
 
         RecordEntity record = RecordEntityCodec.FromWireRecord(wireRecord, zone.Zone.Id);
 
-        // This record is entirely ephemeral, system-managed state -- never something an
-        // operator authored, never something a secondary or cloud provider should ever learn
-        // about via a sync in either direction.
+        // The record is temporary and system-managed, so it is kept out of zone transfers and
+        // cloud sync.
         record.ExcludeFromSync = true;
 
         await zoneUpdateService.ApplyChangesAsync(zone.Zone.Id, [record], [], null, stoppingToken);
@@ -80,10 +80,9 @@ public sealed class AcmeDnsChallengeResponder(
     }
 
     /// <summary>
-    ///     This method removes a domain's own previously published DNS-01 challenge TXT
-    ///     record(s), once the CA has finished validating it (or the attempt has failed) -- a
-    ///     no-op if <see cref="PublishChallengeAsync" /> was never called, or the domain is not
-    ///     locally hosted.
+    ///     This method removes every TXT record at <c>_acme-challenge.&lt;domain&gt;</c> once the
+    ///     attempt is over, including any not published by <see cref="PublishChallengeAsync" />.
+    ///     It does nothing when there are none or the domain is not in a hosted zone.
     /// </summary>
     public async Task RemoveChallengeAsync(string domain, CancellationToken stoppingToken = default)
     {

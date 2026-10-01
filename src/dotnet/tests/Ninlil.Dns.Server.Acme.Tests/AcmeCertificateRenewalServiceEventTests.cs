@@ -15,26 +15,14 @@ using Ninlil.Dns.Server.Core.Extension;
 namespace Ninlil.Dns.Server.Acme.Tests;
 
 /// <summary>
-///     This class covers <see cref="AcmeCertificateRenewalFailedEvent" />, confirming it actually
-///     fires from <see cref="AcmeCertificateRenewalService" />'s own real trigger point (the
-///     <c>catch</c> block around <c>AcmeCertificateIssuer.IssueOrRenewAsync</c>, which also
-///     publishes the event). Deliberately does not attempt to exercise
-///     <see cref="AcmeCertificateRenewalSucceededEvent" /> the same way: a genuine success
-///     requires <c>AcmeCertificateIssuer</c> to complete a real RFC 8555 order/challenge/finalize
-///     round trip against a real or fake CA -- exactly the same verification boundary
-///     documented as a known limitation (the actual Certes-driven CA order/challenge/finalize
-///     flow needs a real CA and a publicly-resolvable domain).
-///     <see cref="AcmeCertificateRenewalSucceededEvent" />'s own publish call sits immediately
-///     after that same, already-unverifiable success path and needs no new machinery of its own
-///     to reason about; it is verified by direct code inspection instead (see
-///     <see cref="AcmeCertificateRenewalService" />'s own source), not by a new executed test.
+///     This class tests that <see cref="AcmeCertificateRenewalService" /> publishes
+///     <see cref="AcmeCertificateRenewalFailedEvent" /> and records the failure when issuance
+///     fails. It runs the service in a host with SQLite storage and a recording event publisher.
+///     <see cref="AcmeCertificateRenewalSucceededEvent" /> is not tested: a success needs a full
+///     RFC 8555 order with a CA and a publicly resolvable domain.
 ///     <para>
-///         The deterministic failure this test drives is a real network failure, not a stub: this
-///         resolver's own <c>AcmeOptions.DirectoryUri</c> points at a closed loopback port, so
-///         Certes's very first HTTP call (registering/reusing the ACME account) fails fast with a
-///         real connection-refused error -- the same "unreachable address, assert failure within a
-///         few seconds" technique <c>Server.Events.ActiveMq.Tests</c>' own regression test for a
-///         real client-library bug already established.
+///         The failure is a real network error: <c>AcmeOptions.DirectoryUri</c> points at a closed
+///         loopback port, so the first Certes HTTP call fails at once with connection refused.
 ///     </para>
 /// </summary>
 public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
@@ -54,9 +42,8 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // Overrides AddNinlilDnsServerCore's own real IDnsServerEventPublisher registration --
-        // this test only cares about capturing what gets published directly, not about the real
-        // background dispatcher delivering it to any subscriber.
+        // Replaces the IDnsServerEventPublisher from AddNinlilDnsServerCore, so published events
+        // are captured instead of dispatched.
         _publisher = new RecordingEventPublisher();
         builder.Services.AddSingleton<IDnsServerEventPublisher>(_publisher);
 
@@ -74,10 +61,8 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
         {
             options.Enable = true;
 
-            // A closed loopback port -- Certes's own first HTTP call (fetching the directory to
-            // register/reuse an account) fails immediately with a real connection-refused error,
-            // rather than hanging until a DNS/TCP timeout the way a routable-but-unreachable
-            // address would.
+            // A closed loopback port: the first Certes HTTP call (fetching the directory) is
+            // refused at once instead of waiting for a timeout, as an unreachable address would.
             options.DirectoryUri = new Uri("http://127.0.0.1:1/directory");
             options.Domains = ["example.invalid"];
             options.AccountStateFilePath = Path.Combine(
@@ -92,10 +77,9 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
         builder.Services.AddScoped<CaaRecordReconciliationService>();
         builder.Services.AddScoped<AcmeCertificateIssuer>();
 
-        // Registered directly (not via AddHostedService, which would only expose it through
-        // IHostedService) so this test can resolve and drive it by its own concrete type, the
-        // same pattern CloudDnsZoneSyncServiceTests already establishes for a different
-        // BackgroundService.
+        // Registered as its concrete type (AddHostedService would expose it only as
+        // IHostedService) so the test can resolve and start it, as CloudDnsZoneSyncServiceTests
+        // does.
         builder.Services.AddSingleton<AcmeCertificateRenewalService>();
 
         _host = builder.Build();
@@ -117,12 +101,8 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
     [Fact]
     public async Task ARealRenewalFailureAgainstAnUnreachableCaPublishesTheFailedEvent()
     {
-        // AcmeCertificateRenewalService.ExecuteAsync runs RenewDueDomainsAsync synchronously
-        // before its own first Task.Delay, but BackgroundService still only schedules that
-        // continuation rather than running it fully to completion before StartAsync returns --
-        // the same real, empirically-confirmed scheduling gap CloudDnsZoneSyncServiceTests'
-        // own RunOneSyncPassAsync already documents for a different background service. Poll for
-        // the expected side effect instead of assuming it has already happened.
+        // StartAsync returns at the first await inside the renewal pass, before it has finished,
+        // so poll for the event instead of assuming it has been published.
         AcmeCertificateRenewalService renewalService =
             _host.Services.GetRequiredService<AcmeCertificateRenewalService>();
 
@@ -141,10 +121,8 @@ public sealed class AcmeCertificateRenewalServiceEventTests : IAsyncLifetime
 
         Assert.Empty(_publisher.Published.OfType<AcmeCertificateRenewalSucceededEvent>());
 
-        // The same failure this event carries must also be durably recorded, since nothing
-        // subscribes to this event type to persist it anywhere a later REST read could find it
-        // -- see AcmeDomainRenewalFailure's own doc comment for why this persistence point
-        // exists at all.
+        // The failure must also be recorded in the store, which the ACME settings API reads (see
+        // AcmeDomainRenewalFailure).
         IAcmeAccountStore accountStore = _host.Services.GetRequiredService<IAcmeAccountStore>();
         Assert.True(
             accountStore.Failures.TryGetValue(
