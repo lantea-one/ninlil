@@ -15,20 +15,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="OutboundQueryOptions" /> --
-///     the REST management surface for this server's own outbound UDP source-port
-///     randomization/pooling. No secret material is involved. Every action requires the
-///     <c>outboundquerysettings:read</c> or <c>outboundquerysettings:write</c> permission.
+///     This controller reads and writes <see cref="OutboundQueryOptions" />: whether outbound
+///     UDP queries use a randomized source-port pool, its size per address family, and ports to
+///     avoid. Reading needs <c>outboundquerysettings:read</c> and writing needs
+///     <c>outboundquerysettings:write</c>.
 ///     <para>
-///         Every field takes effect immediately, with no restart:
-///         <see cref="OutboundQueryOptions" /> is read via <see cref="IOptionsMonitor{TOptions}" />
-///         by <c>OutboundUdpSocketPool</c>, the same live-reload shape
-///         <see cref="RecursiveSettingsController" /> already establishes for most of its own
-///         fields.
+///         Every field takes effect without a restart: <c>OutboundUdpSocketPool</c> reads
+///         <see cref="OutboundQueryOptions" /> through <see cref="IOptionsMonitor{TOptions}" />.
 ///     </para>
 /// </summary>
-/// <param name="outboundQueryOptions">This host's own currently-effective outbound-query settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="outboundQueryOptions">The current outbound-query settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/outbound-query-settings")]
 public class OutboundQuerySettingsController(
@@ -37,7 +34,8 @@ public class OutboundQuerySettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live) outbound-query settings.
+    ///     This action returns the current outbound-query settings. Requires
+    ///     <c>outboundquerysettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("outboundquerysettings:read")]
@@ -52,10 +50,10 @@ public class OutboundQuerySettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:OutboundQuery</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DnsServer:OutboundQuery</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value; <c>excludedSourcePorts</c> replaces the whole
+    ///     list. No range checks are applied. Requires <c>outboundquerysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("outboundquerysettings:write")]

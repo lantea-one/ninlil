@@ -17,49 +17,34 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers Ninlil's own bundled Safe Search / parental-control catalog
-///     (<c>SafeSearchCatalog</c>) -- one-click toggles that force each major search engine's own
-///     publicly documented DNS-based safe-search mechanism. It is a thin layer over the existing
-///     DNS rewrite engine already covered by <see cref="DnsRewritesController" />, not a parallel
-///     mechanism: enabling a catalog entry creates (or re-enables) an ordinary, CNAME-classified
-///     <see cref="DnsRewriteEntity" /> row for each of that entry's own hostname mappings, exactly
-///     what an operator would configure by hand today. See <c>SafeSearchCatalog</c>'s own doc
-///     comment for every mapping's real source and this feature's own documented interaction with
-///     <see cref="DnsRewriteOptions.Enable" />'s single global toggle. Every action requires the
-///     <c>dnsrewrites:read</c> or <c>dnsrewrites:write</c> permission -- the same permissions
-///     <see cref="DnsRewritesController" /> itself requires, since this controller only ever
-///     creates/removes ordinary <see cref="DnsRewriteEntity" /> rows; enabling an entry
-///     additionally flips <see cref="DnsRewriteOptions.Enable" /> on when it was off, which this
-///     controller treats as within scope of <c>dnsrewrites:write</c> rather than requiring the
-///     separate <c>rewritesettings:write</c> permission too -- a deliberate, narrow exception,
-///     since that flag's only effect is whether rewrites (including the very rows this action just
-///     wrote) are consulted at all, not a distinct, unrelated capability.
+///     This controller serves the Safe Search catalog (<c>SafeSearchCatalog</c>): one-click
+///     toggles that force each major search engine's published DNS-based safe-search mechanism.
+///     It is a thin layer over the DNS rewrites of <see cref="DnsRewritesController" />: enabling
+///     an entry creates (or re-enables) one CNAME <see cref="DnsRewriteEntity" /> per hostname
+///     mapping, as an operator could by hand. <c>SafeSearchCatalog</c> documents each mapping's
+///     source and how it relates to the <see cref="DnsRewriteOptions.Enable" /> switch. Reads need
+///     <c>dnsrewrites:read</c> and changes need <c>dnsrewrites:write</c>, the rewrite permissions.
+///     Enabling an entry also turns <see cref="DnsRewriteOptions.Enable" /> on if it was off,
+///     without requiring <c>rewritesettings:write</c>: that switch only decides whether rewrites,
+///     including the ones just written, are used at all. Disabling never turns it off, since
+///     other rewrites may need it.
 ///     <para>
-///         <b>Per-client/client-group scoping (optional <c>clientId</c>/<c>clientGroupId</c> query
-///         parameters, mutually exclusive, on every action below)</b>: omitting both preserves
-///         every one of this controller's own pre-existing, unscoped (global) semantics exactly --
-///         <c>List</c> reports whether an entry is globally enabled, <c>Enable</c> creates/
-///         re-enables its mapping rows as ordinary, unscoped <see cref="DnsRewriteEntity" /> rows,
-///         and <c>Disable</c> removes exactly those unscoped rows. Naming one narrows every action
-///         to that single target's own rows instead: <c>List</c> reports whether the entry is
-///         enabled <em>for that target specifically</em>; <c>Enable</c> creates/re-enables rows
-///         scoped to it (via <see cref="DnsRewriteEntity.ClientId" />/<c>ClientGroupId</c>, see
-///         that entity's own doc comment for the resulting query-time behavior); <c>Disable</c>
-///         removes only that target's own scoped rows, leaving every global row and every other
-///         target's own rows untouched. A scoped row is a genuinely separate row from a global one
-///         for the same mapping -- both can coexist, and both independently apply (the scoped row
-///         to its one audience, the global row to everyone) once <see cref="DnsRewriteOptions.Enable" />
-///         is on, which a scoped <c>Enable</c> still turns on if it was off, for the identical
-///         reason an unscoped one already does: a client-scoped rewrite is exactly as unable to
-///         ever take effect while the single global engine toggle is off as a global one is.
+///         <b>Scoping to a client or client group.</b> Every action takes optional, mutually
+///         exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. Without them the
+///         actions work on global (unscoped) rewrites. With one, <c>List</c> reports whether the
+///         entry is enabled for that target, <c>Enable</c> creates or re-enables rewrites scoped to
+///         it (through <see cref="DnsRewriteEntity.ClientId" /> or <c>ClientGroupId</c>; see that
+///         entity for the query-time behavior), and <c>Disable</c> removes only that target's
+///         rewrites. A scoped rewrite and a global one for the same mapping are separate rows; both
+///         can exist and each applies to its own audience.
 ///     </para>
 /// </summary>
-/// <param name="rewriteRepository">The repository this controller reads and writes rewrite rows through.</param>
-/// <param name="rewriteOptions">This host's own currently-effective rewrite settings, live -- checked before writing to the configuration file.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file <see cref="DnsRewriteOptions.Enable" /> is merged into, when enabling an entry needs to turn it on.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="clientRepository">The repository used to confirm an optional <c>clientId</c> target actually exists.</param>
-/// <param name="clientGroupRepository">The repository used to confirm an optional <c>clientGroupId</c> target actually exists.</param>
+/// <param name="rewriteRepository">Reads and writes rewrites.</param>
+/// <param name="rewriteOptions">The current rewrite settings, checked before turning the engine on.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file <see cref="DnsRewriteOptions.Enable" /> is written to when enabling an entry turns it on.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="clientRepository">Confirms a <c>clientId</c> target exists.</param>
+/// <param name="clientGroupRepository">Confirms a <c>clientGroupId</c> target exists.</param>
 [ApiController]
 [Route("api/safe-search")]
 public class SafeSearchController(
@@ -72,11 +57,9 @@ public class SafeSearchController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every catalog entry this server offers, together with whether each is
-    ///     currently fully enabled (every one of its own hostname mappings present as an enabled
-    ///     rewrite) -- globally by default, or for a single optional <c>clientId</c>/
-    ///     <c>clientGroupId</c> target (mutually exclusive) when named -- see this class's own doc
-    ///     comment for the full scoping contract.
+    ///     This action lists every catalog entry and whether it is fully enabled (every hostname
+    ///     mapping present as an enabled rewrite), globally or for the given <c>clientId</c> or
+    ///     <c>clientGroupId</c> (not both, which returns 400). Requires <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dnsrewrites:read")]
@@ -99,18 +82,12 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This action enables a single catalog entry: for every one of its own hostname mappings,
-    ///     creates a matching rewrite row if none exists, or re-enables one that was previously
-    ///     disabled -- globally by default, or scoped to a single optional <c>clientId</c>/
-    ///     <c>clientGroupId</c> target (mutually exclusive) when named, see this class's own doc
-    ///     comment. Rejected with <c>400 Bad Request</c> if both are given, or if a named target
-    ///     does not actually exist. Rejected with <c>409 Conflict</c>, with nothing at all written,
-    ///     if any mapping would collide with an existing, unrelated CNAME-classified rewrite for
-    ///     the same hostname <em>within the same scope</em> pointing somewhere else -- validated
-    ///     for every mapping before any write is made, so a rejected request never leaves this
-    ///     entry partially applied. Also turns <see cref="DnsRewriteOptions.Enable" /> on if it was
-    ///     off, regardless of scope -- see this class's own doc comment for why that side effect
-    ///     exists and is deliberately not reversed on disable.
+    ///     This action enables one catalog entry: for each hostname mapping it creates a rewrite in
+    ///     the requested scope, or re-enables a disabled one. It also turns the rewrite engine on
+    ///     if it was off, whatever the scope. Returns 400 when both targets are given or the target
+    ///     does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping's
+    ///     hostname already has a different CNAME rewrite in the same scope; every mapping is
+    ///     checked before anything is written. Requires <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpPost("{key}")]
     [RequirePermission("dnsrewrites:write")]
@@ -134,12 +111,9 @@ public class SafeSearchController(
             clientGroupId
         );
 
-        // Validate every mapping before writing anything at all -- a rejected request must never
-        // leave this entry half-applied (the same "fully validate, then fully apply" discipline
-        // BackupController's own restore path already follows). The conflict/exact-match scan is
-        // pre-filtered to this same scope only: a global rewrite pointing somewhere else for the
-        // same hostname never blocks enabling a client-scoped Safe Search override (and vice
-        // versa) -- each scope's own rows are entirely independent.
+        // Check every mapping before writing anything, so a rejected request never leaves the entry
+        // half applied. Only rewrites in the same scope are considered: a global rewrite elsewhere
+        // for the hostname does not block a client-scoped Safe Search override, or the reverse.
         foreach (SafeSearchRewriteMapping mapping in entry.Mappings)
         {
             DnsRewriteEntity conflicting = FindConflictingCname(rewrites, mapping);
@@ -187,10 +161,8 @@ public class SafeSearchController(
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // The single global engine toggle gates every rewrite regardless of scope -- a
-        // client-scoped row created above is exactly as inert as a global one would be while this
-        // stays off, so this check and side effect are deliberately unconditional on clientId/
-        // clientGroupId.
+        // The engine switch gates every rewrite whatever its scope, so a scoped rewrite is as inert
+        // as a global one while it is off; the check does not depend on clientId or clientGroupId.
         if (!rewriteOptions.CurrentValue.Enable)
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
@@ -213,14 +185,12 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This action disables a single catalog entry: removes every rewrite row, within the
-    ///     given scope only, that exactly matches one of its own hostname mappings (source domain
-    ///     and target both) -- globally by default, or scoped to a single optional <c>clientId</c>/
-    ///     <c>clientGroupId</c> target (mutually exclusive) when named, leaving every other scope's
-    ///     own rows (global rows, or another target's own rows) completely untouched. Never touches
-    ///     <see cref="DnsRewriteOptions.Enable" /> -- see this class's own doc comment for why. A
-    ///     no-op, not an error, for a mapping with no matching row in the given scope, or for an
-    ///     unrecognized target (nothing in that scope could ever exist to remove).
+    ///     This action disables one catalog entry: it removes every rewrite in the requested scope
+    ///     whose domain and target match one of the entry's mappings, including an identical one an
+    ///     operator configured by hand, and leaves other scopes alone. It does not turn the rewrite
+    ///     engine off. Having nothing to remove, or naming a target that does not exist, is not an
+    ///     error. Returns 400 when both targets are given and 404 for an unknown key. Requires
+    ///     <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpDelete("{key}")]
     [RequirePermission("dnsrewrites:write")]
@@ -256,8 +226,7 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This method rejects a request naming both a client and a client-group target at once --
-    ///     shared by every action that accepts the optional scoping pair.
+    ///     This method rejects a request that names both a client and a client group.
     /// </summary>
     private static void ValidateMutuallyExclusive(Guid? clientId, Guid? clientGroupId)
     {
@@ -266,10 +235,8 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This method validates an <c>Enable</c> request's own optional scoping target: rejects
-    ///     both being given at once, then confirms whichever one <em>is</em> given actually names
-    ///     an existing row -- a write action must never silently create a scoped rewrite pointed at
-    ///     a client/group that does not exist.
+    ///     This method checks an <c>Enable</c> request's target: not both kinds at once, and the
+    ///     one given must exist, so no scoped rewrite points at a missing client or group.
     /// </summary>
     private async Task ValidateTargetAsync(
         Guid? clientId,
@@ -290,15 +257,12 @@ public class SafeSearchController(
     }
 
     /// <summary>
-    ///     This method narrows a rewrite set down to exactly one scope -- every row whose own
-    ///     <see cref="DnsRewriteEntity.ClientId" />/<c>ClientGroupId</c> pair matches
-    ///     <paramref name="clientId" />/<paramref name="clientGroupId" /> exactly (both
-    ///     <see langword="null" /> matches only the global rows, the same "both null" comparison
-    ///     works for a genuine single target since at most one of the two parameters is ever
-    ///     non-null once <see cref="ValidateMutuallyExclusive" /> has already run). Every method on
-    ///     this controller applies this filter immediately after loading rewrites, so
-    ///     <see cref="FindConflictingCname" />/<see cref="FindExactMatch" />/<see cref="ToDetail" />
-    ///     themselves need no scope awareness of their own at all.
+    ///     This method keeps only the rewrites in one scope: those whose
+    ///     <see cref="DnsRewriteEntity.ClientId" /> and <c>ClientGroupId</c> both equal
+    ///     <paramref name="clientId" /> and <paramref name="clientGroupId" />. Two nulls select the
+    ///     global rows. Every action filters right after loading, so
+    ///     <see cref="FindConflictingCname" />, <see cref="FindExactMatch" /> and
+    ///     <see cref="ToDetail" /> need no scope handling.
     /// </summary>
     private static IReadOnlyList<DnsRewriteEntity> FilterByScope(
         IReadOnlyList<DnsRewriteEntity> rewrites,
@@ -312,12 +276,11 @@ public class SafeSearchController(
         ];
 
     /// <summary>
-    ///     This method finds an existing rewrite row whose own normalized domain matches a
-    ///     mapping's <see cref="SafeSearchRewriteMapping.SourceDomain" /> and whose own target
-    ///     classifies as CNAME (the only kind that could genuinely conflict with a Safe Search
-    ///     mapping, which is always CNAME-classified itself), but whose target text does
-    ///     <b>not</b> match the mapping's own <see cref="SafeSearchRewriteMapping.TargetDomain" /> --
-    ///     the real "something else already claims this hostname" conflict case.
+    ///     This method finds a rewrite for a mapping's
+    ///     <see cref="SafeSearchRewriteMapping.SourceDomain" /> whose target is a CNAME other than
+    ///     the mapping's <see cref="SafeSearchRewriteMapping.TargetDomain" />: another rewrite
+    ///     already claims the hostname. Safe Search mappings are always CNAMEs, so only a CNAME can
+    ///     conflict.
     /// </summary>
     private static DnsRewriteEntity FindConflictingCname(
         IReadOnlyList<DnsRewriteEntity> rewrites,
@@ -339,9 +302,8 @@ public class SafeSearchController(
         );
 
     /// <summary>
-    ///     This method finds an existing rewrite row whose own normalized domain and target both
-    ///     already exactly match a mapping -- already satisfies it, whether this catalog created
-    ///     it or an operator happened to hand-configure the identical override themselves.
+    ///     This method finds a rewrite whose domain and target both match a mapping, whether the
+    ///     catalog created it or an operator configured the same override by hand.
     /// </summary>
     private static DnsRewriteEntity FindExactMatch(
         IReadOnlyList<DnsRewriteEntity> rewrites,
@@ -357,16 +319,15 @@ public class SafeSearchController(
         );
 
     /// <summary>
-    ///     This method normalizes a domain to lowercase with no trailing dot, mirroring
-    ///     <c>DnsRewriteEngine</c>'s own identical normalization.
+    ///     This method lowercases a domain and removes a trailing dot, as <c>DnsRewriteEngine</c>
+    ///     does.
     /// </summary>
     private static string NormalizeDomain(string value) =>
         value?.TrimEnd('.').ToLowerInvariant() ?? string.Empty;
 
     /// <summary>
-    ///     This method builds <see cref="SafeSearchDetail" /> for a catalog entry, considering it
-    ///     enabled only when <b>every</b> one of its own mappings has a matching, enabled rewrite
-    ///     row.
+    ///     This method builds <see cref="SafeSearchDetail" /> for an entry; it counts as enabled
+    ///     only when every mapping has a matching, enabled rewrite.
     /// </summary>
     private static SafeSearchDetail ToDetail(
         SafeSearchCatalogEntry entry,

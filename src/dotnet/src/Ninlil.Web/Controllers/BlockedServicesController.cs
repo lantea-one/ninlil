@@ -13,60 +13,44 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers Ninlil's own curated "blocked services" catalog
-///     (<c>BlockedServiceCatalog</c>) -- the one-click named-service toggles a homelab operator
-///     uses instead of hand-authoring a filter list for a specific consumer service. It is a thin
-///     layer over the existing block/allow-list engine already covered by
-///     <see cref="FilterListsController" />/<see cref="FilterListEntriesController" />, not a
-///     parallel blocking mechanism: enabling a catalog entry creates (or re-enables) exactly one
-///     ordinary, <c>Subscribed</c>-source <see cref="DnsFilterListEntity" /> pointed at that
-///     entry's own real third-party domain list, and disabling it removes that same list. See
-///     <c>BlockedServiceCatalog</c>'s own doc comment for this catalog's data source, license, and
-///     exact scope. Every action requires the <c>filterlists:read</c> or <c>filterlists:write</c>
-///     permission -- the same permissions <see cref="FilterListsController" /> itself requires,
-///     since this controller only ever creates/removes an ordinary <see cref="DnsFilterListEntity" />
-///     row, ordinary Filter Lists permissions already cover exactly the access this needs.
+///     This controller serves the "blocked services" catalog (<c>BlockedServiceCatalog</c>):
+///     one-click toggles for named consumer services, instead of building a filter list by hand.
+///     It is a thin layer over the block/allow-list engine of <see cref="FilterListsController" />
+///     and <see cref="FilterListEntriesController" />: enabling an entry creates (or re-enables)
+///     one ordinary <c>Subscribed</c> <see cref="DnsFilterListEntity" /> pointing at the entry's
+///     third-party domain list, and disabling it removes that list. <c>BlockedServiceCatalog</c>
+///     documents the data source, license and scope. Reads need <c>filterlists:read</c> and
+///     changes need <c>filterlists:write</c>, the Filter Lists permissions, since all it does is
+///     manage ordinary filter lists.
 ///     <para>
-///         <b>How a catalog entry's own managed list is found again</b>: by matching a
-///         <see cref="DnsFilterListSourceEnum.Subscribed" /> list's own
-///         <see cref="DnsFilterListEntity.SubscriptionUrl" /> against the catalog entry's own
-///         <see cref="BlockedServiceCatalogEntry.SubscriptionUrl" /> exactly -- stable even if an
-///         operator renames the list afterward (matching by <c>Name</c> would not be).
+///         <b>Finding an entry's list again.</b> The managed list is the subscribed list whose
+///         <see cref="DnsFilterListEntity.SubscriptionUrl" /> equals the entry's
+///         <see cref="BlockedServiceCatalogEntry.SubscriptionUrl" />. That survives a rename,
+///         which matching by <c>Name</c> would not.
 ///     </para>
 ///     <para>
-///         <b>Per-client/client-group targeting (optional <c>clientId</c>/<c>clientGroupId</c>
-///         query parameters, mutually exclusive, on every action below)</b>: enabling/disabling a
-///         catalog entry always creates (or re-enables)/removes exactly one shared, global
-///         <see cref="DnsFilterListEntity" /> -- that part is unchanged and, with neither
-///         parameter given, every action here behaves byte-for-byte as it always has. What the
-///         parameters add is the second, separate step this feature always needed to actually
-///         apply to anyone: <c>Enable</c> additionally creates a
-///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientListAssignmentEntity" />/
-///         <see cref="DnsClientGroupListAssignmentEntity" /> row (whichever the given parameter
-///         names) linking that shared list straight to the named client/group, via the exact same
-///         repositories <see cref="ClientListAssignmentsController" />/
-///         <see cref="ClientGroupListAssignmentsController" /> already expose -- no new assignment
-///         mechanism, this is just doing, in one call, the second REST call an operator would
-///         otherwise have to make by hand. <c>Disable</c> with a target removes only that one
-///         target's own assignment, leaving the shared list itself, and every other target's own
-///         assignment, completely untouched -- <c>Disable</c> with no target keeps doing exactly
-///         what it always has (permanently deletes the shared list and every group assignment
-///         referencing it), extended only to also clean up any client-level assignment referencing
-///         it now that one can exist at all (a real, necessary addition, not a behavior change to
-///         any flow that predates this capability, since no such assignment could have existed
-///         before it).
+///         <b>Targeting a client or client group.</b> Every action takes optional, mutually
+///         exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. The shared list is
+///         created, re-enabled or found as above either way. With a target, <c>Enable</c> also
+///         creates a
+///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientListAssignmentEntity" /> or
+///         <see cref="DnsClientGroupListAssignmentEntity" /> linking the list to that target,
+///         through the repositories behind <see cref="ClientListAssignmentsController" /> and
+///         <see cref="ClientGroupListAssignmentsController" />, saving a second call. With a
+///         target, <c>Disable</c> removes only that target's assignment and leaves the list and
+///         other targets alone. Without one, <c>Disable</c> deletes the list and every client and
+///         client-group assignment that refers to it.
 ///     </para>
 /// </summary>
-/// <param name="filterListRepository">The repository this controller reads and writes managed filter lists through.</param>
+/// <param name="filterListRepository">Reads and writes the managed filter lists.</param>
 /// <param name="listAssignmentRepository">
-///     The repository used to remove a disabled entry's own client-group assignments, mirroring
-///     <see cref="FilterListsController.Delete" />'s own identical cleanup, and to create/remove a
-///     <c>clientGroupId</c>-targeted assignment.
+///     Creates and removes client-group assignments, including the cleanup when a list is
+///     deleted (as in <see cref="FilterListsController.Delete" />).
 /// </param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="clientRepository">The repository used to confirm an optional <c>clientId</c> target actually exists.</param>
-/// <param name="clientGroupRepository">The repository used to confirm an optional <c>clientGroupId</c> target actually exists.</param>
-/// <param name="clientListAssignmentRepository">The repository used to create/remove a <c>clientId</c>-targeted assignment.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="clientRepository">Confirms a <c>clientId</c> target exists.</param>
+/// <param name="clientGroupRepository">Confirms a <c>clientGroupId</c> target exists.</param>
+/// <param name="clientListAssignmentRepository">Creates and removes client assignments.</param>
 [ApiController]
 [Route("api/blocked-services")]
 public class BlockedServicesController(
@@ -79,17 +63,15 @@ public class BlockedServicesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This constant contains how often a catalog entry's own managed list is refetched once
-    ///     enabled, matching <c>DnsServerPresetCatalog</c>'s own identical default for a
-    ///     preset-owned subscribed list.
+    ///     This constant contains how often an enabled entry's list is fetched again, the same
+    ///     default <c>DnsServerPresetCatalog</c> uses for preset-owned subscribed lists.
     /// </summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(24);
 
     /// <summary>
-    ///     This action lists every catalog entry this server offers, together with whether each is
-    ///     currently enabled -- globally by default, or for a single optional <c>clientId</c>/
-    ///     <c>clientGroupId</c> target (mutually exclusive) when named, see this class's own doc
-    ///     comment for the full targeting contract.
+    ///     This action lists every catalog entry with whether it is enabled: globally by default,
+    ///     or for the given <c>clientId</c> or <c>clientGroupId</c> (not both, which returns 400).
+    ///     Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("filterlists:read")]
@@ -120,15 +102,12 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action enables a single catalog entry: creates its own managed
-    ///     <see cref="DnsFilterListEntity" /> if none exists yet, or re-enables (clears
-    ///     <see cref="DnsFilterListEntity.IsDisabled" /> on) one that was previously disabled --
-    ///     unaffected by scoping, see this class's own doc comment. Idempotent -- enabling an
-    ///     already-enabled entry (in the same scope) simply returns its current state. When a
-    ///     single optional <c>clientId</c>/<c>clientGroupId</c> target (mutually exclusive) is
-    ///     given, this action additionally creates that target's own assignment of the managed
-    ///     list, if it does not already have one -- rejected with <c>400 Bad Request</c> if both
-    ///     are given, or if the named target does not actually exist.
+    ///     This action enables one catalog entry: it creates the entry's managed
+    ///     <see cref="DnsFilterListEntity" /> if none exists or re-enables a disabled one, and,
+    ///     with a <c>clientId</c> or <c>clientGroupId</c>, also assigns the list to that target if
+    ///     it is not already. Enabling an enabled entry just returns its state. Returns 400 when
+    ///     both targets are given or the target does not exist, and 404 for an unknown key.
+    ///     Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPost("{key}")]
     [RequirePermission("filterlists:write")]
@@ -163,11 +142,9 @@ public class BlockedServicesController(
         }
         else
         {
-            // A plain "Blocked Service: <name>" list name could collide with an operator's own,
-            // unrelated list of the exact same name -- rather than silently reusing (and
-            // potentially hijacking) it, generate a name guaranteed unique the same way the
-            // ordinary Filter Lists create form itself would reject a real collision, by checking
-            // first.
+            // "Blocked Service: <name>" could already be the name of an unrelated operator list.
+            // Rather than reuse (and take over) that list, the key is added to make the name
+            // unique.
             string listName = $"Blocked Service: {entry.DisplayName}";
             if (await filterListRepository.FindByNameAsync(listName, stoppingToken) is not null)
                 listName = $"Blocked Service: {entry.DisplayName} ({entry.Key})";
@@ -200,18 +177,14 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action disables a single catalog entry. With neither target given, this keeps
-    ///     doing exactly what it always has: permanently deletes its own managed
-    ///     <see cref="DnsFilterListEntity" /> and every client-group <em>and</em> (now that one can
-    ///     exist at all, see this class's own doc comment) client-level assignment still
-    ///     referencing it, mirroring <see cref="FilterListsController.Delete" />'s own identical
-    ///     cleanup. With a single optional <c>clientId</c>/<c>clientGroupId</c> target given, this
-    ///     instead removes <em>only that target's own assignment</em>, leaving the shared managed
-    ///     list -- and every other target's own assignment -- completely untouched: an operator
-    ///     un-blocking a service for one specific child's device must not also silently un-block it
-    ///     for everyone else who has it assigned. A no-op, not an error, when there is nothing to
-    ///     remove in the given scope (the entry has no managed list at all, or the named target
-    ///     simply has no assignment of its own).
+    ///     This action disables one catalog entry. Without a target it deletes the entry's managed
+    ///     <see cref="DnsFilterListEntity" /> and every client and client-group assignment that
+    ///     refers to it (as <see cref="FilterListsController.Delete" /> does for group
+    ///     assignments). With a <c>clientId</c> or <c>clientGroupId</c> it removes only that
+    ///     target's assignment and leaves the list and every other target alone, so unblocking a
+    ///     service for one device does not unblock it for everyone. Having nothing to remove is not
+    ///     an error. Returns 400 when both targets are given and 404 for an unknown key. Requires
+    ///     <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{key}")]
     [RequirePermission("filterlists:write")]
@@ -262,9 +235,8 @@ public class BlockedServicesController(
             foreach (DnsClientGroupListAssignmentEntity assignment in groupAssignments)
                 listAssignmentRepository.Remove(assignment);
 
-            // A client-level assignment referencing this list could only ever exist via a prior,
-            // targeted Enable call above -- cleaned up here too so the shared list's own removal
-            // below never leaves a dangling reference behind.
+            // A client assignment of this list can exist only from a targeted Enable; it is removed
+            // too so deleting the list leaves no dangling reference.
             IReadOnlyList<DnsClientListAssignmentEntity> clientAssignments =
                 await clientListAssignmentRepository.ListAsync(
                     assignment => assignment.ListId == existing.Id,
@@ -282,8 +254,7 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method rejects a request naming both a client and a client-group target at once --
-    ///     shared by every action that accepts the optional targeting pair.
+    ///     This method rejects a request that names both a client and a client group.
     /// </summary>
     private static void ValidateMutuallyExclusive(Guid? clientId, Guid? clientGroupId)
     {
@@ -292,10 +263,8 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method validates an <c>Enable</c> request's own optional targeting: rejects both
-    ///     being given at once, then confirms whichever one <em>is</em> given actually names an
-    ///     existing row -- a write action must never silently create an assignment pointed at a
-    ///     client/group that does not exist.
+    ///     This method checks an <c>Enable</c> request's target: not both kinds at once, and the
+    ///     one given must exist, so no assignment points at a missing client or group.
     /// </summary>
     private async Task ValidateTargetAsync(
         Guid? clientId,
@@ -316,10 +285,8 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method creates a target's own assignment of the managed list, unless one already
-    ///     exists -- a no-op, not an error, either way when no target is given at all (today's
-    ///     exact no-target behavior: a managed list is created/re-enabled but never automatically
-    ///     assigned to anything).
+    ///     This method assigns the managed list to the target unless it already is. Without a
+    ///     target it does nothing; the list is created or re-enabled but not assigned to anyone.
     /// </summary>
     private async Task EnsureAssignmentAsync(
         Guid listId,
@@ -367,11 +334,9 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method loads every currently-known, <see cref="DnsFilterListSourceEnum.Subscribed" />
-    ///     list this catalog could possibly have created -- a plain <see cref="IRepository{TEntity}.ListAsync" />
-    ///     filter, matching this project's own established "acceptable at homelab/small-org scale"
-    ///     reasoning (see <see cref="DnsRewritesController.FindConflictingAsync" /> for the same
-    ///     precedent) rather than a dedicated repository lookup.
+    ///     This method loads every <see cref="DnsFilterListSourceEnum.Subscribed" /> list, among
+    ///     which the catalog's managed lists are found, through
+    ///     <see cref="IRepository{TEntity}.ListAsync" />.
     /// </summary>
     private async Task<IReadOnlyList<DnsFilterListEntity>> ListManagedAsync(
         CancellationToken stoppingToken
@@ -382,9 +347,8 @@ public class BlockedServicesController(
         );
 
     /// <summary>
-    ///     This method finds a catalog entry's own managed list among an already-loaded set of
-    ///     subscribed lists, matching by <see cref="DnsFilterListEntity.SubscriptionUrl" /> -- see
-    ///     this class's own doc comment for why that, not <c>Name</c>, is the stable key.
+    ///     This method finds an entry's managed list among the loaded subscribed lists by
+    ///     <see cref="DnsFilterListEntity.SubscriptionUrl" /> (see the class summary).
     /// </summary>
     private static DnsFilterListEntity FindManagedList(
         BlockedServiceCatalogEntry entry,
@@ -399,11 +363,10 @@ public class BlockedServicesController(
         );
 
     /// <summary>
-    ///     This method builds <see cref="BlockedServiceDetail" /> for a catalog entry given its own
-    ///     already-resolved managed list (or <see langword="null" /> if it has none) -- with
-    ///     neither target given, <see cref="BlockedServiceDetail.IsEnabled" /> reflects the shared
-    ///     list's own global state exactly as it always has; with one given, it instead reflects
-    ///     whether that specific target currently has its own assignment of the list.
+    ///     This method builds <see cref="BlockedServiceDetail" /> for an entry and its managed list
+    ///     (or <see langword="null" />). Without a target,
+    ///     <see cref="BlockedServiceDetail.IsEnabled" /> is whether the list exists and is enabled;
+    ///     with one, whether that target also has an assignment of it.
     /// </summary>
     private async Task<BlockedServiceDetail> ToDetailAsync(
         BlockedServiceCatalogEntry entry,

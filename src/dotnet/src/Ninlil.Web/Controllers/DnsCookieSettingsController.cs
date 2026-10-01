@@ -19,21 +19,20 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnsCookieOptions" /> (RFC
-///     7873) -- the REST management surface for DNS Cookies, mirroring the surface
-///     <see cref="RateLimitingSettingsController" /> already gives its sibling hardening
-///     primitive. No secret material is involved. Every action requires the
-///     <c>dnscookies:read</c> or <c>dnscookies:write</c> permission.
+///     This controller reads and writes <see cref="DnsCookieOptions" /> (RFC 7873 DNS Cookies):
+///     whether cookies are on, whether they are required, and how often the server secret
+///     rotates. Reading needs <c>dnscookies:read</c> and writing needs <c>dnscookies:write</c>. A
+///     write is also replicated to the other cluster nodes and needs a restart, since the
+///     settings are read through <see cref="IOptions{TOptions}" />.
 /// </summary>
-/// <param name="cookieOptions">This host's own currently-effective DNS Cookie settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="cookieOptions">The DNS Cookie settings loaded at startup.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 /// <param name="clusterSyncRecorder">
-///     The cluster config-sync helper this controller calls after a successful write so the change
-///     propagates to every cluster peer.
+///     Records a successful write and sends it to every cluster peer.
 /// </param>
 /// <param name="stateRepository">
-///     The repository <see cref="Get" /> reads this section's own last-write-wins bookkeeping
-///     from, to surface <see cref="DnsCookieSettingsDetail.LastModifiedUtc" />/
+///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
+///     <see cref="DnsCookieSettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="DnsCookieSettingsDetail.OriginatingNodeId" />.
 /// </param>
 [ApiController]
@@ -46,8 +45,8 @@ public class DnsCookieSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live and running) DNS Cookie
-    ///     settings.
+    ///     This action returns the DNS Cookie settings in use (as loaded at startup) and which node
+    ///     last changed them. Requires <c>dnscookies:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dnscookies:read")]
@@ -71,10 +70,10 @@ public class DnsCookieSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Cookies</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DnsServer:Cookies</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for a
+    ///     malformed rotation interval. Requires <c>dnscookies:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dnscookies:write")]

@@ -17,20 +17,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="EdnsClientSubnetOptions" />
-///     (RFC 7871) -- the REST management surface for this server's own outbound EDNS Client
-///     Subnet behavior. No secret material is involved. Every action requires the
-///     <c>clientsubnetsettings:read</c> or <c>clientsubnetsettings:write</c> permission.
+///     This controller reads and writes <see cref="EdnsClientSubnetOptions" /> (RFC 7871): whether
+///     outbound queries carry an EDNS Client Subnet option, the source prefix lengths for IPv4
+///     and IPv6, and an optional address to send instead of the client's. Reading needs
+///     <c>clientsubnetsettings:read</c> and writing needs <c>clientsubnetsettings:write</c>.
 ///     <para>
-///         Every field takes effect immediately, with no restart:
-///         <see cref="EdnsClientSubnetOptions" /> is read via <see cref="IOptionsMonitor{TOptions}" />
-///         by <c>EdnsClientSubnetService</c>, the same live-reload shape
-///         <see cref="RecursiveSettingsController" /> already establishes for most of its own
-///         fields.
+///         Every field takes effect at once, with no restart: <c>EdnsClientSubnetService</c>
+///         reads <see cref="EdnsClientSubnetOptions" /> through
+///         <see cref="IOptionsMonitor{TOptions}" />.
 ///     </para>
 /// </summary>
-/// <param name="clientSubnetOptions">This host's own currently-effective ECS settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="clientSubnetOptions">The current ECS settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/client-subnet-settings")]
 public class ClientSubnetSettingsController(
@@ -39,7 +37,7 @@ public class ClientSubnetSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live) ECS settings.
+    ///     This action returns the current ECS settings. Requires <c>clientsubnetsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clientsubnetsettings:read")]
@@ -55,10 +53,11 @@ public class ClientSubnetSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:ClientSubnet</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DnsServer:ClientSubnet</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value; a null or blank <c>overrideAddress</c> clears
+    ///     it. Returns 400 for an override address that is not an IP address. Requires
+    ///     <c>clientsubnetsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("clientsubnetsettings:write")]

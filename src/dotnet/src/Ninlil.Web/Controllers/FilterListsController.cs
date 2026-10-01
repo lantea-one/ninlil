@@ -18,27 +18,24 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own block/allow lists -- the top-level
-///     resource; a list's own entries are managed separately, through the nested
-///     <see cref="FilterListEntriesController" /> (<c>/api/filter-lists/{listId}/entries</c>).
-///     Every action requires the <c>filterlists:read</c> or <c>filterlists:write</c> permission --
-///     reused for the nested entries controller too, the same way <c>zones:read</c>/<c>zones:write</c>
-///     already cover <see cref="RecordsController" /> as a zone's own child resource.
+///     This controller manages block and allow lists. A list's entries are managed through the
+///     nested <see cref="FilterListEntriesController" />
+///     (<c>/api/filter-lists/{listId}/entries</c>), which uses the same permissions:
+///     <c>filterlists:read</c> for reads and <c>filterlists:write</c> for changes, as
+///     <c>zones:read</c> and <c>zones:write</c> cover <see cref="RecordsController" />.
 /// </summary>
-/// <param name="filterListRepository">The repository this controller reads and writes lists through.</param>
+/// <param name="filterListRepository">Reads and writes lists.</param>
 /// <param name="listAssignmentRepository">
-///     The repository used to remove a deleted list's own client-group assignments -- see
-///     <see cref="Delete" /> for why.
+///     Removes a deleted list's client-group assignments (see <see cref="Delete" />).
 /// </param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="DnsFilterListChangedEvent" /> through
-///     on every write, so the cluster's own <c>FilterListClusterSyncEventSubscriber</c> forwards
-///     the change to every cluster peer.
+///     Publishes <see cref="DnsFilterListChangedEvent" /> on every write so
+///     <c>FilterListClusterSyncEventSubscriber</c> sends the change to every cluster peer.
 /// </param>
 /// <param name="clusterOptions">
-///     This node's own cluster configuration, read only for its own node id -- stamped onto
-///     <c>DnsFilterListEntity.OriginatingNodeId</c> on every create/update.
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsFilterListEntity.OriginatingNodeId</c> on every create and update.
 /// </param>
 [ApiController]
 [Route("api/filter-lists")]
@@ -51,7 +48,8 @@ public class FilterListsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every block/allow list this server knows about.
+    ///     This action lists block and allow lists, one page at a time. Requires
+    ///     <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("filterlists:read")]
@@ -63,9 +61,8 @@ public class FilterListsController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every list into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every list into memory.
         IReadOnlyList<DnsFilterListEntity> lists = await filterListRepository.SearchAsync(
             skip,
             take,
@@ -79,7 +76,8 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action looks up a single block/allow list by its identifier.
+    ///     This action returns one list. Returns 404 for an unknown id. Requires
+    ///     <c>filterlists:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("filterlists:read")]
@@ -94,7 +92,9 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action creates a new block/allow list.
+    ///     This action creates a block or allow list. A subscribed list needs a subscription URL;
+    ///     the URL and refresh interval are dropped for a local list. Returns 400 for a missing
+    ///     name or URL and 409 when the name is taken. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:write")]
@@ -150,11 +150,12 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing block/allow list's metadata. Note that changing
-    ///     <see cref="FilterListWriteRequest.Source" /> from <see cref="DnsFilterListSourceEnum.Local" />
-    ///     to <see cref="DnsFilterListSourceEnum.Subscribed" /> does not itself touch the list's
-    ///     existing entries -- they remain as-is until the next scheduled refresh replaces them
-    ///     wholesale.
+    ///     This action replaces a list's settings. Changing
+    ///     <see cref="FilterListWriteRequest.Source" /> from
+    ///     <see cref="DnsFilterListSourceEnum.Local" /> to
+    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> leaves the existing entries alone
+    ///     until the next refresh replaces them all. Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -210,10 +211,10 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing block/allow list's metadata via RFC 7396 JSON
-    ///     Merge Patch: a field absent from the patch document is left untouched, a field present
-    ///     with a JSON <c>null</c> clears it (where the underlying field is itself nullable), and
-    ///     any other present field overwrites it.
+    ///     This action updates a list's settings as an RFC 7396 merge patch: an absent field is
+    ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
+    ///     Validation and errors are as for <see cref="Replace" />. Requires
+    ///     <c>filterlists:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -300,14 +301,11 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a block/allow list. Any client-group assignment still
-    ///     referencing it (see <see cref="ClientGroupListAssignmentsController" />) is removed
-    ///     first -- unlike <see cref="TsigKeysController.Delete" />'s deliberately lax stance on a
-    ///     zone's own soft-reference <c>TsigKeyName</c>, <see cref="DnsFilterEngine" /> already
-    ///     tolerates a dangling assignment gracefully (confirmed by inspection: it simply skips a
-    ///     list it cannot find), but this project cleans it up explicitly anyway to avoid
-    ///     accumulating orphaned join rows, the same reasoning <see cref="ZonesController.Delete" />
-    ///     already applies to a deleted zone's own records and DNSSEC keys.
+    ///     This action deletes a list and the client-group assignments that refer to it (see
+    ///     <see cref="ClientGroupListAssignmentsController" />). <see cref="DnsFilterEngine" />
+    ///     would skip a missing list anyway, but the assignments are removed so join rows do not
+    ///     pile up. The list's entries and any direct client assignments are not removed. Returns
+    ///     404 for an unknown id. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -336,11 +334,10 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This method validates that a <see cref="DnsFilterListSourceEnum.Subscribed" /> list
-    ///     supplies a subscription URL, mirroring the same expectation
-    ///     <c>DnsFilterListExternalRefreshService</c> itself has (it silently does nothing for a
-    ///     subscribed list with no URL, rather than erroring -- this REST boundary is stricter,
-    ///     giving the caller an immediate <c>400</c> instead).
+    ///     This method requires a subscription URL for a
+    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list.
+    ///     <c>DnsFilterListExternalRefreshService</c> silently skips a subscribed list without one,
+    ///     so this check returns a 400 instead.
     /// </summary>
     private static bool TryValidateSubscription(
         DnsFilterListSourceEnum source,
@@ -363,7 +360,7 @@ public class FilterListsController(
     }
 
     /// <summary>
-    ///     This method converts a filter list entity into its REST representation.
+    ///     This method converts a list entity to its API representation.
     /// </summary>
     private static FilterListDetail ToDetail(DnsFilterListEntity list) =>
         new(

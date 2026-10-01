@@ -17,30 +17,22 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="ForwardingOptions" /> -- the
-///     engine-level toggle and failover/health-check tuning for upstream forwarding. Forwarder
-///     entries themselves (the actual upstream addresses) are already covered by
-///     <c>ForwardersController</c>; this controller covers only whether the forwarding resolver
-///     consults them at query time at all, plus how it picks among multiple configured forwarders.
-///     No secret material is involved, so every field is a plain read/write, the same shape
-///     <see cref="RateLimitingSettingsController" /> already establishes. Every action requires the
-///     <c>forwardingsettings:read</c> or <c>forwardingsettings:write</c> permission.
+///     This controller reads and writes <see cref="ForwardingOptions" />: whether upstream
+///     forwarding is on, how the resolver chooses among several forwarders, health-check and
+///     timeout tuning, and the forwarding cache. The forwarders themselves are managed by
+///     <c>ForwardersController</c>. Reading needs <c>forwardingsettings:read</c> and writing needs
+///     <c>forwardingsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <see cref="ForwardingOptions" />
-///         is read via <see cref="IOptionsMonitor{TOptions}" /> everywhere it actually matters for a
-///         live query (<c>ForwarderQueryResolver</c>, <c>ForwarderHealthTracker</c>,
-///         <c>UpstreamForwarderHealthCheck</c>), and <c>ForwarderQueryResolver</c> is now always
-///         registered as a DI singleton regardless of <see cref="ForwardingOptions.Enable" />'s own
-///         value at process startup -- a structural fix alongside the hot-reload conversion, since
-///         registering it only when already enabled at startup (this project's original shape)
-///         would have meant a fresh install (which starts with forwarding off by design) could
-///         never turn it on live at all, the same structural gap already found and fixed for
-///         DNS-over-HTTPS's own route mapping. See <c>ServiceCollectionForwardingExtension</c>'s
-///         own doc comment for the full reasoning.
+///         <b>Every field takes effect at once, with no restart.</b> <c>ForwarderQueryResolver</c>,
+///         <c>ForwarderHealthTracker</c> and <c>UpstreamForwarderHealthCheck</c> read
+///         <see cref="ForwardingOptions" /> through <see cref="IOptionsMonitor{TOptions}" />, and
+///         <c>ForwarderQueryResolver</c> is registered whether or not forwarding was on at
+///         startup, so a fresh install (forwarding off by default) can turn it on live. See
+///         <c>ServiceCollectionForwardingExtension</c>.
 ///     </para>
 /// </summary>
-/// <param name="forwardingOptions">This host's own currently-effective forwarding settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="forwardingOptions">The current forwarding settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/forwarding-settings")]
 public class ForwardingSettingsController(
@@ -49,8 +41,8 @@ public class ForwardingSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     forwarding settings.
+    ///     This action returns the current forwarding settings. Requires
+    ///     <c>forwardingsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("forwardingsettings:read")]
@@ -59,11 +51,11 @@ public class ForwardingSettingsController(
         Ok(ToDetail(forwardingOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Forwarding</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. Every field here hot-reloads immediately -- see this class's own doc
-    ///     comment.
+    ///     This action merges a partial update into <c>DnsServer:Forwarding</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Returns 400
+    ///     for an unknown failover strategy, a malformed duration or a <c>maxCacheEntries</c> below
+    ///     1. Requires <c>forwardingsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("forwardingsettings:write")]
@@ -159,8 +151,8 @@ public class ForwardingSettingsController(
 
         if (patch.TryGetMergePatchField("maxCacheEntries", out JsonElement maxCacheEntries))
         {
-            // Zero or less would make every sweep empty the cache while it is still switched
-            // on, which is never what an operator means; "enableCache": false is the off switch.
+            // Zero or less would make every sweep empty the cache while it is switched on, which no
+            // operator means; "enableCache": false is the off switch.
             if (
                 maxCacheEntries.ValueKind != JsonValueKind.Number
                 || !maxCacheEntries.TryGetInt32(out int maxCacheEntriesValue)
@@ -191,9 +183,8 @@ public class ForwardingSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller -- mirrors
-    ///     <c>RecursiveSettingsController.TryGetDuration</c>'s own identical helper.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,
@@ -209,8 +200,8 @@ public class ForwardingSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="ForwardingSettingsDetail" /> from a live
-    ///     <see cref="ForwardingOptions" /> snapshot.
+    ///     This method builds <see cref="ForwardingSettingsDetail" /> from the current
+    ///     <see cref="ForwardingOptions" />.
     /// </summary>
     private static ForwardingSettingsDetail ToDetail(ForwardingOptions options) =>
         new(

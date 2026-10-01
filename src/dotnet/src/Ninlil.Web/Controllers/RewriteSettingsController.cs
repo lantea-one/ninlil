@@ -15,29 +15,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnsRewriteOptions" /> -- the
-///     engine-level toggle and synthesized-answer TTL for DNS rewrites. Rewrite entries themselves
-///     (each individual domain/target override) are already covered by
-///     <c>DnsRewritesController</c>; this controller covers only whether the rewrite engine
-///     consults them at query time at all. No secret material is involved, so every field is a
-///     plain read/write, the same shape <see cref="RateLimitingSettingsController" /> already
-///     establishes. Every action requires the <c>rewritesettings:read</c> or
-///     <c>rewritesettings:write</c> permission.
+///     This controller reads and writes <see cref="DnsRewriteOptions" />: whether the rewrite
+///     engine is on and the TTL of the answers it builds. The rewrites themselves are managed by
+///     <c>DnsRewritesController</c>. Reading needs <c>rewritesettings:read</c> and writing needs
+///     <c>rewritesettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <see cref="DnsRewriteOptions" />
-///         is read via <see cref="IOptionsMonitor{TOptions}" /> everywhere it actually matters for a
-///         live query (<c>DnsRewriteEngine</c>), and <c>DnsRewriteEngine</c> is now always
-///         registered as a DI singleton regardless of <see cref="DnsRewriteOptions.Enable" />'s own
-///         value at process startup -- a structural fix alongside the hot-reload conversion, since
-///         registering it only when already enabled at startup (this project's original shape)
-///         would have meant a fresh install (which starts with rewrites off by design) could never
-///         turn them on live at all, the same structural gap already found and fixed for
-///         DNS-over-HTTPS's own route mapping. See <c>ServiceCollectionRewritesExtension</c>'s own
-///         doc comment for the full reasoning.
+///         <b>Every field takes effect at once, with no restart.</b> <c>DnsRewriteEngine</c> reads
+///         <see cref="DnsRewriteOptions" /> through <see cref="IOptionsMonitor{TOptions}" /> and is
+///         registered whether or not rewrites were on at startup, so a fresh install (rewrites
+///         off by default) can turn them on live. See <c>ServiceCollectionRewritesExtension</c>.
 ///     </para>
 /// </summary>
-/// <param name="rewriteOptions">This host's own currently-effective rewrite settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="rewriteOptions">The current rewrite settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/rewrite-settings")]
 public class RewriteSettingsController(
@@ -46,8 +36,7 @@ public class RewriteSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     rewrite settings.
+    ///     This action returns the current rewrite settings. Requires <c>rewritesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("rewritesettings:read")]
@@ -55,11 +44,10 @@ public class RewriteSettingsController(
     public ActionResult<RewriteSettingsDetail> Get() => Ok(ToDetail(rewriteOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Rewrites</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. Every field here hot-reloads immediately -- see this class's own doc
-    ///     comment.
+    ///     This action merges a partial update into <c>DnsServer:Rewrites</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Requires
+    ///     <c>rewritesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("rewritesettings:write")]
@@ -99,8 +87,8 @@ public class RewriteSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="RewriteSettingsDetail" /> from a live
-    ///     <see cref="DnsRewriteOptions" /> snapshot.
+    ///     This method builds <see cref="RewriteSettingsDetail" /> from the current
+    ///     <see cref="DnsRewriteOptions" />.
     /// </summary>
     private static RewriteSettingsDetail ToDetail(DnsRewriteOptions options) =>
         new(options.Enable, options.TimeToLiveSeconds);

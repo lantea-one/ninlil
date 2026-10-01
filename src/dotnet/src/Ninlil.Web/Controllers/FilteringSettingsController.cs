@@ -19,29 +19,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnsFilterOptions" /> -- the
-///     engine-level toggle and block-response tuning for block/allow-list filtering. Filter list
-///     and entry CRUD (the actual block/allow rows) is already covered by
-///     <c>FilterListsController</c>/<c>FilterListEntriesController</c>; this controller covers
-///     only whether the filter engine consults them at query time at all, plus how a block match
-///     is answered. No secret material is involved, so every field is a plain read/write, the same
-///     shape <see cref="RateLimitingSettingsController" /> already establishes. Every action
-///     requires the <c>filteringsettings:read</c> or <c>filteringsettings:write</c> permission.
+///     This controller reads and writes <see cref="DnsFilterOptions" />: whether block/allow-list
+///     filtering is on, how a blocked name is answered (mode, sinkhole addresses and TTL),
+///     whether block or allow wins, and CNAME-cloaking checks. The lists and entries are managed
+///     by <c>FilterListsController</c> and <c>FilterListEntriesController</c>. Reading needs
+///     <c>filteringsettings:read</c> and writing needs <c>filteringsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <see cref="DnsFilterOptions" />
-///         is read via <see cref="IOptionsMonitor{TOptions}" /> everywhere it actually matters for a
-///         live query (<c>DnsFilterEngine</c>, <c>DnsFilterListExternalRefreshService</c>), and
-///         <c>DnsFilterEngine</c> is now always registered as a DI singleton regardless of
-///         <see cref="DnsFilterOptions.Enable" />'s own value at process startup -- a structural
-///         fix alongside the hot-reload conversion, since registering it only when already enabled
-///         at startup (this project's original shape) would have meant a fresh install (which
-///         starts with filtering off by design) could never turn it on live at all, the same
-///         structural gap already found and fixed for DNS-over-HTTPS's own route mapping. See
-///         <c>ServiceCollectionFilteringExtension</c>'s own doc comment for the full reasoning.
+///         <b>Every field takes effect at once, with no restart.</b> <c>DnsFilterEngine</c> and
+///         <c>DnsFilterListExternalRefreshService</c> read <see cref="DnsFilterOptions" /> through
+///         <see cref="IOptionsMonitor{TOptions}" />, and <c>DnsFilterEngine</c> is registered
+///         whether or not filtering was on at startup, so a fresh install (filtering off by
+///         default) can turn it on live. See <c>ServiceCollectionFilteringExtension</c>.
 ///     </para>
 /// </summary>
-/// <param name="filterOptions">This host's own currently-effective filtering settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="filterOptions">The current filtering settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/filtering-settings")]
 public class FilteringSettingsController(
@@ -50,8 +42,8 @@ public class FilteringSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     filtering settings.
+    ///     This action returns the current filtering settings. Requires
+    ///     <c>filteringsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("filteringsettings:read")]
@@ -59,11 +51,11 @@ public class FilteringSettingsController(
     public ActionResult<FilteringSettingsDetail> Get() => Ok(ToDetail(filterOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Filtering</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. Every field here hot-reloads immediately -- see this class's own doc
-    ///     comment.
+    ///     This action merges a partial update into <c>DnsServer:Filtering</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. Every field takes effect at once. Returns 400
+    ///     for an unknown block response mode or precedence, or a sinkhole address of the wrong
+    ///     family. Requires <c>filteringsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("filteringsettings:write")]
@@ -221,8 +213,8 @@ public class FilteringSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="FilteringSettingsDetail" /> from a live
-    ///     <see cref="DnsFilterOptions" /> snapshot.
+    ///     This method builds <see cref="FilteringSettingsDetail" /> from the current
+    ///     <see cref="DnsFilterOptions" />.
     /// </summary>
     private static FilteringSettingsDetail ToDetail(DnsFilterOptions options) =>
         new(

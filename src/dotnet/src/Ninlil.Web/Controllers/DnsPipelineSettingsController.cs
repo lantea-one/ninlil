@@ -16,30 +16,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnsQueryProcessingPipelineOptions" />
-///     -- worker-pool/queue sizing plus UDP amplification-guard tuning --
-///     `appsettings.json`-only until this pass. Every action requires the
-///     <c>dnspipelinesettings:read</c> or <c>dnspipelinesettings:write</c> permission.
+///     This controller reads and writes <see cref="DnsQueryProcessingPipelineOptions" />: the
+///     query pipeline's worker count and queue size, and its UDP response-size and amplification
+///     limits. Reading needs <c>dnspipelinesettings:read</c> and writing needs
+///     <c>dnspipelinesettings:write</c>.
 ///     <para>
-///         <b>Only half this options class's own fields genuinely hot-reload.</b> See
-///         <see cref="DnsQueryProcessingPipeline" />'s own doc comment for the full technical
-///         reasoning: <see cref="DnsQueryProcessingPipelineOptions.MaxUdpPayloadSizeOctets" />,
-///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" />, and
-///         <see cref="DnsQueryProcessingPipelineOptions.MinUdpAmplificationFloorSizeOctets" />
-///         are read fresh on every single query this pipeline answers, so a write reaches them
-///         with no restart of any kind. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />
-///         and <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> size a fixed
-///         worker-task pool and a brand-new <see cref="System.Threading.Channels.Channel{T}" />,
-///         both of which only happen inside that pipeline's own <c>StartAsync</c> -- restarting
-///         it specifically (<c>POST /api/services/query-processing-pipeline/restart</c>, since it
-///         is registered in <c>ManagedServiceRegistry</c> under that name) or a full process
-///         restart is what actually applies a change to either of those two fields. This
-///         controller's own <c>Patch</c> response note names exactly which of the three cases
-///         (fully live, restart-needed, or a mix of both in the same write) applies.
+///         <b>Only some fields take effect at once.</b>
+///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpPayloadSizeOctets" />,
+///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" /> and
+///         <see cref="DnsQueryProcessingPipelineOptions.MinUdpAmplificationFloorSizeOctets" /> are
+///         read on every query. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" /> and
+///         <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> size the worker pool
+///         and the <see cref="System.Threading.Channels.Channel{T}" /> that
+///         <see cref="DnsQueryProcessingPipeline" /> builds in <c>StartAsync</c>, so they apply
+///         after restarting that service (<c>POST
+///         /api/services/query-processing-pipeline/restart</c>) or the process. The
+///         <see cref="Patch" /> response note says which case applies.
 ///     </para>
 /// </summary>
-/// <param name="pipelineOptions">This host's own currently-effective pipeline sizing/tuning settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="pipelineOptions">The current pipeline settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/dns-pipeline-settings")]
 public class DnsPipelineSettingsController(
@@ -48,7 +44,8 @@ public class DnsPipelineSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective pipeline sizing/tuning settings.
+    ///     This action returns the current pipeline settings. Requires
+    ///     <c>dnspipelinesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dnspipelinesettings:read")]
@@ -65,11 +62,11 @@ public class DnsPipelineSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Pipeline</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. The response note names exactly which of this class's own three
-    ///     documented cases applies, depending on whether <c>workerCount</c>/<c>channelCapacity</c>
-    ///     were touched, a UDP safety field was touched, or both were touched in the same write.
+    ///     This action merges a partial update into <c>DnsServer:Pipeline</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The response note depends
+    ///     on whether the worker or queue size, a UDP limit, or both were changed. Returns 400 for
+    ///     a worker count or capacity below 1, a size outside 1-65535, or an amplification factor
+    ///     that is not above 0. Requires <c>dnspipelinesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dnspipelinesettings:write")]

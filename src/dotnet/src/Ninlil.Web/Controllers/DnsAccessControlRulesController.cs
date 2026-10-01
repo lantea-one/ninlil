@@ -15,58 +15,46 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the real per-client/network access-control rule set
-///     -- <see cref="DnsAccessControlRuleEntity" />, the flat, top-level entity
-///     <c>DnsAccessControlRuleCache</c>/<c>DnsAccessControlEngine</c> (in the dedicated
-///     <c>Ninlil.Dns.Server.AccessControl</c> project) consult from two real hot-path call
-///     sites: <c>RecursiveQueryResolver.TryResolveAsync</c>'s own recursion gate, and
-///     <c>TokenBucketDnsRateLimiter.TryAcquireAsync</c>'s own rate-limit-bypass check. This is a
-///     flat, non-nested resource with no owning parent -- one row per network, deliberately not
-///     the two-table "named group + separate networks" shape <see cref="ClientGroupsController" />/
-///     <see cref="ClientGroupNetworksController" /> use for filter-list client-group scoping -- so this
-///     controller's own REST shape follows <see cref="ForwardersController" />'s flat,
-///     top-level route convention (<c>/api/access-control-rules</c>, no parent segment) rather
-///     than <see cref="ClientGroupNetworksController" />'s nested-under-a-group one; the latter is
-///     only this feature's closest precedent for its own Angular list-plus-form page layout and
-///     interaction pattern (a named, network-scoped rule list), not its route nesting, which has
-///     no analogue here since there is no owning group. Every action requires the
-///     <c>accesscontrol:read</c> or <c>accesscontrol:write</c> permission.
+///     This controller manages the access-control rules
+///     (<see cref="DnsAccessControlRuleEntity" />): each grants a network a set of capabilities.
+///     <c>DnsAccessControlRuleCache</c> and <c>DnsAccessControlEngine</c> in
+///     <c>Ninlil.Dns.Server.AccessControl</c> check them in the recursion gate of
+///     <c>RecursiveQueryResolver.TryResolveAsync</c> and the rate-limit bypass of
+///     <c>TokenBucketDnsRateLimiter.TryAcquireAsync</c>. A rule is one row per network with no
+///     parent, so the route is flat (<c>/api/access-control-rules</c>), like
+///     <see cref="ForwardersController" />, unlike the group-plus-networks shape of
+///     <see cref="ClientGroupsController" /> and <see cref="ClientGroupNetworksController" />.
+///     Reads need <c>accesscontrol:read</c> and changes need <c>accesscontrol:write</c>.
 ///     <para>
-///         <b>Every create/update/delete/enable-disable action publishes a
+///         <b>Every create, update and delete publishes a
 ///         <see cref="DnsAccessControlRuleChangedEvent" /></b> through
-///         <see cref="IDnsServerEventPublisher" /> -- this is what actually invalidates
-///         <c>DnsAccessControlRuleCache</c>'s own in-memory snapshot; skipping it on any write path
-///         here would mean that write silently has no effect on real query answering until this
-///         process restarts.
+///         <see cref="IDnsServerEventPublisher" />. That event is what reloads
+///         <c>DnsAccessControlRuleCache</c>; a write without it would not affect query answering
+///         until a restart.
 ///     </para>
 ///     <para>
-///         <b>The <see cref="DnsAccessControlRuleWriteRequest.Capabilities" />/
-///         <see cref="DnsAccessControlRuleDetail.Capabilities" /> array-of-strings projection</b>
-///         is the exact fix <see cref="DnsAccessControlCapabilityEnum" />'s own doc comment calls
-///         for: that enum is deliberately not decorated with the
-///         <c>[JsonConverter&lt;EnumDescriptionJsonConverter&lt;T&gt;&gt;]</c> every other
-///         single-valued enum in this namespace carries (that converter round-trips exactly one
-///         <see cref="System.Runtime.Serialization.EnumMemberAttribute" />-mapped string, never a
-///         combined <see cref="System.FlagsAttribute" /> value), so this controller converts to
-///         and from the stored bitmask itself, at the REST boundary, via
-///         <see cref="TryParseCapabilities" />/<see cref="ToCapabilityList" /> -- the same
-///         "decouple the wire shape from the stored representation" pattern
-///         <see cref="RecordsController.ToCamelCaseDataJson" /> already establishes for
-///         <c>RecordEntity.DataJson</c>.
+///         <b>Capabilities travel as an array of names.</b>
+///         <see cref="DnsAccessControlCapabilityEnum" /> is a flags enum and has no
+///         <c>[JsonConverter&lt;EnumDescriptionJsonConverter&lt;T&gt;&gt;]</c>, since that
+///         converter handles one <see cref="System.Runtime.Serialization.EnumMemberAttribute" />
+///         name, not a combined value. This controller converts between the name array of
+///         <see cref="DnsAccessControlRuleWriteRequest.Capabilities" /> and
+///         <see cref="DnsAccessControlRuleDetail.Capabilities" /> and the stored bitmask with
+///         <see cref="TryParseCapabilities" /> and <see cref="ToCapabilityList" />.
 ///     </para>
 /// </summary>
-/// <param name="ruleRepository">The repository this controller reads and writes rules through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="ruleRepository">Reads and writes rules.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="DnsAccessControlRuleChangedEvent" />
-///     through on every write, so <c>DnsAccessControlRuleCache</c> reloads its whole-set snapshot
-///     (and, independently, the cluster's own <c>AccessControlRuleClusterSyncEventSubscriber</c>
-///     forwards the change to every cluster peer) -- see this class's own doc comment.
+///     Publishes <see cref="DnsAccessControlRuleChangedEvent" /> on every write, so
+///     <c>DnsAccessControlRuleCache</c> reloads and
+///     <c>AccessControlRuleClusterSyncEventSubscriber</c> sends the change to the other cluster
+///     nodes.
 /// </param>
 /// <param name="clusterOptions">
-///     This node's own cluster configuration, read only for its own node id -- stamped onto
-///     <c>DnsAccessControlRuleEntity.OriginatingNodeId</c> on every create/update, unconditionally,
-///     regardless of whether clustering is actually enabled.
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsAccessControlRuleEntity.OriginatingNodeId</c> on every create and update, whether or
+///     not clustering is enabled.
 /// </param>
 [ApiController]
 [Route("api/access-control-rules")]
@@ -78,7 +66,8 @@ public class DnsAccessControlRulesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every access-control rule this server knows about, enabled or not.
+    ///     This action lists access-control rules, enabled or not, one page at a time. Requires
+    ///     <c>accesscontrol:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("accesscontrol:read")]
@@ -93,9 +82,8 @@ public class DnsAccessControlRulesController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every rule into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every rule into memory.
         IReadOnlyList<DnsAccessControlRuleEntity> rules = await ruleRepository.SearchAsync(
             skip,
             take,
@@ -114,7 +102,8 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This action looks up a single access-control rule by its identifier.
+    ///     This action returns one access-control rule. Returns 404 for an unknown id. Requires
+    ///     <c>accesscontrol:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("accesscontrol:read")]
@@ -132,9 +121,9 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This action creates a new access-control rule, then publishes a
-    ///     <see cref="DnsAccessControlRuleChangedEvent" /> so the real engine's own cache picks it
-    ///     up without a restart.
+    ///     This action creates an access-control rule; it applies to queries without a restart.
+    ///     Returns 400 for a missing name, an invalid network or an unknown capability name.
+    ///     Requires <c>accesscontrol:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("accesscontrol:write")]
@@ -188,9 +177,9 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing access-control rule's fields, then publishes a
-    ///     <see cref="DnsAccessControlRuleChangedEvent" /> so the real engine's own cache picks up
-    ///     the change without a restart.
+    ///     This action replaces an access-control rule's fields; the change applies without a
+    ///     restart. Validation and errors are as for <see cref="Create" />, plus 404 for an unknown
+    ///     id. Requires <c>accesscontrol:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("accesscontrol:write")]
@@ -241,9 +230,8 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes an access-control rule, then publishes a
-    ///     <see cref="DnsAccessControlRuleChangedEvent" /> so the real engine's own cache no longer
-    ///     grants anything on its behalf.
+    ///     This action deletes an access-control rule, so it no longer grants anything. Returns 404
+    ///     for an unknown id. Requires <c>accesscontrol:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("accesscontrol:write")]
@@ -264,12 +252,9 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This method validates that a caller-supplied CIDR value at least parses as an IP
-    ///     network -- the same <see cref="System.Net.IPNetwork" /> parser
-    ///     <see cref="ClientGroupNetworksController" />'s own <c>TryValidateCidr</c> already uses,
-    ///     and <c>DnsAccessControlRuleCache</c> itself matches against at query time -- so a rule
-    ///     this controller accepts is guaranteed to actually be usable by the real engine rather
-    ///     than silently never matching anything.
+    ///     This method checks that a CIDR value parses with <see cref="System.Net.IPNetwork" />,
+    ///     the parser <c>ClientGroupNetworksController.TryValidateCidr</c> uses and
+    ///     <c>DnsAccessControlRuleCache</c> matches with, so an accepted rule can match queries.
     /// </summary>
     private static bool TryValidateCidr(string cidr, out string error)
     {
@@ -291,14 +276,11 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This method converts a caller-supplied array of capability names into the stored
-    ///     <see cref="DnsAccessControlCapabilityEnum" /> bitmask -- see this controller's own doc
-    ///     comment for why this projection exists at all. Each entry must exactly match one
-    ///     defined, non-<see cref="DnsAccessControlCapabilityEnum.None" /> member name (matched
-    ///     case-sensitively, and rejecting a combined or numeric string via
-    ///     <see cref="Enum.IsDefined{TEnum}(TEnum)" />, which only reports <see langword="true" />
-    ///     for an exact, single named constant) -- an unrecognized name is a validation error, not
-    ///     silently ignored or a <c>500</c>.
+    ///     This method converts an array of capability names into the stored
+    ///     <see cref="DnsAccessControlCapabilityEnum" /> bitmask. Each entry must name one defined
+    ///     member other than <see cref="DnsAccessControlCapabilityEnum.None" />, case-sensitively;
+    ///     <see cref="Enum.IsDefined{TEnum}(TEnum)" /> rejects a combined value. An unknown name is
+    ///     a validation error, not ignored. A null list means no capabilities.
     /// </summary>
     private static bool TryParseCapabilities(
         IReadOnlyList<string> names,
@@ -338,9 +320,8 @@ public class DnsAccessControlRulesController(
     }
 
     /// <summary>
-    ///     This method projects the stored <see cref="DnsAccessControlCapabilityEnum" /> bitmask
-    ///     into the explicit array-of-strings shape this controller's REST responses carry -- the
-    ///     inverse of <see cref="TryParseCapabilities" />.
+    ///     This method turns the stored <see cref="DnsAccessControlCapabilityEnum" /> bitmask into
+    ///     the array of names the API returns, the inverse of <see cref="TryParseCapabilities" />.
     /// </summary>
     private static IReadOnlyList<string> ToCapabilityList(
         DnsAccessControlCapabilityEnum capabilities
@@ -353,7 +334,7 @@ public class DnsAccessControlRulesController(
         ];
 
     /// <summary>
-    ///     This method converts an access-control rule entity into its REST representation.
+    ///     This method converts a rule entity to its API representation.
     /// </summary>
     private static DnsAccessControlRuleDetail ToDetail(DnsAccessControlRuleEntity rule) =>
         new(

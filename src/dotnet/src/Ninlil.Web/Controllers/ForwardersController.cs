@@ -20,50 +20,37 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own global upstream-forwarder set --
-///     <see cref="DnsForwarderEntity" />, the server-wide default set
-///     <c>Server.Forwarding</c>'s own <c>ForwarderQueryResolver</c> consults before falling
-///     through to <c>Server.Recursive</c>'s own iterative resolution. This is a flat, top-level,
-///     non-nested resource with no zone/parent relationship at all -- <b>not</b> the same thing as
-///     a <see cref="ZoneEntity" />'s own <c>ForwarderAddresses</c> (a separate, per-zone override
-///     for a <see cref="ZoneTypeEnum.Forwarder" /> zone, managed entirely through
-///     <see cref="ZonesController" /> instead and left untouched by this controller). Every action
-///     requires the <c>forwarders:read</c> or <c>forwarders:write</c> permission.
+///     This controller manages the server-wide upstream forwarders
+///     (<see cref="DnsForwarderEntity" />) that <c>ForwarderQueryResolver</c> in
+///     <c>Server.Forwarding</c> tries before falling back to iterative resolution in
+///     <c>Server.Recursive</c>. These are not the per-zone <c>ForwarderAddresses</c> of a
+///     <see cref="ZoneTypeEnum.Forwarder" /> zone, which <see cref="ZonesController" /> manages.
+///     Reads need <c>forwarders:read</c> and changes need <c>forwarders:write</c>.
 ///     <para>
-///         <b>No local cache-invalidation signal is needed on any write here</b>: confirmed by
-///         reading <c>ForwarderQueryResolver.ResolveForwarderSetAsync</c> directly -- it opens a
-///         fresh <see cref="IServiceScope" /> and calls
-///         <see cref="IDnsForwarderRepository.ListEnabledOrderedAsync" /> fresh on every single
-///         query, with no in-memory cache of the forwarder set itself at all. The only in-memory
-///         state <c>Server.Forwarding</c> keeps (<c>ForwarderHealthTracker</c>'s per-definition-
-///         string health map, and <c>ForwarderQueryResolver</c>'s own parsed-definition cache) is
-///         keyed by the definition string's own content, not by this entity's <c>Id</c> -- editing
-///         a forwarder to a materially different definition string is simply treated as a new,
-///         not-yet-tracked forwarder the next time it is used, and deleting one just means the
-///         next query's fresh repository read no longer returns it. This was a genuine question to
-///         check, not an assumption, per this project's own "check the real code before assuming a
-///         gap exists" convention -- no gap was found. Every write still publishes a
-///         <see cref="DnsForwarderChangedEvent" />, though -- the cluster's own
-///         <c>ForwarderClusterSyncEventSubscriber</c> is a real, independent second reason to
-///         publish, forwarding the change to every cluster peer.
+///         <b>A change applies to the next query without any cache reset.</b>
+///         <c>ForwarderQueryResolver.ResolveForwarderSetAsync</c> reads the enabled forwarders
+///         through <see cref="IDnsForwarderRepository.ListEnabledOrderedAsync" /> in a new
+///         <see cref="IServiceScope" /> on every query. Its parsed-definition cache and
+///         <c>ForwarderHealthTracker</c>'s health map are keyed by the definition string, not by
+///         <c>Id</c>, so an edited definition is simply treated as a new forwarder. Every write
+///         still publishes a <see cref="DnsForwarderChangedEvent" />, which
+///         <c>ForwarderClusterSyncEventSubscriber</c> sends to the other cluster nodes.
 ///     </para>
 /// </summary>
-/// <param name="forwarderRepository">The repository this controller reads and writes forwarders through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="forwarderRepository">Reads and writes forwarders.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="definitionParser">
-///     The real parser this controller validates a caller's own <c>definitionString</c> against
-///     before ever persisting it -- the same parser <c>ForwarderQueryResolver</c> itself uses at
-///     query time, so a definition string accepted here is guaranteed to also be usable there.
+///     Validates a <c>definitionString</c> before it is saved. <c>ForwarderQueryResolver</c> uses
+///     the same parser at query time, so a definition accepted here can be used there.
 /// </param>
-/// <param name="logger">The logger this controller records an unexpectedly-unparseable stored definition to.</param>
+/// <param name="logger">Records a stored definition that unexpectedly fails to parse.</param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="DnsForwarderChangedEvent" /> through
-///     on every write, so the cluster's own <c>ForwarderClusterSyncEventSubscriber</c> forwards the
-///     change to every cluster peer.
+///     Publishes <see cref="DnsForwarderChangedEvent" /> on every write so
+///     <c>ForwarderClusterSyncEventSubscriber</c> sends the change to every cluster peer.
 /// </param>
 /// <param name="clusterOptions">
-///     This node's own cluster configuration, read only for its own node id -- stamped onto
-///     <c>DnsForwarderEntity.OriginatingNodeId</c> on every create/update.
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsForwarderEntity.OriginatingNodeId</c> on every create and update.
 /// </param>
 [ApiController]
 [Route("api/forwarders")]
@@ -77,7 +64,8 @@ public class ForwardersController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every global upstream forwarder this server knows about.
+    ///     This action lists the server-wide forwarders, one page at a time, each with the protocol
+    ///     parsed from its definition. Requires <c>forwarders:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("forwarders:read")]
@@ -89,9 +77,8 @@ public class ForwardersController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every forwarder into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every forwarder into memory.
         IReadOnlyList<DnsForwarderEntity> forwarders = await forwarderRepository.SearchAsync(
             skip,
             take,
@@ -110,7 +97,8 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This action looks up a single global upstream forwarder by its identifier.
+    ///     This action returns one forwarder. Returns 404 for an unknown id. Requires
+    ///     <c>forwarders:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("forwarders:read")]
@@ -125,7 +113,9 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This action creates a new global upstream forwarder.
+    ///     This action creates a server-wide forwarder. Returns 400 for a missing name or a
+    ///     definition string the forwarder parser rejects, and 409 when the name is taken. Requires
+    ///     <c>forwarders:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("forwarders:write")]
@@ -166,7 +156,8 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing global upstream forwarder's fields.
+    ///     This action replaces a forwarder's fields. Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>forwarders:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("forwarders:write")]
@@ -208,10 +199,10 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing global upstream forwarder via RFC 7396 JSON
-    ///     Merge Patch: a field absent from the patch document is left untouched, a field present
-    ///     with a JSON <c>null</c> clears it (where the underlying field is itself nullable), and
-    ///     any other present field overwrites it.
+    ///     This action updates a forwarder as an RFC 7396 merge patch: an absent field is
+    ///     unchanged, a JSON <c>null</c> clears the comments, and any other value replaces it.
+    ///     Validation and errors are as for <see cref="Replace" />. Requires
+    ///     <c>forwarders:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("forwarders:write")]
@@ -271,11 +262,9 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a global upstream forwarder. No zone or other entity
-    ///     references a global forwarder by identifier -- unlike a TSIG key's own soft-referenced
-    ///     <c>TsigKeyName</c> or a cloud credential's own <c>CloudProviderCredentialId</c>, this
-    ///     entity is only ever consulted as a set, read fresh on every query -- so there is nothing
-    ///     to check or clean up before removing it.
+    ///     This action deletes a forwarder. Nothing refers to a forwarder by id (the set is read
+    ///     whole on every query), so nothing needs checking or cleaning up first. Returns 404 for
+    ///     an unknown id. Requires <c>forwarders:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("forwarders:write")]
@@ -296,12 +285,9 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This method looks up a forwarder by its exact name -- <see cref="IDnsForwarderRepository" />
-    ///     exposes no dedicated <c>FindByNameAsync</c> lookup of its own (unlike, say,
-    ///     <c>ITsigKeyRepository</c>), so this controller filters through the base
-    ///     <see cref="IRepository{TEntity}.ListAsync" /> instead -- acceptable at this project's
-    ///     own homelab/small-org target scale, the same reasoning already applied to this
-    ///     controller's own in-memory pagination.
+    ///     This method finds a forwarder by exact name. <see cref="IDnsForwarderRepository" /> has
+    ///     no <c>FindByNameAsync</c> (unlike <c>ITsigKeyRepository</c>), so it filters through
+    ///     <see cref="IRepository{TEntity}.ListAsync" />.
     /// </summary>
     private async Task<DnsForwarderEntity> FindByNameAsync(
         string name,
@@ -316,13 +302,10 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This method validates a caller-supplied forwarder definition string against the real
-    ///     <see cref="IUpstreamForwarderDefinitionParser" /> (which itself delegates to
-    ///     <c>DnsCryptStampParser</c> for an <c>sdns://</c> stamp) -- rejecting a definition string
-    ///     that <c>ForwarderQueryResolver</c> itself would silently skip at query time (logging a
-    ///     warning and moving on to the next candidate) with an immediate, specific <c>400</c>
-    ///     instead, mirroring <c>RecordsController</c>'s own "validate against the real codec, not
-    ///     just accept a string" discipline for a record's own <c>data</c> field.
+    ///     This method checks a definition string with
+    ///     <see cref="IUpstreamForwarderDefinitionParser" /> (which hands <c>sdns://</c> stamps to
+    ///     <c>DnsCryptStampParser</c>). A string that <c>ForwarderQueryResolver</c> would skip with
+    ///     a warning at query time is rejected here with a 400 instead.
     /// </summary>
     private bool TryValidateDefinitionString(string definitionString, out string error)
     {
@@ -348,14 +331,11 @@ public class ForwardersController(
     }
 
     /// <summary>
-    ///     This method converts a forwarder entity into its REST representation, computing
-    ///     <see cref="ForwarderDetail.Protocol" /> fresh via the real, injected
-    ///     <see cref="IUpstreamForwarderDefinitionParser" /> -- a stored definition string was
-    ///     already validated through the exact same parser at write time, so parsing it again here
-    ///     should never actually fail; the <see langword="null" /> fallback exists only to keep a
-    ///     read endpoint from ever throwing over a row some other, non-REST write path (a direct
-    ///     repository call, a future import tool) may have inserted without this controller's own
-    ///     validation.
+    ///     This method converts a forwarder entity to its API representation, parsing the
+    ///     definition string to fill in <see cref="ForwarderDetail.Protocol" />. A string saved
+    ///     through this controller always parses; for a row written another way (cluster sync, for
+    ///     example) the protocol is left <see langword="null" /> and a warning logged, so a read
+    ///     never fails.
     /// </summary>
     private ForwarderDetail ToDetail(DnsForwarderEntity forwarder)
     {

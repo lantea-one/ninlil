@@ -14,53 +14,46 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller serves the persistent query log <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" />
-///     writes to for every answered query -- a real, searchable historical record, unlike the
-///     dashboard's own live SignalR feed, which is capped and resets on every reload. This is a
-///     flat, top-level, read-mostly resource with no parent relationship at all, matching
-///     <see cref="ForwardersController" />'s/<see cref="DnsRewritesController" />'s own precedent.
-///     Every search action requires the <c>querylog:read</c> permission; the one write action
-///     (clearing the log outright) requires <c>querylog:write</c> instead.
+///     This controller serves the persistent query log that
+///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" /> writes for every answered
+///     query: a searchable history, unlike the dashboard's live SignalR feed, which is capped and
+///     resets on reload. The route is flat. Searching needs <c>querylog:read</c>; clearing the log
+///     needs <c>querylog:write</c>.
 ///     <para>
-///         Unlike this project's own much lower-cardinality entities (zones, forwarders, and so
-///         on), where <see cref="PaginationQuery" />'s own in-memory <c>Skip</c>/<c>Take</c> over
-///         an already-fetched full list is an accepted tradeoff, a query log can genuinely reach
-///         millions of rows -- so every filter this action accepts is pushed all the way down into
-///         <see cref="IDnsQueryLogRepository.SearchAsync" />/<see cref="IDnsQueryLogRepository.CountAsync" />,
-///         which translate them into a real, indexed database query rather than filtering a
-///         fully-materialized list.
+///         A query log can reach millions of rows, so every filter, the ordering and the page are
+///         applied by <see cref="IDnsQueryLogRepository.SearchAsync" /> and
+///         <see cref="IDnsQueryLogRepository.CountAsync" /> as an indexed database query.
 ///     </para>
 /// </summary>
-/// <param name="queryLogRepository">The repository this controller searches and clears the log through.</param>
+/// <param name="queryLogRepository">Searches and clears the log.</param>
 [ApiController]
 [Route("api/query-log")]
 public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : ControllerBase
 {
     /// <summary>
-    ///     This action searches the query log, newest entries first, narrowed by whichever of
-    ///     <paramref name="clientAddress" />/<paramref name="domain" />/<paramref name="queriedType" />/
-    ///     <paramref name="responseCode" />/<paramref name="fromUtc" />/<paramref name="toUtc" /> the
-    ///     caller supplied.
+    ///     This action searches the query log, newest first, one page at a time, narrowed by any of
+    ///     the filters given. Returns 400 for an unknown record type, response code or protocol
+    ///     version. Requires <c>querylog:read</c>.
     /// </summary>
-    /// <param name="clientAddress">An exact match against a logged entry's own client address.</param>
-    /// <param name="domain">A case-insensitive substring match against a logged entry's own queried name.</param>
+    /// <param name="clientAddress">An exact match on the client address.</param>
+    /// <param name="domain">A case-insensitive substring match on the queried name.</param>
     /// <param name="queriedType">
-    ///     An exact match against a logged entry's own queried record type, given by its enum
-    ///     member name (for example <c>"A"</c> or <c>"Aaaa"</c>).
+    ///     An exact match on the queried record type, by enum member name (for example <c>"A"</c>
+    ///     or <c>"Aaaa"</c>) or by the name the API returns.
     /// </param>
     /// <param name="responseCode">
-    ///     An exact match against a logged entry's own response code, given by its enum member
-    ///     name (for example <c>"NoError"</c> or <c>"NxDomain"</c>).
+    ///     An exact match on the response code, by enum member name (for example <c>"NxDomain"</c>)
+    ///     or by the name the API returns (for example <c>"NXDOMAIN"</c>).
     /// </param>
     /// <param name="fromUtc">The inclusive start of the time range to search.</param>
     /// <param name="toUtc">The inclusive end of the time range to search.</param>
-    /// <param name="clientIdentifier">An exact match against a logged entry's own resolved, persistent client identifier (a MAC address or DUID).</param>
+    /// <param name="clientIdentifier">An exact match on the resolved, persistent client identifier (a MAC address or DUID).</param>
     /// <param name="clientProtocolVersion">
-    ///     An exact match against a logged entry's own resolved client protocol version, given by
-    ///     its enum member name (for example <c>"IPv4"</c> or <c>"IPv6"</c>) -- narrows which of
-    ///     the two disjoint identifier spaces <paramref name="clientIdentifier" /> must belong to.
+    ///     An exact match on the resolved client's protocol version (for example <c>"IPv4"</c> or
+    ///     <c>"IPv6"</c>), which picks which of the two identifier spaces
+    ///     <paramref name="clientIdentifier" /> belongs to.
     /// </param>
-    /// <param name="pagination">The offset/limit pagination parameters this action accepts.</param>
+    /// <param name="pagination">The offset and limit of the page to return.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpGet]
     [RequirePermission("querylog:read")]
@@ -140,9 +133,10 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     }
 
     /// <summary>
-    ///     This action permanently removes every entry currently in the query log -- an explicit,
-    ///     operator-triggered action distinct from <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" />'s
-    ///     own automatic, retention-driven pruning.
+    ///     This action deletes every entry in the query log and returns how many were removed. It
+    ///     is separate from the retention-based pruning of
+    ///     <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" />. Requires
+    ///     <c>querylog:write</c>.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpDelete]
@@ -155,20 +149,14 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     }
 
     /// <summary>
-    ///     This method parses an optional query-string enum filter, treating an absent or blank
-    ///     value as "no filter on this axis" rather than an error. A value is accepted whether it
-    ///     is spelled as the enum's own C# member name (for example <c>"NxDomain"</c>) or as the
-    ///     wire-format string a response body actually renders that same value as (for example
-    ///     <c>"NXDOMAIN"</c>, via each member's own <see cref="EnumMemberAttribute" />) -- the two
-    ///     differ by more than casing for several <see cref="DnsResponseCodeEnum" /> members
-    ///     (<c>FormatError</c>/<c>"FORMERR"</c>, <c>ServerFailure</c>/<c>"SERVFAIL"</c>, and so
-    ///     on), so a plain, case-insensitive <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)" />
-    ///     against the member name alone would silently reject the exact value a caller just read
-    ///     back out of an earlier search result for those members. A value matching neither form
-    ///     is rejected outright, rather than silently falling back to the enum's own default
-    ///     member -- an easy trap with a generic reflection-based enum-string helper, since a
-    ///     boxed default value is not itself a C# <see langword="null" /> and can look like a
-    ///     successful parse if a helper is not written carefully.
+    ///     This method parses an optional enum filter; an absent or blank value means no filter. A
+    ///     value may be the C# member name (for example <c>"NxDomain"</c>) or the string a response
+    ///     shows for it through its <see cref="EnumMemberAttribute" /> (for example
+    ///     <c>"NXDOMAIN"</c>), both case-insensitive. For several
+    ///     <see cref="DnsResponseCodeEnum" /> members the two differ by more than case
+    ///     (<c>FormatError</c>/<c>"FORMERR"</c>, <c>ServerFailure</c>/<c>"SERVFAIL"</c>), and a
+    ///     caller should be able to send back a value it just read. A value matching neither is
+    ///     rejected rather than taken as the enum's default member.
     /// </summary>
     private static bool TryParseOptionalEnum<TEnum>(
         string value,
@@ -209,7 +197,7 @@ public class QueryLogController(IDnsQueryLogRepository queryLogRepository) : Con
     }
 
     /// <summary>
-    ///     This method converts a query log entity into its REST representation.
+    ///     This method converts a query log entity to its API representation.
     /// </summary>
     internal static DnsQueryLogEntryDetail ToDetail(DnsQueryLogEntryEntity entry) =>
         new(

@@ -16,25 +16,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="PtrSyncOptions" /> -- the
-///     global default for automatic PTR/reverse-zone sync -- `appsettings.json`-only until this
-///     pass, despite the per-zone override (<c>ZoneEntity.AutoManagePtrRecords</c>) already having
-///     a real REST/UI surface of its own through <c>ZonesController</c>. Every action requires the
-///     <c>ptrsyncsettings:read</c> or <c>ptrsyncsettings:write</c> permission.
+///     This controller reads and writes <see cref="PtrSyncOptions" />: the server-wide defaults
+///     for automatic PTR (reverse-zone) sync, which a zone can override through
+///     <c>ZoneEntity.AutoManagePtrRecords</c> and its prefix lengths on <c>ZonesController</c>.
+///     Reading needs <c>ptrsyncsettings:read</c> and writing needs <c>ptrsyncsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <c>PtrSyncService</c>
-///         used to read <see cref="PtrSyncOptions" /> via the snapshotted <see cref="IOptions{TOptions}" />,
-///         cached for the life of the process the first time it was read -- a real functional gap
-///         beyond REST/UI exposure, the same shape already found and fixed elsewhere in this
-///         project for other options classes, converted here the same way: <c>PtrSyncService</c> now
-///         reads <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c> fresh on every
-///         sync call, itself triggered off the back of <c>DnsZoneChangedEvent</c> rather than any
-///         bound socket or long-lived loop, so there is no "read once at StartAsync" concern here
-///         at all.
+///         <b>Every field takes effect at once, with no restart.</b> <c>PtrSyncService</c> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every sync, and each
+///         sync is triggered by a <c>DnsZoneChangedEvent</c> or an on-demand request.
 ///     </para>
 /// </summary>
-/// <param name="ptrSyncOptions">This host's own currently-effective PTR sync default, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="ptrSyncOptions">The current PTR sync defaults.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/ptr-sync-settings")]
 public class PtrSyncSettingsController(
@@ -43,8 +36,7 @@ public class PtrSyncSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     PTR sync default.
+    ///     This action returns the current PTR sync defaults. Requires <c>ptrsyncsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("ptrsyncsettings:read")]
@@ -59,10 +51,11 @@ public class PtrSyncSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Authoritative:PtrSync</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. The single field this options class exposes hot-reloads
-    ///     immediately -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Authoritative:PtrSync</c> as an
+    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every field
+    ///     takes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix
+    ///     that is not a multiple of 4 from 16 to 124 (see <c>ZonesController</c> for why).
+    ///     Requires <c>ptrsyncsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("ptrsyncsettings:write")]

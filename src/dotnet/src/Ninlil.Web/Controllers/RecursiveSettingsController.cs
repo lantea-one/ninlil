@@ -19,39 +19,29 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="RecursiveServerOptions" /> --
-///     the single highest-priority gap a full REST/UI configuration-completeness audit found: a
-///     fresh install starts with recursion off (the correct, documented default -- see
-///     <see cref="RecursiveServerOptions.EnableRecursion" />'s own doc comment) and, before this
-///     controller existed, had no way to turn it on short of hand-editing the configuration file
-///     and restarting. No secret material is involved, so every field is a plain read/write, the
-///     same shape <see cref="RateLimitingSettingsController" /> already establishes. Every action
-///     requires the <c>recursivesettings:read</c> or <c>recursivesettings:write</c> permission.
+///     This controller reads and writes <see cref="RecursiveServerOptions" />: whether recursion
+///     and DNSSEC validation are on, query limits and timeouts, cache size, root-hint and
+///     trust-anchor overrides, RFC 5011 trust-anchor updates, serve-stale and prefetch. A fresh
+///     install starts with recursion off (see
+///     <see cref="RecursiveServerOptions.EnableRecursion" />), and this is where it is turned on.
+///     Reading needs <c>recursivesettings:read</c> and writing needs
+///     <c>recursivesettings:write</c>.
 ///     <para>
-///         <b>Most of this class's own fields take effect immediately, with no restart.</b>
-///         <see cref="RecursiveServerOptions" /> is read via <see cref="IOptionsMonitor{TOptions}" />
-///         everywhere it actually matters for a live query (<c>RecursiveQueryResolver</c>,
-///         <c>IterativeResolutionEngine</c>, <c>UpstreamDnsClient</c>, <c>RecursiveCache</c>,
-///         <c>TrustAnchorRolloverService</c>, and <c>ForwarderQueryResolver</c>'s own re-validation
-///         path) rather than the usual, snapshotted <see cref="IOptions{TOptions}" /> every other
-///         pre-<c>AppearanceOptions</c> runtime settings class in this project still uses -- see
-///         <c>RecursiveQueryResolver</c>'s own doc comment for why a singleton resolver needs
-///         <see cref="IOptionsMonitor{TOptions}" /> specifically to observe a write this
-///         controller's own <see cref="Patch" /> action merges into the configuration file.
-///         <b>Exactly two fields are the deliberate exception</b>:
-///         <see cref="RecursiveServerOptions.RootHintServersOverride" /> and
-///         <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> are each read exactly once,
-///         either at this host's own startup (<c>RootHintsPrimingService</c>) or the first time
-///         <c>FileTrustAnchorStore</c>'s own state file is seeded -- by design, per each
-///         property's own doc comment ("this override has no further effect after that first
-///         seed") -- so a write touching either one still needs a restart, exactly like every
-///         runtime setting in this project predating <c>AppearanceOptions</c>. <see cref="Patch" />
-///         reports which of the two notes applies (or a combined one, if a single write touches
-///         both kinds of field at once).
+///         <b>Most fields take effect at once, with no restart.</b> The classes that use them on
+///         live queries (<c>RecursiveQueryResolver</c>, <c>IterativeResolutionEngine</c>,
+///         <c>UpstreamDnsClient</c>, <c>RecursiveCache</c>, <c>TrustAnchorRolloverService</c> and
+///         the re-validation path of <c>ForwarderQueryResolver</c>) read
+///         <see cref="IOptionsMonitor{TOptions}" /> (see <c>RecursiveQueryResolver</c> for why a
+///         singleton needs it). <b>Two fields are exceptions:</b>
+///         <see cref="RecursiveServerOptions.RootHintServersOverride" /> is read once by
+///         <c>RootHintsPrimingService</c> at startup, and
+///         <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> only when
+///         <c>FileTrustAnchorStore</c> first seeds its state file and never after.
+///         <see cref="Patch" /> returns the note that fits what was changed.
 ///     </para>
 /// </summary>
-/// <param name="recursiveOptions">This host's own currently-effective recursive resolver settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="recursiveOptions">The current recursive resolver settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/recursive-settings")]
 public class RecursiveSettingsController(
@@ -60,9 +50,9 @@ public class RecursiveSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live -- reflecting any write
-    ///     <see cref="Patch" /> has made to every field except the two override lists, even
-    ///     without a restart) recursive resolver settings.
+    ///     This action returns the recursive resolver settings as saved. The two override lists
+    ///     show the saved value, which is not necessarily the one in use (see the class summary).
+    ///     Requires <c>recursivesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("recursivesettings:read")]
@@ -71,11 +61,12 @@ public class RecursiveSettingsController(
         Ok(ToDetail(recursiveOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Recursive</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. See this class's own doc comment for which fields take effect
-    ///     immediately and which need a restart.
+    ///     This action merges a partial update into <c>DnsServer:Recursive</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value; an override list, when present, replaces the
+    ///     whole list. The response note says whether a restart is needed. Returns 400 for a
+    ///     malformed duration, an invalid root-hint address or a malformed trust anchor. Requires
+    ///     <c>recursivesettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("recursivesettings:write")]
@@ -459,8 +450,8 @@ public class RecursiveSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,
@@ -476,12 +467,10 @@ public class RecursiveSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a <c>rootHintServersOverride</c> merge-patch field into the exact
-    ///     shape <see cref="RecursiveServerOptions.RootHintServersOverride" /> binds, RFC 7396's
-    ///     own "arrays replace wholesale, never merge element-by-element" semantics -- validating
-    ///     every address as a real IP along the way, the same rigor
-    ///     <see cref="Controllers.AppearanceSettingsController.Patch" />'s own enum validation
-    ///     already sets for this project's runtime settings controllers.
+    ///     This method parses a <c>rootHintServersOverride</c> field into the shape
+    ///     <see cref="RecursiveServerOptions.RootHintServersOverride" /> binds. As RFC 7396 says
+    ///     for arrays, it replaces the whole list. Each entry needs a name, and every address must
+    ///     be a valid IP address.
     /// </summary>
     private static List<RootHintServerOption> ParseRootHintServers(JsonElement element)
     {
@@ -532,9 +521,9 @@ public class RecursiveSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a <c>trustAnchorsOverride</c> merge-patch field into the exact shape
-    ///     <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> binds, validating each
-    ///     entry's own algorithm name and hexadecimal digest along the way.
+    ///     This method parses a <c>trustAnchorsOverride</c> field into the shape
+    ///     <see cref="RecursiveServerOptions.TrustAnchorsOverride" /> binds, checking each entry's
+    ///     key tag, algorithm name, digest type and hexadecimal digest.
     /// </summary>
     private static List<TrustAnchorOption> ParseTrustAnchors(JsonElement element)
     {
@@ -613,8 +602,8 @@ public class RecursiveSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="RecursiveSettingsDetail" /> from a live
-    ///     <see cref="RecursiveServerOptions" /> snapshot.
+    ///     This method builds <see cref="RecursiveSettingsDetail" /> from the current
+    ///     <see cref="RecursiveServerOptions" />.
     /// </summary>
     private static RecursiveSettingsDetail ToDetail(RecursiveServerOptions options) =>
         new(

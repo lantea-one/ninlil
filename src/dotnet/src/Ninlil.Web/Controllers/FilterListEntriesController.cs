@@ -16,54 +16,41 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the entries stored inside a single block/allow list,
-///     nested under it (<c>/api/filter-lists/{listId}/entries</c>) since an entry only ever makes
-///     sense in its owning list's own context -- the same nesting <see cref="RecordsController" />
-///     already establishes for a zone's records. Every action requires the <c>filterlists:read</c>
-///     or <c>filterlists:write</c> permission, the same as <see cref="FilterListsController" />.
+///     This controller manages the entries of one block or allow list, nested under it at
+///     <c>/api/filter-lists/{listId}/entries</c>, as <see cref="RecordsController" /> is nested
+///     under a zone. Reads need <c>filterlists:read</c> and changes need
+///     <c>filterlists:write</c>, as for <see cref="FilterListsController" />.
 ///     <para>
-///         A <see cref="DnsFilterListEntity" /> whose own <see cref="DnsFilterListEntity.Source" />
-///         is <see cref="DnsFilterListSourceEnum.Subscribed" /> has its entire entry set replaced
-///         wholesale on its own refresh schedule by <c>DnsFilterListExternalRefreshService</c>
-///         (via <see cref="IDnsFilterListEntryRepository.ReplaceEntriesAsync" />) -- confirmed by
-///         reading that service directly before writing this controller, not assumed. Every
-///         write action here (<see cref="Create" />/<see cref="Replace" />/<see cref="Delete" />)
-///         is therefore rejected with <c>409 Conflict</c> for a subscribed list: allowing a manual
-///         edit that the very next scheduled refresh would silently discard, with no warning to
-///         whoever made it, was judged worse than rejecting it outright and pointing the caller at
-///         the actual fix (change the list's own <c>source</c> to <c>Local</c> first, via
-///         <see cref="FilterListsController.Patch" />, if manual entries are genuinely wanted).
-///         <see cref="Get" />/<see cref="List" /> are never blocked -- inspecting a subscribed
-///         list's own currently-fetched entries is always useful, only mutating them by hand is
-///         the part this project has no honest way to make durable.
+///         <b>Entries of a subscribed list cannot be edited.</b>
+///         <c>DnsFilterListExternalRefreshService</c> replaces a
+///         <see cref="DnsFilterListSourceEnum.Subscribed" /> list's whole entry set on each
+///         refresh (through <see cref="IDnsFilterListEntryRepository.ReplaceEntriesAsync" />), so a
+///         manual edit would be silently lost. <see cref="Create" />, <see cref="Replace" /> and
+///         <see cref="Delete" /> therefore return 409 for such a list; change its <c>source</c> to
+///         <c>Local</c> through <see cref="FilterListsController.Patch" /> to edit by hand.
+///         <see cref="Get" /> and <see cref="List" /> always work.
 ///     </para>
 ///     <para>
-///         A subscribed list's own entries are always
-///         <see cref="Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain" /> --
-///         <see cref="DnsFilterListParser" /> skips adblock wildcard/regex rules rather than
-///         translating them, so a subscription never produces a regex/wildcard entry kind at
-///         all, and this controller's own <c>Kind</c> field is only ever meaningful for a
-///         <see cref="DnsFilterListSourceEnum.Local" /> list's own manually-entered rows anyway.
-///         <see cref="Create" />/
-///         <see cref="Replace" /> both reject a malformed regex/wildcard pattern with
-///         <c>400 Bad Request</c> by actually attempting to compile it (via
-///         <c>DnsFilterEngine.CompileOrNull</c>/<c>DnsFilterEngine.BuildWildcardRegexPattern</c>,
-///         the exact same compilation this controller's own pattern must later pass at query
-///         time) before it is ever persisted -- never merely discovered later, at query time, by
-///         <c>DnsFilterEngine</c> itself.
+///         A subscribed list's entries are always
+///         <see cref="Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain" />:
+///         <see cref="DnsFilterListParser" /> skips adblock wildcard and regex rules rather than
+///         translating them, so the entry <c>Kind</c> matters only for a local list.
+///         <see cref="Create" /> and <see cref="Replace" /> compile a regex or wildcard pattern
+///         with <c>DnsFilterEngine.CompileOrNull</c> (and
+///         <c>DnsFilterEngine.BuildWildcardRegexPattern</c>), the same compilation the engine uses
+///         at query time, and return 400 for one that fails.
 ///     </para>
 /// </summary>
-/// <param name="filterListRepository">The repository used to confirm the owning list exists and to check its own <see cref="DnsFilterListEntity.Source" />.</param>
-/// <param name="entryRepository">The repository this controller reads and writes entries through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="filterListRepository">Confirms the list exists and supplies its <see cref="DnsFilterListEntity.Source" />.</param>
+/// <param name="entryRepository">Reads and writes entries.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="DnsFilterListEntryChangedEvent" />
-///     through on every write, so the cluster's own <c>FilterListEntryClusterSyncEventSubscriber</c>
-///     forwards the change to every cluster peer.
+///     Publishes <see cref="DnsFilterListEntryChangedEvent" /> on every write so
+///     <c>FilterListEntryClusterSyncEventSubscriber</c> sends the change to every cluster peer.
 /// </param>
 /// <param name="clusterOptions">
-///     This node's own cluster configuration, read only for its own node id -- stamped onto
-///     <c>DnsFilterListEntryEntity.OriginatingNodeId</c> on every create/update.
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsFilterListEntryEntity.OriginatingNodeId</c> on every create and update.
 /// </param>
 [ApiController]
 [Route("api/filter-lists/{listId:guid}/entries")]
@@ -76,7 +63,8 @@ public class FilterListEntriesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every entry stored in a list.
+    ///     This action lists a list's entries, one page at a time. Returns 404 for an unknown list.
+    ///     Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("filterlists:read")]
@@ -95,11 +83,9 @@ public class FilterListEntriesController(
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated WHERE/ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every entry into memory first. This matters more here than for this
-        // project's other, lower-cardinality entities: a subscribed external block list can carry
-        // tens of thousands of entries.
+        // The page and the total count are both computed by the storage engine
+        // (WHERE/ORDER BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every entry into
+        // memory. It matters here: a subscribed list can hold tens of thousands of entries.
         IReadOnlyList<DnsFilterListEntryEntity> entries = await entryRepository.SearchByListIdAsync(
             listId,
             skip,
@@ -119,7 +105,8 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This action looks up a single entry by its identifier.
+    ///     This action returns one entry. Returns 404 when it does not exist or belongs to another
+    ///     list. Requires <c>filterlists:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("filterlists:read")]
@@ -138,9 +125,10 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This action adds a new entry to a <see cref="DnsFilterListSourceEnum.Local" /> list.
-    ///     Rejected with <c>409 Conflict</c> for a <see cref="DnsFilterListSourceEnum.Subscribed" />
-    ///     list -- see this controller's own summary for why.
+    ///     This action adds an entry to a <see cref="DnsFilterListSourceEnum.Local" /> list.
+    ///     Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a
+    ///     pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list.
+    ///     Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("filterlists:write")]
@@ -184,9 +172,9 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing entry's own value/comment, keeping its own
-    ///     identifier. Rejected with <c>409 Conflict</c> for a subscribed list, the same as
-    ///     <see cref="Create" />.
+    ///     This action replaces an entry's value, comment and kind, keeping its id. Validation and
+    ///     errors are as for <see cref="Create" />, plus 404 for an unknown entry. Requires
+    ///     <c>filterlists:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -229,8 +217,8 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This action removes an entry from the list. Rejected with <c>409 Conflict</c> for a
-    ///     subscribed list, the same as <see cref="Create" />/<see cref="Replace" />.
+    ///     This action removes an entry from the list. Returns 404 for an unknown list or entry and
+    ///     409 for a subscribed list. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("filterlists:write")]
@@ -257,9 +245,8 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This method throws a <see cref="ConflictException" /> when a write is attempted against
-    ///     a <see cref="DnsFilterListSourceEnum.Subscribed" /> list, or does nothing at all
-    ///     otherwise -- see this controller's own summary for the full reasoning.
+    ///     This method throws <see cref="ConflictException" /> when the list is
+    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> (see the class summary).
     /// </summary>
     private static void ValidateNotSubscribedOrThrow(DnsFilterListEntity list)
     {
@@ -272,16 +259,12 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This method throws a <see cref="ValidationException" /> naming exactly which part of a
-    ///     write request's own <c>value</c>/<c>kind</c> pair is invalid -- a
-    ///     malformed regex/wildcard pattern must be rejected here, at write time, never merely
-    ///     discovered later at query time by <c>DnsFilterEngine</c> (which itself only ever treats
-    ///     an unparseable pattern as a silent non-match, by design, since the query-answering path
-    ///     can never throw). A <see cref="DnsFilterEntryKindEnum.Wildcard" />/
-    ///     <see cref="DnsFilterEntryKindEnum.Regex" /> kind is additionally rejected outright
-    ///     against a non-<see cref="DnsFilterListKindEnum.Domain" /> list -- neither syntax has any
-    ///     meaning for an IP address/CIDR network entry. Does nothing at all when the request is
-    ///     entirely valid.
+    ///     This method throws <see cref="ValidationException" /> naming what is wrong with a
+    ///     request's <c>value</c> and <c>kind</c>. A bad regex or wildcard pattern must be caught
+    ///     here, because <c>DnsFilterEngine</c> treats an unparseable pattern as a silent non-match
+    ///     (the query path never throws). A wildcard or regex entry is also rejected for a list
+    ///     that is not a <see cref="DnsFilterListKindEnum.Domain" /> list, since neither means
+    ///     anything for an IP address or network.
     /// </summary>
     private static void ValidateEntryRequestOrThrow(
         DnsFilterListEntity list,
@@ -316,7 +299,7 @@ public class FilterListEntriesController(
     }
 
     /// <summary>
-    ///     This method converts a filter list entry entity into its REST representation.
+    ///     This method converts an entry entity to its API representation.
     /// </summary>
     private static FilterListEntryDetail ToDetail(DnsFilterListEntryEntity entry) =>
         new(

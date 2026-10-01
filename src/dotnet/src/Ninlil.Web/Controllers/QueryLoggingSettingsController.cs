@@ -17,32 +17,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="QueryLoggingOptions" />,
-///     mirroring <see cref="RateLimitingSettingsController" />'s own exact shape -- no secret
-///     material is involved, so every field is a plain read/write. Deliberately gated by the same
-///     <c>querylog:read</c>/<c>querylog:write</c> permission pair <see cref="QueryLogController" />
-///     itself uses, rather than a separate, more granular claim: both controllers administer one
-///     and the same feature (whether entries are logged at all, and for how long they are kept),
-///     not two independent resources.
+///     This controller reads and writes <see cref="QueryLoggingOptions" />: whether queries are
+///     logged, how long and how many entries are kept, how often old entries are pruned, and how
+///     much client detail is recorded. It uses the same <c>querylog:read</c> and
+///     <c>querylog:write</c> permissions as <see cref="QueryLogController" />, since both manage
+///     the same feature.
 ///     <para>
-///         <b><see cref="QueryLoggingOptions.PrivacyLevel" /> takes effect immediately, with no
-///         restart -- every other field here still needs one.</b> This class reads
-///         <see cref="QueryLoggingOptions" /> via <see cref="IOptionsMonitor{TOptions}" /> (so
-///         <see cref="Get" /> always reports the same live, file-effective value
-///         <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" /> itself observes for
-///         <see cref="QueryLoggingOptions.PrivacyLevel" />) but <see cref="Patch" /> still reports
-///         which reload bucket a given write actually touched -- the same "mixed reload" shape
-///         <see cref="RecursiveSettingsController" /> already establishes for a single options
-///         class with fields in both categories, since <see cref="QueryLoggingOptions.Enable" />/
-///         <see cref="QueryLoggingOptions.RetentionPeriod" />/
-///         <see cref="QueryLoggingOptions.MaxRetainedEntries" />/
-///         <see cref="QueryLoggingOptions.CleanupInterval" /> are each still only ever read by
-///         <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" />/the subscriber's own
-///         registration decision at startup, not re-read live.
+///         <b><see cref="QueryLoggingOptions.PrivacyLevel" /> takes effect at once; every other
+///         field needs a restart.</b>
+///         <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" /> reads the privacy level
+///         through <see cref="IOptionsMonitor{TOptions}" />, but
+///         <see cref="QueryLoggingOptions.Enable" />,
+///         <see cref="QueryLoggingOptions.RetentionPeriod" />,
+///         <see cref="QueryLoggingOptions.MaxRetainedEntries" /> and
+///         <see cref="QueryLoggingOptions.CleanupInterval" /> are read only at startup, by
+///         <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogCleanupService" /> and when the
+///         subscriber is registered. <see cref="Patch" /> returns the note that fits.
 ///     </para>
 /// </summary>
-/// <param name="queryLoggingOptions">This host's own currently-effective query logging settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="queryLoggingOptions">The query logging settings as saved.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/query-logging-settings")]
 public class QueryLoggingSettingsController(
@@ -51,11 +45,9 @@ public class QueryLoggingSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live and running) query logging
-    ///     settings. <see cref="QueryLoggingSettingsDetail.PrivacyLevel" /> reflects any write
-    ///     <see cref="Patch" /> has made even without a restart; every other field reflects the
-    ///     configuration file's own current contents, which may not yet be what is actually
-    ///     running if a restart is still pending for it.
+    ///     This action returns the query logging settings as saved in the configuration file. The
+    ///     privacy level is the one in use; the other fields may be waiting for a restart. Requires
+    ///     <c>querylog:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("querylog:read")]
@@ -72,11 +64,11 @@ public class QueryLoggingSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:QueryLogging</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. See this class's own doc comment for which field takes effect
-    ///     immediately and which need a restart.
+    ///     This action merges a partial update into <c>DnsServer:QueryLogging</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. The response note says whether a restart is
+    ///     needed. Returns 400 for a malformed duration or an unknown privacy level. Requires
+    ///     <c>querylog:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("querylog:write")]

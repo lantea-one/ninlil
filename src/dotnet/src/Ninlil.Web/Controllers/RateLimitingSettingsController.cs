@@ -19,21 +19,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnsRateLimitOptions" /> --
-///     the REST management surface for rate limiting, mirroring the surface the block/allow-list
-///     and forwarder features each already have of their own. No secret material is
-///     involved, so every field is a plain read/write, unlike <see cref="EventBrokerSettingsController" />.
-///     Every action requires the <c>ratelimiting:read</c> or <c>ratelimiting:write</c> permission.
+///     This controller reads and writes <see cref="DnsRateLimitOptions" />: the per-client DNS
+///     query rate limit (rate, burst, client tracking) and the per-subnet limits (prefix lengths,
+///     sample window, UDP and TCP limits, truncation share, bypass networks). Reading needs
+///     <c>ratelimiting:read</c> and writing needs <c>ratelimiting:write</c>. A write is also
+///     replicated to the other cluster nodes and needs a restart, since the settings are read
+///     through <see cref="IOptions{TOptions}" />.
 /// </summary>
-/// <param name="rateLimitOptions">This host's own currently-effective rate-limiting settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="rateLimitOptions">The rate-limiting settings loaded at startup.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 /// <param name="clusterSyncRecorder">
-///     The cluster config-sync helper this controller calls after a successful write so the change
-///     propagates to every cluster peer.
+///     Records a successful write and sends it to every cluster peer.
 /// </param>
 /// <param name="stateRepository">
-///     The repository <see cref="Get" /> reads this section's own last-write-wins bookkeeping
-///     from, to surface <see cref="RateLimitingSettingsDetail.LastModifiedUtc" />/
+///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
+///     <see cref="RateLimitingSettingsDetail.LastModifiedUtc" /> and
 ///     <see cref="RateLimitingSettingsDetail.OriginatingNodeId" />.
 /// </param>
 [ApiController]
@@ -46,8 +46,8 @@ public class RateLimitingSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live and running) rate-limiting
-    ///     settings.
+    ///     This action returns the rate-limiting settings in use (as loaded at startup) and which
+    ///     node last changed them. Requires <c>ratelimiting:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("ratelimiting:read")]
@@ -81,10 +81,11 @@ public class RateLimitingSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:RateLimiting</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DnsServer:RateLimiting</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value; <c>subnetBypassCidrs</c> replaces the whole
+    ///     list. The change needs a restart. Returns 400 for a malformed duration or a truncation
+    ///     percentage outside 0-100. Requires <c>ratelimiting:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("ratelimiting:write")]

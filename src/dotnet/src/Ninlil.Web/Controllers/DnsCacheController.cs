@@ -13,19 +13,19 @@ namespace Ninlil.Web.Controllers;
 
 /// <summary>
 ///     This controller shows and trims this node's in-memory DNS answer caches: the
-///     forwarded-response cache and the recursive resolver's cache, every
-///     <see cref="IDnsCache" /> the resolver projects register. One endpoint covers both, so an
-///     operator never needs to know which path answered a name to flush it.
+///     forwarded-response cache and the recursive resolver's cache, that is, every registered
+///     <see cref="IDnsCache" />. One endpoint covers both, so an operator does not need to know
+///     which path answered a name to flush it.
 ///     <para>
-///         Reading requires <c>recursivesettings:read</c> and changing requires
-///         <c>recursivesettings:write</c> -- the permissions that already guard the cache's size
-///         and serve-stale settings and the live cache-eviction feed (see
+///         Reading needs <c>recursivesettings:read</c> and changing needs
+///         <c>recursivesettings:write</c>, the permissions that already guard the cache size and
+///         serve-stale settings and the live cache-eviction feed (see
 ///         <c>DnsEventsHub.CacheEventsPermission</c>), so whoever may tune the cache may also
-///         inspect and flush it, and nobody gains a new permission to hand out.
+///         inspect and flush it, with no new permission to hand out.
 ///     </para>
 ///     <para>
-///         Every action affects only the node that serves the request. Caches are per process
-///         and never replicated, so on a cluster each node is flushed through its own address.
+///         Every action affects only the node serving the request. Caches are per process and
+///         never replicated, so in a cluster each node is flushed through its own address.
 ///     </para>
 /// </summary>
 /// <param name="caches">Every registered cache.</param>
@@ -39,7 +39,8 @@ public class DnsCacheController(IEnumerable<IDnsCache> caches) : ControllerBase
     ];
 
     /// <summary>
-    ///     This action reports every cache's size and hit rate.
+    ///     This action reports each cache's size, limit and hit and miss counts. Requires
+    ///     <c>recursivesettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("recursivesettings:read")]
@@ -48,8 +49,10 @@ public class DnsCacheController(IEnumerable<IDnsCache> caches) : ControllerBase
         Ok(_caches.Select(cache => ToDetail(cache.GetStatistics())).ToList());
 
     /// <summary>
-    ///     This action empties every cache, or only the one named by <paramref name="cache" />,
-    ///     and resets its hit and miss counters. The next query for any name goes upstream.
+    ///     This action empties every cache, or only the one named by <paramref name="cache" />, and
+    ///     resets its hit and miss counters, so the next query for any name goes upstream. Returns
+    ///     the number of entries removed, or 404 for an unknown cache name. Requires
+    ///     <c>recursivesettings:write</c>.
     /// </summary>
     /// <param name="cache">A cache name (<c>forwarded</c> or <c>recursive</c>) to flush alone; omit to flush every cache.</param>
     [HttpDelete]
@@ -59,10 +62,11 @@ public class DnsCacheController(IEnumerable<IDnsCache> caches) : ControllerBase
         Ok(new DnsCacheRemovalResult(SelectCaches(cache).Sum(selected => selected.Flush())));
 
     /// <summary>
-    ///     This action forgets every cached answer for exactly one name -- every record type,
-    ///     and in the forwarded cache every upstream set -- so the next query for it goes
-    ///     upstream. Names below it are left alone. Removing a name that is not cached is not an
-    ///     error; it simply removes nothing.
+    ///     This action forgets every cached answer for one name (every record type and, in the
+    ///     forwarded cache, every upstream set), so the next query for it goes upstream. Names
+    ///     below it are left alone. Removing a name that is not cached removes nothing and is not
+    ///     an error. Returns 400 for an invalid name and 404 for an unknown cache name. Requires
+    ///     <c>recursivesettings:write</c>.
     /// </summary>
     /// <param name="name">The name to forget, for example <c>www.example.com</c>; a trailing dot is optional.</param>
     /// <param name="cache">A cache name to remove it from alone; omit to remove it from every cache.</param>
@@ -82,8 +86,8 @@ public class DnsCacheController(IEnumerable<IDnsCache> caches) : ControllerBase
     }
 
     /// <summary>
-    ///     This method returns every cache, or the one named, failing with 404 for a name no
-    ///     cache has.
+    ///     This method returns every cache, or the one named, throwing
+    ///     <see cref="NotFoundException" /> (404) for a name no cache has.
     /// </summary>
     private IEnumerable<IDnsCache> SelectCaches(string cacheName)
     {

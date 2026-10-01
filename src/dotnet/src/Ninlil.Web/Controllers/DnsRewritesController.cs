@@ -19,45 +19,36 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this project's DNS rewrites --
-///     <see cref="DnsRewriteEntity" />, the lightweight <c>domain -&gt; target</c> override
-///     <c>Server.Rewrites</c>'s own <c>DnsRewriteEngine</c> consults before zone/forwarder/
-///     recursive resolution. This is a flat, top-level, non-nested resource with no zone/parent
-///     relationship at all, matching <see cref="ForwardersController" />'s/
-///     <see cref="WebhooksController" />'s own precedent. Every action requires the
-///     <c>dnsrewrites:read</c> or <c>dnsrewrites:write</c> permission.
+///     This controller manages DNS rewrites (<see cref="DnsRewriteEntity" />): simple
+///     <c>domain -&gt; target</c> overrides that <c>DnsRewriteEngine</c> in <c>Server.Rewrites</c>
+///     applies before zone, forwarder and recursive resolution. The route is flat, like
+///     <see cref="ForwardersController" />. Reads need <c>dnsrewrites:read</c> and changes need
+///     <c>dnsrewrites:write</c>.
 ///     <para>
-///         <b>No local cache-invalidation signal is needed on any write here</b>:
-///         <c>DnsRewriteEngine.TryBuildResponseAsync</c> opens a fresh <see cref="IServiceScope" />
-///         and calls <see cref="IDnsRewriteRepository.ListEnabledAsync" /> fresh on every single
-///         query, with no in-memory cache of the rewrite set itself at all -- the same
-///         "check the real code before assuming a gap exists" convention already applied to
-///         <see cref="ForwardersController" />'s own identical question. Every
-///         write still publishes a <see cref="DnsRewriteChangedEvent" />, though -- the cluster's
-///         own <c>RewriteClusterSyncEventSubscriber</c> is a real, independent second reason to
-///         publish, forwarding the change to every cluster peer.
+///         <b>A change applies to the next query without any cache reset.</b>
+///         <c>DnsRewriteEngine.TryBuildResponseAsync</c> reads the enabled rewrites through
+///         <see cref="IDnsRewriteRepository.ListEnabledAsync" /> in a new
+///         <see cref="IServiceScope" /> on every query. Every write still publishes a
+///         <see cref="DnsRewriteChangedEvent" />, which <c>RewriteClusterSyncEventSubscriber</c>
+///         sends to the other cluster nodes.
 ///     </para>
 ///     <para>
-///         <b>Duplicate detection</b>: a rewrite's own <see cref="DnsRewriteEntity.Domain" /> is
-///         deliberately <b>not</b> unique at the storage layer (an operator may legitimately
-///         configure separate A-target and AAAA-target rewrites for the same domain), so this
-///         controller instead rejects, with <c>409 Conflict</c>, a create/replace whose
-///         <see cref="DnsRewriteEntity.Domain" /> (normalized) <em>and</em> classified
-///         <see cref="DnsRewriteTargetKindEnum" /> both already match an existing rewrite --
-///         the ambiguous case (two A-target rewrites for the same domain) this project's own
-///         REST layer should never silently accept.
+///         <b>Duplicates.</b> <see cref="DnsRewriteEntity.Domain" /> is not unique in storage,
+///         since one domain may have both an A-target and an AAAA-target rewrite. A create or
+///         update returns 409 when another rewrite has the same normalized domain and the same
+///         classified <see cref="DnsRewriteTargetKindEnum" />, because two rewrites answering the
+///         same record kind for one name would be ambiguous.
 ///     </para>
 /// </summary>
-/// <param name="rewriteRepository">The repository this controller reads and writes rewrites through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="rewriteRepository">Reads and writes rewrites.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="DnsRewriteChangedEvent" /> through on
-///     every write, so the cluster's own <c>RewriteClusterSyncEventSubscriber</c> forwards the
-///     change to every cluster peer.
+///     Publishes <see cref="DnsRewriteChangedEvent" /> on every write so
+///     <c>RewriteClusterSyncEventSubscriber</c> sends the change to every cluster peer.
 /// </param>
 /// <param name="clusterOptions">
-///     This node's own cluster configuration, read only for its own node id -- stamped onto
-///     <c>DnsRewriteEntity.OriginatingNodeId</c> on every create/update.
+///     Supplies this node's cluster node id, stamped onto
+///     <c>DnsRewriteEntity.OriginatingNodeId</c> on every create and update.
 /// </param>
 [ApiController]
 [Route("api/dns-rewrites")]
@@ -69,7 +60,8 @@ public class DnsRewritesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every DNS rewrite this server knows about.
+    ///     This action lists DNS rewrites, one page at a time, each with its classified target
+    ///     kind. Requires <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dnsrewrites:read")]
@@ -81,9 +73,8 @@ public class DnsRewritesController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every rewrite into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every rewrite into memory.
         IReadOnlyList<DnsRewriteEntity> rewrites = await rewriteRepository.SearchAsync(
             skip,
             take,
@@ -102,7 +93,8 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This action looks up a single DNS rewrite by its identifier.
+    ///     This action returns one DNS rewrite. Returns 404 for an unknown id. Requires
+    ///     <c>dnsrewrites:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dnsrewrites:read")]
@@ -117,7 +109,9 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This action creates a new DNS rewrite.
+    ///     This action creates a DNS rewrite. Returns 400 for an invalid domain or a target that is
+    ///     not an IP address or domain name, and 409 when a rewrite of the same kind exists for the
+    ///     domain. Requires <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dnsrewrites:write")]
@@ -165,7 +159,8 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing DNS rewrite's fields.
+    ///     This action replaces a DNS rewrite's fields. Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dnsrewrites:write")]
@@ -219,9 +214,10 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing DNS rewrite via RFC 7396 JSON Merge Patch: a
-    ///     field absent from the patch document is left untouched, and any present field
-    ///     overwrites it.
+    ///     This action updates a DNS rewrite as an RFC 7396 merge patch: an absent field is
+    ///     unchanged, a JSON <c>null</c> clears the comments, and any other value replaces it.
+    ///     Changing the domain or target is checked as for <see cref="Create" />. Requires
+    ///     <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("dnsrewrites:write")]
@@ -299,8 +295,8 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a DNS rewrite. No other entity references a rewrite
-    ///     by identifier, so there is nothing to check or clean up before removing it.
+    ///     This action deletes a DNS rewrite. Nothing refers to a rewrite by id, so nothing needs
+    ///     cleaning up first. Returns 404 for an unknown id. Requires <c>dnsrewrites:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dnsrewrites:write")]
@@ -321,11 +317,10 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This method validates a domain pattern -- required, and a syntactically valid DNS
-    ///     name (a bare <c>*</c> label is ordinary label content as far as
-    ///     <see cref="DnsName.TryParse(string, out DnsName, out string)" /> is concerned, so a
-    ///     wildcard domain such as <c>*.example.com</c> already passes this same structural
-    ///     check without any special-casing).
+    ///     This method checks that a domain is present and a valid DNS name. A <c>*</c> label is
+    ///     ordinary label content to
+    ///     <see cref="DnsName.TryParse(string, out DnsName, out string)" />, so a wildcard such as
+    ///     <c>*.example.com</c> passes without special handling.
     /// </summary>
     private static bool TryValidateDomain(string domain, out string error)
     {
@@ -347,12 +342,10 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This method looks up an existing rewrite whose own normalized domain and classified
-    ///     target kind both already match the given pair -- the ambiguous "two rewrites of the
-    ///     same record kind for the same domain" case this controller rejects. Filters through
-    ///     the base <see cref="IRepository{TEntity}.ListAsync" /> rather than a dedicated
-    ///     repository lookup, the same "acceptable at this project's own homelab/small-org target
-    ///     scale" reasoning <see cref="ForwardersController.FindByNameAsync" /> already applies.
+    ///     This method finds another rewrite with the same normalized domain and the same
+    ///     classified target kind, the ambiguous case this controller rejects. It filters the whole
+    ///     set loaded through <see cref="IRepository{TEntity}.ListAsync" />, as there is no
+    ///     dedicated lookup.
     /// </summary>
     private async Task<DnsRewriteEntity> FindConflictingAsync(
         string domain,
@@ -380,13 +373,10 @@ public class DnsRewritesController(
     }
 
     /// <summary>
-    ///     This method converts a rewrite entity into its REST representation, computing
-    ///     <see cref="DnsRewriteDetail.TargetKind" /> fresh via the real
-    ///     <see cref="DnsRewriteTargetClassifier" /> -- a stored target was already validated
-    ///     through the exact same classifier at write time, so classifying it again here should
-    ///     never actually fail; the <see langword="null" /> fallback exists only to keep a read
-    ///     endpoint from ever throwing over a row some other, non-REST write path may have
-    ///     inserted without this controller's own validation.
+    ///     This method converts a rewrite entity to its API representation, classifying the target
+    ///     to fill in <see cref="DnsRewriteDetail.TargetKind" />. A target saved through this
+    ///     controller always classifies; for a row written another way the kind is left
+    ///     <see langword="null" />, so a read never fails.
     /// </summary>
     private static DnsRewriteDetail ToDetail(DnsRewriteEntity rewrite)
     {
