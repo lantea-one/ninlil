@@ -7,40 +7,32 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Middleware;
 
 /// <summary>
-///     This class builds the <see cref="ForwardedHeadersOptions" /> instance
+///     This class fills the <see cref="ForwardedHeadersOptions" /> that
 ///     <see cref="ReverseProxyTrustGatingMiddleware" /> and
 ///     <see cref="Microsoft.AspNetCore.Builder.ForwardedHeadersExtensions.UseForwardedHeaders(Microsoft.AspNetCore.Builder.IApplicationBuilder)" />
-///     share, from a <see cref="ReverseProxyOptions" /> instance, extracted out of <c>Program.cs</c>'s
-///     own inline configuration lambda specifically so it can be exercised directly by a
-///     permanent test -- see this method's own doc comment for the real, checked-not-assumed bug
-///     it exists to prevent a regression of.
+///     share from <see cref="ReverseProxyOptions" />. It lives outside <c>Program.cs</c> so a test
+///     can call it directly and guard the loopback rule described on <see cref="Configure" />.
 /// </summary>
 public static class ReverseProxyForwardedHeadersConfigurator
 {
     /// <summary>
-    ///     This method populates <paramref name="forwardedHeadersOptions" />'s own
-    ///     <see cref="ForwardedHeadersOptions.ForwardedHeaders" />/<see cref="ForwardedHeadersOptions.KnownProxies" />/
-    ///     <see cref="ForwardedHeadersOptions.KnownIPNetworks" /> from <paramref name="reverseProxyOptions" />.
+    ///     This method sets <paramref name="forwardedHeadersOptions" />'s
+    ///     <see cref="ForwardedHeadersOptions.ForwardedHeaders" />,
+    ///     <see cref="ForwardedHeadersOptions.KnownProxies" /> and
+    ///     <see cref="ForwardedHeadersOptions.KnownIPNetworks" /> from
+    ///     <paramref name="reverseProxyOptions" />. Malformed entries are logged and skipped.
     ///     <para>
-    ///         <b>A brand-new <see cref="ForwardedHeadersOptions" /> instance already pre-trusts
-    ///         loopback on its own</b> -- its own default constructor seeds
-    ///         <see cref="ForwardedHeadersOptions.KnownProxies" /> with <c>::1</c> and
-    ///         <see cref="ForwardedHeadersOptions.KnownIPNetworks" /> with <c>127.0.0.0/8</c>, a
-    ///         real, checked-not-assumed fact confirmed against a real running host, not read
-    ///         from documentation alone: a first attempt at this wiring that only ever *added*
-    ///         this project's own configured entries, without clearing these framework defaults
-    ///         first, left this host's own reverse-proxy trust gate always trusting a request
-    ///         from loopback regardless of what an operator actually configured -- found only by
-    ///         an actual end-to-end request from <c>curl</c> over IPv6 loopback (<c>::1</c>)
-    ///         honoring a forwarded header despite a deliberately non-matching allowlist. Both
-    ///         collections are cleared here before this project's own configured entries are
-    ///         added, so an operator's own explicit allowlist is the entire trust boundary, never
-    ///         silently widened by this framework default.
+    ///         <b>A new <see cref="ForwardedHeadersOptions" /> already trusts loopback:</b> its
+    ///         constructor puts <c>::1</c> in <see cref="ForwardedHeadersOptions.KnownProxies" />
+    ///         and <c>127.0.0.0/8</c> in <see cref="ForwardedHeadersOptions.KnownIPNetworks" />.
+    ///         Adding the configured entries on top would leave loopback always trusted, whatever
+    ///         the operator configured, so both collections are cleared first and the configured
+    ///         allowlist is the whole trust boundary.
     ///     </para>
     /// </summary>
-    /// <param name="forwardedHeadersOptions">The instance to populate.</param>
-    /// <param name="reverseProxyOptions">The configured allowlist to populate it from.</param>
-    /// <param name="logger">A logger a malformed allowlist entry is warned through.</param>
+    /// <param name="forwardedHeadersOptions">The instance to fill.</param>
+    /// <param name="reverseProxyOptions">The configured allowlist.</param>
+    /// <param name="logger">Warns about a malformed allowlist entry.</param>
     public static void Configure(
         ForwardedHeadersOptions forwardedHeadersOptions,
         ReverseProxyOptions reverseProxyOptions,

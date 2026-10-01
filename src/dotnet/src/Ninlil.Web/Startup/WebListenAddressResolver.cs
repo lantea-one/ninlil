@@ -34,7 +34,7 @@ public static class WebListenAddressResolver
 {
     /// <summary>
     ///     This method returns the addresses to bind, or <see langword="null" /> to bind every
-    ///     address with Kestrel's usual dual-stack wildcard, as before this setting existed.
+    ///     address with Kestrel's dual-stack wildcard.
     /// </summary>
     /// <param name="options">The web listener's options, as read at startup.</param>
     /// <param name="logger">Where skipped addresses and the loopback fallback are reported.</param>

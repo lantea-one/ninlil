@@ -13,30 +13,26 @@ using Ninlil.Web.Services;
 namespace Ninlil.Web.Startup;
 
 /// <summary>
-///     This class solves the cold-start bootstrapping problem: every management endpoint in this
-///     project requires a specific permission claim, but a fresh installation starts with zero
-///     users and therefore nobody who could ever be granted one through the REST API itself. On
-///     startup, if no user account exists at all, this class creates one -- with a randomly
-///     generated password, logged once -- holding a new "Administrators" role granted
-///     <see cref="PermissionAuthorizationHandler.WildcardPermission" />, so the very first
-///     sign-in already has enough access to create real, specifically-scoped accounts and roles
-///     for actual day-to-day use.
+///     This class solves first-start access: every management endpoint needs a permission, but
+///     a fresh installation has no users, so nobody could be granted one through the API. At
+///     startup, if no user account exists, it creates one in a new "Administrators" role that
+///     holds <see cref="PermissionAuthorizationHandler.WildcardPermission" />, with a configured
+///     password or a generated one that is logged once. The first sign-in can then create
+///     accounts and roles with narrower permissions for daily use.
 /// </summary>
 public static class AdministratorBootstrapper
 {
     /// <summary>
-    ///     This constant contains the configuration key an operator can use to override the
-    ///     bootstrap administrator account's own user name.
+    ///     This constant contains the configuration key that overrides the bootstrap
+    ///     administrator's user name (<c>admin</c> by default).
     /// </summary>
     public const string UserNameConfigurationKey = "Identity:BootstrapAdministratorUserName";
 
     /// <summary>
-    ///     This constant contains the configuration key an operator can use to provision the
-    ///     bootstrap administrator account's own initial password explicitly -- useful for an
-    ///     automated deployment (a Docker Compose environment variable, for example) that needs
-    ///     a known credential rather than one only ever recorded in this process's own log
-    ///     output. When left unset, a strong password is generated randomly and logged once, as
-    ///     before.
+    ///     This constant contains the configuration key that sets the bootstrap administrator's
+    ///     initial password, for an automated deployment (a Docker Compose environment variable,
+    ///     for example) that needs a known credential instead of one that appears only in the log.
+    ///     When it is unset, a strong password is generated and logged once.
     /// </summary>
     public const string PasswordConfigurationKey = "Identity:BootstrapAdministratorPassword";
 
@@ -47,11 +43,10 @@ public static class AdministratorBootstrapper
     public const string AdministratorsRoleName = "Administrators";
 
     /// <summary>
-    ///     This method creates the bootstrap administrator account, if -- and only if -- no user
-    ///     account exists at all yet. Safe to call every time the application starts; every call
-    ///     after the first one finds at least one existing user and does nothing.
+    ///     This method creates the bootstrap administrator account only when no user account
+    ///     exists. It is safe to call on every start; once any user exists it does nothing.
     /// </summary>
-    /// <param name="services">The application's own root service provider.</param>
+    /// <param name="services">The application's root service provider.</param>
     /// <param name="configuration">The application configuration to read the account's own user name from.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public static async Task EnsureBootstrapAdministratorAsync(
@@ -68,9 +63,8 @@ public static class AdministratorBootstrapper
             .ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(AdministratorBootstrapper).FullName);
 
-        // The entire cold-start decision: any existing user account at all -- bootstrap-created or
-        // real -- means this process has already solved the "nobody can sign in" problem, so every
-        // call after the very first one on a given installation is a safe no-op from here on.
+        // Any existing user, bootstrap-created or not, means someone can already sign in, so every
+        // later start does nothing from here.
         IReadOnlyList<UserEntity> existingUsers = await userRepository.ListAsync(
             stoppingToken: stoppingToken
         );
@@ -84,10 +78,9 @@ public static class AdministratorBootstrapper
             UserManager<UserEntity>
         >();
 
-        // Look the role up by name rather than assuming it must be missing here: the role and the
-        // user are two separate writes, so a prior run that created the role but then failed
-        // before creating the user (the create-user branch below can fail and return early) must
-        // not create a second, duplicate "Administrators" role on the next attempt.
+        // Look the role up by name rather than assume it is missing: the role and the user are
+        // separate writes, so a run that created the role and then failed to create the user (the
+        // branch below can return early) must not create a second "Administrators" role next time.
         RoleEntity administratorsRole = await roleManager.FindByNameAsync(AdministratorsRoleName);
         if (administratorsRole is null)
         {
@@ -113,24 +106,19 @@ public static class AdministratorBootstrapper
         if (string.IsNullOrWhiteSpace(userName))
             userName = "admin";
 
-        // An operator-supplied password (an automated deployment's own environment variable, for
-        // example) always wins over generating one -- that is the whole point of
-        // PasswordConfigurationKey existing at all, a known credential an automated pipeline can
-        // rely on rather than one that only ever appears once in this process's own log output.
-        // passwordWasGenerated is carried forward purely to decide what the log message below is
-        // allowed to say.
+        // A configured password (from a deployment's environment variable, say) always wins over a
+        // generated one; that is the purpose of PasswordConfigurationKey. passwordWasGenerated only
+        // decides what the log message may say.
         string configuredPassword = configuration[PasswordConfigurationKey];
         bool passwordWasGenerated = string.IsNullOrWhiteSpace(configuredPassword);
         string password = passwordWasGenerated
             ? PasswordGenerator.GenerateStrongRandomPassword()
             : configuredPassword;
 
-        // Identity's own AddNinlilDnsIdentity configuration sets RequireUniqueEmail = true,
-        // which -- found only by actually running this against a real database, not by
-        // inspection -- rejects a null or empty e-mail address as "invalid" rather than simply
-        // treating it as absent. A placeholder, format-valid address lets the bootstrap account
-        // pass that check; it is expected to be replaced (along with this whole account) once a
-        // real administrator account exists.
+        // AddNinlilDnsIdentity sets RequireUniqueEmail = true, which rejects a null or empty e-mail
+        // address as invalid rather than treating it as absent. A placeholder, well-formed address
+        // lets the bootstrap account pass; it is expected to go when a real administrator account
+        // replaces this one.
         UserEntity administratorUser = new()
         {
             Id = Guid.NewGuid(),
@@ -152,12 +140,9 @@ public static class AdministratorBootstrapper
 
         await userManager.AddToRoleAsync(administratorUser, AdministratorsRoleName);
 
-        // Only a generated password is ever written to the log -- it is the one and only record
-        // of that credential anywhere, so logging it once is the entire point. A configured
-        // password already exists somewhere else (the operator's own deployment configuration),
-        // so echoing it back into this process's own log would just be a second, unnecessary copy
-        // of an already-known secret; that branch logs only the fact that the configured value was
-        // used, never the value itself.
+        // Only a generated password is logged: the log is its one record, so logging it once is the
+        // point. A configured password already exists in the deployment's configuration, so it is
+        // never echoed; that branch logs only that the configured value was used.
         if (passwordWasGenerated)
             logger.LogWarning(
                 "No user account existed yet, so a bootstrap administrator account was created. "

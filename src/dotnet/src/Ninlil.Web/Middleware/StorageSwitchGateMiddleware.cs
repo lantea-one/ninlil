@@ -6,35 +6,30 @@ using Ninlil.Web.Services.Storage;
 namespace Ninlil.Web.Middleware;
 
 /// <summary>
-///     This middleware rejects every request with a <c>503 Service Unavailable</c> while a live
-///     storage-engine switch (<see cref="Controllers.StorageController.Switch" />) is in
-///     progress, with two narrow exceptions: <c>GET /api/storage</c> itself (so a client polling
-///     for completion is never blocked from checking), and every static/SPA asset request (so the
-///     Angular admin SPA itself can keep rendering a "switch in progress" page rather than a
-///     browser-level connection failure).
+///     This middleware answers every <c>/api</c> request with <c>503 Service Unavailable</c> while
+///     a live storage-engine switch (<see cref="Controllers.StorageController.Switch" />) is in
+///     progress, except <c>GET /api/storage</c>, so a client can keep polling for completion.
+///     Requests outside <c>/api</c> pass through, so the admin console's static files still load
+///     and it can show a "switch in progress" page instead of a connection error.
 ///     <para>
-///         This exists because <see cref="StorageEngineSwitchService" />'s own switch sequence
-///         briefly leaves this process pointed at a freshly migrated, still-empty target database
-///         between the moment its own <c>StorageOptions</c> singleton is flipped and the moment
-///         the backup captured from the previous engine finishes being restored into it. An
-///         ordinary request answered from inside that window would see a database missing
-///         everything the operator expects -- for example, <c>ZonesController.List</c> returning
-///         an empty zone list moments before every zone reappears once the restore finishes --
-///         which is a confusing, silently-incomplete answer rather than a clear "try again in a
-///         moment" one. Registered early in the pipeline, immediately after exception handling
-///         and reverse-proxy trust gating, so it catches every REST action this switch's own
-///         narrow window could otherwise affect.
+///         The switch sequence in <see cref="StorageEngineSwitchService" /> briefly leaves the
+///         process using the freshly migrated, still-empty target database, between switching
+///         the <c>StorageOptions</c> singleton and finishing the restore of the backup taken from
+///         the old engine. A request answered in that window would see missing data (for example
+///         <c>ZonesController.List</c> returning no zones moments before they all reappear),
+///         which is more confusing than "try again in a moment". <c>Program.cs</c> registers it
+///         right after exception handling and reverse-proxy trust gating, ahead of the endpoints.
 ///     </para>
 /// </summary>
 /// <param name="next">The next delegate in the pipeline.</param>
-/// <param name="state">The shared in-progress flag this middleware reads on every request.</param>
+/// <param name="state">The shared in-progress flag read on every request.</param>
 public sealed class StorageSwitchGateMiddleware(
     RequestDelegate next,
     StorageEngineSwitchState state
 )
 {
     /// <summary>
-    ///     This method is the actual middleware entry point, invoked once per request.
+    ///     This method is the middleware entry point, called once per request.
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
@@ -52,10 +47,8 @@ public sealed class StorageSwitchGateMiddleware(
     }
 
     /// <summary>
-    ///     This method decides whether a request is exempt from this gate -- every
-    ///     non-<c>/api</c> request (the SPA's own static assets, so it can keep rendering while a
-    ///     switch runs) and <c>GET /api/storage</c> itself (so a client can keep polling for
-    ///     completion).
+    ///     This method decides whether a request is exempt from the gate: every request outside
+    ///     <c>/api</c>, and <c>GET</c> requests under <c>/api/storage</c>.
     /// </summary>
     private static bool IsExempt(HttpContext context)
     {

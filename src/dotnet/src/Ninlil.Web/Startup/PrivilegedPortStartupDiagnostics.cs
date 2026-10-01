@@ -9,78 +9,64 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Startup;
 
 /// <summary>
-///     This class solves a real, previously undiagnosed operator confusion: binding a
-///     "privileged" port (below 1024 on Linux/most Unix-likes -- 53 for Plain DNS, 80/443 for
-///     this host's own Kestrel listener, 853 for DNS-over-TLS/DNS-over-QUIC, or a DNSCrypt port
-///     reconfigured below 1024) without the elevation actually needed to bind it does not fail
-///     with any obviously actionable message today -- the affected transport's own
-///     <c>BackgroundService.ExecuteAsync</c> simply throws a raw <see cref="System.Net.Sockets.SocketException" />
-///     moments after this host finishes starting, which (absent this diagnostic) is the very
-///     first and only signal an operator ever sees.
+///     This class warns at startup when a listener is configured on a privileged port (below 1024
+///     on Linux and most Unix-likes: 53 for plain DNS, 80 and 443 for Kestrel, 853 for DNS-over-TLS
+///     and DNS-over-QUIC, or a DNSCrypt port moved below 1024) that the process cannot bind.
+///     Without it, the only sign is a raw <see cref="System.Net.Sockets.SocketException" /> from
+///     the transport's <c>BackgroundService.ExecuteAsync</c> shortly after startup.
 ///     <para>
-///         This class runs once, immediately after the host is built but before any transport's
-///         own listener actually starts, and warns -- through the real, already-configured
-///         logger, not the throwaway bootstrap logger earlier startup code uses before dependency
-///         injection exists -- for every currently-enabled listener whose configured port is
-///         privileged and which a live bind probe (<see cref="IPrivilegedPortBindProbe" />)
-///         reports this process cannot actually bind. <b>This is diagnostic only</b>: it never
-///         prevents, delays, or otherwise changes what happens next -- every listener still
-///         attempts its own real bind exactly as it always has, succeeding or failing entirely on
-///         its own, whether or not this class warned about it first.
+///         <c>Program.cs</c> runs it once, after the host is built and before the listeners
+///         start, and logs through the configured logger (not the bootstrap logger used before
+///         dependency injection exists). It warns for each enabled listener whose port is
+///         privileged and which a live bind probe (<see cref="IPrivilegedPortBindProbe" />) says
+///         cannot be bound. <b>It only diagnoses:</b> every listener still tries its own bind
+///         and succeeds or fails on its own.
 ///     </para>
 ///     <para>
-///         A live probe, not a bare "is the port number below 1024" rule, is deliberate: a
-///         container or a systemd unit can grant a non-root process Linux's own
-///         <c>CAP_NET_BIND_SERVICE</c> capability, in which case a configured privileged port is
-///         entirely fine and this class must stay silent about it -- see
-///         <see cref="SocketPrivilegedPortBindProbe" />'s own doc comment for exactly how that
-///         live check works.
+///         A live probe is used rather than a "below 1024" rule because a container or systemd
+///         unit can give a non-root process Linux's <c>CAP_NET_BIND_SERVICE</c>, in which case a
+///         privileged port is fine and no warning should appear (see
+///         <see cref="SocketPrivilegedPortBindProbe" />).
 ///     </para>
 /// </summary>
 public static class PrivilegedPortStartupDiagnostics
 {
     /// <summary>
-    ///     This constant contains the highest port number POSIX/Linux still treats as
-    ///     "privileged" -- 1023 -- so a port at or below it may need elevation to bind, and a
-    ///     port above it never does.
+    ///     This constant contains the highest port POSIX treats as privileged, 1023; a port at or
+    ///     below it may need elevation to bind.
     /// </summary>
     private const int HighestPrivilegedPort = 1023;
 
     /// <summary>
-    ///     This method builds the real, current list of every listener this host is about to
-    ///     start -- honoring each transport's own <c>Enable</c> flag exactly the way
-    ///     <c>Program.cs</c>'s own composition root already does, so this diagnostic never reports
-    ///     against a transport an operator has not actually turned on. Kept as a small, pure
-    ///     function (no socket, no logger, no DI container) specifically so it can be exercised
-    ///     directly by a unit test.
+    ///     This method lists the listeners the host is about to start, honoring each transport's
+    ///     <c>Enable</c> flag as <c>Program.cs</c> does, so no warning concerns a transport that is
+    ///     switched off. It is a pure function (no socket, logger or container) so a unit test can
+    ///     call it directly.
     /// </summary>
     /// <param name="webListenOptions">
-    ///     This host's own shared Kestrel HTTP/HTTPS listener configuration -- always included,
-    ///     since neither the HTTP nor the HTTPS port has an <c>Enable</c> flag of its own; both
-    ///     always bind.
+    ///     The Kestrel HTTP and HTTPS listener settings. Both ports are always included, since
+    ///     neither has an <c>Enable</c> flag.
     /// </param>
     /// <param name="plainProtocolOptions">
-    ///     Plain DNS's own UDP/TCP listener configuration -- always included, the one DNS
-    ///     transport with no <c>Enable</c> flag of its own (see <c>PlainProtocolOptions</c>'s own
-    ///     doc comment).
+    ///     The plain DNS UDP/TCP listener settings, always included: it is the one DNS transport
+    ///     with no <c>Enable</c> flag (see <c>PlainProtocolOptions</c>).
     /// </param>
     /// <param name="dnsOverTlsOptions">
-    ///     DNS-over-TLS's own listener configuration -- included only when
-    ///     <see cref="DnsOverTlsOptions.Enable" /> is <see langword="true" />.
+    ///     The DNS-over-TLS settings, included only when <see cref="DnsOverTlsOptions.Enable" /> is
+    ///     <see langword="true" />.
     /// </param>
     /// <param name="dnsOverQuicOptions">
-    ///     DNS-over-QUIC's own listener configuration -- included only when
-    ///     <see cref="DnsOverQuicOptions.Enable" /> is <see langword="true" />.
+    ///     The DNS-over-QUIC settings, included only when <see cref="DnsOverQuicOptions.Enable" />
+    ///     is <see langword="true" />.
     /// </param>
     /// <param name="dnsCryptOptions">
-    ///     DNSCrypt's own listener configuration -- included only when
-    ///     <see cref="DnsCryptOptions.Enable" /> is <see langword="true" />. DNS-over-HTTPS is
-    ///     deliberately never included: in this host's own composition, it rides this same
-    ///     <paramref name="webListenOptions" /> listener rather than binding a port of its own
-    ///     (see <c>EndpointRouteBuilderDnsOverHttpsExtension</c>'s own doc comment), so
-    ///     <c>DnsOverHttpsOptions.Port</c> is not a real, separately-bound port here at all.
+    ///     The DNSCrypt settings, included only when <see cref="DnsCryptOptions.Enable" /> is
+    ///     <see langword="true" />. DNS-over-HTTPS is never included: it is served by the
+    ///     <paramref name="webListenOptions" /> listener rather than its own port (see
+    ///     <c>EndpointRouteBuilderDnsOverHttpsExtension</c>), so <c>DnsOverHttpsOptions.Port</c> is
+    ///     not bound separately.
     /// </param>
-    /// <returns>Every listener this host is about to actually start, by name and port.</returns>
+    /// <returns>Every listener the host is about to start, by name and port.</returns>
     public static IReadOnlyList<PrivilegedPortListenerDescriptor> BuildConfiguredListeners(
         WebListenOptions webListenOptions,
         PlainProtocolOptions plainProtocolOptions,
@@ -109,22 +95,20 @@ public static class PrivilegedPortStartupDiagnostics
         if (dnsCryptOptions.Enable)
             listeners.Add(new PrivilegedPortListenerDescriptor("DNSCrypt", dnsCryptOptions.Port));
 
-        // We're done, return every listener this host is about to actually start.
+        // Every listener the host is about to start.
         return listeners;
     }
 
     /// <summary>
-    ///     This method logs one clear, actionable startup warning for every listener in
-    ///     <paramref name="listeners" /> whose own configured port is privileged (1023 or below)
-    ///     and which <paramref name="probe" /> reports this process cannot actually bind. Kept
-    ///     separate from <see cref="BuildConfiguredListeners" /> so a unit test can supply a fake
-    ///     <see cref="IPrivilegedPortBindProbe" /> with a deterministic answer, rather than
-    ///     depending on the real OS-level privilege state of whatever account happens to run the
-    ///     test.
+    ///     This method logs one actionable warning for each listener whose port is privileged (1023
+    ///     or below) and which <paramref name="probe" /> says this process cannot bind. It is
+    ///     separate from <see cref="BuildConfiguredListeners" /> so a unit test can pass a fake
+    ///     <see cref="IPrivilegedPortBindProbe" /> instead of depending on the privileges of the
+    ///     account running the test.
     /// </summary>
-    /// <param name="listeners">Every listener this host is about to actually start.</param>
-    /// <param name="probe">The live probe used to test whether each privileged port can actually be bound.</param>
-    /// <param name="logger">The logger this method writes an actionable warning to.</param>
+    /// <param name="listeners">Every listener the host is about to start.</param>
+    /// <param name="probe">Tests whether each privileged port can be bound.</param>
+    /// <param name="logger">Receives the warnings.</param>
     public static void WarnAboutUnbindablePrivilegedPorts(
         IReadOnlyList<PrivilegedPortListenerDescriptor> listeners,
         IPrivilegedPortBindProbe probe,

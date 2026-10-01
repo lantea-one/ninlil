@@ -7,34 +7,25 @@ using ValidationException = Ninlil.Dns.Common.Exceptions.ValidationException;
 namespace Ninlil.Web.ExceptionHandling;
 
 /// <summary>
-///     This is the one place every exception this REST API's own controllers let escape gets
-///     turned into an HTTP response -- registered as an <see cref="IExceptionHandler" /> via
-///     <c>AddExceptionHandler&lt;NinlilExceptionHandler&gt;()</c> and invoked by
-///     <c>UseExceptionHandler()</c> ahead of every other middleware in this project's pipeline.
-///     Every response this handler produces is RFC 7807 <see cref="ProblemDetails" />
-///     (<c>application/problem+json</c>), so a caller of any converted endpoint sees exactly one
-///     consistent error shape, whether the failure is a named domain condition
-///     (<see cref="NinlilException" /> and its three subclasses) or a genuinely unhandled bug.
+///     This class turns every exception that escapes a controller or middleware into an HTTP
+///     response. It is registered with <c>AddExceptionHandler&lt;NinlilExceptionHandler&gt;()</c>
+///     and run by <c>UseExceptionHandler()</c>, the first middleware in <c>Program.cs</c>. Every
+///     response is an RFC 7807 <see cref="ProblemDetails" /> (<c>application/problem+json</c>),
+///     so callers see one error shape whether the failure is a named domain condition
+///     (<see cref="NinlilException" /> and its three subclasses) or an unhandled bug.
 ///     <para>
-///         An action that still returns an ordinary <see cref="Microsoft.AspNetCore.Mvc.ActionResult" />
-///         for its own error paths -- <c>NotFound()</c>, <c>Conflict("...")</c>,
-///         <c>BadRequest("...")</c>, and so on, everywhere this project has not yet converted to
-///         throwing one of the four exception types below -- never reaches this handler at all:
-///         an already-produced action result is written directly by MVC's own result-execution
-///         pipeline, with no exception ever thrown, so this handler is purely additive and cannot
-///         interfere with or double-handle a controller's own existing error handling.
+///         An action that returns an error result itself (<c>NotFound()</c>,
+///         <c>Conflict("...")</c>, <c>BadRequest("...")</c>) never reaches this handler, because
+///         no exception is thrown; MVC writes that result directly.
 ///     </para>
 /// </summary>
 /// <param name="problemDetailsService">
-///     Writes the finished <see cref="ProblemDetails" /> body onto the response, honoring
-///     whatever content-negotiation/formatting ASP.NET Core's own <c>AddProblemDetails()</c>
-///     registration configured.
+///     Writes the <see cref="ProblemDetails" /> body, using the formatting that
+///     <c>AddProblemDetails()</c> configured.
 /// </param>
 /// <param name="logger">
-///     Records every exception this handler processes server-side -- with full detail (including
-///     a stack trace) for a genuinely unhandled exception, since that detail is never returned to
-///     the caller and exists purely so an operator can diagnose the real bug from this server's
-///     own logs.
+///     Logs each handled exception. An unhandled exception is logged in full, with its stack
+///     trace, since the caller never sees that detail.
 /// </param>
 public sealed class NinlilExceptionHandler(
     IProblemDetailsService problemDetailsService,
@@ -42,13 +33,10 @@ public sealed class NinlilExceptionHandler(
 ) : IExceptionHandler
 {
     /// <summary>
-    ///     This method builds the <see cref="ProblemDetails" /> body for whichever exception
-    ///     reached this handler, sets the matching HTTP status code on the response, and hands the
-    ///     finished body to <see cref="IProblemDetailsService" /> to actually write. Always
-    ///     returns <see langword="true" /> -- every exception, named or not, is handled by the
-    ///     <c>default</c> branch below at the very least, so this handler never lets an exception
-    ///     fall through to a second handler (there is none registered) or to the framework's own
-    ///     bare, unhandled-exception response.
+    ///     This method builds the <see cref="ProblemDetails" /> for the exception, sets the
+    ///     matching status code and writes the body. Every exception is handled, at worst by the
+    ///     final catch-all branch of <see cref="BuildProblemDetails" />, so none falls through to
+    ///     the framework's bare error response.
     /// </summary>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -72,22 +60,16 @@ public sealed class NinlilExceptionHandler(
     }
 
     /// <summary>
-    ///     This method classifies an exception against this project's own four-type hierarchy and
-    ///     builds the matching <see cref="ProblemDetails" /> body -- pattern-matching on the
-    ///     exception's own concrete type, from most specific to least specific, so a
-    ///     <see cref="ValidationException" />/<see cref="NotFoundException" />/
-    ///     <see cref="ConflictException" /> is always classified correctly even though every one
-    ///     of them also happens to satisfy the final, catch-all <see cref="NinlilException" />
-    ///     case.
+    ///     This method maps an exception to a <see cref="ProblemDetails" />: 400 for
+    ///     <see cref="ValidationException" />, 404 for <see cref="NotFoundException" />, 409 for
+    ///     <see cref="ConflictException" />, and 500 for any other exception. The specific types
+    ///     are checked before <see cref="NinlilException" />, which they all derive from.
     /// </summary>
     private ProblemDetails BuildProblemDetails(HttpContext httpContext, Exception exception)
     {
-        // A validation failure carrying a field-keyed error breakdown (an IdentityResult with
-        // more than one distinct failure, for example) gets the exact same response shape ASP.NET
-        // Core's own automatic model-state validation already produces -- an "errors" dictionary
-        // alongside the usual title/detail/status -- so a caller never has to distinguish "a
-        // field-level validation failure the framework caught" from "a field-level validation
-        // failure this project's own business logic caught" by response shape alone.
+        // A validation failure with per-field errors (an IdentityResult with several failures, for
+        // example) gets the same shape as ASP.NET Core's automatic model validation: an "errors"
+        // dictionary alongside title, detail and status. Callers can then handle both the same way.
         if (exception is ValidationException { Errors.Count: > 0 } fieldValidationException)
         {
             return new HttpValidationProblemDetails(fieldValidationException.Errors)
@@ -130,12 +112,9 @@ public sealed class NinlilExceptionHandler(
             );
         }
 
-        // A NinlilException reaching this point is the catch-all case: a named, understood
-        // domain failure that does not fit any of the three more specific types above. Its own
-        // message is, by this hierarchy's own documented contract, already safe to return to the
-        // caller verbatim -- unlike a genuinely unhandled exception below, no correlation id or
-        // extra server-side-only logging is needed, though a warning is still logged so an
-        // operator can see how often a named failure of this shape is actually occurring.
+        // Any other NinlilException is a named, expected failure whose message is safe to return as
+        // is, so no correlation id is needed. A warning is still logged so an operator can see how
+        // often it happens.
         if (exception is NinlilException ninlilOneException)
         {
             logger.LogWarning(
@@ -152,12 +131,10 @@ public sealed class NinlilExceptionHandler(
             );
         }
 
-        // A genuinely unhandled exception -- a real bug, not a named domain failure this project
-        // anticipated. The full exception (message, stack trace, every inner exception) is logged
-        // server-side with a correlation id; the caller receives only that same correlation id and
-        // a generic message, never the exception's own message or any part of its stack trace, so
-        // an internal detail (a connection string, a file path, a raw SQL fragment) can never leak
-        // through an error response.
+        // An unhandled exception is a bug. It is logged in full with a correlation id, and the
+        // caller gets only that id and a generic message, never the exception message or stack
+        // trace, so no internal detail (a connection string, a file path, a SQL fragment) leaks
+        // into a response.
         string correlationId = Guid.NewGuid().ToString("n");
         logger.LogError(
             exception,
@@ -179,9 +156,8 @@ public sealed class NinlilExceptionHandler(
     }
 
     /// <summary>
-    ///     This method builds a plain <see cref="ProblemDetails" /> instance for the given status
-    ///     code, title, and detail message -- the shared shape every branch above that does not
-    ///     need a field-keyed error breakdown builds its own response from.
+    ///     This method builds a <see cref="ProblemDetails" /> with the given status, title and
+    ///     detail, for every branch that has no per-field errors.
     /// </summary>
     private static ProblemDetails NewProblemDetails(int statusCode, string title, string detail) =>
         new()
@@ -193,9 +169,8 @@ public sealed class NinlilExceptionHandler(
         };
 
     /// <summary>
-    ///     This method builds the conventional <c>https://httpstatuses.io/{code}</c> reference
-    ///     URI RFC 7807's own <c>type</c> member expects -- a stable, human-readable page
-    ///     describing what the status code itself means, not specific to this project.
+    ///     This method builds the <c>https://httpstatuses.io/{code}</c> page URI used as the RFC
+    ///     7807 <c>type</c> member, which describes the status code in general.
     /// </summary>
     private static string ProblemTypeUri(int statusCode) => $"https://httpstatuses.io/{statusCode}";
 }

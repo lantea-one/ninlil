@@ -5,14 +5,13 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Web.Hubs;
 
 /// <summary>
-///     This class bridges Server.Core's own internal event bus to <see cref="DnsEventsHub" />:
-///     one <see cref="IDnsServerEventSubscriber{TEvent}" /> registration per curated event type,
-///     each simply forwarding the event, as-is, to the connected clients whose user holds the
-///     permission that event type requires (see <see cref="DnsEventsHub" />'s own remarks).
-///     Works identically regardless of whether <c>DnsServer:Events:Transport</c> is
-///     <c>InMemory</c>, <c>RabbitMq</c>, or <c>ActiveMq</c> -- <c>BrokerEventConsumerService</c>
-///     already feeds a broker-received event back into the same local dispatch path an
-///     in-process event uses, so this class needs no broker awareness of its own.
+///     This class connects the Server.Core event bus to <see cref="DnsEventsHub" />: it
+///     subscribes (<see cref="IDnsServerEventSubscriber{TEvent}" />) to each event type the hub
+///     carries and forwards each event unchanged to the connected clients whose user holds the
+///     permission that event type requires (see <see cref="DnsEventsHub" />). It works the same
+///     whether <c>DnsServer:Events:Transport</c> is <c>InMemory</c>, <c>RabbitMq</c> or
+///     <c>ActiveMq</c>, because <c>BrokerEventConsumerService</c> feeds events received from a
+///     broker into the same local dispatch as in-process events.
 /// </summary>
 /// <param name="hubContext">The hub context events are broadcast through.</param>
 public sealed class DnsEventsHubBroadcaster(IHubContext<DnsEventsHub> hubContext)
@@ -70,10 +69,9 @@ public sealed class DnsEventsHubBroadcaster(IHubContext<DnsEventsHub> hubContext
         );
 
     /// <summary>
-    ///     This method forwards one domain event, under the given client-side method name and with
-    ///     no transformation of the event itself, to every connected SignalR client whose user
-    ///     holds <paramref name="permission" /> -- never to <c>Clients.All</c>, which would hand
-    ///     the event to every signed-in user whatever their permissions.
+    ///     This method forwards one event unchanged, under the given client method name, to the
+    ///     SignalR group of <paramref name="permission" />, never to <c>Clients.All</c>, which
+    ///     would reach every signed-in user whatever their permissions.
     /// </summary>
     private async ValueTask BroadcastAsync<TEvent>(
         string methodName,
