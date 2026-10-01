@@ -13,16 +13,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the arbitrary, raw DHCPv4 options belonging to a single DHCP
-///     scope, nested under it (<c>/api/dhcp-scopes/{scopeId}/custom-options</c>) since a custom
-///     option only ever makes sense in its owning scope's own context -- the same nesting
-///     <see cref="RecordsController" /> already establishes for a zone's records. Every action
-///     requires the <c>dhcpscopes:read</c> or <c>dhcpscopes:write</c> permission, the same as
+///     This controller manages the raw DHCPv4 options (tag and value) of one DHCP scope, nested
+///     under it at <c>/api/dhcp-scopes/{scopeId}/custom-options</c>. Only the DHCPv4 engine
+///     delivers them (see
+///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity" /> for
+///     precedence over the standard options and the Parameter Request List). Reads need
+///     <c>dhcpscopes:read</c> and changes need <c>dhcpscopes:write</c>, as for
 ///     <see cref="DhcpScopesController" />.
 /// </summary>
-/// <param name="scopeRepository">The repository used to confirm the owning scope exists.</param>
-/// <param name="customOptionRepository">The repository this controller reads and writes custom options through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="scopeRepository">Confirms the scope exists.</param>
+/// <param name="customOptionRepository">Reads and writes custom options.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/dhcp-scopes/{scopeId:guid}/custom-options")]
 public class DhcpScopeCustomOptionsController(
@@ -32,7 +33,8 @@ public class DhcpScopeCustomOptionsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every custom option belonging to a DHCP scope.
+    ///     This action lists a scope's custom options, one page at a time. Returns 404 for an
+    ///     unknown scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcpscopes:read")]
@@ -66,7 +68,8 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This action looks up a single custom option by its identifier.
+    ///     This action returns one custom option. Returns 404 when it does not exist or belongs to
+    ///     another scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcpscopes:read")]
@@ -88,10 +91,9 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This action adds a new custom option to a DHCP scope. See
-    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity" />'s own doc
-    ///     comment for how a custom option interacts with this project's own standard-option
-    ///     computation and a client's Parameter Request List.
+    ///     This action adds a custom option to a scope. The value is stored as uppercase hex.
+    ///     Returns 400 for a value that is not even-length hex, or a missing value when the source
+    ///     is <c>Custom</c>, and 404 for an unknown scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -138,8 +140,9 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing custom option's own fields, keeping its own
-    ///     identifier and owning scope.
+    ///     This action replaces a custom option's fields, keeping its id and scope. Validation is
+    ///     as for <see cref="Create" />; returns 404 when the option does not exist or belongs to
+    ///     another scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -178,7 +181,8 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This action removes a custom option from the DHCP scope.
+    ///     This action removes a custom option from the scope. Returns 404 when it does not exist
+    ///     or belongs to another scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -198,15 +202,14 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This method validates a custom option write request, and canonicalizes
+    ///     This method checks a custom option request and converts
     ///     <see cref="DhcpScopeCustomOptionWriteRequest.ValueHex" /> to the uppercase, even-length
-    ///     hexadecimal form <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity.ValueHex" />
-    ///     always stores. A blank <c>valueHex</c> is only ever rejected for
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> (this option's stored value is what gets
-    ///     delivered, so it must actually contain something); for
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> it is genuinely irrelevant --
-    ///     the delivery engine substitutes this server's own address instead and never reads it --
-    ///     so a blank value is accepted and normalized to an empty string rather than rejected.
+    ///     hex that
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity.ValueHex" />
+    ///     stores. A blank value is an error only for
+    ///     <see cref="DhcpOptionValueSourceEnum.Custom" />, where the stored value is what gets
+    ///     sent. For <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the server's address is
+    ///     sent instead and the value is never read, so a blank value is stored as an empty string.
     /// </summary>
     private static bool TryValidate(
         DhcpScopeCustomOptionWriteRequest request,
@@ -251,7 +254,7 @@ public class DhcpScopeCustomOptionsController(
     }
 
     /// <summary>
-    ///     This method converts a custom option entity into its REST representation.
+    ///     This method converts a custom option entity to its API representation.
     /// </summary>
     private static DhcpScopeCustomOptionDetail ToDetail(DhcpScopeCustomOptionEntity customOption) =>
         new(

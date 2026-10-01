@@ -14,24 +14,20 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the static reservations belonging to a single DHCP scope,
-///     nested under it (<c>/api/dhcp-scopes/{scopeId}/reservations</c>) since a reservation only
-///     ever makes sense in its owning scope's own context -- the same nesting
-///     <see cref="RecordsController" /> already establishes for a zone's records. Every action
-///     requires the <c>dhcpscopes:read</c> or <c>dhcpscopes:write</c> permission, the same as
-///     <see cref="DhcpScopesController" />.
+///     This controller manages the static reservations of one DHCP scope, nested under it at
+///     <c>/api/dhcp-scopes/{scopeId}/reservations</c>. Reads need <c>dhcpscopes:read</c> and
+///     changes need <c>dhcpscopes:write</c>, as for <see cref="DhcpScopesController" />.
 ///     <para>
-///         <b>Address-assignment scopes only.</b> RFC 8415 defines no delegated-prefix
-///         reservation shape at all -- a reservation is always a fixed ordinary address, never a
-///         fixed delegated prefix -- so <see cref="Create" />/<see cref="Replace" /> both reject a
-///         write against a <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope with a real
-///         <see cref="ValidationException" />, rather than silently accepting a reservation shape
-///         this feature has no way to actually honor.
+///         <b>Address scopes only.</b> RFC 8415 has no form for reserving a delegated prefix; a
+///         reservation is always one fixed address. <see cref="Create" /> and
+///         <see cref="Replace" /> therefore return 400 for a
+///         <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope rather than accept a
+///         reservation the server could not honor.
 ///     </para>
 /// </summary>
-/// <param name="scopeRepository">The repository used to confirm the owning scope exists, and to check its own <see cref="DhcpScopeEntity.Kind" />.</param>
-/// <param name="reservationRepository">The repository this controller reads and writes reservations through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="scopeRepository">Confirms the scope exists and supplies its <see cref="DhcpScopeEntity.Kind" />.</param>
+/// <param name="reservationRepository">Reads and writes reservations.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/dhcp-scopes/{scopeId:guid}/reservations")]
 public class DhcpReservationsController(
@@ -41,7 +37,8 @@ public class DhcpReservationsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every reservation belonging to a DHCP scope.
+    ///     This action lists a scope's reservations, one page at a time. Returns 404 for an unknown
+    ///     scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcpscopes:read")]
@@ -75,7 +72,8 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This action looks up a single reservation by its identifier.
+    ///     This action returns one reservation. Returns 404 when it does not exist or belongs to
+    ///     another scope. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcpscopes:read")]
@@ -97,12 +95,12 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This action adds a new static reservation to a DHCP scope. Rejected with
-    ///     <c>409 Conflict</c> when either the client identifier or the IP address is already
-    ///     reserved elsewhere in this same scope -- the same "unique per scope per client/per
-    ///     address" shape a lease already has, per
-    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />'s own doc
-    ///     comment.
+    ///     This action adds a static reservation to a scope. Returns 400 for a prefix-delegation
+    ///     scope, a missing client identifier or an invalid IP address; 404 for an unknown scope;
+    ///     and 409 when the client identifier or the address is already reserved in this scope
+    ///     (both are unique per scope, as for leases; see
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity" />). The address
+    ///     is not checked against the scope's range or protocol. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -177,8 +175,8 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing reservation's own fields, keeping its own
-    ///     identifier and owning scope.
+    ///     This action replaces a reservation's fields, keeping its id and scope. Validation and
+    ///     errors are as for <see cref="Create" />. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -245,7 +243,8 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This action removes a reservation from the DHCP scope.
+    ///     This action removes a reservation from the scope. Returns 404 when it does not exist or
+    ///     belongs to another scope. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -265,7 +264,8 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This method validates a reservation write request's own fields.
+    ///     This method checks that a reservation request has a client identifier and a valid IP
+    ///     address.
     /// </summary>
     private static bool TryValidate(DhcpReservationWriteRequest request, out string error)
     {
@@ -290,7 +290,7 @@ public class DhcpReservationsController(
     }
 
     /// <summary>
-    ///     This method converts a reservation entity into its REST representation.
+    ///     This method converts a reservation entity to its API representation.
     /// </summary>
     private static DhcpReservationDetail ToDetail(DhcpReservationEntity reservation) =>
         new(

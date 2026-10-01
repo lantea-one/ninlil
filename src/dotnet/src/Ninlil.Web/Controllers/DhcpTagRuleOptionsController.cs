@@ -13,15 +13,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the options a single tag rule contributes, nested under it
-///     (<c>/api/dhcp-tag-rules/{tagRuleId}/options</c>) since an option only ever makes sense in
-///     its owning rule's own context -- the same nesting <see cref="RecordsController" /> already
-///     establishes for a zone's records. Every action requires the <c>dhcptagrules:read</c> or
-///     <c>dhcptagrules:write</c> permission, the same as <see cref="DhcpTagRulesController" />.
+///     This controller manages the options one tag rule contributes, nested under it at
+///     <c>/api/dhcp-tag-rules/{tagRuleId}/options</c>. Reads need <c>dhcptagrules:read</c> and
+///     changes need <c>dhcptagrules:write</c>, as for <see cref="DhcpTagRulesController" />.
 /// </summary>
-/// <param name="tagRuleRepository">The repository used to confirm the owning rule exists.</param>
-/// <param name="tagRuleOptionRepository">The repository this controller reads and writes options through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="tagRuleRepository">Confirms the rule exists.</param>
+/// <param name="tagRuleOptionRepository">Reads and writes options.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/dhcp-tag-rules/{tagRuleId:guid}/options")]
 public class DhcpTagRuleOptionsController(
@@ -31,7 +29,8 @@ public class DhcpTagRuleOptionsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every option a tag rule contributes.
+    ///     This action lists a rule's options, one page at a time. Returns 404 for an unknown rule.
+    ///     Requires <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcptagrules:read")]
@@ -73,7 +72,8 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This action looks up a single option by its identifier.
+    ///     This action returns one option. Returns 404 when it does not exist or belongs to another
+    ///     rule. Requires <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcptagrules:read")]
@@ -95,7 +95,9 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This action adds a new option to a tag rule.
+    ///     This action adds an option to a tag rule. The value is stored as uppercase hex. Returns
+    ///     400 for a value that is not even-length hex, or a missing value when the source is
+    ///     <c>Custom</c>, and 404 for an unknown rule. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcptagrules:write")]
@@ -133,8 +135,9 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing option's own fields, keeping its own identifier
-    ///     and owning rule.
+    ///     This action replaces an option's fields, keeping its id and rule. Validation is as for
+    ///     <see cref="Create" />; returns 404 when the option does not exist or belongs to another
+    ///     rule. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -170,7 +173,8 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This action removes an option from the tag rule.
+    ///     This action removes an option from the rule. Returns 404 when it does not exist or
+    ///     belongs to another rule. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -194,14 +198,13 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This method validates a tag rule option write request, and canonicalizes
-    ///     <see cref="DhcpTagRuleOptionWriteRequest.ValueHex" /> to the uppercase, even-length
-    ///     hexadecimal form <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleOptionEntity.ValueHex" />
-    ///     always stores, the same convention <see cref="DhcpScopeCustomOptionsController" />
-    ///     already establishes for a scope's own custom options -- including that a blank
-    ///     <c>valueHex</c> is only rejected for <see cref="DhcpOptionValueSourceEnum.Custom" />,
-    ///     never for <see cref="DhcpOptionValueSourceEnum.ServerAddress" />, whose stored value the
-    ///     delivery engine never reads at all.
+    ///     This method checks an option request and converts
+    ///     <see cref="DhcpTagRuleOptionWriteRequest.ValueHex" /> to the uppercase, even-length hex
+    ///     that
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleOptionEntity.ValueHex" />
+    ///     stores, with the same rule as <see cref="DhcpScopeCustomOptionsController" />: a blank
+    ///     value is an error only for <see cref="DhcpOptionValueSourceEnum.Custom" />, since for
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> the value is never read.
     /// </summary>
     private static bool TryValidate(
         DhcpTagRuleOptionWriteRequest request,
@@ -246,7 +249,7 @@ public class DhcpTagRuleOptionsController(
     }
 
     /// <summary>
-    ///     This method converts a tag rule option entity into its REST representation.
+    ///     This method converts an option entity to its API representation.
     /// </summary>
     private static DhcpTagRuleOptionDetail ToDetail(DhcpTagRuleOptionEntity option) =>
         new(

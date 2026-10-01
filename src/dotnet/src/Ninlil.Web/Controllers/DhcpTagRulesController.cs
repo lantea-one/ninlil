@@ -15,20 +15,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own tag-based conditional option delivery rules
-///     -- the top-level resource; a rule's own contributed options are managed separately,
-///     through the nested <see cref="DhcpTagRuleOptionsController" />
-///     (<c>/api/dhcp-tag-rules/{tagRuleId}/options</c>) -- the same "one parent, one nested child
-///     collection" shape <see cref="DhcpScopesController" /> already establishes for a scope's own
-///     reservations/custom options. Every action requires the <c>dhcptagrules:read</c> or
-///     <c>dhcptagrules:write</c> permission, reused for the nested controller too. See
-///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity" />'s own doc comment for
-///     the full match/priority/conflict-resolution semantics this resource's own fields drive.
+///     This controller manages tag rules for conditional DHCP option delivery: a rule matches
+///     clients by vendor class, user class, relay agent IDs or enterprise number, optionally
+///     within one scope, and contributes options to them. A rule's options are managed through the
+///     nested <see cref="DhcpTagRuleOptionsController" />
+///     (<c>/api/dhcp-tag-rules/{tagRuleId}/options</c>), which uses the same permissions:
+///     <c>dhcptagrules:read</c> for reads and <c>dhcptagrules:write</c> for changes. See
+///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity" /> for how matching,
+///     priority and conflicts work.
 /// </summary>
-/// <param name="tagRuleRepository">The repository this controller reads and writes rules through.</param>
-/// <param name="tagRuleOptionRepository">The repository used to remove a deleted rule's own options -- see <see cref="Delete" />.</param>
-/// <param name="scopeRepository">The repository used to confirm an optional <c>scopeId</c> actually names a real scope.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="tagRuleRepository">Reads and writes rules.</param>
+/// <param name="tagRuleOptionRepository">Removes a deleted rule's options (see <see cref="Delete" />).</param>
+/// <param name="scopeRepository">Confirms an optional <c>scopeId</c> names an existing scope.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/dhcp-tag-rules")]
 public class DhcpTagRulesController(
@@ -39,7 +38,7 @@ public class DhcpTagRulesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every tag rule this server manages.
+    ///     This action lists tag rules, one page at a time. Requires <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcptagrules:read")]
@@ -64,7 +63,8 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This action looks up a single tag rule by its identifier.
+    ///     This action returns one tag rule. Returns 404 for an unknown id. Requires
+    ///     <c>dhcptagrules:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcptagrules:read")]
@@ -79,7 +79,9 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This action creates a new tag rule.
+    ///     This action creates a tag rule. Relay ID hex values are stored in uppercase. Returns 400
+    ///     for a missing name, an unknown scope or a relay ID that is not even-length hex. Requires
+    ///     <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcptagrules:write")]
@@ -120,7 +122,8 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing tag rule's own fields.
+    ///     This action replaces a tag rule's fields. Validation is as for <see cref="Create" />;
+    ///     returns 404 for an unknown id. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -161,9 +164,10 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing tag rule via RFC 7396 JSON Merge Patch: a
-    ///     field absent from the patch document is left untouched, and any other present field
-    ///     overwrites it.
+    ///     This action updates a tag rule as an RFC 7396 merge patch: an absent field is unchanged,
+    ///     a JSON <c>null</c> clears a nullable field, and any other value replaces it. Returns 400
+    ///     for an empty name, an unknown scope, an unknown match mode or bad hex, and 404 for an
+    ///     unknown id. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -284,11 +288,9 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a tag rule and every option it contributes -- removed
-    ///     explicitly, rather than relying on the relational backend's own cascade delete, since
-    ///     MongoDB has no equivalent mechanism at all, the same reasoning
-    ///     <see cref="ClientGroupsController.Delete" /> already applies to a deleted client
-    ///     group's own dependent rows.
+    ///     This action deletes a tag rule and every option it contributes, removed explicitly
+    ///     rather than by a relational cascade delete, which MongoDB lacks. Returns 404 for an
+    ///     unknown id. Requires <c>dhcptagrules:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dhcptagrules:write")]
@@ -312,8 +314,8 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch match-mode field, rejecting anything that isn't a
-    ///     recognized <see cref="Dhcpv4TagMatchModeEnum" /> member name.
+    ///     This method parses a match-mode field, rejecting anything that is not a
+    ///     <see cref="Dhcpv4TagMatchModeEnum" /> member name.
     /// </summary>
     private static Dhcpv4TagMatchModeEnum ParseMatchMode(JsonElement element, string fieldName)
     {
@@ -333,8 +335,8 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This method reads and validates a merge-patch hex-value field, allowing an explicit
-    ///     <see langword="null" /> to clear it.
+    ///     This method checks a merge-patch hex field and converts it to uppercase; a JSON
+    ///     <see langword="null" /> or empty value clears it.
     /// </summary>
     private static string NormalizeHexFieldOrThrow(JsonElement element, string fieldName)
     {
@@ -359,8 +361,8 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This method canonicalizes an optional hex string field to its uppercase form, or
-    ///     returns <see langword="null" /> unchanged.
+    ///     This method converts an optional hex string to uppercase, or returns
+    ///     <see langword="null" /> for an empty one. The value must already be valid hex.
     /// </summary>
     private static string NormalizeHexOrNull(string value)
     {
@@ -371,13 +373,11 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This method validates every field of a tag rule write request up front, so a
-    ///     <c>POST</c>/<c>PUT</c> either fully succeeds or is rejected outright with no partial
-    ///     effect. When <see cref="DhcpTagRuleWriteRequest.ScopeId" /> is set, its own existence is
-    ///     checked here too, treated as an invalid value on the rule being written rather than a
-    ///     lookup of the scope itself -- the same "referenced entity absence is a 400, not a 404"
-    ///     precedent <see cref="ClientGroupListAssignmentsController.Create" /> already establishes
-    ///     for a list assignment's own referenced list.
+    ///     This method checks every field of a tag rule write request before anything is saved, so
+    ///     a POST or PUT either succeeds fully or changes nothing. A
+    ///     <see cref="DhcpTagRuleWriteRequest.ScopeId" /> that names no scope is an invalid value
+    ///     in the request (400), not a missing resource, as in
+    ///     <see cref="ClientGroupListAssignmentsController.Create" />.
     /// </summary>
     private async Task<(bool IsValid, string Error)> TryValidateAsync(
         DhcpTagRuleWriteRequest request,
@@ -423,7 +423,7 @@ public class DhcpTagRulesController(
     }
 
     /// <summary>
-    ///     This method converts a tag rule entity into its REST representation.
+    ///     This method converts a tag rule entity to its API representation.
     /// </summary>
     private static DhcpTagRuleDetail ToDetail(DhcpTagRuleEntity rule) =>
         new(

@@ -15,62 +15,39 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers a real, in-process hot start/stop lifecycle for the four
-///     DHCP-family transport listeners -- DHCPv4, DHCPv6, Router Advertisement, and the TFTP
-///     server -- through the shared <see cref="IDhcpProtocolService" /> contract each one
-///     implements (see that interface's own doc comment). Stopping one genuinely unbinds its
-///     socket right now, in this running process, and starting it again genuinely rebinds it, with
-///     no process restart involved.
+///     This controller starts and stops the four DHCP-family listeners (DHCPv4, DHCPv6, Router
+///     Advertisement and TFTP) inside the running process, through the
+///     <see cref="IDhcpProtocolService" /> each implements. Stopping one unbinds its socket at
+///     once and starting it rebinds it, with no process restart.
 ///     <para>
-///         <b>This is deliberately a separate REST surface from <see cref="ServicesController" />'s
-///         own general <c>/api/services</c> Service Lifecycle Management endpoint</b>, not an
-///         oversight -- <c>IDhcpProtocolService</c> (Phase 17a/17b) and
-///         <c>Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration</c> (Phase 5l) are two
-///         independently evolved abstractions with a real, structural difference this controller
-///         depends on directly: a DHCP-family service's own configured <c>Enable</c> flag and its
-///         live <see cref="DhcpServiceStatus.IsRunning" /> signal are always reported
-///         <em>together</em>, as two genuinely distinct fields, in every response this controller
-///         returns -- exactly what an operator managing a family of listeners each with its own
-///         restart-required "enable at boot" setting needs to see at a glance --
-///         whereas <c>ManagedServiceSummary</c> (the general registry's own response shape)
-///         collapses that same distinction down to <c>IsRunning</c> alone. Folding these four
-///         services into the general registry instead would have meant either losing that
-///         side-by-side <c>Enabled</c>/<c>IsRunning</c> reporting, or extending
-///         <c>ManagedServiceSummary</c> itself for every one of that registry's other ~26 members
-///         that have no comparable "configured but not auto-started" concept at all. A dedicated
-///         controller keeps both shapes honest.
+///         <b>Why it is separate from <see cref="ServicesController" />.</b> Its responses always
+///         show a service's configured <c>Enable</c> flag (whether it starts at boot, which needs
+///         a restart to change) and its live <see cref="DhcpServiceStatus.IsRunning" /> state side
+///         by side. <c>ManagedServiceSummary</c>, the <c>/api/services</c> response, carries only
+///         the running state, and the other services there have no "configured but not started"
+///         notion, so this pair is kept in its own controller.
 ///     </para>
 ///     <para>
-///         <b>Route shape</b>: <see cref="Start" />/<see cref="Stop" /> address a service by
-///         <see cref="DhcpServiceKindEnum" /> as a typed route segment (bound case-insensitively by
-///         ASP.NET Core's own default enum model binding), rather than <see cref="ServicesController" />'s
-///         own free-text service-name lookup -- there are exactly four, fixed, well-known DHCP-family
-///         services, never an open-ended registry an operator could name incorrectly, so an
-///         unrecognized <c>{kind}</c> segment is rejected by model binding itself, as an ordinary
-///         <c>400</c>, before this controller's own action code ever runs.
+///         <see cref="Start" /> and <see cref="Stop" /> take a <see cref="DhcpServiceKindEnum" />
+///         route segment, bound case-insensitively, rather than a free-text name: there are only
+///         four fixed services, and an unknown <c>{kind}</c> fails model binding with 400.
 ///     </para>
 ///     <para>
-///         <b>Permissions</b>: <see cref="List" /> reveals only which of the four services exist,
-///         each one's configured <c>Enable</c> flag, and whether it is genuinely running -- no
-///         secret or configuration data -- so it is gated by the lighter <c>dhcpservices:read</c>.
-///         <see cref="Start" />/<see cref="Stop" /> genuinely change what this server is doing on
-///         the network right now (stopping DHCPv4/DHCPv6 live cuts off real client lease traffic
-///         immediately), so both are gated by the separate, narrower <c>dhcpservices:manage</c> --
-///         the same "a real start/stop action needs its own dedicated permission, apart from
-///         ordinary <c>&lt;resource&gt;:write</c>" precedent <see cref="ServicesController" />'s
-///         own <c>services:manage</c>/<see cref="StorageController" />'s own <c>storage:manage</c>
-///         already establish.
+///         <see cref="List" /> reveals only each service's <c>Enable</c> flag and running state,
+///         so it needs <c>dhcpservices:read</c>. <see cref="Start" /> and <see cref="Stop" />
+///         change what the server does on the network (stopping DHCPv4 or DHCPv6 cuts off lease
+///         traffic at once), so they need the separate <c>dhcpservices:manage</c>, as with
+///         <c>services:manage</c> and <c>storage:manage</c>.
 ///     </para>
 /// </summary>
 /// <param name="services">
-///     Every registered <see cref="IDhcpProtocolService" /> -- resolved once per request and
-///     matched by concrete type, the same "resolve by type, not by a separate registry" shape
-///     <c>TransportListenersHealthCheck</c> already establishes for the DNS side's own transports.
+///     Every registered <see cref="IDhcpProtocolService" />, matched by concrete type, as
+///     <c>TransportListenersHealthCheck</c> does for the DNS transports.
 /// </param>
-/// <param name="dhcpv4Options">DHCPv4's own configured <c>Enable</c> flag.</param>
-/// <param name="dhcpv6Options">DHCPv6's own configured <c>Enable</c> flag.</param>
-/// <param name="raOptions">Router Advertisement's own configured <c>Enable</c> flag.</param>
-/// <param name="tftpOptions">The TFTP server's own configured <c>Enable</c> flag.</param>
+/// <param name="dhcpv4Options">The DHCPv4 settings loaded at startup, for its <c>Enable</c> flag.</param>
+/// <param name="dhcpv6Options">The DHCPv6 settings loaded at startup, for its <c>Enable</c> flag.</param>
+/// <param name="raOptions">The Router Advertisement settings loaded at startup, for its <c>Enable</c> flag.</param>
+/// <param name="tftpOptions">The TFTP settings loaded at startup, for its <c>Enable</c> flag.</param>
 [ApiController]
 [Route("api/dhcp-services")]
 public class DhcpServiceControlController(
@@ -82,9 +59,8 @@ public class DhcpServiceControlController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reports every DHCP-family service's own configured <c>Enable</c> flag and
-    ///     its actual, live running state -- see this class's own doc comment for why both are
-    ///     always reported side by side rather than collapsed into one signal.
+    ///     This action reports each DHCP-family service's configured <c>Enable</c> flag and its
+    ///     live running state. Requires <c>dhcpservices:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcpservices:read")]
@@ -121,10 +97,10 @@ public class DhcpServiceControlController(
     }
 
     /// <summary>
-    ///     This action starts a single DHCP-family service -- binding its socket -- right now, in
-    ///     this running process, regardless of its own configured <c>Enable</c> flag. Starting a
-    ///     service that is already running is a safe, harmless no-op (see
-    ///     <see cref="IDhcpProtocolService.StartAsync" />'s own doc comment).
+    ///     This action starts one DHCP-family service now, binding its socket, whatever its
+    ///     <c>Enable</c> flag says. Starting a running service changes nothing (see
+    ///     <see cref="IDhcpProtocolService.StartAsync" />). Returns 400 for an unknown kind.
+    ///     Requires <c>dhcpservices:manage</c>.
     /// </summary>
     /// <param name="kind">Which of the four DHCP-family services to start.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -142,10 +118,10 @@ public class DhcpServiceControlController(
     }
 
     /// <summary>
-    ///     This action stops a single DHCP-family service -- releasing its socket -- right now, in
-    ///     this running process, leaving every other DHCP-family (and every other) service this
-    ///     server runs untouched. Stopping a service that is already stopped is a safe, harmless
-    ///     no-op (see <see cref="IDhcpProtocolService.StopAsync" />'s own doc comment).
+    ///     This action stops one DHCP-family service now, releasing its socket and leaving every
+    ///     other service running. Stopping a stopped service changes nothing (see
+    ///     <see cref="IDhcpProtocolService.StopAsync" />). Returns 400 for an unknown kind.
+    ///     Requires <c>dhcpservices:manage</c>.
     /// </summary>
     /// <param name="kind">Which of the four DHCP-family services to stop.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -163,11 +139,9 @@ public class DhcpServiceControlController(
     }
 
     /// <summary>
-    ///     This method resolves <paramref name="kind" /> to its one real registered
-    ///     <see cref="IDhcpProtocolService" /> instance, throwing <see cref="NotFoundException" />
-    ///     in the (should-be-unreachable, given every one of the four is registered
-    ///     unconditionally by this project's own composition root) case that none is found for a
-    ///     structurally valid <see cref="DhcpServiceKindEnum" /> value.
+    ///     This method finds the registered <see cref="IDhcpProtocolService" /> for
+    ///     <paramref name="kind" />, or throws <see cref="NotFoundException" />. All four are
+    ///     registered unconditionally in <c>Program.cs</c>, so that should not happen.
     /// </summary>
     private IDhcpProtocolService Resolve(DhcpServiceKindEnum kind)
     {
@@ -186,7 +160,7 @@ public class DhcpServiceControlController(
     }
 
     /// <summary>
-    ///     This method reports <paramref name="kind" />'s own configured <c>Enable</c> flag.
+    ///     This method returns the configured <c>Enable</c> flag for <paramref name="kind" />.
     /// </summary>
     private bool IsEnabled(DhcpServiceKindEnum kind) =>
         kind switch
@@ -199,8 +173,7 @@ public class DhcpServiceControlController(
         };
 
     /// <summary>
-    ///     This method converts one resolved service (or, defensively, its absence) into its REST
-    ///     representation.
+    ///     This method converts a service, or a missing one, to its API representation.
     /// </summary>
     private static DhcpServiceStatus ToStatus(
         DhcpServiceKindEnum kind,

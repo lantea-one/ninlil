@@ -18,29 +18,23 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own DHCP scopes -- the top-level resource; a
-///     scope's own static reservations and custom options are managed separately, through the
-///     nested <see cref="DhcpReservationsController" /> (<c>/api/dhcp-scopes/{scopeId}/reservations</c>)
-///     and <see cref="DhcpScopeCustomOptionsController" /> (<c>/api/dhcp-scopes/{scopeId}/custom-options</c>)
-///     -- the same "one parent, several nested child collections" shape
-///     <see cref="ClientGroupsController" /> already establishes for a client group's own networks
-///     and list assignments. Every action requires the <c>dhcpscopes:read</c> or
-///     <c>dhcpscopes:write</c> permission, reused for both nested controllers too.
+///     This controller manages DHCP scopes and reports their utilization. A scope's static
+///     reservations and custom options are managed through the nested
+///     <see cref="DhcpReservationsController" /> (<c>/api/dhcp-scopes/{scopeId}/reservations</c>)
+///     and <see cref="DhcpScopeCustomOptionsController" />
+///     (<c>/api/dhcp-scopes/{scopeId}/custom-options</c>), which use the same permissions:
+///     <c>dhcpscopes:read</c> for reads and <c>dhcpscopes:write</c> for changes.
 /// </summary>
-/// <param name="scopeRepository">The repository this controller reads and writes scopes through.</param>
-/// <param name="reservationRepository">The repository used to remove a deleted scope's own reservations -- see <see cref="Delete" />.</param>
-/// <param name="customOptionRepository">The repository used to remove a deleted scope's own custom options -- see <see cref="Delete" />.</param>
+/// <param name="scopeRepository">Reads and writes scopes.</param>
+/// <param name="reservationRepository">Removes a deleted scope's reservations (see <see cref="Delete" />).</param>
+/// <param name="customOptionRepository">Removes a deleted scope's custom options (see <see cref="Delete" />).</param>
 /// <param name="zoneRepository">
-///     The repository used to confirm a scope's own <see cref="DhcpScopeWriteRequest.DnsZoneId" />
-///     names a real zone -- existence only, never zone-type eligibility, mirroring
-///     <c>ZonesController</c>'s own established "enforced at the reconciliation-service level,
-///     not the REST layer" precedent for <c>AutoManageCaaRecords</c>/<c>AutoManagePtrRecords</c>.
+///     Confirms a scope's <see cref="DhcpScopeWriteRequest.DnsZoneId" /> names an existing zone.
+///     Only existence is checked here; whether the zone can take DHCP registrations is decided
+///     when registering, as for the CAA and PTR settings on <c>ZonesController</c>.
 /// </param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="statisticsService">
-///     The service used to compute a scope's own real, current utilization -- see
-///     <see cref="Statistics" />.
-/// </param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="statisticsService">Computes a scope's current utilization for <see cref="Statistics" />.</param>
 [ApiController]
 [Route("api/dhcp-scopes")]
 public class DhcpScopesController(
@@ -53,7 +47,7 @@ public class DhcpScopesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every DHCP scope this server manages.
+    ///     This action lists DHCP scopes, one page at a time. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcpscopes:read")]
@@ -78,7 +72,8 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action looks up a single DHCP scope by its identifier.
+    ///     This action returns one DHCP scope. Returns 404 for an unknown id. Requires
+    ///     <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcpscopes:read")]
@@ -93,13 +88,12 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action reports a single DHCP scope's own real, current utilization -- total
-    ///     addresses/prefixes in the scope's own configured range, how many are currently leased or
-    ///     tentatively offered, how many the scope's own static reservations account for, and how
-    ///     many remain genuinely available -- computed fresh from this scope's own configuration
-    ///     and its real, currently-recorded lease/reservation rows on every call, never a cached or
-    ///     approximate figure. See <see cref="IDhcpScopeStatisticsService" />'s own doc comment for
-    ///     exactly how each field is derived.
+    ///     This action reports a scope's current utilization: the total addresses or prefixes in
+    ///     its range, how many are leased or offered, how many its reservations account for, and
+    ///     how many remain available. It is computed from the scope's settings and its recorded
+    ///     leases and reservations on every call (see <see cref="IDhcpScopeStatisticsService" />).
+    ///     The two slot counts are strings because an IPv6 range can exceed a 64-bit integer.
+    ///     Returns 404 for an unknown id. Requires <c>dhcpscopes:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/statistics")]
     [RequirePermission("dhcpscopes:read")]
@@ -131,7 +125,11 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action creates a new DHCP scope.
+    ///     This action creates a DHCP scope. Returns 400 for a missing name, a range address of the
+    ///     wrong family, a bad prefix length, a non-positive lease duration or a default above the
+    ///     maximum, an invalid gateway, DNS server or next-server address, a boot file name over
+    ///     128 bytes, an invalid kind and delegated-prefix combination, or an unknown DNS zone; and
+    ///     409 when the name is taken. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("dhcpscopes:write")]
@@ -185,7 +183,8 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing DHCP scope's own fields.
+    ///     This action replaces a DHCP scope's fields. Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -243,9 +242,10 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing DHCP scope via RFC 7396 JSON Merge Patch: a
-    ///     field absent from the patch document is left untouched, and any other present field
-    ///     overwrites it.
+    ///     This action updates a DHCP scope as an RFC 7396 merge patch: an absent field is
+    ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
+    ///     The protocol version cannot be changed. The patched scope is checked as for
+    ///     <see cref="Create" />. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -408,18 +408,12 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a DHCP scope, every reservation it contains, and every
-    ///     custom option it contains -- removed explicitly, rather than relying on the relational
-    ///     backend's own cascade delete, since MongoDB has no equivalent mechanism at all, the same
-    ///     reasoning <see cref="ClientGroupsController.Delete" /> already applies to a deleted
-    ///     client group's own dependent rows. Any lease already recorded against this scope (keyed
-    ///     by its own <c>ScopeName</c>, not this scope's identifier) is left untouched -- a lease is
-    ///     historical/operational data, not configuration this deletion owns, the same "never
-    ///     touch operational telemetry on a configuration delete" posture
-    ///     <c>Server.Backup.BackupEntityCatalog</c> already establishes. A tag rule that names this
-    ///     scope's own identifier (<c>DhcpTagRuleEntity.ScopeId</c>) is also left untouched -- it
-    ///     simply becomes permanently ineligible to match any future client, exactly like a rule
-    ///     naming a scope that was never created in the first place.
+    ///     This action deletes a DHCP scope with its reservations and custom options, removed
+    ///     explicitly rather than by a relational cascade delete, which MongoDB lacks. Leases
+    ///     recorded for the scope (which refer to it by <c>ScopeName</c>, not id) are left alone as
+    ///     operational data, as <c>Server.Backup.BackupEntityCatalog</c> treats them. A tag rule
+    ///     that names the scope (<c>DhcpTagRuleEntity.ScopeId</c>) is also left alone and simply
+    ///     never matches again. Returns 404 for an unknown id. Requires <c>dhcpscopes:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("dhcpscopes:write")]
@@ -451,8 +445,8 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method returns the largest valid CIDR prefix length for a protocol version -- 32
-    ///     for IPv4, 128 for IPv6.
+    ///     This method returns the largest CIDR prefix length for a protocol version: 32 for IPv4,
+    ///     128 for IPv6.
     /// </summary>
     private static int MaxPrefixLength(InternetProtocolVersionEnum protocolVersion) =>
         protocolVersion == InternetProtocolVersionEnum.IPv6 ? 128 : 32;
@@ -466,8 +460,8 @@ public class DhcpScopesController(
     ) => prefixLength >= 0 && prefixLength <= MaxPrefixLength(protocolVersion);
 
     /// <summary>
-    ///     This method validates that an address string parses and matches the address family
-    ///     implied by <paramref name="protocolVersion" />.
+    ///     This method checks that an address parses and belongs to the family of
+    ///     <paramref name="protocolVersion" />.
     /// </summary>
     private static bool TryParseAddress(
         string address,
@@ -491,8 +485,8 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method parses a JSON array of address strings from a merge-patch field into a
-    ///     concrete list, tolerating an absent/empty array as "no addresses configured."
+    ///     This method parses a merge-patch field holding a JSON array of IP address strings; an
+    ///     empty array means no addresses.
     /// </summary>
     private static List<string> ParseAddressList(JsonElement element)
     {
@@ -513,9 +507,8 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method validates every field of a scope write request up front, so a
-    ///     <c>POST</c>/<c>PUT</c> either fully succeeds or is rejected outright with no partial
-    ///     effect.
+    ///     This method checks every field of a scope write request before anything is saved, so a
+    ///     POST or PUT either succeeds fully or changes nothing.
     /// </summary>
     private static bool TryValidate(DhcpScopeWriteRequest request, out string error)
     {
@@ -597,14 +590,12 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method validates the combination of <see cref="DhcpScopeKindEnum" /> and
-    ///     <c>DelegatedPrefixLength</c> a scope write request carries: a
-    ///     <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope is IPv6-only (RFC 8415 Prefix
-    ///     Delegation has no DHCPv4 analogue at all -- see <c>DhcpScopeKindEnum</c>'s own doc
-    ///     comment) and always requires a real, in-range delegated prefix length; an
-    ///     <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope -- every DHCPv4 scope, and an
-    ///     ordinary stateful DHCPv6 scope alike -- has no delegated prefix length of its own to
-    ///     speak of, so one being set at all is rejected outright rather than silently ignored.
+    ///     This method checks the scope kind against <c>DelegatedPrefixLength</c>. A
+    ///     <see cref="DhcpScopeKindEnum.PrefixDelegation" /> scope must be IPv6 (DHCPv4 has no
+    ///     prefix delegation; see <c>DhcpScopeKindEnum</c>) and needs a delegated prefix length
+    ///     from 1 to 128. An <see cref="DhcpScopeKindEnum.AddressAssignment" /> scope (every DHCPv4
+    ///     scope and an ordinary DHCPv6 one) has no delegated prefix length, so setting one is
+    ///     rejected rather than ignored.
     /// </summary>
     private static bool TryValidateKindAndDelegatedPrefixLength(
         DhcpScopeKindEnum kind,
@@ -626,7 +617,7 @@ public class DhcpScopesController(
             return true;
         }
 
-        // Kind == PrefixDelegation from here on.
+        // Kind is PrefixDelegation from here on.
         if (protocolVersion != InternetProtocolVersionEnum.IPv6)
         {
             error = "'kind' can only be 'PrefixDelegation' for an IPv6 scope.";
@@ -645,11 +636,11 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method validates a boot file name -- RFC 2131 §2's own 128-octet cap on the
-    ///     fixed "file" header field <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeEntity.BootFileName" />
-    ///     is ultimately written into, the one constraint <c>Dhcpv4MessageWriter</c> would
-    ///     otherwise only discover -- as a real, thrown exception, mid-DORA -- the first time a
-    ///     lease is actually granted from this scope.
+    ///     This method checks the boot file name against the 128-octet "file" header field of RFC
+    ///     2131 §2 that
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeEntity.BootFileName" /> is
+    ///     written into. Otherwise <c>Dhcpv4MessageWriter</c> would throw in the middle of the
+    ///     first exchange that sends it.
     /// </summary>
     private static bool TryValidateBootFileName(string bootFileName, out string error)
     {
@@ -668,11 +659,10 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method validates a next-server address, meaningful only alongside a real
-    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeEntity.BootFileName" />, but
-    ///     validated unconditionally here regardless of whether one is currently set -- an
-    ///     operator setting this field ahead of a boot file name it will soon accompany should
-    ///     never have it silently accepted as garbage.
+    ///     This method checks a next-server address. It only matters with a
+    ///     <see cref="Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeEntity.BootFileName" />, but is
+    ///     checked even without one, so a value set ahead of the boot file name is not saved as
+    ///     garbage.
     /// </summary>
     private static bool TryValidateNextServerAddress(string nextServerAddress, out string error)
     {
@@ -691,7 +681,7 @@ public class DhcpScopesController(
     }
 
     /// <summary>
-    ///     This method converts a DHCP scope entity into its REST representation.
+    ///     This method converts a scope entity to its API representation.
     /// </summary>
     private static DhcpScopeDetail ToDetail(DhcpScopeEntity scope) =>
         new(

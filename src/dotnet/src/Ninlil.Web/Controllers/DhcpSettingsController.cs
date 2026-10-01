@@ -25,71 +25,51 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes every DHCP settings section under one thematic REST
-///     surface, one sub-resource per section -- the same "one controller, several related-but-
-///     distinct sub-resources" shape <see cref="TransportSettingsController" /> already
-///     establishes for the five DNS transports. Every action requires the
-///     <c>dhcpsettings:read</c> or <c>dhcpsettings:write</c> permission, uniformly across all
-///     eight sections.
+///     This controller reads and writes the DHCP settings, one sub-resource per section: core
+///     engine settings, the DHCPv4 and DHCPv6 transports, the DHCPv4 and DHCPv6 relay agents, the
+///     TFTP server, and Router Advertisement transport and content. Reading needs
+///     <c>dhcpsettings:read</c> and writing needs <c>dhcpsettings:write</c> for every section.
 ///     <para>
-///         <b>Every field here is restart-required, with no live toggle at all</b> -- unlike
-///         <see cref="TransportSettingsController" />'s own DNS transports, none of
-///         <see cref="DhcpServerOptions" />/<see cref="Dhcpv4ProtocolOptions" />/
-///         <see cref="Dhcpv4RelayOptions" />/<see cref="Dhcpv6ProtocolOptions" />/
-///         <see cref="Dhcpv6RelayOptions" />/<see cref="TftpServerOptions" />/
-///         <see cref="RaProtocolOptions" />/<see cref="RaOptions" /> is bound via
-///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, and neither the
-///         local DHCPv4/DHCPv6 engines (<c>Ninlil.Dhcp.Server.Core</c>), the relay agents
-///         (<c>Ninlil.Dhcp.Server.Relay</c>), the TFTP server (<c>Ninlil.Dhcp.Server.Tftp</c>),
-///         nor the Router Advertisement listener (<c>Ninlil.Dhcp.Protocol.Ra</c>) is registered in
-///         <see cref="Web.Services.IManagedServiceRegistry" /> the way a DNS transport listener
-///         is. Most fundamentally, <see cref="Dhcpv4RelayOptions.Enable" />/
-///         <see cref="Dhcpv6RelayOptions.Enable" /> each decide -- once, in <c>Program.cs</c>,
-///         before this host's dependency injection container is even built -- which one of their
-///         own two mutually exclusive engines actually answers a request for that protocol at all
-///         (DHCPv4's own choice and DHCPv6's own choice are made completely independently of each
-///         other), the exact same "selecting the active implementation is decided before DI is
-///         built, so switching it always needs a restart" precedent this project's own
-///         message-broker (<c>Server.Events.RabbitMq</c>/<c>.ActiveMq</c>) and OIDC SSO scheme
-///         selection already establish. <see cref="Dhcpv4ProtocolOptions.Enable" />/
-///         <see cref="Dhcpv6ProtocolOptions.Enable" />/<see cref="RaProtocolOptions.Enable" /> each
-///         mirror a DNS transport's own <c>Enable</c> flag structurally (checked once, inside
-///         <c>Dhcpv4UdpListener.ExecuteAsync</c>/<c>Dhcpv6UdpListener.ExecuteAsync</c>/
-///         <c>Icmpv6RaListener.ExecuteAsync</c> respectively), but that background service is
-///         never restarted individually the way a DNS transport listener can be via
-///         <c>POST /api/services/{name}/restart</c> -- so, unlike
-///         <see cref="TransportSettingsController" />, there is no live path here at all, and
-///         every <c>PATCH</c> below always returns
+///         <b>Every field needs a process restart.</b> <see cref="DhcpServerOptions" />,
+///         <see cref="Dhcpv4ProtocolOptions" />, <see cref="Dhcpv4RelayOptions" />,
+///         <see cref="Dhcpv6ProtocolOptions" />, <see cref="Dhcpv6RelayOptions" />,
+///         <see cref="TftpServerOptions" />, <see cref="RaProtocolOptions" /> and
+///         <see cref="RaOptions" /> are all read through
+///         <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, so the GET actions also
+///         show the values loaded at startup until the server restarts.
+///         <see cref="Dhcpv4RelayOptions.Enable" /> and <see cref="Dhcpv6RelayOptions.Enable" />
+///         each decide, once in <c>Program.cs</c> before dependency injection is built, whether the
+///         local engine or the relay agent answers that protocol (the two protocols decide
+///         independently), as the message-broker and OIDC scheme choices are made. The
+///         <c>Enable</c> flags of DHCPv4, DHCPv6 and Router Advertisement are read once at boot by
+///         each listener's hosted-service wrapper. <see cref="DhcpServiceControlController" /> can
+///         stop and start the listeners, but they keep the settings they started with. Every PATCH
+///         therefore returns
 ///         <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
 ///     </para>
 ///     <para>
-///         <b><see cref="GetRa" />/<see cref="PatchRa" /> deliberately omit
-///         <see cref="RaOptions.Prefixes" /></b>, but do carry <see cref="RaOptions.Routes" /> as a
-///         real, whole-array-replace field -- see <see cref="DhcpRaSettingsDetail" />'s own doc
-///         comment for why the two lists get different treatment; configuring advertised prefixes
-///         remains config-file-only, while advertised routes have full REST/UI coverage here.
+///         <b><see cref="GetRa" /> and <see cref="PatchRa" /> leave out
+///         <see cref="RaOptions.Prefixes" /></b> but carry <see cref="RaOptions.Routes" /> as a
+///         whole-array-replace field (see <see cref="DhcpRaSettingsDetail" /> for why); advertised
+///         prefixes are set only in the configuration file.
 ///     </para>
 ///     <para>
-///         <b><see cref="GetRa" />/<see cref="PatchRa" /> also carry
-///         <see cref="RaOptions.InterfaceOverrides" /></b> as a genuine, nested whole-array-replace
-///         field (<see cref="DhcpRaInterfaceOverrideDetail" />), letting each network interface
-///         advertise its own distinct content -- or be excluded from Router Advertisement
-///         entirely -- rather than the one shared advertisement every interface used to receive.
-///         See that record's own doc comment for exactly which of <see cref="RaOptions" />'s own
-///         fields an override can carry (every one of them except an override's own would-be
-///         nested prefix/route lists, which remain config-file-only, mirroring
-///         <see cref="RaOptions.Prefixes" />'s own established scope boundary).
+///         <b>They also carry <see cref="RaOptions.InterfaceOverrides" /></b> as a nested
+///         whole-array-replace field (<see cref="DhcpRaInterfaceOverrideDetail" />), so each
+///         network interface can advertise different content or none at all. That record lists
+///         which <see cref="RaOptions" /> fields an override can set; its own prefix and route
+///         lists, like <see cref="RaOptions.Prefixes" />, are set only in the configuration file.
 ///     </para>
 /// </summary>
-/// <param name="coreOptions">This host's own currently-effective shared DHCP engine settings.</param>
-/// <param name="protocolOptions">This host's own currently-effective DHCPv4 transport settings.</param>
-/// <param name="relayOptions">This host's own currently-effective DHCPv4 relay agent settings.</param>
-/// <param name="dhcpv6ProtocolOptions">This host's own currently-effective DHCPv6 transport settings.</param>
-/// <param name="dhcpv6RelayOptions">This host's own currently-effective DHCPv6 relay agent settings.</param>
-/// <param name="tftpOptions">This host's own currently-effective TFTP server settings.</param>
-/// <param name="raProtocolOptions">This host's own currently-effective Router Advertisement transport/timing settings.</param>
-/// <param name="raOptions">This host's own currently-effective Router Advertisement content settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="coreOptions">The shared DHCP engine settings loaded at startup.</param>
+/// <param name="protocolOptions">The DHCPv4 transport settings loaded at startup.</param>
+/// <param name="relayOptions">The DHCPv4 relay agent settings loaded at startup.</param>
+/// <param name="dhcpv6ProtocolOptions">The DHCPv6 transport settings loaded at startup.</param>
+/// <param name="dhcpv6RelayOptions">The DHCPv6 relay agent settings loaded at startup.</param>
+/// <param name="tftpOptions">The TFTP server settings loaded at startup.</param>
+/// <param name="raProtocolOptions">The Router Advertisement transport and timing settings loaded at startup.</param>
+/// <param name="raOptions">The Router Advertisement content settings loaded at startup.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/dhcp-settings")]
 public class DhcpSettingsController(
@@ -104,7 +84,10 @@ public class DhcpSettingsController(
     RuntimeConfigurationOptions runtimeConfigurationOptions
 ) : ControllerBase
 {
-    /// <summary>This action reads the settings shared by every local DHCP protocol engine.</summary>
+    /// <summary>
+    ///     This action returns the settings shared by the local DHCP engines. Requires
+    ///     <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("core")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpCoreSettingsDetailExample))]
@@ -118,10 +101,10 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Core</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DhcpServer:Core</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. The change needs a restart. Returns 400 for
+    ///     an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("core")]
     [RequirePermission("dhcpsettings:write")]
@@ -204,7 +187,9 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads the DHCPv4 UDP transport's own bind/port settings.</summary>
+    /// <summary>
+    ///     This action returns the DHCPv4 transport settings. Requires <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("protocol")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpProtocolSettingsDetailExample))]
@@ -218,9 +203,9 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv4</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style.
+    ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv4</c> as an
+    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The change
+    ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("protocol")]
     [RequirePermission("dhcpsettings:write")]
@@ -272,7 +257,9 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads the DHCPv6 UDP transport's own bind/port settings.</summary>
+    /// <summary>
+    ///     This action returns the DHCPv6 transport settings. Requires <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("dhcpv6-protocol")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(Dhcpv6ProtocolSettingsDetailExample))]
@@ -286,9 +273,9 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv6</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style.
+    ///     This action merges a partial update into <c>DhcpServer:Protocol:Dhcpv6</c> as an
+    ///     RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. The change
+    ///     needs a restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("dhcpv6-protocol")]
     [RequirePermission("dhcpsettings:write")]
@@ -340,7 +327,9 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads this host's own DHCPv4 relay agent settings.</summary>
+    /// <summary>
+    ///     This action returns the DHCPv4 relay agent settings. Requires <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("relay")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpRelaySettingsDetailExample))]
@@ -357,11 +346,10 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv4</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. See this controller's own doc comment for why enabling this
-    ///     relay -- mutually exclusive with the local DHCP engine -- always needs a restart to
-    ///     actually take over answering DHCPv4 requests.
+    ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv4</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. Turning the relay on
+    ///     replaces the local DHCPv4 engine only after a restart (see the class summary). Returns
+    ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("relay")]
     [RequirePermission("dhcpsettings:write")]
@@ -489,7 +477,9 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads this host's own DHCPv6 relay agent settings.</summary>
+    /// <summary>
+    ///     This action returns the DHCPv6 relay agent settings. Requires <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("dhcpv6-relay")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(Dhcpv6RelaySettingsDetailExample))]
@@ -505,11 +495,10 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv6</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. See this controller's own doc comment for why enabling this
-    ///     relay -- mutually exclusive with the local DHCPv6 engine -- always needs a restart to
-    ///     actually take over answering DHCPv6 requests.
+    ///     This action merges a partial update into <c>DhcpServer:Relay:Dhcpv6</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. Turning the relay on
+    ///     replaces the local DHCPv6 engine only after a restart (see the class summary). Returns
+    ///     400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("dhcpv6-relay")]
     [RequirePermission("dhcpsettings:write")]
@@ -613,7 +602,10 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads this host's own bundled read-only TFTP server settings.</summary>
+    /// <summary>
+    ///     This action returns the read-only TFTP server settings. Requires
+    ///     <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("tftp")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpTftpSettingsDetailExample))]
@@ -629,9 +621,9 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Tftp</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style.
+    ///     This action merges a partial update into <c>DhcpServer:Tftp</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change needs a
+    ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("tftp")]
     [RequirePermission("dhcpsettings:write")]
@@ -717,7 +709,10 @@ public class DhcpSettingsController(
         return await ApplyAsync(settings);
     }
 
-    /// <summary>This action reads this host's own Router Advertisement transport/timing settings.</summary>
+    /// <summary>
+    ///     This action returns the Router Advertisement transport and timing settings. Requires
+    ///     <c>dhcpsettings:read</c>.
+    /// </summary>
     [HttpGet("ra-protocol")]
     [RequirePermission("dhcpsettings:read")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(DhcpRaProtocolSettingsDetailExample))]
@@ -731,9 +726,9 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Protocol:Ra</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style.
+    ///     This action merges a partial update into <c>DhcpServer:Protocol:Ra</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. The change needs a
+    ///     restart. Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra-protocol")]
     [RequirePermission("dhcpsettings:write")]
@@ -796,9 +791,9 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This action reads this host's own Router Advertisement content settings -- see this
-    ///     controller's own doc comment for why <see cref="RaOptions.Prefixes" /> is deliberately
-    ///     left out while <see cref="RaOptions.Routes" /> is included.
+    ///     This action returns the Router Advertisement content settings, with routes and interface
+    ///     overrides but without <see cref="RaOptions.Prefixes" /> (see the class summary).
+    ///     Requires <c>dhcpsettings:read</c>.
     /// </summary>
     [HttpGet("ra")]
     [RequirePermission("dhcpsettings:read")]
@@ -848,9 +843,10 @@ public class DhcpSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DhcpServer:Ra</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style.
+    ///     This action merges a partial update into <c>DhcpServer:Ra</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />; <c>routes</c> and
+    ///     <c>interfaceOverrides</c> each replace the whole list. The change needs a restart.
+    ///     Returns 400 for an invalid value. Requires <c>dhcpsettings:write</c>.
     /// </summary>
     [HttpPatch("ra")]
     [RequirePermission("dhcpsettings:write")]
@@ -1094,8 +1090,8 @@ public class DhcpSettingsController(
                         ? prefixElement.GetString()
                         : null;
 
-                // A prefix length of 0 advertises only a route preference, with no real prefix at
-                // all -- the one case a route legitimately has no address to validate.
+                // A prefix length of 0 advertises only a route preference with no prefix, the one
+                // case a route has no address to check.
                 if (
                     prefixLength > 0
                     && (string.IsNullOrWhiteSpace(prefix) || !IPAddress.TryParse(prefix, out _))
@@ -1189,10 +1185,9 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method parses and validates one <c>interfaceOverrides</c> array element from a
-    ///     <c>PATCH ra</c> merge-patch body -- see <see cref="DhcpRaInterfaceOverrideDetail" />'s
-    ///     own doc comment for exactly which fields an override carries (and which two nested lists
-    ///     it deliberately does not).
+    ///     This method parses and checks one element of the <c>interfaceOverrides</c> array in a
+    ///     <c>PATCH ra</c> body (see <see cref="DhcpRaInterfaceOverrideDetail" /> for the fields an
+    ///     override carries and the two nested lists it does not).
     /// </summary>
     private static RaInterfaceOverrideConfigurationEntry ParseInterfaceOverrideEntry(
         JsonElement overrideElement
@@ -1369,9 +1364,9 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method reads an optional boolean field, returning <see langword="null" /> when the
-    ///     field is absent or JSON <see langword="null" /> -- an interface override's own "inherit
-    ///     the global default" state for a nullable boolean field.
+    ///     This method reads an optional boolean field, returning <see langword="null" /> when it
+    ///     is absent or JSON <see langword="null" />, which for an interface override means "use
+    ///     the global value".
     /// </summary>
     private static bool? TryGetOptionalBoolean(JsonElement parent, string propertyName) =>
         parent.TryGetProperty(propertyName, out JsonElement element)
@@ -1380,10 +1375,10 @@ public class DhcpSettingsController(
             : null;
 
     /// <summary>
-    ///     This method parses and validates an optional, non-negative <see cref="TimeSpan" /> field
-    ///     -- absent or JSON <see langword="null" /> parses to <see langword="null" /> (this
-    ///     interface override's own "inherit the global default" state) rather than an error, the
-    ///     nullable counterpart to <see cref="TryParseNonNegativeTimeSpan" /> above.
+    ///     This method parses an optional, non-negative TimeSpan field. Absent or JSON
+    ///     <see langword="null" /> gives <see langword="null" /> ("use the global value" for an
+    ///     interface override) rather than an error; it is the nullable form of
+    ///     <see cref="TryParseNonNegativeTimeSpan" />.
     /// </summary>
     private static bool TryParseOptionalNonNegativeTimeSpan(
         JsonElement parent,
@@ -1414,9 +1409,9 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method writes a collected settings list to the configuration file and always
-    ///     returns <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" /> -- see this
-    ///     controller's own doc comment for why no DHCP settings section here ever hot-reloads.
+    ///     This method writes the collected settings to the configuration file and returns
+    ///     <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />, since no DHCP setting
+    ///     takes effect without a restart (see the class summary).
     /// </summary>
     private async Task<ActionResult<RuntimeSettingsWriteResult>> ApplyAsync(
         List<PresetConfigurationSetting> settings
@@ -1434,8 +1429,7 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method parses and validates a merge-patch <see cref="TimeSpan" /> field, requiring
-    ///     a strictly positive duration.
+    ///     This method parses a merge-patch TimeSpan field that must be strictly positive.
     /// </summary>
     private static bool TryParsePositiveTimeSpan(
         JsonElement element,
@@ -1458,12 +1452,11 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method parses and validates a merge-patch <see cref="TimeSpan" /> field that
-    ///     legitimately allows zero -- several Router Advertisement fields (
-    ///     <see cref="RaOptions.RouterLifetime" />/<see cref="RaOptions.ReachableTime" />/
-    ///     <see cref="RaOptions.RetransTimer" />) use <see cref="TimeSpan.Zero" /> itself as their
-    ///     own real "make no recommendation"/"not a default router" sentinel, unlike
-    ///     <see cref="TryParsePositiveTimeSpan" />'s own strictly-positive fields.
+    ///     This method parses a merge-patch TimeSpan field that may be zero. Several Router
+    ///     Advertisement fields (<see cref="RaOptions.RouterLifetime" />,
+    ///     <see cref="RaOptions.ReachableTime" />, <see cref="RaOptions.RetransTimer" />) use
+    ///     <see cref="TimeSpan.Zero" /> to mean "no recommendation" or "not a default router",
+    ///     unlike the fields <see cref="TryParsePositiveTimeSpan" /> handles.
     /// </summary>
     private static bool TryParseNonNegativeTimeSpan(
         JsonElement element,
@@ -1486,7 +1479,7 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This method parses and validates a merge-patch UDP port field.
+    ///     This method parses a merge-patch UDP port field.
     /// </summary>
     private static bool TryParsePort(JsonElement element, out int parsed, out string error)
     {
@@ -1503,18 +1496,13 @@ public class DhcpSettingsController(
     }
 
     /// <summary>
-    ///     This record is the exact on-disk shape one <see cref="RaOptions.Routes" /> entry is
-    ///     written as -- its own property names deliberately match
-    ///     <c>Ninlil.Dhcp.Server.Ra.RaAdvertisedRouteOptions</c>'s real property names one for one,
-    ///     since <see cref="PresetConfigurationFileApplier" /> serializes this record generically
-    ///     (via <see cref="System.Text.Json.JsonSerializer" />) straight into the JSON configuration
-    ///     file, which <see cref="Microsoft.Extensions.Configuration.IConfiguration" />'s own
-    ///     ordinary binding then reconstructs <c>RaAdvertisedRouteOptions</c> instances from at
-    ///     startup, exactly like every other <c>Options</c>-bound class in this project. Both
-    ///     <see cref="Preference" /> and <see cref="RouteLifetime" /> are written as plain strings
-    ///     (an enum member's own name, a <see cref="TimeSpan" />'s own round-trippable text form)
-    ///     since that is what the configuration binder parses them from, exactly like every other
-    ///     enum/<see cref="TimeSpan" /> value this controller writes elsewhere.
+    ///     This record is the shape one <see cref="RaOptions.Routes" /> entry is written in. Its
+    ///     property names match those of <c>Ninlil.Dhcp.Server.Ra.RaAdvertisedRouteOptions</c>,
+    ///     because <see cref="PresetConfigurationFileApplier" /> serializes it with
+    ///     <see cref="System.Text.Json.JsonSerializer" /> into the configuration file and ordinary
+    ///     configuration binding rebuilds <c>RaAdvertisedRouteOptions</c> from it at startup.
+    ///     <see cref="Preference" /> and <see cref="RouteLifetime" /> are strings (an enum member
+    ///     name and a round-trippable TimeSpan) because that is what the binder parses them from.
     /// </summary>
     private sealed record RaRouteConfigurationEntry(
         string Prefix,
@@ -1524,16 +1512,12 @@ public class DhcpSettingsController(
     );
 
     /// <summary>
-    ///     This record is the exact on-disk shape one <see cref="RaOptions.InterfaceOverrides" />
-    ///     entry is written as -- its own property names deliberately match
-    ///     <c>Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions</c>'s real property names one for
-    ///     one, the same generic-serialize/ordinary-configuration-bind round trip
-    ///     <see cref="RaRouteConfigurationEntry" />'s own doc comment already describes. Every
-    ///     <see cref="TimeSpan" />-typed field is written as a plain, round-trippable string (or
-    ///     <see langword="null" />) since that is what the configuration binder parses a
-    ///     <see cref="TimeSpan" /> from; every other nullable field is written as its own native
-    ///     JSON type (boolean/number/array), exactly like <see cref="RaRouteConfigurationEntry.PrefixLength" />
-    ///     already is.
+    ///     This record is the shape one <see cref="RaOptions.InterfaceOverrides" /> entry is
+    ///     written in. Its property names match those of
+    ///     <c>Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions</c>, for the same
+    ///     serialize-then-bind round trip as <see cref="RaRouteConfigurationEntry" />. TimeSpan
+    ///     fields are written as round-trippable strings (or <see langword="null" />), which the
+    ///     binder parses; other nullable fields keep their JSON types (boolean, number, array).
     /// </summary>
     private sealed record RaInterfaceOverrideConfigurationEntry(
         string InterfaceName,

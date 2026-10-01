@@ -12,32 +12,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reports this server's own live DHCP lease state -- a lease is a live
-///     artifact the allocation engine itself creates and updates as clients come and go, never an
-///     operator-created resource, so this controller offers no <c>PUT</c>/<c>PATCH</c>/<c>DELETE</c>
-///     at all, and its one write action (<see cref="Release" />) is an action-style endpoint that
-///     force-releases an existing lease rather than an ordinary resource mutation. Every <c>GET</c>
-///     requires <c>dhcpleases:read</c>; <see cref="Release" /> requires <c>dhcpleases:manage</c>.
+///     This controller reports DHCP leases. The allocation engine creates and updates leases as
+///     clients come and go, so there is no PUT, PATCH or DELETE; the one write,
+///     <see cref="Release" />, force-releases a lease. Reads need <c>dhcpleases:read</c> and
+///     <see cref="Release" /> needs <c>dhcpleases:manage</c>.
 ///     <para>
-///         <b>Flat, all-scopes listing, with an optional per-scope narrowing.</b> Unlike this
-///         project's own scope-nested reservation/custom-option resources, a lease
-///         (<see cref="LeaseEntity" />) carries its owning scope by name
-///         (<see cref="LeaseEntity.ScopeName" />), not by identifier -- so rather than nesting this
-///         resource under <c>/api/dhcp-scopes/{scopeId}</c> the way <see cref="DhcpReservationsController" />
-///         does, <see cref="List" /> lives at the top level and accepts an optional
-///         <c>scopeId</c> query parameter, resolved to that scope's own current name before being
-///         pushed down into <see cref="ILeaseRepository.SearchByScopeNameAsync" />. This also
-///         suits how an operator actually wants to see this data: a flat, all-scopes lease table
-///         is the natural "what is my network doing right now" view, with narrowing to one scope
-///         as a secondary refinement rather than the primary access path.
+///         <b>One list for all scopes, optionally narrowed.</b> A lease
+///         (<see cref="LeaseEntity" />) names its scope (<see cref="LeaseEntity.ScopeName" />)
+///         rather than referring to it by id, so instead of nesting under
+///         <c>/api/dhcp-scopes/{scopeId}</c> like <see cref="DhcpReservationsController" />,
+///         <see cref="List" /> is top-level and takes an optional <c>scopeId</c>, which it turns
+///         into the scope's current name for
+///         <see cref="ILeaseRepository.SearchByScopeNameAsync" />. An all-scopes lease table is
+///         also the usual "what is my network doing" view.
 ///     </para>
 /// </summary>
-/// <param name="leaseRepository">The repository this controller reads leases through.</param>
-/// <param name="scopeRepository">The repository used to resolve an optional <c>scopeId</c> filter into a scope name.</param>
+/// <param name="leaseRepository">Reads leases.</param>
+/// <param name="scopeRepository">Turns an optional <c>scopeId</c> filter into a scope name.</param>
 /// <param name="leaseAdministrationService">
-///     The service <see cref="Release" /> delegates a force-release to -- see that service's own
-///     doc comment for why this is the same mutation, and the same downstream
-///     <c>DhcpLeaseChangedEvent</c>, a real client-initiated release already produces.
+///     Performs the force-release for <see cref="Release" />, with the same change and the same
+///     <c>DhcpLeaseChangedEvent</c> as a release sent by the client.
 /// </param>
 [ApiController]
 [Route("api/dhcp-leases")]
@@ -48,8 +42,9 @@ public class DhcpLeasesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every DHCP lease this server has recorded, optionally narrowed to one
-    ///     scope via <paramref name="scopeId" />.
+    ///     This action lists DHCP leases, one page at a time, for every scope or only the one named
+    ///     by <paramref name="scopeId" />. Returns 404 for an unknown scope. Requires
+    ///     <c>dhcpleases:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dhcpleases:read")]
@@ -107,7 +102,8 @@ public class DhcpLeasesController(
     }
 
     /// <summary>
-    ///     This action looks up a single lease by its identifier.
+    ///     This action returns one lease. Returns 404 for an unknown id. Requires
+    ///     <c>dhcpleases:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("dhcpleases:read")]
@@ -122,16 +118,13 @@ public class DhcpLeasesController(
     }
 
     /// <summary>
-    ///     This action force-releases a lease by its own identifier, letting an operator reclaim a
-    ///     stuck or stale address without waiting for the client itself to send a real DHCP RELEASE
-    ///     or for this server's own natural expiry sweep to eventually catch it. Delegates directly
-    ///     to <see cref="IDhcpLeaseAdministrationService.ForceReleaseAsync" /> -- see that method's
-    ///     own doc comment for exactly what it does (the identical mutation, and the identical
-    ///     downstream <c>DhcpLeaseChangedEvent</c>, a real client-initiated release already
-    ///     produces, so the address is genuinely available for reallocation immediately, and any
-    ///     DNS record this lease auto-registered is cleaned up exactly as it would be for a real
-    ///     release). Idempotent: releasing an already-released lease is a safe no-op that still
-    ///     returns <c>200 OK</c>.
+    ///     This action force-releases a lease so an operator can reclaim a stuck or stale address
+    ///     without waiting for the client's RELEASE or the expiry sweep. It calls
+    ///     <see cref="IDhcpLeaseAdministrationService.ForceReleaseAsync" />, which makes the same
+    ///     change and raises the same <c>DhcpLeaseChangedEvent</c> as a client release, so the
+    ///     address can be handed out again at once and any DNS record the lease registered is
+    ///     removed. Releasing a lease that is already released succeeds and changes nothing.
+    ///     Returns 404 for an unknown id. Requires <c>dhcpleases:manage</c>.
     /// </summary>
     [HttpPost("{id:guid}/release")]
     [RequirePermission("dhcpleases:manage")]
@@ -149,7 +142,7 @@ public class DhcpLeasesController(
     }
 
     /// <summary>
-    ///     This method converts a lease entity into its REST representation.
+    ///     This method converts a lease entity to its API representation.
     /// </summary>
     private static DhcpLeaseDetail ToDetail(LeaseEntity lease) =>
         new(
