@@ -19,12 +19,12 @@ using Ninlil.Dns.Server.Core.Certificates;
 namespace Ninlil.Dns.Server.Backup.Tests;
 
 /// <summary>
-///     This class covers <see cref="SystemBackupService" /> against a real, SQLite-backed
-///     repository stack and a real, on-disk Data Protection key ring -- the same verification
-///     shape <c>CaaRecordReconciliationServiceTests</c>/<c>PtrSyncServiceTests</c> already use for
-///     this project's own write-path services, extended here with a real encrypted secret so a
-///     restore's own "every previously-encrypted field is still decryptable afterward" promise is
-///     genuinely exercised, not merely asserted.
+///     This class tests <see cref="SystemBackupService" /> against the SQLite-backed EF Core
+///     repositories and a Data Protection key ring in a temporary directory, like
+///     <c>CaaRecordReconciliationServiceTests</c> and <c>PtrSyncServiceTests</c>. A TSIG secret
+///     encrypted with that key ring checks that encrypted fields can still be decrypted after a
+///     restore. It also covers the DHCP and client tables, rejected restores, and the
+///     encrypted/unencrypted envelope handling. The TLS certificate is not covered.
 /// </summary>
 public sealed class SystemBackupServiceTests : IAsyncLifetime
 {
@@ -55,9 +55,8 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         builder.Services.AddSingleton(
             new TlsCertificateOptions
             {
-                // Point both certificate paths somewhere that never actually exists for this
-                // test -- the certificate bundle is exercised by its own dedicated assertions
-                // below, not implicitly by every other test in this class.
+                // Point the certificate at a file that does not exist, so no certificate is
+                // backed up or restored in these tests.
                 PfxPath = "",
                 SelfSignedCertificateStatePath = Path.Combine(
                     _keyRingDirectory,
@@ -94,10 +93,9 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds an <see cref="IDataProtector" /> pointed at this test's own key
-    ///     ring directory, exactly the shape a real <c>TsigSecretProtector</c> would build one
-    ///     with, so a test can encrypt and later decrypt a real secret the same way this
-    ///     project's own production code does.
+    ///     This method builds an <see cref="IDataProtector" /> on the test key ring directory, as
+    ///     <c>TsigSecretProtector</c> does in production, so a test can encrypt a secret and
+    ///     decrypt it again after a restore.
     /// </summary>
     private IDataProtector CreateSecretProtector() =>
         DataProtectionProvider
@@ -110,9 +108,8 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         IServiceScopeFactory scopeFactory =
             _host.Services.GetRequiredService<IServiceScopeFactory>();
 
-        // Seed a real zone, a real record inside it, a real TSIG key whose own secret is
-        // genuinely encrypted through this test's own key ring (not a stand-in string), and a
-        // real role/user/role-assignment/direct-claim identity relationship set.
+        // Seed a zone with a record, a TSIG key whose secret is encrypted with the test key
+        // ring, and a role, a user, a role assignment and a direct claim.
         Guid zoneId = Guid.NewGuid();
         Guid recordId = Guid.NewGuid();
         Guid tsigKeyId = Guid.NewGuid();
@@ -194,15 +191,14 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
             await unitOfWork.SaveChangesAsync();
         }
 
-        // Confirm the secret is genuinely decryptable before backup, so a later failure can only
-        // mean the restore itself broke something, not that the seed data was already wrong.
+        // Check the secret decrypts before the backup, so a later failure points at the restore.
         Assert.Equal(plaintextSecret, CreateSecretProtector().Unprotect(encryptedSecret));
 
         IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
         byte[] archive = await backupService.CreateBackupAsync("a-strong-test-passphrase");
 
-        // Wipe every entity this catalog covers and delete every key ring file, simulating a
-        // brand-new install this archive is about to be restored onto.
+        // Remove the seeded records, zones and TSIG keys and delete the key ring files, like a
+        // new installation the archive is restored onto.
         await using (AsyncServiceScope wipeScope = scopeFactory.CreateAsyncScope())
         {
             IUnitOfWork unitOfWork = wipeScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
@@ -267,17 +263,16 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
             .GetByIdAsync(tsigKeyId);
         Assert.NotNull(restoredKey);
 
-        // The single most important assertion in this test: the ciphertext round-tripped
-        // byte-for-byte, AND a fresh IDataProtector -- pointed at the key ring the restore itself
-        // just wrote back to disk -- can still decrypt it back to the original plaintext.
+        // The key assertion: the ciphertext came back unchanged, and a new IDataProtector on the
+        // key ring the restore wrote can decrypt it.
         Assert.Equal(encryptedSecret, restoredKey.SecretEncrypted);
         Assert.Equal(
             plaintextSecret,
             CreateSecretProtector().Unprotect(restoredKey.SecretEncrypted)
         );
 
-        // The identity relationships this catalog cannot express on its own must also have
-        // survived, re-attached to the same, preserved user/role identifiers.
+        // The identity relationships, which the catalog does not cover, must also be back on
+        // the same user and role identifiers.
         IUserRepository verifyUserRepository =
             verifyScope.ServiceProvider.GetRequiredService<IUserRepository>();
         IRoleRepository verifyRoleRepository =
@@ -305,11 +300,10 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves the known-client registry, access-control rules, cluster peers, and
-    ///     every DHCP table survive a backup/restore round trip -- the tables a storage-engine
-    ///     switch (which moves data exclusively through this same path) would otherwise silently
-    ///     drop. Every seeded row is removed after the backup is taken, so each one found
-    ///     afterward can only have come from the archive.
+    ///     This test checks that the client registry, access-control rules, cluster peers and every
+    ///     DHCP table survive a backup and restore, which a storage-engine switch relies on. Every
+    ///     seeded row is removed after the backup, so each one found afterwards came from the
+    ///     archive.
     /// </summary>
     [Fact]
     public async Task ARoundTripPreservesClientRegistryAccessControlClusterAndDhcpData()
@@ -430,8 +424,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
         byte[] archive = await backupService.CreateBackupAsync("a-strong-test-passphrase");
 
-        // Remove every seeded row, children before parents, so the restore below has to bring
-        // each one back from the archive itself.
+        // Remove every seeded row, children before parents, so the restore must bring each back.
         await using (AsyncServiceScope wipeScope = scopeFactory.CreateAsyncScope())
         {
             IServiceProvider services = wipeScope.ServiceProvider;
@@ -478,7 +471,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         await using AsyncServiceScope verifyScope = scopeFactory.CreateAsyncScope();
         IServiceProvider verify = verifyScope.ServiceProvider;
 
-        // The device must still resolve by its own identifier, through its restored address.
+        // The device must still resolve to its identifier through its restored address.
         DnsClientEntity restoredDevice = await verify
             .GetRequiredService<IDnsClientRepository>()
             .GetByClientIdentifierAsync("aa:bb:cc:dd:ee:ff", InternetProtocolVersionEnum.IPv4);
@@ -542,7 +535,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
             )
         );
 
-        // Nothing was written -- the one zone seeded above is still exactly the one zone present.
+        // Nothing was written: the one seeded zone is still the only zone.
         Assert.Single(await _host.Services.GetRequiredService<IZoneRepository>().ListAsync());
     }
 
@@ -554,7 +547,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
         byte[] archive = await backupService.CreateBackupAsync("a-strong-test-passphrase");
 
-        // Corrupt one byte well inside the archive's own ciphertext.
+        // Corrupt one byte inside the ciphertext.
         archive[archive.Length / 2] ^= 0xFF;
 
         await Assert.ThrowsAsync<BackupDecryptionFailedException>(() =>
@@ -599,8 +592,8 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
         byte[] archive = await backupService.CreateBackupAsync("");
 
-        // A passphrase supplied for an archive that is genuinely unencrypted (per its own
-        // envelope header) is simply not needed -- it must never cause the restore to fail.
+        // A passphrase given for an unencrypted archive (by its header) is ignored and must not
+        // make the restore fail.
         BackupRestoreSummary summary = await backupService.RestoreBackupAsync(
             new MemoryStream(archive),
             "a-passphrase-nobody-asked-for"

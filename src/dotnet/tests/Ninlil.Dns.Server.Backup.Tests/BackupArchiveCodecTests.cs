@@ -6,9 +6,9 @@ using Ninlil.Dns.Server.Backup.Crypto;
 namespace Ninlil.Dns.Server.Backup.Tests;
 
 /// <summary>
-///     This class covers <see cref="BackupArchiveCodec" /> directly, against plain byte arrays,
-///     with no database or filesystem involved at all -- the pure cryptographic contract every
-///     higher-level backup/restore behavior ultimately depends on.
+///     This class tests <see cref="BackupArchiveCodec" /> on plain byte arrays, with no database
+///     or files: round trips, rejection of wrong passphrases and changed bytes, and the
+///     encrypted/unencrypted envelope checks.
 /// </summary>
 public sealed class BackupArchiveCodecTests
 {
@@ -31,11 +31,11 @@ public sealed class BackupArchiveCodecTests
         byte[] first = BackupArchiveCodec.Encrypt(plaintext, "same-passphrase");
         byte[] second = BackupArchiveCodec.Encrypt(plaintext, "same-passphrase");
 
-        // A fresh random salt and nonce per archive means two archives of the identical
-        // plaintext, encrypted with the identical passphrase, must never be byte-for-byte equal.
+        // A new salt and nonce per archive means two archives of the same plaintext and
+        // passphrase must differ.
         Assert.NotEqual(first, second);
 
-        // Both must still decrypt back to the same original plaintext.
+        // Both must still decrypt to the original plaintext.
         Assert.Equal(plaintext, BackupArchiveCodec.Decrypt(first, "same-passphrase"));
         Assert.Equal(plaintext, BackupArchiveCodec.Decrypt(second, "same-passphrase"));
     }
@@ -61,9 +61,8 @@ public sealed class BackupArchiveCodecTests
             "correct-horse-battery-staple"
         );
 
-        // Flip one bit near the end of the archive, inside its own ciphertext -- authenticated
-        // encryption must catch this via its own authentication tag check, the same real
-        // cryptographic proof (not a heuristic) that also catches a wrong passphrase.
+        // Flip one bit in the ciphertext near the end; the authentication tag check must catch
+        // it, as it catches a wrong passphrase.
         archive[^1] ^= 0b0000_0001;
 
         Assert.Throws<BackupDecryptionFailedException>(() =>
@@ -79,8 +78,8 @@ public sealed class BackupArchiveCodecTests
             "correct-horse-battery-staple"
         );
 
-        // Flip a bit inside the recorded nonce -- corrupting the envelope's own header, not just
-        // the ciphertext, must be caught exactly the same way.
+        // Flip a bit in the stored salt (bytes 5 to 20, after the 5-byte header). A changed
+        // header field must be caught the same way, because it changes the derived key.
         archive[10] ^= 0b0000_0001;
 
         Assert.Throws<BackupDecryptionFailedException>(() =>
@@ -147,9 +146,8 @@ public sealed class BackupArchiveCodecTests
     [Fact]
     public void UnwrapOnAGenuinelyEncryptedArchiveThrowsBackupArchiveInvalidExceptionCleanly()
     {
-        // The "vice versa" mismatch case: an archive that is genuinely encrypted must never be
-        // silently misread as unencrypted plaintext -- Unwrap must reject it via its own header
-        // check rather than returning corrupted-looking bytes.
+        // An encrypted archive must not be read as unencrypted: Unwrap rejects it by its header
+        // instead of returning ciphertext as the payload.
         byte[] encrypted = BackupArchiveCodec.Encrypt(
             Encoding.UTF8.GetBytes("secret payload"),
             "correct-horse-battery-staple"
@@ -161,9 +159,8 @@ public sealed class BackupArchiveCodecTests
     [Fact]
     public void DecryptOnAGenuinelyUnencryptedArchiveThrowsBackupDecryptionFailedExceptionCleanly()
     {
-        // The other mismatch direction: an archive that was deliberately created without a
-        // passphrase must never be treated as encrypted ciphertext -- Decrypt must reject it via
-        // its own header check rather than attempting (and silently failing) authentication.
+        // The other direction: Decrypt rejects an unencrypted archive by its header instead of
+        // trying to authenticate it.
         byte[] wrapped = BackupArchiveCodec.Wrap(Encoding.UTF8.GetBytes("plain payload"));
 
         Assert.Throws<BackupDecryptionFailedException>(() =>

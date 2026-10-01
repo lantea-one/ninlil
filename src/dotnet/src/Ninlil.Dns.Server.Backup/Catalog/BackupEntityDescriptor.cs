@@ -6,24 +6,21 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 namespace Ninlil.Dns.Server.Backup.Catalog;
 
 /// <summary>
-///     This record describes how to export and import every row of one entity type through its
-///     own already-existing repository, without this project ever needing a second, parallel copy
-///     of any entity's shape. Every function below is built inside <see cref="For{TEntity, TRepository}" />,
-///     where <c>TEntity</c> is still a concrete type the compiler knows, so the
-///     actual JSON serialization always happens against that concrete type rather than the boxed
-///     <see cref="EntityBase" /> this record exposes it as -- passing an interface- or base-typed
-///     value into <c>Ninlil.Common.Serializer.JsonSerializer</c>'s own single-argument
-///     overload silently serializes based on that base type's own (empty) shape instead of the
-///     real one, a mistake this project has been bitten by before.
+///     This record describes how to export, import and wipe every row of one entity type through
+///     its existing repository, so no second copy of the entity shapes is needed. The functions
+///     are built in <see cref="For{TEntity, TRepository}" />, where <c>TEntity</c> is the concrete
+///     type, so JSON serialization uses the full entity shape. Serializing through
+///     <see cref="EntityBase" /> or an interface with the single-argument
+///     <c>Ninlil.Common.Serializer.JsonSerializer</c> overload would write only the base type's
+///     properties.
 /// </summary>
 /// <param name="Name">
-///     This entity type's own name inside the archive -- both the JSON file name under
-///     <c>database/</c> and the key <see cref="Model.BackupManifest.EntityCounts" /> reports it
-///     under.
+///     The entity type's name in the archive: the JSON file name under <c>database/</c> and the
+///     key in <see cref="Model.BackupManifest.EntityCounts" />.
 /// </param>
 /// <param name="ExportJsonAsync">Exports every row of this entity type as a JSON array.</param>
-/// <param name="ImportJsonAsync">Imports a JSON array of this entity type, returning how many rows it added.</param>
-/// <param name="WipeAsync">Removes every existing row of this entity type, returning how many it removed.</param>
+/// <param name="ImportJsonAsync">Adds the rows in a JSON array of this entity type (the caller saves), returning how many.</param>
+/// <param name="WipeAsync">Marks every existing row of this entity type for removal (the caller saves), returning how many.</param>
 public sealed record BackupEntityDescriptor(
     string Name,
     Func<IServiceProvider, CancellationToken, Task<string>> ExportJsonAsync,
@@ -33,12 +30,11 @@ public sealed record BackupEntityDescriptor(
 {
     /// <summary>
     ///     This method builds a <see cref="BackupEntityDescriptor" /> for one entity type, given
-    ///     the repository interface that already implements <see cref="IRepository{TEntity}" />
-    ///     for it.
+    ///     the repository interface that implements <see cref="IRepository{TEntity}" /> for it.
     /// </summary>
     /// <typeparam name="TEntity">The concrete entity type this descriptor exports and imports.</typeparam>
     /// <typeparam name="TRepository">The repository interface that reads and writes it.</typeparam>
-    /// <param name="name">This entity type's own name inside the archive.</param>
+    /// <param name="name">The entity type's name in the archive.</param>
     public static BackupEntityDescriptor For<TEntity, TRepository>(string name)
         where TEntity : EntityBase
         where TRepository : IRepository<TEntity>
@@ -52,8 +48,7 @@ public sealed record BackupEntityDescriptor(
                     stoppingToken: stoppingToken
                 );
 
-                // Serialize while TEntity is still a concrete, compile-time-known type, so this
-                // always reflects the real entity shape rather than a base type's own.
+                // Serialize as the concrete TEntity so the full entity shape is written.
                 return Ninlil.Common.Serializer.JsonSerializer.Serialize(entities.ToList());
             },
             async (services, json, stoppingToken) =>

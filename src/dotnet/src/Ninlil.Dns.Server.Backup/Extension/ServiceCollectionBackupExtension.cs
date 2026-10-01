@@ -13,10 +13,8 @@ public static class ServiceCollectionBackupExtension
 {
     /// <summary>
     ///     This method binds <see cref="BackupOptions" /> and registers <see cref="IBackupService" />.
-    ///     Unlike a query-time feature such as filtering or rewrites, this has no capability
-    ///     toggle to gate registration on -- backup and restore are always available REST
-    ///     operations, since an operator should always be able to take a backup regardless of
-    ///     whatever else is currently enabled.
+    ///     There is no switch to turn backup off: an operator should always be able to take a
+    ///     backup, whatever else is enabled.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read backup settings from.</param>

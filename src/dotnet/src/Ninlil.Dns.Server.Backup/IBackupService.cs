@@ -4,38 +4,40 @@ using Ninlil.Dns.Server.Backup.Model;
 namespace Ninlil.Dns.Server.Backup;
 
 /// <summary>
-///     This interface exports and imports a full-system backup archive -- the entire
-///     application-level database, the Data Protection key ring, the shared TLS certificate, and
-///     the runtime configuration file, bundled together so the resulting file is safe to keep
-///     off-site and, restored onto a brand-new install, leaves every previously-encrypted secret
-///     still decryptable. Encryption itself is optional: a passphrase is supplied,
-///     <see cref="Crypto.BackupArchiveCodec" /> encrypts the archive with it via AES-256-GCM; a
-///     passphrase is omitted, the archive is written out unencrypted, clearly marked as such via
-///     its own distinct envelope header so <see cref="RestoreBackupAsync" /> can always tell which
-///     kind an uploaded archive actually is.
+///     This interface exports and imports a full-system backup archive: the application
+///     database (apart from history tables, see <see cref="Catalog.BackupEntityCatalog" />), the
+///     Data Protection key ring, the shared TLS certificate and the runtime configuration file.
+///     Including the key ring means secrets encrypted in the database can still be decrypted
+///     after a restore onto a new installation. Encryption is optional: with a passphrase,
+///     <see cref="Crypto.BackupArchiveCodec" /> encrypts the archive with AES-256-GCM; without
+///     one, the archive is written unencrypted with its own envelope header, so
+///     <see cref="RestoreBackupAsync" /> can tell the two kinds apart.
 /// </summary>
 public interface IBackupService
 {
     /// <summary>
     ///     This method builds a complete backup archive, encrypting it with
-    ///     <paramref name="passphrase" /> when one is supplied, or leaving it deliberately
-    ///     unencrypted (never a weak or default-derived key) when it is not.
+    ///     <paramref name="passphrase" /> when one is supplied, or leaving it unencrypted (not
+    ///     encrypted with a weak default key) when it is not.
     /// </summary>
     /// <param name="passphrase">
-    ///     The passphrase to encrypt the archive with, or null/blank to skip encryption
-    ///     entirely. This server never stores a supplied passphrase anywhere -- losing it means
-    ///     losing the ability to ever decrypt this specific archive again.
+    ///     The passphrase to encrypt the archive with, or null or blank for no encryption. It must
+    ///     be at least <c>BackupOptions.MinimumPassphraseLength</c> characters. The server never
+    ///     stores it, so a lost passphrase means the archive cannot be decrypted.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The complete archive file's own bytes, encrypted or not per the request above.</returns>
+    /// <returns>The bytes of the archive file.</returns>
+    /// <exception cref="ArgumentException">
+    ///     Thrown when <paramref name="passphrase" /> is given but too short.
+    /// </exception>
     Task<byte[]> CreateBackupAsync(string passphrase, CancellationToken stoppingToken = default);
 
     /// <summary>
-    ///     This method validates <paramref name="archiveStream" /> in full before writing
-    ///     anything -- decrypting it first if its own envelope header says it is encrypted, or
-    ///     reading it directly if that header says it is not -- then wipes and replaces every
-    ///     entity this server persists, the Data Protection key ring, the shared TLS certificate,
-    ///     and the runtime configuration file with the archive's own contents.
+    ///     This method decrypts or unwraps <paramref name="archiveStream" /> (as its envelope header
+    ///     says) and checks that every required entry is present, then wipes and replaces the
+    ///     backed-up database contents, the Data Protection key ring, the shared TLS certificate
+    ///     and the runtime configuration file. The running process keeps its loaded keys,
+    ///     certificate and settings, so a restart is needed afterwards.
     /// </summary>
     /// <param name="archiveStream">The archive to restore from, encrypted or not.</param>
     /// <param name="passphrase">
@@ -51,13 +53,13 @@ public interface IBackupService
     /// </exception>
     /// <exception cref="BackupDecryptionFailedException">
     ///     Thrown when an encrypted <paramref name="archiveStream" /> cannot be decrypted with
-    ///     <paramref name="passphrase" /> -- either the passphrase is wrong, or the archive was
-    ///     corrupted or tampered with. Nothing is written when this is thrown.
+    ///     <paramref name="passphrase" />: the passphrase is wrong, or the archive was corrupted or
+    ///     tampered with. Nothing is written when this is thrown.
     /// </exception>
     /// <exception cref="BackupArchiveInvalidException">
     ///     Thrown when <paramref name="archiveStream" /> does not carry a recognizable envelope
-    ///     header at all, or decrypts/unwraps successfully but does not structurally look like a
-    ///     backup archive this server produced. Nothing is written when this is thrown.
+    ///     header, or decrypts or unwraps but is not a backup archive this server can import.
+    ///     Nothing is written when this is thrown.
     /// </exception>
     Task<BackupRestoreSummary> RestoreBackupAsync(
         Stream archiveStream,

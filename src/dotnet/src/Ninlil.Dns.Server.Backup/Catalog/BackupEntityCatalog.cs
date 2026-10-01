@@ -8,26 +8,25 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 
 /// <summary>
 ///     This class lists every entity type a full-system backup covers, in an order that is safe
-///     to import forward (a referenced row, such as a zone, always lands before the rows that
-///     reference it, such as its own records) and safe to wipe in reverse (a referencing row is
-///     always removed before the row it references). Relational providers configure a cascading
-///     foreign key for most of these relationships already, but this class never relies on that --
-///     MongoDB has no equivalent mechanism at all, so both providers are wiped and re-imported
-///     through the identical explicit sequence below.
+///     to import forward (a referenced row, such as a zone, comes before the rows that reference
+///     it, such as its records) and to wipe in reverse (a referencing row is removed before the
+///     row it references). <see cref="SystemBackupService" /> does not rely on cascading
+///     deletes, which MongoDB does not have, so every storage engine goes through the same
+///     explicit sequence.
 ///     <para>
 ///         <b>What is covered</b>: every configuration and identity table, including the known-client
 ///         registry and everything hanging off it, access-control rules, cluster peers and their
-///         settings-sync bookkeeping, and every DHCP table -- scopes, reservations, custom options,
-///         tag rules and leases. Leases are live operational state rather than configuration, but
-///         they are included deliberately: the storage-engine hot-switch moves data exclusively
-///         through this backup/restore path, and a switch that dropped every active lease would
-///         let this server hand a still-leased address to a second device. A restored lease that
-///         has since lapsed is simply reclaimed by the ordinary expiry sweep.
+///         settings-sync bookkeeping, and every DHCP table: scopes, reservations, custom options,
+///         tag rules and leases. Leases are live state rather than configuration, but the
+///         storage-engine switch (<c>StorageEngineSwitchService</c>) moves data only through
+///         backup and restore, and dropping active leases would let the server hand a leased
+///         address to a second device. A restored lease that has since lapsed is reclaimed by the
+///         normal expiry sweep.
 ///     </para>
 ///     <para>
-///         <b>Deliberately excluded, and why</b>: only history/telemetry tables, none of which a
-///         server needs in order to function after a restore and all of which can grow very large
-///         -- <see cref="LogEntity" />/<see cref="MetricEntity" /> (operational telemetry);
+///         <b>Excluded</b>: only history and telemetry tables, which a server does not need after
+///         a restore and which can grow very large: <see cref="LogEntity" /> and
+///         <see cref="MetricEntity" /> (operational telemetry);
 ///         <see cref="ZoneChangeJournalEntryEntity" /> (the incremental-transfer journal, whose
 ///         absence costs nothing beyond a secondary's next refresh falling back from IXFR to a
 ///         full AXFR once); <see cref="DnsQueryLogEntryEntity" /> (the persistent query log); and
@@ -39,8 +38,8 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 public static class BackupEntityCatalog
 {
     /// <summary>
-    ///     This property contains every entity type a backup covers, already ordered so that
-    ///     importing the list forward, or wiping it in reverse, never violates a foreign key.
+    ///     This property contains every entity type a backup covers, ordered so that importing
+    ///     forward or wiping in reverse never violates a foreign key.
     /// </summary>
     public static IReadOnlyList<BackupEntityDescriptor> Entries { get; } =
     [

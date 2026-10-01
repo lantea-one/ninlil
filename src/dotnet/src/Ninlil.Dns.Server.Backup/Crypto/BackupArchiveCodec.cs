@@ -5,44 +5,37 @@ using System.Text;
 namespace Ninlil.Dns.Server.Backup.Crypto;
 
 /// <summary>
-///     This class encrypts and decrypts a backup archive's own plaintext payload with a
-///     passphrase this server never stores anywhere, so the resulting file is safe to keep
-///     off-site. It uses AES-256-GCM (authenticated encryption -- decryption fails loudly if
-///     even one byte of the ciphertext was altered after encryption, which is what lets a
-///     tampered archive be rejected with real cryptographic proof rather than a heuristic) with a
-///     key derived from the passphrase via PBKDF2-HMAC-SHA256, a fresh random salt and iteration
-///     count recorded per archive (so two archives encrypted with the identical passphrase never
-///     share a key), and a fresh random nonce per archive (so the same key, if it were ever
-///     reused, would never see nonce reuse -- the one mistake that fully breaks AES-GCM's own
-///     security guarantee).
+///     This class writes and reads the outer envelope of a backup archive. With a passphrase
+///     the server never stores, it encrypts the payload so the file is safe to keep off-site:
+///     AES-256-GCM, whose authentication makes decryption fail if any byte of the ciphertext
+///     changed, with a key derived by PBKDF2-HMAC-SHA256 from the passphrase and a random salt
+///     stored in the archive (so two archives with the same passphrase never share a key), and a
+///     random nonce per archive (so a key is never used twice with one nonce, which would break
+///     AES-GCM). Without a passphrase it only adds a header that marks the archive as
+///     unencrypted. <see cref="SystemBackupService" /> calls it.
 /// </summary>
 public static class BackupArchiveCodec
 {
     /// <summary>
-    ///     This constant contains the fixed 5-byte sequence that opens every encrypted archive
-    ///     this class produces, identifying both the file format itself and its own version --
-    ///     distinct from <see cref="Model.BackupManifest.FormatVersion" />, which versions the
-    ///     *decrypted* payload's own entity/file layout, not this envelope's own cryptographic
-    ///     framing.
+    ///     This field contains the 5-byte header of every encrypted archive, naming the envelope
+    ///     format and its version. It is separate from
+    ///     <see cref="Model.BackupManifest.FormatVersion" />, which versions the payload layout
+    ///     inside.
     /// </summary>
     private static readonly byte[] MagicHeaderEncrypted = "LTBK1"u8.ToArray();
 
     /// <summary>
-    ///     This constant contains the fixed 5-byte sequence that opens every unencrypted archive
-    ///     <see cref="Wrap" /> produces -- an operator-chosen alternative to
-    ///     <see cref="MagicHeaderEncrypted" /> for a backup created with no passphrase at all.
-    ///     Sharing the same length as the encrypted header, differing only in its final digit,
-    ///     keeps <see cref="PeekKind" /> a single fixed-offset comparison rather than needing two
-    ///     different header lengths.
+    ///     This field contains the 5-byte header of every unencrypted archive <see cref="Wrap" />
+    ///     writes. It has the same length as <see cref="MagicHeaderEncrypted" /> and differs only
+    ///     in the last digit, so <see cref="PeekKind" /> compares one fixed-length prefix.
     /// </summary>
     private static readonly byte[] MagicHeaderUnencrypted = "LTBK0"u8.ToArray();
 
     /// <summary>
-    ///     This constant contains how many PBKDF2 rounds derive the AES key from the operator's
-    ///     passphrase -- 600,000 rounds of HMAC-SHA256, matching OWASP's own current minimum
-    ///     recommendation for this exact algorithm/hash pairing as of this writing, chosen to make
-    ///     brute-forcing a weak passphrase materially slower without making a legitimate backup or
-    ///     restore noticeably slow on ordinary hardware.
+    ///     This constant contains how many PBKDF2-HMAC-SHA256 iterations derive the AES key for a
+    ///     new archive: 600,000, the OWASP recommendation for that pairing. It slows brute force
+    ///     without making a backup or restore noticeably slow. The count is stored in each archive,
+    ///     and <see cref="Decrypt" /> uses the stored value.
     /// </summary>
     private const int Pbkdf2Iterations = 600_000;
 
@@ -53,22 +46,17 @@ public static class BackupArchiveCodec
 
     /// <summary>
     ///     This method encrypts <paramref name="plaintext" /> with a key derived from
-    ///     <paramref name="passphrase" />, returning a single self-contained byte array: the
-    ///     magic header, the salt and iteration count PBKDF2 needs to re-derive the same key, the
-    ///     nonce and authentication tag AES-GCM needs to decrypt and verify, and finally the
-    ///     ciphertext itself.
+    ///     <paramref name="passphrase" /> and returns one self-contained byte array: the header, the
+    ///     salt and iteration count needed to derive the key again, the nonce and authentication
+    ///     tag, and the ciphertext.
     /// </summary>
-    /// <param name="plaintext">The archive's own decrypted payload bytes.</param>
-    /// <param name="passphrase">The operator-supplied passphrase to encrypt it with.</param>
-    /// <returns>The complete, encrypted archive file's own bytes.</returns>
+    /// <param name="plaintext">The payload bytes.</param>
+    /// <param name="passphrase">The operator's passphrase to encrypt with.</param>
+    /// <returns>The bytes of the encrypted archive file.</returns>
     public static byte[] Encrypt(byte[] plaintext, string passphrase)
     {
-        // Why: a fresh salt and nonce are generated on every single call, from a cryptographic
-        // random source, never derived from the passphrase or from each other -- this is what
-        // this class's own doc comment means by "two archives encrypted with the identical
-        // passphrase never share a key" (the salt) and "the same key ... would never see nonce
-        // reuse" (the nonce), the one mistake that would otherwise fully break AES-GCM's own
-        // confidentiality and authentication guarantees.
+        // A new random salt and nonce on every call: the salt gives each archive its own key,
+        // and the nonce is never reused with a key (see the class summary).
         byte[] salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
         byte[] nonce = RandomNumberGenerator.GetBytes(NonceSizeBytes);
         byte[] key = DeriveKey(passphrase, salt, Pbkdf2Iterations);
@@ -79,10 +67,7 @@ public static class BackupArchiveCodec
         using (AesGcm aesGcm = new(key, TagSizeBytes))
             aesGcm.Encrypt(nonce, plaintext, ciphertext, tag);
 
-        // How: the finished archive's own byte layout is written in exactly the order Decrypt
-        // expects to read it back in -- magic header, then everything Decrypt needs to
-        // re-derive the same key and re-verify the same tag (salt, iteration count, nonce, tag),
-        // and only then the ciphertext itself.
+        // The layout Decrypt reads: header, salt, iteration count, nonce, tag, ciphertext.
         using MemoryStream output = new();
         output.Write(MagicHeaderEncrypted);
         output.Write(salt);
@@ -95,20 +80,18 @@ public static class BackupArchiveCodec
     }
 
     /// <summary>
-    ///     This method reverses <see cref="Encrypt" />, re-deriving the same key from
-    ///     <paramref name="passphrase" /> and the salt/iteration count recorded in
-    ///     <paramref name="archive" />'s own header, then decrypting and authenticating the
-    ///     ciphertext.
+    ///     This method reverses <see cref="Encrypt" />: it derives the key again from
+    ///     <paramref name="passphrase" /> and the salt and iteration count stored in the archive,
+    ///     then decrypts and authenticates the ciphertext. The stored iteration count is used as
+    ///     is.
     /// </summary>
-    /// <param name="archive">The complete, encrypted archive file's own bytes.</param>
-    /// <param name="passphrase">The passphrase to attempt decryption with.</param>
-    /// <returns>The archive's own decrypted payload bytes.</returns>
+    /// <param name="archive">The bytes of the encrypted archive file.</param>
+    /// <param name="passphrase">The passphrase to decrypt with.</param>
+    /// <returns>The decrypted payload bytes.</returns>
     /// <exception cref="BackupDecryptionFailedException">
-    ///     Thrown when <paramref name="archive" /> is too short to be a real archive, does not
-    ///     start with the expected magic header, or fails AES-GCM's own authentication check --
-    ///     which happens both for a wrong passphrase and for a tampered ciphertext, since an
-    ///     authenticated cipher cannot (and, for tamper-detection to mean anything, must not) tell
-    ///     the two apart.
+    ///     Thrown when <paramref name="archive" /> is too short, does not start with the encrypted
+    ///     header, or fails AES-GCM authentication, which happens both for a wrong passphrase and
+    ///     for a changed ciphertext; the two cannot be told apart.
     /// </exception>
     public static byte[] Decrypt(byte[] archive, string passphrase)
     {
@@ -157,9 +140,8 @@ public static class BackupArchiveCodec
         }
         catch (CryptographicException)
         {
-            // AesGcm.Decrypt throws exactly this way both for a wrong key (a wrong passphrase)
-            // and for ciphertext/tag tampering -- there is no way, by design, to tell those two
-            // apart from the outside without weakening the authentication guarantee itself.
+            // AesGcm.Decrypt throws the same way for a wrong key (wrong passphrase) and for a
+            // changed ciphertext or tag; the two cannot be told apart.
             throw new BackupDecryptionFailedException(
                 "Failed to decrypt this backup archive. The passphrase may be incorrect, or the "
                     + "archive may be corrupted or have been tampered with."
@@ -170,16 +152,14 @@ public static class BackupArchiveCodec
     }
 
     /// <summary>
-    ///     This method wraps <paramref name="plaintext" /> in the unencrypted archive envelope --
-    ///     no key derivation, no cipher, nothing beyond <see cref="MagicHeaderUnencrypted" />
-    ///     identifying this file as an archive an operator deliberately chose to create without a
-    ///     passphrase. Used only when <c>SystemBackupService.CreateBackupAsync</c> receives a
-    ///     null/blank passphrase -- a real, honest design choice (a clearly-marked unencrypted
-    ///     archive) rather than deriving a weak key from an empty or default value, which would
-    ///     dishonestly look encrypted while offering no real protection at all.
+    ///     This method wraps <paramref name="plaintext" /> in the unencrypted envelope: only
+    ///     <see cref="MagicHeaderUnencrypted" /> in front, no key and no cipher.
+    ///     <c>SystemBackupService.CreateBackupAsync</c> uses it when no passphrase is given. A key
+    ///     derived from an empty or default value would look encrypted without protecting
+    ///     anything, so the archive is marked as unencrypted instead.
     /// </summary>
-    /// <param name="plaintext">The archive's own decrypted payload bytes.</param>
-    /// <returns>The complete, unencrypted archive file's own bytes.</returns>
+    /// <param name="plaintext">The payload bytes.</param>
+    /// <returns>The bytes of the unencrypted archive file.</returns>
     public static byte[] Wrap(byte[] plaintext)
     {
         using MemoryStream output = new();
@@ -192,13 +172,13 @@ public static class BackupArchiveCodec
     ///     This method reverses <see cref="Wrap" />, validating <see cref="MagicHeaderUnencrypted" />
     ///     and returning the payload bytes underneath it unchanged.
     /// </summary>
-    /// <param name="archive">The complete, unencrypted archive file's own bytes.</param>
-    /// <returns>The archive's own payload bytes.</returns>
+    /// <param name="archive">The bytes of the unencrypted archive file.</param>
+    /// <returns>The payload bytes.</returns>
     /// <exception cref="BackupArchiveInvalidException">
     ///     Thrown when <paramref name="archive" /> is too short to carry the header, or does not
-    ///     start with <see cref="MagicHeaderUnencrypted" /> -- most commonly because the archive
-    ///     is actually encrypted (see <see cref="PeekKind" />, which every real caller checks
-    ///     first, so reaching this exception at all means a caller bypassed that check).
+    ///     start with <see cref="MagicHeaderUnencrypted" />, usually because it is encrypted.
+    ///     <c>SystemBackupService</c> calls <see cref="PeekKind" /> first, so it does not reach
+    ///     this case.
     /// </exception>
     public static byte[] Unwrap(byte[] archive)
     {
@@ -217,17 +197,13 @@ public static class BackupArchiveCodec
     }
 
     /// <summary>
-    ///     This method inspects only <paramref name="archive" />'s own magic header to determine
-    ///     whether it is encrypted or not, without attempting to decrypt or unwrap it -- the one
-    ///     place this class lets a caller ask "what kind of archive is this" ahead of committing
-    ///     to either <see cref="Decrypt" /> or <see cref="Unwrap" />. This is what lets
-    ///     <c>SystemBackupService.RestoreBackupAsync</c> auto-detect an archive's own real kind
-    ///     directly from the uploaded bytes themselves, rather than trusting a caller-supplied
-    ///     flag (or the mere presence of a passphrase in the request) that could disagree with
-    ///     what the file actually is.
+    ///     This method reads only the header of <paramref name="archive" /> to tell whether it is
+    ///     encrypted, before calling <see cref="Decrypt" /> or <see cref="Unwrap" />.
+    ///     <c>SystemBackupService.RestoreBackupAsync</c> uses it so the file itself, not a request
+    ///     flag or the presence of a passphrase, decides how it is read.
     /// </summary>
-    /// <param name="archive">The complete archive file's own bytes, of either kind.</param>
-    /// <returns>Which envelope <paramref name="archive" /> actually carries.</returns>
+    /// <param name="archive">The bytes of an archive file of either kind.</param>
+    /// <returns>The envelope kind of <paramref name="archive" />.</returns>
     /// <exception cref="BackupArchiveInvalidException">
     ///     Thrown when <paramref name="archive" /> is too short to carry a header, or its header
     ///     matches neither known magic sequence.

@@ -2,17 +2,14 @@
 namespace Ninlil.Dns.Server.Backup.Model;
 
 /// <summary>
-///     This record bundles the identity relationships that do not fit
-///     <see cref="Ninlil.Dns.Server.Backup.Catalog.BackupEntityCatalog" />'s own uniform,
-///     one-repository-per-entity-type shape: which roles a user holds, which permission claims
-///     are attached directly to a user, and which permission claims a role grants. Every
-///     relational provider configures a cascading foreign key for each of these three joins, but
-///     MongoDB has no such mechanism at all -- so a restore never relies on cascade delete for
-///     either provider, and instead wipes and re-creates every relationship explicitly through
-///     this bundle, the same "no cascade to rely on" posture this project already applies to a
-///     zone's own records and a filter list's own client-group assignments.
+///     This record holds the identity relationships that have no repository of their own and so
+///     do not fit <see cref="Ninlil.Dns.Server.Backup.Catalog.BackupEntityCatalog" />: the roles
+///     each user holds, the claims attached directly to users, and the claims roles grant. It is
+///     stored in the archive as <c>database/identity-relationships.json</c>. A restore removes
+///     and recreates these relationships explicitly instead of relying on cascading deletes,
+///     which MongoDB does not have.
 /// </summary>
-/// <param name="UserRoles">Every user-to-role membership this server currently has recorded.</param>
+/// <param name="UserRoles">Every user-to-role membership.</param>
 /// <param name="UserClaims">Every permission claim attached directly to a user.</param>
 /// <param name="RoleClaims">Every permission claim granted to a role.</param>
 public sealed record BackupIdentityRelationships(
