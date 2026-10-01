@@ -2,60 +2,45 @@
 namespace Ninlil.Dhcp.Server.Ra;
 
 /// <summary>
-///     This class configures one network interface's own distinct Router Advertisement content,
-///     overriding a subset of <see cref="RaOptions" />'s own global default fields for that one
-///     interface only -- the same "nullable field, inherit a global default when unset" shape
-///     <c>Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity</c>'s own <c>AutoManageCaaRecords</c>/
-///     <c>CaaIssuerDomain</c> pair already establishes, applied here to a real network interface
-///     rather than a DNS zone. Every entry in <see cref="RaOptions.InterfaceOverrides" /> is
-///     matched against <see cref="System.Net.NetworkInformation.NetworkInterface.Name" /> (the
-///     OS-reported interface name, e.g. <c>eth0</c>/<c>enp3s0</c>), case-insensitively.
+///     This class overrides part of the <see cref="RaOptions" /> content for one interface, in
+///     <see cref="RaOptions.InterfaceOverrides" />. Entries are matched case-insensitively against
+///     <see cref="System.Net.NetworkInformation.NetworkInterface.Name" /> (for example <c>eth0</c>
+///     or <c>enp3s0</c>). Unset fields inherit the global value, as with the nullable
+///     <c>AutoManageCaaRecords</c> and <c>CaaIssuerDomain</c> of
+///     <c>Ninlil.Dns.Data.Abstractions.Entity.ZoneEntity</c>.
 ///     <para>
-///         <b>A scalar field left <see langword="null" /> here inherits <see cref="RaOptions" />'s
-///         own matching global default exactly</b> -- set it to override that one field for this
-///         interface only, leaving every other field (and every other interface) unaffected. A
-///         list field (<see cref="Prefixes" />/<see cref="RecursiveDnsServers" />/
-///         <see cref="DnsSearchListDomains" />/<see cref="Routes" />) follows the identical rule at
-///         the whole-list level: <see langword="null" /> (the default) inherits the matching global
-///         list verbatim, while a non-<see langword="null" /> list -- including a deliberately
-///         empty one -- wholesale-replaces it for this interface, letting an operator advertise,
-///         for example, zero routes on one interface while the global default still advertises
-///         several on every other one.
+///         <b>Inheritance.</b> A scalar field left <see langword="null" /> uses the global value;
+///         setting it changes only that field on this interface. The list fields
+///         (<see cref="Prefixes" />, <see cref="RecursiveDnsServers" />,
+///         <see cref="DnsSearchListDomains" />, <see cref="Routes" />) work on the whole list:
+///         <see langword="null" /> inherits the global list, and any other list, even an empty one,
+///         replaces it, so one interface can advertise no routes while the others advertise
+///         several.
 ///     </para>
 ///     <para>
-///         <b><see cref="LinkMtu" /> has one genuine, deliberately accepted limitation</b> shared
-///         with <see cref="RaOptions.LinkMtu" /> itself: <see langword="null" /> already means
-///         "advertise no MTU option at all" at the global level, so a per-interface override has no
-///         separate way to say "explicitly advertise no MTU on this interface, even though the
-///         global default has one" as distinct from "inherit the global default" -- both states
-///         collapse onto the same <see langword="null" />. Every other nullable field here has the
-///         same two-state limitation for the same structural reason (a nullable value type only
-///         has two states to begin with); this is a documented, accepted simplification, not an
-///         oversight -- an operator who genuinely needs "no MTU here despite a global one" can
-///         still express it by leaving the global default unset and setting <see cref="LinkMtu" />
-///         explicitly on every interface that does want one.
+///         <b>Limitation.</b> <see langword="null" /> means "inherit", so an override cannot turn
+///         off something the global settings send, such as an MTU option (for
+///         <see cref="RaOptions.LinkMtu" />, <see langword="null" /> also means "send none"). To
+///         send an MTU on some interfaces only, leave the global value unset and set
+///         <see cref="LinkMtu" /> on those interfaces.
 ///     </para>
 /// </summary>
 public sealed class RaInterfaceOverrideOptions
 {
     /// <summary>
-    ///     This property contains the OS-reported name of the network interface this override
-    ///     applies to (for example <c>eth0</c>), matched case-insensitively against
-    ///     <see cref="System.Net.NetworkInformation.NetworkInterface.Name" />. Required -- an entry
-    ///     with a blank name matches nothing.
+    ///     This property contains the name of the interface this override applies to (for example
+    ///     <c>eth0</c>), matched case-insensitively against
+    ///     <see cref="System.Net.NetworkInformation.NetworkInterface.Name" />. An entry with a blank
+    ///     name matches nothing.
     /// </summary>
     public string InterfaceName { get; set; } = string.Empty;
 
     /// <summary>
-    ///     This property, when <see langword="true" />, excludes this interface from Router
-    ///     Advertisement entirely -- no periodic unsolicited advertisement is ever sent on it, and
-    ///     a genuine Router Solicitation received on it is never answered (see
-    ///     <c>Ninlil.Dhcp.Protocol.Ra.Icmpv6RaListener</c> for exactly how this interacts with the
-    ///     one case it cannot honor: a unicast reply to a real, non-unspecified solicitation source
-    ///     address, which that listener can never attribute to a specific arrival interface at all,
-    ///     so it always answers using the global default content regardless of any interface's own
-    ///     <see cref="Exclude" /> flag). Every other field below is ignored once this is
-    ///     <see langword="true" />.
+    ///     This property, when <see langword="true" />, stops Router Advertisements on this
+    ///     interface: no periodic advertisements and no multicast replies to solicitations. A
+    ///     solicitation from a unicast address is still answered with the global content, since
+    ///     <c>Ninlil.Dhcp.Protocol.Ra.Icmpv6RaListener</c> cannot tell which interface it arrived
+    ///     on. The other fields are ignored when this is set.
     /// </summary>
     public bool Exclude { get; set; }
 
@@ -79,21 +64,20 @@ public sealed class RaInterfaceOverrideOptions
 
     /// <summary>
     ///     This property overrides <see cref="RaOptions.LinkMtu" /> for this interface, or inherits
-    ///     it when <see langword="null" /> -- see this class's own doc comment for the one
-    ///     documented limitation this shares with the global field.
+    ///     it when <see langword="null" /> (see the limitation in the class summary).
     /// </summary>
     public uint? LinkMtu { get; set; }
 
     /// <summary>
-    ///     This property overrides <see cref="RaOptions.Prefixes" /> wholesale for this interface
-    ///     when non-<see langword="null" />, or inherits the global list verbatim when
+    ///     This property overrides <see cref="RaOptions.Prefixes" /> for this interface when not
+    ///     <see langword="null" />, even if empty, or inherits the global list when
     ///     <see langword="null" /> (the default).
     /// </summary>
     public List<RaAdvertisedPrefixOptions> Prefixes { get; set; }
 
     /// <summary>
-    ///     This property overrides <see cref="RaOptions.RecursiveDnsServers" /> wholesale for this
-    ///     interface when non-<see langword="null" />, or inherits the global list verbatim when
+    ///     This property overrides <see cref="RaOptions.RecursiveDnsServers" /> for this interface
+    ///     when not <see langword="null" />, even if empty, or inherits the global list when
     ///     <see langword="null" /> (the default).
     /// </summary>
     public List<string> RecursiveDnsServers { get; set; }
@@ -102,8 +86,8 @@ public sealed class RaInterfaceOverrideOptions
     public TimeSpan? RecursiveDnsServerLifetime { get; set; }
 
     /// <summary>
-    ///     This property overrides <see cref="RaOptions.DnsSearchListDomains" /> wholesale for this
-    ///     interface when non-<see langword="null" />, or inherits the global list verbatim when
+    ///     This property overrides <see cref="RaOptions.DnsSearchListDomains" /> for this interface
+    ///     when not <see langword="null" />, even if empty, or inherits the global list when
     ///     <see langword="null" /> (the default).
     /// </summary>
     public List<string> DnsSearchListDomains { get; set; }
@@ -112,8 +96,8 @@ public sealed class RaInterfaceOverrideOptions
     public TimeSpan? DnsSearchListLifetime { get; set; }
 
     /// <summary>
-    ///     This property overrides <see cref="RaOptions.Routes" /> wholesale for this interface
-    ///     when non-<see langword="null" />, or inherits the global list verbatim when
+    ///     This property overrides <see cref="RaOptions.Routes" /> for this interface when not
+    ///     <see langword="null" />, even if empty, or inherits the global list when
     ///     <see langword="null" /> (the default).
     /// </summary>
     public List<RaAdvertisedRouteOptions> Routes { get; set; }

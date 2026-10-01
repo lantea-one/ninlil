@@ -7,14 +7,15 @@ using Ninlil.Dhcp.Protocol.Ra;
 namespace Ninlil.Dhcp.Server.Ra;
 
 /// <summary>
-///     This class implements <see cref="IRaAdvertisementProvider" /> by building a
-///     <see cref="RouterAdvertisementMessage" /> from <see cref="RaOptions" />'s own global
-///     default content, individually resolved per interface against
-///     <see cref="RaOptions.InterfaceOverrides" /> -- the only real decisions this engine ever
-///     makes, since (unlike DHCPv4/DHCPv6) there is no per-client state, lease, or scope
-///     resolution involved in Router Advertisement at all.
+///     This class implements <see cref="IRaAdvertisementProvider" />: it builds a
+///     <see cref="RouterAdvertisementMessage" /> from <see cref="RaOptions" />, with the matching
+///     <see cref="RaOptions.InterfaceOverrides" /> entry applied. Unlike DHCP there is no client
+///     state, lease or scope; the content comes only from configuration, read through
+///     <see cref="IOptionsMonitor{TOptions}" /> on every call so changes apply at the next send.
+///     Entries that do not parse are skipped; other bad values (an IPv4 RDNSS address, a router
+///     lifetime too large for its field) are not checked and make building or encoding throw.
 /// </summary>
-/// <param name="options">This server's own Router Advertisement content configuration.</param>
+/// <param name="options">The Router Advertisement content configuration.</param>
 public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
     : IRaAdvertisementProvider
 {
@@ -24,8 +25,7 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
         RaOptions global = options.CurrentValue;
         RaInterfaceOverrideOptions overrideOptions = ResolveOverride(global, interfaceName);
 
-        // An interface explicitly excluded never advertises anything at all, regardless of every
-        // other field -- checked first, unconditionally, before resolving a single other field.
+        // An excluded interface advertises nothing, whatever the other fields say.
         if (overrideOptions is { Exclude: true })
             return null;
 
@@ -49,10 +49,8 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
             overrideOptions?.DnsSearchListLifetime ?? global.DnsSearchListLifetime;
         IReadOnlyList<RaAdvertisedRouteOptions> routes = overrideOptions?.Routes ?? global.Routes;
 
-        // If every one of these is at its own "say nothing" default, there is genuinely nothing
-        // for this server to advertise on this interface -- the caller sends no message at all in
-        // that case, rather than a real Router Advertisement with every field unset, which would
-        // still misleadingly tell every host on the link "I exist and have an opinion."
+        // With everything at its "say nothing" default, send no advertisement at all; an empty
+        // one would still announce a router to every host on the link.
         bool hasAnythingToAdvertise =
             prefixes.Count > 0
             || routerLifetime > TimeSpan.Zero
@@ -78,9 +76,7 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
 
         foreach (RaAdvertisedPrefixOptions prefix in prefixes)
         {
-            // An operator-supplied prefix string that fails to parse is skipped rather than
-            // crashing this entire engine -- every other configured prefix, and every other part
-            // of the advertisement, still goes out correctly.
+            // Skip a prefix that does not parse so the rest of the advertisement still goes out.
             if (!IPAddress.TryParse(prefix.Prefix, out IPAddress parsedPrefix))
                 continue;
 
@@ -114,10 +110,8 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
 
         if (dnsSearchListDomains.Count > 0)
         {
-            // An operator-supplied domain suffix this option's own encoder cannot represent (an
-            // empty label, an over-length label, or a non-ASCII character) is skipped rather than
-            // crashing this entire engine -- the same "skip what doesn't parse, keep going"
-            // precedent this method's own prefix/RDNSS handling already establishes above.
+            // Skip a domain the encoder cannot represent (an empty or overlong label, a non-ASCII
+            // character), as with prefixes above.
             List<string> validDomainNames =
             [
                 .. dnsSearchListDomains.Where(RaDnsSearchListOption.IsValidDomainName),
@@ -129,10 +123,7 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
 
         foreach (RaAdvertisedRouteOptions route in routes)
         {
-            // An operator-supplied route this option's own encoder cannot represent (an
-            // unparseable prefix, or a prefix length outside 0-128) is skipped rather than
-            // crashing this entire engine -- the same "skip what doesn't parse, keep going"
-            // precedent this method's own prefix/RDNSS/DNSSL handling already establishes above.
+            // Skip a route with a prefix length outside 0-128 or a prefix that does not parse.
             if (route.PrefixLength is < 0 or > 128)
                 continue;
 
@@ -155,9 +146,9 @@ public sealed class RaAdvertisementProvider(IOptionsMonitor<RaOptions> options)
     }
 
     /// <summary>
-    ///     This method finds <paramref name="interfaceName" />'s own configured override, if one
-    ///     exists -- matched case-insensitively, since an interface name's own casing is not a
-    ///     meaningful distinction on any of this project's real target platforms.
+    ///     This method returns the first override whose name matches
+    ///     <paramref name="interfaceName" /> case-insensitively, or <see langword="null" /> (always
+    ///     for a <see langword="null" /> name).
     /// </summary>
     private static RaInterfaceOverrideOptions ResolveOverride(
         RaOptions global,

@@ -5,10 +5,11 @@ namespace Ninlil.Dhcp.Server.Ra;
 
 /// <summary>
 ///     This class binds to the <c>DhcpServer:Ra</c> section of the application's configuration
-///     and controls what a Router Advertisement should actually contain -- the M/O flags, the
-///     link parameters, every advertised prefix, and optional MTU/DNS resolver values.
-///     <see cref="RaProtocolOptions" /> controls this server's own transport/timing behavior
-///     instead; see that class's own doc comment for why the two are kept separate.
+///     and sets what Router Advertisements contain: the M and O flags, link parameters,
+///     prefixes, routes, MTU and DNS options, and per-interface overrides.
+///     <see cref="RaAdvertisementProvider" /> reads it. Transport and timing settings are in
+///     <see cref="RaProtocolOptions" />. On-link and SLAAC prefixes are configured only here, in
+///     the configuration file.
 /// </summary>
 public sealed class RaOptions
 {
@@ -18,124 +19,106 @@ public sealed class RaOptions
     public const string SectionName = "DhcpServer:Ra";
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.2's own "M" (Managed Address Configuration) flag,
-    ///     advertised on every Router Advertisement this server sends -- set this
-    ///     <see langword="true" /> when hosts on this link should obtain their addresses via
-    ///     DHCPv6 stateful address assignment rather than (or alongside) SLAAC.
+    ///     This property is the RFC 4861 Section 4.2 "M" (Managed Address Configuration) flag. Set
+    ///     it when hosts should get addresses from DHCPv6, instead of or as well as SLAAC.
     /// </summary>
     public bool ManagedAddressConfiguration { get; set; }
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.2's own "O" (Other Configuration) flag -- set this
-    ///     <see langword="true" /> when hosts on this link should still use DHCPv6 for other
-    ///     configuration information (most commonly, when this server's own Recursive DNS Server
-    ///     option below is left unset and DHCPv6 is the intended way to learn DNS servers instead),
-    ///     matching dnsmasq's own checklist "ra-stateless" mode -- SLAAC for the address itself,
-    ///     DHCPv6 for everything else.
+    ///     This property is the RFC 4861 Section 4.2 "O" (Other Configuration) flag. Set it when
+    ///     hosts configure their address with SLAAC but should get other configuration, such as
+    ///     DNS servers, from DHCPv6, typically when <see cref="RecursiveDnsServers" /> is empty.
     /// </summary>
     public bool OtherConfiguration { get; set; }
 
     /// <summary>
-    ///     This property contains how long a host may consider this server usable as its own
-    ///     default router -- RFC 4861 Section 6.2.1's own "AdvDefaultLifetime" router
-    ///     configuration variable. <see cref="TimeSpan.Zero" /> (the default) means this server
-    ///     never offers itself as a default router at all, advertising prefixes purely for
-    ///     on-link/SLAAC purposes -- an operator must set this explicitly (matching dnsmasq's own
-    ///     checklist "ra-advrouter" mode) for this server to actually be usable as a gateway.
+    ///     This property contains how long hosts may use this server as a default router (RFC
+    ///     4861 Section 6.2.1 "AdvDefaultLifetime"). The default, <see cref="TimeSpan.Zero" />,
+    ///     means it is not a default router and advertises prefixes only for on-link use and
+    ///     SLAAC; set it for this host to act as the gateway. The wire field holds at most 65535
+    ///     seconds.
     /// </summary>
     public TimeSpan RouterLifetime { get; set; } = TimeSpan.Zero;
 
     /// <summary>
-    ///     This property contains the hop limit value this server recommends hosts on the link use
-    ///     for outgoing unicast packets -- RFC 4861 Section 4.2's own "Cur Hop Limit" field,
-    ///     defaulting to the conventional IPv6 default of 64. <see langword="0" /> means this
-    ///     server makes no recommendation at all.
+    ///     This property contains the hop limit hosts should use for outgoing packets (RFC 4861
+    ///     Section 4.2 "Cur Hop Limit"). The default is the usual 64; <see langword="0" /> means
+    ///     no recommendation.
     /// </summary>
     public byte CurrentHopLimit { get; set; } = 64;
 
     /// <summary>
-    ///     This property contains how long, in milliseconds, an address obtained via Neighbor
-    ///     Discovery is assumed reachable absent contrary evidence -- RFC 4861 Section 4.2's own
-    ///     "Reachable Time" field. <see cref="TimeSpan.Zero" /> (the default) means this server
-    ///     makes no recommendation, letting every host use its own operating system default.
+    ///     This property contains how long a neighbor is assumed reachable after a confirmation
+    ///     (RFC 4861 Section 4.2 "Reachable Time", sent in milliseconds). The default,
+    ///     <see cref="TimeSpan.Zero" />, means no recommendation, so hosts keep their own default.
     /// </summary>
     public TimeSpan ReachableTime { get; set; } = TimeSpan.Zero;
 
     /// <summary>
     ///     This property contains how long a host should wait before retransmitting a Neighbor
-    ///     Solicitation -- RFC 4861 Section 4.2's own "Retrans Timer" field.
-    ///     <see cref="TimeSpan.Zero" /> (the default) means this server makes no recommendation.
+    ///     Solicitation (RFC 4861 Section 4.2 "Retrans Timer"). The default,
+    ///     <see cref="TimeSpan.Zero" />, means no recommendation.
     /// </summary>
     public TimeSpan RetransTimer { get; set; } = TimeSpan.Zero;
 
     /// <summary>
-    ///     This property contains the link's own MTU, advertised via RFC 4861 Section 4.6.4's own
-    ///     MTU option, or <see langword="null" /> (the default) to advertise no MTU option at all
-    ///     -- appropriate whenever every host on the link already agrees on the link's own MTU
-    ///     through some other means (the overwhelmingly common case for an ordinary Ethernet-based
-    ///     homelab link).
+    ///     This property contains the link MTU for the RFC 4861 Section 4.6.4 MTU option, or
+    ///     <see langword="null" /> (the default) to send none, which suits an Ethernet link where
+    ///     all hosts already agree on the MTU.
     /// </summary>
     public uint? LinkMtu { get; set; }
 
     /// <summary>
-    ///     This property contains every on-link prefix this server advertises. Empty by default --
-    ///     an operator must configure at least one prefix here (or set <see cref="RouterLifetime" />
-    ///     to advertise this server purely as a default router with no prefix of its own) for
-    ///     Router Advertisement to have anything real to offer at all.
+    ///     This property contains the prefixes to advertise. It is empty by default; without a
+    ///     prefix, a <see cref="RouterLifetime" /> or another option there is nothing to advertise
+    ///     and no Router Advertisement is sent.
     /// </summary>
     public List<RaAdvertisedPrefixOptions> Prefixes { get; set; } = [];
 
     /// <summary>
-    ///     This property contains the Recursive DNS Server addresses (RFC 8106 Section 5.1) this
-    ///     server advertises to a SLAAC-configured host, which RFC 4862 SLAAC itself carries no DNS
-    ///     configuration of its own to convey. Empty (the default) advertises no Recursive DNS
-    ///     Server option at all -- appropriate when <see cref="OtherConfiguration" /> is set
-    ///     instead, directing hosts to learn DNS servers via DHCPv6.
+    ///     This property contains the DNS resolver addresses for the RFC 8106 Section 5.1 RDNSS
+    ///     option, which gives SLAAC hosts DNS servers (SLAAC itself carries none). Empty (the
+    ///     default) sends no RDNSS option, for example when <see cref="OtherConfiguration" /> sends
+    ///     hosts to DHCPv6 instead. Entries that do not parse are skipped; an IPv4 address makes
+    ///     building the advertisement throw.
     /// </summary>
     public List<string> RecursiveDnsServers { get; set; } = [];
 
     /// <summary>
-    ///     This property contains how long a host should trust <see cref="RecursiveDnsServers" />
-    ///     before re-querying for a fresh Router Advertisement -- RFC 8106 Section 5.1 recommends
-    ///     this be at least twice <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" />,
-    ///     which this default (1800 seconds) already comfortably exceeds against that option's own
-    ///     600-second default.
+    ///     This property contains how long hosts may use <see cref="RecursiveDnsServers" /> after
+    ///     receiving them (the RDNSS Lifetime). The default, 1800 seconds, is three times the
+    ///     default <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" /> of 600 seconds,
+    ///     so the servers do not lapse between advertisements; RFC 8106 recommends a lifetime of
+    ///     that order.
     /// </summary>
     public TimeSpan RecursiveDnsServerLifetime { get; set; } = TimeSpan.FromSeconds(1800);
 
     /// <summary>
-    ///     This property contains the DNS search domain suffixes (RFC 8106 Section 5.2) this
-    ///     server advertises to a SLAAC-configured host via the DNS Search List (DNSSL) option --
-    ///     the unqualified-name search list counterpart to <see cref="RecursiveDnsServers" />.
-    ///     Empty (the default) advertises no DNS Search List option at all, byte-for-byte
-    ///     unchanged from before this option existed.
+    ///     This property contains the search domain suffixes for the RFC 8106 Section 5.2 DNS
+    ///     Search List (DNSSL) option, the companion of <see cref="RecursiveDnsServers" />. Empty
+    ///     (the default) sends no DNSSL option. Names the encoder cannot represent are skipped.
     /// </summary>
     public List<string> DnsSearchListDomains { get; set; } = [];
 
     /// <summary>
-    ///     This property contains how long a host should trust <see cref="DnsSearchListDomains" />
-    ///     before re-querying for a fresh Router Advertisement -- RFC 8106 Section 5.2 recommends
-    ///     the same "at least twice <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" />"
-    ///     guidance as <see cref="RecursiveDnsServerLifetime" />, so this shares that same default.
+    ///     This property contains how long hosts may use <see cref="DnsSearchListDomains" /> after
+    ///     receiving them (the DNSSL Lifetime), with the same default and reasoning as
+    ///     <see cref="RecursiveDnsServerLifetime" />.
     /// </summary>
     public TimeSpan DnsSearchListLifetime { get; set; } = TimeSpan.FromSeconds(1800);
 
     /// <summary>
-    ///     This property contains every specific route this server advertises via RFC 4191
-    ///     Section 2.3's own Route Information option -- distinct from <see cref="Prefixes" />'s
-    ///     own on-link/SLAAC purpose, this steers a host's real routing decisions among several
-    ///     routers/routes sharing the same link. Empty (the default) advertises no Route
-    ///     Information option at all, byte-for-byte unchanged from before this option existed.
+    ///     This property contains the routes to advertise in RFC 4191 Section 2.3 Route
+    ///     Information options. Unlike <see cref="Prefixes" />, which are for on-link use and
+    ///     SLAAC, these guide hosts' choice between routers on the link. Empty (the default) sends
+    ///     none.
     /// </summary>
     public List<RaAdvertisedRouteOptions> Routes { get; set; } = [];
 
     /// <summary>
-    ///     This property contains every network interface's own explicit content override --
-    ///     see <see cref="RaInterfaceOverrideOptions" />'s own doc comment for the full
-    ///     "nullable field inherits this class's own matching global default" shape. Empty (the
-    ///     default) means every usable interface advertises this class's own global content
-    ///     identically, byte-for-byte unchanged from before this option existed -- an operator
-    ///     with a single relevant LAN interface never needs to configure this at all.
+    ///     This property contains per-interface overrides (see <see cref="RaInterfaceOverrideOptions" />;
+    ///     fields left unset inherit the values above). Empty (the default) means every interface
+    ///     advertises the values above, which is all a single-LAN host needs.
     /// </summary>
     public List<RaInterfaceOverrideOptions> InterfaceOverrides { get; set; } = [];
 }

@@ -7,11 +7,11 @@ using Ninlil.Dhcp.Common.Wire.Ra;
 namespace Ninlil.Dhcp.Server.Ra.Tests;
 
 /// <summary>
-///     This test class proves <see cref="RaAdvertisementProvider.BuildCurrentAdvertisement" />
-///     builds a correct <see cref="RouterAdvertisementMessage" /> straight from
-///     <see cref="RaOptions" /> -- the one real decision this engine makes, since there is no
-///     per-client state involved at all (unlike the DHCPv4/DHCPv6 engines' own request-handler
-///     tests, this needs no database, scope, or lease fixture whatsoever).
+///     This test class checks that <see cref="RaAdvertisementProvider.BuildCurrentAdvertisement" />
+///     builds the right <see cref="RouterAdvertisementMessage" /> from <see cref="RaOptions" />:
+///     flags and timers, prefixes, MTU, RDNSS, DNSSL, routes, skipped bad entries, the "nothing to
+///     advertise" case, and per-interface overrides and exclusions. It needs no database, only a
+///     fixed options monitor.
 /// </summary>
 public class RaAdvertisementProviderTests
 {
@@ -194,9 +194,7 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithOnlyDnsSearchListConfigured_StillAdvertises()
     {
-        // The DNS Search List alone -- with no prefix, router lifetime, or anything else set --
-        // must be enough to make this engine actually build and send an advertisement, exactly
-        // like the RDNSS-only and prefix-only cases already proven above.
+        // A DNS Search List alone is enough for an advertisement, like RDNSS or a prefix alone.
         RaAdvertisementProvider provider = NewProvider(
             new RaOptions { DnsSearchListDomains = ["homelab.internal"] }
         );
@@ -332,9 +330,7 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithOnlyARouteConfigured_StillAdvertises()
     {
-        // A route alone -- with no prefix, router lifetime, or anything else set -- must be
-        // enough to make this engine actually build and send an advertisement, exactly like the
-        // RDNSS-only/prefix-only/DNS-Search-List-only cases already proven above.
+        // A route alone is enough for an advertisement, like the cases above.
         RaAdvertisementProvider provider = NewProvider(
             new RaOptions
             {
@@ -354,8 +350,7 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithNoInterfaceOverridesConfigured_IsIdenticalAcrossEveryInterfaceName()
     {
-        // Verification (a): with no interface overrides configured at all, behavior is unchanged
-        // -- every interface (named or not) gets the exact same global content, byte-for-byte.
+        // (a) With no overrides, every interface, named or not, gets the same global content.
         RaOptions options = new()
         {
             RouterLifetime = TimeSpan.FromSeconds(1800),
@@ -384,8 +379,8 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithAMatchingInterfaceOverride_UsesTheOverriddenFieldsForThatInterfaceOnly()
     {
-        // Verification (b): an interface with an override gets its own distinct content, while an
-        // interface with no matching override still falls back to the global default.
+        // (b) An interface with an override gets its own content; one without falls back to the
+        // global values.
         RaOptions options = new()
         {
             RouterLifetime = TimeSpan.FromSeconds(1800),
@@ -409,7 +404,7 @@ public class RaAdvertisementProviderTests
         Assert.NotNull(overridden);
         Assert.Equal(TimeSpan.FromSeconds(300), overridden.RouterLifetime);
         Assert.Equal(10, overridden.CurrentHopLimit);
-        // A field the override never touches still inherits the global default.
+        // A field the override leaves unset inherits the global value.
         Assert.True(overridden.TryGetRecursiveDnsServers(out _, out var overriddenDnsServers));
         Assert.Single(overriddenDnsServers);
 
@@ -443,8 +438,8 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithANonNullOverrideList_ReplacesTheGlobalListWholesaleEvenWhenEmpty()
     {
-        // A non-null (but empty) override list is a deliberate "advertise nothing here" wholesale
-        // replacement, distinct from leaving the field null (which inherits the global list).
+        // An empty (not null) override list replaces the global list with nothing; null would
+        // inherit it.
         RaOptions options = new()
         {
             RecursiveDnsServers = ["2001:db8:1::1"],
@@ -469,8 +464,7 @@ public class RaAdvertisementProviderTests
     [Fact]
     public void BuildCurrentAdvertisement_WithAnExcludedInterface_ReturnsNull()
     {
-        // Verification (c): an interface explicitly excluded gets no advertisement at all, even
-        // though the global default has plenty to advertise.
+        // (c) An excluded interface gets no advertisement, although the global content has plenty.
         RaOptions options = new()
         {
             RouterLifetime = TimeSpan.FromSeconds(1800),
@@ -486,16 +480,15 @@ public class RaAdvertisementProviderTests
         RaAdvertisementProvider provider = NewProvider(options);
 
         Assert.Null(provider.BuildCurrentAdvertisement("eth0"));
-        // A different, non-excluded interface is unaffected.
+        // Another interface is unaffected.
         Assert.NotNull(provider.BuildCurrentAdvertisement("eth1"));
     }
 
     [Fact]
     public void BuildCurrentAdvertisement_WithAnExcludedInterfaceAndNoInterfaceNameGiven_StillAdvertisesTheGlobalDefault()
     {
-        // A caller that does not know which interface a send is for (interfaceName: null) can
-        // never honor a per-interface exclusion, since there is no name to match against -- see
-        // IRaAdvertisementProvider's own doc comment.
+        // With no interface name (null) there is nothing to match, so the exclusion cannot apply
+        // (see IRaAdvertisementProvider).
         RaOptions options = new()
         {
             RouterLifetime = TimeSpan.FromSeconds(1800),
@@ -510,18 +503,14 @@ public class RaAdvertisementProviderTests
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="RaAdvertisementProvider" /> against a fixed,
-    ///     never-changing options snapshot -- this engine has no need to observe a live
-    ///     configuration reload mid-test.
+    ///     This method builds a <see cref="RaAdvertisementProvider" /> on fixed options.
     /// </summary>
     private static RaAdvertisementProvider NewProvider(RaOptions options) =>
         new(new FixedOptionsMonitor(options));
 
     /// <summary>
-    ///     This class is a minimal <see cref="IOptionsMonitor{TOptions}" /> stand-in that always
-    ///     reports the same fixed value -- this project has no dependency on a real
-    ///     dependency-injection host/configuration builder at all, so a hand-rolled fake is
-    ///     simpler than assembling one just to get a real <see cref="IOptionsMonitor{TOptions}" />.
+    ///     This class is an <see cref="IOptionsMonitor{TOptions}" /> fake that always returns the
+    ///     same value, simpler than building a host and configuration for these tests.
     /// </summary>
     private sealed class FixedOptionsMonitor(RaOptions value) : IOptionsMonitor<RaOptions>
     {

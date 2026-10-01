@@ -2,55 +2,50 @@
 namespace Ninlil.Dhcp.Server.Ra;
 
 /// <summary>
-///     This class configures one on-link prefix <see cref="RaOptions" /> advertises via a Router
-///     Advertisement's own Prefix Information option (RFC 4861 Section 4.6.2).
+///     This class configures one prefix in <see cref="RaOptions.Prefixes" /> (or an interface
+///     override), sent as an RFC 4861 Section 4.6.2 Prefix Information option. Prefixes are
+///     configured only in the configuration file.
 /// </summary>
 public sealed class RaAdvertisedPrefixOptions
 {
     /// <summary>
-    ///     This property contains the prefix itself, as a plain IPv6 address (for example
-    ///     <c>2001:db8:1::</c>) -- the trailing bits beyond <see cref="PrefixLength" /> are not
-    ///     validated as zero; an operator-supplied host bit here is simply ignored on the wire.
+    ///     This property contains the prefix as an IPv6 address (for example <c>2001:db8:1::</c>).
+    ///     A value that does not parse skips the prefix. Bits beyond <see cref="PrefixLength" /> are
+    ///     neither checked nor cleared; they are sent as written.
     /// </summary>
     public string Prefix { get; set; }
 
     /// <summary>
-    ///     This property contains the number of leading significant bits of <see cref="Prefix" />
-    ///     -- conventionally <c>64</c> for an ordinary SLAAC-eligible prefix, since RFC 4862
-    ///     Section 5.5.3 requires exactly a 64-bit interface identifier for the "A" (autonomous)
-    ///     flag below to have any effect at all.
+    ///     This property contains the number of significant bits of <see cref="Prefix" />. The
+    ///     default is 64, since SLAAC (RFC 4862 Section 5.5.3) needs the prefix and the interface
+    ///     identifier (64 bits on Ethernet) to add up to 128 for the "A" flag to have effect.
     /// </summary>
     public int PrefixLength { get; set; } = 64;
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.6.2's own "L" (on-link) flag: hosts on this link may
-    ///     treat this prefix as directly reachable without going through a router. Set this
-    ///     <see langword="false" /> for a prefix advertised purely for routing/reachability
-    ///     information (dnsmasq's own checklist calls this an "off-link" prefix) rather than for
-    ///     hosts to actually configure an address from at all.
+    ///     This property is the RFC 4861 Section 4.6.2 "L" (on-link) flag: hosts may reach
+    ///     addresses in the prefix directly, without a router. Clear it for an off-link prefix
+    ///     that hosts only build addresses from. The default is <see langword="true" />.
     /// </summary>
     public bool OnLink { get; set; } = true;
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.6.2's own "A" (autonomous address-configuration)
-    ///     flag: a host on this link may use this prefix for RFC 4862 Stateless Address
-    ///     Autoconfiguration (SLAAC), self-assigning its own address from it with no DHCPv6
-    ///     involvement at all.
+    ///     This property is the RFC 4861 Section 4.6.2 "A" (autonomous address-configuration)
+    ///     flag: hosts may build their own address from the prefix with SLAAC (RFC 4862), without
+    ///     DHCPv6. The default is <see langword="true" />.
     /// </summary>
     public bool Autonomous { get; set; } = true;
 
     /// <summary>
-    ///     This property contains how long an address a host autoconfigures from this prefix
-    ///     remains valid, from the moment each advertisement carrying it is sent -- RFC 4861
-    ///     Section 6.2.1's own "AdvValidLifetime" router configuration variable, defaulting to
-    ///     that section's own stated default value (30 days).
+    ///     This property contains how long after each advertisement the prefix stays valid (RFC
+    ///     4861 Section 6.2.1 "AdvValidLifetime"). The default is the RFC default of 30 days.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; } = TimeSpan.FromDays(30);
 
     /// <summary>
-    ///     This property contains how long an address a host autoconfigures from this prefix
-    ///     remains preferred -- RFC 4861 Section 6.2.1's own "AdvPreferredLifetime" router
-    ///     configuration variable, defaulting to that section's own stated default value (7 days).
+    ///     This property contains how long after each advertisement addresses from the prefix
+    ///     stay preferred (RFC 4861 Section 6.2.1 "AdvPreferredLifetime"). The default is the RFC
+    ///     default of 7 days.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; } = TimeSpan.FromDays(7);
 }

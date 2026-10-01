@@ -9,23 +9,18 @@ using Ninlil.Dhcp.Protocol.Ra;
 namespace Ninlil.Dhcp.Server.Ra.Tests;
 
 /// <summary>
-///     This test proves <see cref="Icmpv6RaListener" /> is a genuinely restartable
-///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c> -- the Router Advertisement analogue
-///     of <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c>/
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6LiveServiceControlTests</c>, with the same real
-///     start -&gt; solicit -&gt; real advertisement -&gt; stop -&gt; confirm-silent -&gt;
-///     start-again -&gt; real advertisement-again cycle.
+///     This test class checks that <see cref="Icmpv6RaListener" /> can be started and stopped
+///     repeatedly, like <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c> and
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6LiveServiceControlTests</c>: start, solicit and
+///     receive an advertisement over IPv6 loopback, stop, confirm silence, start again, and
+///     receive an advertisement again.
 ///     <para>
-///         <b>This transport needs a real raw ICMPv6 socket</b> (<c>CAP_NET_RAW</c> or root), which
-///         a typical unprivileged CI runner does not grant -- see <see cref="Icmpv6RaListener" />'s
-///         own doc comment. <see cref="CanOpenRawIcmpv6Socket" /> is checked once, at the top of
-///         this test, via a real attempted socket creation; when it reports
-///         <see langword="false" />, this test exits early, reported as passed rather than
-///         skipped, mirroring <c>Ninlil.Dns.Protocol.DnsOverQuic.Tests.DnsOverQuicListenerTests</c>'
-///         own established convention for an environment-dependent capability this repository has
-///         no control over. Run with root (or an explicit <c>CAP_NET_RAW</c> grant), this test
-///         performs the same genuine, real-socket round trip every other live-service-control test
-///         in this project does.
+///         <b>It needs a raw ICMPv6 socket</b> (<c>CAP_NET_RAW</c> or root), which CI runners
+///         usually do not grant (see <see cref="Icmpv6RaListener" />). The test first tries to
+///         open one with <see cref="CanOpenRawIcmpv6Socket" /> and, if that fails, returns at once
+///         and is reported as passed rather than skipped, as
+///         <c>Ninlil.Dns.Protocol.DnsOverQuic.Tests.DnsOverQuicListenerTests</c> does for QUIC. Run
+///         with root or <c>CAP_NET_RAW</c>, it performs the full round trip.
 ///     </para>
 /// </summary>
 public sealed class Icmpv6RaListenerLiveServiceControlTests
@@ -45,27 +40,26 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
             NullLogger<Icmpv6RaListener>.Instance
         );
 
-        // First cycle: start, confirm a real solicitation gets a real advertisement reply.
+        // First cycle: start and confirm a solicitation gets an advertisement.
         await listener.StartAsync(CancellationToken.None);
         Assert.True(listener.IsListening);
         Assert.True(await TrySolicitAndReceiveAdvertisementAsync());
 
-        // A second Start call while already running must be a safe no-op.
+        // Starting again while running must do nothing.
         await listener.StartAsync(CancellationToken.None);
         Assert.True(listener.IsListening);
 
-        // Stop: the raw socket must genuinely be released -- a solicitation sent while stopped
-        // must receive no advertisement at all.
+        // After a stop, a solicitation must get no advertisement.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
         Assert.False(await TrySolicitAndReceiveAdvertisementAsync());
 
-        // A second Stop call while already stopped must also be a safe no-op.
+        // Stopping again while stopped must also do nothing.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
 
-        // Second cycle: start again -- this only succeeds if StopAsync genuinely released the raw
-        // socket rather than merely stopping the receive/send loops.
+        // Second cycle, which works only if StopAsync released the socket rather than just
+        // stopping the loops.
         await listener.StartAsync(CancellationToken.None);
 
         try
@@ -80,10 +74,8 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method reports whether the current process can genuinely open a raw ICMPv6 socket
-    ///     right now -- the one real, environment-dependent precondition this whole test depends
-    ///     on, checked via a real attempted socket creation rather than inferred from the
-    ///     operating system or a configuration flag.
+    ///     This method reports whether the process can open a raw ICMPv6 socket, by trying to,
+    ///     rather than guessing from the platform or a setting.
     /// </summary>
     private static bool CanOpenRawIcmpv6Socket()
     {
@@ -103,14 +95,11 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method sends one real, wire-encoded Router Solicitation over the IPv6 loopback
-    ///     address and reports whether a real Router Advertisement reply was received within a
-    ///     short, bounded timeout -- <see langword="true" /> when the listener is genuinely up and
-    ///     answering, <see langword="false" /> when nothing answers at all (the listener is
-    ///     stopped), never throwing on the timeout case. A raw ICMPv6 socket delivers every ICMPv6
-    ///     message on the host -- including, potentially, a loopback echo of this method's own
-    ///     solicitation -- so this keeps receiving until either a genuine advertisement arrives or
-    ///     the timeout elapses, rather than trusting the very first datagram received.
+    ///     This method sends one encoded Router Solicitation over IPv6 loopback and reports
+    ///     whether a Router Advertisement arrived within a short timeout; a timeout returns
+    ///     <see langword="false" /> rather than throwing. A raw ICMPv6 socket receives every ICMPv6
+    ///     message on the host, possibly including its own solicitation, so it keeps reading
+    ///     until an advertisement arrives or time runs out.
     /// </summary>
     private static async Task<bool> TrySolicitAndReceiveAdvertisementAsync()
     {
@@ -148,9 +137,8 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
                 )
                     return true;
 
-                // Something else arrived (most plausibly, a loopback echo of this method's own
-                // outgoing solicitation, or unrelated Neighbor Discovery traffic already on this
-                // host) -- keep waiting within the same bounded timeout window.
+                // Something else arrived (our own solicitation, or other Neighbor Discovery
+                // traffic); keep waiting until the timeout.
             }
         }
         catch (OperationCanceledException)
@@ -160,10 +148,8 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
     }
 
     /// <summary>
-    ///     This class is a minimal <see cref="IOptionsMonitor{TOptions}" /> stand-in that always
-    ///     reports the same fixed value -- this test has no need to observe a live configuration
-    ///     reload mid-run, the same reasoning
-    ///     <c>RaAdvertisementProviderTests.FixedOptionsMonitor</c>'s own doc comment gives.
+    ///     This class is an <see cref="IOptionsMonitor{TOptions}" /> fake that always returns the
+    ///     same value, like <c>RaAdvertisementProviderTests.FixedOptionsMonitor</c>.
     /// </summary>
     private sealed class FixedOptionsMonitor(RaOptions value) : IOptionsMonitor<RaOptions>
     {
