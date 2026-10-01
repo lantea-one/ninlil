@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TwoFactor;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RecoveryCodesResult" />, referenced by
-///     <see cref="Controllers.TwoFactorController.GenerateRecoveryCodes" />.
+///     This class supplies the Swagger example for <see cref="RecoveryCodesResult" />, as returned
+///     by <see cref="Controllers.TwoFactorController.GenerateRecoveryCodes" />.
 /// </summary>
 public class RecoveryCodesResultExample : IExamplesProvider<RecoveryCodesResult>
 {
     /// <summary>
-    ///     This method returns a freshly-generated batch of 10 obviously-fake placeholder codes --
-    ///     a real batch is this project's own reveal-once secret shape (like a TSIG key's shared
-    ///     secret), so a genuine value must never appear in permanent documentation.
+    ///     This method returns a batch of 10 placeholder codes. Real codes are shown only once,
+    ///     like a TSIG secret, so a real-looking batch does not belong in documentation.
     /// </summary>
     public RecoveryCodesResult GetExamples() =>
         new([

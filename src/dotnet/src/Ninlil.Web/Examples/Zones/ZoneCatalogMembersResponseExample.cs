@@ -5,9 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZoneCatalogMembersResponse" />, referenced by
-///     <see cref="Controllers.ZonesController.ListCatalogMembers" />.
+///     This class supplies the Swagger example for <see cref="ZoneCatalogMembersResponse" />, as
+///     returned by <see cref="Controllers.ZonesController.ListCatalogMembers" />: two member zone
+///     names in alphabetical order.
 /// </summary>
 public class ZoneCatalogMembersResponseExample : IExamplesProvider<ZoneCatalogMembersResponse>
 {

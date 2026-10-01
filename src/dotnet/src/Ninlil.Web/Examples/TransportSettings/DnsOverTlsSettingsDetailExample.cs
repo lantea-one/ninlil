@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsOverTlsSettingsDetail" />, referenced by
-///     <see cref="Controllers.TransportSettingsController.GetDnsOverTls" />.
+///     This class supplies the Swagger example for <see cref="DnsOverTlsSettingsDetail" />, as
+///     returned by <see cref="Controllers.TransportSettingsController.GetDnsOverTls" />.
 /// </summary>
 public class DnsOverTlsSettingsDetailExample : IExamplesProvider<DnsOverTlsSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: this transport
-    ///     enabled, this class's own compiled-in default port/timeouts/connection limit, and a
-    ///     self-signed certificate (no operator-provided PFX configured).
+    ///     This method returns DNS-over-TLS enabled with the default port, timeout and connection
+    ///     limit and a self-signed certificate (no PFX path).
     /// </summary>
     public DnsOverTlsSettingsDetail GetExamples() =>
         new(

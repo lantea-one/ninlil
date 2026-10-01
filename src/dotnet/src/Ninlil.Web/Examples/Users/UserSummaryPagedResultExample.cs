@@ -5,16 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="UserSummary" />, referenced by <see cref="Controllers.UsersController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="UserSummary" />, as
+///     returned by <see cref="Controllers.UsersController.List" />.
 /// </summary>
 public class UserSummaryPagedResultExample : IExamplesProvider<PagedResult<UserSummary>>
 {
     /// <summary>
-    ///     This method returns one page of two representative accounts: the bootstrap
-    ///     administrator (holding the wildcard permission this project's own cold-start solution
-    ///     grants it) and an ordinary, single-role operator, in the exact envelope a real list
-    ///     response carries.
+    ///     This method returns the bootstrap administrator, who gets every permission through the
+    ///     <c>Administrators</c> role rather than directly, and an ordinary operator. The real
+    ///     bootstrap account defaults to the user name <c>admin</c> and display name
+    ///     <c>Administrator</c>; the example uses other values.
     /// </summary>
     public PagedResult<UserSummary> GetExamples() =>
         new(

@@ -5,19 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TsigKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="TsigKeyCreateResponse" />, referenced by
-///     <see cref="Controllers.TsigKeysController.Create" />.
+///     This class supplies the Swagger example for <see cref="TsigKeyCreateResponse" />, as
+///     returned by <see cref="Controllers.TsigKeysController.Create" />.
 /// </summary>
 public class TsigKeyCreateResponseExample : IExamplesProvider<TsigKeyCreateResponse>
 {
     /// <summary>
-    ///     This method returns a freshly created key alongside its own plaintext shared secret.
-    ///     <see cref="TsigKeyCreateResponse.Secret" /> is an obviously-fake, base64-looking
-    ///     placeholder value, not a value shaped to look like a real, genuinely-leakable shared
-    ///     secret -- this response is the one and only place a real key's own secret is ever
-    ///     returned, per <see cref="TsigKeyDetail" />'s own doc comment, so a documented example
-    ///     must never look like it could be mistaken for one.
+    ///     This method returns a new key with its plaintext secret. This response is the only place
+    ///     a key's secret is returned, so the secret is a base64 placeholder that decodes to text
+    ///     saying it is not real.
     /// </summary>
     public TsigKeyCreateResponse GetExamples() =>
         new(

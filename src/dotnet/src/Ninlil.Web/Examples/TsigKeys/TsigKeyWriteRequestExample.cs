@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TsigKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="TsigKeyWriteRequest" />, referenced by
-///     <see cref="Controllers.TsigKeysController.Replace" />.
+///     This class supplies the Swagger example for <see cref="TsigKeyWriteRequest" />, the request
+///     body of <see cref="Controllers.TsigKeysController.Replace" />.
 /// </summary>
 public class TsigKeyWriteRequestExample : IExamplesProvider<TsigKeyWriteRequest>
 {
     /// <summary>
-    ///     This method returns a full replacement of a key's own metadata -- the key's own shared
-    ///     secret has no field here at all; see <see cref="TsigKeyWriteRequest" />'s own doc
-    ///     comment for why.
+    ///     This method returns a full replacement of a key's settings. There is no secret field
+    ///     (see <see cref="TsigKeyWriteRequest" />).
     /// </summary>
     public TsigKeyWriteRequest GetExamples() =>
         new(

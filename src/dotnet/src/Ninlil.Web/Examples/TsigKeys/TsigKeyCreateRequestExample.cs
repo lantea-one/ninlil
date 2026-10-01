@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TsigKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="TsigKeyCreateRequest" />, referenced by
-///     <see cref="Controllers.TsigKeysController.Create" />.
+///     This class supplies the Swagger example for <see cref="TsigKeyCreateRequest" />, the request
+///     body of <see cref="Controllers.TsigKeysController.Create" />.
 /// </summary>
 public class TsigKeyCreateRequestExample : IExamplesProvider<TsigKeyCreateRequest>
 {
     /// <summary>
-    ///     This method returns a request that leaves <see cref="TsigKeyCreateRequest.Secret" />
-    ///     unset, letting the server generate a cryptographically random one instead -- the more
-    ///     common case, since there is rarely a reason for an operator to supply their own value.
+    ///     This method returns a request without a secret, so the server generates a random one,
+    ///     the usual case.
     /// </summary>
     public TsigKeyCreateRequest GetExamples() =>
         new(

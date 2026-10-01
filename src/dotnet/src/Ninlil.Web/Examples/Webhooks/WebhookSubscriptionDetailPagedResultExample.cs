@@ -6,19 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Webhooks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="WebhookSubscriptionDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="WebhookSubscriptionDetail" />, as returned by
 ///     <see cref="Controllers.WebhooksController.List" />.
 /// </summary>
 public class WebhookSubscriptionDetailPagedResultExample
     : IExamplesProvider<PagedResult<WebhookSubscriptionDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two subscriptions -- the same active,
-    ///     bearer-authenticated subscription <see cref="WebhookSubscriptionDetailExample" />
-    ///     already shows individually, alongside an unauthenticated, currently disabled one, so a
-    ///     caller reading this example sees both <see cref="WebhookSubscriptionDetail.IsDisabled" />
-    ///     shapes together.
+    ///     This method returns the active subscription from
+    ///     <see cref="WebhookSubscriptionDetailExample" /> and a disabled one without
+    ///     authentication.
     /// </summary>
     public PagedResult<WebhookSubscriptionDetail> GetExamples() =>
         new(

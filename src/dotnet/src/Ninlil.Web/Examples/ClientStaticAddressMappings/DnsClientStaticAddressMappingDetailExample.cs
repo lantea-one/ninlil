@@ -6,8 +6,8 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientStaticAddressMappings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsClientStaticAddressMappingDetail" />, referenced by
+///     This class supplies the Swagger example for
+///     <see cref="DnsClientStaticAddressMappingDetail" />, as returned by
 ///     <see cref="Controllers.DnsClientStaticAddressMappingsController.Get" /> and
 ///     <see cref="Controllers.DnsClientStaticAddressMappingsController.Create" />.
 /// </summary>
@@ -15,10 +15,9 @@ public class DnsClientStaticAddressMappingDetailExample
     : IExamplesProvider<DnsClientStaticAddressMappingDetail>
 {
     /// <summary>
-    ///     This method returns the same static address mapping
-    ///     <see cref="DnsClientStaticAddressMappingWriteRequestExample" /> submits, as this server
-    ///     would report it back -- a single, statically-addressed guest-VLAN host pinned to a MAC
-    ///     address this server's own ARP table can never observe.
+    ///     This method returns the mapping
+    ///     <see cref="DnsClientStaticAddressMappingWriteRequestExample" /> submits, as the server
+    ///     reports it.
     /// </summary>
     public DnsClientStaticAddressMappingDetail GetExamples() =>
         new(

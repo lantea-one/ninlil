@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.TransportSettingsController.PatchDnsOverQuic" />'s own RFC 7396 JSON
-///     Merge Patch request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.TransportSettingsController.PatchDnsOverQuic" />.
 /// </summary>
 public class DnsOverQuicSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns the single most common real-world patch this endpoint exists for:
-    ///     turning this transport on for a fresh install, leaving every other field untouched.
+    ///     This method returns the usual first patch: turn DNS-over-QUIC on, which applies at once,
+    ///     and leave every other field as it is.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

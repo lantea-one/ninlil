@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.TransportSettingsController.PatchPlain" />'s own RFC 7396 JSON Merge
-///     Patch request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.TransportSettingsController.PatchPlain" />.
 /// </summary>
 public class PlainTransportSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a realistic patch: keeping plain DNS on the LAN and loopback
-    ///     addresses only (for example to leave 127.0.0.53 to systemd-resolved), plus an
-    ///     idle-timeout tweak.
+    ///     This method returns a patch that limits plain DNS to a LAN address and the loopback
+    ///     addresses (for example to leave 127.0.0.53 to systemd-resolved) and lengthens the TCP
+    ///     idle timeout. Both need a listener restart.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

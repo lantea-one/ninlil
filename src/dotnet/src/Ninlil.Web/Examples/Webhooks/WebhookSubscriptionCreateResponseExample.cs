@@ -6,23 +6,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Webhooks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="WebhookSubscriptionCreateResponse" />, referenced by
+///     This class supplies the Swagger example for
+///     <see cref="WebhookSubscriptionCreateResponse" />, as returned by
 ///     <see cref="Controllers.WebhooksController.Create" />.
 /// </summary>
 public class WebhookSubscriptionCreateResponseExample
     : IExamplesProvider<WebhookSubscriptionCreateResponse>
 {
     /// <summary>
-    ///     This method returns a freshly created subscription alongside its own plaintext auth
-    ///     credential (echoing what the caller already supplied, per
-    ///     <see cref="WebhookSubscriptionWriteRequest" />'s own doc comment on why that field has
-    ///     no reveal-once problem) and its freshly generated, plaintext HMAC signing secret. Both
-    ///     the bearer token and the HMAC secret are obviously-fake, base64-looking placeholder
-    ///     values, not values shaped to look like a real, genuinely-leakable secret -- this
-    ///     response is the one and only place a real subscription's own HMAC secret is ever
-    ///     returned, per <see cref="WebhookSubscriptionDetail" />'s own doc comment, so a
-    ///     documented example must never look like it could be mistaken for one.
+    ///     This method returns a new subscription with its plaintext bearer token, echoed from the
+    ///     request (see <see cref="WebhookSubscriptionWriteRequest" />), and its generated HMAC
+    ///     signing secret. This response is the only place the signing secret is returned, so both
+    ///     values are placeholders that cannot be mistaken for real secrets.
     /// </summary>
     public WebhookSubscriptionCreateResponse GetExamples() =>
         new(

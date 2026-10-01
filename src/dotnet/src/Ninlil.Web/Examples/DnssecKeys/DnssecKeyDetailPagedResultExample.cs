@@ -6,15 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DnssecKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DnssecKeyDetail" />, referenced by
-///     <see cref="Controllers.DnssecKeysController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DnssecKeyDetail" />, as
+///     returned by <see cref="Controllers.DnssecKeysController.List" />.
 /// </summary>
 public class DnssecKeyDetailPagedResultExample : IExamplesProvider<PagedResult<DnssecKeyDetail>>
 {
     /// <summary>
-    ///     This method returns one page holding a zone's own KSK and ZSK together, the ordinary
-    ///     RFC 6781 pairing a signed zone actually has.
+    ///     This method returns a zone's KSK and ZSK, the usual RFC 6781 pair, both ECDSA here. The
+    ///     ZSK's public key is a 48-byte placeholder, shorter than the 64 bytes a P-256 key has.
     /// </summary>
     public PagedResult<DnssecKeyDetail> GetExamples() =>
         new(

@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TsigKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="TsigKeyDetail" />, referenced by <see cref="Controllers.TsigKeysController.Get" />.
+///     This class supplies the Swagger example for <see cref="TsigKeyDetail" />, as returned by
+///     <see cref="Controllers.TsigKeysController.Get" />.
 /// </summary>
 public class TsigKeyDetailExample : IExamplesProvider<TsigKeyDetail>
 {
     /// <summary>
-    ///     This method returns a key's own metadata with no secret material at all, per
-    ///     <see cref="TsigKeyDetail" />'s own doc comment -- see
-    ///     <see cref="TsigKeyCreateResponseExample" /> for the one response shape that does
-    ///     include one.
+    ///     This method returns a key without its secret; only
+    ///     <see cref="TsigKeyCreateResponseExample" /> shows one.
     /// </summary>
     public TsigKeyDetail GetExamples() =>
         new(

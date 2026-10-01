@@ -5,14 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="UpdateUserRequest" />, referenced by
-///     <see cref="Controllers.UsersController.Update" />.
+///     This class supplies the Swagger example for <see cref="UpdateUserRequest" />, the request
+///     body of <see cref="Controllers.UsersController.Update" />.
 /// </summary>
 public class UpdateUserRequestExample : IExamplesProvider<UpdateUserRequest>
 {
     /// <summary>
-    ///     This method returns a profile update that leaves the account enabled.
+    ///     This method returns a change of e-mail address that keeps the account enabled.
     /// </summary>
     public UpdateUserRequest GetExamples() => new("Jamie Smith", "jamie.smith@example.com", false);
 }

@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ZoneSigningSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZoneSigningSettingsDetail" />, referenced by
-///     <see cref="Controllers.ZoneSigningSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="ZoneSigningSettingsDetail" />, as
+///     returned by <see cref="Controllers.ZoneSigningSettingsController.Get" />.
 /// </summary>
 public class ZoneSigningSettingsDetailExample : IExamplesProvider<ZoneSigningSettingsDetail>
 {
     /// <summary>
-    ///     This method returns this project's own compiled-in defaults (see
-    ///     <see cref="Ninlil.Dns.Server.Authoritative.Dnssec.ZoneSigningOptions" />'s own doc comments), not
-    ///     an arbitrary value.
+    ///     This method returns the defaults of
+    ///     <see cref="Ninlil.Dns.Server.Authoritative.Dnssec.ZoneSigningOptions" />.
     /// </summary>
     public ZoneSigningSettingsDetail GetExamples() =>
         new(

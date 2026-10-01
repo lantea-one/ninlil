@@ -5,15 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a single
-///     <see cref="UserSummary" />, referenced by <see cref="Controllers.UsersController.Get" />
-///     and <see cref="Controllers.UsersController.Create" />.
+///     This class supplies the Swagger example for one <see cref="UserSummary" />, as returned by
+///     <see cref="Controllers.UsersController.Get" /> and
+///     <see cref="Controllers.UsersController.Create" />.
 /// </summary>
 public class UserSummaryExample : IExamplesProvider<UserSummary>
 {
     /// <summary>
-    ///     This method returns an enabled, two-factor-enrolled operator holding one role plus one
-    ///     directly-granted permission that role does not itself include.
+    ///     This method returns an enabled operator with two-factor authentication, one role and one
+    ///     direct permission the role does not grant.
     /// </summary>
     public UserSummary GetExamples() =>
         new(

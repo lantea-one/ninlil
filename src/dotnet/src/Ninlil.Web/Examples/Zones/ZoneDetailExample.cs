@@ -6,15 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZoneDetail" />, referenced by <see cref="Controllers.ZonesController.Get" /> and
+///     This class supplies the Swagger examples for <see cref="ZoneDetail" />, as returned by
+///     <see cref="Controllers.ZonesController.Get" /> and
 ///     <see cref="Controllers.ZonesController.Create" />.
 /// </summary>
 public class ZoneDetailExample : IMultipleExamplesProvider<ZoneDetail>
 {
     /// <summary>
-    ///     This method returns the same two zones <see cref="ZoneWriteRequestExample" /> submits,
-    ///     as this server would report them back, each with its own identifier and timestamps.
+    ///     This method returns the two zones <see cref="ZoneWriteRequestExample" /> submits, as the
+    ///     server reports them. The record examples in <see cref="Records.RecordExampleCatalog" />
+    ///     belong to the first.
     /// </summary>
     public IEnumerable<SwaggerExample<ZoneDetail>> GetExamples() =>
         [

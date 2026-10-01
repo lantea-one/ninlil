@@ -5,9 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZonePtrReconciliationResponse" />, referenced by
-///     <see cref="Controllers.ZonesController.ReconcilePtr" />.
+///     This class supplies the Swagger example for <see cref="ZonePtrReconciliationResponse" />, as
+///     returned by <see cref="Controllers.ZonesController.ReconcilePtr" />: two PTR records added
+///     across two reverse zones, none removed, not skipped.
 /// </summary>
 public class ZonePtrReconciliationResponseExample : IExamplesProvider<ZonePtrReconciliationResponse>
 {

@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.UsersController.PatchMine" />'s own RFC 7396 JSON Merge Patch
-///     request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.UsersController.PatchMine" />.
 /// </summary>
 public class UserProfilePatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that sets both the caller's own display name and phone
-    ///     number. Sending a field with a JSON <c>null</c> value instead -- for example
-    ///     <c>{"phoneNumber": null}</c> -- clears that field back to <see langword="null" />;
-    ///     omitting a field entirely leaves it untouched.
+    ///     This method returns a patch that sets the caller's display name and phone number.
+    ///     Sending a field as JSON <c>null</c>, such as <c>{"phoneNumber": null}</c>, clears it;
+    ///     leaving a field out keeps it.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

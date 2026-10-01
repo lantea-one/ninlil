@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ZoneTransferClientSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.ZoneTransferClientSettingsController.Patch" />'s own RFC 7396 JSON
-///     Merge Patch request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own
-///     doc comment for why this parameter's declared type is the generic
-///     <see cref="JsonElement" />, not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.ZoneTransferClientSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class ZoneTransferClientSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that raises the read timeout.
+    ///     This method returns a patch that raises the read timeout from 10 to 20 seconds.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument.Parse("""{ "readTimeout": "00:00:20" }""").RootElement.Clone();

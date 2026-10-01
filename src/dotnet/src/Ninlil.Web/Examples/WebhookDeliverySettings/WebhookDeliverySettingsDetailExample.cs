@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.WebhookDeliverySettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="WebhookDeliverySettingsDetail" />, referenced by
-///     <see cref="Controllers.WebhookDeliverySettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="WebhookDeliverySettingsDetail" />, as
+///     returned by <see cref="Controllers.WebhookDeliverySettingsController.Get" />.
 /// </summary>
 public class WebhookDeliverySettingsDetailExample : IExamplesProvider<WebhookDeliverySettingsDetail>
 {
     /// <summary>
-    ///     This method returns this project's own compiled-in defaults (see
-    ///     <see cref="Ninlil.Dns.Server.Webhooks.WebhookDeliveryOptions" />), not arbitrary values.
+    ///     This method returns the defaults of
+    ///     <see cref="Ninlil.Dns.Server.Webhooks.WebhookDeliveryOptions" />.
     /// </summary>
     public WebhookDeliverySettingsDetail GetExamples() =>
         new(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(10));

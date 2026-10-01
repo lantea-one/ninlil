@@ -5,17 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TwoFactor;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="TwoFactorCodeRequest" />, referenced by
-///     <see cref="Controllers.TwoFactorController.EnableAuthenticator" /> and
-///     <see cref="Controllers.TwoFactorController.Disable" />, both of which accept this same
-///     request shape.
+///     This class supplies the Swagger example for <see cref="TwoFactorCodeRequest" />, the request
+///     body of <see cref="Controllers.TwoFactorController.EnableAuthenticator" /> and
+///     <see cref="Controllers.TwoFactorController.Disable" />.
 /// </summary>
 public class TwoFactorCodeRequestExample : IExamplesProvider<TwoFactorCodeRequest>
 {
     /// <summary>
-    ///     This method returns a fixed, universally-recognizable six-digit placeholder code, not a
-    ///     value observed from a real authenticator device.
+    ///     This method returns the stock example code <c>123456</c>.
     /// </summary>
     public TwoFactorCodeRequest GetExamples() => new("123456");
 }

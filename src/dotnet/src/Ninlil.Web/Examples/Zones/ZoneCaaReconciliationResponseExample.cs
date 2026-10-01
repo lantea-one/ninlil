@@ -5,9 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZoneCaaReconciliationResponse" />, referenced by
-///     <see cref="Controllers.ZonesController.ReconcileCaa" />.
+///     This class supplies the Swagger example for <see cref="ZoneCaaReconciliationResponse" />, as
+///     returned by <see cref="Controllers.ZonesController.ReconcileCaa" />: one CAA record added,
+///     none removed, not skipped.
 /// </summary>
 public class ZoneCaaReconciliationResponseExample : IExamplesProvider<ZoneCaaReconciliationResponse>
 {

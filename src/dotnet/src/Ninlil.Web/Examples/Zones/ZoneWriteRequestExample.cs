@@ -6,20 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ZoneWriteRequest" />, referenced by <see cref="Controllers.ZonesController.Create" />
-///     and <see cref="Controllers.ZonesController.Replace" />.
+///     This class supplies the Swagger examples for <see cref="ZoneWriteRequest" />, the request
+///     body of <see cref="Controllers.ZonesController.Create" /> and
+///     <see cref="Controllers.ZonesController.Replace" />.
 /// </summary>
 public class ZoneWriteRequestExample : IMultipleExamplesProvider<ZoneWriteRequest>
 {
     /// <summary>
-    ///     This method returns two genuinely different zone shapes -- a signed, self-hosted
-    ///     <see cref="ZoneTypeEnum.Primary" /> zone (whose own DNSSEC/CAA/PTR-automation fields
-    ///     are meaningful) and an unsigned <see cref="ZoneTypeEnum.Secondary" /> zone (whose own
-    ///     <see cref="ZoneWriteRequest.PrimaryServerAddresses" /> is what it actually needs
-    ///     instead) -- so a caller reading this example sees the two most common, and most
-    ///     conditionally different, zone shapes in one place rather than guessing which of this
-    ///     record's 20 fields apply to which zone type.
+    ///     This method returns the two most common zone shapes, which use different fields: a
+    ///     signed <see cref="ZoneTypeEnum.Primary" /> zone with DNSSEC, NOTIFY, CAA and PTR
+    ///     settings, and an unsigned <see cref="ZoneTypeEnum.Secondary" /> zone that needs
+    ///     <see cref="ZoneWriteRequest.PrimaryServerAddresses" /> instead.
     /// </summary>
     public IEnumerable<SwaggerExample<ZoneWriteRequest>> GetExamples() =>
         [

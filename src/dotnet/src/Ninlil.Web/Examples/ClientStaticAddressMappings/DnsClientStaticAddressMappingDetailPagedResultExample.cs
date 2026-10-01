@@ -6,16 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientStaticAddressMappings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DnsClientStaticAddressMappingDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="DnsClientStaticAddressMappingDetail" />, as returned by
 ///     <see cref="Controllers.DnsClientStaticAddressMappingsController.List" />.
 /// </summary>
 public class DnsClientStaticAddressMappingDetailPagedResultExample
     : IExamplesProvider<PagedResult<DnsClientStaticAddressMappingDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same mapping
-    ///     <see cref="DnsClientStaticAddressMappingDetailExample" /> already shows individually.
+    ///     This method returns a one-item page holding the mapping from
+    ///     <see cref="DnsClientStaticAddressMappingDetailExample" />.
     /// </summary>
     public PagedResult<DnsClientStaticAddressMappingDetail> GetExamples() =>
         new(

@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="UserPermissionRequest" />, referenced by
-///     <see cref="Controllers.UsersController.AddPermission" /> and
+///     This class supplies the Swagger example for <see cref="UserPermissionRequest" />, the
+///     request body of <see cref="Controllers.UsersController.AddPermission" /> and
 ///     <see cref="Controllers.UsersController.RemovePermission" />.
 /// </summary>
 public class UserPermissionRequestExample : IExamplesProvider<UserPermissionRequest>
 {
     /// <summary>
-    ///     This method returns a request naming one of this project's own real,
-    ///     already-registered permission strings, exactly matching
-    ///     <see cref="Permissions.PermissionListExample" />'s own catalog.
+    ///     This method returns a request naming a registered permission that appears in
+    ///     <see cref="Permissions.PermissionListExample" />.
     /// </summary>
     public UserPermissionRequest GetExamples() => new("backup:read");
 }

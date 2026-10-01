@@ -5,16 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsCryptSettingsDetail" />, referenced by
-///     <see cref="Controllers.TransportSettingsController.GetDnsCrypt" />.
+///     This class supplies the Swagger example for <see cref="DnsCryptSettingsDetail" />, as
+///     returned by <see cref="Controllers.TransportSettingsController.GetDnsCrypt" />.
 /// </summary>
 public class DnsCryptSettingsDetailExample : IExamplesProvider<DnsCryptSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: this transport
-    ///     enabled, a real provider zone an operator controls, both supported ciphers enabled, and
-    ///     this class's own compiled-in default certificate rotation policy.
+    ///     This method returns DNSCrypt enabled with a provider name, both ciphers and the default
+    ///     port, limits and certificate timing. The provider name already starts with
+    ///     <c>2.dnscrypt-cert.</c>, which <c>DnsCryptCertificateDiscoveryResponder</c> adds again,
+    ///     so with this value the certificates would be published under a doubled prefix.
     /// </summary>
     public DnsCryptSettingsDetail GetExamples() =>
         new(

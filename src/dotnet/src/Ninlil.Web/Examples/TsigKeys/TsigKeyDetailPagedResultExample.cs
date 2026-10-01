@@ -5,15 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TsigKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="TsigKeyDetail" />, referenced by <see cref="Controllers.TsigKeysController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="TsigKeyDetail" />, as
+///     returned by <see cref="Controllers.TsigKeysController.List" />.
 /// </summary>
 public class TsigKeyDetailPagedResultExample : IExamplesProvider<PagedResult<TsigKeyDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two keys -- an active one and a disabled one, so a
-    ///     caller reading this example can see both a key's ordinary shape and its
-    ///     <see cref="TsigKeyDetail.IsDisabled" /> flag actually set.
+    ///     This method returns an active key and a disabled one.
     /// </summary>
     public PagedResult<TsigKeyDetail> GetExamples() =>
         new(

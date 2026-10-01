@@ -5,17 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.TransportSettingsController.PatchDnsCrypt" />'s own RFC 7396 JSON
-///     Merge Patch request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.TransportSettingsController.PatchDnsCrypt" />.
 /// </summary>
 public class DnsCryptSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns the single most common real-world patch this endpoint exists for:
-    ///     turning this transport on for a fresh install, providing the one field this transport
-    ///     also genuinely requires before it will actually start (a blank provider name makes both
-    ///     listeners decline to bind, logging why).
+    ///     This method returns the usual first patch: turn DNSCrypt on and set the provider name,
+    ///     without which both listeners log why and do not bind.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

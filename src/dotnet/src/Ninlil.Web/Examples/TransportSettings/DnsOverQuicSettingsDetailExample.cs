@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsOverQuicSettingsDetail" />, referenced by
-///     <see cref="Controllers.TransportSettingsController.GetDnsOverQuic" />.
+///     This class supplies the Swagger example for <see cref="DnsOverQuicSettingsDetail" />, as
+///     returned by <see cref="Controllers.TransportSettingsController.GetDnsOverQuic" />.
 /// </summary>
 public class DnsOverQuicSettingsDetailExample : IExamplesProvider<DnsOverQuicSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: this transport
-    ///     enabled, this class's own compiled-in default port/timeout/stream limit, and a
-    ///     self-signed certificate (no operator-provided PFX configured).
+    ///     This method returns DNS-over-QUIC enabled with the default port, timeout and stream
+    ///     limit and a self-signed certificate (no PFX path).
     /// </summary>
     public DnsOverQuicSettingsDetail GetExamples() =>
         new(

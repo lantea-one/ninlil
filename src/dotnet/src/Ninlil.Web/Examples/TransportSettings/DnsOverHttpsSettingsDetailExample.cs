@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsOverHttpsSettingsDetail" />, referenced by
-///     <see cref="Controllers.TransportSettingsController.GetDnsOverHttps" />.
+///     This class supplies the Swagger example for <see cref="DnsOverHttpsSettingsDetail" />, as
+///     returned by <see cref="Controllers.TransportSettingsController.GetDnsOverHttps" />.
 /// </summary>
 public class DnsOverHttpsSettingsDetailExample : IExamplesProvider<DnsOverHttpsSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: this transport
-    ///     enabled, at RFC 8484's conventional path, this class's own compiled-in default maximum
-    ///     message size.
+    ///     This method returns DNS-over-HTTPS enabled at the conventional RFC 8484 path
+    ///     <c>/dns-query</c> with the default 65535-byte message limit.
     /// </summary>
     public DnsOverHttpsSettingsDetail GetExamples() =>
         new(Enable: true, Path: "/dns-query", MaxMessageSizeBytes: 65535);

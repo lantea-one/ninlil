@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Users;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="UserProfileDetail" />, referenced by
+///     This class supplies the Swagger example for <see cref="UserProfileDetail" />, as returned by
 ///     <see cref="Controllers.UsersController.GetMine" /> and
 ///     <see cref="Controllers.UsersController.PatchMine" />.
 /// </summary>
 public class UserProfileDetailExample : IExamplesProvider<UserProfileDetail>
 {
     /// <summary>
-    ///     This method returns a caller who has already set both a display name and a phone
-    ///     number, alongside their account's own e-mail address (read-only through this pair of
-    ///     actions).
+    ///     This method returns a caller with a display name and phone number set, and the account's
+    ///     e-mail address, which cannot be changed here.
     /// </summary>
     public UserProfileDetail GetExamples() =>
         new(

@@ -6,17 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Zones;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ZoneDetail" />, referenced by <see cref="Controllers.ZonesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ZoneDetail" />, as returned
+///     by <see cref="Controllers.ZonesController.List" />.
 /// </summary>
 public class ZoneDetailPagedResultExample : IExamplesProvider<PagedResult<ZoneDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two zones -- the same signed
-    ///     <see cref="ZoneTypeEnum.Primary" /> zone and unsigned
-    ///     <see cref="ZoneTypeEnum.Secondary" /> zone <see cref="ZoneDetailExample" /> already
-    ///     shows individually, so a caller reading this example sees both shapes together, in the
-    ///     exact envelope a real list response carries.
+    ///     This method returns a page holding the signed <see cref="ZoneTypeEnum.Primary" /> zone
+    ///     and the unsigned <see cref="ZoneTypeEnum.Secondary" /> zone from
+    ///     <see cref="ZoneDetailExample" />.
     /// </summary>
     public PagedResult<ZoneDetail> GetExamples() =>
         new(

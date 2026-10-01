@@ -7,20 +7,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Webhooks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="WebhookSubscriptionDetail" />, referenced by
-///     <see cref="Controllers.WebhooksController.Get" />.
+///     This class supplies the Swagger example for <see cref="WebhookSubscriptionDetail" />, as
+///     returned by <see cref="Controllers.WebhooksController.Get" />.
 /// </summary>
 public class WebhookSubscriptionDetailExample : IExamplesProvider<WebhookSubscriptionDetail>
 {
     /// <summary>
-    ///     This method returns a subscription subscribed to two of the seven real, currently
-    ///     delivery-eligible event types (see <see cref="DnsServerEventTypeRegistry" />'s own
-    ///     doc comment for the full curated set), with a bearer-token auth mode and HMAC payload
-    ///     signing enabled -- neither the bearer token itself nor the HMAC secret is ever
-    ///     included here, only <see cref="WebhookSubscriptionDetail.HasHmacSigningSecret" />; see
-    ///     <see cref="WebhookSubscriptionCreateResponseExample" /> for the one response shape
-    ///     that reveals either.
+    ///     This method returns a subscription to two event types from
+    ///     <see cref="DnsServerEventTypeRegistry" />, with bearer authentication and HMAC signing.
+    ///     Neither secret is included, only
+    ///     <see cref="WebhookSubscriptionDetail.HasHmacSigningSecret" />;
+    ///     <see cref="WebhookSubscriptionCreateResponseExample" /> is the one response that shows
+    ///     them.
     /// </summary>
     public WebhookSubscriptionDetail GetExamples() =>
         new(

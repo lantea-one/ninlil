@@ -5,13 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.TransportSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="PlainTransportSettingsDetail" />, referenced by
-///     <see cref="Controllers.TransportSettingsController.GetPlain" />.
+///     This class supplies the Swagger example for <see cref="PlainTransportSettingsDetail" />, as
+///     returned by <see cref="Controllers.TransportSettingsController.GetPlain" />.
 /// </summary>
 public class PlainTransportSettingsDetailExample : IExamplesProvider<PlainTransportSettingsDetail>
 {
-    /// <summary>This method returns this class's own compiled-in defaults.</summary>
+    /// <summary>
+    ///     This method returns the defaults: port 53 on every address, a 30-second TCP idle timeout
+    ///     and 512 TCP connections.
+    /// </summary>
     public PlainTransportSettingsDetail GetExamples() =>
         new(
             Port: 53,

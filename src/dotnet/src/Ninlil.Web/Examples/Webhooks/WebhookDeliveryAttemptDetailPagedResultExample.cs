@@ -6,19 +6,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Webhooks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="WebhookDeliveryAttemptDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="WebhookDeliveryAttemptDetail" />, as returned by
 ///     <see cref="Controllers.WebhooksController.ListDeliveryAttempts" />.
 /// </summary>
 public class WebhookDeliveryAttemptDetailPagedResultExample
     : IExamplesProvider<PagedResult<WebhookDeliveryAttemptDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two delivery attempts for the same subscription
-    ///     <see cref="WebhookSubscriptionDetailExample" /> already shows -- a successful delivery
-    ///     on its first attempt, and a still-pending one that has already failed twice and is
-    ///     waiting out its own backoff for a third, so a caller reading this example sees both a
-    ///     terminal and a still-in-flight delivery's own shape together.
+    ///     This method returns two deliveries for the subscription in
+    ///     <see cref="WebhookSubscriptionDetailExample" />: one still pending after two failures
+    ///     (the last a 503), waiting for its next retry, and one that succeeded on its first
+    ///     attempt.
     /// </summary>
     public PagedResult<WebhookDeliveryAttemptDetail> GetExamples() =>
         new(

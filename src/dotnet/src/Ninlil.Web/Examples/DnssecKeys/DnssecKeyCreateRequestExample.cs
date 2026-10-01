@@ -6,18 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DnssecKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnssecKeyCreateRequest" />, referenced by
-///     <see cref="Controllers.DnssecKeysController.Create" />.
+///     This class supplies the Swagger examples for <see cref="DnssecKeyCreateRequest" />, the
+///     request body of <see cref="Controllers.DnssecKeysController.Create" />.
 /// </summary>
 public class DnssecKeyCreateRequestExample : IMultipleExamplesProvider<DnssecKeyCreateRequest>
 {
     /// <summary>
-    ///     This method returns two genuinely different key requests -- a key-signing key using
-    ///     ECDSA (whose own <see cref="DnssecKeyCreateRequest.KeySizeBits" /> is ignored, since it
-    ///     is meaningful only for the RSA algorithm family) and a zone-signing key using RSA
-    ///     (where it is not) -- so a caller reading this example sees both a real value and a real
-    ///     zero for that same field, rather than guessing when it applies.
+    ///     This method returns an ECDSA key-signing key, where
+    ///     <see cref="DnssecKeyCreateRequest.KeySizeBits" /> is 0 because only RSA uses it, and a
+    ///     2048-bit RSA zone-signing key, where it applies.
     /// </summary>
     public IEnumerable<SwaggerExample<DnssecKeyCreateRequest>> GetExamples() =>
         [

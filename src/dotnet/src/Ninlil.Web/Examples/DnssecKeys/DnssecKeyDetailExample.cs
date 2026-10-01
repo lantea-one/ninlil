@@ -6,20 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DnssecKeys;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnssecKeyDetail" />, referenced by
+///     This class supplies the Swagger examples for <see cref="DnssecKeyDetail" />, as returned by
 ///     <see cref="Controllers.DnssecKeysController.Get" /> and
 ///     <see cref="Controllers.DnssecKeysController.Create" />.
 /// </summary>
 public class DnssecKeyDetailExample : IMultipleExamplesProvider<DnssecKeyDetail>
 {
     /// <summary>
-    ///     This method returns the same two keys <see cref="DnssecKeyCreateRequestExample" />
-    ///     requests, as this server would report them back. Neither example carries anything
-    ///     shaped like private key material -- <see cref="DnssecKeyDetail.PublicKeyWireFormat" />
-    ///     is exactly what it says, a <b>public</b> key, and this record has no other field a
-    ///     private key could hide inside at all, per <see cref="DnssecKeyDetail" />'s own doc
-    ///     comment.
+    ///     This method returns the two keys <see cref="DnssecKeyCreateRequestExample" /> requests,
+    ///     as the server reports them. <see cref="DnssecKeyDetail.PublicKeyWireFormat" /> is the
+    ///     public key; the record has no field for private key material. Only the KSK has a DS
+    ///     record.
     /// </summary>
     public IEnumerable<SwaggerExample<DnssecKeyDetail>> GetExamples() =>
         [

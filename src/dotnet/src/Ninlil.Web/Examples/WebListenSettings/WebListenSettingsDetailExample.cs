@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.WebListenSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="WebListenSettingsDetail" />, referenced by
-///     <see cref="Controllers.WebListenSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="WebListenSettingsDetail" />, as
+///     returned by <see cref="Controllers.WebListenSettingsController.Get" />.
 /// </summary>
 public class WebListenSettingsDetailExample : IExamplesProvider<WebListenSettingsDetail>
 {
     /// <summary>
-    ///     This method returns this project's own compiled-in defaults (see
-    ///     <see cref="Options.WebListenOptions" />'s own doc comments), not an arbitrary value.
+    ///     This method returns the defaults of <see cref="Options.WebListenOptions" />: ports 80
+    ///     and 443 on every address with a self-signed certificate.
     /// </summary>
     public WebListenSettingsDetail GetExamples() =>
         new(
