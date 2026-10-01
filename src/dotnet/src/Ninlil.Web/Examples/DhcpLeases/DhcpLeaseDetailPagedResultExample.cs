@@ -6,14 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpLeases;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DhcpLeaseDetail" />, referenced by <see cref="Controllers.DhcpLeasesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DhcpLeaseDetail" />, as
+///     returned by <see cref="Controllers.DhcpLeasesController.List" />.
 /// </summary>
 public class DhcpLeaseDetailPagedResultExample : IExamplesProvider<PagedResult<DhcpLeaseDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same actively-held lease
-    ///     <see cref="DhcpLeaseDetailExample" /> already shows individually.
+    ///     This method returns a one-item page holding the lease from
+    ///     <see cref="DhcpLeaseDetailExample" />.
     /// </summary>
     public PagedResult<DhcpLeaseDetail> GetExamples() =>
         new(

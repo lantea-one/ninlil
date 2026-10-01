@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DnssecPolicySettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnssecPolicySettingsDetail" />, referenced by
-///     <see cref="Controllers.DnssecPolicySettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="DnssecPolicySettingsDetail" />, as
+///     returned by <see cref="Controllers.DnssecPolicySettingsController.Get" />.
 /// </summary>
 public class DnssecPolicySettingsDetailExample : IExamplesProvider<DnssecPolicySettingsDetail>
 {
     /// <summary>
-    ///     This method returns the exact restriction the <c>FIPS</c> preset itself applies (see
-    ///     <see cref="Ninlil.Dns.Server.Presets.DnsServerPresetCatalog.Fips" />), a realistic
-    ///     compliance-driven posture rather than an arbitrary value.
+    ///     This method returns the restriction the FIPS preset applies (see
+    ///     <see cref="Ninlil.Dns.Server.Presets.DnsServerPresetCatalog.Fips" />): RSA/SHA-256 and
+    ///     ECDSA P-256 and P-384.
     /// </summary>
     public DnssecPolicySettingsDetail GetExamples() =>
         new([

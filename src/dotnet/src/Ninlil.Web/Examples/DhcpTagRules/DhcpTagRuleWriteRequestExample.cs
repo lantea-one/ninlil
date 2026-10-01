@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpTagRules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpTagRuleWriteRequest" />, referenced by
-///     <see cref="Controllers.DhcpTagRulesController.Create" /> and
+///     This class supplies the Swagger example for <see cref="DhcpTagRuleWriteRequest" />, the
+///     request body of <see cref="Controllers.DhcpTagRulesController.Create" /> and
 ///     <see cref="Controllers.DhcpTagRulesController.Replace" />.
 /// </summary>
 public class DhcpTagRuleWriteRequestExample : IExamplesProvider<DhcpTagRuleWriteRequest>
 {
     /// <summary>
-    ///     This method returns a rule matching any client whose Vendor Class Identifier starts
-    ///     with <c>"PXEClient"</c>, eligible against any scope.
+    ///     This method returns a rule matching any client, in any scope, whose Vendor Class
+    ///     Identifier starts with <c>"PXEClient"</c>, the prefix PXE firmware sends.
     /// </summary>
     public DhcpTagRuleWriteRequest GetExamples() =>
         new(

@@ -5,13 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpCoreSettingsDetail" />, referenced by
-///     <see cref="Controllers.DhcpSettingsController.GetCore" />.
+///     This class supplies the Swagger example for <see cref="DhcpCoreSettingsDetail" />, as
+///     returned by <see cref="Controllers.DhcpSettingsController.GetCore" />.
 /// </summary>
 public class DhcpCoreSettingsDetailExample : IExamplesProvider<DhcpCoreSettingsDetail>
 {
-    /// <summary>This method returns the compiled-in defaults, with auto-detection left in place.</summary>
+    /// <summary>
+    ///     This method returns the defaults: no fixed server identifier (it is detected at
+    ///     startup), a 30-second offer hold and a 10-minute declined-address quarantine.
+    /// </summary>
     public DhcpCoreSettingsDetail GetExamples() =>
         new(null, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(10));
 }

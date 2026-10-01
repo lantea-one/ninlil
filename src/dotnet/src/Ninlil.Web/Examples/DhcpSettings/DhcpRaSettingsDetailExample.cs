@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpRaSettingsDetail" />, referenced by
-///     <see cref="Controllers.DhcpSettingsController.GetRa" />.
+///     This class supplies the Swagger example for <see cref="DhcpRaSettingsDetail" />, as returned
+///     by <see cref="Controllers.DhcpSettingsController.GetRa" />.
 /// </summary>
 public class DhcpRaSettingsDetailExample : IExamplesProvider<DhcpRaSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a real-router advertisement configuration: a default router with a
-    ///     Recursive DNS Server, a DNS Search List, and a specific advertised route all present
-    ///     alongside it.
+    ///     This method returns a router configuration: a non-zero router lifetime (so hosts use
+    ///     this server as their default router), a Recursive DNS Server, a DNS Search List, one
+    ///     specific route, and an <c>eth1</c> override that only shortens the router lifetime.
     /// </summary>
     public DhcpRaSettingsDetail GetExamples() =>
         new(

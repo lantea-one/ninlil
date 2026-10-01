@@ -6,19 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterLists;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="FilterListDetail" />, referenced by
+///     This class supplies the Swagger examples for <see cref="FilterListDetail" />, as returned by
 ///     <see cref="Controllers.FilterListsController.Get" /> and
 ///     <see cref="Controllers.FilterListsController.Create" />.
 /// </summary>
 public class FilterListDetailExample : IMultipleExamplesProvider<FilterListDetail>
 {
     /// <summary>
-    ///     This method returns the same two lists <see cref="FilterListWriteRequestExample" />
-    ///     submits, as this server would report them back, each with its own identifier and
-    ///     timestamps -- the subscribed list's own <see cref="FilterListDetail.LastFetchedAtUtc" />
-    ///     reflects a real completed refresh, while the local list's stays <see langword="null" />
-    ///     since it is never fetched at all.
+    ///     This method returns the two lists <see cref="FilterListWriteRequestExample" /> submits,
+    ///     as the server reports them. The subscribed list has a
+    ///     <see cref="FilterListDetail.LastFetchedAtUtc" /> from its last refresh; the local list's
+    ///     is <see langword="null" />, since it is never fetched.
     /// </summary>
     public IEnumerable<SwaggerExample<FilterListDetail>> GetExamples() =>
         [

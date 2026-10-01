@@ -7,17 +7,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopes;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpScopeDetail" />, referenced by
+///     This class supplies the Swagger example for <see cref="DhcpScopeDetail" />, as returned by
 ///     <see cref="Controllers.DhcpScopesController.Get" /> and
 ///     <see cref="Controllers.DhcpScopesController.Create" />.
 /// </summary>
 public class DhcpScopeDetailExample : IExamplesProvider<DhcpScopeDetail>
 {
     /// <summary>
-    ///     This method returns the same home-LAN scope
-    ///     <see cref="DhcpScopeWriteRequestExample" /> submits, as this server would report it
-    ///     back, with its own identifier and timestamps.
+    ///     This method returns the "Home LAN" scope from
+    ///     <see cref="DhcpScopeWriteRequestExample" />, as the server reports it, with PXE boot
+    ///     settings (a boot file and next server) added.
     /// </summary>
     public DhcpScopeDetail GetExamples() =>
         new(

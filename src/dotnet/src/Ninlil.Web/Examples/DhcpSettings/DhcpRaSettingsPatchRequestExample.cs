@@ -5,21 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpSettingsController.PatchRa" />'s own RFC 7396 JSON Merge Patch
-///     request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.DhcpSettingsController.PatchRa" />.
 /// </summary>
 public class DhcpRaSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch configuring a DNS Search List and a specific advertised
-    ///     route alongside a Recursive DNS Server -- restart-required, per
-    ///     <see cref="Controllers.DhcpSettingsController" />'s own doc comment. The
-    ///     <c>routes</c>/<c>interfaceOverrides</c> arrays are each a whole-list replace: every
-    ///     route/interface override this server should advertise after this patch applies, not
-    ///     merely the ones being added. This example's own <c>eth1</c> entry advertises a shorter
-    ///     router lifetime on that one interface, leaving every other field (and every other
-    ///     interface) inheriting the global content above unchanged.
+    ///     This method returns a patch that sets a Recursive DNS Server, a DNS Search List and one
+    ///     specific route, and adds an <c>eth1</c> override with a shorter router lifetime; every
+    ///     other field of the override inherits the global value. <c>routes</c> and
+    ///     <c>interfaceOverrides</c> each replace the whole list, so they must hold every entry
+    ///     wanted afterwards. The change needs a restart.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

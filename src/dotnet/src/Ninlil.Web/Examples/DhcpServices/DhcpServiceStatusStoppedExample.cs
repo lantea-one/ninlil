@@ -5,10 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpServices;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpServiceControlController.Stop" /> -- the same TFTP server
-///     <see cref="DhcpServiceStatusExample" /> shows running, now genuinely stopped, while
-///     remaining disabled at boot.
+///     This class supplies the Swagger example for the response of
+///     <see cref="Controllers.DhcpServiceControlController.Stop" />: the TFTP server from
+///     <see cref="DhcpServiceStatusExample" />, now stopped and still disabled at boot.
 /// </summary>
 public class DhcpServiceStatusStoppedExample : IExamplesProvider<DhcpServiceStatus>
 {

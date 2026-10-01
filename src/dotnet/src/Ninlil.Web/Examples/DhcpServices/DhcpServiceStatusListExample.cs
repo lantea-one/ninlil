@@ -5,12 +5,10 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpServices;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpServiceControlController.List" /> -- one representative snapshot
-///     showing every real combination this feature supports: a service both enabled at boot and
-///     genuinely running (DHCPv4), a service disabled at boot but started live anyway (DHCPv6),
-///     a service enabled at boot yet genuinely not running (Router Advertisement, stopped live),
-///     and a service left at this project's own default, off, never-touched state (TFTP).
+///     This class supplies the Swagger example for the response of
+///     <see cref="Controllers.DhcpServiceControlController.List" />, showing each combination of
+///     the two flags: DHCPv4 enabled and running, DHCPv6 disabled at boot but started since, Router
+///     Advertisement enabled but stopped since, and TFTP at its default, off and not running.
 /// </summary>
 public class DhcpServiceStatusListExample : IExamplesProvider<IReadOnlyList<DhcpServiceStatus>>
 {

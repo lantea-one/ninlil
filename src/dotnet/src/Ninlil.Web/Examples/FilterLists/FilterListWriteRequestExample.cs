@@ -6,22 +6,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterLists;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="FilterListWriteRequest" />, referenced by
-///     <see cref="Controllers.FilterListsController.Create" /> and
+///     This class supplies the Swagger examples for <see cref="FilterListWriteRequest" />, the
+///     request body of <see cref="Controllers.FilterListsController.Create" /> and
 ///     <see cref="Controllers.FilterListsController.Replace" />.
 /// </summary>
 public class FilterListWriteRequestExample : IMultipleExamplesProvider<FilterListWriteRequest>
 {
     /// <summary>
-    ///     This method returns two genuinely different list shapes -- a manually-curated
-    ///     <see cref="DnsFilterListSourceEnum.Local" /> list (whose own
-    ///     <see cref="FilterListWriteRequest.SubscriptionUrl" />/
-    ///     <see cref="FilterListWriteRequest.RefreshInterval" /> are meaningless) and a
-    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list (whose own entries are instead
-    ///     periodically replaced wholesale from that URL) -- so a caller reading this example sees
-    ///     both of this field pair's conditional shapes in one place, rather than guessing which
-    ///     applies.
+    ///     This method returns a <see cref="DnsFilterListSourceEnum.Local" /> list, where
+    ///     <see cref="FilterListWriteRequest.SubscriptionUrl" /> and
+    ///     <see cref="FilterListWriteRequest.RefreshInterval" /> do not apply, and a
+    ///     <see cref="DnsFilterListSourceEnum.Subscribed" /> list, whose entries are replaced from
+    ///     that URL on each refresh.
     /// </summary>
     public IEnumerable<SwaggerExample<FilterListWriteRequest>> GetExamples() =>
         [

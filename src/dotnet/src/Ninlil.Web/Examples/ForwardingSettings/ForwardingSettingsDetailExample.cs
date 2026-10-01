@@ -6,16 +6,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ForwardingSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ForwardingSettingsDetail" />, referenced by
-///     <see cref="Controllers.ForwardingSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="ForwardingSettingsDetail" />, as
+///     returned by <see cref="Controllers.ForwardingSettingsController.Get" />.
 /// </summary>
 public class ForwardingSettingsDetailExample : IExamplesProvider<ForwardingSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: forwarding on,
-    ///     the health-checked round-robin failover strategy (this class's own default), and this
-    ///     class's own compiled-in default timeouts and cache settings.
+    ///     This method returns forwarding turned on; every other field is the default.
     /// </summary>
     public ForwardingSettingsDetail GetExamples() =>
         new(

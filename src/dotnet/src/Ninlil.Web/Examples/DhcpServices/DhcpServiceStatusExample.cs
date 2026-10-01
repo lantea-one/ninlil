@@ -5,9 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpServices;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpServiceControlController.Start" /> -- the TFTP server, genuinely
-///     running after a successful start, regardless of its own configured <c>Enable</c> flag.
+///     This class supplies the Swagger example for the response of
+///     <see cref="Controllers.DhcpServiceControlController.Start" />: the TFTP server running after
+///     a start, although its configured <c>Enable</c> flag is off.
 /// </summary>
 public class DhcpServiceStatusExample : IExamplesProvider<DhcpServiceStatus>
 {

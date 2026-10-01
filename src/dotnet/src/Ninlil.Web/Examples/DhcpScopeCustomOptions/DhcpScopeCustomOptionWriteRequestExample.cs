@@ -5,8 +5,8 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopeCustomOptions;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpScopeCustomOptionWriteRequest" />, referenced by
+///     This class supplies the Swagger example for
+///     <see cref="DhcpScopeCustomOptionWriteRequest" />, the request body of
 ///     <see cref="Controllers.DhcpScopeCustomOptionsController.Create" /> and
 ///     <see cref="Controllers.DhcpScopeCustomOptionsController.Replace" />.
 /// </summary>
@@ -14,8 +14,9 @@ public class DhcpScopeCustomOptionWriteRequestExample
     : IExamplesProvider<DhcpScopeCustomOptionWriteRequest>
 {
     /// <summary>
-    ///     This method returns a custom TFTP Server Name option (tag 66) pointing PXE clients at a
-    ///     boot server.
+    ///     This method returns a TFTP Server Name option (tag 66) pointing PXE clients at a boot
+    ///     server. Option 66 is a text field, so the value is the ASCII text <c>192.168.1.10</c> in
+    ///     uppercase hex.
     /// </summary>
     public DhcpScopeCustomOptionWriteRequest GetExamples() =>
         new(

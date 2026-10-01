@@ -5,14 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DnsCache;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
+///     This class supplies the Swagger example for the response of
 ///     <see cref="Controllers.DnsCacheController.List" />.
 /// </summary>
 public class DnsCacheDetailListExample : IExamplesProvider<IReadOnlyList<DnsCacheDetail>>
 {
     /// <summary>
     ///     This method returns a home setup that forwards to a public resolver: a busy forwarded
-    ///     cache, and a recursive cache holding little beyond the root priming data.
+    ///     cache and a recursive cache holding little beyond root priming data. The size limits are
+    ///     the defaults.
     /// </summary>
     public IReadOnlyList<DnsCacheDetail> GetExamples() =>
         [

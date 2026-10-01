@@ -6,16 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpTagRuleOptions;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DhcpTagRuleOptionDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="DhcpTagRuleOptionDetail" />, as returned by
 ///     <see cref="Controllers.DhcpTagRuleOptionsController.List" />.
 /// </summary>
 public class DhcpTagRuleOptionDetailPagedResultExample
     : IExamplesProvider<PagedResult<DhcpTagRuleOptionDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same Bootfile Name option
-    ///     <see cref="DhcpTagRuleOptionDetailExample" /> already shows individually.
+    ///     This method returns a one-item page holding the option from
+    ///     <see cref="DhcpTagRuleOptionDetailExample" />.
     /// </summary>
     public PagedResult<DhcpTagRuleOptionDetail> GetExamples() =>
         new(

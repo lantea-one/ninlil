@@ -6,16 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Forwarders;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ForwarderDetail" />, referenced by <see cref="Controllers.ForwardersController.Get" />
-///     and <see cref="Controllers.ForwardersController.Create" />.
+///     This class supplies the Swagger examples for <see cref="ForwarderDetail" />, as returned by
+///     <see cref="Controllers.ForwardersController.Get" /> and
+///     <see cref="Controllers.ForwardersController.Create" />.
 /// </summary>
 public class ForwarderDetailExample : IMultipleExamplesProvider<ForwarderDetail>
 {
     /// <summary>
-    ///     This method returns the same three forwarders <see cref="ForwarderWriteRequestExample" />
-    ///     submits, as this server would report them back, each with its own identifier,
-    ///     timestamps, and <see cref="ForwarderDetail.Protocol" /> computed fresh from its own
+    ///     This method returns the three forwarders <see cref="ForwarderWriteRequestExample" />
+    ///     submits, as the server reports them, each with the
+    ///     <see cref="ForwarderDetail.Protocol" /> parsed from its
     ///     <see cref="ForwarderDetail.DefinitionString" />.
     /// </summary>
     public IEnumerable<SwaggerExample<ForwarderDetail>> GetExamples() =>

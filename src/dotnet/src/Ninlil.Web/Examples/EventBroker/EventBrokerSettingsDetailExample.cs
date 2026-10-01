@@ -6,18 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.EventBroker;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="EventBrokerSettingsDetail" />, referenced by
-///     <see cref="Controllers.EventBrokerSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="EventBrokerSettingsDetail" />, as
+///     returned by <see cref="Controllers.EventBrokerSettingsController.Get" />.
 /// </summary>
 public class EventBrokerSettingsDetailExample : IExamplesProvider<EventBrokerSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a host currently running with RabbitMQ selected and connected --
-    ///     showing <see cref="EventBrokerSettingsDetail.RabbitMq" /> fully populated (minus its
-    ///     own <c>Password</c>, per <see cref="RabbitMqBrokerSettingsDetail" />'s own doc comment)
-    ///     while <see cref="EventBrokerSettingsDetail.ActiveMq" /> stays <see langword="null" />,
-    ///     the real shape this endpoint returns for whichever transport is not currently active.
+    ///     This method returns a server running on RabbitMQ and connected.
+    ///     <see cref="EventBrokerSettingsDetail.RabbitMq" /> is filled in without its password (see
+    ///     <see cref="RabbitMqBrokerSettingsDetail" />) and
+    ///     <see cref="EventBrokerSettingsDetail.ActiveMq" /> is <see langword="null" />, as it is
+    ///     for the inactive transport.
     /// </summary>
     public EventBrokerSettingsDetail GetExamples() =>
         new(

@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpSettingsController.PatchTftp" />'s own RFC 7396 JSON Merge
-///     Patch request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.DhcpSettingsController.PatchTftp" />.
 /// </summary>
 public class DhcpTftpSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch enabling the TFTP server against a real root directory --
-    ///     restart-required, per <see cref="Controllers.DhcpSettingsController" />'s own doc
-    ///     comment.
+    ///     This method returns a patch that turns the TFTP server on with a root directory, without
+    ///     which it does not start. The change needs a restart (see
+    ///     <see cref="Controllers.DhcpSettingsController" />).
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

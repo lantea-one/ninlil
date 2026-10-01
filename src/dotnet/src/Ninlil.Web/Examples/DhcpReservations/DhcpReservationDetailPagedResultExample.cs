@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpReservations;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DhcpReservationDetail" />, referenced by
-///     <see cref="Controllers.DhcpReservationsController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DhcpReservationDetail" />,
+///     as returned by <see cref="Controllers.DhcpReservationsController.List" />.
 /// </summary>
 public class DhcpReservationDetailPagedResultExample
     : IExamplesProvider<PagedResult<DhcpReservationDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same printer reservation
-    ///     <see cref="DhcpReservationDetailExample" /> already shows individually.
+    ///     This method returns a one-item page holding the reservation from
+    ///     <see cref="DhcpReservationDetailExample" />.
     /// </summary>
     public PagedResult<DhcpReservationDetail> GetExamples() =>
         new(

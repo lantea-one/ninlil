@@ -6,13 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpLeases;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpLeaseDetail" />, referenced by <see cref="Controllers.DhcpLeasesController.Get" />.
+///     This class supplies the Swagger example for <see cref="DhcpLeaseDetail" />, as returned by
+///     <see cref="Controllers.DhcpLeasesController.Get" />.
 /// </summary>
 public class DhcpLeaseDetailExample : IExamplesProvider<DhcpLeaseDetail>
 {
     /// <summary>
-    ///     This method returns an actively-held lease in the "Home LAN" scope.
+    ///     This method returns an active IPv4 lease in the "Home LAN" scope; <c>PrefixLength</c> is
+    ///     <see langword="null" /> because it is an address lease.
     /// </summary>
     public DhcpLeaseDetail GetExamples() =>
         new(

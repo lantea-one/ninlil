@@ -7,15 +7,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopes;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DhcpScopeDetail" />, referenced by <see cref="Controllers.DhcpScopesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DhcpScopeDetail" />, as
+///     returned by <see cref="Controllers.DhcpScopesController.List" />.
 /// </summary>
 public class DhcpScopeDetailPagedResultExample : IExamplesProvider<PagedResult<DhcpScopeDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same home-LAN scope
-    ///     <see cref="DhcpScopeDetailExample" /> already shows individually, in the exact envelope
-    ///     a real list response carries.
+    ///     This method returns a one-item page holding the "Home LAN" scope without PXE boot
+    ///     settings.
     /// </summary>
     public PagedResult<DhcpScopeDetail> GetExamples() =>
         new(

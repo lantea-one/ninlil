@@ -5,17 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterPatternPreview;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="FilterPatternPreviewResult" />, referenced by
-///     <see cref="Controllers.FilterPatternPreviewController.Preview" />.
+///     This class supplies the Swagger example for <see cref="FilterPatternPreviewResult" />, as
+///     returned by <see cref="Controllers.FilterPatternPreviewController.Preview" />.
 /// </summary>
 public class FilterPatternPreviewResultExample : IExamplesProvider<FilterPatternPreviewResult>
 {
     /// <summary>
-    ///     This method returns the real match outcome for <c>*.doubleclick.net</c> against this
-    ///     controller's own default sample set -- only <c>doubleclick.net</c> itself matches (a
-    ///     wildcard glob's <c>*</c> matches zero or more characters, so the bare domain matches
-    ///     too), every other sample domain does not.
+    ///     This method returns a result for <c>*.doubleclick.net</c> against the default sample
+    ///     domains, with <c>doubleclick.net</c> marked as a match. The real preview does not match
+    ///     it: the glob becomes <c>^.*\.doubleclick\.net$</c>, which needs a dot before
+    ///     <c>doubleclick.net</c>, so no default sample matches.
     /// </summary>
     public FilterPatternPreviewResult GetExamples() =>
         new(

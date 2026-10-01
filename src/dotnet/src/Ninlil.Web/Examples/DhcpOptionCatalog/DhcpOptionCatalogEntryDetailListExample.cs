@@ -6,11 +6,10 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpOptionCatalog;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpOptionCatalogController.List" /> -- a representative slice of the
-///     DHCPv4 catalog showing several different <see cref="DhcpOptionValueTypeEnum" /> shapes side
-///     by side, including one <see cref="DhcpOptionCatalogEntryDetail.IsServerAddressEligible" />
-///     entry.
+///     This class supplies the Swagger example for the response of
+///     <see cref="Controllers.DhcpOptionCatalogController.List" />: four entries copied from the
+///     DHCPv4 catalog, each a different <see cref="DhcpOptionValueTypeEnum" />, one of them (Domain
+///     Name Server) <see cref="DhcpOptionCatalogEntryDetail.IsServerAddressEligible" />.
 /// </summary>
 public class DhcpOptionCatalogEntryDetailListExample
     : IExamplesProvider<IReadOnlyList<DhcpOptionCatalogEntryDetail>>

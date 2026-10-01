@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopes;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpScopeWriteRequest" />, referenced by
-///     <see cref="Controllers.DhcpScopesController.Create" /> and
+///     This class supplies the Swagger example for <see cref="DhcpScopeWriteRequest" />, the
+///     request body of <see cref="Controllers.DhcpScopesController.Create" /> and
 ///     <see cref="Controllers.DhcpScopesController.Replace" />.
 /// </summary>
 public class DhcpScopeWriteRequestExample : IExamplesProvider<DhcpScopeWriteRequest>
 {
     /// <summary>
-    ///     This method returns an ordinary home-LAN IPv4 scope handing out a day-long lease by
-    ///     default, up to a week at most, advertising a router and a DNS server.
+    ///     This method returns an ordinary home IPv4 scope: leases of a day by default and a week
+    ///     at most, with one router and one DNS server.
     /// </summary>
     public DhcpScopeWriteRequest GetExamples() =>
         new(

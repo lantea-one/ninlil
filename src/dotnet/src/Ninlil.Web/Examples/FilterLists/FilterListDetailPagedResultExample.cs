@@ -6,17 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterLists;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="FilterListDetail" />, referenced by
-///     <see cref="Controllers.FilterListsController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="FilterListDetail" />, as
+///     returned by <see cref="Controllers.FilterListsController.List" />.
 /// </summary>
 public class FilterListDetailPagedResultExample : IExamplesProvider<PagedResult<FilterListDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two lists -- the same local allowlist and subscribed
-    ///     blocklist <see cref="FilterListDetailExample" /> already shows individually, so a
-    ///     caller reading this example sees both shapes together, in the exact envelope a real
-    ///     list response carries.
+    ///     This method returns a page holding the local allowlist and the subscribed blocklist from
+    ///     <see cref="FilterListDetailExample" />.
     /// </summary>
     public PagedResult<FilterListDetail> GetExamples() =>
         new(

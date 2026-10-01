@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpReservations;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpReservationDetail" />, referenced by
-///     <see cref="Controllers.DhcpReservationsController.Get" /> and
+///     This class supplies the Swagger example for <see cref="DhcpReservationDetail" />, as
+///     returned by <see cref="Controllers.DhcpReservationsController.Get" /> and
 ///     <see cref="Controllers.DhcpReservationsController.Create" />.
 /// </summary>
 public class DhcpReservationDetailExample : IExamplesProvider<DhcpReservationDetail>
 {
     /// <summary>
-    ///     This method returns the same printer reservation
-    ///     <see cref="DhcpReservationWriteRequestExample" /> submits, as this server would report
-    ///     it back.
+    ///     This method returns the printer reservation
+    ///     <see cref="DhcpReservationWriteRequestExample" /> submits, as the server reports it.
     /// </summary>
     public DhcpReservationDetail GetExamples() =>
         new(

@@ -6,17 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopeCustomOptions;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpScopeCustomOptionDetail" />, referenced by
-///     <see cref="Controllers.DhcpScopeCustomOptionsController.Get" /> and
+///     This class supplies the Swagger example for <see cref="DhcpScopeCustomOptionDetail" />, as
+///     returned by <see cref="Controllers.DhcpScopeCustomOptionsController.Get" /> and
 ///     <see cref="Controllers.DhcpScopeCustomOptionsController.Create" />.
 /// </summary>
 public class DhcpScopeCustomOptionDetailExample : IExamplesProvider<DhcpScopeCustomOptionDetail>
 {
     /// <summary>
-    ///     This method returns the same TFTP Server Name option
-    ///     <see cref="DhcpScopeCustomOptionWriteRequestExample" /> submits, as this server would
-    ///     report it back.
+    ///     This method returns the TFTP Server Name option
+    ///     <see cref="DhcpScopeCustomOptionWriteRequestExample" /> submits, as the server reports
+    ///     it.
     /// </summary>
     public DhcpScopeCustomOptionDetail GetExamples() =>
         new(

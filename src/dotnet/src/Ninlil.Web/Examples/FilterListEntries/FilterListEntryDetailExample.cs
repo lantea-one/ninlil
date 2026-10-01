@@ -6,18 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterListEntries;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="FilterListEntryDetail" />, referenced by
-///     <see cref="Controllers.FilterListEntriesController.Get" /> and
+///     This class supplies the Swagger examples for <see cref="FilterListEntryDetail" />, as
+///     returned by <see cref="Controllers.FilterListEntriesController.Get" /> and
 ///     <see cref="Controllers.FilterListEntriesController.Create" />.
 /// </summary>
 public class FilterListEntryDetailExample : IMultipleExamplesProvider<FilterListEntryDetail>
 {
     /// <summary>
-    ///     This method returns the same three entries
-    ///     <see cref="FilterListEntryWriteRequestExample" /> submits, as this server would report
-    ///     them back, each belonging to the local allowlist
-    ///     <see cref="FilterLists.FilterListDetailExample" /> shows.
+    ///     This method returns the three entries <see cref="FilterListEntryWriteRequestExample" />
+    ///     submits, as the server reports them, plus an <c>IsException</c> entry of the kind only a
+    ///     subscribed list's refresh creates. All four carry the identifier of the "Internal
+    ///     Allowlist" from <see cref="FilterLists.FilterListDetailExample" />.
     /// </summary>
     public IEnumerable<SwaggerExample<FilterListEntryDetail>> GetExamples() =>
         [

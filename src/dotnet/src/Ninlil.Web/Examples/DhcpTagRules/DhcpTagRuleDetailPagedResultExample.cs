@@ -6,15 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpTagRules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DhcpTagRuleDetail" />, referenced by
-///     <see cref="Controllers.DhcpTagRulesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DhcpTagRuleDetail" />, as
+///     returned by <see cref="Controllers.DhcpTagRulesController.List" />.
 /// </summary>
 public class DhcpTagRuleDetailPagedResultExample : IExamplesProvider<PagedResult<DhcpTagRuleDetail>>
 {
     /// <summary>
-    ///     This method returns one page containing the same PXE boot rule
-    ///     <see cref="DhcpTagRuleDetailExample" /> already shows individually.
+    ///     This method returns a one-item page holding the rule from
+    ///     <see cref="DhcpTagRuleDetailExample" />.
     /// </summary>
     public PagedResult<DhcpTagRuleDetail> GetExamples() =>
         new(

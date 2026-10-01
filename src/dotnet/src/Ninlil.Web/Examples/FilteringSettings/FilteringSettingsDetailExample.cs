@@ -6,16 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilteringSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="FilteringSettingsDetail" />, referenced by
-///     <see cref="Controllers.FilteringSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="FilteringSettingsDetail" />, as
+///     returned by <see cref="Controllers.FilteringSettingsController.Get" />.
 /// </summary>
 public class FilteringSettingsDetailExample : IExamplesProvider<FilteringSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: filtering on,
-    ///     the classic Pi-hole-style NXDOMAIN block response, and this class's own compiled-in
-    ///     default sinkhole addresses, precedence and CNAME-cloaking protection.
+    ///     This method returns filtering turned on with NXDOMAIN block responses; the other fields
+    ///     are the defaults.
     /// </summary>
     public FilteringSettingsDetail GetExamples() =>
         new(

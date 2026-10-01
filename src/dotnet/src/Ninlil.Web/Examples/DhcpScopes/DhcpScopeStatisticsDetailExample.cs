@@ -7,15 +7,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpScopes;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpScopeStatisticsDetail" />, referenced by
-///     <see cref="Controllers.DhcpScopesController.Statistics" />.
+///     This class supplies the Swagger example for <see cref="DhcpScopeStatisticsDetail" />, as
+///     returned by <see cref="Controllers.DhcpScopesController.Statistics" />.
 /// </summary>
 public class DhcpScopeStatisticsDetailExample : IExamplesProvider<DhcpScopeStatisticsDetail>
 {
     /// <summary>
-    ///     This method returns the same home-LAN scope <see cref="DhcpScopeDetailExample" /> uses,
-    ///     a /24 pool (101 addresses) with a handful of leases/reservations already drawn from it.
+    ///     This method returns the "Home LAN" scope from <see cref="DhcpScopeDetailExample" />: its
+    ///     100 to 200 range holds 101 addresses, of which 12 are leased, 1 offered and 3 reserved.
     /// </summary>
     public DhcpScopeStatisticsDetail GetExamples() =>
         new(
@@ -27,9 +26,9 @@ public class DhcpScopeStatisticsDetailExample : IExamplesProvider<DhcpScopeStati
             12,
             1,
             3,
-            // Not fully additive (12 + 1 + 3 != 101 - 85) since a reserved address that is also
-            // currently leased is only ever counted once against the total -- see
-            // DhcpScopeStatisticsDetail's own doc comment.
+            // Here 12 + 1 + 3 = 101 - 85. A reserved address that is also leased is counted once
+            // against the total, so in general the three counts can add up to more than the
+            // occupied slots (see DhcpScopeStatisticsDetail).
             "85"
         );
 }

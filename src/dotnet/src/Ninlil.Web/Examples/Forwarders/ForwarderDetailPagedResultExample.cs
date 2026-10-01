@@ -6,18 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Forwarders;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ForwarderDetail" />, referenced by <see cref="Controllers.ForwardersController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ForwarderDetail" />, as
+///     returned by <see cref="Controllers.ForwardersController.List" />.
 /// </summary>
 public class ForwarderDetailPagedResultExample : IExamplesProvider<PagedResult<ForwarderDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the same three forwarders
-    ///     <see cref="ForwarderDetailExample" /> already shows individually -- ordered by their
-    ///     own <see cref="ForwarderDetail.SortOrder" />, the same order
-    ///     <see cref="Controllers.ForwardersController.List" /> itself sorts by -- so a caller
-    ///     reading this example sees every supported transport together, in the exact envelope a
-    ///     real list response carries.
+    ///     This method returns a page holding the three forwarders from
+    ///     <see cref="ForwarderDetailExample" />, in <see cref="ForwarderDetail.SortOrder" />
+    ///     order, as the list endpoint returns them.
     /// </summary>
     public PagedResult<ForwarderDetail> GetExamples() =>
         new(

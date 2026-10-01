@@ -5,12 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpRelaySettingsDetail" />, referenced by
-///     <see cref="Controllers.DhcpSettingsController.GetRelay" />.
+///     This class supplies the Swagger example for <see cref="DhcpRelaySettingsDetail" />, as
+///     returned by <see cref="Controllers.DhcpSettingsController.GetRelay" />.
 /// </summary>
 public class DhcpRelaySettingsDetailExample : IExamplesProvider<DhcpRelaySettingsDetail>
 {
-    /// <summary>This method returns the relay agent disabled, its compiled-in defaults otherwise.</summary>
+    /// <summary>
+    ///     This method returns the defaults: the DHCPv4 relay agent off, no upstream servers, port
+    ///     67.
+    /// </summary>
     public DhcpRelaySettingsDetail GetExamples() => new(false, [], 67, null, null, null);
 }

@@ -5,21 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Forwarders;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ForwarderWriteRequest" />, referenced by
-///     <see cref="Controllers.ForwardersController.Create" /> and
+///     This class supplies the Swagger examples for <see cref="ForwarderWriteRequest" />, the
+///     request body of <see cref="Controllers.ForwardersController.Create" /> and
 ///     <see cref="Controllers.ForwardersController.Replace" />.
 /// </summary>
 public class ForwarderWriteRequestExample : IMultipleExamplesProvider<ForwarderWriteRequest>
 {
     /// <summary>
-    ///     This method returns three genuinely different definition-string shapes -- a bare
-    ///     address (plain UDP/TCP), a <c>tls://</c> URL (DNS-over-TLS), and an <c>https://</c> URL
-    ///     (DNS-over-HTTPS) -- all pointed at Cloudflare's real, publicly-documented resolver
-    ///     endpoints, the same real-world addresses this project's own
-    ///     <c>Server.Forwarding.ClientProtocols</c> test suite already uses, rather than an
-    ///     invented-looking placeholder. <c>ForwarderWriteRequest.DefinitionString</c>'s own doc
-    ///     comment lists the two remaining supported forms (<c>quic://</c>, <c>sdns://</c>).
+    ///     This method returns three definition forms, a bare address (plain UDP and TCP), a
+    ///     <c>tls://</c> URL and an <c>https://</c> URL, all for Cloudflare's public resolver,
+    ///     which the <c>Server.Forwarding.ClientProtocols</c> tests also use. The <c>quic://</c>
+    ///     and <c>sdns://</c> forms are described on <c>ForwarderWriteRequest.DefinitionString</c>.
     /// </summary>
     public IEnumerable<SwaggerExample<ForwarderWriteRequest>> GetExamples() =>
         [

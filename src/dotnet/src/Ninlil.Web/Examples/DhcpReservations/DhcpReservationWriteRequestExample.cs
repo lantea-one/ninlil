@@ -5,16 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpReservations;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DhcpReservationWriteRequest" />, referenced by
-///     <see cref="Controllers.DhcpReservationsController.Create" /> and
+///     This class supplies the Swagger example for <see cref="DhcpReservationWriteRequest" />, the
+///     request body of <see cref="Controllers.DhcpReservationsController.Create" /> and
 ///     <see cref="Controllers.DhcpReservationsController.Replace" />.
 /// </summary>
 public class DhcpReservationWriteRequestExample : IExamplesProvider<DhcpReservationWriteRequest>
 {
     /// <summary>
-    ///     This method returns a fixed address reservation for a printer, identified by its MAC
-    ///     address.
+    ///     This method returns a fixed address for a printer identified by its MAC address. The
+    ///     address lies outside the 100 to 200 range of the "Home LAN" scope in
+    ///     <see cref="DhcpScopes.DhcpScopeWriteRequestExample" />.
     /// </summary>
     public DhcpReservationWriteRequest GetExamples() =>
         new(

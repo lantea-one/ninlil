@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Dns64;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.Dns64SettingsController.Patch" />'s own RFC 7396 JSON Merge Patch
-///     request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.Dns64SettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class Dns64SettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns the single most common real-world patch this endpoint exists for:
-    ///     opting into DNS64, leaving RFC 6052's own Well-Known Prefix untouched.
+    ///     This method returns the usual patch: turn DNS64 on and keep the Well-Known Prefix.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

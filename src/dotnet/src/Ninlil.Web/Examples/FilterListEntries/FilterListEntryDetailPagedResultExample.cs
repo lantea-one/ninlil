@@ -6,18 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.FilterListEntries;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="FilterListEntryDetail" />, referenced by
-///     <see cref="Controllers.FilterListEntriesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="FilterListEntryDetail" />,
+///     as returned by <see cref="Controllers.FilterListEntriesController.List" />.
 /// </summary>
 public class FilterListEntryDetailPagedResultExample
     : IExamplesProvider<PagedResult<FilterListEntryDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the same three entries
-    ///     <see cref="FilterListEntryDetailExample" /> already shows individually, so a caller
-    ///     reading this example sees every <see cref="DnsFilterEntryKindEnum" /> shape together,
-    ///     in the exact envelope a real list response carries.
+    ///     This method returns a page with one entry of each <see cref="DnsFilterEntryKindEnum" />,
+    ///     the three from <see cref="FilterListEntryDetailExample" />.
     /// </summary>
     public PagedResult<FilterListEntryDetail> GetExamples() =>
         new(

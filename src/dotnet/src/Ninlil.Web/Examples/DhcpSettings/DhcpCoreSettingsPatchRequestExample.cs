@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.DhcpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.DhcpSettingsController.PatchCore" />'s own RFC 7396 JSON Merge Patch
-///     request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.DhcpSettingsController.PatchCore" />.
 /// </summary>
 public class DhcpCoreSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch explicitly pinning the server identifier address for a
-    ///     multi-homed host, leaving the hold/quarantine durations at their current values.
+    ///     This method returns a patch that fixes the server identifier address, as a host with
+    ///     several interfaces may need, and leaves the durations as they are.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument.Parse("""{ "serverIdentifierAddress": "192.168.1.1" }""").RootElement.Clone();
