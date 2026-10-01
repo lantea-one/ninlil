@@ -28,14 +28,14 @@ export interface RecursiveSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live -- reflecting any write M:Ninlil.Web.Controllers.RecursiveSettingsController.Patch(System.Text.Json.JsonElement) has made to every field except the two override lists, even without a restart) recursive resolver settings.
+     * This action returns the recursive resolver settings as saved. The two override lists show the saved value, which is not necessarily the one in use (see the class summary). Requires &#x60;recursivesettings:read&#x60;.
      * 
      * @endpoint get /api/recursive-settings
 */
     apiRecursiveSettingsGet(extraHttpRequestParams?: any): Observable<RecursiveSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Recursive&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. See this class\&#39;s own doc comment for which fields take effect immediately and which need a restart.
+     * This action merges a partial update into &#x60;DnsServer:Recursive&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; an override list, when present, replaces the whole list. The response note says whether a restart is needed. Returns 400 for a malformed duration, an invalid root-hint address or a malformed trust anchor. Requires &#x60;recursivesettings:write&#x60;.
      * 
      * @endpoint patch /api/recursive-settings
 * @param requestParameters

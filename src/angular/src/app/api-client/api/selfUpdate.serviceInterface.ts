@@ -23,14 +23,14 @@ export interface SelfUpdateServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action triggers a real, immediate check against the currently-configured release feed, waits for it to finish, and returns the fresh result -- the same underlying check Ninlil.Dns.Server.SelfUpdate.SelfUpdateCheckService\&#39;s own periodic loop runs automatically, just run on demand rather than waited out.
+     * This action checks the configured release feed now, waits for the result and returns it. It runs the same check as the periodic loop in Ninlil.Dns.Server.SelfUpdate.SelfUpdateCheckService. Requires &#x60;selfupdate:manage&#x60;.
      * 
      * @endpoint post /api/self-update/check
 */
     apiSelfUpdateCheckPost(extraHttpRequestParams?: any): Observable<SelfUpdateStatusDetail>;
 
     /**
-     * This action reads the self-update checker\&#39;s own currently-known status -- whatever the most recent check (automatic or manually triggered) last recorded, never a fresh check of its own. See M:Ninlil.Web.Controllers.SelfUpdateController.Check(System.Threading.CancellationToken) to trigger a fresh one.  &lt;b&gt;Why there is no \&quot;apply now\&quot; button.&lt;/b&gt; This server has no real, safe, in-process     way to replace its own running binary -- there is no installer, no systemd-unit     management, and no established release-artifact packaging for this project yet     (Ninlil.Dns.Server.SelfUpdate.SelfUpdateOptions\&#39;s own doc comment covers the parallel gap on the     feed side). Building a fake button that reports success without genuinely     re-executing a new binary would be actively dishonest, and building a real one     without that missing infrastructure would risk leaving a homelab DNS server     half-replaced or simply dead, with nobody around to notice. Instead,     Ninlil.Web.Models.SelfUpdateStatusDetail.UpdateInstructions tells an operator, in plain     language, exactly what to do by hand -- an honest instruction rather than an action     this project cannot yet perform safely.
+     * This action returns the result of the latest check, automatic or manual, without checking again; M:Ninlil.Web.Controllers.SelfUpdateController.Check(System.Threading.CancellationToken) runs a new one. Requires &#x60;selfupdate:read&#x60;.  &lt;b&gt;Why there is no \&quot;apply now\&quot; action.&lt;/b&gt; The server does not replace its own     running binary: it is installed from a package, container or install script, and a     failed in-place update could leave a home DNS server broken with nobody watching.     Instead, Ninlil.Web.Models.SelfUpdateStatusDetail.UpdateInstructions tells the operator     what to do by hand.
      * 
      * @endpoint get /api/self-update
 */

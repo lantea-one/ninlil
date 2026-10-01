@@ -46,7 +46,7 @@ export interface ClientListAssignmentsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every list assignment belonging to a known client.
+     * This action lists a client\&#39;s direct list assignments, one page at a time. Returns 404 for an unknown client. Requires &#x60;clients:read&#x60;.
      * 
      * @endpoint get /api/clients/{clientId}/list-assignments
 * @param requestParameters
@@ -54,7 +54,7 @@ export interface ClientListAssignmentsServiceInterface {
     apiClientsClientIdListAssignmentsGet(requestParameters: ApiClientsClientIdListAssignmentsGetRequestParams, extraHttpRequestParams?: any): Observable<ClientListAssignmentDetailPagedResult>;
 
     /**
-     * This action removes a list assignment from the known client.
+     * This action removes a list assignment from the client. Returns 404 when it does not exist or belongs to another client. Requires &#x60;clients:write&#x60;.
      * 
      * @endpoint delete /api/clients/{clientId}/list-assignments/{id}
 * @param requestParameters
@@ -62,7 +62,7 @@ export interface ClientListAssignmentsServiceInterface {
     apiClientsClientIdListAssignmentsIdDelete(requestParameters: ApiClientsClientIdListAssignmentsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single list assignment by its identifier.
+     * This action returns one list assignment. Returns 404 when it does not exist or belongs to another client. Requires &#x60;clients:read&#x60;.
      * 
      * @endpoint get /api/clients/{clientId}/list-assignments/{id}
 * @param requestParameters
@@ -70,7 +70,7 @@ export interface ClientListAssignmentsServiceInterface {
     apiClientsClientIdListAssignmentsIdGet(requestParameters: ApiClientsClientIdListAssignmentsIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientListAssignmentDetail>;
 
     /**
-     * This action assigns a block/allow list to the known client. Rejected with &#x60;400 Bad Request&#x60; if the referenced list does not exist -- treated as an invalid value on the assignment being created, not a lookup of the list itself, so this stays a Ninlil.Dns.Common.Exceptions.ValidationException rather than a Ninlil.Dns.Common.Exceptions.NotFoundException -- and &#x60;409 Conflict&#x60; if this exact client/list pairing is already assigned -- an unenforced duplicate would be harmless to &#x60;DnsFilterEngine&#x60; itself (it collects assigned list identifiers into a System.Collections.Generic.HashSet&#x60;1 before resolving them, see &#x60;DnsFilterEngine.ResolveApplicableListsAsync&#x60;), but is still rejected here to avoid letting an operator accumulate meaningless duplicate rows -- the same reasoning M:Ninlil.Web.Controllers.ClientGroupListAssignmentsController.Create(System.Guid,Ninlil.Web.Models.ClientGroupListAssignmentWriteRequest,System.Threading.CancellationToken) already documents.
+     * This action assigns a block or allow list to the client. Returns 400 when the list does not exist (an invalid value in the request, not a missing resource), 404 for an unknown client, and 409 when the list is already assigned (refused to keep rows meaningful, as in M:Ninlil.Web.Controllers.ClientGroupListAssignmentsController.Create(System.Guid,Ninlil.Web.Models.ClientGroupListAssignmentWriteRequest,System.Threading.CancellationToken)). Requires &#x60;clients:write&#x60;.
      * 
      * @endpoint post /api/clients/{clientId}/list-assignments
 * @param requestParameters

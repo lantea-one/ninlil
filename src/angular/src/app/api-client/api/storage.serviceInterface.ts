@@ -29,14 +29,14 @@ export interface StorageServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reports this host\&#39;s own currently active storage engine, whether a switch is in progress right now, and which engines a live switch can target.
+     * This action reports the active storage engine, whether a switch is in progress, and which engines a switch can target. Requires &#x60;storage:read&#x60;.
      * 
      * @endpoint get /api/storage
 */
     apiStorageGet(extraHttpRequestParams?: any): Observable<StorageStatus>;
 
     /**
-     * This action performs a real, in-process storage-engine switch: backs up this host\&#39;s currently active engine, provisions and migrates request\&#39;s own target engine, flips this process\&#39;s own live storage onto it, and restores the backup into it -- returning once every row has been carried across and this process is already serving from the new engine. This call blocks for the whole duration of the switch (a real backup-and-restore pass, plus a migration), which, at this project\&#39;s own stated homelab/small-org scale, is expected to complete in well under a minute.  request carries structured, per-engine connection fields (a     file path for SQLite; host/port/database name/username/password/encryption mode for     the other three) rather than a single free-text connection string, mirroring     Ninlil.Web.Controllers.EventBrokerSettingsController\&#39;s own structured-field pattern. This     action assembles the real ADO.NET connection string via     Ninlil.Web.Services.Storage.StorageConnectionStringAssembler -- always through the target     engine\&#39;s own official &#x60;*ConnectionStringBuilder&#x60; type, never by hand-formatting     a string -- before ever calling Ninlil.Web.Services.Storage.IStorageEngineSwitchService, which     itself still operates on that single already-assembled connection string, unaware     structured fields exist at all.
+     * This action switches the storage engine in-process: it backs up the active engine, provisions and migrates the target, moves the running server onto it and restores the backup into it. It returns once every row is copied and the server is using the new engine, which at homelab or small-office scale takes well under a minute. Requires &#x60;storage:manage&#x60;.  The request carries per-engine connection fields (a file path for SQLite; host,     port, database, username, password and encryption mode for the others) rather than a     free-text connection string. The server builds the connection string with each     engine\&#39;s &#x60;*ConnectionStringBuilder&#x60;. A failed switch returns 400 and leaves the     previous engine active with its data untouched; a switch already in progress returns     409.
      * 
      * @endpoint post /api/storage/switch
 * @param requestParameters

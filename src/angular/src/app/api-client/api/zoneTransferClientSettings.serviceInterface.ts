@@ -28,14 +28,14 @@ export interface ZoneTransferClientSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) zone-transfer-pulling settings.
+     * This action returns the current zone-transfer pulling settings. Requires &#x60;zonetransferclientsettings:read&#x60;.
      * 
      * @endpoint get /api/zone-transfer-client-settings
 */
     apiZoneTransferClientSettingsGet(extraHttpRequestParams?: any): Observable<ZoneTransferClientSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransferClient&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires &#x60;zonetransferclientsettings:write&#x60;.
      * 
      * @endpoint patch /api/zone-transfer-client-settings
 * @param requestParameters

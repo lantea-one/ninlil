@@ -42,7 +42,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
     }
 
     /**
-     * This action lists every service this server runs, along with whether each is currently running -- sorted by category, then by name, for a stable, predictable presentation order (this registry\&#39;s own Ninlil.Web.Services.IManagedServiceRegistry.Services makes no ordering guarantee of its own).
+     * This action lists every managed service and whether it is running, sorted by category and then by name (the registry itself guarantees no order). Requires &#x60;services:read&#x60;.
      * @endpoint get /api/services
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
     }
 
     /**
-     * This action restarts a single service -- stopping it, then immediately starting it again, right now, in this running process. Exactly the sequence a genuine \&quot;reload\&quot; request means for a service whose own M:Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration.StartAsync(System.Threading.CancellationToken) re-seeds its state fresh every call (&#x60;AuthoritativeZoneCache&#x60;/ &#x60;SignedZoneCache&#x60; reload their entire in-memory snapshot from storage on every start, for example) -- for those two specifically, a restart is the only one of these three actions with any externally observable effect at all, since their own M:Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration.StopAsync(System.Threading.CancellationToken) deliberately leaves the already-loaded snapshot in place and keeps answering from it.
+     * This action stops one service and starts it again. Services that reload their state on every start pick up changes this way: &#x60;AuthoritativeZoneCache&#x60; and &#x60;SignedZoneCache&#x60; reload their whole in-memory snapshot from storage, and their stop leaves the loaded snapshot answering, so for them only a restart has a visible effect. A transport listener re-reads its port, certificate and tuning settings. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
      * @endpoint post /api/services/{name}/restart
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -161,7 +161,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
     }
 
     /**
-     * This action starts a single service -- binding a transport\&#39;s own socket, or resuming a background loop -- right now, in this running process. Starting a service that is already running simply re-invokes the same underlying start logic every service in this project was already confirmed safe to call again by a dedicated restart-safety audit.
+     * This action starts one service now: it binds a transport\&#39;s socket or resumes a background loop. It does not check whether the service is already running; the service\&#39;s start logic is called either way. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
      * @endpoint post /api/services/{name}/start
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -223,7 +223,7 @@ export class ServicesService extends BaseService implements ServicesServiceInter
     }
 
     /**
-     * This action stops a single service -- unbinding a transport\&#39;s own socket, or halting a background loop -- right now, in this running process, leaving every other service this server runs untouched.
+     * This action stops one service now, unbinding a transport\&#39;s socket or halting a background loop, and leaves every other service running. Returns 404 for an unknown name. Requires &#x60;services:manage&#x60;.
      * @endpoint post /api/services/{name}/stop
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

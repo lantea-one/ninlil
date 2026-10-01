@@ -28,14 +28,14 @@ export interface RateLimitingSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live and running) rate-limiting settings.
+     * This action returns the rate-limiting settings in use (as loaded at startup) and which node last changed them. Requires &#x60;ratelimiting:read&#x60;.
      * 
      * @endpoint get /api/rate-limiting-settings
 */
     apiRateLimitingSettingsGet(extraHttpRequestParams?: any): Observable<RateLimitingSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:RateLimiting&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
+     * This action merges a partial update into &#x60;DnsServer:RateLimiting&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; &#x60;subnetBypassCidrs&#x60; replaces the whole list. The change needs a restart. Returns 400 for a malformed duration or a truncation percentage outside 0-100. Requires &#x60;ratelimiting:write&#x60;.
      * 
      * @endpoint patch /api/rate-limiting-settings
 * @param requestParameters

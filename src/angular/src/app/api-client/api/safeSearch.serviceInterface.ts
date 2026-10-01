@@ -40,7 +40,7 @@ export interface SafeSearchServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every catalog entry this server offers, together with whether each is currently fully enabled (every one of its own hostname mappings present as an enabled rewrite) -- globally by default, or for a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named -- see this class\&#39;s own doc comment for the full scoping contract.
+     * This action lists every catalog entry and whether it is fully enabled (every hostname mapping present as an enabled rewrite), globally or for the given &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; (not both, which returns 400). Requires &#x60;dnsrewrites:read&#x60;.
      * 
      * @endpoint get /api/safe-search
 * @param requestParameters
@@ -48,7 +48,7 @@ export interface SafeSearchServiceInterface {
     apiSafeSearchGet(requestParameters: ApiSafeSearchGetRequestParams, extraHttpRequestParams?: any): Observable<Array<SafeSearchDetail>>;
 
     /**
-     * This action disables a single catalog entry: removes every rewrite row, within the given scope only, that exactly matches one of its own hostname mappings (source domain and target both) -- globally by default, or scoped to a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, leaving every other scope\&#39;s own rows (global rows, or another target\&#39;s own rows) completely untouched. Never touches Ninlil.Dns.Server.Rewrites.DnsRewriteOptions.Enable -- see this class\&#39;s own doc comment for why. A no-op, not an error, for a mapping with no matching row in the given scope, or for an unrecognized target (nothing in that scope could ever exist to remove).
+     * This action disables one catalog entry: it removes every rewrite in the requested scope whose domain and target match one of the entry\&#39;s mappings, including an identical one an operator configured by hand, and leaves other scopes alone. It does not turn the rewrite engine off. Having nothing to remove, or naming a target that does not exist, is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;dnsrewrites:write&#x60;.
      * 
      * @endpoint delete /api/safe-search/{key}
 * @param requestParameters
@@ -56,7 +56,7 @@ export interface SafeSearchServiceInterface {
     apiSafeSearchKeyDelete(requestParameters: ApiSafeSearchKeyDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action enables a single catalog entry: for every one of its own hostname mappings, creates a matching rewrite row if none exists, or re-enables one that was previously disabled -- globally by default, or scoped to a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, see this class\&#39;s own doc comment. Rejected with &#x60;400 Bad Request&#x60; if both are given, or if a named target does not actually exist. Rejected with &#x60;409 Conflict&#x60;, with nothing at all written, if any mapping would collide with an existing, unrelated CNAME-classified rewrite for the same hostname &lt;em&gt;within the same scope&lt;/em&gt; pointing somewhere else -- validated for every mapping before any write is made, so a rejected request never leaves this entry partially applied. Also turns Ninlil.Dns.Server.Rewrites.DnsRewriteOptions.Enable on if it was off, regardless of scope -- see this class\&#39;s own doc comment for why that side effect exists and is deliberately not reversed on disable.
+     * This action enables one catalog entry: for each hostname mapping it creates a rewrite in the requested scope, or re-enables a disabled one. It also turns the rewrite engine on if it was off, whatever the scope. Returns 400 when both targets are given or the target does not exist, 404 for an unknown key, and 409, with nothing written, when a mapping\&#39;s hostname already has a different CNAME rewrite in the same scope; every mapping is checked before anything is written. Requires &#x60;dnsrewrites:write&#x60;.
      * 
      * @endpoint post /api/safe-search/{key}
 * @param requestParameters

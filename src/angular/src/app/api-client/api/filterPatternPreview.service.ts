@@ -42,7 +42,7 @@ export class FilterPatternPreviewService extends BaseService implements FilterPa
     }
 
     /**
-     * This action previews a candidate pattern against a sample domain set. A malformed or catastrophic-backtracking pattern can never stall this endpoint -- see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String) for how the same timeout guard Ninlil.Dns.Server.Filtering.DnsFilterEngine itself uses at query time is reused here.
+     * This action tests a candidate pattern against the caller\&#39;s sample domains, or Ninlil.Web.Controllers.FilterPatternPreviewController.DefaultSampleDomains when none are given, and reports which match. An invalid pattern is reported in the 200 response, not as an error status. Each match is bounded by the engine\&#39;s regex timeout (see M:Ninlil.Web.Controllers.FilterPatternPreviewController.Compile(System.String,System.String)). Requires &#x60;filterlists:read&#x60;.
      * @endpoint post /api/filter-pattern-preview
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

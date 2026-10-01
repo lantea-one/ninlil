@@ -28,14 +28,14 @@ export interface AdminLoginRateLimitSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live and running) admin-login rate limit settings.
+     * This action returns the admin sign-in limiter settings in effect, as loaded at startup; a saved change shows here only after a restart. Requires &#x60;adminloginratelimit:read&#x60;.
      * 
      * @endpoint get /api/admin-login-rate-limit-settings
 */
     apiAdminLoginRateLimitSettingsGet(extraHttpRequestParams?: any): Observable<AdminLoginRateLimitSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
+     * This action merges a partial update into &#x60;DnsServer:AdminLoginRateLimit&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Returns 400 when &#x60;permitLimit&#x60; is below 1 or &#x60;window&#x60; is not a positive TimeSpan. The change needs a restart. Requires &#x60;adminloginratelimit:write&#x60;.
      * 
      * @endpoint patch /api/admin-login-rate-limit-settings
 * @param requestParameters

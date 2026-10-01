@@ -48,7 +48,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
-     * This action lists every schedule belonging to a known client.
+     * This action lists a client\&#39;s schedules, one page at a time. Returns 404 for an unknown client. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/clients/{clientId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -133,7 +133,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
-     * This action removes a schedule from the known client.
+     * This action removes a schedule from the client. Returns 404 when it does not exist or belongs to another client. Requires &#x60;clients:write&#x60;.
      * @endpoint delete /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -196,7 +196,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
-     * This action looks up a single schedule by its identifier.
+     * This action returns one schedule. Returns 404 when it does not exist or belongs to another client. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -262,7 +262,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
-     * This action fully replaces an existing schedule\&#39;s own fields, keeping its own identifier and owning client.
+     * This action replaces a schedule\&#39;s fields, keeping its id and client. Validation is as for M:Ninlil.Web.Controllers.ClientSchedulesController.Create(System.Guid,Ninlil.Web.Models.ClientScheduleWriteRequest,System.Threading.CancellationToken); returns 404 when the schedule does not exist or belongs to another client. Requires &#x60;clients:write&#x60;.
      * @endpoint put /api/clients/{clientId}/schedules/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -338,7 +338,7 @@ export class ClientSchedulesService extends BaseService implements ClientSchedul
     }
 
     /**
-     * This action adds a new schedule to the known client.
+     * This action adds a schedule to the client. Returns 400 for no days, an unrecognized time zone or equal start and end times, and 404 for an unknown client. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{clientId}/schedules
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

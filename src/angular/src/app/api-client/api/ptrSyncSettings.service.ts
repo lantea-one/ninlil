@@ -42,7 +42,7 @@ export class PtrSyncSettingsService extends BaseService implements PtrSyncSettin
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) PTR sync default.
+     * This action returns the current PTR sync defaults. Requires &#x60;ptrsyncsettings:read&#x60;.
      * @endpoint get /api/ptr-sync-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class PtrSyncSettingsService extends BaseService implements PtrSyncSettin
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:PtrSync&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. The single field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:PtrSync&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for an IPv4 prefix outside 24-30 or an IPv6 prefix that is not a multiple of 4 from 16 to 124 (see &#x60;ZonesController&#x60; for why). Requires &#x60;ptrsyncsettings:write&#x60;.
      * @endpoint patch /api/ptr-sync-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

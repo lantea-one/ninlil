@@ -54,7 +54,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action lists every role on this server.
+     * This action lists roles, one page at a time, with their permissions. Requires &#x60;roles:read&#x60;.
      * @endpoint get /api/roles
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -135,7 +135,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action permanently deletes a role. Any user currently holding it simply stops holding it; their account itself is not affected.
+     * This action deletes a role. Users who held it lose it and its permissions; their accounts are otherwise unchanged. Requires &#x60;roles:write&#x60;.
      * @endpoint delete /api/roles/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,7 +194,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action looks up a single role by its identifier.
+     * This action returns one role and its permissions. Returns 404 for an unknown id. Requires &#x60;roles:read&#x60;.
      * @endpoint get /api/roles/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -256,7 +256,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action revokes a permission claim from a role.
+     * This action revokes a permission from a role. Requires &#x60;roles:write&#x60;.
      * @endpoint delete /api/roles/{id}/permissions
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -328,7 +328,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action grants a role a permission claim, extending that permission to every user who holds the role.
+     * This action grants a role a permission, giving it to every user who holds the role. The permission string is not checked against &#x60;GET /api/permissions&#x60;. Requires &#x60;roles:write&#x60;.
      * @endpoint post /api/roles/{id}/permissions
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -400,7 +400,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action updates an existing role\&#39;s description.
+     * This action updates a role\&#39;s description; the name cannot be changed. Requires &#x60;roles:write&#x60;.
      * @endpoint put /api/roles/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -472,7 +472,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action creates a new role.
+     * This action creates a role with no permissions. Returns 400 when the name is invalid or already taken. Requires &#x60;roles:write&#x60;.
      * @endpoint post /api/roles
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

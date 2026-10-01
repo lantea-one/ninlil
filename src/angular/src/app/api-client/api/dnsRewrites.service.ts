@@ -49,7 +49,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action lists every DNS rewrite this server knows about.
+     * This action lists DNS rewrites, one page at a time, each with its classified target kind. Requires &#x60;dnsrewrites:read&#x60;.
      * @endpoint get /api/dns-rewrites
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -130,7 +130,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action permanently deletes a DNS rewrite. No other entity references a rewrite by identifier, so there is nothing to check or clean up before removing it.
+     * This action deletes a DNS rewrite. Nothing refers to a rewrite by id, so nothing needs cleaning up first. Returns 404 for an unknown id. Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint delete /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -189,7 +189,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action looks up a single DNS rewrite by its identifier.
+     * This action returns one DNS rewrite. Returns 404 for an unknown id. Requires &#x60;dnsrewrites:read&#x60;.
      * @endpoint get /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -251,7 +251,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action partially updates an existing DNS rewrite via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any present field overwrites it.
+     * This action updates a DNS rewrite as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Changing the domain or target is checked as for M:Ninlil.Web.Controllers.DnsRewritesController.Create(Ninlil.Web.Models.DnsRewriteWriteRequest,System.Threading.CancellationToken). Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint patch /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -323,7 +323,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action fully replaces an existing DNS rewrite\&#39;s fields.
+     * This action replaces a DNS rewrite\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.DnsRewritesController.Create(Ninlil.Web.Models.DnsRewriteWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint put /api/dns-rewrites/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -395,7 +395,7 @@ export class DnsRewritesService extends BaseService implements DnsRewritesServic
     }
 
     /**
-     * This action creates a new DNS rewrite.
+     * This action creates a DNS rewrite. Returns 400 for an invalid domain or a target that is not an IP address or domain name, and 409 when a rewrite of the same kind exists for the domain. Requires &#x60;dnsrewrites:write&#x60;.
      * @endpoint post /api/dns-rewrites
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

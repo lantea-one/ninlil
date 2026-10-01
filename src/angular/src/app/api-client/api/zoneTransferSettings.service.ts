@@ -42,7 +42,7 @@ export class ZoneTransferSettingsService extends BaseService implements ZoneTran
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) zone-transfer-serving settings.
+     * This action returns the current zone-transfer serving settings. Requires &#x60;zonetransfersettings:read&#x60;.
      * @endpoint get /api/zone-transfer-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class ZoneTransferSettingsService extends BaseService implements ZoneTran
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransfer&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. This options class\&#39;s own single field hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:ZoneTransfer&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 when &#x60;recordsPerMessage&#x60; is below 1. Requires &#x60;zonetransfersettings:write&#x60;.
      * @endpoint patch /api/zone-transfer-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -28,14 +28,14 @@ export interface ClusterSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this node\&#39;s own currently-effective (live) cluster settings.
+     * This action returns this node\&#39;s current cluster settings, including its node id. Requires &#x60;clustersettings:read&#x60;.
      * 
      * @endpoint get /api/cluster-settings
 */
     apiClusterSettingsGet(extraHttpRequestParams?: any): Observable<ClusterSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;Cluster&#x60; (and, for &#x60;addressReconcileInterval&#x60;, the separate &#x60;CatalogSync&#x60; section) via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Ninlil.Dns.Server.Cluster.Options.ClusterOptions.NodeId has no field here at all -- it is generated once, automatically, and never operator-editable.
+     * This action merges a partial update into the &#x60;Cluster&#x60; section (and, for &#x60;addressReconcileInterval&#x60;, the &#x60;CatalogSync&#x60; section) as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. There is no &#x60;nodeId&#x60; field. The response note says whether the change applies at once or needs a restart. Returns 400 for a port outside 0-65535 (0 means the shared HTTPS port), a missed-heartbeat threshold below 1, or a duration that is not a valid TimeSpan. Requires &#x60;clustersettings:write&#x60;.
      * 
      * @endpoint patch /api/cluster-settings
 * @param requestParameters

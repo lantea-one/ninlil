@@ -43,7 +43,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
     }
 
     /**
-     * This action creates a complete backup archive and streams it back as a downloadable file -- never a JSON response body, since the archive itself is the whole point of this action. Encrypted when Ninlil.Web.Models.BackupCreateRequest.Passphrase is supplied, or deliberately, clearly-markedly unencrypted when it is not.
+     * This action builds a complete backup archive and returns it as a file download (&#x60;application/octet-stream&#x60;, &#x60;ninlil-backup-*.ltbk&#x60;), not JSON. With Ninlil.Web.Models.BackupCreateRequest.Passphrase the archive is encrypted with AES-256-GCM; without one it is unencrypted and marked as such in its header. Returns 400 when the passphrase is too short. Requires &#x60;backup:read&#x60;.
      * @endpoint post /api/backup
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -111,7 +111,7 @@ export class BackupService extends BaseService implements BackupServiceInterface
     }
 
     /**
-     * This action restores this server\&#39;s own full database, Data Protection key ring, TLS certificate, and runtime configuration file from a previously created archive, of either kind -- encrypted or, per its own envelope header, deliberately unencrypted. Every entity currently persisted is wiped and replaced -- there is no partial or merge restore. The archive is fully decrypted (if encrypted) and structurally validated before any of that happens, so a rejected request (wrong or missing passphrase, corrupted or tampered archive, unrecognized format) is guaranteed to have left this server\&#39;s own data completely untouched.
+     * This action restores the database, Data Protection key ring, TLS certificate and runtime configuration file from an archive, encrypted or not. All stored data is wiped and replaced; there is no partial or merge restore. The archive is decrypted and checked before anything is written, so a wrong or missing passphrase or a corrupted, tampered or unrecognized archive returns 400 and leaves the server\&#39;s data untouched. The server must be restarted afterwards to pick up the restored key ring, certificate and settings. Requires &#x60;backup:write&#x60;.
      * @endpoint post /api/backup/restore
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

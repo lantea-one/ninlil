@@ -40,7 +40,7 @@ export class ClientActivityService extends BaseService implements ClientActivity
     }
 
     /**
-     * This action searches the persistent query log for entries this project\&#39;s own write-time identity resolution attributed to any of clientId\&#39;s own current addresses -- newest first, exactly like M:Ninlil.Web.Controllers.QueryLogController.Search(System.String,System.String,System.String,System.String,System.Nullable{System.DateTimeOffset},System.Nullable{System.DateTimeOffset},System.String,System.String,Ninlil.Web.Models.PaginationQuery,System.Threading.CancellationToken).
+     * This action lists the query log entries attributed, when they were logged, to any of the client\&#39;s current addresses, newest first, one page at a time. Returns 404 for an unknown client. Requires &#x60;querylog:read&#x60;.
      * @endpoint get /api/clients/{clientId}/activity
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

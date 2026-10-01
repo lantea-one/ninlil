@@ -49,7 +49,7 @@ export interface ClusterChannelServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action receives one operational-config-sync envelope from a peer and dispatches it to whichever registered Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier\&#39;s own Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier.EntityType matches Ninlil.Dns.Server.Core.ClusterSync.ClusterConfigSyncEnvelope.EntityType -- the one inbound endpoint every synced category (filter lists, filter list entries, access-control rules, rewrites, forwarders, settings sections) shares, per this mechanism\&#39;s own \&quot;one generic envelope, dispatched by a discriminator\&quot; design.  Always answers &#x60;200 OK&#x60;, even for an entity type this node does not recognize     (logged, not rejected) -- a newer peer sending a category an older node has not     been upgraded to understand yet must never look like a channel failure; the actual     accept/reject/last-write-wins decision lives entirely inside the matched applier     itself, per Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier\&#39;s own doc comment.
+     * This action receives one config-sync envelope from a peer and passes it to the Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier whose Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier.EntityType matches Ninlil.Dns.Server.Core.ClusterSync.ClusterConfigSyncEnvelope.EntityType. Every synced kind of data (filter lists and entries, access-control rules, rewrites, forwarders, users, roles, settings sections) comes through this one endpoint.  It always returns 200, even for an entity type this node does not know (logged and     ignored), so a newer peer sending a kind an older node cannot handle does not look     like a channel failure. Accepting, rejecting and last-write-wins are decided by the     applier (see Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier).
      * 
      * @endpoint post /api/cluster/channel/config-sync
 * @param requestParameters
@@ -57,7 +57,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelConfigSyncPost(requestParameters: ApiClusterChannelConfigSyncPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action answers a peer\&#39;s own heartbeat probe. A successfully authenticated request reaching this action at all is the entire trust decision -- this node\&#39;s own &#x60;ClusterHeartbeatBackgroundService&#x60; updates the calling peer\&#39;s own Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status purely based on whether its own probe against that peer succeeded, never on anything this action returns beyond a bare success status; see that service\&#39;s own doc comment for why each node\&#39;s own, locally-observed view of a peer\&#39;s health is this project\&#39;s deliberately chosen source of truth, not a value the peer reports about itself.
+     * This action answers a peer\&#39;s heartbeat with 200. Passing authentication is all it checks. Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports.
      * 
      * @endpoint post /api/cluster/channel/heartbeat
 * @param requestParameters
@@ -65,7 +65,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelHeartbeatPost(requestParameters: ApiClusterChannelHeartbeatPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action receives a joining node\&#39;s own callback, completing the second half of the join handshake -- see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken) for the real logic this delegates to. The caller\&#39;s own successfully-authenticated TSIG key name (the exact key the invite this joiner is redeeming carried) is read from the authenticated identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler already established, never re-derived from the request body itself.
+     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes from the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never from the request body.
      * 
      * @endpoint post /api/cluster/channel/join-complete
 * @param requestParameters
@@ -73,7 +73,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelJoinCompletePost(requestParameters: ApiClusterChannelJoinCompletePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action answers the aggregate cluster dashboard\&#39;s per-peer query-stats request -- a plain, read-only count against this node\&#39;s own persistent query log (Ninlil.Dns.Data.Abstractions.Repository.IDnsQueryLogRepository), called by a peer\&#39;s own &#x60;ClusterQueryStatsAggregator&#x60; when an operator opens that peer\&#39;s own \&quot;Cluster\&quot; page. Always computed live at request time, never cached -- a dashboard load tolerates real query-log I/O far better than a DNS query answer ever could, and there is no other consumer of this endpoint to protect from that cost.
+     * This action returns this node\&#39;s query counts (last hour, last 24 hours, all retained) for the cluster dashboard. A peer\&#39;s &#x60;ClusterQueryStatsAggregator&#x60; calls it when an operator opens that peer\&#39;s Cluster page. The counts are computed from the query log on every call and not cached; a dashboard load can afford that.
      * 
      * @endpoint post /api/cluster/channel/query-stats
 * @param requestParameters
@@ -81,7 +81,7 @@ export interface ClusterChannelServiceInterface {
     apiClusterChannelQueryStatsPost(requestParameters: ApiClusterChannelQueryStatsPostRequestParams, extraHttpRequestParams?: any): Observable<ClusterQueryStatsSnapshot>;
 
     /**
-     * This action answers the cluster\&#39;s own best-effort, cluster-wide username-uniqueness check -- a plain, read-only existence lookup against this node\&#39;s own Ninlil.Dns.Data.Abstractions.Repository.IUserRepository, called by a peer\&#39;s own &#x60;ClusterUsernameUniquenessChecker&#x60; at user-creation time on that peer. This is deliberately the entire check: no lock, no reservation, no two-phase commit -- a real, if rare, race (two nodes creating the same username within the same few hundred milliseconds, each seeing the other as not-yet-existing) is still possible, and is exactly the case the cluster\&#39;s own last-write-wins collision resolution (Ninlil.Dns.Server.Core.ClusterSync.ClusterSyncConflictResolver, applied by &#x60;UserClusterConfigSyncApplier&#x60;) exists to catch and flag once the two nodes\&#39; config-sync broadcasts actually reach each other.
+     * This action tells a peer whether a username exists on this node. A peer\&#39;s &#x60;ClusterUsernameUniquenessChecker&#x60; calls it when creating a user. It is a plain lookup with no lock or reservation, so two nodes creating the same name within moments of each other can both succeed; Ninlil.Dns.Server.Core.ClusterSync.ClusterSyncConflictResolver, applied by &#x60;UserClusterConfigSyncApplier&#x60;, resolves and flags that collision once the nodes sync.
      * 
      * @endpoint post /api/cluster/channel/username-check
 * @param requestParameters

@@ -47,7 +47,7 @@ export interface DnsAccessControlRulesServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every access-control rule this server knows about, enabled or not.
+     * This action lists access-control rules, enabled or not, one page at a time. Requires &#x60;accesscontrol:read&#x60;.
      * 
      * @endpoint get /api/access-control-rules
 * @param requestParameters
@@ -55,7 +55,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesGet(requestParameters: ApiAccessControlRulesGetRequestParams, extraHttpRequestParams?: any): Observable<DnsAccessControlRuleDetailPagedResult>;
 
     /**
-     * This action permanently deletes an access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache no longer grants anything on its behalf.
+     * This action deletes an access-control rule, so it no longer grants anything. Returns 404 for an unknown id. Requires &#x60;accesscontrol:write&#x60;.
      * 
      * @endpoint delete /api/access-control-rules/{id}
 * @param requestParameters
@@ -63,7 +63,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdDelete(requestParameters: ApiAccessControlRulesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single access-control rule by its identifier.
+     * This action returns one access-control rule. Returns 404 for an unknown id. Requires &#x60;accesscontrol:read&#x60;.
      * 
      * @endpoint get /api/access-control-rules/{id}
 * @param requestParameters
@@ -71,7 +71,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdGet(requestParameters: ApiAccessControlRulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DnsAccessControlRuleDetail>;
 
     /**
-     * This action fully replaces an existing access-control rule\&#39;s fields, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks up the change without a restart.
+     * This action replaces an access-control rule\&#39;s fields; the change applies without a restart. Validation and errors are as for M:Ninlil.Web.Controllers.DnsAccessControlRulesController.Create(Ninlil.Web.Models.DnsAccessControlRuleWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;accesscontrol:write&#x60;.
      * 
      * @endpoint put /api/access-control-rules/{id}
 * @param requestParameters
@@ -79,7 +79,7 @@ export interface DnsAccessControlRulesServiceInterface {
     apiAccessControlRulesIdPut(requestParameters: ApiAccessControlRulesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a new access-control rule, then publishes a Ninlil.Dns.Server.Core.Events.DnsAccessControlRuleChangedEvent so the real engine\&#39;s own cache picks it up without a restart.
+     * This action creates an access-control rule; it applies to queries without a restart. Returns 400 for a missing name, an invalid network or an unknown capability name. Requires &#x60;accesscontrol:write&#x60;.
      * 
      * @endpoint post /api/access-control-rules
 * @param requestParameters

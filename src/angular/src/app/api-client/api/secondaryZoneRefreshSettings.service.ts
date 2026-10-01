@@ -42,7 +42,7 @@ export class SecondaryZoneRefreshSettingsService extends BaseService implements 
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) secondary-zone-refresh-polling settings.
+     * This action returns the current secondary-zone refresh settings. Requires &#x60;secondaryzonerefreshsettings:read&#x60;.
      * @endpoint get /api/secondary-zone-refresh-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class SecondaryZoneRefreshSettingsService extends BaseService implements 
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:SecondaryZoneRefresh&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field this options class exposes hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:SecondaryZoneRefresh&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect without a restart. Returns 400 for a value that is not a positive TimeSpan. Requires &#x60;secondaryzonerefreshsettings:write&#x60;.
      * @endpoint patch /api/secondary-zone-refresh-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

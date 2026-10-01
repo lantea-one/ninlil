@@ -28,14 +28,14 @@ export interface OidcSsoSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live) OIDC SSO settings. Ninlil.Dns.Identity.Options.OidcSsoOptions.ClientSecretEncrypted is never returned -- see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured\&#39;s own doc comment.
+     * This action returns the current SSO settings. The client secret is never returned, only whether one is set (see Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured). Requires &#x60;ssosettings:read&#x60;.
      * 
      * @endpoint get /api/sso-settings
 */
     apiSsoSettingsGet(extraHttpRequestParams?: any): Observable<OidcSsoSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;Identity:Sso&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file -- including &#x60;clientSecret&#x60;, letting an operator change, say, only &#x60;displayName&#x60; without ever having to resupply a credential this endpoint\&#39;s own M:Ninlil.Web.Controllers.OidcSsoSettingsController.Get action never reveals back to them.
+     * This action merges a partial update into &#x60;Identity:Sso&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;clientSecret&#x60;, so an operator can change only &#x60;displayName&#x60; without resupplying a secret M:Ninlil.Web.Controllers.OidcSsoSettingsController.Get never shows. A blank &#x60;clientSecret&#x60; clears it. Returns 400 for a blank display name or client id, an authority that is not an absolute http(s) URL, or scopes without &#x60;openid&#x60;. Requires &#x60;ssosettings:write&#x60;.
      * 
      * @endpoint patch /api/sso-settings
 * @param requestParameters

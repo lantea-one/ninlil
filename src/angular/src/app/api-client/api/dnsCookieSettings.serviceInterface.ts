@@ -28,14 +28,14 @@ export interface DnsCookieSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live and running) DNS Cookie settings.
+     * This action returns the DNS Cookie settings in use (as loaded at startup) and which node last changed them. Requires &#x60;dnscookies:read&#x60;.
      * 
      * @endpoint get /api/dns-cookie-settings
 */
     apiDnsCookieSettingsGet(extraHttpRequestParams?: any): Observable<DnsCookieSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Cookies&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
+     * This action merges a partial update into &#x60;DnsServer:Cookies&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change needs a restart. Returns 400 for a malformed rotation interval. Requires &#x60;dnscookies:write&#x60;.
      * 
      * @endpoint patch /api/dns-cookie-settings
 * @param requestParameters

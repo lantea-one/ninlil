@@ -52,7 +52,7 @@ export interface FilterListsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every block/allow list this server knows about.
+     * This action lists block and allow lists, one page at a time. Requires &#x60;filterlists:read&#x60;.
      * 
      * @endpoint get /api/filter-lists
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsGet(requestParameters: ApiFilterListsGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetailPagedResult>;
 
     /**
-     * This action permanently deletes a block/allow list. Any client-group assignment still referencing it (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController) is removed first -- unlike M:Ninlil.Web.Controllers.TsigKeysController.Delete(System.Guid,System.Threading.CancellationToken)\&#39;s deliberately lax stance on a zone\&#39;s own soft-reference &#x60;TsigKeyName&#x60;, Ninlil.Dns.Server.Filtering.DnsFilterEngine already tolerates a dangling assignment gracefully (confirmed by inspection: it simply skips a list it cannot find), but this project cleans it up explicitly anyway to avoid accumulating orphaned join rows, the same reasoning M:Ninlil.Web.Controllers.ZonesController.Delete(System.Guid,System.Threading.CancellationToken) already applies to a deleted zone\&#39;s own records and DNSSEC keys.
+     * This action deletes a list and the client-group assignments that refer to it (see Ninlil.Web.Controllers.ClientGroupListAssignmentsController). Ninlil.Dns.Server.Filtering.DnsFilterEngine would skip a missing list anyway, but the assignments are removed so join rows do not pile up. The list\&#39;s entries and any direct client assignments are not removed. Returns 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/filter-lists/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdDelete(requestParameters: ApiFilterListsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single block/allow list by its identifier.
+     * This action returns one list. Returns 404 for an unknown id. Requires &#x60;filterlists:read&#x60;.
      * 
      * @endpoint get /api/filter-lists/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdGet(requestParameters: ApiFilterListsIdGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListDetail>;
 
     /**
-     * This action partially updates an existing block/allow list\&#39;s metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
+     * This action updates a list\&#39;s settings as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Replace(System.Guid,Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken). Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint patch /api/filter-lists/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdPatch(requestParameters: ApiFilterListsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action fully replaces an existing block/allow list\&#39;s metadata. Note that changing Ninlil.Web.Models.FilterListWriteRequest.Source from Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local to Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed does not itself touch the list\&#39;s existing entries -- they remain as-is until the next scheduled refresh replaces them wholesale.
+     * This action replaces a list\&#39;s settings. Changing Ninlil.Web.Models.FilterListWriteRequest.Source from Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local to Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed leaves the existing entries alone until the next refresh replaces them all. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListsController.Create(Ninlil.Web.Models.FilterListWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint put /api/filter-lists/{id}
 * @param requestParameters
@@ -92,7 +92,7 @@ export interface FilterListsServiceInterface {
     apiFilterListsIdPut(requestParameters: ApiFilterListsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a new block/allow list.
+     * This action creates a block or allow list. A subscribed list needs a subscription URL; the URL and refresh interval are dropped for a local list. Returns 400 for a missing name or URL and 409 when the name is taken. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/filter-lists
 * @param requestParameters

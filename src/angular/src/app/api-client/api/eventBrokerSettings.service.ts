@@ -42,7 +42,7 @@ export class EventBrokerSettingsService extends BaseService implements EventBrok
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (that is, live and running, not merely written to the configuration file) message-broker settings.
+     * This action returns the broker settings the running server uses (as loaded at startup, not later file changes), whether the broker is connected (null for the in-memory transport), and which node last changed the settings. Passwords are never returned. Only the active broker\&#39;s settings are filled in. Requires &#x60;eventbroker:read&#x60;.
      * @endpoint get /api/event-broker-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class EventBrokerSettingsService extends BaseService implements EventBrok
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Events&#x60;/ &#x60;DnsServer:Events:RabbitMq&#x60;/&#x60;DnsServer:Events:ActiveMq&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style at every level: a field absent from patch (at either the top level or within &#x60;rabbitMq&#x60;/&#x60;activeMq&#x60;) is left exactly as it was in the file, including &#x60;password&#x60; -- letting an operator change, say, only &#x60;hostName&#x60; without ever having to resupply a credential this endpoint\&#39;s own M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) action never reveals back to them.
+     * This action merges a partial update into &#x60;DnsServer:Events&#x60;, &#x60;DnsServer:Events:RabbitMq&#x60; and &#x60;DnsServer:Events:ActiveMq&#x60; as an RFC 7396 merge patch at every level, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent at the top level or within &#x60;rabbitMq&#x60; or &#x60;activeMq&#x60; keeps its value, including &#x60;password&#x60;, so an operator can change only &#x60;hostName&#x60; without resupplying a password M:Ninlil.Web.Controllers.EventBrokerSettingsController.Get(System.Threading.CancellationToken) never shows. The change needs a restart. Returns 400 for an unknown transport or a malformed duration. Requires &#x60;eventbroker:write&#x60;.
      * @endpoint patch /api/event-broker-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

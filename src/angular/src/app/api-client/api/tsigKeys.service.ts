@@ -53,7 +53,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action lists every TSIG key this server knows about.
+     * This action lists TSIG keys, one page at a time, without their secrets. Requires &#x60;tsigkeys:read&#x60;.
      * @endpoint get /api/tsig-keys
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -134,7 +134,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action permanently deletes a TSIG key. Any zone still referencing it by name (see Ninlil.Web.Controllers.ZonesController) simply stops being able to sign or verify transfers against it -- this project does not track or block on that soft reference, the same laxness Ninlil.Web.Controllers.ZonesController itself already accepts for &#x60;TsigKeyName&#x60;.
+     * This action deletes a TSIG key. Zones that still refer to it by name are not checked or blocked; they simply can no longer sign or verify with it. Returns 404 for an unknown id. Requires &#x60;tsigkeys:write&#x60;.
      * @endpoint delete /api/tsig-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -193,7 +193,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action looks up a single TSIG key by its identifier.
+     * This action returns one TSIG key, without its secret. Returns 404 for an unknown id. Requires &#x60;tsigkeys:read&#x60;.
      * @endpoint get /api/tsig-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -255,7 +255,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action partially updates an existing TSIG key\&#39;s metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it. As with M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken), the key\&#39;s own shared secret cannot be changed this way.
+     * This action updates a TSIG key as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. The secret cannot be changed. Errors are as for M:Ninlil.Web.Controllers.TsigKeysController.Replace(System.Guid,Ninlil.Web.Models.TsigKeyWriteRequest,System.Threading.CancellationToken). Requires &#x60;tsigkeys:write&#x60;.
      * @endpoint patch /api/tsig-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -327,7 +327,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action fully replaces an existing TSIG key\&#39;s metadata. The key\&#39;s own shared secret is left untouched -- see Ninlil.Web.Models.TsigKeyWriteRequest for why.
+     * This action replaces a TSIG key\&#39;s name, algorithm, disabled flag and comments. The secret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an invalid name or algorithm, 404 for an unknown id and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
      * @endpoint put /api/tsig-keys/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -399,7 +399,7 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
     }
 
     /**
-     * This action creates a new TSIG key. When the caller does not supply Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a cryptographically random secret is generated instead. Either way, the plaintext secret is returned exactly once, in this action\&#39;s own response -- every later request for this key omits it entirely.
+     * This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a random 32-byte secret is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
      * @endpoint post /api/tsig-keys
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

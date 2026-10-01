@@ -42,7 +42,7 @@ export class DnssecPolicySettingsService extends BaseService implements DnssecPo
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) DNSSEC algorithm policy.
+     * This action returns the current DNSSEC algorithm policy; an empty list allows every algorithm the server supports. Requires &#x60;dnssecpolicysettings:read&#x60;.
      * @endpoint get /api/dnssec-policy-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class DnssecPolicySettingsService extends BaseService implements DnssecPo
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Dnssec&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Dnssec&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 for an unknown algorithm name. Requires &#x60;dnssecpolicysettings:write&#x60;.
      * @endpoint patch /api/dnssec-policy-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

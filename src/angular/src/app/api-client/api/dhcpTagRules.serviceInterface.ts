@@ -52,7 +52,7 @@ export interface DhcpTagRulesServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every tag rule this server manages.
+     * This action lists tag rules, one page at a time. Requires &#x60;dhcptagrules:read&#x60;.
      * 
      * @endpoint get /api/dhcp-tag-rules
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface DhcpTagRulesServiceInterface {
     apiDhcpTagRulesGet(requestParameters: ApiDhcpTagRulesGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpTagRuleDetailPagedResult>;
 
     /**
-     * This action permanently deletes a tag rule and every option it contributes -- removed explicitly, rather than relying on the relational backend\&#39;s own cascade delete, since MongoDB has no equivalent mechanism at all, the same reasoning M:Ninlil.Web.Controllers.ClientGroupsController.Delete(System.Guid,System.Threading.CancellationToken) already applies to a deleted client group\&#39;s own dependent rows.
+     * This action deletes a tag rule and every option it contributes, removed explicitly rather than by a relational cascade delete, which MongoDB lacks. Returns 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint delete /api/dhcp-tag-rules/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface DhcpTagRulesServiceInterface {
     apiDhcpTagRulesIdDelete(requestParameters: ApiDhcpTagRulesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single tag rule by its identifier.
+     * This action returns one tag rule. Returns 404 for an unknown id. Requires &#x60;dhcptagrules:read&#x60;.
      * 
      * @endpoint get /api/dhcp-tag-rules/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface DhcpTagRulesServiceInterface {
     apiDhcpTagRulesIdGet(requestParameters: ApiDhcpTagRulesIdGetRequestParams, extraHttpRequestParams?: any): Observable<DhcpTagRuleDetail>;
 
     /**
-     * This action partially updates an existing tag rule via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any other present field overwrites it.
+     * This action updates a tag rule as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Returns 400 for an empty name, an unknown scope, an unknown match mode or bad hex, and 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-tag-rules/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface DhcpTagRulesServiceInterface {
     apiDhcpTagRulesIdPatch(requestParameters: ApiDhcpTagRulesIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action fully replaces an existing tag rule\&#39;s own fields.
+     * This action replaces a tag rule\&#39;s fields. Validation is as for M:Ninlil.Web.Controllers.DhcpTagRulesController.Create(Ninlil.Web.Models.DhcpTagRuleWriteRequest,System.Threading.CancellationToken); returns 404 for an unknown id. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint put /api/dhcp-tag-rules/{id}
 * @param requestParameters
@@ -92,7 +92,7 @@ export interface DhcpTagRulesServiceInterface {
     apiDhcpTagRulesIdPut(requestParameters: ApiDhcpTagRulesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a new tag rule.
+     * This action creates a tag rule. Relay ID hex values are stored in uppercase. Returns 400 for a missing name, an unknown scope or a relay ID that is not even-length hex. Requires &#x60;dhcptagrules:write&#x60;.
      * 
      * @endpoint post /api/dhcp-tag-rules
 * @param requestParameters

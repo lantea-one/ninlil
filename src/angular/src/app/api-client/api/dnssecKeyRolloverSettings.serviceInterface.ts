@@ -28,14 +28,14 @@ export interface DnssecKeyRolloverSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) DNSSEC key-rollover timing configuration.
+     * This action returns the current DNSSEC key-rollover timing. Requires &#x60;dnsseckeyrolloversettings:read&#x60;.
      * 
      * @endpoint get /api/dnssec-key-rollover-settings
 */
     apiDnssecKeyRolloverSettingsGet(extraHttpRequestParams?: any): Observable<DnssecKeyRolloverSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Authoritative:DnssecKeyRollover&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Authoritative:DnssecKeyRollover&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect at once. Returns 400 for a malformed duration, a negative propagation delay, or a non-positive parent DS TTL or poll interval. Requires &#x60;dnsseckeyrolloversettings:write&#x60;.
      * 
      * @endpoint patch /api/dnssec-key-rollover-settings
 * @param requestParameters

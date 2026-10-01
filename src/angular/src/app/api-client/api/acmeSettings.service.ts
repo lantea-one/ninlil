@@ -45,7 +45,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
     }
 
     /**
-     * This action issues or renews a single, configured domain\&#39;s own certificate right now, outside &#x60;AcmeCertificateRenewalService&#x60;\&#39;s own poll loop timing -- driven directly through M:Ninlil.Dns.Server.Acme.AcmeCertificateRenewalService.RenewOneDomainAsync(System.String,System.Threading.CancellationToken), the exact same scope-per-attempt construction that service\&#39;s own background loop already uses (see that method\&#39;s own doc comment for why it is the one, shared implementation rather than a second copy here). The real attempt\&#39;s own outcome (success or failure) is always reflected in the returned inventory entry -- a genuine issuance/renewal failure (a CA outage, a challenge that failed to validate) is not reported as an HTTP error here, the same \&quot;one item\&#39;s own failure must not be treated as the request itself failing\&quot; reasoning the background loop already applies, since the failure itself is already logged and durably recorded by the time this action returns; only a domain this server does not currently have configured at all is a genuine &#x60;404&#x60;.
+     * This action issues or renews one configured domain\&#39;s certificate now, outside the renewal service\&#39;s schedule, through M:Ninlil.Dns.Server.Acme.AcmeCertificateRenewalService.RenewOneDomainAsync(System.String,System.Threading.CancellationToken), the same method the background loop uses. A failed attempt (a certificate authority outage, a challenge that did not validate) is not an HTTP error: it is logged and recorded, and the returned entry shows it. Returns 404 when the domain is not configured. Requires &#x60;acmesettings:manage&#x60;.
      * @endpoint post /api/acme-settings/certificates/{domain}/issue
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -107,7 +107,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
     }
 
     /**
-     * This action returns a real, per-domain certificate inventory: every domain Ninlil.Dns.Server.Acme.AcmeOptions.Domains currently names, alongside whatever Ninlil.Dns.Server.Acme.IAcmeAccountStore actually knows about it -- whether it has ever had a certificate successfully issued (a real, distinct state from \&quot;issued, but not due for renewal yet\&quot;), its issued/expiry dates, whether it is currently due for renewal, and its most recent renewal failure, if any. Returned in Ninlil.Dns.Server.Acme.AcmeOptions.Domains\&#39;s own configured order.
+     * This action lists every domain in Ninlil.Dns.Server.Acme.AcmeOptions.Domains, in configured order, with what Ninlil.Dns.Server.Acme.IAcmeAccountStore knows about it: whether a certificate has ever been issued, its issue and expiry dates, whether it is due for renewal, and its latest renewal failure, if any. Requires &#x60;acmesettings:read&#x60;.
      * @endpoint get /api/acme-settings/certificates
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -164,7 +164,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live) ACME and global CAA auto-management settings.
+     * This action returns the current ACME and server-wide CAA management settings. Requires &#x60;acmesettings:read&#x60;.
      * @endpoint get /api/acme-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -221,7 +221,7 @@ export class AcmeSettingsService extends BaseService implements AcmeSettingsServ
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Acme&#x60;/ &#x60;DnsServer:Acme:CaaAutoManagement&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. See this class\&#39;s own doc comment for which field needs a restart.
+     * This action merges a partial update into &#x60;DnsServer:Acme&#x60; and &#x60;DnsServer:Acme:CaaAutoManagement&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The response note says whether a restart is needed. Returns 400 for an invalid directory URL, domain, contact address or duration, a non-positive interval, or an empty path or organization. Requires &#x60;acmesettings:write&#x60;.
      * @endpoint patch /api/acme-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

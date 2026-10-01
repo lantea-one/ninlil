@@ -42,7 +42,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
-     * This action lists every catalog entry this server offers, together with whether each is currently enabled -- globally by default, or for a single optional &#x60;clientId&#x60;/ &#x60;clientGroupId&#x60; target (mutually exclusive) when named, see this class\&#39;s own doc comment for the full targeting contract.
+     * This action lists every catalog entry with whether it is enabled: globally by default, or for the given &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; (not both, which returns 400). Requires &#x60;filterlists:read&#x60;.
      * @endpoint get /api/blocked-services
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -123,7 +123,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
-     * This action disables a single catalog entry. With neither target given, this keeps doing exactly what it always has: permanently deletes its own managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity and every client-group &lt;em&gt;and&lt;/em&gt; (now that one can exist at all, see this class\&#39;s own doc comment) client-level assignment still referencing it, mirroring M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken)\&#39;s own identical cleanup. With a single optional &#x60;clientId&#x60;/&#x60;clientGroupId&#x60; target given, this instead removes &lt;em&gt;only that target\&#39;s own assignment&lt;/em&gt;, leaving the shared managed list -- and every other target\&#39;s own assignment -- completely untouched: an operator un-blocking a service for one specific child\&#39;s device must not also silently un-block it for everyone else who has it assigned. A no-op, not an error, when there is nothing to remove in the given scope (the entry has no managed list at all, or the named target simply has no assignment of its own).
+     * This action disables one catalog entry. Without a target it deletes the entry\&#39;s managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity and every client and client-group assignment that refers to it (as M:Ninlil.Web.Controllers.FilterListsController.Delete(System.Guid,System.Threading.CancellationToken) does for group assignments). With a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60; it removes only that target\&#39;s assignment and leaves the list and every other target alone, so unblocking a service for one device does not unblock it for everyone. Having nothing to remove is not an error. Returns 400 when both targets are given and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * @endpoint delete /api/blocked-services/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -205,7 +205,7 @@ export class BlockedServicesService extends BaseService implements BlockedServic
     }
 
     /**
-     * This action enables a single catalog entry: creates its own managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity if none exists yet, or re-enables (clears Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity.IsDisabled on) one that was previously disabled -- unaffected by scoping, see this class\&#39;s own doc comment. Idempotent -- enabling an already-enabled entry (in the same scope) simply returns its current state. When a single optional &#x60;clientId&#x60;/&#x60;clientGroupId&#x60; target (mutually exclusive) is given, this action additionally creates that target\&#39;s own assignment of the managed list, if it does not already have one -- rejected with &#x60;400 Bad Request&#x60; if both are given, or if the named target does not actually exist.
+     * This action enables one catalog entry: it creates the entry\&#39;s managed Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity if none exists or re-enables a disabled one, and, with a &#x60;clientId&#x60; or &#x60;clientGroupId&#x60;, also assigns the list to that target if it is not already. Enabling an enabled entry just returns its state. Returns 400 when both targets are given or the target does not exist, and 404 for an unknown key. Requires &#x60;filterlists:write&#x60;.
      * @endpoint post /api/blocked-services/{key}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

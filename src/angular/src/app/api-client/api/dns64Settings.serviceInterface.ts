@@ -28,14 +28,14 @@ export interface Dns64SettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live) DNS64 settings.
+     * This action returns the current DNS64 settings. Requires &#x60;dns64settings:read&#x60;.
      * 
      * @endpoint get /api/dns64-settings
 */
     apiDns64SettingsGet(extraHttpRequestParams?: any): Observable<Dns64SettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Dns64&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix is validated here, at write time, against the same RFC 6052 §2.2 rule &#x60;Dns64SynthesisService.TryParsePrefix&#x60; enforces at synthesis time, so a misconfigured prefix is rejected immediately rather than silently disabling synthesis later.
+     * This action merges a partial update into &#x60;DnsServer:Dns64&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Ninlil.Dns.Server.Core.Dns64.Dns64Options.SynthesisPrefix is checked against the same RFC 6052 §2.2 rule &#x60;Dns64SynthesisService.TryParsePrefix&#x60; applies (an IPv6 prefix of /32, /40, /48, /56, /64 or /96), so a bad prefix returns 400 here instead of quietly disabling synthesis later. Requires &#x60;dns64settings:write&#x60;.
      * 
      * @endpoint patch /api/dns64-settings
 * @param requestParameters

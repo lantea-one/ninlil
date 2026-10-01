@@ -28,14 +28,14 @@ export interface ClientSubnetSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live) ECS settings.
+     * This action returns the current ECS settings. Requires &#x60;clientsubnetsettings:read&#x60;.
      * 
      * @endpoint get /api/client-subnet-settings
 */
     apiClientSubnetSettingsGet(extraHttpRequestParams?: any): Observable<ClientSubnetSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
+     * This action merges a partial update into &#x60;DnsServer:ClientSubnet&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value; a null or blank &#x60;overrideAddress&#x60; clears it. Returns 400 for an override address that is not an IP address. Requires &#x60;clientsubnetsettings:write&#x60;.
      * 
      * @endpoint patch /api/client-subnet-settings
 * @param requestParameters

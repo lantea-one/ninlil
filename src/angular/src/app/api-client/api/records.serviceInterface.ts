@@ -58,7 +58,7 @@ export interface RecordsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every record stored in a zone.
+     * This action lists a zone\&#39;s records, one page at a time, with their data as structured camelCase JSON. Returns 404 for an unknown zone. Requires &#x60;zones:read&#x60;.
      * 
      * @endpoint get /api/zones/{zoneId}/records
 * @param requestParameters
@@ -66,7 +66,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsGet(requestParameters: ApiZonesZoneIdRecordsGetRequestParams, extraHttpRequestParams?: any): Observable<RecordDetailPagedResult>;
 
     /**
-     * This action removes a record from the zone. A zone\&#39;s own SOA record cannot be removed this way -- every zone must always have exactly one; delete the zone itself instead.
+     * This action removes a record from the zone. The SOA record cannot be removed (409), since every zone must keep exactly one; delete the zone instead. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint delete /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -74,7 +74,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdDelete(requestParameters: ApiZonesZoneIdRecordsIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single record by its identifier.
+     * This action returns one record. Returns 404 when the record does not exist or belongs to another zone. Requires &#x60;zones:read&#x60;.
      * 
      * @endpoint get /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -82,7 +82,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdGet(requestParameters: ApiZonesZoneIdRecordsIdGetRequestParams, extraHttpRequestParams?: any): Observable<RecordDetail>;
 
     /**
-     * This action partially updates an existing record via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
+     * This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;type&#x60; without new &#x60;data&#x60; re-checks the existing data against the new type and returns 400 if it does not fit. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint patch /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -90,7 +90,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdPatch(requestParameters: ApiZonesZoneIdRecordsIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action fully replaces an existing record\&#39;s fields, keeping its own identifier.
+     * This action replaces a record\&#39;s fields, keeping its id. Returns 400 when the data does not fit the record type and 404 when the record does not exist or belongs to another zone. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint put /api/zones/{zoneId}/records/{id}
 * @param requestParameters
@@ -98,7 +98,7 @@ export interface RecordsServiceInterface {
     apiZonesZoneIdRecordsIdPut(requestParameters: ApiZonesZoneIdRecordsIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a new record to the zone. A zone\&#39;s very first record must be its own SOA record -- there is otherwise no serial to advance -- so this bootstraps the zone via M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken) exactly once; every later addition goes through the ordinary M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken) path instead.
+     * This action adds a record to the zone. A zone\&#39;s first record must be its SOA, since without it there is no serial to advance; that first record bootstraps the zone through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.BootstrapZoneAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Threading.CancellationToken), and later records go through M:Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService.ApplyChangesAsync(System.Guid,System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Collections.Generic.IReadOnlyList{Ninlil.Dns.Data.Abstractions.Entity.RecordEntity},System.Nullable{System.UInt32},System.Threading.CancellationToken). Returns 400 when the first record is not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409 for a second SOA. Requires &#x60;zones:write&#x60;.
      * 
      * @endpoint post /api/zones/{zoneId}/records
 * @param requestParameters

@@ -28,14 +28,14 @@ export interface ClientPresenceSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the currently-effective client presence settings.
+     * This action returns the current client presence settings. Requires &#x60;clientpresencesettings:read&#x60;.
      * 
      * @endpoint get /api/client-presence-settings
 */
     apiClientPresenceSettingsGet(extraHttpRequestParams?: any): Observable<ClientPresenceSettingsDetail>;
 
     /**
-     * This action applies a JSON merge patch to the client presence settings. Every interval must be a positive System.TimeSpan.
+     * This action applies an RFC 7396 merge patch to the client presence settings. Returns 400 for an interval that is not a positive TimeSpan or a non-boolean &#x60;enableNeighborTableSignal&#x60;. Requires &#x60;clientpresencesettings:write&#x60;.
      * 
      * @endpoint patch /api/client-presence-settings
 * @param requestParameters

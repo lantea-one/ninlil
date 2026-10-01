@@ -62,7 +62,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action lists every known client this server is tracking, optionally narrowed to favorites or non-favorites (&#x60;isFavorite&#x60;) and to devices currently online or offline (&#x60;presence&#x60;) and to devices registered since a given instant (&#x60;createdSinceUtc&#x60;), in the requested order (&#x60;sort&#x60;, creation order by default). Presence is evaluated against the live online window at the moment of the request -- the same cutoff each returned device\&#39;s own Ninlil.Web.Models.ClientDetail.IsOnline is computed from -- and every filter and ordering is pushed down to the storage engine.
+     * This action lists known clients, one page at a time, optionally narrowed by favorite star (&#x60;isFavorite&#x60;), online or offline (&#x60;presence&#x60;) and registration time (&#x60;createdSinceUtc&#x60;), in the requested order (&#x60;sort&#x60;; creation order by default). Presence uses the online window at the moment of the request, the same cutoff each device\&#39;s Ninlil.Web.Models.ClientDetail.IsOnline uses. Filtering, ordering and paging run in the storage engine. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/clients
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -183,7 +183,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action permanently deletes a known client. This has no effect on any lease/record the device may still hold -- this registry is purely descriptive metadata about a device, never the source of truth for its own address assignment or DNS content.
+     * This action deletes a known client and its addresses. Leases and DNS records the device holds are not affected; the registry only describes devices. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint delete /api/clients/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -242,7 +242,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action looks up a single known client by its identifier.
+     * This action returns one known client. Returns 404 for an unknown id. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/clients/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -304,7 +304,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action partially updates an existing known client\&#39;s own editable metadata via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, and any other present field overwrites it. As with M:Ninlil.Web.Controllers.ClientsController.Replace(System.Guid,Ninlil.Web.Models.ClientWriteRequest,System.Threading.CancellationToken), this action never recognizes an address field -- a patch document naming one is simply ignored, the same way &#x60;TsigKeysController.Patch&#x60; never looks for a &#x60;secret&#x60; field at all.
+     * This action updates a client\&#39;s editable details as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Address fields are not recognized and are ignored. Errors are as for M:Ninlil.Web.Controllers.ClientsController.Replace(System.Guid,Ninlil.Web.Models.ClientWriteRequest,System.Threading.CancellationToken). Requires &#x60;clients:write&#x60;.
      * @endpoint patch /api/clients/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -376,7 +376,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action starts, or replaces, an instant pause on a single known client -- blocking every one of its own DNS queries outright, regardless of any schedule, filter-list, or rewrite that would otherwise apply, until Ninlil.Web.Models.InstantPauseRequest.DurationMinutes minutes from now. Calling this again while a pause is already active simply replaces it with a fresh one -- there is no \&quot;extend\&quot; semantic, matching how every other write action in this controller always fully overwrites the field(s) it targets.
+     * This action pauses one client now: all its DNS queries are blocked, whatever schedules, filter lists or rewrites would apply, for Ninlil.Web.Models.InstantPauseRequest.DurationMinutes minutes. Calling it during a pause replaces the pause rather than extending it. Returns 400 for a duration that is not positive and 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{id}/pause
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -451,7 +451,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action fully replaces an existing known client\&#39;s own editable metadata -- see this class\&#39;s own doc comment for why a device\&#39;s own address(es) can never be changed this way.
+     * This action replaces a client\&#39;s editable details; its addresses cannot be changed this way (see the class summary). Returns 400 for an unknown client group or icon name and 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint put /api/clients/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -523,7 +523,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action ends a client\&#39;s own instant pause immediately, clearing Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc back to null regardless of how much time was left on it. A no-op, not an error, when the client was not currently paused at all.
+     * This action ends a client\&#39;s pause now by clearing Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc. Resuming a client that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients/{id}/resume
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -585,7 +585,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action registers a new known client device together with its first address. Rejected with &#x60;409 Conflict&#x60; when a device already exists for the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier/Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion pair -- the same real, storage-level uniqueness Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity\&#39;s own composite index enforces, translated here via a pre-check against M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken), mirroring exactly how every other controller in this project translates a storage-level uniqueness violation into a real &#x60;ConflictException&#x60; (see M:Ninlil.Web.Controllers.TsigKeysController.Create(Ninlil.Web.Models.TsigKeyCreateRequest,System.Threading.CancellationToken)\&#39;s own &#x60;FindByNameAsync&#x60; pre-check for the closest precedent).
+     * This action registers a client device with its first address. Returns 400 for a missing identifier, an unknown client group or an unknown icon name, and 409 when a device already has the same Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion (the pair the address table\&#39;s unique index covers, checked first through M:Ninlil.Dns.Data.Abstractions.Repository.IDnsClientRepository.GetByClientIdentifierAsync(System.String,Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum,System.Threading.CancellationToken)). Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/clients
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -656,7 +656,7 @@ export class ClientsService extends BaseService implements ClientsServiceInterfa
     }
 
     /**
-     * This action reports the registry\&#39;s headline counts -- total, online, offline, new, and favorites -- each a pushed-down count over the same filters M:Ninlil.Web.Controllers.ClientsController.List(Ninlil.Web.Models.PaginationQuery,System.Nullable{System.Boolean},System.Nullable{Ninlil.Dns.Common.Enum.DnsClientPresenceFilterEnum},System.Nullable{System.DateTimeOffset},System.Nullable{Ninlil.Dns.Common.Enum.DnsClientSortOrderEnum},System.Threading.CancellationToken) applies, so a count always agrees with the filtered list it summarizes.
+     * This action returns the registry\&#39;s headline counts: total, online, offline, new and favorites, each counted in storage with the same filters M:Ninlil.Web.Controllers.ClientsController.List(Ninlil.Web.Models.PaginationQuery,System.Nullable{System.Boolean},System.Nullable{Ninlil.Dns.Common.Enum.DnsClientPresenceFilterEnum},System.Nullable{System.DateTimeOffset},System.Nullable{Ninlil.Dns.Common.Enum.DnsClientSortOrderEnum},System.Threading.CancellationToken) uses, so a count agrees with the matching list. Returns 400 when &#x60;newSinceUtc&#x60; is in the future. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/clients/summary
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

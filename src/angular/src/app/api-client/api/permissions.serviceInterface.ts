@@ -22,7 +22,7 @@ export interface PermissionsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the distinct, sorted set of every permission string named by any Ninlil.Dns.Identity.Authorization.RequirePermissionAttribute applied anywhere in this project\&#39;s own controller assembly -- on a controller class itself or on any individual action.
+     * This action returns the sorted, distinct permission strings named by every Ninlil.Dns.Identity.Authorization.RequirePermissionAttribute on a controller class or action. Requires only a signed-in caller.
      * 
      * @endpoint get /api/permissions
 */

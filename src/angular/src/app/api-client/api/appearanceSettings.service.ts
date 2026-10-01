@@ -45,7 +45,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live -- reflecting any write M:Ninlil.Web.Controllers.AppearanceSettingsController.Patch(System.Text.Json.JsonElement) has made, even without a restart) global default appearance.
+     * This action returns the server-wide default appearance, including any change M:Ninlil.Web.Controllers.AppearanceSettingsController.Patch(System.Text.Json.JsonElement) has made. Requires &#x60;appearance:read&#x60;.
      * @endpoint get /api/appearance-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -102,7 +102,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
     }
 
     /**
-     * This action reports the current caller\&#39;s own appearance preference: their own override (if any) alongside the effective value the Angular admin SPA\&#39;s own theming engine should actually render, falling back to this host\&#39;s own current global default for whichever field (if either) the caller has not overridden.
+     * This action returns the caller\&#39;s appearance: their override for each field, if any, and the effective value the admin console should render, which falls back to the server-wide default for a field without an override. Requires only a signed-in caller.
      * @endpoint get /api/appearance-settings/me
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -159,7 +159,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
     }
 
     /**
-     * This action merges a partial update into the current caller\&#39;s own Ninlil.Dns.Data.Abstractions.Entity.UserEntity.PreferredPalette/Ninlil.Dns.Data.Abstractions.Entity.UserEntity.PreferredMode, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was; a field present with a JSON &#x60;null&#x60; clears that field\&#39;s own override, reverting the caller back to this host\&#39;s own global default for it; a field present with a palette/mode name sets that override. This write lands directly on the caller\&#39;s own account row, so -- unlike M:Ninlil.Web.Controllers.AppearanceSettingsController.Patch(System.Text.Json.JsonElement) -- it needs no configuration-file round trip and is visible on this same controller\&#39;s very next read regardless.
+     * This action merges a partial update into the caller\&#39;s Ninlil.Dns.Data.Abstractions.Entity.UserEntity.PreferredPalette and Ninlil.Dns.Data.Abstractions.Entity.UserEntity.PreferredMode as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; removes the override (falling back to the server-wide default), and a palette or mode name sets it. The value is stored on the caller\&#39;s account, not in the configuration file. Returns 400 for an unknown name. Requires only a signed-in caller.
      * @endpoint patch /api/appearance-settings/me
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -230,7 +230,7 @@ export class AppearanceSettingsService extends BaseService implements Appearance
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Appearance&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. Unlike every other runtime settings &#x60;PATCH&#x60; action in this project, this one\&#39;s own write is visible immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Appearance&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change takes effect at once. Returns 400 for an unknown palette or mode name. Requires &#x60;appearance:write&#x60;.
      * @endpoint patch /api/appearance-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

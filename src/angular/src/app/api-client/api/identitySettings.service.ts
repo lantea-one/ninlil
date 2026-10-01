@@ -42,7 +42,7 @@ export class IdentitySettingsService extends BaseService implements IdentitySett
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) password-complexity and account-lockout policy.
+     * This action returns the current password-complexity and account-lockout policy. Requires &#x60;identitysettings:read&#x60;.
      * @endpoint get /api/identity-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class IdentitySettingsService extends BaseService implements IdentitySett
     }
 
     /**
-     * This action merges a partial update into &#x60;Identity:Password&#x60;/&#x60;Identity:Lockout&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Every field takes effect on the very next request -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;Identity:Password&#x60; and &#x60;Identity:Lockout&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Every field takes effect on the next request. Returns 400 when a length or attempt count is below 1 or the lockout duration is not a valid TimeSpan. Requires &#x60;identitysettings:write&#x60;.
      * @endpoint patch /api/identity-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

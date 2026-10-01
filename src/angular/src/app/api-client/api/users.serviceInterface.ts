@@ -87,7 +87,7 @@ export interface UsersServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every user account on this server.
+     * This action lists user accounts, one page at a time, with their roles and direct permissions. Requires &#x60;users:read&#x60;.
      * 
      * @endpoint get /api/users
 * @param requestParameters
@@ -95,7 +95,7 @@ export interface UsersServiceInterface {
     apiUsersGet(requestParameters: ApiUsersGetRequestParams, extraHttpRequestParams?: any): Observable<UserSummaryPagedResult>;
 
     /**
-     * This action permanently deletes a user account.
+     * This action deletes a user account. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint delete /api/users/{id}
 * @param requestParameters
@@ -103,7 +103,7 @@ export interface UsersServiceInterface {
     apiUsersIdDelete(requestParameters: ApiUsersIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single user account by its identifier.
+     * This action returns one user account. Returns 404 for an unknown id. Requires &#x60;users:read&#x60;.
      * 
      * @endpoint get /api/users/{id}
 * @param requestParameters
@@ -111,7 +111,7 @@ export interface UsersServiceInterface {
     apiUsersIdGet(requestParameters: ApiUsersIdGetRequestParams, extraHttpRequestParams?: any): Observable<UserSummary>;
 
     /**
-     * This action revokes a permission claim that was granted to a user account directly.
+     * This action revokes a permission granted to a user directly. Permissions that come from the user\&#39;s roles are unaffected. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint delete /api/users/{id}/permissions
 * @param requestParameters
@@ -119,7 +119,7 @@ export interface UsersServiceInterface {
     apiUsersIdPermissionsDelete(requestParameters: ApiUsersIdPermissionsDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action grants a user account a permission claim directly, independent of any role they hold.
+     * This action grants a user a permission directly, independent of their roles. The permission string is not checked against &#x60;GET /api/permissions&#x60;. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint post /api/users/{id}/permissions
 * @param requestParameters
@@ -127,7 +127,7 @@ export interface UsersServiceInterface {
     apiUsersIdPermissionsPost(requestParameters: ApiUsersIdPermissionsPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action updates an existing user account\&#39;s profile and enabled/disabled state. Password changes are handled separately, not through this endpoint.
+     * This action updates an account\&#39;s display name, e-mail address and disabled flag. A disabled account cannot sign in or refresh its session. Passwords are changed through M:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest). Requires &#x60;users:write&#x60;.
      * 
      * @endpoint put /api/users/{id}
 * @param requestParameters
@@ -135,7 +135,7 @@ export interface UsersServiceInterface {
     apiUsersIdPut(requestParameters: ApiUsersIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action resets a user account\&#39;s password on an administrator\&#39;s behalf -- built for a locked-out account that cannot supply its own current password the way M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest) requires. Ninlil.Web.Models.AdminResetPasswordRequest.Mode selects one of two delivery modes (see Ninlil.Web.Models.AdminPasswordResetMode\&#39;s own doc comment for what each does and why both exist): &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a freshly-generated         strong password immediately (via a real         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.GeneratePasswordResetTokenAsync(&#x60;0)/         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) round trip, not a direct         field write, so the exact same Identity validation/hashing path every other         password change goes through still applies) and returns it exactly once, in         the response body only -- this project\&#39;s usual reveal-once secret exposure         policy.     &lt;/item&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account\&#39;s own         address a link to this project\&#39;s shared \&quot;set new password\&quot; landing page         (M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest) is what that page\&#39;s         own form submits to), carrying a real Identity reset token, Base64Url-encoded         for safe transport in a URL query string -- see         Ninlil.Web.Models.ConfirmPasswordResetRequest\&#39;s own doc comment for why. Requires         both a confirmed e-mail address on the target account and an already-configured         SMTP server (see &#x60;SmtpSettingsController&#x60;); either gap is reported as a         clear Ninlil.Dns.Common.Exceptions.ValidationException rather than letting         &#x60;SmtpClient.ConnectAsync&#x60; fail with an unhelpful raw exception.     &lt;/item&gt;&lt;/list&gt;
+     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest) requires. Ninlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see Ninlil.Web.Models.AdminPasswordResetMode). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong         password at once, through a reset token and         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only.     &lt;/item&gt;&lt;item&gt;Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The link carries an         Identity reset token, Base64Url-encoded for the query string (see         Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail         address and SMTP must be configured (see &#x60;SmtpSettingsController&#x60;);         otherwise this returns 400 with a clear message.     &lt;/item&gt;&lt;/list&gt;
      * 
      * @endpoint post /api/users/{id}/reset-password
 * @param requestParameters
@@ -143,7 +143,7 @@ export interface UsersServiceInterface {
     apiUsersIdResetPasswordPost(requestParameters: ApiUsersIdResetPasswordPostRequestParams, extraHttpRequestParams?: any): Observable<AdminResetPasswordResult>;
 
     /**
-     * This action grants a user account a role.
+     * This action adds a user to a role, by role name. Returns 400 when the role does not exist or the user already holds it. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint post /api/users/{id}/roles
 * @param requestParameters
@@ -151,7 +151,7 @@ export interface UsersServiceInterface {
     apiUsersIdRolesPost(requestParameters: ApiUsersIdRolesPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action revokes a role from a user account.
+     * This action removes a user from a role. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint delete /api/users/{id}/roles/{roleName}
 * @param requestParameters
@@ -159,7 +159,7 @@ export interface UsersServiceInterface {
     apiUsersIdRolesRoleNameDelete(requestParameters: ApiUsersIdRolesRoleNameDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action changes the current caller\&#39;s own password, proving they already know the current one via M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ChangePasswordAsync(&#x60;0,System.String,System.String) -- a wrong Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword surfaces as a real, specific Microsoft.AspNetCore.Identity.IdentityResult failure (Identity\&#39;s own &#x60;PasswordMismatch&#x60; error) through M:Ninlil.Web.Extension.IdentityResultExtension.ThrowIfFailed(Microsoft.AspNetCore.Identity.IdentityResult), never swallowed into a generic message. See this class\&#39;s own doc comment for why this needs no specific permission, only Microsoft.AspNetCore.Authorization.AuthorizeAttribute.
+     * This action changes the caller\&#39;s password. It requires the current password; a wrong one returns 400 with Identity\&#39;s &#x60;PasswordMismatch&#x60; error. Requires only a signed-in caller.
      * 
      * @endpoint post /api/users/me/change-password
 * @param requestParameters
@@ -167,14 +167,14 @@ export interface UsersServiceInterface {
     apiUsersMeChangePasswordPost(requestParameters: ApiUsersMeChangePasswordPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action reports the current caller\&#39;s own self-service profile: display name, phone number, and (read-only) e-mail address. Unlike M:Ninlil.Web.Controllers.UsersController.Get(System.Guid), this needs no &#x60;users:read&#x60; permission -- see this class\&#39;s own doc comment.
+     * This action returns the caller\&#39;s profile: display name, phone number and read-only e-mail address. Requires only a signed-in caller.
      * 
      * @endpoint get /api/users/me
 */
     apiUsersMeGet(extraHttpRequestParams?: any): Observable<UserProfileDetail>;
 
     /**
-     * This action merges a partial update into the current caller\&#39;s own Ninlil.Dns.Data.Abstractions.Entity.UserEntity.DisplayName/Ninlil.Dns.Data.Abstractions.Entity.UserEntity.PhoneNumber, RFC 7396 merge-patch style (see Ninlil.Web.Extension.JsonElementMergePatchExtension): a field absent from patch is left exactly as it was; a field present with a JSON &#x60;null&#x60; clears it back to null; a field present with a string value sets it. Ninlil.Dns.Data.Abstractions.Entity.UserEntity.Email is deliberately not accepted here -- see this class\&#39;s own doc comment and Ninlil.Web.Models.UserProfileDetail\&#39;s own doc comment for why.
+     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see Ninlil.Web.Extension.JsonElementMergePatchExtension): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. The e-mail address cannot be changed here (see Ninlil.Web.Models.UserProfileDetail). Requires only a signed-in caller.
      * 
      * @endpoint patch /api/users/me
 * @param requestParameters
@@ -182,7 +182,7 @@ export interface UsersServiceInterface {
     apiUsersMePatch(requestParameters: ApiUsersMePatchRequestParams, extraHttpRequestParams?: any): Observable<UserProfileDetail>;
 
     /**
-     * This action creates a new user account. Before actually creating it, a best-effort, cluster-wide uniqueness check (Ninlil.Dns.Server.Core.ClusterSync.IClusterUsernameUniquenessChecker) is consulted against every currently-reachable peer -- a real, currently-healthy peer that already reports this username rejects the request outright with a Ninlil.Dns.Common.Exceptions.ConflictException, since that is a genuinely preventable collision, not a partition; an unreachable peer is silently skipped, per this project\&#39;s own explicit \&quot;never block user management on one down peer\&quot; decision. A rarer collision that genuinely only becomes visible after both sides already committed (a true network partition) is instead caught and resolved later, once the two nodes resync, by &#x60;UserClusterConfigSyncApplier&#x60;\&#39;s own last-write-wins collision handling.
+     * This action creates a user account. It first asks every reachable, healthy cluster peer whether the username exists there and returns 409 if one does; an unreachable peer is skipped, so user management never blocks on one node being down. A collision that only shows up later (after a network partition) is resolved when the nodes resync, by the last-write-wins handling in &#x60;UserClusterConfigSyncApplier&#x60;. Returns 400 when the username, e-mail address or password fails validation. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint post /api/users
 * @param requestParameters

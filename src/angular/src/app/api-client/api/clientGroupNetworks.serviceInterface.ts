@@ -52,7 +52,7 @@ export interface ClientGroupNetworksServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every network belonging to a client group.
+     * This action lists a group\&#39;s members, one page at a time. Returns 404 for an unknown group. Requires &#x60;clientgroups:read&#x60;.
      * 
      * @endpoint get /api/client-groups/{groupId}/networks
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksGet(requestParameters: ApiClientGroupsGroupIdNetworksGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupNetworkDetailPagedResult>;
 
     /**
-     * This action removes a network from the client group.
+     * This action removes a member from the group. Returns 404 when it does not exist or belongs to another group. Requires &#x60;clientgroups:write&#x60;.
      * 
      * @endpoint delete /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdDelete(requestParameters: ApiClientGroupsGroupIdNetworksIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single network by its identifier.
+     * This action returns one member. Returns 404 when it does not exist or belongs to another group. Requires &#x60;clientgroups:read&#x60;.
      * 
      * @endpoint get /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdGet(requestParameters: ApiClientGroupsGroupIdNetworksIdGetRequestParams, extraHttpRequestParams?: any): Observable<ClientGroupNetworkDetail>;
 
     /**
-     * This action fully replaces an existing network\&#39;s own CIDR value, keeping its own identifier.
+     * This action replaces a member\&#39;s CIDR or ClientID, keeping its id. Validation is as for M:Ninlil.Web.Controllers.ClientGroupNetworksController.Create(System.Guid,Ninlil.Web.Models.ClientGroupNetworkWriteRequest,System.Threading.CancellationToken); returns 404 when the member does not exist or belongs to another group. Requires &#x60;clientgroups:write&#x60;.
      * 
      * @endpoint put /api/client-groups/{groupId}/networks/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface ClientGroupNetworksServiceInterface {
     apiClientGroupsGroupIdNetworksIdPut(requestParameters: ApiClientGroupsGroupIdNetworksIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a new network to the client group.
+     * This action adds a member to the group. Returns 400 unless exactly one of &#x60;cidr&#x60; and &#x60;clientId&#x60; is given or when the CIDR does not parse, and 404 for an unknown group. Requires &#x60;clientgroups:write&#x60;.
      * 
      * @endpoint post /api/client-groups/{groupId}/networks
 * @param requestParameters

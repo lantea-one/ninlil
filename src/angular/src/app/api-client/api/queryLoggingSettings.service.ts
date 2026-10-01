@@ -42,7 +42,7 @@ export class QueryLoggingSettingsService extends BaseService implements QueryLog
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live and running) query logging settings. Ninlil.Web.Models.QueryLoggingSettingsDetail.PrivacyLevel reflects any write M:Ninlil.Web.Controllers.QueryLoggingSettingsController.Patch(System.Text.Json.JsonElement) has made even without a restart; every other field reflects the configuration file\&#39;s own current contents, which may not yet be what is actually running if a restart is still pending for it.
+     * This action returns the query logging settings as saved in the configuration file. The privacy level is the one in use; the other fields may be waiting for a restart. Requires &#x60;querylog:read&#x60;.
      * @endpoint get /api/query-logging-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class QueryLoggingSettingsService extends BaseService implements QueryLog
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:QueryLogging&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. See this class\&#39;s own doc comment for which field takes effect immediately and which need a restart.
+     * This action merges a partial update into &#x60;DnsServer:QueryLogging&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The response note says whether a restart is needed. Returns 400 for a malformed duration or an unknown privacy level. Requires &#x60;querylog:write&#x60;.
      * @endpoint patch /api/query-logging-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

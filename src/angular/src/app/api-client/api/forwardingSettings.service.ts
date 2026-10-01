@@ -42,7 +42,7 @@ export class ForwardingSettingsService extends BaseService implements Forwarding
     }
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) forwarding settings.
+     * This action returns the current forwarding settings. Requires &#x60;forwardingsettings:read&#x60;.
      * @endpoint get /api/forwarding-settings
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -99,7 +99,7 @@ export class ForwardingSettingsService extends BaseService implements Forwarding
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Forwarding&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file. Every field here hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Forwarding&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. Every field takes effect at once. Returns 400 for an unknown failover strategy, a malformed duration or a &#x60;maxCacheEntries&#x60; below 1. Requires &#x60;forwardingsettings:write&#x60;.
      * @endpoint patch /api/forwarding-settings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

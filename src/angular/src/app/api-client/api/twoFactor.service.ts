@@ -47,7 +47,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action confirms a TOTP enrollment by checking a freshly-generated code, and only then turns on the requirement to supply a second factor at sign-in.
+     * This action confirms authenticator setup by checking a code from the app, and only then makes a second factor required at sign-in. Returns 400 for a wrong code.
      * @endpoint post /api/auth/two-factor/authenticator/enable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -115,7 +115,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action generates a fresh TOTP shared secret for the current caller, replacing any previously-generated (and not yet confirmed) one. Two-factor authentication is not yet required at this point -- M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must still confirm it.
+     * This action generates a new TOTP shared secret for the caller, replacing the existing one, and returns it with an &#x60;otpauth://&#x60; URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must confirm it before two-factor sign-in becomes required. If two-factor sign-in is already on, the new secret replaces the old one at once.
      * @endpoint post /api/auth/two-factor/authenticator/setup
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -172,7 +172,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action turns off the requirement to supply a second factor at sign-in, after confirming the caller can still produce a valid code -- so a stolen access token alone is not enough to disable this protection.
+     * This action stops requiring a second factor at sign-in. It needs a valid authenticator code as well as the access token. Returns 400 for a wrong code.
      * @endpoint post /api/auth/two-factor/disable
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -240,7 +240,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action e-mails the current caller a one-time verification code, for use as a second factor at sign-in when an authenticator app is not available. The caller\&#39;s e-mail address must already be confirmed.
+     * This action e-mails the caller a short-lived verification code from the e-mail token provider and returns 202. The account must have a confirmed e-mail address, otherwise this returns 400. Because it needs a signed-in caller, it cannot be called during the two-factor step of a sign-in.
      * @endpoint post /api/auth/two-factor/email/send
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -294,7 +294,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action generates a fresh batch of 10 single-use two-factor recovery codes for the current caller, replacing (invalidating) any previously-generated batch entirely. Two- factor authentication must already be enabled -- a recovery code exists purely as a fallback for a second factor this account does not otherwise require, so generating one first would have nothing to be a fallback *for*, mirroring the guard M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) itself already establishes for a similar reason.
+     * This action generates a new batch of single-use recovery codes for the caller and invalidates any earlier batch. A recovery code is a fallback for the second factor, so two-factor sign-in must already be enabled; otherwise this returns 400.
      * @endpoint post /api/auth/two-factor/recovery-codes/generate
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -351,7 +351,7 @@ export class TwoFactorService extends BaseService implements TwoFactorServiceInt
     }
 
     /**
-     * This action reports the current caller\&#39;s own two-factor enrollment state -- whether two-factor sign-in is currently required, and whether an authenticator app has already been confirmed. Built for the self-service account-security page, which has no other way to learn this: &#x60;UserClaimsBuilder&#x60; never places a two-factor claim on an issued access token (a stale, cached \&quot;enabled\&quot; claim on an already-issued token would be actively misleading the moment it changed), and the only other place this state is exposed at all, &#x60;UsersController&#x60;\&#39;s own &#x60;UserSummary&#x60;, requires the &#x60;users:read&#x60; permission an ordinary, non-administrative account has no reason to hold.
+     * This action reports the caller\&#39;s two-factor state: whether two-factor sign-in is required, whether an authenticator key exists, whether the account has a confirmed e-mail address, and how many recovery codes remain. The account-security page needs this endpoint because access tokens carry no two-factor claim (it would go stale as soon as the setting changed), and &#x60;UsersController&#x60; exposes the state only to holders of &#x60;users:read&#x60;.
      * @endpoint get /api/auth/two-factor/status
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

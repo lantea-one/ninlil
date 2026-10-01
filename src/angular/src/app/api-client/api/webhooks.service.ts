@@ -56,7 +56,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action lists every outbound webhook subscription this server knows about.
+     * This action lists webhook subscriptions, one page at a time, without their credentials or signing secrets. Requires &#x60;webhooks:read&#x60;.
      * @endpoint get /api/webhooks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -137,7 +137,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action permanently deletes an outbound webhook subscription.
+     * This action deletes a webhook subscription. Returns 404 for an unknown id. Requires &#x60;webhooks:write&#x60;.
      * @endpoint delete /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -196,7 +196,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action lists a single webhook subscription\&#39;s own persisted delivery-attempt history, most-recently-created first -- every real delivery &#x60;WebhookDeliveryService&#x60;/&#x60;WebhookDeliveryRetrySweepService&#x60; has ever recorded for it, from its very first attempt through to whichever terminal outcome (or ongoing retry) it currently stands at. This is a read-only view: there is no action anywhere on this controller to create, edit, or manually trigger a retry of a delivery attempt -- a row here is written exclusively by the delivery engine itself, on the server\&#39;s own schedule, never by an operator.
+     * This action lists one subscription\&#39;s delivery attempts, newest first, one page at a time: every delivery &#x60;WebhookDeliveryService&#x60; and &#x60;WebhookDeliveryRetrySweepService&#x60; have recorded for it, from the first try to its final outcome or pending retry. It is read only; the API has no way to create, edit or retry an attempt. Returns 404 for an unknown subscription. Requires &#x60;webhooks:read&#x60;.
      * @endpoint get /api/webhooks/{id}/delivery-attempts
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -281,7 +281,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action looks up a single outbound webhook subscription by its identifier.
+     * This action returns one webhook subscription, without its credentials or signing secret. Returns 404 for an unknown id. Requires &#x60;webhooks:read&#x60;.
      * @endpoint get /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -343,7 +343,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action partially updates an existing webhook subscription via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it. As with M:Ninlil.Web.Controllers.WebhooksController.Replace(System.Guid,Ninlil.Web.Models.WebhookSubscriptionWriteRequest,System.Threading.CancellationToken), this subscription\&#39;s own HMAC signing secret cannot be changed this way.
+     * This action updates a webhook subscription as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears a nullable field, and any other value replaces it. Changing &#x60;authMode&#x60; requires a matching &#x60;authCredentials&#x60; in the same patch. The HMAC signing secret cannot be changed. Requires &#x60;webhooks:write&#x60;.
      * @endpoint patch /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -415,7 +415,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action fully replaces an existing webhook subscription\&#39;s metadata and auth credentials. The subscription\&#39;s own HMAC signing secret is left untouched -- see Ninlil.Web.Models.WebhookSubscriptionWriteRequest for why.
+     * This action replaces a webhook subscription\&#39;s settings and authentication credentials. The HMAC signing secret is left unchanged (see Ninlil.Web.Models.WebhookSubscriptionWriteRequest). Validation and errors are as for M:Ninlil.Web.Controllers.WebhooksController.Create(Ninlil.Web.Models.WebhookSubscriptionCreateRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;webhooks:write&#x60;.
      * @endpoint put /api/webhooks/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -487,7 +487,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action creates a new outbound webhook subscription. The plaintext auth credential(s) and (if enabled) HMAC signing secret are returned exactly once, in this action\&#39;s own response -- every later request for this subscription omits both.
+     * This action creates a webhook subscription. When HMAC signing is enabled and no secret is supplied, a random 32-byte secret is generated. The plaintext credentials and signing secret are returned in this response only; later reads never include them. Returns 400 for a missing name, a target that is not an absolute http(s) URL, an unknown event type, credentials that do not fit the auth mode, or a non-positive attempt limit, and 409 when the name is taken. Requires &#x60;webhooks:write&#x60;.
      * @endpoint post /api/webhooks
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

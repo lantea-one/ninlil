@@ -48,7 +48,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action lists every reservation belonging to a DHCP scope.
+     * This action lists a scope\&#39;s reservations, one page at a time. Returns 404 for an unknown scope. Requires &#x60;dhcpscopes:read&#x60;.
      * @endpoint get /api/dhcp-scopes/{scopeId}/reservations
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -133,7 +133,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action removes a reservation from the DHCP scope.
+     * This action removes a reservation from the scope. Returns 404 when it does not exist or belongs to another scope. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint delete /api/dhcp-scopes/{scopeId}/reservations/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -196,7 +196,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action looks up a single reservation by its identifier.
+     * This action returns one reservation. Returns 404 when it does not exist or belongs to another scope. Requires &#x60;dhcpscopes:read&#x60;.
      * @endpoint get /api/dhcp-scopes/{scopeId}/reservations/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -262,7 +262,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action fully replaces an existing reservation\&#39;s own fields, keeping its own identifier and owning scope.
+     * This action replaces a reservation\&#39;s fields, keeping its id and scope. Validation and errors are as for M:Ninlil.Web.Controllers.DhcpReservationsController.Create(System.Guid,Ninlil.Web.Models.DhcpReservationWriteRequest,System.Threading.CancellationToken). Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{scopeId}/reservations/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -338,7 +338,7 @@ export class DhcpReservationsService extends BaseService implements DhcpReservat
     }
 
     /**
-     * This action adds a new static reservation to a DHCP scope. Rejected with &#x60;409 Conflict&#x60; when either the client identifier or the IP address is already reserved elsewhere in this same scope -- the same \&quot;unique per scope per client/per address\&quot; shape a lease already has, per Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity\&#39;s own doc comment.
+     * This action adds a static reservation to a scope. Returns 400 for a prefix-delegation scope, a missing client identifier or an invalid IP address; 404 for an unknown scope; and 409 when the client identifier or the address is already reserved in this scope (both are unique per scope, as for leases; see Ninlil.Dhcp.Data.Abstractions.Entity.DhcpReservationEntity). The address is not checked against the scope\&#39;s range or protocol. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes/{scopeId}/reservations
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

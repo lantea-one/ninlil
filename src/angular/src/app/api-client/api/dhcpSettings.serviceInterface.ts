@@ -63,14 +63,14 @@ export interface DhcpSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads the settings shared by every local DHCP protocol engine.
+     * This action returns the settings shared by the local DHCP engines. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/core
 */
     apiDhcpSettingsCoreGet(extraHttpRequestParams?: any): Observable<DhcpCoreSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style: a field absent from patch is left exactly as it was in the file.
+     * This action merges a partial update into &#x60;DhcpServer:Core&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/core
 * @param requestParameters
@@ -78,14 +78,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsCorePatch(requestParameters: ApiDhcpSettingsCorePatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads the DHCPv6 UDP transport\&#39;s own bind/port settings.
+     * This action returns the DHCPv6 transport settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/dhcpv6-protocol
 */
     apiDhcpSettingsDhcpv6ProtocolGet(extraHttpRequestParams?: any): Observable<Dhcpv6ProtocolSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv6&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv6&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/dhcpv6-protocol
 * @param requestParameters
@@ -93,14 +93,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsDhcpv6ProtocolPatch(requestParameters: ApiDhcpSettingsDhcpv6ProtocolPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads this host\&#39;s own DHCPv6 relay agent settings.
+     * This action returns the DHCPv6 relay agent settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/dhcpv6-relay
 */
     apiDhcpSettingsDhcpv6RelayGet(extraHttpRequestParams?: any): Observable<Dhcpv6RelaySettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv6&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. See this controller\&#39;s own doc comment for why enabling this relay -- mutually exclusive with the local DHCPv6 engine -- always needs a restart to actually take over answering DHCPv6 requests.
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv6&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Turning the relay on replaces the local DHCPv6 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/dhcpv6-relay
 * @param requestParameters
@@ -108,14 +108,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsDhcpv6RelayPatch(requestParameters: ApiDhcpSettingsDhcpv6RelayPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads the DHCPv4 UDP transport\&#39;s own bind/port settings.
+     * This action returns the DHCPv4 transport settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/protocol
 */
     apiDhcpSettingsProtocolGet(extraHttpRequestParams?: any): Observable<DhcpProtocolSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv4&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Dhcpv4&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/protocol
 * @param requestParameters
@@ -123,14 +123,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsProtocolPatch(requestParameters: ApiDhcpSettingsProtocolPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads this host\&#39;s own Router Advertisement content settings -- see this controller\&#39;s own doc comment for why Ninlil.Dhcp.Server.Ra.RaOptions.Prefixes is deliberately left out while Ninlil.Dhcp.Server.Ra.RaOptions.Routes is included.
+     * This action returns the Router Advertisement content settings, with routes and interface overrides but without Ninlil.Dhcp.Server.Ra.RaOptions.Prefixes (see the class summary). Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/ra
 */
     apiDhcpSettingsRaGet(extraHttpRequestParams?: any): Observable<DhcpRaSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
+     * This action merges a partial update into &#x60;DhcpServer:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier; &#x60;routes&#x60; and &#x60;interfaceOverrides&#x60; each replace the whole list. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/ra
 * @param requestParameters
@@ -138,14 +138,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsRaPatch(requestParameters: ApiDhcpSettingsRaPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads this host\&#39;s own Router Advertisement transport/timing settings.
+     * This action returns the Router Advertisement transport and timing settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/ra-protocol
 */
     apiDhcpSettingsRaProtocolGet(extraHttpRequestParams?: any): Observable<DhcpRaProtocolSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Protocol:Ra&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
+     * This action merges a partial update into &#x60;DhcpServer:Protocol:Ra&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/ra-protocol
 * @param requestParameters
@@ -153,14 +153,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsRaProtocolPatch(requestParameters: ApiDhcpSettingsRaProtocolPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads this host\&#39;s own DHCPv4 relay agent settings.
+     * This action returns the DHCPv4 relay agent settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/relay
 */
     apiDhcpSettingsRelayGet(extraHttpRequestParams?: any): Observable<DhcpRelaySettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv4&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. See this controller\&#39;s own doc comment for why enabling this relay -- mutually exclusive with the local DHCP engine -- always needs a restart to actually take over answering DHCPv4 requests.
+     * This action merges a partial update into &#x60;DhcpServer:Relay:Dhcpv4&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. Turning the relay on replaces the local DHCPv4 engine only after a restart (see the class summary). Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/relay
 * @param requestParameters
@@ -168,14 +168,14 @@ export interface DhcpSettingsServiceInterface {
     apiDhcpSettingsRelayPatch(requestParameters: ApiDhcpSettingsRelayPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action reads this host\&#39;s own bundled read-only TFTP server settings.
+     * This action returns the read-only TFTP server settings. Requires &#x60;dhcpsettings:read&#x60;.
      * 
      * @endpoint get /api/dhcp-settings/tftp
 */
     apiDhcpSettingsTftpGet(extraHttpRequestParams?: any): Observable<DhcpTftpSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DhcpServer:Tftp&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style.
+     * This action merges a partial update into &#x60;DhcpServer:Tftp&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change needs a restart. Returns 400 for an invalid value. Requires &#x60;dhcpsettings:write&#x60;.
      * 
      * @endpoint patch /api/dhcp-settings/tftp
 * @param requestParameters

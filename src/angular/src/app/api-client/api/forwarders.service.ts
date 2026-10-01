@@ -49,7 +49,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action lists every global upstream forwarder this server knows about.
+     * This action lists the server-wide forwarders, one page at a time, each with the protocol parsed from its definition. Requires &#x60;forwarders:read&#x60;.
      * @endpoint get /api/forwarders
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -130,7 +130,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action permanently deletes a global upstream forwarder. No zone or other entity references a global forwarder by identifier -- unlike a TSIG key\&#39;s own soft-referenced &#x60;TsigKeyName&#x60; or a cloud credential\&#39;s own &#x60;CloudProviderCredentialId&#x60;, this entity is only ever consulted as a set, read fresh on every query -- so there is nothing to check or clean up before removing it.
+     * This action deletes a forwarder. Nothing refers to a forwarder by id (the set is read whole on every query), so nothing needs checking or cleaning up first. Returns 404 for an unknown id. Requires &#x60;forwarders:write&#x60;.
      * @endpoint delete /api/forwarders/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -189,7 +189,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action looks up a single global upstream forwarder by its identifier.
+     * This action returns one forwarder. Returns 404 for an unknown id. Requires &#x60;forwarders:read&#x60;.
      * @endpoint get /api/forwarders/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -251,7 +251,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action partially updates an existing global upstream forwarder via RFC 7396 JSON Merge Patch: a field absent from the patch document is left untouched, a field present with a JSON &#x60;null&#x60; clears it (where the underlying field is itself nullable), and any other present field overwrites it.
+     * This action updates a forwarder as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears the comments, and any other value replaces it. Validation and errors are as for M:Ninlil.Web.Controllers.ForwardersController.Replace(System.Guid,Ninlil.Web.Models.ForwarderWriteRequest,System.Threading.CancellationToken). Requires &#x60;forwarders:write&#x60;.
      * @endpoint patch /api/forwarders/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -323,7 +323,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action fully replaces an existing global upstream forwarder\&#39;s fields.
+     * This action replaces a forwarder\&#39;s fields. Validation and errors are as for M:Ninlil.Web.Controllers.ForwardersController.Create(Ninlil.Web.Models.ForwarderWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown id. Requires &#x60;forwarders:write&#x60;.
      * @endpoint put /api/forwarders/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -395,7 +395,7 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
     }
 
     /**
-     * This action creates a new global upstream forwarder.
+     * This action creates a server-wide forwarder. Returns 400 for a missing name or a definition string the forwarder parser rejects, and 409 when the name is taken. Requires &#x60;forwarders:write&#x60;.
      * @endpoint post /api/forwarders
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

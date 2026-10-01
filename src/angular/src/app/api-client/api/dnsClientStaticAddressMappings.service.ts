@@ -48,7 +48,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action lists every static address mapping this server knows about, enabled or not.
+     * This action lists static address mappings, enabled or not, one page at a time. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/client-static-address-mappings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -129,7 +129,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action permanently deletes a static address mapping.
+     * This action deletes a static address mapping. Returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint delete /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -188,7 +188,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action looks up a single static address mapping by its identifier.
+     * This action returns one static address mapping. Returns 404 for an unknown id. Requires &#x60;clients:read&#x60;.
      * @endpoint get /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -250,7 +250,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action fully replaces an existing static address mapping\&#39;s own fields.
+     * This action replaces a static address mapping\&#39;s fields. Validation is as for M:Ninlil.Web.Controllers.DnsClientStaticAddressMappingsController.Create(Ninlil.Web.Models.DnsClientStaticAddressMappingWriteRequest,System.Threading.CancellationToken); returns 404 for an unknown id. Requires &#x60;clients:write&#x60;.
      * @endpoint put /api/client-static-address-mappings/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -322,7 +322,7 @@ export class DnsClientStaticAddressMappingsService extends BaseService implement
     }
 
     /**
-     * This action creates a new static address mapping.
+     * This action creates a static address mapping. Returns 400 for a missing identifier, an address or network that does not parse, or a protocol version that does not match the address family. Requires &#x60;clients:write&#x60;.
      * @endpoint post /api/client-static-address-mappings
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

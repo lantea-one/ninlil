@@ -52,7 +52,7 @@ export interface FilterListEntriesServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every entry stored in a list.
+     * This action lists a list\&#39;s entries, one page at a time. Returns 404 for an unknown list. Requires &#x60;filterlists:read&#x60;.
      * 
      * @endpoint get /api/filter-lists/{listId}/entries
 * @param requestParameters
@@ -60,7 +60,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesGet(requestParameters: ApiFilterListsListIdEntriesGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListEntryDetailPagedResult>;
 
     /**
-     * This action removes an entry from the list. Rejected with &#x60;409 Conflict&#x60; for a subscribed list, the same as M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken)/M:Ninlil.Web.Controllers.FilterListEntriesController.Replace(System.Guid,System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken).
+     * This action removes an entry from the list. Returns 404 for an unknown list or entry and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint delete /api/filter-lists/{listId}/entries/{id}
 * @param requestParameters
@@ -68,7 +68,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdDelete(requestParameters: ApiFilterListsListIdEntriesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single entry by its identifier.
+     * This action returns one entry. Returns 404 when it does not exist or belongs to another list. Requires &#x60;filterlists:read&#x60;.
      * 
      * @endpoint get /api/filter-lists/{listId}/entries/{id}
 * @param requestParameters
@@ -76,7 +76,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdGet(requestParameters: ApiFilterListsListIdEntriesIdGetRequestParams, extraHttpRequestParams?: any): Observable<FilterListEntryDetail>;
 
     /**
-     * This action fully replaces an existing entry\&#39;s own value/comment, keeping its own identifier. Rejected with &#x60;409 Conflict&#x60; for a subscribed list, the same as M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken).
+     * This action replaces an entry\&#39;s value, comment and kind, keeping its id. Validation and errors are as for M:Ninlil.Web.Controllers.FilterListEntriesController.Create(System.Guid,Ninlil.Web.Models.FilterListEntryWriteRequest,System.Threading.CancellationToken), plus 404 for an unknown entry. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint put /api/filter-lists/{listId}/entries/{id}
 * @param requestParameters
@@ -84,7 +84,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdPut(requestParameters: ApiFilterListsListIdEntriesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds a new entry to a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list. Rejected with &#x60;409 Conflict&#x60; for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list -- see this controller\&#39;s own summary for why.
+     * This action adds an entry to a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list. Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/filter-lists/{listId}/entries
 * @param requestParameters

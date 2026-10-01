@@ -28,14 +28,14 @@ export interface WebListenSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own web listener configuration as it was at process startup -- see this class\&#39;s own doc comment for why this can never be \&quot;live\&quot; the way every other settings controller\&#39;s own &#x60;Get&#x60; action is.
+     * This action returns the web listener settings as they were at startup; a saved change shows here only after a restart. The certificate password is never returned, only whether one is set. Requires &#x60;weblistensettings:read&#x60;.
      * 
      * @endpoint get /api/web-listen-settings
 */
     apiWebListenSettingsGet(extraHttpRequestParams?: any): Observable<WebListenSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Web&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. Written to the configuration file immediately, but never applied to this already-running process -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Web&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change is written to the file and applied only after a full restart. Returns 400 for a port outside 1-65535, an invalid listen address, a malformed duration or an unknown TLS protocol name. Requires &#x60;weblistensettings:write&#x60;.
      * 
      * @endpoint patch /api/web-listen-settings
 * @param requestParameters

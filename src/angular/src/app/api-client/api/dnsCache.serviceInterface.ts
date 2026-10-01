@@ -33,7 +33,7 @@ export interface DnsCacheServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action empties every cache, or only the one named by cache, and resets its hit and miss counters. The next query for any name goes upstream.
+     * This action empties every cache, or only the one named by cache, and resets its hit and miss counters, so the next query for any name goes upstream. Returns the number of entries removed, or 404 for an unknown cache name. Requires &#x60;recursivesettings:write&#x60;.
      * 
      * @endpoint delete /api/dns-cache
 * @param requestParameters
@@ -41,7 +41,7 @@ export interface DnsCacheServiceInterface {
     apiDnsCacheDelete(requestParameters: ApiDnsCacheDeleteRequestParams, extraHttpRequestParams?: any): Observable<DnsCacheRemovalResult>;
 
     /**
-     * This action forgets every cached answer for exactly one name -- every record type, and in the forwarded cache every upstream set -- so the next query for it goes upstream. Names below it are left alone. Removing a name that is not cached is not an error; it simply removes nothing.
+     * This action forgets every cached answer for one name (every record type and, in the forwarded cache, every upstream set), so the next query for it goes upstream. Names below it are left alone. Removing a name that is not cached removes nothing and is not an error. Returns 400 for an invalid name and 404 for an unknown cache name. Requires &#x60;recursivesettings:write&#x60;.
      * 
      * @endpoint delete /api/dns-cache/entries/{name}
 * @param requestParameters
@@ -49,7 +49,7 @@ export interface DnsCacheServiceInterface {
     apiDnsCacheEntriesNameDelete(requestParameters: ApiDnsCacheEntriesNameDeleteRequestParams, extraHttpRequestParams?: any): Observable<DnsCacheRemovalResult>;
 
     /**
-     * This action reports every cache\&#39;s size and hit rate.
+     * This action reports each cache\&#39;s size, limit and hit and miss counts. Requires &#x60;recursivesettings:read&#x60;.
      * 
      * @endpoint get /api/dns-cache
 */

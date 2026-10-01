@@ -28,14 +28,14 @@ export interface TsigSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live, even without a restart) TSIG signing-behavior settings.
+     * This action returns the current TSIG signing settings. Requires &#x60;tsigsettings:read&#x60;.
      * 
      * @endpoint get /api/tsig-settings
 */
     apiTsigSettingsGet(extraHttpRequestParams?: any): Observable<TsigSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Tsig&#x60; via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style. This options class\&#39;s own single field hot-reloads immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Tsig&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The change takes effect at once. Returns 400 when &#x60;defaultFudgeSeconds&#x60; is outside 0-65535. Requires &#x60;tsigsettings:write&#x60;.
      * 
      * @endpoint patch /api/tsig-settings
 * @param requestParameters

@@ -54,7 +54,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action lists every peer node currently in this node\&#39;s own registry.
+     * This action lists the peer nodes in this node\&#39;s registry, one page at a time. Requires &#x60;clusternodes:read&#x60;.
      * @endpoint get /api/cluster/nodes
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -135,7 +135,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action removes a peer node from this node\&#39;s own registry -- purely local: it does not notify the peer, and does not affect the peer\&#39;s own registry entry for this node (an operator who wants a clean, two-sided break must remove the relationship from both nodes\&#39; own \&quot;Cluster\&quot; pages, a deliberate \&quot;no cross-node cleanup\&quot; posture documented as an accepted limitation).
+     * This action removes a peer from this node\&#39;s registry only. The peer is not told and keeps its own entry for this node, so a clean two-sided break means removing the relationship on both nodes. Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
      * @endpoint delete /api/cluster/nodes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -194,7 +194,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action looks up a single peer node by its own local registry row identifier.
+     * This action returns one peer by its local registry id. Returns 404 for an unknown id. Requires &#x60;clusternodes:read&#x60;.
      * @endpoint get /api/cluster/nodes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -256,7 +256,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action partially updates a peer\&#39;s own display name and/or notes via RFC 7396 JSON Merge Patch -- see Ninlil.Web.Models.ClusterNodeWriteRequest for why every other field is fixed once a peer row exists.
+     * This action updates a peer\&#39;s display name and notes as an RFC 7396 merge patch; a field that is absent or null is left unchanged. The other fields are fixed once a peer exists (see Ninlil.Web.Models.ClusterNodeWriteRequest). Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
      * @endpoint patch /api/cluster/nodes/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -328,7 +328,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action creates a fresh cluster invite -- see Ninlil.Dns.Server.Cluster.Invite.ClusterInviteService for the real generation logic this delegates to.
+     * This action creates a cluster invite and returns its code and expiry time (see Ninlil.Dns.Server.Cluster.Invite.ClusterInviteService). Requires &#x60;clusternodes:write&#x60;.
      * @endpoint post /api/cluster/nodes/invite
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -385,7 +385,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action consumes an invite code, completing the join handshake against the inviting node -- see Ninlil.Dns.Server.Cluster.Join.ClusterJoinService for the real handshake logic this delegates to.
+     * This action uses an invite code from another node to complete the join handshake with that node, and returns the new peer (see Ninlil.Dns.Server.Cluster.Join.ClusterJoinService). Requires &#x60;clusternodes:write&#x60;.
      * @endpoint post /api/cluster/nodes/join
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -456,7 +456,7 @@ export class ClusterService extends BaseService implements ClusterServiceInterfa
     }
 
     /**
-     * This action serves the aggregate cluster dashboard: this node\&#39;s own live query-stats snapshot, plus one row per known peer, each peer\&#39;s own row collected live over the existing TSIG-authenticated + TLS-encrypted cluster channel via Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator. A peer that could not be reached is still included in the response, marked unreachable with every count null -- never silently omitted, so an operator can tell \&quot;this peer has no query traffic\&quot; apart from \&quot;this node could not reach this peer right now.\&quot; Returns an empty peer list (this node\&#39;s own row only) when clustering is disabled or no peer is currently known.
+     * This action serves the cluster dashboard: a row with this node\&#39;s query counts (last hour, last 24 hours, all retained), then one row per known peer, collected live over the TSIG-authenticated, TLS-encrypted cluster channel by Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator. A peer that cannot be reached is still listed, marked unreachable with null counts, so \&quot;no traffic\&quot; and \&quot;unreachable\&quot; look different. With clustering disabled or no known peers, only this node\&#39;s row is returned. Requires &#x60;clusternodes:read&#x60;.
      * @endpoint get /api/cluster/nodes/stats
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

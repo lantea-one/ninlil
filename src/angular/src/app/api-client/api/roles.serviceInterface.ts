@@ -59,7 +59,7 @@ export interface RolesServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action lists every role on this server.
+     * This action lists roles, one page at a time, with their permissions. Requires &#x60;roles:read&#x60;.
      * 
      * @endpoint get /api/roles
 * @param requestParameters
@@ -67,7 +67,7 @@ export interface RolesServiceInterface {
     apiRolesGet(requestParameters: ApiRolesGetRequestParams, extraHttpRequestParams?: any): Observable<RoleSummaryPagedResult>;
 
     /**
-     * This action permanently deletes a role. Any user currently holding it simply stops holding it; their account itself is not affected.
+     * This action deletes a role. Users who held it lose it and its permissions; their accounts are otherwise unchanged. Requires &#x60;roles:write&#x60;.
      * 
      * @endpoint delete /api/roles/{id}
 * @param requestParameters
@@ -75,7 +75,7 @@ export interface RolesServiceInterface {
     apiRolesIdDelete(requestParameters: ApiRolesIdDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action looks up a single role by its identifier.
+     * This action returns one role and its permissions. Returns 404 for an unknown id. Requires &#x60;roles:read&#x60;.
      * 
      * @endpoint get /api/roles/{id}
 * @param requestParameters
@@ -83,7 +83,7 @@ export interface RolesServiceInterface {
     apiRolesIdGet(requestParameters: ApiRolesIdGetRequestParams, extraHttpRequestParams?: any): Observable<RoleSummary>;
 
     /**
-     * This action revokes a permission claim from a role.
+     * This action revokes a permission from a role. Requires &#x60;roles:write&#x60;.
      * 
      * @endpoint delete /api/roles/{id}/permissions
 * @param requestParameters
@@ -91,7 +91,7 @@ export interface RolesServiceInterface {
     apiRolesIdPermissionsDelete(requestParameters: ApiRolesIdPermissionsDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action grants a role a permission claim, extending that permission to every user who holds the role.
+     * This action grants a role a permission, giving it to every user who holds the role. The permission string is not checked against &#x60;GET /api/permissions&#x60;. Requires &#x60;roles:write&#x60;.
      * 
      * @endpoint post /api/roles/{id}/permissions
 * @param requestParameters
@@ -99,7 +99,7 @@ export interface RolesServiceInterface {
     apiRolesIdPermissionsPost(requestParameters: ApiRolesIdPermissionsPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action updates an existing role\&#39;s description.
+     * This action updates a role\&#39;s description; the name cannot be changed. Requires &#x60;roles:write&#x60;.
      * 
      * @endpoint put /api/roles/{id}
 * @param requestParameters
@@ -107,7 +107,7 @@ export interface RolesServiceInterface {
     apiRolesIdPut(requestParameters: ApiRolesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a new role.
+     * This action creates a role with no permissions. Returns 400 when the name is invalid or already taken. Requires &#x60;roles:write&#x60;.
      * 
      * @endpoint post /api/roles
 * @param requestParameters

@@ -48,7 +48,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
-     * This action lists every option a tag rule contributes.
+     * This action lists a rule\&#39;s options, one page at a time. Returns 404 for an unknown rule. Requires &#x60;dhcptagrules:read&#x60;.
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -133,7 +133,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
-     * This action removes an option from the tag rule.
+     * This action removes an option from the rule. Returns 404 when it does not exist or belongs to another rule. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint delete /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -196,7 +196,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
-     * This action looks up a single option by its identifier.
+     * This action returns one option. Returns 404 when it does not exist or belongs to another rule. Requires &#x60;dhcptagrules:read&#x60;.
      * @endpoint get /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -262,7 +262,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
-     * This action fully replaces an existing option\&#39;s own fields, keeping its own identifier and owning rule.
+     * This action replaces an option\&#39;s fields, keeping its id and rule. Validation is as for M:Ninlil.Web.Controllers.DhcpTagRuleOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpTagRuleOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another rule. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint put /api/dhcp-tag-rules/{tagRuleId}/options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -338,7 +338,7 @@ export class DhcpTagRuleOptionsService extends BaseService implements DhcpTagRul
     }
 
     /**
-     * This action adds a new option to a tag rule.
+     * This action adds an option to a tag rule. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, and 404 for an unknown rule. Requires &#x60;dhcptagrules:write&#x60;.
      * @endpoint post /api/dhcp-tag-rules/{tagRuleId}/options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

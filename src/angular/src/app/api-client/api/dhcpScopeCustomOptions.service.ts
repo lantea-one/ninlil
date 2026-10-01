@@ -48,7 +48,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action lists every custom option belonging to a DHCP scope.
+     * This action lists a scope\&#39;s custom options, one page at a time. Returns 404 for an unknown scope. Requires &#x60;dhcpscopes:read&#x60;.
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -133,7 +133,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action removes a custom option from the DHCP scope.
+     * This action removes a custom option from the scope. Returns 404 when it does not exist or belongs to another scope. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint delete /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -196,7 +196,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action looks up a single custom option by its identifier.
+     * This action returns one custom option. Returns 404 when it does not exist or belongs to another scope. Requires &#x60;dhcpscopes:read&#x60;.
      * @endpoint get /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -262,7 +262,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action fully replaces an existing custom option\&#39;s own fields, keeping its own identifier and owning scope.
+     * This action replaces a custom option\&#39;s fields, keeping its id and scope. Validation is as for M:Ninlil.Web.Controllers.DhcpScopeCustomOptionsController.Create(System.Guid,Ninlil.Web.Models.DhcpScopeCustomOptionWriteRequest,System.Threading.CancellationToken); returns 404 when the option does not exist or belongs to another scope. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint put /api/dhcp-scopes/{scopeId}/custom-options/{id}
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -338,7 +338,7 @@ export class DhcpScopeCustomOptionsService extends BaseService implements DhcpSc
     }
 
     /**
-     * This action adds a new custom option to a DHCP scope. See Ninlil.Dhcp.Data.Abstractions.Entity.DhcpScopeCustomOptionEntity\&#39;s own doc comment for how a custom option interacts with this project\&#39;s own standard-option computation and a client\&#39;s Parameter Request List.
+     * This action adds a custom option to a scope. The value is stored as uppercase hex. Returns 400 for a value that is not even-length hex, or a missing value when the source is &#x60;Custom&#x60;, and 404 for an unknown scope. Requires &#x60;dhcpscopes:write&#x60;.
      * @endpoint post /api/dhcp-scopes/{scopeId}/custom-options
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

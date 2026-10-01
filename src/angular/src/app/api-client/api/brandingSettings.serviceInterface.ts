@@ -29,21 +29,21 @@ export interface BrandingSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action reads only the small, non-sensitive slice of this host\&#39;s own branding every authenticated session needs to render the SPA\&#39;s own page title/logo correctly -- see Ninlil.Web.Models.BrandingEffectiveDetail\&#39;s own doc comment for why this needs no specific permission, unlike M:Ninlil.Web.Controllers.BrandingSettingsController.Get.
+     * This action returns only the site title and logo, which every signed-in session needs to render the admin console. Requires only a signed-in caller (see Ninlil.Web.Models.BrandingEffectiveDetail).
      * 
      * @endpoint get /api/branding-settings/effective
 */
     apiBrandingSettingsEffectiveGet(extraHttpRequestParams?: any): Observable<BrandingEffectiveDetail>;
 
     /**
-     * This action reads this host\&#39;s own currently-effective (live -- reflecting any write M:Ninlil.Web.Controllers.BrandingSettingsController.Patch(System.Text.Json.JsonElement) has made, even without a restart) branding configuration.
+     * This action returns the branding and CHAOS query settings, including any change M:Ninlil.Web.Controllers.BrandingSettingsController.Patch(System.Text.Json.JsonElement) has made. Requires &#x60;branding:read&#x60;.
      * 
      * @endpoint get /api/branding-settings
 */
     apiBrandingSettingsGet(extraHttpRequestParams?: any): Observable<BrandingSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Branding&#x60; (&#x60;siteTitle&#x60;/ &#x60;logoDataUri&#x60;) and/or &#x60;DnsServer:Authoritative&#x60; (&#x60;hostnameString&#x60;/ &#x60;versionString&#x60;/&#x60;enableChaosVersionQueries&#x60;) via Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier\&#39;s own generic settings-list overload, RFC 7396 merge-patch style -- a single write can touch either section, or both, at once. A field absent from patch is left exactly as it was in the file; a field present with a JSON &#x60;null&#x60; clears &#x60;siteTitle&#x60;/&#x60;logoDataUri&#x60; back to \&quot;unset\&quot; (this project\&#39;s every other settings controller treats a JSON &#x60;null&#x60; the same way for a nullable field). Every field takes effect immediately -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Branding&#x60; (&#x60;siteTitle&#x60;, &#x60;logoDataUri&#x60;) and &#x60;DnsServer:Authoritative&#x60; (&#x60;hostnameString&#x60;, &#x60;versionString&#x60;, &#x60;enableChaosVersionQueries&#x60;) as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. One write may touch either section or both. An absent field keeps its value; a JSON &#x60;null&#x60; clears &#x60;siteTitle&#x60; or &#x60;logoDataUri&#x60;. Every field takes effect at once. Returns 400 for a blank hostname or version string or an invalid logo. Requires &#x60;branding:write&#x60;.
      * 
      * @endpoint patch /api/branding-settings
 * @param requestParameters

@@ -54,7 +54,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action reads DNS-over-HTTPS\&#39;s own currently-effective settings.
+     * This action returns the DNS-over-HTTPS settings. Requires &#x60;transportsettings:read&#x60;.
      * @endpoint get /api/transport-settings/dns-over-https
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -111,7 +111,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which needs a full process restart -- Ninlil.Web.Models.DnsOverHttpsSettingsDetail\&#39;s own doc comment explains why &#x60;path&#x60;/&#x60;maxMessageSizeBytes&#x60; specifically need the whole process to restart, not merely this one transport.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverHttps&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; takes effect at once; &#x60;path&#x60; and &#x60;maxMessageSizeBytes&#x60; need a full process restart (see Ninlil.Web.Models.DnsOverHttpsSettingsDetail for why). Returns 400 for a path that does not start with &#x60;/&#x60;. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/dns-over-https
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -182,7 +182,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action reads DNS-over-QUIC\&#39;s own currently-effective settings.
+     * This action returns the DNS-over-QUIC settings. Requires &#x60;transportsettings:read&#x60;.
      * @endpoint get /api/transport-settings/dns-over-quic
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -239,7 +239,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverQuic&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which is restart-required.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverQuic&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. Returns 400 for an invalid listen address, duration or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/dns-over-quic
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -310,7 +310,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action reads DNS-over-TLS\&#39;s own currently-effective settings.
+     * This action returns the DNS-over-TLS settings. Requires &#x60;transportsettings:read&#x60;.
      * @endpoint get /api/transport-settings/dns-over-tls
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -367,7 +367,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverTls&#x60;. See this class\&#39;s own doc comment for which field is genuinely live and which is restart-required.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsOverTls&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the listener at once; every other field needs a listener restart. The response note says which applies. Returns 400 for an invalid listen address, duration or TLS protocol name. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/dns-over-tls
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -438,7 +438,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action reads DNSCrypt\&#39;s own currently-effective settings.
+     * This action returns the DNSCrypt settings. Requires &#x60;transportsettings:read&#x60;.
      * @endpoint get /api/transport-settings/dnscrypt
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -495,7 +495,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsCrypt&#x60;. See this class\&#39;s own doc comment for which field is genuinely live (and why a live enable toggle here starts/stops three registered services, not one) and which is restart-required.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:DnsCrypt&#x60; as an RFC 7396 merge patch. &#x60;enable&#x60; starts or stops the UDP and TCP listeners and the certificate rotation loop at once; every other field needs a restart of those services. Returns 400 for an invalid listen address, duration or cipher name, or an empty cipher list. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/dnscrypt
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -566,7 +566,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action reads Plain DNS\&#39;s own currently-effective settings.
+     * This action returns the plain DNS settings. Requires &#x60;transportsettings:read&#x60;.
      * @endpoint get /api/transport-settings/plain
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -623,7 +623,7 @@ export class TransportSettingsService extends BaseService implements TransportSe
     }
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Protocol:Plain&#x60;. Every field here is restart-required -- see this class\&#39;s own doc comment.
+     * This action merges a partial update into &#x60;DnsServer:Protocol:Plain&#x60; as an RFC 7396 merge patch. Every field needs a listener or process restart. Returns 400 for an invalid listen address or duration. Requires &#x60;transportsettings:write&#x60;.
      * @endpoint patch /api/transport-settings/plain
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

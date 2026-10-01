@@ -29,14 +29,14 @@ export interface MacVendorSettingsServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action returns the currently-effective settings and the loaded vendor data\&#39;s status.
+     * This action returns the current settings and the status of the loaded vendor data. Requires &#x60;macvendorsettings:read&#x60;.
      * 
      * @endpoint get /api/mac-vendor-settings
 */
     apiMacVendorSettingsGet(extraHttpRequestParams?: any): Observable<MacVendorSettingsDetail>;
 
     /**
-     * This action applies a JSON merge patch to the vendor refresh settings. &#x60;refreshInterval&#x60; must be at least one day; each registry URL must be an absolute HTTP or HTTPS URL (shape-checked only, never fetched here).
+     * This action applies an RFC 7396 merge patch to the vendor refresh settings. Returns 400 when &#x60;refreshInterval&#x60; is under one day or a registry URL is not an absolute http(s) URL (URLs are only checked for shape, not fetched). Requires &#x60;macvendorsettings:write&#x60;.
      * 
      * @endpoint patch /api/mac-vendor-settings
 * @param requestParameters
@@ -44,7 +44,7 @@ export interface MacVendorSettingsServiceInterface {
     apiMacVendorSettingsPatch(requestParameters: ApiMacVendorSettingsPatchRequestParams, extraHttpRequestParams?: any): Observable<RuntimeSettingsWriteResult>;
 
     /**
-     * This action re-downloads the registries right now, regardless of schedule or of whether automatic refresh is enabled, waits for it to finish, and returns the resulting status. A failed or implausible download is reported in the status, never as an error response, and never replaces the data already loaded.
+     * This action re-downloads the registries now, whatever the schedule and even with automatic refresh off, waits for it to finish, and returns the resulting status. A failed or implausible download is reported in the status, never as an error response, and never replaces the data already loaded. Requires &#x60;macvendorsettings:manage&#x60;.
      * 
      * @endpoint post /api/mac-vendor-settings/refresh
 */
