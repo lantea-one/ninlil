@@ -5,9 +5,8 @@ using Ninlil.Dhcp.Server.Relay.Identity;
 namespace Ninlil.Dhcp.Server.Relay.Tests;
 
 /// <summary>
-///     This is a minimal, test-only stand-in for <see cref="Dhcpv6RelayAgentAddressProvider" />
-///     that always reports a fixed, test-chosen address rather than genuinely auto-detecting one
-///     from this test-runner machine's own real network interfaces -- the DHCPv6 analogue of
+///     This class is a test stand-in for <see cref="Dhcpv6RelayAgentAddressProvider" /> that
+///     returns a fixed address, the DHCPv6 counterpart of
 ///     <see cref="FixedDhcpv4RelayAgentAddressProvider" />.
 /// </summary>
 /// <param name="value">The fixed address this stand-in always reports.</param>

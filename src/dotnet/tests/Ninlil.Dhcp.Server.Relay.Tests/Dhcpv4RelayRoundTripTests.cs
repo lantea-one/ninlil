@@ -10,28 +10,18 @@ using Ninlil.Dhcp.Protocol.Dhcpv4;
 namespace Ninlil.Dhcp.Server.Relay.Tests;
 
 /// <summary>
-///     This test proves the real <see cref="Dhcpv4RelayAgent" /> and the real
-///     <see cref="Dhcpv4UdpListener" /> genuinely work together over real UDP sockets, both
-///     directions: a real "client" socket's own DISCOVER genuinely reaches a fake "upstream
-///     server" socket with <c>hops</c>/<c>giaddr</c> correctly set, and that fake upstream's own
-///     crafted OFFER genuinely gets relayed back down and is received by that same "client"
-///     socket.
+///     This class tests <see cref="Dhcpv4RelayAgent" /> behind a running
+///     <see cref="Dhcpv4UdpListener" />, in both directions, over loopback UDP sockets. A client
+///     socket's DISCOVER must reach a fake upstream server with <c>hops</c> and <c>giaddr</c> set,
+///     and the OFFER the fake server sends back must reach the client socket.
 ///     <para>
-///         Both this relay's own listening address and the client's own address use ordinary,
-///         unprivileged loopback addresses/ports rather than a real network interface and the
-///         real IANA-assigned 67/68 ports -- the real privileged-port bind was already, separately
-///         proven for this project's shared <see cref="Dhcpv4UdpListener" /> transport during
-///         its own development; this test
-///         proves the relay-specific protocol logic layered on top of it, which is identical
-///         regardless of which port number is actually bound.
+///         The test uses unprivileged loopback ports instead of 67 and 68. The relay logic does
+///         not depend on the port numbers.
 ///     </para>
 ///     <para>
-///         The crafted OFFER deliberately sets <c>ciaddr</c> and clears the broadcast flag, rather
-///         than mirroring a real OFFER's own usual all-zero-address/broadcast-flag-set shape --
-///         the same deliberate simplification <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests
-///         .Dhcpv4UdpRoundTripTests</c> already establishes, forcing a deterministic unicast
-///         delivery path rather than depending on this sandboxed environment's own, possibly
-///         restricted, UDP broadcast delivery behavior.
+///         The OFFER sets <c>ciaddr</c> and clears the broadcast flag, unlike a typical OFFER, so
+///         the relay unicasts it. This avoids depending on broadcast delivery in the test
+///         environment, as <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c> does.
 ///     </para>
 /// </summary>
 public sealed class Dhcpv4RelayRoundTripTests
@@ -82,9 +72,8 @@ public sealed class Dhcpv4RelayRoundTripTests
 
             Assert.True(listener.IsListening, "The relay's own listener never finished binding.");
 
-            // Step 1: the client's own broadcast DISCOVER "reaches the relay" (sent directly, to
-            // this relay's own listening port, standing in for the relay having genuinely received
-            // a real local-subnet broadcast).
+            // Step 1: the client's DISCOVER reaches the relay. It is sent straight to the
+            // listener's port in place of a subnet broadcast.
             Dhcpv4Message discover = new()
             {
                 OperationCode = Dhcpv4OperationCodeEnum.BootRequest,
@@ -102,8 +91,8 @@ public sealed class Dhcpv4RelayRoundTripTests
                 new IPEndPoint(IPAddress.Loopback, relayListenPort)
             );
 
-            // Step 2: the fake upstream server genuinely receives the forwarded request, with
-            // hops/giaddr set correctly by the real relay agent.
+            // Step 2: the fake upstream server receives the forwarded request with hops and
+            // giaddr set.
             using CancellationTokenSource upstreamReceiveTimeout = new(TimeSpan.FromSeconds(5));
             UdpReceiveResult forwardedResult = await upstreamSocket.ReceiveAsync(
                 upstreamReceiveTimeout.Token
@@ -123,10 +112,8 @@ public sealed class Dhcpv4RelayRoundTripTests
             Assert.Equal(relayAgentAddress, forwarded.RelayAgentIpAddress);
             Assert.Equal((byte)1, forwarded.Hops);
 
-            // Step 3: the fake upstream server crafts an OFFER and sends it to giaddr at the DHCP
-            // server port -- exactly where RFC 2131 Section 4.1 says a server unicasts a reply
-            // through a relay agent, and exactly the same address:port this relay's own listener
-            // is already bound to.
+            // Step 3: the fake upstream server sends an OFFER to giaddr at the server port, where
+            // RFC 2131 Section 4.1 sends replies through a relay and where the listener is bound.
             Dhcpv4Message offer = new()
             {
                 OperationCode = Dhcpv4OperationCodeEnum.BootReply,
@@ -135,8 +122,7 @@ public sealed class Dhcpv4RelayRoundTripTests
                 RelayAgentIpAddress = forwarded.RelayAgentIpAddress,
                 ClientHardwareAddress = forwarded.ClientHardwareAddress,
                 HardwareAddressLength = forwarded.HardwareAddressLength,
-                // See this class's own doc comment for why ciaddr/broadcast are set this way
-                // rather than mirroring a real OFFER's own usual shape.
+                // Forces unicast delivery (see the class summary).
                 ClientIpAddress = IPAddress.Loopback,
                 BroadcastFlagSet = false,
             };
@@ -149,8 +135,8 @@ public sealed class Dhcpv4RelayRoundTripTests
                 new IPEndPoint(relayAgentAddress, relayListenPort)
             );
 
-            // Step 4: the same relay agent, still listening on that one shared socket, receives
-            // this BootReply-typed datagram and relays it on down to the original client.
+            // Step 4: the relay receives the BootReply on the same listener socket and relays it
+            // to the client.
             using CancellationTokenSource clientReceiveTimeout = new(TimeSpan.FromSeconds(5));
             UdpReceiveResult relayedResult = await clientSocket.ReceiveAsync(
                 clientReceiveTimeout.Token
@@ -177,10 +163,9 @@ public sealed class Dhcpv4RelayRoundTripTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port by asking the operating
-    ///     system to assign an ephemeral one, reading it back, and immediately releasing it --
-    ///     good enough for a test that binds it again itself moments later, with only a small,
-    ///     accepted race window against something else on the same machine grabbing it first.
+    ///     This method returns a free UDP port by binding to port 0, reading the assigned port and
+    ///     releasing it. Another process could take the port before the test binds it; the risk
+    ///     is accepted.
     /// </summary>
     private static int GetFreeUdpPort()
     {

@@ -14,18 +14,15 @@ public static class ServiceCollectionDhcpv4RelayExtension
 {
     /// <summary>
     ///     This method registers <see cref="Dhcpv4RelayOptions" />,
-    ///     <see cref="IDhcpv4RelayAgentAddressProvider" />, and the real
-    ///     <see cref="IDhcpv4RequestHandler" /> implementation (<see cref="Dhcpv4RelayAgent" />)
-    ///     <see cref="Dhcpv4UdpListener" /> depends on.
+    ///     <see cref="IDhcpv4RelayAgentAddressProvider" /> and <see cref="Dhcpv4RelayAgent" /> as
+    ///     the <see cref="IDhcpv4RequestHandler" /> that <see cref="Dhcpv4UdpListener" /> uses.
     ///     <para>
-    ///         <b>The composition root must call either this method or
-    ///         <c>AddNinlilDhcpServerCore</c>, never both</b> -- see <see cref="Dhcpv4RelayOptions" />'s
-    ///         own doc comment for why these two engines are mutually exclusive, and how the
-    ///         composition root decides which one to register.
+    ///         <b>Call either this method or <c>AddNinlilDhcpServerCore</c>, not both.</b> See
+    ///         <see cref="Dhcpv4RelayOptions" /> for how <c>Program.cs</c> chooses.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
-    /// <param name="configuration">The application configuration to read this relay's own settings from.</param>
+    /// <param name="configuration">The application configuration the relay settings are read from.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
     public static IServiceCollection AddNinlilDhcpv4Relay(
         this IServiceCollection instance,
@@ -38,11 +35,8 @@ public static class ServiceCollectionDhcpv4RelayExtension
 
         instance.AddSingleton<IDhcpv4RelayAgentAddressProvider, Dhcpv4RelayAgentAddressProvider>();
 
-        // Singleton: Dhcpv4UdpListener (a process-lifetime BackgroundService) resolves this
-        // exactly once, at startup, and this class owns one long-lived outbound socket of its
-        // own for the whole lifetime of the process (see its own doc comment) -- unlike
-        // Dhcpv4RequestHandler, this class needs no per-request dependency injection scope at
-        // all, since it depends on nothing scoped (it never touches a repository or DbContext).
+        // Singleton: the relay holds one outbound socket for the life of the process and uses
+        // no scoped services, so unlike Dhcpv4RequestHandler it needs no per-request scope.
         instance.AddSingleton<IDhcpv4RequestHandler, Dhcpv4RelayAgent>();
 
         // We're done, return the IServiceCollection instance.

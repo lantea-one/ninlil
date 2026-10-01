@@ -4,14 +4,14 @@ using System.Net;
 namespace Ninlil.Dhcp.Server.Relay.Identity;
 
 /// <summary>
-///     This interface resolves this server's own RFC 8415 Section 7.1 relay-agent link address --
-///     the value written into every RELAY-FORW's own "link-address" field -- the DHCPv6 analogue
-///     of <see cref="IDhcpv4RelayAgentAddressProvider" />.
+///     This interface supplies the DHCPv6 relay's link address: the value written into the
+///     "link-address" field of every RELAY-FORW (RFC 8415). It is the DHCPv6 counterpart of
+///     <see cref="IDhcpv4RelayAgentAddressProvider" />.
 /// </summary>
 public interface IDhcpv6RelayAgentAddressProvider
 {
     /// <summary>
-    ///     This property contains this relay's own address, resolved once at startup.
+    ///     This property contains the relay's link address, resolved once at startup.
     /// </summary>
     IPAddress Value { get; }
 }

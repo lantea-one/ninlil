@@ -10,18 +10,15 @@ using Ninlil.Dhcp.Protocol.Dhcpv6;
 namespace Ninlil.Dhcp.Server.Relay.Tests;
 
 /// <summary>
-///     This test proves the real <see cref="Dhcpv6RelayAgent" /> and the real
-///     <see cref="Dhcpv6UdpListener" /> genuinely work together over real UDP sockets, both
-///     directions: a real "client" socket's own SOLICIT genuinely reaches a fake "upstream server"
-///     socket wrapped in a correctly-built RELAY-FORW envelope, and that fake upstream's own
-///     crafted RELAY-REPL genuinely gets unwrapped and relayed back down, arriving at that same
-///     "client" socket as an ordinary ADVERTISE -- the DHCPv6 analogue of
-///     <see cref="Dhcpv4RelayRoundTripTests" />. This test also exercises
-///     <see cref="Dhcpv6RelayAgent" />'s own background receive loop on its dedicated outbound
-///     socket (see that class's own doc comment for why it needs one, unlike
-///     <see cref="Dhcpv4RelayAgent" />) -- the genuinely different "receiving side" role (this
-///     server accepting a RELAY-FORW an external relay agent forwarded to it) is proven
-///     separately, in <c>Ninlil.Dhcp.Server.Core.Tests.Dhcpv6RelayReceivingRoundTripTests</c>.
+///     This class tests <see cref="Dhcpv6RelayAgent" /> behind a running
+///     <see cref="Dhcpv6UdpListener" />, in both directions, over IPv6 loopback UDP sockets. A
+///     client socket's SOLICIT must reach a fake upstream server inside a RELAY-FORW with the
+///     expected hop-count, link-address and peer-address, and the RELAY-REPL the fake server sends
+///     back must arrive at the client as a plain ADVERTISE. The reply leg runs through the relay's
+///     receive loop on its outbound socket. It is the DHCPv6 counterpart of
+///     <see cref="Dhcpv4RelayRoundTripTests" />. The server side of relaying (this server
+///     answering a RELAY-FORW from another relay) is tested in
+///     <c>Ninlil.Dhcp.Server.Core.Tests.Dhcpv6RelayReceivingRoundTripTests</c>.
 /// </summary>
 public sealed class Dhcpv6RelayRoundTripTests
 {
@@ -59,9 +56,7 @@ public sealed class Dhcpv6RelayRoundTripTests
             NullLogger<Dhcpv6UdpListener>.Instance
         );
 
-        // Both this relay's own dedicated outbound socket (its own background receive loop -- see
-        // this class's own doc comment) and the ordinary shared listener need to be running for
-        // this full, both-directions round trip to work.
+        // Start both the relay's receive loop and the listener; each carries one direction.
         await agent.StartAsync(CancellationToken.None);
         await listener.StartAsync(CancellationToken.None);
 
@@ -81,9 +76,8 @@ public sealed class Dhcpv6RelayRoundTripTests
 
             byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
 
-            // Step 1: the client's own SOLICIT "reaches the relay" (sent directly, to this relay's
-            // own listening port, standing in for the relay having genuinely received a real
-            // multicast SOLICIT on its own client-facing link).
+            // Step 1: the client's SOLICIT reaches the relay. It is sent straight to the listener's
+            // port in place of a multicast.
             Dhcpv6Message solicit = new()
             {
                 MessageType = Dhcpv6MessageTypeEnum.Solicit,
@@ -102,8 +96,8 @@ public sealed class Dhcpv6RelayRoundTripTests
                 new IPEndPoint(IPAddress.IPv6Loopback, relayListenPort)
             );
 
-            // Step 2: the fake upstream server genuinely receives the forwarded message, wrapped
-            // in a RELAY-FORW envelope this relay's own address/hop-count are correctly set on.
+            // Step 2: the fake upstream server receives the message inside a RELAY-FORW with the
+            // relay's link-address and hop-count 0.
             using CancellationTokenSource upstreamReceiveTimeout = new(TimeSpan.FromSeconds(5));
             UdpReceiveResult forwardedResult = await upstreamSocket.ReceiveAsync(
                 upstreamReceiveTimeout.Token
@@ -134,10 +128,9 @@ public sealed class Dhcpv6RelayRoundTripTests
             Assert.Equal(Dhcpv6MessageTypeEnum.Solicit, forwardedSolicit.MessageType);
             Assert.Equal(solicit.TransactionId, forwardedSolicit.TransactionId);
 
-            // Step 3: the fake upstream server crafts an ADVERTISE, wraps it in a RELAY-REPL
-            // envelope copying hop-count/link-address/peer-address unchanged (RFC 8415 Section
-            // 16), and sends it back to wherever the RELAY-FORW actually came from -- this relay's
-            // own dedicated outbound socket, at its own ephemeral local port.
+            // Step 3: the fake upstream server wraps an ADVERTISE in a RELAY-REPL, copying
+            // hop-count, link-address and peer-address from the RELAY-FORW, and sends it to the
+            // RELAY-FORW's source: the relay's outbound socket on its ephemeral port.
             Dhcpv6Message advertise = new()
             {
                 MessageType = Dhcpv6MessageTypeEnum.Advertise,
@@ -174,9 +167,8 @@ public sealed class Dhcpv6RelayRoundTripTests
                 forwardedResult.RemoteEndPoint
             );
 
-            // Step 4: this relay's own dedicated outbound socket (its own background receive loop)
-            // receives that RELAY-REPL, unwraps it, and relays the inner ADVERTISE on down to the
-            // original client.
+            // Step 4: the relay's receive loop gets the RELAY-REPL, unwraps it and sends the
+            // ADVERTISE to the client.
             using CancellationTokenSource clientReceiveTimeout = new(TimeSpan.FromSeconds(5));
             UdpReceiveResult relayedResult = await clientSocket.ReceiveAsync(
                 clientReceiveTimeout.Token
@@ -212,10 +204,9 @@ public sealed class Dhcpv6RelayRoundTripTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged IPv6 UDP port by asking the
-    ///     operating system to assign an ephemeral one, reading it back, and immediately releasing
-    ///     it -- the same convention <c>Dhcpv4RelayRoundTripTests.GetFreeUdpPort</c> establishes,
-    ///     adapted to IPv6.
+    ///     This method returns a free IPv6 UDP port by binding to port 0 on loopback, reading the
+    ///     assigned port and releasing it, as <c>Dhcpv4RelayRoundTripTests.GetFreeUdpPort</c> does
+    ///     for IPv4.
     /// </summary>
     private static int GetFreeUdpPort()
     {

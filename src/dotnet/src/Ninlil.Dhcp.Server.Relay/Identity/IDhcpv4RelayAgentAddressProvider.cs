@@ -4,13 +4,14 @@ using System.Net;
 namespace Ninlil.Dhcp.Server.Relay.Identity;
 
 /// <summary>
-///     This interface resolves this server's own RFC 3046 relay-agent address -- the value
-///     written into <c>giaddr</c> on every request this relay is the first relay to forward.
+///     This interface supplies the relay agent's address: the value written into <c>giaddr</c>
+///     when this relay is the first to forward a request, and the <c>giaddr</c> a reply must carry
+///     to be relayed to a client.
 /// </summary>
 public interface IDhcpv4RelayAgentAddressProvider
 {
     /// <summary>
-    ///     This property contains this relay's own address, resolved once at startup.
+    ///     This property contains the relay's address, resolved once at startup.
     /// </summary>
     IPAddress Value { get; }
 }

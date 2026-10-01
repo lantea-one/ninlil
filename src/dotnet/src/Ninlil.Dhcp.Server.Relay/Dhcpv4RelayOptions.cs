@@ -3,21 +3,15 @@ namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
 ///     This class binds to the <c>DhcpServer:Relay:Dhcpv4</c> section of the application's
-///     configuration and controls whether this server acts as an RFC 3046 DHCPv4 relay agent --
-///     forwarding a client's request to one or more upstream DHCPv4 servers rather than answering
-///     it itself from local scope/lease state -- and, if so, how.
+///     configuration and controls whether this server acts as a DHCPv4 relay agent (RFC 2131
+///     Section 4.1, with RFC 3046 Relay Agent Information), forwarding client requests to
+///     upstream DHCPv4 servers instead of answering them from local scopes, and how.
 ///     <para>
-///         <b>This is mutually exclusive with <c>Ninlil.Dhcp.Server.Core</c>'s own local
-///         lease-allocation engine, by design</b>: a real host does not, on the same listening
-///         instance, both answer authoritatively AND forward to someone else for the same
-///         request. The composition root (<c>Program.cs</c>) reads this class's own
-///         <see cref="Enable" /> flag directly, before dependency injection is built, and
-///         registers exactly one <c>IDhcpv4RequestHandler</c> implementation accordingly --
-///         mirroring the same "selecting an active transport always needs a restart, decided
-///         before dependency injection is built" precedent this project's own message-broker
-///         (RabbitMQ/ActiveMQ) and OIDC SSO scheme selection already establish, rather than
-///         registering both implementations and letting whichever one dependency injection
-///         resolves last silently win.
+///         <b>Relay or local engine, not both.</b> One listener cannot both answer and forward
+///         the same request. <c>Program.cs</c> reads <see cref="Enable" /> before dependency
+///         injection is built and registers either <see cref="Dhcpv4RelayAgent" /> or the
+///         <c>Ninlil.Dhcp.Server.Core</c> engine as the <c>IDhcpv4RequestHandler</c>, as it does
+///         for the message broker and OIDC scheme. Changing it needs a restart.
 ///     </para>
 /// </summary>
 public sealed class Dhcpv4RelayOptions
@@ -28,65 +22,55 @@ public sealed class Dhcpv4RelayOptions
     public const string SectionName = "DhcpServer:Relay:Dhcpv4";
 
     /// <summary>
-    ///     This property controls whether this server acts as a DHCPv4 relay agent at all. Off by
-    ///     default -- the same "capability-expanding toggles default off" reasoning
-    ///     <see cref="Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions.Enable" />'s own doc comment
-    ///     already documents for the local engine: silently forwarding a network's own DHCP
-    ///     traffic to a third party is a real, capability-expanding change to that network's own
-    ///     behavior, not a passive setting an operator might casually leave on.
+    ///     This property controls whether this server is a DHCPv4 relay agent. It is off by
+    ///     default, like <see cref="Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions.Enable" />:
+    ///     forwarding a network's DHCP traffic elsewhere changes the network. The listener still
+    ///     needs <see cref="Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions.Enable" /> to start.
     /// </summary>
     public bool Enable { get; set; }
 
     /// <summary>
-    ///     This property contains the IPv4 addresses of every upstream DHCPv4 server this relay
-    ///     forwards a client's request to. A real relay agent conventionally forwards to every
-    ///     configured server at once (whichever one actually has an address available answers
-    ///     first) rather than picking just one -- this project follows that same convention. Left
-    ///     empty (the default), a request this relay would otherwise forward is simply dropped,
-    ///     with a warning logged once per occurrence, rather than this server binding a socket
-    ///     with genuinely nothing useful to do with what it receives.
+    ///     This property contains the IPv4 addresses of the upstream DHCPv4 servers. Every request
+    ///     is sent to all of them, as relay agents usually do, and whichever can serve the client
+    ///     answers. Entries that do not parse are skipped with a warning. Left empty (the
+    ///     default), every request is dropped with a warning.
     /// </summary>
     public List<string> UpstreamServerAddresses { get; set; } = [];
 
     /// <summary>
-    ///     This property contains the UDP port every configured upstream DHCPv4 server listens on
-    ///     for a relayed request, and the port RFC 2131 Section 4.1 says a server unicasts a reply
-    ///     back through this relay's own <c>giaddr</c> to. 67 is the IANA-assigned DHCP/BOOTP
-    ///     server port, and the overwhelmingly common real-world value.
+    ///     This property contains the UDP port the upstream servers listen on. The default is
+    ///     67, the IANA DHCP/BOOTP server port. Replies come back to <c>giaddr</c> on the
+    ///     listener's server port (RFC 2131 Section 4.1), not on this setting.
     /// </summary>
     public int UpstreamServerPort { get; set; } = 67;
 
     /// <summary>
-    ///     This property optionally contains the IPv4 address this relay identifies itself as via
-    ///     the <c>giaddr</c> field of every request it is the first relay to forward. Left
-    ///     <see langword="null" /> (the default), this is auto-detected once, at startup, the same
-    ///     way <c>Ninlil.Dhcp.Server.Core.DhcpServerOptions.ServerIdentifierAddress</c>'s
-    ///     own doc comment describes for the local engine's own Server Identifier address, and for
-    ///     the exact same underlying reason: this project's transport binds a single wildcard
-    ///     socket with no per-packet receiving-interface information to fall back on, so a
-    ///     genuinely multi-homed, multi-subnet relay deployment needs this set explicitly.
+    ///     This property optionally contains the IPv4 address this relay puts in <c>giaddr</c>
+    ///     when it is the first relay to forward a request. Upstream servers use it to choose the
+    ///     scope, so it should be the relay's address on the client subnet. Left
+    ///     <see langword="null" /> (the default), it is detected once at startup as for
+    ///     <c>Ninlil.Dhcp.Server.Core.DhcpServerOptions.ServerIdentifierAddress</c>; the listener
+    ///     does not know a packet's arrival interface, and a relay always has at least two
+    ///     interfaces, so this should normally be set.
     /// </summary>
     public string RelayAgentAddress { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the RFC 3046 Section 2.1 Agent Circuit ID text this
-    ///     relay adds (as an opaque ASCII string) to every request it is the first relay to
-    ///     forward -- letting its own upstream server tell which of this relay's own interfaces or
-    ///     circuits a client is on. Left <see langword="null" /> or empty (the default), no Circuit
-    ///     ID sub-option is added. Combined with <see cref="RelayAgentRemoteId" /> into a single
-    ///     Relay Agent Information option (tag 82) via
-    ///     <see cref="Common.Wire.Dhcpv4MessageOptionExtensions.SetRelayAgentInformation" />; at
-    ///     least one of the two must be set for the option to be added at all.
+    ///     This property optionally contains the RFC 3046 Section 2.1 Agent Circuit ID, as ASCII
+    ///     text, which tells the upstream server which relay interface or circuit the client is
+    ///     on. With it or <see cref="RelayAgentRemoteId" /> set, the relay puts a Relay Agent
+    ///     Information option (tag 82) on every request it forwards, replacing any already there
+    ///     (see <see cref="Common.Wire.Dhcpv4MessageOptionExtensions.SetRelayAgentInformation" />);
+    ///     with neither set, the option is left as received. The value must be at most 255 bytes;
+    ///     length is not checked.
     /// </summary>
     public string RelayAgentCircuitId { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the RFC 3046 Section 2.2 Agent Remote ID text this
-    ///     relay adds (as an opaque ASCII string) to every request it is the first relay to
-    ///     forward -- conventionally identifying the specific client (or its own directly-attached
-    ///     access concentrator) more precisely than the Circuit ID alone. Left
-    ///     <see langword="null" /> or empty (the default), no Remote ID sub-option is added. See
-    ///     <see cref="RelayAgentCircuitId" />'s own doc comment for how the two combine.
+    ///     This property optionally contains the RFC 3046 Section 2.2 Agent Remote ID, as ASCII
+    ///     text, usually naming the client or its access device more specifically than the Circuit
+    ///     ID. Left <see langword="null" /> or empty (the default), no Remote ID sub-option is
+    ///     added; see <see cref="RelayAgentCircuitId" /> for how the two combine.
     /// </summary>
     public string RelayAgentRemoteId { get; set; }
 }

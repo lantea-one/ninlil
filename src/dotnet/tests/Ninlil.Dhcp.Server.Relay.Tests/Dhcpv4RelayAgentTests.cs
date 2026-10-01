@@ -10,12 +10,12 @@ using Ninlil.Dhcp.Protocol.Dhcpv4;
 namespace Ninlil.Dhcp.Server.Relay.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv4RelayAgent" />'s own RFC 2131 Section 4.1/RFC 3046
-///     behavior directly, by invoking its real <see cref="Dhcpv4RelayAgent.HandleRequestAsync" />
-///     method against real UDP sockets standing in for an upstream DHCPv4 server and the
-///     originating client -- edge/branch coverage this project's own separate, real, full
-///     <see cref="Dhcpv4UdpListener" /> round trip (<see cref="Dhcpv4RelayRoundTripTests" />)
-///     deliberately does not repeat.
+///     This class tests the forwarding side of <see cref="Dhcpv4RelayAgent" />: <c>giaddr</c> and
+///     hops handling for first and chained hops, Relay Agent Information, the hop limit and an
+///     empty upstream list. Each test calls <see cref="Dhcpv4RelayAgent.HandleRequestAsync" />
+///     directly and reads what arrives on a loopback UDP socket acting as the upstream server.
+///     The full path through <see cref="Dhcpv4UdpListener" /> is covered by
+///     <see cref="Dhcpv4RelayRoundTripTests" />.
 /// </summary>
 public sealed class Dhcpv4RelayAgentTests
 {
@@ -39,8 +39,7 @@ public sealed class Dhcpv4RelayAgentTests
             TransactionId = 0x1111_2222,
             HardwareAddressLength = 6,
             ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x03],
-            // A message a different, upstream-of-us relay has already touched: giaddr already
-            // set, hops already at 1.
+            // Already forwarded by another relay: giaddr set, hops at 1.
             RelayAgentIpAddress = upstreamRelayAddress,
             Hops = 1,
         };
@@ -64,10 +63,9 @@ public sealed class Dhcpv4RelayAgentTests
             reason
         );
 
-        // RFC 2131 Section 2: giaddr is filled in only by "the first" relay agent -- this relay is
-        // not the first one here, so the already-set value must survive unchanged.
+        // RFC 2131 Section 2: only "the first" relay agent sets giaddr, so it is unchanged.
         Assert.Equal(upstreamRelayAddress, forwarded.RelayAgentIpAddress);
-        // Every relay along the path still increments hops, regardless of whether it is the first.
+        // Every relay increments hops, first or not.
         Assert.Equal((byte)2, forwarded.Hops);
     }
 
@@ -138,7 +136,7 @@ public sealed class Dhcpv4RelayAgentTests
             TransactionId = 0x5555_6666,
             HardwareAddressLength = 6,
             ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x05],
-            // This project's own defensive loop-prevention limit (Dhcpv4RelayAgent.MaxHops).
+            // Dhcpv4RelayAgent.MaxHops.
             Hops = 16,
         };
         request.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -173,7 +171,7 @@ public sealed class Dhcpv4RelayAgentTests
         };
         request.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
 
-        // Simply must not throw -- there is nowhere sensible to forward this to.
+        // Passes if nothing throws; the request is dropped with a warning.
         await agent.HandleRequestAsync(
             request,
             new IPEndPoint(IPAddress.Loopback, 0),
@@ -182,10 +180,8 @@ public sealed class Dhcpv4RelayAgentTests
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="Dhcpv4RelayAgent" /> against a fixed, deterministic
-    ///     relay address and a caller-chosen upstream server list -- avoiding this test project's
-    ///     own dependency injection registration entirely, since this class's own constructor
-    ///     dependencies are cheap enough to construct directly by hand.
+    ///     This method builds a <see cref="Dhcpv4RelayAgent" /> by hand, without dependency
+    ///     injection, with a fixed relay address and the given upstream servers.
     /// </summary>
     private static Dhcpv4RelayAgent CreateAgent(
         IPAddress relayAddress,
@@ -211,10 +207,9 @@ public sealed class Dhcpv4RelayAgentTests
         );
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port by asking the operating
-    ///     system to assign an ephemeral one, reading it back, and immediately releasing it --
-    ///     good enough for a test that binds it again itself moments later, with only a small,
-    ///     accepted race window against something else on the same machine grabbing it first.
+    ///     This method returns a free UDP port by binding to port 0, reading the assigned port and
+    ///     releasing it. Another process could take the port before the test binds it; the risk
+    ///     is accepted.
     /// </summary>
     private static int GetFreeUdpPort()
     {

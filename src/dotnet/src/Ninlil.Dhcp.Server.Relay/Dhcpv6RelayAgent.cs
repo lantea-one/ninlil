@@ -13,41 +13,25 @@ using Ninlil.Dhcp.Server.Relay.Identity;
 namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
-///     This class is the real RFC 8415 DHCPv6 relay agent: the alternative
-///     <see cref="IDhcpv6RequestHandler" />/<see cref="IDhcpv6RelayMessageHandler" />
-///     implementation <see cref="Dhcpv6UdpListener" /> dispatches every decoded datagram to when
-///     this server is configured to relay rather than answer locally (see
-///     <see cref="Dhcpv6RelayOptions" />'s own doc comment for why the two are mutually
-///     exclusive) -- the DHCPv6 analogue of <see cref="Dhcpv4RelayAgent" />.
+///     This class is the DHCPv6 relay agent (RFC 8415): the
+///     <see cref="IDhcpv6RequestHandler" /> and <see cref="IDhcpv6RelayMessageHandler" /> that
+///     <see cref="Dhcpv6UdpListener" /> uses instead of the local engine when
+///     <see cref="Dhcpv6RelayOptions.Enable" /> is set. It is the DHCPv6 counterpart of
+///     <see cref="Dhcpv4RelayAgent" />.
 ///     <para>
-///         <b>Why this needs its own background receive loop, unlike <see cref="Dhcpv4RelayAgent" /></b>:
-///         DHCPv4's own relay agent needs no receive loop of its own at all, because RFC 2131
-///         Section 4.1 has a server unicast its reply to "the 'DHCP server' port on the BOOTP
-///         relay agent whose address appears in 'giaddr'" -- a fixed, well-known port, regardless
-///         of which port the original forwarded request's own source happened to be. That lets
-///         <see cref="Dhcpv4RelayAgent" />'s reply arrive back through the very same well-known
-///         port <c>Dhcpv4UdpListener</c> already listens on. DHCPv6 has no equivalent convention:
-///         RFC 8415's RELAY-FORW/RELAY-REPL exchange is an ordinary, symmetric UDP request/reply --
-///         a server replies to whatever source address and port the RELAY-FORW actually arrived
-///         from. Since this relay's own dedicated outbound socket (<see cref="_outboundSocket" />)
-///         sends every RELAY-FORW from its own ephemeral local port, the upstream server's own
-///         RELAY-REPL naturally targets that exact same ephemeral port -- never the shared,
-///         well-known port <see cref="Dhcpv6UdpListener" /> binds -- so this class runs its own
-///         small receive loop directly on that same dedicated socket (registered as a
-///         <see cref="BackgroundService" />) rather than depending on
-///         <see cref="Dhcpv6UdpListener" />'s own separate listening socket for this leg at all.
-///         <see cref="Dhcpv6UdpListener" />'s own generic RELAY-FORW/RELAY-REPL dispatch mechanism
-///         (see its own doc comment) exists for the genuinely different "receiving side" role
-///         instead -- an external relay agent forwarding a client's message <i>to</i> this server,
-///         handled by <c>Ninlil.Dhcp.Server.Core.Dhcpv6RequestHandler</c>'s own
-///         <see cref="IDhcpv6RelayMessageHandler" /> implementation, never by this class.
+///         <b>It has a second receive loop.</b> A DHCPv4 server sends its reply to the relay's
+///         server port, where the listener already listens. A DHCPv6 server sends the RELAY-REPL
+///         to the source address and port of the RELAY-FORW, and this class sends RELAY-FORW
+///         from the ephemeral port of <see cref="_outboundSocket" />. So the class is also a
+///         <see cref="BackgroundService" /> whose <see cref="ExecuteAsync" /> receives on that
+///         socket. The relay handling is also reachable from the listener: a RELAY-REPL arriving
+///         on the server port is dispatched to <see cref="HandleRelayMessageAsync" /> as well.
 ///     </para>
 ///     <para>
-///         Like <see cref="Dhcpv4RelayAgent" />, this class's own <see cref="HandleRequestAsync" />
-///         (an ordinary client message arriving via <see cref="Dhcpv6UdpListener" />'s own shared,
-///         multicast-joined socket) always returns <see langword="null" /> -- every real send this
-///         class ever makes goes out through its own dedicated outbound socket instead, whether
-///         forwarding a client's message upstream or relaying a reply back down.
+///         <b>It sends everything itself.</b> Client messages arrive from the listener through
+///         <see cref="HandleRequestAsync" />, are wrapped in a RELAY-FORW and sent upstream.
+///         Replies are unwrapped and sent to the client. Both handler methods return
+///         <see langword="null" />, leaving the listener nothing to send.
 ///     </para>
 /// </summary>
 public sealed class Dhcpv6RelayAgent
@@ -56,23 +40,17 @@ public sealed class Dhcpv6RelayAgent
         IDhcpv6RelayMessageHandler
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this relay's own receive loop will ever
-    ///     read -- the same reasoning <c>Dhcpv6UdpListener.MaximumDatagramSize</c>'s own doc
-    ///     comment gives.
+    ///     This constant contains the receive buffer size: the largest UDP payload, as in
+    ///     <c>Dhcpv6UdpListener.MaximumDatagramSize</c>.
     /// </summary>
     private const int MaximumDatagramSize = 65507;
 
     /// <summary>
-    ///     This constant bounds how many times a RELAY-REPL this relay receives back may report
-    ///     having already been relayed (RFC 8415 Section 7.1's own "hop-count" field) before this
-    ///     relay refuses to process it -- the same defensive, RFC-independent loop-prevention
-    ///     reasoning <c>Dhcpv4RelayAgent.MaxHops</c>'s own doc comment already documents. This
-    ///     relay itself always sends a RELAY-FORW with <c>hop-count</c> <c>0</c> (this project's
-    ///     own relay support forwards exactly one hop -- see
-    ///     <see cref="Dhcpv6RelayMessage" />'s own doc comment), so a genuine upstream server's own
-    ///     RELAY-REPL always echoes that same <c>0</c> back per RFC 8415 Section 16; a materially
-    ///     higher value reaching this check would mean something other than this relay's own
-    ///     genuine upstream reply arrived on this socket.
+    ///     This constant is the largest "hop-count" a received RELAY-REPL may carry. This relay
+    ///     always sends RELAY-FORW with hop-count 0 (only one hop is supported; see
+    ///     <see cref="Dhcpv6RelayMessage" />), and the server copies it into the reply, so a higher
+    ///     value means the packet is not an answer to this relay. The limit of 16 matches
+    ///     <c>Dhcpv4RelayAgent.MaxHops</c>, so values from 1 to 16 are still accepted.
     /// </summary>
     private const byte MaxHops = 16;
 
@@ -82,18 +60,16 @@ public sealed class Dhcpv6RelayAgent
     private readonly ILogger<Dhcpv6RelayAgent> _logger;
 
     /// <summary>
-    ///     This property contains the socket every outbound send (both the upstream-bound
-    ///     RELAY-FORW and the client-bound relayed reply) goes out through, and the socket
-    ///     <see cref="ExecuteAsync" /> also receives a genuine upstream RELAY-REPL back on -- see
-    ///     this class's own doc comment for why the same socket handles both directions here,
-    ///     unlike <see cref="Dhcpv4RelayAgent" />.
+    ///     This field contains the socket RELAY-FORW messages and relayed replies are sent from,
+    ///     and on which <see cref="ExecuteAsync" /> receives RELAY-REPL messages (see the class
+    ///     summary). It is bound to the wildcard address and an ephemeral port.
     /// </summary>
     private readonly Socket _outboundSocket;
 
-    /// <param name="relayOptions">This relay's own upstream-server and Interface-ID configuration.</param>
-    /// <param name="protocolOptions">The transport's own configured client port, used for a relayed reply's own destination.</param>
-    /// <param name="addressProvider">This relay's own resolved link-address.</param>
-    /// <param name="logger">The logger this relay's own forwarding decisions are recorded to.</param>
+    /// <param name="relayOptions">The upstream servers and Interface-ID settings.</param>
+    /// <param name="protocolOptions">The transport options, read for the client port relayed replies go to.</param>
+    /// <param name="addressProvider">The relay's link-address.</param>
+    /// <param name="logger">The logger dropped and failed messages are recorded to.</param>
     public Dhcpv6RelayAgent(
         IOptions<Dhcpv6RelayOptions> relayOptions,
         IOptions<Dhcpv6ProtocolOptions> protocolOptions,
@@ -119,11 +95,8 @@ public sealed class Dhcpv6RelayAgent
     {
         if (!_relayOptions.Value.Enable)
         {
-            // Registration is already conditional on this same flag (see
-            // Extension.ServiceCollectionDhcpv6RelayExtension.AddNinlilDhcpv6Relay and Program.cs's
-            // own composition-root branch), so this should never actually be reached -- kept as
-            // defense in depth, mirroring the same "checks its own Enable flag" posture every
-            // other optional transport/engine in this project already establishes.
+            // Program.cs only registers the relay when this flag is set, so this is a safety
+            // check in case the class is registered some other way.
             return;
         }
 
@@ -183,9 +156,7 @@ public sealed class Dhcpv6RelayAgent
 
             try
             {
-                // The result is always null here (see HandleRelayMessageAsync's own doc comment)
-                // -- this loop exists purely to drive the receive-and-process side of that method,
-                // not to send anything further of its own.
+                // The result is always null: the method sends the reply itself.
                 await HandleRelayMessageAsync(message, remoteEndPoint, stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -208,16 +179,16 @@ public sealed class Dhcpv6RelayAgent
     {
         await RelayRequestUpstreamAsync(request, remoteEndPoint, cancellationToken);
 
-        // This class always sends every real datagram itself, through its own outbound socket
-        // (see this class's own doc comment for why) -- there is never anything left for
-        // Dhcpv6UdpListener to send back to remoteEndPoint on this class's behalf.
+        // Everything has been sent through the outbound socket (see the class summary); the
+        // listener has nothing to send.
         return null;
     }
 
     /// <summary>
-    ///     This method implements the forwarding half of this relay's own job: a client's message,
-    ///     received on <see cref="Dhcpv6UdpListener" />'s own shared, multicast-joined socket, is
-    ///     wrapped in a RELAY-FORW envelope and unicast to every configured upstream DHCPv6 server.
+    ///     This method wraps a client message in a RELAY-FORW, with the client's source address as
+    ///     peer-address and the optional Interface-ID, and sends it by unicast to every configured
+    ///     upstream server. It drops the message when no upstream is configured or the envelope
+    ///     cannot be encoded.
     /// </summary>
     private async Task RelayRequestUpstreamAsync(
         Dhcpv6Message request,
@@ -239,9 +210,8 @@ public sealed class Dhcpv6RelayAgent
         Dhcpv6RelayMessage relayForward = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.RelayForward,
-            // This project's own relay support forwards exactly one hop -- see
-            // Dhcpv6RelayMessage's own doc comment -- so this relay is always "the" relay agent
-            // for a message it forwards, never a later hop in some longer chain.
+            // Only one hop is supported (see Dhcpv6RelayMessage), so this relay is always the
+            // first.
             HopCount = 0,
             LinkAddress = _addressProvider.Value,
             PeerAddress = clientEndPoint.Address,
@@ -265,9 +235,7 @@ public sealed class Dhcpv6RelayAgent
 
         int upstreamPort = _relayOptions.Value.UpstreamServerPort;
 
-        // A real relay agent conventionally forwards to every configured upstream server at once
-        // (see Dhcpv6RelayOptions.UpstreamServerAddresses's own doc comment) -- whichever one
-        // replies first wins.
+        // Send to every upstream server (see Dhcpv6RelayOptions.UpstreamServerAddresses).
         foreach (string upstreamAddressText in upstreamAddresses)
         {
             if (
@@ -308,9 +276,9 @@ public sealed class Dhcpv6RelayAgent
         CancellationToken cancellationToken
     )
     {
-        // Only ever process a genuine RELAY-REPL here -- a RELAY-FORW reaching this relay's own
-        // outbound socket would mean something else entirely was sent to it, never a real upstream
-        // server's own reply to a message this relay itself forwarded.
+        // Only a RELAY-REPL is an answer to this relay. A RELAY-FORW from another relay is not
+        // handled, since chained relays are not supported. The sender is not checked against
+        // the upstream servers.
         if (message.MessageType != Dhcpv6MessageTypeEnum.RelayReply)
         {
             _logger.LogDebug(
@@ -357,10 +325,8 @@ public sealed class Dhcpv6RelayAgent
             return null;
         }
 
-        // message.PeerAddress is the original client's own address, exactly as this relay itself
-        // set it when building the RELAY-FORW this reply answers -- RFC 8415 Section 16 has a
-        // relay agent extract and deliver the inner message to that same peer, unicast, once it
-        // strips the relay envelope back off.
+        // The server copies peer-address from the RELAY-FORW, so it is the client's address. The
+        // relay sends the unwrapped message there (RFC 8415). The address carries no scope ID.
         int clientPort = _protocolOptions.Value.ClientPort;
         IPEndPoint clientDestination = new(message.PeerAddress, clientPort);
         byte[] innerReplyBytes = Dhcpv6MessageWriter.Write(innerReply);
@@ -382,9 +348,8 @@ public sealed class Dhcpv6RelayAgent
             );
         }
 
-        // This class always sends every real datagram itself, through its own outbound socket --
-        // there is never a reply for a caller (Dhcpv6UdpListener's own generic relay dispatch, or
-        // this class's own ExecuteAsync loop above) to send back on this class's behalf.
+        // The reply has been sent here; neither the listener nor ExecuteAsync has anything to
+        // send.
         return null;
     }
 

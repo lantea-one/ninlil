@@ -9,12 +9,12 @@ using Ninlil.Dhcp.Protocol.Dhcpv6;
 namespace Ninlil.Dhcp.Server.Relay.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv6RelayAgent" />'s own edge-case/defensive behavior
-///     directly, by invoking its real <see cref="Dhcpv6RelayAgent.HandleRequestAsync" />/
-///     <see cref="Dhcpv6RelayAgent.HandleRelayMessageAsync" /> methods without a real socket pair
-///     -- edge/branch coverage this project's own separate, real, full round trip
-///     (<see cref="Dhcpv6RelayRoundTripTests" />) deliberately does not repeat, the DHCPv6 analogue
-///     of <see cref="Dhcpv4RelayAgentTests" />.
+///     This class tests the drop paths of <see cref="Dhcpv6RelayAgent" />: no upstream servers, a
+///     RELAY-FORW arriving at the relay, and a RELAY-REPL over the hop limit. Each test calls
+///     <see cref="Dhcpv6RelayAgent.HandleRequestAsync" /> or
+///     <see cref="Dhcpv6RelayAgent.HandleRelayMessageAsync" /> directly and checks that it returns
+///     <see langword="null" /> without throwing. The full path is covered by
+///     <see cref="Dhcpv6RelayRoundTripTests" />.
 /// </summary>
 public sealed class Dhcpv6RelayAgentTests
 {
@@ -26,7 +26,7 @@ public sealed class Dhcpv6RelayAgentTests
         Dhcpv6Message request = new() { MessageType = Dhcpv6MessageTypeEnum.Solicit };
         request.SetClientIdentifier([0x00, 0x01, 0x00, 0x01, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
 
-        // Simply must not throw -- there is nowhere sensible to forward this to.
+        // Passes if nothing throws; the message is dropped with a warning.
         Dhcpv6Message reply = await agent.HandleRequestAsync(
             request,
             new IPEndPoint(IPAddress.IPv6Loopback, 0),
@@ -41,9 +41,8 @@ public sealed class Dhcpv6RelayAgentTests
     {
         using Dhcpv6RelayAgent agent = CreateAgent(upstreamServerAddresses: ["::1"]);
 
-        // This relay's own dedicated outbound socket only ever legitimately receives a RELAY-REPL
-        // back from an upstream server it forwarded to -- a RELAY-FORW reaching it would mean
-        // something else entirely was sent there.
+        // Only a RELAY-REPL answers this relay; chained relays are not supported, so a
+        // RELAY-FORW is ignored.
         Dhcpv6Message innerMessage = new() { MessageType = Dhcpv6MessageTypeEnum.Solicit };
         innerMessage.SetClientIdentifier([
             0x00,
@@ -86,7 +85,7 @@ public sealed class Dhcpv6RelayAgentTests
         Dhcpv6RelayMessage relayReply = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.RelayReply,
-            // This project's own defensive loop-prevention limit (Dhcpv6RelayAgent.MaxHops).
+            // One above Dhcpv6RelayAgent.MaxHops.
             HopCount = 17,
             LinkAddress = IPAddress.Parse("2001:db8:1::1"),
             PeerAddress = IPAddress.Parse("fe80::1"),
@@ -103,11 +102,8 @@ public sealed class Dhcpv6RelayAgentTests
     }
 
     /// <summary>
-    ///     This method builds a real <see cref="Dhcpv6RelayAgent" /> against a fixed, deterministic
-    ///     link address and a caller-chosen upstream server list -- avoiding this test project's
-    ///     own dependency injection registration entirely, since this class's own constructor
-    ///     dependencies are cheap enough to construct directly by hand, the same convention
-    ///     <c>Dhcpv4RelayAgentTests.CreateAgent</c> already establishes.
+    ///     This method builds a <see cref="Dhcpv6RelayAgent" /> by hand, without dependency
+    ///     injection, with a fixed link address and the given upstream servers.
     /// </summary>
     private static Dhcpv6RelayAgent CreateAgent(IReadOnlyList<string> upstreamServerAddresses) =>
         new(
@@ -128,8 +124,8 @@ public sealed class Dhcpv6RelayAgentTests
     /// <summary>
     ///     This method asks the operating system for a currently unused port, by binding to port 0
     ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     their own DNS, DHCP, and web services, and may run alongside another copy of this suite,
-    ///     so no test listener ever uses a fixed or well-known port.
+    ///     DNS, DHCP and web services, and may run alongside another copy of this suite, so no
+    ///     test uses a fixed or well-known port.
     /// </summary>
     /// <returns>A free TCP port number.</returns>
     private static int GetFreePort()
