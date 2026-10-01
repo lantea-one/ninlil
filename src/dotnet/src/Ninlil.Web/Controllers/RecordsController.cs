@@ -16,30 +16,23 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the records stored inside a single zone, nested under it
-///     (<c>/api/zones/{zoneId}/records</c>) since a record only ever makes sense in its owning
-///     zone's own context. Every content change goes through <see cref="IZoneUpdateService" /> --
-///     the one path this project expects a zone's record content to ever change through -- so the
-///     zone's SOA serial, transfer journal, cache reload, and (for a signed zone) re-signing all
-///     stay correct with no extra work in this controller. Every action requires the
-///     <c>zones:read</c> or <c>zones:write</c> permission, the same as <see cref="ZonesController" />.
+///     This controller manages the records of one zone, nested under it at
+///     <c>/api/zones/{zoneId}/records</c>. Every content change goes through
+///     <see cref="IZoneUpdateService" />, the single path for changing zone content, so the SOA
+///     serial, the transfer journal, the cache reload and, for a signed zone, re-signing are
+///     handled there. Reads need <c>zones:read</c> and changes need <c>zones:write</c>, as for
+///     <see cref="ZonesController" />.
 ///     <para>
-///         <see cref="IZoneUpdateService" /> itself is shared with every genuinely DNS-protocol-
-///         triggered write path (RFC 2136 dynamic update, an AXFR/IXFR pull, cloud DNS sync, CAA/
-///         PTR auto-management, and ACME's own DNS-01 challenge responder), so it stays completely
-///         untouched by this project's own custom exception hierarchy -- converting its own
-///         <see cref="InvalidOperationException" /> throws directly would change error signaling
-///         on a live query/protocol response path this hierarchy is never allowed to reach.
-///         Instead, this controller catches that exception right at its own REST boundary and
-///         translates it, via <see cref="TranslateZoneUpdateFailure" />, into whichever of this
-///         project's own custom exception types actually matches the failure -- every other write
-///         path keeps seeing exactly the same <see cref="InvalidOperationException" /> it always
-///         has.
+///         <see cref="IZoneUpdateService" /> is shared with the DNS-protocol write paths (RFC 2136
+///         dynamic update, AXFR/IXFR pulls, cloud DNS sync, CAA and PTR management, and the ACME
+///         DNS-01 responder), so it reports failures as <see cref="InvalidOperationException" />
+///         rather than the REST exception types. This controller catches that exception at its
+///         boundary and maps it with <see cref="TranslateZoneUpdateFailure" />.
 ///     </para>
 /// </summary>
-/// <param name="zoneRepository">The repository used to confirm the owning zone exists.</param>
-/// <param name="recordRepository">The repository this controller reads records through directly.</param>
-/// <param name="zoneUpdateService">The service every record content change is applied through.</param>
+/// <param name="zoneRepository">Confirms the zone exists.</param>
+/// <param name="recordRepository">Reads records.</param>
+/// <param name="zoneUpdateService">Applies every change to record content.</param>
 [ApiController]
 [Route("api/zones/{zoneId:guid}/records")]
 public class RecordsController(
@@ -49,7 +42,8 @@ public class RecordsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every record stored in a zone.
+    ///     This action lists a zone's records, one page at a time, with their data as structured
+    ///     camelCase JSON. Returns 404 for an unknown zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("zones:read")]
@@ -65,11 +59,9 @@ public class RecordsController(
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine --
-        // a real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) scoped to this
-        // zone -- rather than materializing every record in the zone into memory first, so a
-        // high-record-count zone never forces its whole content into memory just to answer one
-        // page's worth of a request.
+        // The page and the total count are both computed by the storage engine for this zone
+        // (ORDER BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading the whole zone into
+        // memory.
         IReadOnlyList<RecordEntity> records = await recordRepository.SearchByZoneIdAsync(
             zoneId,
             skip,
@@ -84,7 +76,8 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action looks up a single record by its identifier.
+    ///     This action returns one record. Returns 404 when the record does not exist or belongs to
+    ///     another zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("zones:read")]
@@ -103,11 +96,12 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action adds a new record to the zone. A zone's very first record must be its own
-    ///     SOA record -- there is otherwise no serial to advance -- so this bootstraps the zone
-    ///     via <see cref="IZoneUpdateService.BootstrapZoneAsync" /> exactly once; every later
-    ///     addition goes through the ordinary <see cref="IZoneUpdateService.ApplyChangesAsync" />
-    ///     path instead.
+    ///     This action adds a record to the zone. A zone's first record must be its SOA, since
+    ///     without it there is no serial to advance; that first record bootstraps the zone through
+    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" />, and later records go through
+    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />. Returns 400 when the first record
+    ///     is not an SOA or the data does not fit the record type, 404 for an unknown zone, and 409
+    ///     for a second SOA. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -171,7 +165,9 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing record's fields, keeping its own identifier.
+    ///     This action replaces a record's fields, keeping its id. Returns 400 when the data does
+    ///     not fit the record type and 404 when the record does not exist or belongs to another
+    ///     zone. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -217,10 +213,10 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing record via RFC 7396 JSON Merge Patch: a
-    ///     field absent from the patch document is left untouched, a field present with a JSON
-    ///     <c>null</c> clears it (where the underlying field is itself nullable), and any other
-    ///     present field overwrites it.
+    ///     This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a
+    ///     JSON <c>null</c> clears a nullable field, and any other value replaces it. Changing
+    ///     <c>type</c> without new <c>data</c> re-checks the existing data against the new type and
+    ///     returns 400 if it does not fit. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -236,8 +232,8 @@ public class RecordsController(
         if (existingRecord is null || existingRecord.ZoneId != zoneId)
             throw new NotFoundException("Record", id.ToString());
 
-        // A patch that changes Data but not Type must still validate against this record's own,
-        // unchanged type; one that changes both validates against the new type instead.
+        // A patch that changes the data but not the type is checked against the record's current
+        // type; one that changes both is checked against the new type.
         DnsResourceRecordTypeEnum effectiveType = existingRecord.Type;
         if (patch.TryGetMergePatchField("type", out JsonElement type))
             effectiveType = System.Text.Json.JsonSerializer.Deserialize<DnsResourceRecordTypeEnum>(
@@ -251,9 +247,8 @@ public class RecordsController(
         }
         else if (effectiveType != existingRecord.Type)
         {
-            // The type changed but no new data was supplied -- the old RDATA cannot possibly
-            // match the new type's own shape, so re-validate (and re-normalize) it against the
-            // new type's codec rather than silently keeping data that no longer matches Type.
+            // The type changed without new data, so the old data is re-checked (and re-normalized)
+            // against the new type rather than kept in a shape that no longer matches.
             try
             {
                 newDataJson = RecordDataValidator.EncodeDataFromJsonOrThrow(
@@ -324,8 +319,9 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action removes a record from the zone. A zone's own SOA record cannot be removed
-    ///     this way -- every zone must always have exactly one; delete the zone itself instead.
+    ///     This action removes a record from the zone. The SOA record cannot be removed (409),
+    ///     since every zone must keep exactly one; delete the zone instead. Requires
+    ///     <c>zones:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -358,8 +354,8 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This method builds a brand-new, not-yet-persisted record entity from a create request,
-    ///     validating and normalizing its type-specific data along the way.
+    ///     This method builds a new, unsaved record entity from a create request, checking and
+    ///     normalizing its type-specific data.
     /// </summary>
     private static RecordEntity BuildRecord(Guid zoneId, RecordWriteRequest request)
     {
@@ -382,24 +378,18 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This method classifies an <see cref="InvalidOperationException" /> raised by
-    ///     <see cref="IZoneUpdateService" /> -- a service this controller shares with every
-    ///     DNS-protocol-triggered write path, and therefore never converts to throw this
-    ///     project's own custom exception hierarchy directly -- into whichever of this project's
-    ///     own exception types actually matches the failure, based on the specific, already-known
-    ///     wording <see cref="ZoneUpdateService" /> itself uses for each condition. A message this
-    ///     method does not recognize is deliberately never guessed at: it is wrapped as
-    ///     <see cref="NinlilException" /> instead, so it still becomes a clean, specific
-    ///     <c>ProblemDetails</c> response rather than the framework's own bare, generic
-    ///     unhandled-exception fallback, without this controller pretending to know a cause it
-    ///     does not actually recognize.
+    ///     This method maps an <see cref="InvalidOperationException" /> from
+    ///     <see cref="IZoneUpdateService" /> to a REST exception by the message wording
+    ///     <see cref="ZoneUpdateService" /> uses: a missing zone or record becomes
+    ///     <see cref="NotFoundException" /> and a repeated bootstrap becomes
+    ///     <see cref="ConflictException" />. An unrecognized message is not guessed at; it becomes
+    ///     a <see cref="NinlilException" />, which still yields a <c>ProblemDetails</c> response.
     /// </summary>
     /// <param name="exception">The exception raised by the <see cref="IZoneUpdateService" /> call.</param>
-    /// <param name="zoneId">The zone identifier the failing call was made against.</param>
+    /// <param name="zoneId">The zone the failing call was made against.</param>
     /// <param name="recordId">
-    ///     The record identifier the failing call was made against, when the call site names one
-    ///     -- <see langword="null" /> for a call (such as <see cref="Create" />'s own bootstrap
-    ///     branch) that has no single record identifier of its own yet.
+    ///     The record the failing call was made against, or <see langword="null" /> when there is
+    ///     none yet (such as the bootstrap branch of <see cref="Create" />).
     /// </param>
     /// <returns>The exception this controller should throw in place of <paramref name="exception" />.</returns>
     private static Exception TranslateZoneUpdateFailure(
@@ -427,22 +417,18 @@ public class RecordsController(
         )
             return new NotFoundException("Record", recordId.Value.ToString());
 
-        // A genuinely unexpected internal state (a missing or corrupt SOA record, most likely) --
-        // not something this caller's own request could realistically have avoided, so it is
-        // named and understood, but not a 404/409/400 from the caller's own perspective.
+        // Most likely a missing or corrupt SOA record: an understood internal state the caller
+        // could not have avoided, so not a 400, 404 or 409.
         return new NinlilException(message, exception);
     }
 
     /// <summary>
-    ///     This method re-serializes a record's own stored <c>DataJson</c> -- always in the
-    ///     PascalCase shape <c>Ninlil.Common.Serializer.JsonSerializer</c> produces by
-    ///     default, matching every other internal consumer of a record's data (the wire-format
-    ///     codecs, AXFR/IXFR, dynamic update) -- into the camelCase shape the rest of this REST
-    ///     API already uses everywhere else. Deliberately done only at this API boundary, on the
-    ///     way out, rather than changing what gets stored: storing camelCase JSON from this
-    ///     controller while every other write path keeps storing PascalCase would leave
-    ///     <c>RecordEntity.DataJson</c> in an inconsistent shape depending on which path last
-    ///     touched a given row.
+    ///     This method re-serializes a record's stored <c>DataJson</c>, which is always in the
+    ///     PascalCase shape <c>Ninlil.Common.Serializer.JsonSerializer</c> produces (the shape the
+    ///     wire codecs, AXFR/IXFR and dynamic update use), into the camelCase the rest of the API
+    ///     uses. It is done only on the way out: storing camelCase from this controller while the
+    ///     other write paths store PascalCase would leave <c>RecordEntity.DataJson</c> in mixed
+    ///     shapes.
     /// </summary>
     private static string ToCamelCaseDataJson(DnsResourceRecordTypeEnum type, string dataJson)
     {
@@ -462,9 +448,8 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This method converts a record entity into its REST representation, parsing its own
-    ///     stored <c>DataJson</c> back into structured JSON rather than leaving it as an escaped
-    ///     string.
+    ///     This method converts a record entity to its API representation, with its data as
+    ///     structured JSON rather than an escaped string.
     /// </summary>
     private static RecordDetail ToDetail(RecordEntity record)
     {

@@ -16,26 +16,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="ZoneSigningOptions" /> -- the
-///     DNSSEC signature validity/inception/refresh timing <c>ZoneSigningService</c>/
-///     <c>DnssecResigningBackgroundService</c> both consult -- `appsettings.json`-only until this
-///     pass. Every action requires the <c>zonesigningsettings:read</c> or
-///     <c>zonesigningsettings:write</c> permission.
+///     This controller reads and writes <see cref="ZoneSigningOptions" />: the DNSSEC signature
+///     validity, inception offset and re-signing timing that <c>ZoneSigningService</c> and
+///     <c>DnssecResigningBackgroundService</c> use. Reading needs
+///     <c>zonesigningsettings:read</c> and writing needs <c>zonesigningsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> Both consuming classes
-///         used to read <see cref="ZoneSigningOptions" /> via the snapshotted
-///         <see cref="IOptions{TOptions}" />, cached for the life of the process the first time it
-///         was read -- a real functional gap beyond REST/UI exposure, the same shape already
-///         found and fixed elsewhere in this project for other options classes, converted here the same
-///         way: <c>ZoneSigningService</c> reads <see cref="IOptionsMonitor{TOptions}" />'s own
-///         <c>CurrentValue</c> fresh on every signing call, and <c>DnssecResigningBackgroundService</c>
-///         reads it fresh on every iteration of its own polling loop -- a write this controller's
-///         own <see cref="Patch" /> merges into the configuration file changes what the *very next*
-///         sign or poll iteration uses, whichever comes first, no restart, no new instance.
+///         <b>Every field takes effect without a restart.</b> <c>ZoneSigningService</c> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every signing call,
+///         and <c>DnssecResigningBackgroundService</c> on every pass of its loop, so the next
+///         signing or pass uses the new values.
 ///     </para>
 /// </summary>
-/// <param name="zoneSigningOptions">This host's own currently-effective zone-signing timing, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="zoneSigningOptions">The current zone-signing timing.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/zone-signing-settings")]
 public class ZoneSigningSettingsController(
@@ -44,8 +37,8 @@ public class ZoneSigningSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     zone-signing timing configuration.
+    ///     This action returns the current zone-signing timing. Requires
+    ///     <c>zonesigningsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("zonesigningsettings:read")]
@@ -65,10 +58,11 @@ public class ZoneSigningSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Authoritative:ZoneSigning</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Every field hot-reloads immediately -- see this class's own doc
-    ///     comment.
+    ///     This action merges a partial update into <c>DnsServer:Authoritative:ZoneSigning</c> as
+    ///     an RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every
+    ///     field takes effect at once. Returns 400 for a malformed duration, a negative inception
+    ///     offset, or a non-positive validity period, refresh margin or poll interval. Requires
+    ///     <c>zonesigningsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("zonesigningsettings:write")]
@@ -190,10 +184,8 @@ public class ZoneSigningSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller -- the
-    ///     same helper <see cref="RecursiveSettingsController" />/<see cref="TransportSettingsController" />
-    ///     each already establish independently.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,

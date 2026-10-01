@@ -16,26 +16,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="NotifyOptions" /> -- how many
-///     times, how often, and to what port this server sends RFC 1996 NOTIFY messages to a zone's
-///     configured secondaries -- `appsettings.json`-only until this pass. Every action requires
-///     the <c>notifysettings:read</c> or <c>notifysettings:write</c> permission.
+///     This controller reads and writes <see cref="NotifyOptions" />: how many times, how often
+///     and to which port this server sends RFC 1996 NOTIFY messages to a zone's secondaries.
+///     Reading needs <c>notifysettings:read</c> and writing needs <c>notifysettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <c>UdpNotifySender</c>
-///         used to read <see cref="NotifyOptions" /> via the snapshotted
-///         <see cref="IOptions{TOptions}" />, cached for the life of the process the first time
-///         it was read -- a real functional gap beyond REST/UI exposure, the same shape already
-///         found and fixed elsewhere in this project for other options classes, converted here
-///         the same way: <c>UdpNotifySender</c> now reads <see cref="IOptionsMonitor{TOptions}" />'s
-///         own <c>CurrentValue</c> fresh on every single NOTIFY attempt, even though a fresh
-///         instance of that (scoped) class is itself constructed per attempt -- the plain,
-///         snapshotted <see cref="IOptions{TOptions}" /> it used before this fix would still have
-///         handed every one of those fresh instances back the exact same process-wide-cached
-///         value.
+///         <b>Every field takes effect at once, with no restart.</b> <c>UdpNotifySender</c> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every NOTIFY attempt.
 ///     </para>
 /// </summary>
-/// <param name="notifyOptions">This host's own currently-effective NOTIFY settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="notifyOptions">The current NOTIFY settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/notify-settings")]
 public class NotifySettingsController(
@@ -44,8 +34,7 @@ public class NotifySettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     NOTIFY settings.
+    ///     This action returns the current NOTIFY settings. Requires <c>notifysettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("notifysettings:read")]
@@ -61,10 +50,11 @@ public class NotifySettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Authoritative:Notify</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Every field this options class exposes hot-reloads immediately
-    ///     -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Authoritative:Notify</c> as an RFC
+    ///     7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every field
+    ///     takes effect at once. Returns 400 when <c>maxAttempts</c> is below 1, the port is
+    ///     outside 1-65535, or a timeout or delay is not a positive TimeSpan. Requires
+    ///     <c>notifysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("notifysettings:write")]
@@ -136,10 +126,8 @@ public class NotifySettingsController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch field expected to be a positive <see cref="TimeSpan" />,
-    ///     matching this project's own established convention of a small, controller-local helper
-    ///     over a shared one (see <c>TryGetDuration</c>'s own several independent copies already
-    ///     in this codebase).
+    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
+    ///     <see cref="ValidationException" /> naming the field.
     /// </summary>
     private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
     {

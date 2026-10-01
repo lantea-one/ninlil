@@ -17,28 +17,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the DNSSEC signing keys stored inside a single zone, nested
-///     under it (<c>/api/zones/{zoneId}/dnssec-keys</c>) since a key belongs to exactly one zone
-///     via <see cref="DnssecKeyEntity.ZoneId" /> -- the same nesting <see cref="RecordsController" />
-///     already establishes for a zone's records. Generation and decryption of key material itself
-///     goes through <see cref="IDnssecKeyManagementService" />; this controller only ever touches
-///     a key's own metadata (retirement status, comments) directly. Every action requires the
-///     <c>zones:read</c> or <c>zones:write</c> permission, the same as <see cref="ZonesController" />
-///     and <see cref="RecordsController" />. A key's own private key material is never returned by
-///     any action here -- see <see cref="DnssecKeyDetail" /> for why.
+///     This controller manages one zone's DNSSEC signing keys, nested under it at
+///     <c>/api/zones/{zoneId}/dnssec-keys</c> because each key belongs to one zone through
+///     <see cref="DnssecKeyEntity.ZoneId" />. Generating keys, starting rollovers and confirming
+///     parent DS updates go through <see cref="IDnssecKeyManagementService" />; this controller
+///     edits only a key's retirement state and comments itself. Reads need <c>zones:read</c> and
+///     changes need <c>zones:write</c>, as for <see cref="ZonesController" />. Private key
+///     material is never returned (see <see cref="DnssecKeyDetail" />).
 /// </summary>
-/// <param name="zoneRepository">The repository used to confirm the owning zone exists.</param>
-/// <param name="dnssecKeyRepository">The repository this controller reads and writes keys through.</param>
+/// <param name="zoneRepository">Confirms the zone exists and supplies its name.</param>
+/// <param name="dnssecKeyRepository">Reads and writes keys.</param>
 /// <param name="dnssecKeyManagementService">
-///     The service a new key is actually generated through -- it owns key-pair generation, key
-///     tag computation, and private-key encryption; this controller never does any of that itself.
+///     Generates keys (key pair, key tag, private-key encryption) and runs rollovers.
 /// </param>
-/// <param name="unitOfWork">The unit of work a metadata-only change is committed through.</param>
+/// <param name="unitOfWork">Commits metadata-only changes.</param>
 /// <param name="eventPublisher">
-///     The publisher this controller reports a change through once persisted, so
-///     <c>SignedZoneCache</c> reloads and re-signs the zone with the updated key set --
-///     <see cref="IDnssecKeyManagementService" /> itself publishes no such event, unlike
-///     <see cref="Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService" />, so this controller must.
+///     Publishes <see cref="DnsZoneChangedEvent" /> after a change so <c>SignedZoneCache</c>
+///     re-signs the zone with the new key set. <see cref="IDnssecKeyManagementService" /> does not
+///     publish it itself (unlike
+///     <see cref="Ninlil.Dns.Server.Authoritative.Journal.IZoneUpdateService" />), so this
+///     controller does.
 /// </param>
 [ApiController]
 [Route("api/zones/{zoneId:guid}/dnssec-keys")]
@@ -51,7 +49,8 @@ public class DnssecKeysController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every DNSSEC key belonging to a zone.
+    ///     This action lists a zone's DNSSEC keys, one page at a time, each with its DNSKEY and DS
+    ///     record text. Returns 404 for an unknown zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("zones:read")]
@@ -68,9 +67,8 @@ public class DnssecKeysController(
 
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every key into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every key into memory.
         IReadOnlyList<DnssecKeyEntity> keys = await dnssecKeyRepository.SearchByZoneIdAsync(
             zoneId,
             skip,
@@ -90,7 +88,8 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action looks up a single DNSSEC key by its identifier.
+    ///     This action returns one DNSSEC key with its DNSKEY and DS record text. Returns 404 when
+    ///     the key does not exist or belongs to another zone. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("zones:read")]
@@ -114,7 +113,9 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action generates a brand-new DNSSEC key for the zone, already active.
+    ///     This action generates a new DNSSEC key for the zone, active at once, and has the zone
+    ///     re-signed. Returns 400 for an algorithm the server's policy disallows or cannot sign
+    ///     with, and 404 for an unknown zone. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -130,10 +131,9 @@ public class DnssecKeysController(
         if (zone is null)
             throw new NotFoundException("Zone", zoneId.ToString());
 
-        // DnssecKeyManagementService.GenerateKeyAsync throws ValidationException directly for
-        // both an algorithm the server's own configured policy disallows and an algorithm with
-        // no registered signing implementation at all -- caught by the shared exception handler,
-        // never re-derived here.
+        // GenerateKeyAsync throws ValidationException itself for an algorithm the configured policy
+        // disallows or that has no signing implementation; the shared exception handler turns it
+        // into a 400.
         DnssecKeyEntity key = await dnssecKeyManagementService.GenerateKeyAsync(
             zoneId,
             request.Role,
@@ -156,8 +156,9 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing key's own mutable state (retirement status and
-    ///     comments) -- see <see cref="DnssecKeyWriteRequest" /> for why nothing else is writable.
+    ///     This action replaces a key's editable state, its retirement flag and comments (see
+    ///     <see cref="DnssecKeyWriteRequest" /> for why nothing else can be written). Returns 404
+    ///     when the zone or key does not exist. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -177,12 +178,10 @@ public class DnssecKeysController(
         if (key is null || key.ZoneId != zoneId)
             throw new NotFoundException("DnssecKey", id.ToString());
 
-        // IsRetired stays a plain two-way toggle over LifecycleState, exactly as it behaved before
-        // this key gained a real RFC 6781 rollover state model: true forces the key straight to
-        // Removed (the same outcome IDnssecKeyManagementService.RetireKeyAsync produces), false
-        // forces it back to Active -- a deliberate manual override an operator can use to cancel a
-        // rollover mid-flight, not something DnssecKeyRolloverBackgroundService's own automated
-        // walk ever does on its own.
+        // IsRetired is a two-way manual override of LifecycleState: true moves the key straight to
+        // Removed (as IDnssecKeyManagementService.RetireKeyAsync does) and false moves it back to
+        // Active, whatever rollover state it was in. An operator can use it to cancel a rollover;
+        // DnssecKeyRolloverBackgroundService never does this itself.
         key.LifecycleState = request.IsRetired
             ? DnssecKeyLifecycleStateEnum.Removed
             : DnssecKeyLifecycleStateEnum.Active;
@@ -198,10 +197,10 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing key's own mutable state via RFC 7396 JSON
-    ///     Merge Patch: a field absent from the patch document is left untouched, a field present
-    ///     with a JSON <c>null</c> clears it (where the underlying field is itself nullable), and
-    ///     any other present field overwrites it.
+    ///     This action updates a key's retirement flag and comments as an RFC 7396 merge patch: an
+    ///     absent field is unchanged, a JSON <c>null</c> clears the comments, and any other value
+    ///     replaces it. Returns 404 when the zone or key does not exist. Requires
+    ///     <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -221,8 +220,7 @@ public class DnssecKeysController(
         if (key is null || key.ZoneId != zoneId)
             throw new NotFoundException("DnssecKey", id.ToString());
 
-        // See Replace's own comment above for why this remains a plain two-way toggle over
-        // LifecycleState.
+        // See the comment in Replace: isRetired is a two-way override of LifecycleState.
         if (patch.TryGetMergePatchField("isRetired", out JsonElement isRetired))
             key.LifecycleState = isRetired.GetBoolean()
                 ? DnssecKeyLifecycleStateEnum.Removed
@@ -241,9 +239,10 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a DNSSEC key. Prefer retiring a key (<see cref="Patch" />
-    ///     or <see cref="Replace" /> with <c>isRetired: true</c>) over deleting it outright, unless
-    ///     the key is already retired and no longer needed for signature validation continuity.
+    ///     This action deletes a DNSSEC key. Prefer retiring a key (<see cref="Patch" /> or
+    ///     <see cref="Replace" /> with <c>isRetired: true</c>) unless it is already retired and no
+    ///     longer needed to keep signatures validating. Returns 404 when the zone or key does not
+    ///     exist. Requires <c>zones:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -266,10 +265,10 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action starts a real, automated RFC 6781 key rollover, replacing an existing
-    ///     currently-active key -- see <see cref="IDnssecKeyManagementService.StartRolloverAsync" />
-    ///     for exactly what happens next, and which scheme (Pre-Publish or Double-Signature) is
-    ///     chosen automatically from the existing key's own role.
+    ///     This action starts an automated RFC 6781 rollover of an active key and returns the new
+    ///     key. The scheme (Pre-Publish or Double-Signature) follows from the key's role; see
+    ///     <see cref="IDnssecKeyManagementService.StartRolloverAsync" /> for the steps. Returns
+    ///     400, 404 or 409 as that method reports. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/roll")]
     [RequirePermission("zones:write")]
@@ -289,9 +288,8 @@ public class DnssecKeysController(
         if (zone is null)
             throw new NotFoundException("Zone", zoneId.ToString());
 
-        // StartRolloverAsync throws NotFoundException/ValidationException/ConflictException
-        // directly for every real failure mode; none is re-derived here, the same precedent
-        // Create's own doc comment already establishes for GenerateKeyAsync.
+        // StartRolloverAsync throws NotFoundException, ValidationException or ConflictException
+        // itself for each failure; the shared exception handler maps them.
         DnssecKeyEntity replacement = await dnssecKeyManagementService.StartRolloverAsync(
             zoneId,
             id,
@@ -300,9 +298,9 @@ public class DnssecKeysController(
             stoppingToken
         );
 
-        // The incoming key is already published in the zone's own DNSKEY RRset the moment it is
-        // created (every non-Removed state is), and a Double-Signature KSK already signs -- both
-        // real content changes SignedZoneCache must pick up right away.
+        // The new key appears in the zone's DNSKEY RRset as soon as it is created (every state but
+        // Removed is published), and a Double-Signature KSK signs at once, so the zone must be
+        // re-signed now.
         eventPublisher.Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, zoneId, zone.Name));
 
         return CreatedAtAction(
@@ -313,10 +311,11 @@ public class DnssecKeysController(
     }
 
     /// <summary>
-    ///     This action records that an operator has confirmed a Key-Signing Key rollover's own new
-    ///     DS record has actually been published at a real, externally-hosted parent zone -- see
-    ///     <see cref="IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync" /> for exactly when
-    ///     this is needed at all.
+    ///     This action records that the operator has published a Key-Signing Key rollover's new DS
+    ///     record at an externally hosted parent zone, so the rollover can continue (see
+    ///     <see cref="IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync" />). Returns 400
+    ///     when the key is not a KSK in the middle of a rollover and 404 when it does not exist in
+    ///     this zone. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/confirm-parent-ds-updated")]
     [RequirePermission("zones:write")]
@@ -330,16 +329,16 @@ public class DnssecKeysController(
         if (key is null || key.ZoneId != zoneId)
             throw new NotFoundException("DnssecKey", id.ToString());
 
-        // ConfirmParentDsUpdatedAsync throws ValidationException directly when the key is not
-        // really a KSK mid-rollover -- not re-derived here.
+        // ConfirmParentDsUpdatedAsync throws ValidationException itself when the key is not a KSK
+        // in the middle of a rollover.
         await dnssecKeyManagementService.ConfirmParentDsUpdatedAsync(id, stoppingToken);
 
         return NoContent();
     }
 
     /// <summary>
-    ///     This method converts a DNSSEC key entity into its REST representation, deliberately
-    ///     never including its own private key material.
+    ///     This method converts a key entity to its API representation, with its DNSKEY and DS
+    ///     record text, and never its private key material.
     /// </summary>
     private static DnssecKeyDetail ToDetail(DnssecKeyEntity key, string zoneName)
     {

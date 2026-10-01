@@ -16,24 +16,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="SecondaryZoneRefreshOptions" />
-///     -- how often the background loop that checks whether a secondary zone is due for a refresh
-///     wakes up -- `appsettings.json`-only until this pass. Every action requires the
-///     <c>secondaryzonerefreshsettings:read</c> or <c>secondaryzonerefreshsettings:write</c>
-///     permission.
+///     This controller reads and writes <see cref="SecondaryZoneRefreshOptions" />: how often the
+///     background loop checks whether a secondary zone is due for a refresh, and how long to wait
+///     before retrying a zone that has no SOA yet or whose primaries were unreachable. Reading
+///     needs <c>secondaryzonerefreshsettings:read</c> and writing needs
+///     <c>secondaryzonerefreshsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <c>SecondaryZoneRefreshService</c>
-///         is a singleton hosted service whose own loop body already re-read this options class's
-///         properties on every iteration, but through the snapshotted <see cref="IOptions{TOptions}" />
-///         -- computed once and cached for the life of the process -- so a configuration write
-///         never actually reached a live loop, the same shape already found and fixed for
-///         <c>DnssecResigningBackgroundService</c>. Converted here to
-///         <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c>, read fresh on every
-///         loop iteration.
+///         <b>Every field takes effect without a restart.</b> The singleton
+///         <c>SecondaryZoneRefreshService</c> reads <see cref="IOptionsMonitor{TOptions}" />'s
+///         <c>CurrentValue</c> on every pass of its loop.
 ///     </para>
 /// </summary>
-/// <param name="secondaryZoneRefreshOptions">This host's own currently-effective secondary-zone-refresh-polling settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="secondaryZoneRefreshOptions">The current secondary-zone refresh settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/secondary-zone-refresh-settings")]
 public class SecondaryZoneRefreshSettingsController(
@@ -42,8 +37,8 @@ public class SecondaryZoneRefreshSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     secondary-zone-refresh-polling settings.
+    ///     This action returns the current secondary-zone refresh settings. Requires
+    ///     <c>secondaryzonerefreshsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("secondaryzonerefreshsettings:read")]
@@ -61,10 +56,10 @@ public class SecondaryZoneRefreshSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:SecondaryZoneRefresh</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Every field this options class exposes hot-reloads immediately
-    ///     -- see this class's own doc comment.
+    ///     <c>DnsServer:Authoritative:SecondaryZoneRefresh</c> as an RFC 7396 merge patch, through
+    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect without a
+    ///     restart. Returns 400 for a value that is not a positive TimeSpan. Requires
+    ///     <c>secondaryzonerefreshsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("secondaryzonerefreshsettings:write")]
@@ -113,10 +108,8 @@ public class SecondaryZoneRefreshSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch field expected to be a positive <see cref="TimeSpan" />,
-    ///     matching this project's own established convention of a small, controller-local helper
-    ///     over a shared one (see <c>TryGetDuration</c>'s own several independent copies already
-    ///     in this codebase).
+    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
+    ///     <see cref="ValidationException" /> naming the field.
     /// </summary>
     private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
     {

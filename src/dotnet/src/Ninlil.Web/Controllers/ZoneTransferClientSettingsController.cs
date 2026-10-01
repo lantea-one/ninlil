@@ -16,27 +16,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="ZoneTransferClientOptions" />
-///     -- the port and timeouts this server uses while pulling an AXFR/IXFR transfer from a
-///     primary as a secondary -- `appsettings.json`-only until this pass. Every action requires
-///     the <c>zonetransferclientsettings:read</c> or <c>zonetransferclientsettings:write</c>
-///     permission.
+///     This controller reads and writes <see cref="ZoneTransferClientOptions" />: the port and
+///     timeouts this server uses as a secondary when it pulls AXFR/IXFR transfers from a primary.
+///     Reading needs <c>zonetransferclientsettings:read</c> and writing needs
+///     <c>zonetransferclientsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <c>TcpZoneTransferClient</c>
-///         used to read <see cref="ZoneTransferClientOptions" /> via the snapshotted
-///         <see cref="IOptions{TOptions}" />, cached for the life of the process the first time it
-///         was read -- a real functional gap beyond REST/UI exposure, the same shape already
-///         found and fixed elsewhere in this project for other options classes, converted here the same
-///         way: <c>TcpZoneTransferClient</c> now reads <see cref="IOptionsMonitor{TOptions}" />'s
-///         own <c>CurrentValue</c> fresh on every single pull it attempts, even though a fresh
-///         instance of that (scoped) client is itself constructed per pull -- the plain,
-///         snapshotted <see cref="IOptions{TOptions}" /> it used before this fix would still have
-///         handed every one of those fresh instances back the exact same process-wide-cached
-///         value.
+///         <b>Every field takes effect at once, with no restart.</b>
+///         <c>TcpZoneTransferClient</c> reads <see cref="IOptionsMonitor{TOptions}" />'s
+///         <c>CurrentValue</c> on every pull.
 ///     </para>
 /// </summary>
-/// <param name="zoneTransferClientOptions">This host's own currently-effective zone-transfer-pulling settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="zoneTransferClientOptions">The current zone-transfer pulling settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/zone-transfer-client-settings")]
 public class ZoneTransferClientSettingsController(
@@ -45,8 +36,8 @@ public class ZoneTransferClientSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     zone-transfer-pulling settings.
+    ///     This action returns the current zone-transfer pulling settings. Requires
+    ///     <c>zonetransferclientsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("zonetransferclientsettings:read")]
@@ -66,10 +57,10 @@ public class ZoneTransferClientSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:ZoneTransferClient</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Every field this options class exposes hot-reloads immediately
-    ///     -- see this class's own doc comment.
+    ///     <c>DnsServer:Authoritative:ZoneTransferClient</c> as an RFC 7396 merge patch, through
+    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect at once. Returns
+    ///     400 for a port outside 1-65535 or a timeout that is not a positive TimeSpan. Requires
+    ///     <c>zonetransferclientsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("zonetransferclientsettings:write")]
@@ -137,10 +128,8 @@ public class ZoneTransferClientSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a merge-patch field expected to be a positive <see cref="TimeSpan" />,
-    ///     matching this project's own established convention of a small, controller-local helper
-    ///     over a shared one (see <c>TryGetDuration</c>'s own several independent copies already
-    ///     in this codebase).
+    ///     This method parses a merge-patch field that must hold a positive TimeSpan, or throws a
+    ///     <see cref="ValidationException" /> naming the field.
     /// </summary>
     private static TimeSpan ParsePositiveTimeSpan(JsonElement element, string fieldName)
     {

@@ -16,29 +16,25 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="DnssecKeyRolloverOptions" />
-///     -- the RFC 6781 §4.1.1.1 (Pre-Publish, ZSK)/§4.1.2 (Double-Signature, KSK) key-rollover
-///     timing <see cref="DnssecKeyRolloverBackgroundService" /> walks every locally signed zone's
-///     own keys against -- `appsettings.json`-only until this pass. An operator genuinely needs
-///     <see cref="DnssecKeyRolloverOptions.ExternalParentDsTtl" /> configurable at runtime: it is
-///     this project's own stand-in for a real external registrar's own DS record TTL (which this
-///     project has no live way to observe), and getting it wrong either withdraws a retired KSK
-///     too early (a real validation failure for a resolver still holding the old DS in cache) or
-///     needlessly delays withdrawal. Every action requires the
-///     <c>dnsseckeyrolloversettings:read</c> or <c>dnsseckeyrolloversettings:write</c> permission.
+///     This controller reads and writes <see cref="DnssecKeyRolloverOptions" />: the timing that
+///     <see cref="DnssecKeyRolloverBackgroundService" /> applies when it walks each locally signed
+///     zone's keys through an RFC 6781 rollover (Pre-Publish for a ZSK, §4.1.1.1; Double-Signature
+///     for a KSK, §4.1.2). <see cref="DnssecKeyRolloverOptions.ExternalParentDsTtl" /> matters
+///     most: it stands in for the DS record TTL at an external registrar, which the server cannot
+///     observe. Too short withdraws a retired KSK while resolvers may still cache the old DS, so
+///     validation fails; too long only delays the withdrawal. Reading needs
+///     <c>dnsseckeyrolloversettings:read</c> and writing needs
+///     <c>dnsseckeyrolloversettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b>
-///         <see cref="DnssecKeyRolloverBackgroundService" /> already reads
-///         <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c> fresh on every
-///         zone it processes within a single poll pass, and reads
-///         <see cref="DnssecKeyRolloverOptions.PollInterval" /> fresh for its own next
-///         <see cref="Task.Delay(TimeSpan, CancellationToken)" /> wait too -- a write this
-///         controller's own <see cref="Patch" /> merges into the configuration file changes what
-///         the very next rollover check or poll wait uses, no restart, no new instance.
+///         <b>Every field takes effect without a restart.</b>
+///         <see cref="DnssecKeyRolloverBackgroundService" /> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> for each zone it
+///         processes and for each wait between passes, so the next check or wait uses the new
+///         values.
 ///     </para>
 /// </summary>
-/// <param name="rolloverOptions">This host's own currently-effective key-rollover timing, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="rolloverOptions">The current key-rollover timing.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/dnssec-key-rollover-settings")]
 public class DnssecKeyRolloverSettingsController(
@@ -47,8 +43,8 @@ public class DnssecKeyRolloverSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     DNSSEC key-rollover timing configuration.
+    ///     This action returns the current DNSSEC key-rollover timing. Requires
+    ///     <c>dnsseckeyrolloversettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("dnsseckeyrolloversettings:read")]
@@ -71,10 +67,10 @@ public class DnssecKeyRolloverSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into
-    ///     <c>DnsServer:Authoritative:DnssecKeyRollover</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. Every field hot-reloads immediately -- see this class's own
-    ///     doc comment.
+    ///     <c>DnsServer:Authoritative:DnssecKeyRollover</c> as an RFC 7396 merge patch, through
+    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect at once. Returns
+    ///     400 for a malformed duration, a negative propagation delay, or a non-positive parent DS
+    ///     TTL or poll interval. Requires <c>dnsseckeyrolloversettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("dnsseckeyrolloversettings:write")]
@@ -174,10 +170,8 @@ public class DnssecKeyRolloverSettingsController(
     }
 
     /// <summary>
-    ///     This method reads a merge-patch field expected to hold a <see cref="TimeSpan" />-parseable
-    ///     string, distinguishing "absent" from "present but unparseable" for the caller -- the
-    ///     same helper shape <see cref="ZoneSigningSettingsController" />'s own equivalent already
-    ///     establishes.
+    ///     This method reads a merge-patch field that should hold a TimeSpan string, telling the
+    ///     caller both whether the field was present and whether it parsed.
     /// </summary>
     private static bool TryGetDuration(
         JsonElement patch,

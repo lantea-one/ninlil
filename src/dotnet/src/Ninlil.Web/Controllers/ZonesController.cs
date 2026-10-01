@@ -19,44 +19,39 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers every DNS zone this server hosts or references -- creating,
-///     updating, and deleting a zone's own metadata (its name, role, DNSSEC posture, transfer and
-///     forwarding configuration). A zone's actual record content is managed separately, through
-///     the nested <see cref="RecordsController" />. Every action requires the <c>zones:read</c> or
-///     <c>zones:write</c> permission.
+///     This controller manages the DNS zones this server hosts or refers to: creating, updating
+///     and deleting a zone's settings (name, type, DNSSEC, transfer, forwarding, cloud sync, CAA
+///     and PTR management), catalog-zone membership, and on-demand CAA and PTR reconciliation. A
+///     zone's records are managed through <see cref="RecordsController" />. Reads need
+///     <c>zones:read</c> and changes need <c>zones:write</c>. Every change publishes a
+///     <see cref="DnsZoneChangedEvent" />.
 /// </summary>
-/// <param name="zoneRepository">The repository this controller reads and writes zones through.</param>
-/// <param name="recordRepository">
-///     The repository used to remove a deleted zone's own records, and to confirm a zone is not
-///     entirely empty when a caller flips it into a state that would otherwise leave it
-///     unanswerable.
-/// </param>
+/// <param name="zoneRepository">Reads and writes zones.</param>
+/// <param name="recordRepository">Removes a deleted zone's records.</param>
 /// <param name="dnssecKeyRepository">
-///     The repository used to remove a deleted zone's own DNSSEC keys (see
-///     <see cref="DnssecKeysController" />) -- <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity" />
-///     references its zone by <c>ZoneId</c> alone, with no cascade-delete this controller can rely
-///     on (MongoDB has no equivalent mechanism at all), so it is removed explicitly here, the same
-///     way a zone's own records already are.
+///     Removes a deleted zone's DNSSEC keys (see <see cref="DnssecKeysController" />).
+///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnssecKeyEntity" /> refers to its zone by
+///     <c>ZoneId</c> only, and MongoDB has no cascade delete, so the keys are removed explicitly,
+///     like the records.
 /// </param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="eventPublisher">
-///     The publisher this controller reports a change through once persisted, so
-///     <c>AuthoritativeZoneCache</c> reloads it, <c>SignedZoneCache</c> re-signs it if applicable,
-///     and any configured secondary is notified -- all three already wired to
-///     <see cref="DnsZoneChangedEvent" /> already, with no new subscriber needed here.
+///     Publishes <see cref="DnsZoneChangedEvent" /> after a change is saved, so
+///     <c>AuthoritativeZoneCache</c> reloads the zone, <c>SignedZoneCache</c> re-signs it if
+///     needed, and configured secondaries are notified.
 /// </param>
 /// <param name="catalogZoneMembershipService">
-///     The service this controller's own catalog-membership actions delegate to -- see
-///     <see cref="JoinCatalog" />/<see cref="LeaveCatalog" />/<see cref="ListCatalogMembers" />.
+///     Handles <see cref="JoinCatalog" />, <see cref="LeaveCatalog" /> and
+///     <see cref="ListCatalogMembers" />.
 /// </param>
 /// <param name="caaRecordReconciliationService">
-///     The service <see cref="ReconcileCaa" />'s own on-demand action delegates directly to --
-///     the very same instance <c>CaaRecordReconciliationEventSubscriber</c> uses off the event
-///     bus, so an on-demand pass and an automatic one behave identically.
+///     Runs <see cref="ReconcileCaa" />; it is the same instance
+///     <c>CaaRecordReconciliationEventSubscriber</c> uses, so on-demand and automatic passes
+///     behave the same.
 /// </param>
 /// <param name="ptrSyncService">
-///     The service <see cref="ReconcilePtr" />'s own on-demand action delegates directly to --
-///     the very same instance <c>PtrSyncEventSubscriber</c> uses off the event bus.
+///     Runs <see cref="ReconcilePtr" />; it is the same instance <c>PtrSyncEventSubscriber</c>
+///     uses.
 /// </param>
 [ApiController]
 [Route("api/zones")]
@@ -72,7 +67,7 @@ public class ZonesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every zone this server hosts or references.
+    ///     This action lists zones, one page at a time. Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("zones:read")]
@@ -84,10 +79,8 @@ public class ZonesController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine --
-        // a real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every zone into memory first, so a large zone count never forces the
-        // whole set into memory just to answer one page's worth of a request.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every zone into memory.
         IReadOnlyList<ZoneEntity> zones = await zoneRepository.SearchAsync(
             skip,
             take,
@@ -99,7 +92,8 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action looks up a single zone by its identifier.
+    ///     This action returns one zone's settings. Returns 404 for an unknown id. Requires
+    ///     <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("zones:read")]
@@ -114,8 +108,9 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action creates a new zone's metadata shell. The zone has no records -- not even
-    ///     its own SOA -- until the caller adds them through <see cref="RecordsController" />.
+    ///     This action creates a zone with no records, not even an SOA; add them through
+    ///     <see cref="RecordsController" />. Returns 400 for an invalid zone name or PTR prefix
+    ///     length and 409 when the name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("zones:write")]
@@ -141,16 +136,16 @@ public class ZonesController(
         await zoneRepository.AddAsync(zone, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // Harmless even though the zone has no records yet -- AuthoritativeZoneCache's own
-        // reload simply caches an empty zone, ready the moment its first record (its own SOA)
-        // is added through RecordsController.
+        // AuthoritativeZoneCache simply caches the empty zone, ready for its first record (the SOA)
+        // to be added through RecordsController.
         eventPublisher.Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, zone.Id, zone.Name));
 
         return CreatedAtAction(nameof(Get), new { id = zone.Id }, ToDetail(zone));
     }
 
     /// <summary>
-    ///     This action fully replaces an existing zone's metadata.
+    ///     This action replaces a zone's settings. Validation and errors are as for
+    ///     <see cref="Create" />, plus 404 for an unknown id. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -189,10 +184,10 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing zone's metadata via RFC 7396 JSON Merge
-    ///     Patch: a field absent from the patch document is left untouched, a field present with
-    ///     a JSON <c>null</c> clears it (where the underlying field is itself nullable), and any
-    ///     other present field overwrites it.
+    ///     This action updates a zone's settings as an RFC 7396 merge patch: an absent field is
+    ///     unchanged, a JSON <c>null</c> clears a nullable field, and any other value replaces it.
+    ///     Returns 400 for an invalid name or PTR prefix length, 404 for an unknown id and 409 when
+    ///     a new name is taken. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -379,8 +374,8 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a zone, every record it contains, and every DNSSEC key
-    ///     belonging to it.
+    ///     This action deletes a zone with all its records and DNSSEC keys. Returns 404 for an
+    ///     unknown id. Requires <c>zones:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -390,9 +385,8 @@ public class ZonesController(
         if (zone is null)
             throw new NotFoundException("Zone", id.ToString());
 
-        // Removed explicitly, rather than relying on the relational backend's own cascade
-        // delete, since MongoDB has no equivalent foreign-key mechanism at all -- this way,
-        // deleting a zone behaves identically regardless of which storage engine is active.
+        // Removed explicitly rather than by a relational cascade delete, which MongoDB lacks, so a
+        // delete behaves the same on every storage engine.
         IReadOnlyList<RecordEntity> records = await recordRepository.ListByZoneIdAsync(
             id,
             stoppingToken
@@ -410,17 +404,17 @@ public class ZonesController(
         zoneRepository.Remove(zone);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // AuthoritativeZoneCache's own ReloadZoneAsync evicts a zone it can no longer find.
+        // AuthoritativeZoneCache.ReloadZoneAsync drops a zone it can no longer find.
         eventPublisher.Publish(new DnsZoneChangedEvent(DateTimeOffset.UtcNow, zone.Id, zone.Name));
 
         return NoContent();
     }
 
     /// <summary>
-    ///     This action lists the member zone names an RFC 9432 catalog zone (either the
-    ///     <see cref="ZoneTypeEnum.Catalog" /> original or a <see cref="ZoneTypeEnum.SecondaryCatalog" />
-    ///     copy of it) currently enumerates, parsed live from its own stored PTR records -- how an
-    ///     operator actually sees a catalog's own current membership.
+    ///     This action lists the member zone names of an RFC 9432 catalog zone (a
+    ///     <see cref="ZoneTypeEnum.Catalog" /> zone or a
+    ///     <see cref="ZoneTypeEnum.SecondaryCatalog" /> copy), read from its stored PTR records.
+    ///     Requires <c>zones:read</c>.
     /// </summary>
     [HttpGet("{id:guid}/catalog-members")]
     [RequirePermission("zones:read")]
@@ -436,13 +430,13 @@ public class ZonesController(
         );
 
     /// <summary>
-    ///     This action adds a <see cref="ZoneTypeEnum.Primary" />/<see cref="ZoneTypeEnum.CloudPrimary" />
-    ///     zone this server originates as a member of a <see cref="ZoneTypeEnum.Catalog" /> zone
-    ///     it also originates -- writing the member's own RFC 9432 PTR record into the catalog
-    ///     zone's content and merging every currently healthy cluster peer's own address into
-    ///     both zones' <c>NotifyAddresses</c>, so the change propagates cluster-wide with no
-    ///     further, manually-maintained configuration. See <see cref="CatalogZoneMembershipService.JoinAsync" />
-    ///     for the full mechanics.
+    ///     This action makes a <see cref="ZoneTypeEnum.Primary" /> or
+    ///     <see cref="ZoneTypeEnum.CloudPrimary" /> zone that this server originates a member of a
+    ///     <see cref="ZoneTypeEnum.Catalog" /> zone it also originates. It writes the member's RFC
+    ///     9432 PTR record into the catalog zone and adds every healthy cluster peer's address to
+    ///     both zones' <c>NotifyAddresses</c>, so the change reaches the cluster without manual
+    ///     configuration (see <see cref="CatalogZoneMembershipService.JoinAsync" />). Requires
+    ///     <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/catalog-membership")]
     [RequirePermission("zones:write")]
@@ -465,9 +459,9 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action removes a zone's own membership in whichever catalog zone it currently
-    ///     belongs to, deleting its member PTR record from that catalog zone's content. A no-op
-    ///     if the zone is not currently a member of any catalog.
+    ///     This action removes a zone from the catalog zone it belongs to, deleting its member PTR
+    ///     record there. It does nothing if the zone belongs to no catalog. Requires
+    ///     <c>zones:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}/catalog-membership")]
     [RequirePermission("zones:write")]
@@ -478,14 +472,12 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action triggers one real, synchronous CAA reconciliation pass for the zone right
-    ///     now, rather than waiting for the next <c>DnsZoneChangedEvent</c> to trigger one
-    ///     automatically -- useful right after changing <c>CaaAutoManagementOptions</c>'s own
-    ///     global default, or simply to confirm a zone's CAA records are already up to date
-    ///     without waiting on the event bus. Delegates directly to
-    ///     <see cref="CaaRecordReconciliationService.ReconcileZoneAsync(Guid, CancellationToken)" />
-    ///     -- the exact same reconciliation logic the automatic path already uses, so this action
-    ///     can never behave differently from what would have happened anyway.
+    ///     This action runs one CAA reconciliation pass for the zone now and returns how many
+    ///     records were added or removed, or why the pass was skipped. The same pass runs
+    ///     automatically on each <c>DnsZoneChangedEvent</c>; running it by hand is useful after
+    ///     changing the server-wide CAA default. It calls
+    ///     <see cref="CaaRecordReconciliationService.ReconcileZoneAsync(Guid, CancellationToken)" />,
+    ///     like the automatic path. Returns 404 for an unknown id. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/reconcile-caa")]
     [RequirePermission("zones:write")]
@@ -514,13 +506,12 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This action triggers one real, synchronous PTR/reverse-zone sync reconciliation pass
-    ///     for the zone right now, the same on-demand convenience <see cref="ReconcileCaa" />
-    ///     offers for CAA reconciliation. Delegates directly to
-    ///     <see cref="PtrSyncService.ReconcileZoneAsync" /> -- the exact same reconciliation logic
-    ///     both the automatic (<c>DnsZoneChangedEvent</c>-triggered) path and this on-demand path
-    ///     share, including RFC 2317 classless-delegation glue when this zone's own
-    ///     <c>PtrIpv4PrefixLength</c> (or the global default) calls for it.
+    ///     This action runs one PTR (reverse-zone) sync pass for the zone now, through
+    ///     <see cref="PtrSyncService.ReconcileZoneAsync" />, the same logic the automatic
+    ///     <c>DnsZoneChangedEvent</c> path uses, including RFC 2317 classless-delegation records
+    ///     when the zone's <c>PtrIpv4PrefixLength</c> (or the server-wide default) calls for them.
+    ///     Returns the records added and removed and the reverse zones touched, or why the pass was
+    ///     skipped, and 404 for an unknown id. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/reconcile-ptr")]
     [RequirePermission("zones:write")]
@@ -547,13 +538,10 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This method validates a PTR IPv4 reverse-zone grouping prefix length, throwing
-    ///     <see cref="ValidationException" /> for anything other than <see langword="null" /> or a
-    ///     value within <c>24</c>-<c>30</c> inclusive -- <c>24</c> is the conventional octet
-    ///     boundary this feature always used before RFC 2317 support existed; <c>25</c>-<c>30</c>
-    ///     is the classless range this project supports delegating at; a coarser value would span
-    ///     more than one octet (unsupported), and <c>31</c>/<c>32</c> would leave a delegated block
-    ///     too small to hold a usable host range.
+    ///     This method checks a PTR IPv4 reverse-zone prefix length: <see langword="null" /> or 24
+    ///     to 30 inclusive. 24 is the octet boundary; 25 to 30 are the classless (RFC 2317) lengths
+    ///     that can be delegated. A shorter prefix would span more than one octet, which is not
+    ///     supported, and 31 or 32 leaves no usable host range.
     /// </summary>
     private static void ValidatePtrIpv4PrefixLength(int? prefixLength)
     {
@@ -564,11 +552,9 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This method validates a PTR IPv6 reverse-zone grouping prefix length, throwing
-    ///     <see cref="ValidationException" /> for anything other than <see langword="null" /> or a
-    ///     multiple of <c>4</c> between <c>16</c> and <c>124</c> inclusive -- every
-    ///     <c>ip6.arpa</c> label is exactly one hex nibble (RFC 3596), so only a multiple-of-4 bit
-    ///     count is even expressible as a whole number of labels.
+    ///     This method checks a PTR IPv6 reverse-zone prefix length: <see langword="null" /> or a
+    ///     multiple of 4 from 16 to 124 inclusive. Each <c>ip6.arpa</c> label is one hex nibble
+    ///     (RFC 3596), so only multiples of 4 map to whole labels.
     /// </summary>
     private static void ValidatePtrIpv6PrefixLength(int? prefixLength)
     {
@@ -579,7 +565,8 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This method copies every writable field from a write request onto a zone entity.
+    ///     This method copies every writable field from a write request onto a zone entity. A
+    ///     missing <c>CloudSyncInterval</c> defaults to five minutes.
     /// </summary>
     private static void ApplyWrite(ZoneEntity zone, ZoneWriteRequest request)
     {
@@ -609,7 +596,7 @@ public class ZonesController(
     }
 
     /// <summary>
-    ///     This method converts a zone entity into its REST representation.
+    ///     This method converts a zone entity to its API representation.
     /// </summary>
     private static ZoneDetail ToDetail(ZoneEntity zone) =>
         new(

@@ -16,27 +16,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="TsigServiceOptions" /> -- the
-///     clock-skew tolerance (RFC 8945's own "fudge" field) written into every message this server
-///     signs -- `appsettings.json`-only until this pass. Every action requires the
-///     <c>tsigsettings:read</c> or <c>tsigsettings:write</c> permission. This is deliberately
-///     separate from <c>TsigKeysController</c>, which manages the keys themselves; this controller
-///     manages the one shared signing-behavior tuning knob every key uses alike.
+///     This controller reads and writes <see cref="TsigServiceOptions" />: the clock-skew
+///     tolerance (the RFC 8945 "fudge" field) written into every message this server signs. The
+///     keys themselves are managed by <c>TsigKeysController</c>. Reading needs
+///     <c>tsigsettings:read</c> and writing needs <c>tsigsettings:write</c>.
 ///     <para>
-///         <b>Its one field takes effect immediately, with no restart.</b> <c>TsigService</c> used
-///         to read <see cref="TsigServiceOptions" /> via the snapshotted <see cref="IOptions{TOptions}" />,
-///         cached for the life of the process the first time it was read -- a real functional gap
-///         beyond REST/UI exposure, the same shape already found and fixed elsewhere in this
-///         project for other options classes, converted here the same way: <c>TsigService</c> now reads
-///         <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c> fresh on every single
-///         <c>SignAsync</c> call, even though a fresh instance of that (scoped) service is itself
-///         constructed per call -- the plain, snapshotted <see cref="IOptions{TOptions}" /> it
-///         used before this fix would still have handed every one of those fresh instances back
-///         the exact same process-wide-cached value.
+///         <b>The field takes effect at once, with no restart.</b> <c>TsigService</c> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every
+///         <c>SignAsync</c> call.
 ///     </para>
 /// </summary>
-/// <param name="tsigServiceOptions">This host's own currently-effective TSIG signing-behavior settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="tsigServiceOptions">The current TSIG signing settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/tsig-settings")]
 public class TsigSettingsController(
@@ -45,8 +36,8 @@ public class TsigSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     TSIG signing-behavior settings.
+    ///     This action returns the current TSIG signing settings. Requires
+    ///     <c>tsigsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("tsigsettings:read")]
@@ -55,10 +46,10 @@ public class TsigSettingsController(
         Ok(new TsigSettingsDetail(tsigServiceOptions.CurrentValue.DefaultFudgeSeconds));
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Tsig</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style. This options class's own single field hot-reloads immediately
-    ///     -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Tsig</c> as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. The change takes effect at
+    ///     once. Returns 400 when <c>defaultFudgeSeconds</c> is outside 0-65535. Requires
+    ///     <c>tsigsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("tsigsettings:write")]

@@ -16,18 +16,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own TSIG keys -- the pre-shared secrets zone
-///     transfers and dynamic updates authenticate with (RFC 8945). A key is not scoped to any
-///     one zone; a zone references one by name, through its own <c>TsigKeyName</c> field (see
-///     <see cref="ZonesController" />), rather than through a foreign key. Every action requires
-///     the <c>tsigkeys:read</c> or <c>tsigkeys:write</c> permission.
+///     This controller manages TSIG keys (RFC 8945), the shared secrets that zone transfers and
+///     dynamic updates authenticate with. A key belongs to no single zone; a zone refers to one by
+///     name through its <c>TsigKeyName</c> (see <see cref="ZonesController" />), with no foreign
+///     key. Any enabled key also authenticates the cluster channel (see
+///     <c>ClusterTsigAuthenticationHandler</c>). Secrets are encrypted at rest and returned only
+///     when created. Reads need <c>tsigkeys:read</c> and changes need <c>tsigkeys:write</c>.
 /// </summary>
-/// <param name="tsigKeyRepository">The repository this controller reads and writes keys through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="tsigKeyRepository">Reads and writes keys.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 /// <param name="secretProtector">
-///     The protector this controller encrypts a new or rotated shared secret through before it is
-///     ever persisted -- the same protector <c>TsigService</c> itself decrypts a secret through at
-///     verification/signing time.
+///     Encrypts a new key's secret before it is stored; <c>TsigService</c> decrypts it with the
+///     same protector when signing or verifying.
 /// </param>
 [ApiController]
 [Route("api/tsig-keys")]
@@ -38,22 +38,22 @@ public class TsigKeysController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This constant contains the length, in bytes, of a server-generated shared secret --
-    ///     matching HMAC-SHA256's own 256-bit block size, the only algorithm Ninlil implements.
+    ///     This constant contains the length, in bytes, of a generated shared secret: 256 bits, the
+    ///     HMAC-SHA256 output size. HMAC-SHA256 is the only algorithm Ninlil implements.
     /// </summary>
     private const int GeneratedSecretLengthBytes = 32;
 
     /// <summary>
-    ///     This property contains the canonical, dot-stripped presentation form of the only MAC
-    ///     algorithm Ninlil implements, derived from <c>DnsTsigOptions.HmacSha256AlgorithmName</c>
-    ///     itself rather than a separately hand-maintained literal.
+    ///     This property contains the presentation form, without the trailing dot, of the only MAC
+    ///     algorithm Ninlil implements, derived from <c>DnsTsigOptions.HmacSha256AlgorithmName</c>.
     /// </summary>
     private static readonly string HmacSha256AlgorithmName = DnsTsigOptions
         .HmacSha256AlgorithmName.ToString()
         .TrimEnd('.');
 
     /// <summary>
-    ///     This action lists every TSIG key this server knows about.
+    ///     This action lists TSIG keys, one page at a time, without their secrets. Requires
+    ///     <c>tsigkeys:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("tsigkeys:read")]
@@ -65,9 +65,8 @@ public class TsigKeysController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every key into memory first.
+        // The page and the total count are both computed by the storage engine (ORDER
+        // BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every key into memory.
         IReadOnlyList<TsigKeyEntity> keys = await tsigKeyRepository.SearchAsync(
             skip,
             take,
@@ -81,7 +80,8 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This action looks up a single TSIG key by its identifier.
+    ///     This action returns one TSIG key, without its secret. Returns 404 for an unknown id.
+    ///     Requires <c>tsigkeys:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("tsigkeys:read")]
@@ -96,10 +96,11 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This action creates a new TSIG key. When the caller does not supply
-    ///     <see cref="TsigKeyCreateRequest.Secret" />, a cryptographically random secret is
-    ///     generated instead. Either way, the plaintext secret is returned exactly once, in this
-    ///     action's own response -- every later request for this key omits it entirely.
+    ///     This action creates a TSIG key. Without <see cref="TsigKeyCreateRequest.Secret" />, a
+    ///     random 32-byte secret is generated; without an algorithm, <c>hmac-sha256</c> is used.
+    ///     The base64 secret is returned in this response only. Returns 400 for an invalid name, an
+    ///     unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is
+    ///     taken. Requires <c>tsigkeys:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("tsigkeys:write")]
@@ -153,8 +154,10 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing TSIG key's metadata. The key's own shared
-    ///     secret is left untouched -- see <see cref="TsigKeyWriteRequest" /> for why.
+    ///     This action replaces a TSIG key's name, algorithm, disabled flag and comments. The
+    ///     secret is left unchanged (see <see cref="TsigKeyWriteRequest" />). Returns 400 for an
+    ///     invalid name or algorithm, 404 for an unknown id and 409 when the name is taken.
+    ///     Requires <c>tsigkeys:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("tsigkeys:write")]
@@ -201,11 +204,10 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing TSIG key's metadata via RFC 7396 JSON Merge
-    ///     Patch: a field absent from the patch document is left untouched, a field present with
-    ///     a JSON <c>null</c> clears it (where the underlying field is itself nullable), and any
-    ///     other present field overwrites it. As with <see cref="Replace" />, the key's own
-    ///     shared secret cannot be changed this way.
+    ///     This action updates a TSIG key as an RFC 7396 merge patch: an absent field is unchanged,
+    ///     a JSON <c>null</c> clears the comments, and any other value replaces it. The secret
+    ///     cannot be changed. Errors are as for <see cref="Replace" />. Requires
+    ///     <c>tsigkeys:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("tsigkeys:write")]
@@ -266,10 +268,9 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a TSIG key. Any zone still referencing it by name (see
-    ///     <see cref="ZonesController" />) simply stops being able to sign or verify transfers
-    ///     against it -- this project does not track or block on that soft reference, the same
-    ///     laxness <see cref="ZonesController" /> itself already accepts for <c>TsigKeyName</c>.
+    ///     This action deletes a TSIG key. Zones that still refer to it by name are not checked or
+    ///     blocked; they simply can no longer sign or verify with it. Returns 404 for an unknown
+    ///     id. Requires <c>tsigkeys:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("tsigkeys:write")]
@@ -286,8 +287,8 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This method validates a caller-supplied algorithm name against the only algorithm
-    ///     Ninlil implements, optionally defaulting to it when none was supplied at all.
+    ///     This method checks an algorithm name against the only algorithm Ninlil implements,
+    ///     defaulting to it when none is given and <paramref name="allowDefault" /> is set.
     /// </summary>
     private static bool TryResolveAlgorithmName(
         string requestedAlgorithmName,
@@ -327,8 +328,8 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This method resolves the shared secret a new key is created with: the caller's own
-    ///     base64-encoded secret, if supplied, or a freshly generated random one otherwise.
+    ///     This method resolves a new key's secret: the caller's base64-encoded secret if given,
+    ///     otherwise a new random one.
     /// </summary>
     private static bool TryResolveSecret(
         string requestedSecret,
@@ -365,8 +366,8 @@ public class TsigKeysController(
     }
 
     /// <summary>
-    ///     This method converts a TSIG key entity into its REST representation, deliberately
-    ///     never including its own shared secret.
+    ///     This method converts a key entity to its API representation, which never includes the
+    ///     secret.
     /// </summary>
     private static TsigKeyDetail ToDetail(TsigKeyEntity key) =>
         new(
