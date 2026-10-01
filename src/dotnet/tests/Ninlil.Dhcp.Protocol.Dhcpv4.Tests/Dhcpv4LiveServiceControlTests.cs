@@ -9,14 +9,12 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv4.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv4UdpListener" /> is a genuinely restartable
-///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c>, not merely a single-shot
-///     <see cref="Microsoft.Extensions.Hosting.BackgroundService" /> whose
-///     <c>StartAsync</c>/<c>StopAsync</c> only ever run once each for the whole host lifetime
-///     (see this class's own doc comment for the design). It exercises a real
-///     start -> answer -> stop -> confirm-truly-stopped -> start-again-on-the-same-port ->
-///     answer-again cycle against a real bound socket, which is exactly what live DHCP
-///     service control (a future REST surface's own job) depends on actually working.
+///     This test class checks that <see cref="Dhcpv4UdpListener" /> can be started and stopped
+///     repeatedly as a <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c>, which runtime
+///     service control (<c>DhcpServiceControlController</c>) relies on. On loopback UDP sockets
+///     with high ports and <see cref="StubDhcpv4RequestHandler" />, it runs start, answer, stop,
+///     confirm silence, start again on the same port, answer again, and checks that repeated
+///     start and stop calls do nothing.
 /// </summary>
 public class Dhcpv4LiveServiceControlTests
 {
@@ -39,31 +37,27 @@ public class Dhcpv4LiveServiceControlTests
             NullLogger<Dhcpv4UdpListener>.Instance
         );
 
-        // First cycle: start, confirm a real request is answered.
+        // First cycle: start and confirm a request is answered.
         await listener.StartAsync(CancellationToken.None);
         await WaitUntilListeningAsync(listener);
         Assert.True(await TrySendDiscoverAndReceiveOfferAsync(serverPort, clientPort));
 
-        // A second, concurrent-looking Start call while already running must be a safe no-op,
-        // not a crash or a second bind attempt on the same port.
+        // Starting again while running must do nothing, not try a second bind on the port.
         await listener.StartAsync(CancellationToken.None);
         Assert.True(listener.IsListening);
 
-        // Stop: the socket must genuinely be released -- a request sent while stopped must
-        // receive no reply at all, not merely a slower one. The server always replies to the
-        // one fixed options.Value.ClientPort configured above, so every call in this test uses
-        // that exact same clientPort -- not a different one per call -- for its own local bind.
+        // After a stop, a request must get no reply at all. The server always replies to the
+        // configured ClientPort, so every call binds that same client port.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
         Assert.False(await TrySendDiscoverAndReceiveOfferAsync(serverPort, clientPort));
 
-        // A second, concurrent-looking Stop call while already stopped must also be a safe
-        // no-op.
+        // Stopping again while stopped must also do nothing.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
 
-        // Second cycle: start again, on the exact same server port -- this only succeeds if
-        // StopAsync genuinely released the socket rather than merely stopping the receive loop.
+        // Second cycle on the same server port, which only works if StopAsync released the
+        // socket rather than just stopping the receive loop.
         await listener.StartAsync(CancellationToken.None);
 
         try
@@ -78,9 +72,9 @@ public class Dhcpv4LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method waits, polling, for <paramref name="listener" /> to report itself bound,
-    ///     since <see cref="Dhcpv4UdpListener.StartAsync" /> returns as soon as the bind itself
-    ///     completes, but the caller here still wants a deterministic point to send from.
+    ///     This method polls until <paramref name="listener" /> reports that it is listening.
+    ///     <see cref="Dhcpv4UdpListener.StartAsync" /> already binds before returning; the poll
+    ///     only guards against that changing.
     /// </summary>
     private static async Task WaitUntilListeningAsync(Dhcpv4UdpListener listener)
     {
@@ -93,11 +87,9 @@ public class Dhcpv4LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method sends one real, wire-encoded DISCOVER datagram to
-    ///     <paramref name="serverPort" /> and reports whether a real OFFER reply was received
-    ///     within a short, bounded timeout -- <see langword="true" /> when the listener is
-    ///     genuinely up and answering, <see langword="false" /> when nothing answers at all
-    ///     (the listener is stopped), never throwing on the timeout case.
+    ///     This method sends one encoded DISCOVER to <paramref name="serverPort" /> and reports
+    ///     whether an OFFER arrived within a short timeout. A timeout returns
+    ///     <see langword="false" /> rather than throwing.
     /// </summary>
     private static async Task<bool> TrySendDiscoverAndReceiveOfferAsync(
         int serverPort,
@@ -137,8 +129,8 @@ public class Dhcpv4LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port -- the same approach
-    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> already establishes.
+    ///     This method gets an unused high UDP port, as
+    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> does.
     /// </summary>
     private static int GetFreeUdpPort()
     {

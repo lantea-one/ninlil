@@ -6,30 +6,27 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
 
 /// <summary>
-///     This is a minimal, test-only stand-in for the real DHCPv6 server engine (a future
-///     sub-phase's own job) -- it answers every SOLICIT with one fixed, canned ADVERTISE carrying
-///     a single offered address. It exists purely so <see cref="Dhcpv6UdpRoundTripTests" /> can
-///     prove the transport and wire codec work correctly over a real socket, independent of any
-///     real address-assignment logic -- the DHCPv6 analogue of
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.StubDhcpv4RequestHandler</c>.
+///     This class is a test stand-in for the DHCPv6 server engine
+///     (<c>Ninlil.Dhcp.Server.Core.Dhcpv6RequestHandler</c>), like
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.StubDhcpv4RequestHandler</c>. It answers every
+///     SOLICIT with a fixed ADVERTISE offering one address, so the transport tests can check
+///     sockets and the codec without address assignment.
 /// </summary>
 internal sealed class StubDhcpv6RequestHandler : IDhcpv6RequestHandler
 {
     /// <summary>
-    ///     The fixed address this stub always offers, regardless of what a real scope/pool would
-    ///     actually have available.
+    ///     The address this stub always offers.
     /// </summary>
     public static readonly IPAddress OfferedAddress = IPAddress.Parse("2001:db8:1::100");
 
     /// <summary>
-    ///     The fixed DUID bytes this stub always identifies itself as the server with.
+    ///     The server DUID this stub always sends.
     /// </summary>
     public static readonly byte[] ServerIdentifier = [0x00, 0x02, 0x00, 0x00, 0xAB, 0xCD];
 
     /// <summary>
-    ///     This property reports whether <see cref="HandleRequestAsync" /> was ever actually
-    ///     invoked, so a test can assert the listener really did dispatch a decoded request to
-    ///     this handler rather than merely appearing to succeed some other way.
+    ///     This property reports whether <see cref="HandleRequestAsync" /> was called, so a test
+    ///     can check the listener passed the request on.
     /// </summary>
     public bool ReceivedRequest { get; private set; }
 

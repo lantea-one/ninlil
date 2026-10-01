@@ -9,13 +9,11 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
 
 /// <summary>
-///     This test proves <see cref="Dhcpv6UdpListener" /> is a genuinely restartable
-///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c> -- the DHCPv6 analogue of
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c>, with the same
-///     start -> answer -> stop -> confirm-truly-stopped -> start-again-on-the-same-port ->
-///     answer-again cycle, including a genuine re-bind (and, implicitly, a real
-///     rejoin-the-multicast-group cycle, exercised on the second <c>StartAsync</c> call) on the
-///     exact same server port.
+///     This test class checks that <see cref="Dhcpv6UdpListener" /> can be started and stopped
+///     repeatedly, like <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c>:
+///     start, answer, stop, confirm silence, start again on the same port (re-binding and
+///     re-joining the multicast group), answer again. It uses IPv6 loopback sockets, high ports
+///     and <see cref="StubDhcpv6RequestHandler" />.
 /// </summary>
 public class Dhcpv6LiveServiceControlTests
 {
@@ -42,18 +40,17 @@ public class Dhcpv6LiveServiceControlTests
         await WaitUntilListeningAsync(listener);
         Assert.True(await TrySendSolicitAndReceiveAdvertiseAsync(serverPort, clientPort));
 
-        // A second Start call while already running must be a safe no-op.
+        // Starting again while running must do nothing.
         await listener.StartAsync(CancellationToken.None);
         Assert.True(listener.IsListening);
 
-        // The server always replies to the one fixed options.Value.ClientPort configured above,
-        // so every call in this test uses that exact same clientPort -- not a different one per
-        // call -- for its own local bind.
+        // The server always replies to the configured ClientPort, so every call binds that same
+        // client port.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
         Assert.False(await TrySendSolicitAndReceiveAdvertiseAsync(serverPort, clientPort));
 
-        // A second Stop call while already stopped must also be a safe no-op.
+        // Stopping again while stopped must also do nothing.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
 
@@ -81,12 +78,9 @@ public class Dhcpv6LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method sends one real, wire-encoded SOLICIT datagram to
-    ///     <paramref name="serverPort" /> over the IPv6 loopback address and reports whether a
-    ///     real ADVERTISE reply was received within a short, bounded timeout --
-    ///     <see langword="true" /> when the listener is genuinely up and answering,
-    ///     <see langword="false" /> when nothing answers at all (the listener is stopped), never
-    ///     throwing on the timeout case.
+    ///     This method sends one encoded SOLICIT to <paramref name="serverPort" /> over IPv6
+    ///     loopback and reports whether an ADVERTISE arrived within a short timeout. A timeout
+    ///     returns <see langword="false" /> rather than throwing.
     /// </summary>
     private static async Task<bool> TrySendSolicitAndReceiveAdvertiseAsync(
         int serverPort,
@@ -127,8 +121,8 @@ public class Dhcpv6LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port -- the same approach
-    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> already establishes, adapted to IPv6.
+    ///     This method gets an unused high IPv6 UDP port, as
+    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
     /// </summary>
     private static int GetFreeUdpPort()
     {

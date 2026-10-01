@@ -9,26 +9,17 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv6.Tests;
 
 /// <summary>
-///     This test proves the DHCPv6 UDP transport and wire codec genuinely work together over a
-///     real socket, not merely as an in-memory byte-array round trip (that layer is already
-///     covered exhaustively, and far faster, by <c>Ninlil.Dhcp.Common.Tests</c>): a real
-///     <see cref="Dhcpv6UdpListener" /> binds a real IPv6 UDP socket, a real
-///     <see cref="UdpClient" /> sends a real, wire-encoded SOLICIT datagram to it over the IPv6
-///     loopback address, a stub <see cref="StubDhcpv6RequestHandler" /> answers with a canned
-///     ADVERTISE, and this test's own socket receives and decodes that reply back into a
-///     <see cref="Dhcpv6Message" /> -- the DHCPv6 analogue of
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c>.
+///     This test class checks the DHCPv6 UDP transport and codec together over IPv6 loopback, like
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4UdpRoundTripTests</c>: a
+///     <see cref="Dhcpv6UdpListener" /> binds an IPv6 UDP socket, a <see cref="UdpClient" /> sends
+///     an encoded SOLICIT, <see cref="StubDhcpv6RequestHandler" /> answers with a fixed ADVERTISE,
+///     and the test decodes the reply.
 ///     <para>
-///         This runs on ordinary, unprivileged, dynamically-chosen high ports rather than the
-///         real IANA-assigned 546/547 DHCPv6 ports, since binding a port below 1024 needs root
-///         privileges an automated test suite does not run with, and it sends directly over
-///         unicast loopback rather than joining/sending to the real multicast group -- this
-///         listener's own real multicast-group join is exercised for real every time it starts
-///         (a failure on any one interface can never abort it), but a genuinely reliable, portable way
-///         to prove multicast delivery itself works inside an arbitrary, possibly
-///         multicast-restricted sandboxed test environment does not exist -- this test instead
-///         proves the wire protocol, socket-handling, and reply-destination logic itself, which is
-///         identical regardless of how the original datagram was addressed.
+///         It uses unprivileged high ports instead of 546 and 547, and sends by unicast to
+///         loopback rather than to the multicast group, since multicast delivery cannot be relied
+///         on in every test environment. The listener still joins the group on every start (a
+///         failure on one interface is only logged). The wire format, socket handling and reply
+///         destination do not depend on how the request was addressed.
 ///     </para>
 /// </summary>
 public class Dhcpv6UdpRoundTripTests
@@ -122,10 +113,8 @@ public class Dhcpv6UdpRoundTripTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged IPv6 UDP port by asking the
-    ///     operating system to assign an ephemeral one, reading it back, and immediately releasing
-    ///     it -- the same convention <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> establishes,
-    ///     adapted to IPv6.
+    ///     This method gets an unused high IPv6 UDP port, as
+    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> does for IPv4.
     /// </summary>
     private static int GetFreeUdpPort()
     {

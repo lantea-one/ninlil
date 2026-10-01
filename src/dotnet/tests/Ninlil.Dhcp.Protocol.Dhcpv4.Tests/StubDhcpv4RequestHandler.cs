@@ -7,34 +7,32 @@ using Ninlil.Dhcp.Protocol.Dhcpv4;
 namespace Ninlil.Dhcp.Protocol.Dhcpv4.Tests;
 
 /// <summary>
-///     This is a minimal, test-only stand-in for the real DHCPv4 server engine (a future
-///     sub-phase's own job) -- it answers every DISCOVER with one fixed, canned OFFER. It exists
-///     purely so <see cref="Dhcpv4UdpRoundTripTests" /> can prove the transport and wire codec
-///     work correctly over a real socket, independent of any real lease-allocation logic.
+///     This class is a test stand-in for the DHCPv4 server engine
+///     (<c>Ninlil.Dhcp.Server.Core.Dhcpv4RequestHandler</c>). It answers every DISCOVER with a
+///     fixed OFFER, so the transport tests can check sockets and the codec without lease
+///     allocation.
 /// </summary>
 internal sealed class StubDhcpv4RequestHandler : IDhcpv4RequestHandler
 {
     /// <summary>
-    ///     The fixed address this stub always offers, regardless of what a real scope/pool would
-    ///     actually have available.
+    ///     The address this stub always offers.
     /// </summary>
     public static readonly IPAddress OfferedAddress = IPAddress.Parse("203.0.113.50");
 
     /// <summary>
-    ///     The fixed address this stub always identifies itself as the server for.
+    ///     The Server Identifier this stub always sends.
     /// </summary>
     public static readonly IPAddress ServerIdentifier = IPAddress.Parse("203.0.113.1");
 
     /// <summary>
-    ///     This property reports whether <see cref="HandleRequestAsync" /> was ever actually
-    ///     invoked, so a test can assert the listener really did dispatch a decoded request to
-    ///     this handler rather than merely appearing to succeed some other way.
+    ///     This property reports whether <see cref="HandleRequestAsync" /> was called, so a test
+    ///     can check the listener passed the request on.
     /// </summary>
     public bool ReceivedRequest { get; private set; }
 
     /// <summary>
-    ///     This property captures the most recently received request's own client hardware
-    ///     address, so a test can confirm it survived the real wire round trip unchanged.
+    ///     This property holds the client hardware address of the last request, so a test can
+    ///     check it survived the round trip.
     /// </summary>
     public byte[] LastRequestHardwareAddress { get; private set; }
 

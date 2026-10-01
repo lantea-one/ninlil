@@ -12,50 +12,34 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv6;
 
 /// <summary>
-///     This class implements the DHCPv6 UDP transport itself: binding the configured server
-///     port, joining the RFC 8415 Section 7.1 multicast group every DHCPv6 client sends to,
-///     receiving client datagrams, decoding them via <see cref="Dhcpv6MessageReader" />, handing
-///     the decoded message to whichever <see cref="IDhcpv6RequestHandler" /> dependency injection
-///     resolves, and sending back whatever reply that handler produces -- the DHCPv6 analogue of
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>. It does nothing beyond that: address
-///     assignment, Prefix Delegation, and every other real server-engine decision belong to the
-///     handler, never to this class.
+///     This class is the DHCPv6 UDP transport, the counterpart of
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>. It binds the server port, joins the
+///     RFC 8415 Section 7.1 All_DHCP_Relay_Agents_and_Servers group on every interface, decodes
+///     client datagrams with <see cref="Dhcpv6MessageReader" />, passes them to the
+///     <see cref="IDhcpv6RequestHandler" /> and unicasts the reply back. Address assignment,
+///     prefix delegation and every other server decision belong to the handler.
 ///     <para>
-///         <b>RELAY-FORW/RELAY-REPL messages</b> arriving on this same socket are recognized by
-///         their own leading "msg-type" byte before <see cref="Dhcpv6MessageReader" /> ever sees
-///         them (that ordinary reader rejects them outright -- see its own doc comment), decoded
-///         instead via <see cref="Dhcpv6RelayMessageReader" />, and dispatched to whichever
-///         <see cref="IDhcpv6RelayMessageHandler" /> dependency injection resolves -- resolved as
-///         an <b>optional</b> service (see <see cref="IDhcpv6RelayMessageHandler" />'s own doc
-///         comment for why), since a deployment with no relay-adjacent role active at all has
-///         nothing registered for it and simply discards a relay message it happens to receive.
+///         <b>Relay messages.</b> A datagram whose first byte is RELAY-FORW or RELAY-REPL is
+///         decoded with <see cref="Dhcpv6RelayMessageReader" /> instead and passed to the
+///         <see cref="IDhcpv6RelayMessageHandler" />, an optional service: when none is registered
+///         the message is discarded.
 ///     </para>
 ///     <para>
-///         <b>This class is a genuinely restartable <see cref="IDhcpProtocolService" /></b>, not a
-///         <see cref="Microsoft.Extensions.Hosting.BackgroundService" /> -- <see cref="StartAsync" />/
-///         <see cref="StopAsync" /> can be called repeatedly, in either order, for the rest of
-///         this process's life, each genuinely binding/releasing a real socket (and joining/
-///         leaving its multicast group membership) rather than running once for the whole host
-///         lifetime. It is registered as an ordinary dependency-injection singleton (never as an
-///         <see cref="Microsoft.Extensions.Hosting.IHostedService" /> itself) --
-///         <see cref="Dhcpv6ListenerHostedService" /> is the thin wrapper that starts this
-///         instance once, automatically, at host boot, only when
-///         <see cref="Dhcpv6ProtocolOptions.Enable" /> is <see langword="true" />; see that
-///         class's own doc comment, and <see cref="IDhcpProtocolService" />'s, for why configured
-///         <c>Enable</c> and this instance's own live running state are two distinct concepts
-///         from here on. A concurrent <see cref="StartAsync" />/<see cref="StopAsync" /> pair is
-///         serialized through <see cref="_lifecycleLock" />, and each call is a safe, harmless
-///         no-op when this service is already in the state being requested.
+///         <b>It is a restartable <see cref="IDhcpProtocolService" /></b>, registered as a
+///         singleton, with the same lifecycle as the DHCPv4 listener: <see cref="StartAsync" /> and
+///         <see cref="StopAsync" /> bind and release the socket (and its multicast memberships)
+///         any number of times, <see cref="Dhcpv6ListenerHostedService" /> starts it at boot when
+///         <see cref="Dhcpv6ProtocolOptions.Enable" /> is <see langword="true" />, and
+///         <see cref="_lifecycleLock" /> serializes concurrent calls.
 ///     </para>
 /// </summary>
-/// <param name="handler">The handler every decoded ordinary request is dispatched to.</param>
-/// <param name="options">This transport's own listen ports.</param>
+/// <param name="handler">The handler client/server requests are passed to.</param>
+/// <param name="options">The listen and reply ports.</param>
 /// <param name="logger">The logger this listener records unexpected socket/handler failures to.</param>
 /// <param name="serviceProvider">
-///     Used to resolve <see cref="IDhcpv6RelayMessageHandler" /> as an optional dependency (see
-///     this class's own doc comment) -- left <see langword="null" /> by a caller that never
-///     expects to receive a relay message at all, such as a test constructing this listener
-///     directly rather than through dependency injection.
+///     Used to resolve the optional <see cref="IDhcpv6RelayMessageHandler" />. Tests that build
+///     the listener directly may leave it <see langword="null" />, and relay messages are then
+///     discarded.
 /// </param>
 public sealed class Dhcpv6UdpListener(
     IDhcpv6RequestHandler handler,
@@ -65,50 +49,44 @@ public sealed class Dhcpv6UdpListener(
 ) : IDhcpProtocolService
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this listener will ever read -- the
-    ///     same reasoning <c>Dhcpv4UdpListener.MaximumDatagramSize</c>'s own doc comment gives.
+    ///     This constant contains the receive buffer size, chosen as in
+    ///     <c>Dhcpv4UdpListener.MaximumDatagramSize</c>.
     /// </summary>
     private const int MaximumDatagramSize = 65507;
 
     /// <summary>
-    ///     This lock serializes every <see cref="StartAsync" />/<see cref="StopAsync" /> call
-    ///     against each other -- the same reasoning
-    ///     <c>Dhcpv4UdpListener._lifecycleLock</c>'s own doc comment gives.
+    ///     This lock serializes <see cref="StartAsync" /> and <see cref="StopAsync" />, as in
+    ///     <c>Dhcpv4UdpListener._lifecycleLock</c>.
     /// </summary>
     private readonly Lock _lifecycleLock = new();
 
     /// <summary>
-    ///     This field contains the listening socket, once <see cref="StartAsync" /> has bound
-    ///     one, cleared again by <see cref="StopAsync" /> once it has been released.
+    ///     This field contains the listening socket while the listener runs, or
+    ///     <see langword="null" />.
     /// </summary>
     private Socket _socket;
 
     /// <summary>
-    ///     This field contains the cancellation source that owns the currently running receive
-    ///     loop's own lifetime, cancelled by <see cref="StopAsync" /> to unblock its pending
-    ///     receive call and signal it to exit.
+    ///     This field contains the cancellation source of the running receive loop, which
+    ///     <see cref="StopAsync" /> cancels.
     /// </summary>
     private CancellationTokenSource _receiveLoopCts;
 
     /// <summary>
-    ///     This field contains the currently running receive loop's own task, awaited by
-    ///     <see cref="StopAsync" /> to confirm the loop has genuinely exited (and, with it, that
-    ///     no further use of <see cref="_socket" /> is still in flight) before that socket is
-    ///     disposed.
+    ///     This field contains the running receive loop's task. <see cref="StopAsync" /> awaits
+    ///     it so the loop has stopped using the socket before the socket is disposed.
     /// </summary>
     private Task _receiveLoopTask;
 
     /// <summary>
-    ///     This field contains the optional relay-message handler, re-resolved at the top of
-    ///     every <see cref="StartAsync" /> call rather than once for the whole process -- see
-    ///     this class's own doc comment for why this is an optional dependency rather than a
-    ///     required constructor parameter.
+    ///     This field contains the optional relay-message handler, resolved again on every
+    ///     <see cref="StartAsync" />, or <see langword="null" /> when none is registered.
     /// </summary>
     private IDhcpv6RelayMessageHandler _relayMessageHandler;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
-    ///     accepting datagrams.
+    ///     This property reports whether the socket is bound. As in the DHCPv4 listener, it is
+    ///     not cleared if the receive loop ends on an unexpected exception.
     /// </summary>
     public bool IsListening { get; private set; }
 
@@ -123,23 +101,18 @@ public sealed class Dhcpv6UdpListener(
 
         lock (_lifecycleLock)
         {
-            // Calling Start while already running is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Starting a running listener does nothing (see IDhcpProtocolService).
             if (IsListening)
                 return Task.CompletedTask;
 
-            // Resolved fresh on every start, rather than cached once for the whole process -- see
-            // this class's own doc comment for why this is an optional dependency, resolved by
-            // hand rather than as an ordinary required constructor parameter.
+            // The relay handler is optional, so it is looked up rather than injected.
             _relayMessageHandler = serviceProvider?.GetService<IDhcpv6RelayMessageHandler>();
 
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
 
             try
             {
-                // The same coexistence/restart-friendliness reasoning
-                // Dhcpv4UdpListener.StartAsync's own doc comment gives for SO_REUSEADDR applies
-                // here too.
+                // SO_REUSEADDR for the same reasons as in Dhcpv4UdpListener.StartAsync.
                 socket.SetSocketOption(
                     SocketOptionLevel.Socket,
                     SocketOptionName.ReuseAddress,
@@ -150,9 +123,8 @@ public sealed class Dhcpv6UdpListener(
             }
             catch
             {
-                // A genuine bind failure (the port already in use, for instance) must leave this
-                // service reporting IsListening = false, not half-started -- propagate the
-                // exception to the caller rather than swallowing it.
+                // On a bind failure (port in use, for instance) leave IsListening false and let
+                // the caller see the exception.
                 socket.Dispose();
                 throw;
             }
@@ -183,8 +155,7 @@ public sealed class Dhcpv6UdpListener(
 
         lock (_lifecycleLock)
         {
-            // Calling Stop while already stopped is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Stopping a stopped listener does nothing (see IDhcpProtocolService).
             if (!IsListening)
                 return;
 
@@ -198,9 +169,8 @@ public sealed class Dhcpv6UdpListener(
             IsListening = false;
         }
 
-        // Cancel the loop's own token and close the socket -- closing is what actually unblocks
-        // a pending ReceiveFromAsync call, and also drops this socket's own multicast-group
-        // membership, since that membership is scoped to the socket's own lifetime.
+        // Cancel the token and close the socket. Closing unblocks a pending ReceiveFromAsync and
+        // drops the multicast memberships, which belong to the socket.
         await receiveLoopCts.CancelAsync();
         socket.Close();
 
@@ -212,10 +182,8 @@ public sealed class Dhcpv6UdpListener(
             }
             catch (OperationCanceledException)
             {
-                // Either this call's own cancellationToken fired while waiting, or the loop task
-                // itself completed via cancellation -- either way, the loop has stopped touching
-                // the socket by the time this method returns, which is this method's own real
-                // contract.
+                // Either the caller's token fired while waiting or the loop ended by cancellation.
+                // The socket is already closed, so the loop can no longer use it.
             }
         }
 
@@ -227,13 +195,11 @@ public sealed class Dhcpv6UdpListener(
 
     /// <summary>
     ///     This method joins <see cref="Dhcpv6MulticastGroups.AllDhcpRelayAgentsAndServers" /> on
-    ///     every network interface that is currently up and IPv6-capable, since a DHCPv6 server
-    ///     must be reachable by a client on any link it serves, not merely whichever single
-    ///     interface the operating system would otherwise pick as a socket's own "default"
-    ///     multicast interface. Failing to join on one specific interface (a virtual/tunnel
-    ///     adapter that rejects multicast membership, for example) is logged and otherwise
-    ///     ignored -- it must never prevent this listener from serving every other, healthy
-    ///     interface.
+    ///     every interface that is up and supports IPv6, so clients on any attached link can reach
+    ///     the server, not only those on the operating system's default multicast interface. A
+    ///     failure on one interface (a tunnel that rejects multicast, for example) is logged and
+    ///     skipped. Interfaces that come up after the listener starts are not joined until the
+    ///     next start.
     /// </summary>
     private void JoinMulticastGroupOnEveryUsableInterface(Socket socket)
     {
@@ -271,10 +237,9 @@ public sealed class Dhcpv6UdpListener(
     }
 
     /// <summary>
-    ///     This method runs the receive loop for one start/stop cycle -- the DHCPv6 analogue of
-    ///     <c>Dhcpv4UdpListener.RunReceiveLoopAsync</c>, with the same reasoning for why every
-    ///     socket/cancellation value is passed explicitly rather than read back off this
-    ///     instance's own fields.
+    ///     This method runs the receive loop for one start/stop cycle, as
+    ///     <c>Dhcpv4UdpListener.RunReceiveLoopAsync</c> does, with the socket and token passed in
+    ///     for the same reason.
     /// </summary>
     private async Task RunReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
     {
@@ -318,12 +283,10 @@ public sealed class Dhcpv6UdpListener(
     }
 
     /// <summary>
-    ///     This method decodes one received datagram, invokes the request handler, and sends
-    ///     back whatever reply it produces -- the same shape
-    ///     <c>Dhcpv4UdpListener.ProcessDatagramAsync</c> establishes. A datagram whose own leading
-    ///     "msg-type" byte names RELAY-FORW/RELAY-REPL is diverted to
-    ///     <see cref="ProcessRelayDatagramAsync" /> instead, before <see cref="Dhcpv6MessageReader" />
-    ///     -- which rejects that shape outright -- ever sees it.
+    ///     This method decodes one datagram, calls the request handler and sends any reply, as
+    ///     <c>Dhcpv4UdpListener.ProcessDatagramAsync</c> does. A RELAY-FORW or RELAY-REPL goes to
+    ///     <see cref="ProcessRelayDatagramAsync" /> instead, since
+    ///     <see cref="Dhcpv6MessageReader" /> rejects relay messages.
     /// </summary>
     private async Task ProcessDatagramAsync(
         Socket socket,
@@ -384,10 +347,10 @@ public sealed class Dhcpv6UdpListener(
         || messageTypeByte == (byte)Dhcpv6MessageTypeEnum.RelayReply;
 
     /// <summary>
-    ///     This method decodes one received RELAY-FORW/RELAY-REPL datagram, invokes whichever
-    ///     <see cref="IDhcpv6RelayMessageHandler" /> is registered (if any), and sends back
-    ///     whatever reply it produces, directly to <paramref name="remoteEndPoint" /> -- never
-    ///     through <see cref="SendReplyAsync" />, which assumes an ordinary client/server message.
+    ///     This method decodes one RELAY-FORW or RELAY-REPL, calls the registered
+    ///     <see cref="IDhcpv6RelayMessageHandler" /> (if any) and sends any reply straight back to
+    ///     <paramref name="remoteEndPoint" />, the relay agent's address and port. Unlike
+    ///     <see cref="SendReplyAsync" />, an encoding failure is caught and logged.
     /// </summary>
     private async Task ProcessRelayDatagramAsync(
         Socket socket,
@@ -475,23 +438,15 @@ public sealed class Dhcpv6UdpListener(
     }
 
     /// <summary>
-    ///     This method sends an encoded reply directly back, via unicast, to the address the
-    ///     original request was received from.
+    ///     This method encodes the reply and unicasts it to the request's source address on the
+    ///     client port. As in the DHCPv4 listener, encoding happens outside the try/catch.
     ///     <para>
-    ///         Unlike DHCPv4 (see <c>Dhcpv4UdpListener.SendReplyAsync</c>'s own doc comment for
-    ///         its real RFC 2131 Section 4.1 destination-selection logic), a DHCPv6 client always
-    ///         has a usable source address to be answered at -- its own link-local address -- even
-    ///         before it has any address this server assigned, since IPv6 requires an interface to
-    ///         configure a link-local address on its own before doing anything else on the
-    ///         network. A client reaches a server by multicasting to
-    ///         <see cref="Dhcpv6MulticastGroups.AllDhcpRelayAgentsAndServers" />, but the request's
-    ///         own source address is always that real, reachable unicast address, never the
-    ///         multicast destination it was sent to -- so no DHCPv4-style broadcast fallback, and
-    ///         no relay-agent-address branching, is needed here at all. A genuine relay agent
-    ///         forwarding a client's message via RELAY-FORW is a different message shape entirely
-    ///         (see <see cref="Common.Enum.Dhcpv6MessageTypeEnum.RelayForward" />'s own doc
-    ///         comment), decoded and answered by <see cref="ProcessRelayDatagramAsync" /> instead
-    ///         -- this method is only ever called for an ordinary, unrelayed client/server message.
+    ///         Unlike DHCPv4 (see <c>Dhcpv4UdpListener.SendReplyAsync</c>), no destination choice
+    ///         is needed: a DHCPv6 client always has a link-local address, which IPv6 configures
+    ///         before anything else, and its request comes from that unicast address even though
+    ///         it was sent to the multicast group. Relayed messages arrive as RELAY-FORW and are
+    ///         answered by <see cref="ProcessRelayDatagramAsync" />, so this method only sees
+    ///         unrelayed client messages.
     ///     </para>
     /// </summary>
     private async Task SendReplyAsync(

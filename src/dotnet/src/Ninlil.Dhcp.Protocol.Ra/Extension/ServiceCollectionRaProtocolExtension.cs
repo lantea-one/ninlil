@@ -7,23 +7,18 @@ namespace Ninlil.Dhcp.Protocol.Ra.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's Router Advertisement raw ICMPv6 transport -- the Router Advertisement analogue of
+///     Ninlil's Router Advertisement raw ICMPv6 transport, like
 ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Extension.ServiceCollectionDhcpv6ProtocolExtension</c>.
 /// </summary>
 public static class ServiceCollectionRaProtocolExtension
 {
     /// <summary>
-    ///     This method registers <see cref="Icmpv6RaListener" /> as a singleton -- both under its
-    ///     own concrete type and as <see cref="IDhcpProtocolService" />, so a protocol-agnostic
-    ///     caller can reach it without knowing it is specifically the Router Advertisement listener
-    ///     -- plus <see cref="Icmpv6RaListenerHostedService" />, the thin
-    ///     <see cref="Microsoft.Extensions.Hosting.IHostedService" /> wrapper that starts it
-    ///     automatically at host boot only when <see cref="RaProtocolOptions.Enable" /> is
-    ///     configured <see langword="true" /> -- see that class's own doc comment for why the
-    ///     listener itself stays independently controllable for the rest of the process's life
-    ///     regardless of that flag. The composition root is still expected to have already
-    ///     registered a real <see cref="IRaAdvertisementProvider" /> implementation of its own --
-    ///     the listener depends on one to decide what to send, and provides no default of its own.
+    ///     This method binds <see cref="RaProtocolOptions" />, registers
+    ///     <see cref="Icmpv6RaListener" /> as a singleton under its own type and as
+    ///     <see cref="IDhcpProtocolService" />, and adds <see cref="Icmpv6RaListenerHostedService" />,
+    ///     which starts it at boot when <see cref="RaProtocolOptions.Enable" /> is
+    ///     <see langword="true" />. The caller must also register an
+    ///     <see cref="IRaAdvertisementProvider" />; there is no default.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read transport settings from.</param>

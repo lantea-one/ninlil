@@ -5,39 +5,34 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv6;
 
 /// <summary>
-///     This interface decides how a received RELAY-FORW/RELAY-REPL message should be answered --
-///     the relay-message sibling of <see cref="IDhcpv6RequestHandler" />, which only ever sees an
-///     ordinary client/server message. <see cref="Dhcpv6UdpListener" /> resolves this as an
-///     <b>optional</b> dependency (via <see cref="IServiceProvider.GetService" />, not a required
-///     constructor parameter) -- a listener with nothing registered for this interface simply
-///     discards a relay message it happens to receive, logging once, rather than failing to start
-///     at all.
+///     This interface decides how a received RELAY-FORW or RELAY-REPL is answered; it is the
+///     relay counterpart of <see cref="IDhcpv6RequestHandler" />, which sees only client/server
+///     messages. <see cref="Dhcpv6UdpListener" /> resolves it as an optional service (through
+///     <see cref="IServiceProvider.GetService" />): with none registered, relay messages are
+///     discarded and logged at debug level.
 ///     <para>
-///         Two genuinely different implementations exist, corresponding to this project's own two
-///         relay-adjacent roles: <c>Ninlil.Dhcp.Server.Core.Dhcpv6RequestHandler</c> implements
-///         this to unwrap a RELAY-FORW an external relay agent forwarded to this server, process
-///         the inner client message exactly as it would an unrelayed one, and wrap the result back
-///         up as a RELAY-REPL; <c>Ninlil.Dhcp.Server.Relay.Dhcpv6RelayAgent</c> implements this to
-///         unwrap a RELAY-REPL its own upstream server sent back, and deliver the inner reply down
-///         to the original client. The composition root registers exactly one of the two,
-///         mirroring how exactly one <see cref="IDhcpv6RequestHandler" /> is ever registered too.
+///         There are two implementations, one per role. <c>Ninlil.Dhcp.Server.Core.Dhcpv6RequestHandler</c>
+///         unwraps a RELAY-FORW from an external relay agent, handles the client message as if
+///         unrelayed and wraps the reply in a RELAY-REPL. <c>Ninlil.Dhcp.Server.Relay.Dhcpv6RelayAgent</c>
+///         unwraps a RELAY-REPL from its upstream server and delivers the reply to the client. The
+///         composition root (<c>Program.cs</c>) registers one or the other depending on
+///         <c>Dhcpv6RelayOptions.Enable</c>, together with the matching
+///         <see cref="IDhcpv6RequestHandler" />.
 ///     </para>
 /// </summary>
 public interface IDhcpv6RelayMessageHandler
 {
     /// <summary>
-    ///     This method decides how, if at all, a received RELAY-FORW/RELAY-REPL message should be
-    ///     answered.
+    ///     This method decides how, if at all, a received RELAY-FORW or RELAY-REPL is answered.
     /// </summary>
     /// <param name="message">The decoded relay message.</param>
-    /// <param name="remoteEndPoint">The socket address the message actually arrived from.</param>
+    /// <param name="remoteEndPoint">The address and port the message came from.</param>
     /// <param name="cancellationToken">A token that becomes signaled once the listener is stopping.</param>
     /// <returns>
     ///     The relay message to send back to <paramref name="remoteEndPoint" />, or
-    ///     <see langword="null" /> if nothing should be sent back from there at all -- for example,
-    ///     because this implementation already sent everything it needed to through a socket of its
-    ///     own (<c>Dhcpv6RelayAgent</c>'s own posture), or because there is genuinely nothing
-    ///     sensible to answer with.
+    ///     <see langword="null" /> to send nothing, for example because the implementation has
+    ///     already sent what it needed on another socket (as <c>Dhcpv6RelayAgent</c> does) or there
+    ///     is nothing to answer.
     /// </returns>
     Task<Dhcpv6RelayMessage> HandleRelayMessageAsync(
         Dhcpv6RelayMessage message,

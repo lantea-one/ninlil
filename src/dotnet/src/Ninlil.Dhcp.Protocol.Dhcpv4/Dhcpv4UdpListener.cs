@@ -9,32 +9,23 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv4;
 
 /// <summary>
-///     This class implements the DHCPv4 UDP transport itself: binding the configured server
-///     port, receiving client (or relay-agent-forwarded) datagrams, decoding them via
-///     <see cref="Dhcpv4MessageReader" />, handing the decoded message to whichever
-///     <see cref="IDhcpv4RequestHandler" /> dependency injection resolves, and -- per RFC 2131
-///     Section 4.1's own destination-selection rules -- sending back whatever reply that handler
-///     produces. It does nothing beyond that: lease allocation, option delivery, and every other
-///     real server-engine decision belong to the handler, never to this class.
+///     This class is the DHCPv4 UDP transport. It binds the server port, receives datagrams from
+///     clients and relay agents, decodes them with <see cref="Dhcpv4MessageReader" />, passes each
+///     to the <see cref="IDhcpv4RequestHandler" /> (in <c>Ninlil.Dhcp.Server.Core</c>), and sends
+///     the reply to the destination RFC 2131 Section 4.1 prescribes. Lease allocation, options
+///     and every other server decision belong to the handler.
 ///     <para>
-///         <b>This class is a genuinely restartable <see cref="IDhcpProtocolService" /></b>, not a
-///         <see cref="Microsoft.Extensions.Hosting.BackgroundService" /> -- <see cref="StartAsync" />/
-///         <see cref="StopAsync" /> can be called repeatedly, in either order, for the rest of this
-///         process's life, each genuinely binding/releasing a real socket rather than running once
-///         for the whole host lifetime. It is registered as an ordinary dependency-injection
-///         singleton (never as an <see cref="Microsoft.Extensions.Hosting.IHostedService" />
-///         itself) -- <see cref="Dhcpv4ListenerHostedService" /> is the thin wrapper that starts
-///         this instance once, automatically, at host boot, only when
-///         <see cref="Dhcpv4ProtocolOptions.Enable" /> is <see langword="true" />; see that
-///         class's own doc comment, and <see cref="IDhcpProtocolService" />'s, for why configured
-///         <c>Enable</c> and this instance's own live running state are two distinct concepts from
-///         here on. A concurrent <see cref="StartAsync" />/<see cref="StopAsync" /> pair is
-///         serialized through <see cref="_lifecycleLock" />, and each call is a safe, harmless
-///         no-op when this service is already in the state being requested.
+///         <b>It is a restartable <see cref="IDhcpProtocolService" /></b>, registered as a
+///         singleton rather than a hosted service: <see cref="StartAsync" /> and
+///         <see cref="StopAsync" /> can be called any number of times, each binding or releasing
+///         the socket. <see cref="Dhcpv4ListenerHostedService" /> starts it at boot when
+///         <see cref="Dhcpv4ProtocolOptions.Enable" /> is <see langword="true" />.
+///         <see cref="_lifecycleLock" /> serializes concurrent start and stop calls, and a call
+///         that finds the listener already in the requested state does nothing.
 ///     </para>
 /// </summary>
 /// <param name="handler">The handler every decoded request is dispatched to.</param>
-/// <param name="options">This transport's own listen ports.</param>
+/// <param name="options">The listen and reply ports.</param>
 /// <param name="logger">The logger this listener records unexpected socket/handler failures to.</param>
 public sealed class Dhcpv4UdpListener(
     IDhcpv4RequestHandler handler,
@@ -43,48 +34,41 @@ public sealed class Dhcpv4UdpListener(
 ) : IDhcpProtocolService
 {
     /// <summary>
-    ///     This constant contains the largest UDP datagram this listener will ever read. A real
-    ///     DHCPv4 message, even with a generous options area, runs a small fraction of this; the
-    ///     receive buffer is sized to the largest a UDP payload can ever be anyway, so an
-    ///     oversized datagram is simply read and discarded downstream rather than truncated by
-    ///     the socket call itself.
+    ///     This constant contains the receive buffer size: the largest UDP payload over IPv4. A
+    ///     DHCPv4 message is far smaller, but a full-size buffer means an oversized datagram is
+    ///     read whole rather than truncated by the socket.
     /// </summary>
     private const int MaximumDatagramSize = 65507;
 
     /// <summary>
-    ///     This lock serializes every <see cref="StartAsync" />/<see cref="StopAsync" /> call
-    ///     against each other, so a concurrent start-while-stopping (or stop-while-starting) pair
-    ///     can never leave <see cref="_socket" />/<see cref="_receiveLoopCts" />/
-    ///     <see cref="IsListening" /> in an inconsistent combination. Only ever held across plain,
-    ///     synchronous field mutation -- never across an <see langword="await" /> -- so it is safe
-    ///     to guard both async methods with the same instance.
+    ///     This lock serializes <see cref="StartAsync" /> and <see cref="StopAsync" /> so that
+    ///     <see cref="_socket" />, <see cref="_receiveLoopCts" /> and <see cref="IsListening" />
+    ///     always change together. It is held only for synchronous field updates, never across an
+    ///     <see langword="await" />.
     /// </summary>
     private readonly Lock _lifecycleLock = new();
 
     /// <summary>
-    ///     This field contains the listening socket, once <see cref="StartAsync" /> has bound
-    ///     one, cleared again by <see cref="StopAsync" /> once it has been released.
+    ///     This field contains the listening socket while the listener runs, or
+    ///     <see langword="null" />.
     /// </summary>
     private Socket _socket;
 
     /// <summary>
-    ///     This field contains the cancellation source that owns the currently running receive
-    ///     loop's own lifetime, cancelled by <see cref="StopAsync" /> to unblock its pending
-    ///     receive call and signal it to exit.
+    ///     This field contains the cancellation source of the running receive loop, which
+    ///     <see cref="StopAsync" /> cancels.
     /// </summary>
     private CancellationTokenSource _receiveLoopCts;
 
     /// <summary>
-    ///     This field contains the currently running receive loop's own task, awaited by
-    ///     <see cref="StopAsync" /> to confirm the loop has genuinely exited (and, with it, that
-    ///     no further use of <see cref="_socket" /> is still in flight) before that socket is
-    ///     disposed.
+    ///     This field contains the running receive loop's task. <see cref="StopAsync" /> awaits
+    ///     it so the loop has stopped using the socket before the socket is disposed.
     /// </summary>
     private Task _receiveLoopTask;
 
     /// <summary>
-    ///     This property reports whether this listener's own socket is currently bound and
-    ///     accepting datagrams.
+    ///     This property reports whether the socket is bound. It is not cleared if the receive
+    ///     loop ends on an unexpected exception.
     /// </summary>
     public bool IsListening { get; private set; }
 
@@ -99,17 +83,12 @@ public sealed class Dhcpv4UdpListener(
 
         lock (_lifecycleLock)
         {
-            // Calling Start while already running is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Starting a running listener does nothing (see IDhcpProtocolService).
             if (IsListening)
                 return Task.CompletedTask;
 
-            // DHCPv4 is an IPv4-only protocol (a DHCPv6 listener is its own, separate transport
-            // with its own multicast-based semantics), and a server must be able to both receive
-            // datagrams sent to the limited-broadcast address and send replies back to it --
-            // EnableBroadcast opts this socket into the latter; the operating system delivers
-            // incoming broadcasts to a bound socket without any special option needed on the
-            // receiving side.
+            // DHCPv4 is IPv4-only. EnableBroadcast is needed to send to the limited-broadcast
+            // address; receiving broadcasts needs no option on a wildcard-bound socket.
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
             {
                 EnableBroadcast = true,
@@ -117,13 +96,9 @@ public sealed class Dhcpv4UdpListener(
 
             try
             {
-                // SO_REUSEADDR lets this wildcard bind coexist with a second, unrelated socket
-                // bound to a more specific local address on the same port (the operating system
-                // delivers a datagram addressed to that specific address to the more specific
-                // socket, and everything else here) -- harmless for this project's own
-                // single-instance deployment, and lets a re-bind immediately following a stop (or
-                // an operator restarting this process) avoid occasionally hitting a stale,
-                // still-lingering bind from the just-released previous socket.
+                // SO_REUSEADDR lets this wildcard bind coexist with a socket bound to a specific
+                // local address on the same port (that socket gets datagrams for its address,
+                // this one the rest), and lets a quick restart re-bind without a conflict.
                 socket.SetSocketOption(
                     SocketOptionLevel.Socket,
                     SocketOptionName.ReuseAddress,
@@ -133,9 +108,8 @@ public sealed class Dhcpv4UdpListener(
             }
             catch
             {
-                // A genuine bind failure (the port already in use, for instance) must leave this
-                // service reporting IsListening = false, not half-started -- propagate the
-                // exception to the caller rather than swallowing it.
+                // On a bind failure (port in use, for instance) leave IsListening false and let
+                // the caller see the exception.
                 socket.Dispose();
                 throw;
             }
@@ -166,8 +140,7 @@ public sealed class Dhcpv4UdpListener(
 
         lock (_lifecycleLock)
         {
-            // Calling Stop while already stopped is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Stopping a stopped listener does nothing (see IDhcpProtocolService).
             if (!IsListening)
                 return;
 
@@ -181,9 +154,8 @@ public sealed class Dhcpv4UdpListener(
             IsListening = false;
         }
 
-        // Cancel the loop's own token and close the socket -- closing is what actually unblocks
-        // a pending ReceiveFromAsync call, since a cancellation token alone does not interrupt a
-        // socket operation already in flight on some platforms.
+        // Cancel the token and close the socket. Closing is what unblocks a pending
+        // ReceiveFromAsync on platforms where the token alone does not.
         await receiveLoopCts.CancelAsync();
         socket.Close();
 
@@ -195,10 +167,8 @@ public sealed class Dhcpv4UdpListener(
             }
             catch (OperationCanceledException)
             {
-                // Either this call's own cancellationToken fired while waiting, or the loop task
-                // itself completed via cancellation -- either way, the loop has stopped touching
-                // the socket by the time this method returns, which is this method's own real
-                // contract.
+                // Either the caller's token fired while waiting or the loop ended by cancellation.
+                // The socket is already closed, so the loop can no longer use it.
             }
         }
 
@@ -209,12 +179,12 @@ public sealed class Dhcpv4UdpListener(
     }
 
     /// <summary>
-    ///     This method runs the receive loop for one start/stop cycle: reading datagrams off
-    ///     <paramref name="socket" /> until <paramref name="stoppingToken" /> is cancelled,
-    ///     dispatching each to <see cref="ProcessDatagramAsync" />. Every socket/cancellation
-    ///     value is passed explicitly rather than read back off this instance's own fields, since
-    ///     a concurrent <see cref="StopAsync" /> call clears those fields as soon as it claims the
-    ///     stop, strictly before this loop has necessarily noticed and exited.
+    ///     This method runs the receive loop for one start/stop cycle, reading datagrams from
+    ///     <paramref name="socket" /> until <paramref name="stoppingToken" /> is cancelled and
+    ///     handling each with <see cref="ProcessDatagramAsync" /> one at a time. The socket and
+    ///     token are passed in rather than read from the fields, because <see cref="StopAsync" />
+    ///     clears the fields before the loop notices it should exit. An exception other than the
+    ///     receive errors caught here ends the loop.
     /// </summary>
     private async Task RunReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
     {
@@ -243,16 +213,13 @@ public sealed class Dhcpv4UdpListener(
             }
             catch (SocketException exception)
             {
-                // Cancelling a pending receive (via StopAsync closing the socket, or the token
-                // itself) can surface here as a SocketException rather than
-                // OperationCanceledException/ObjectDisposedException on some platforms; if we
-                // were asked to stop, this is that, not a datagram-level failure to log and shrug
-                // off.
+                // On some platforms a cancelled or closed receive surfaces as a SocketException;
+                // if a stop was requested, that is what this is.
                 if (stoppingToken.IsCancellationRequested)
                     break;
 
-                // Otherwise, a malformed or unreachable-sender-triggered failure on one datagram
-                // must never take down the whole listener; log it and keep serving everyone else.
+                // Otherwise one failed receive (an ICMP unreachable, for example) must not stop
+                // the listener; log it and continue.
                 logger.LogWarning(exception, "Error receiving a DHCPv4 datagram.");
                 continue;
             }
@@ -265,10 +232,10 @@ public sealed class Dhcpv4UdpListener(
     }
 
     /// <summary>
-    ///     This method decodes one received datagram, invokes the request handler, and sends
-    ///     back whatever reply it produces. A malformed datagram or a handler failure is logged
-    ///     and otherwise ignored -- one bad or hostile packet must never take down the whole
-    ///     listener.
+    ///     This method decodes one datagram, calls the request handler and sends any reply. A
+    ///     malformed datagram or a handler exception is logged and dropped so that one bad packet
+    ///     does not stop the listener. An exception from encoding the reply is not caught here
+    ///     (see <see cref="SendReplyAsync" />).
     /// </summary>
     private async Task ProcessDatagramAsync(
         Socket socket,
@@ -316,23 +283,18 @@ public sealed class Dhcpv4UdpListener(
     }
 
     /// <summary>
-    ///     This method sends an encoded reply to whichever destination RFC 2131 Section 4.1 says
-    ///     it belongs at, based on the original request's own "giaddr"/"ciaddr" fields and
-    ///     broadcast flag.
+    ///     This method encodes the reply and sends it where RFC 2131 Section 4.1 says, based on the
+    ///     request's "giaddr" and "ciaddr" fields and broadcast flag: to the relay agent, by
+    ///     broadcast, or by unicast to the client's address. Encoding happens outside the
+    ///     try/catch, so a reply the writer rejects throws out of the receive loop. A DHCPNAK
+    ///     follows the same rules, so it is unicast to a client that set "ciaddr".
     ///     <para>
-    ///         RFC 2131 Section 4.1 describes a fourth case this method does not implement
-    ///         precisely: when a request carries no relay-agent address, no client address, and
-    ///         no broadcast flag, the RFC calls for the reply to be unicast to the client's own
-    ///         offered address (<c>yiaddr</c>) using the client's hardware address directly,
-    ///         bypassing ARP resolution entirely, since that address is not yet configured or
-    ///         reachable by any ordinary route. A managed <see cref="Socket" /> has no portable
-    ///         way to address a send that way; doing so for real needs either a raw/packet socket
-    ///         or a platform-specific mechanism to inject an ARP-table entry, neither of which
-    ///         exists in this listener. A well-behaved client with no address configured yet --
-    ///         the only situation this fourth case can arise in -- always sets the broadcast flag
-    ///         for exactly this reason, so this method falls back to broadcasting the reply
-    ///         instead, which reaches such a client correctly; it is a real, deliberate, and
-    ///         currently unaddressed limitation only for a client that violates that expectation.
+    ///         RFC 2131 Section 4.1 has one more case: with no "giaddr", no "ciaddr" and no
+    ///         broadcast flag, the reply should be unicast to "yiaddr" at the client's hardware
+    ///         address, without ARP. A managed <see cref="Socket" /> cannot address a send that way
+    ///         (it would need a packet socket or an ARP-table entry), so the reply is broadcast
+    ///         instead. A client without an address still receives it; the broadcast is only less
+    ///         efficient.
     ///     </para>
     /// </summary>
     private async Task SendReplyAsync(
@@ -348,8 +310,8 @@ public sealed class Dhcpv4UdpListener(
 
         if (!request.RelayAgentIpAddress.Equals(IPAddress.Any))
         {
-            // A relay agent forwarded this request; the reply always goes back to it, at the
-            // server port, for the relay agent to forward on to the real client in turn.
+            // A relay agent forwarded this request; the reply goes back to it on the server port
+            // for it to pass on to the client.
             destination = new IPEndPoint(request.RelayAgentIpAddress, options.Value.ServerPort);
         }
         else if (request.BroadcastFlagSet)
@@ -358,13 +320,12 @@ public sealed class Dhcpv4UdpListener(
         }
         else if (!request.ClientIpAddress.Equals(IPAddress.Any))
         {
-            // The client already has a usable address (renewing/rebinding) and can receive an
-            // ordinary unicast reply there.
+            // The client has an address (renewing or rebinding) and can receive unicast there.
             destination = new IPEndPoint(request.ClientIpAddress, options.Value.ClientPort);
         }
         else
         {
-            // See this method's own doc comment for why this falls back to broadcasting.
+            // Broadcast instead of the unicast-to-hardware-address case (see the summary).
             destination = new IPEndPoint(IPAddress.Broadcast, options.Value.ClientPort);
         }
 

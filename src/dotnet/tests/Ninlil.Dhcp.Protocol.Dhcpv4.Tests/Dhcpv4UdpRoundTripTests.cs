@@ -9,21 +9,16 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Protocol.Dhcpv4.Tests;
 
 /// <summary>
-///     This test proves the DHCPv4 UDP transport and wire codec genuinely work together over a
-///     real socket, not merely as an in-memory byte-array round trip (that layer is already
-///     covered exhaustively, and far faster, by <c>Ninlil.Dhcp.Common.Tests</c>): a real
-///     <see cref="Dhcpv4UdpListener" /> binds a real UDP socket, a real <see cref="UdpClient" />
-///     sends a real, wire-encoded DISCOVER datagram to it, a stub
-///     <see cref="StubDhcpv4RequestHandler" /> answers with a canned OFFER, and this test's own
-///     socket receives and decodes that reply back into a <see cref="Dhcpv4Message" />.
+///     This test class checks the DHCPv4 UDP transport and codec together over loopback sockets
+///     (the in-memory codec tests are in <c>Ninlil.Dhcp.Common.Tests</c>): a
+///     <see cref="Dhcpv4UdpListener" /> binds a UDP socket, a <see cref="UdpClient" /> sends an
+///     encoded DISCOVER, <see cref="StubDhcpv4RequestHandler" /> answers with a fixed OFFER, and
+///     the test decodes the reply. It also checks that a relayed request's reply goes to the
+///     relay agent.
 ///     <para>
-///         This runs on ordinary, unprivileged, dynamically-chosen high ports rather than the
-///         real IANA-assigned 67/68 DHCP ports, since binding a port below 1024 needs root
-///         privileges an automated test suite does not run with. The real privileged-port bind
-///         was separately, manually proven with <c>sudo</c> in a throwaway scratchpad console app
-///         during this feature's own development. This committed test instead proves the wire protocol and
-///         socket-handling logic itself, which is identical regardless of which port number is
-///         actually bound.
+///         The tests use unprivileged high ports chosen at run time instead of 67 and 68, which
+///         need root to bind. The socket handling and wire format do not depend on the port
+///         number.
 ///     </para>
 /// </summary>
 public class Dhcpv4UdpRoundTripTests
@@ -51,9 +46,8 @@ public class Dhcpv4UdpRoundTripTests
 
         try
         {
-            // Dhcpv4UdpListener.StartAsync binds synchronously before it returns, so IsListening
-            // is already true here in practice -- this poll is a harmless belt-and-suspenders
-            // guard against that timing detail ever changing, not a race this test depends on.
+            // StartAsync binds before it returns, so IsListening is already true; the poll only
+            // guards against that changing.
             DateTime deadline = DateTime.UtcNow.AddSeconds(5);
 
             while (!listener.IsListening && DateTime.UtcNow < deadline)
@@ -71,12 +65,10 @@ public class Dhcpv4UdpRoundTripTests
                 TransactionId = 0x1234ABCD,
                 HardwareAddressLength = 6,
                 ClientHardwareAddress = clientHardwareAddress,
-                // A real, freshly-booted client would set the broadcast flag instead of a real
-                // ciaddr, since it has no address yet -- setting ciaddr here to this test's own
-                // loopback client socket is a deliberate simplification that forces a
-                // deterministic unicast reply (RFC 2131 Section 4.1's "client already has an
-                // address" case), rather than depending on this sandboxed environment's own,
-                // possibly restricted, UDP broadcast delivery behavior.
+                // A client without an address would not set ciaddr. Setting it to the loopback
+                // address forces a unicast reply (RFC 2131 Section 4.1's "client has an address"
+                // case), so the test does not depend on broadcast delivery in the test
+                // environment.
                 ClientIpAddress = IPAddress.Loopback,
             };
             discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -116,23 +108,17 @@ public class Dhcpv4UdpRoundTripTests
     }
 
     /// <summary>
-    ///     This test proves <c>Dhcpv4UdpListener.SendReplyAsync</c>'s real, production
-    ///     reply-destination logic honors RFC 2131 Section 4.1's own stated priority order: a
-    ///     request carrying a non-zero relay-agent address (<c>giaddr</c>) always gets its reply
-    ///     unicast back to that relay agent, even when the same request's own broadcast flag is
-    ///     also set -- proving <c>giaddr</c> genuinely takes priority, not merely that it works
-    ///     when there is no broadcast flag to compete with.
+    ///     This test checks the RFC 2131 Section 4.1 priority in
+    ///     <c>Dhcpv4UdpListener.SendReplyAsync</c>: a request with a non-zero relay-agent address
+    ///     (<c>giaddr</c>) gets its reply unicast to that relay agent even when its broadcast flag
+    ///     is also set.
     ///     <para>
-    ///         The "relay agent" itself is a second, real socket, bound to its own specific
-    ///         loopback address (<c>127.0.0.7</c>) on the exact same server port the listener
-    ///         under test is bound to via a wildcard (<c>INADDR_ANY</c>) bind -- both sockets set
-    ///         <c>SO_REUSEADDR</c> (the listener's own real production bind already does; see
-    ///         <see cref="Dhcpv4UdpListener.StartAsync" />'s own doc comment), which lets a
-    ///         specific-address bind coexist with an already-established wildcard bind on the same
-    ///         port, with the operating system delivering any datagram addressed to that specific
-    ///         address to the more specific socket. If the reply were ever (incorrectly)
-    ///         broadcast instead, this "relay" socket would never receive anything and this test
-    ///         would time out -- a real, meaningfully-discriminating proof, not a tautology.
+    ///         The "relay agent" is a second socket bound to <c>127.0.0.7</c> on the listener's
+    ///         server port, while the listener has a wildcard bind on that port. Both set
+    ///         <c>SO_REUSEADDR</c> (see <see cref="Dhcpv4UdpListener.StartAsync" />), so the
+    ///         specific bind can coexist with the wildcard one and receives datagrams addressed to
+    ///         <c>127.0.0.7</c>. If the reply were broadcast instead, the relay socket would get
+    ///         nothing and the test would time out.
     ///     </para>
     /// </summary>
     [Fact]
@@ -183,8 +169,8 @@ public class Dhcpv4UdpRoundTripTests
                 HardwareAddressLength = 6,
                 ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x02],
                 RelayAgentIpAddress = relayAgentAddress,
-                // Deliberately set alongside a non-zero giaddr -- proves the priority order this
-                // test's own doc comment describes, rather than only the uncontested case.
+                // Set together with a non-zero giaddr to test the priority, not just the case
+                // with no competing flag.
                 BroadcastFlagSet = true,
             };
             discover.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -224,10 +210,9 @@ public class Dhcpv4UdpRoundTripTests
     }
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port by asking the operating
-    ///     system to assign an ephemeral one, reading it back, and immediately releasing it --
-    ///     good enough for a test that binds it again itself moments later, with only a small,
-    ///     accepted race window against something else on the same machine grabbing it first.
+    ///     This method gets an unused high UDP port by binding to port 0, reading the assigned
+    ///     port and releasing it. Something else could take the port before the test binds it;
+    ///     that small race is accepted.
     /// </summary>
     private static int GetFreeUdpPort()
     {

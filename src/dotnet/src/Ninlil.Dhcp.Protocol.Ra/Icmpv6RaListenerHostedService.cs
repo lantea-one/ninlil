@@ -6,29 +6,22 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Protocol.Ra;
 
 /// <summary>
-///     This class is the thin <see cref="IHostedService" /> wrapper this project's composition
-///     root registers for the Router Advertisement transport -- the Router Advertisement analogue
-///     of <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ListenerHostedService</c>. The real, genuinely
-///     restartable listener logic lives entirely in <see cref="Icmpv6RaListener" /> (registered
-///     separately as an ordinary dependency-injection singleton, both under its own concrete type
-///     and as <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" />), never in this
-///     class.
+///     This class is the <see cref="IHostedService" /> that starts the Router Advertisement
+///     transport at boot, like <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ListenerHostedService</c>. The
+///     listener itself is <see cref="Icmpv6RaListener" />, a singleton also registered as
+///     <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" />.
 ///     <para>
-///         <see cref="StartAsync" /> runs exactly once, at host boot, and starts the underlying
-///         listener only when <see cref="RaProtocolOptions.Enable" /> is configured
-///         <see langword="true" /> at that moment. From that point on, though, the underlying
-///         listener stays independently startable/stoppable for the rest of the process's life via
-///         <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" /> -- see that interface's
-///         own doc comment for why configured <c>Enable</c> and live running state are two
-///         distinct concepts. <see cref="StopAsync" /> always stops the underlying listener
-///         unconditionally at host shutdown, regardless of whether it was auto-started at boot or
-///         later started/stopped live, so a clean process exit never leaves a bound raw socket (or
-///         multicast-group membership) behind.
+///         <see cref="StartAsync" /> runs once at boot and starts the listener only when
+///         <see cref="RaProtocolOptions.Enable" /> is <see langword="true" />; after that it can
+///         be started or stopped at runtime through
+///         <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" />.
+///         <see cref="StopAsync" /> always stops the listener at shutdown, so no raw socket or
+///         multicast membership is left behind.
 ///     </para>
 /// </summary>
-/// <param name="listener">The real, controllable listener this wrapper starts/stops.</param>
-/// <param name="options">This transport's own configured <c>Enable</c> flag, consulted only at boot.</param>
-/// <param name="logger">The logger this wrapper records its own boot-time decision to.</param>
+/// <param name="listener">The listener this service starts and stops.</param>
+/// <param name="options">The transport options; only <c>Enable</c> is read, at boot.</param>
+/// <param name="logger">The logger the boot-time decision is recorded to.</param>
 public sealed class Icmpv6RaListenerHostedService(
     Icmpv6RaListener listener,
     IOptions<RaProtocolOptions> options,

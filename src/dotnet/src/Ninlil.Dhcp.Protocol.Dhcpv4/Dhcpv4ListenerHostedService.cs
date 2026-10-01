@@ -6,30 +6,21 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Protocol.Dhcpv4;
 
 /// <summary>
-///     This class is the thin <see cref="IHostedService" /> wrapper this project's composition
-///     root registers for the DHCPv4 transport -- the real, genuinely restartable listener logic
-///     lives entirely in <see cref="Dhcpv4UdpListener" /> (registered separately as an ordinary
-///     dependency-injection singleton, both under its own concrete type and as
-///     <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" />), never in this class.
+///     This class is the <see cref="IHostedService" /> that starts the DHCPv4 transport at boot.
+///     The listener itself is <see cref="Dhcpv4UdpListener" />, a singleton also registered as
+///     <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" />.
 ///     <para>
-///         <see cref="StartAsync" /> runs exactly once, at host boot, and starts the underlying
-///         listener only when <see cref="Dhcpv4ProtocolOptions.Enable" /> is configured
-///         <see langword="true" /> at that moment -- mirroring exactly what this listener's own
-///         previous, single-shot <see cref="Microsoft.Extensions.Hosting.BackgroundService" />
-///         implementation used to check internally. From that point on, though, the underlying
-///         listener stays independently startable/stoppable for the rest of the process's life
-///         via <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" /> -- a future REST
-///         surface (or any other in-process caller) can start it even though it booted disabled,
-///         or stop it even though it booted enabled, with no restart and no change to this
-///         wrapper at all. <see cref="StopAsync" /> always stops the underlying listener
-///         unconditionally at host shutdown, regardless of whether it was auto-started at boot or
-///         later started/stopped live, so a clean process exit never leaves a bound socket
-///         behind.
+///         <see cref="StartAsync" /> runs once at boot and starts the listener only when
+///         <see cref="Dhcpv4ProtocolOptions.Enable" /> is <see langword="true" />. After that the
+///         listener can be started or stopped at runtime through
+///         <see cref="Ninlil.Dhcp.Common.Control.IDhcpProtocolService" /> (for example from
+///         <c>DhcpServiceControlController</c>). <see cref="StopAsync" /> always stops the
+///         listener at shutdown, however it was started, so no socket is left bound.
 ///     </para>
 /// </summary>
-/// <param name="listener">The real, controllable listener this wrapper starts/stops.</param>
-/// <param name="options">This transport's own configured <c>Enable</c> flag, consulted only at boot.</param>
-/// <param name="logger">The logger this wrapper records its own boot-time decision to.</param>
+/// <param name="listener">The listener this service starts and stops.</param>
+/// <param name="options">The transport options; only <c>Enable</c> is read, at boot.</param>
+/// <param name="logger">The logger the boot-time decision is recorded to.</param>
 public sealed class Dhcpv4ListenerHostedService(
     Dhcpv4UdpListener listener,
     IOptions<Dhcpv4ProtocolOptions> options,
