@@ -2,12 +2,12 @@
 namespace Ninlil.Dhcp.Server.Tftp.Wire;
 
 /// <summary>
-///     This class represents a decoded RFC 1350 Section 5 Read Request (RRQ) or Write Request
-///     (WRQ) packet -- the two packet types that share an identical wire shape (opcode, a
-///     NUL-terminated filename, a NUL-terminated mode string), distinguished only by
-///     <see cref="Opcode" />.
+///     This record represents a decoded RFC 1350 Read Request (RRQ) or Write Request (WRQ). Both
+///     have the same layout (opcode, NUL-terminated filename, NUL-terminated mode) and differ
+///     only in <see cref="Opcode" />. Anything after the mode, such as RFC 2347 options, is
+///     dropped.
 /// </summary>
-/// <param name="Opcode">Which of the two request types this is.</param>
-/// <param name="Filename">The file name the client named, exactly as sent (not yet sanitized).</param>
-/// <param name="Mode">The transfer mode the client named (for example <c>"octet"</c>), exactly as sent.</param>
+/// <param name="Opcode">Whether this is a read or a write request.</param>
+/// <param name="Filename">The filename as sent, not yet checked.</param>
+/// <param name="Mode">The transfer mode as sent, for example <c>"octet"</c>.</param>
 public record TftpRequestPacket(TftpOpcodeEnum Opcode, string Filename, string Mode);

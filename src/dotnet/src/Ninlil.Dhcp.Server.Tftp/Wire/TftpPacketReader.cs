@@ -5,11 +5,9 @@ using System.Text;
 namespace Ninlil.Dhcp.Server.Tftp.Wire;
 
 /// <summary>
-///     This class decodes the three TFTP packet shapes this server's own transfer loop ever
-///     needs to read: a Read/Write Request (from the main listening socket), an Acknowledgment,
-///     and an Error (both from a per-transfer socket, while a download is in progress). This
-///     server never needs to decode a Data packet -- it only ever sends those, never receives
-///     them, since it is read-only.
+///     This class decodes the TFTP packets the server receives: Read and Write Requests on the
+///     listening socket, and Acknowledgments and Errors on a transfer socket. Data packets are
+///     not decoded, since a read-only server only sends them.
 /// </summary>
 public static class TftpPacketReader
 {
@@ -58,7 +56,7 @@ public static class TftpPacketReader
     }
 
     /// <summary>
-    ///     This method attempts to decode an Acknowledgment packet's own block number.
+    ///     This method attempts to decode the block number of an Acknowledgment packet.
     /// </summary>
     public static bool TryReadAcknowledgment(
         ReadOnlySpan<byte> datagram,
@@ -88,9 +86,9 @@ public static class TftpPacketReader
     }
 
     /// <summary>
-    ///     This method attempts to decode an Error packet's own code and message -- used only to
-    ///     recognize a client-initiated transfer abort mid-transfer, never acted on beyond
-    ///     logging it and stopping.
+    ///     This method attempts to decode the code and message of an Error packet. The server uses
+    ///     it to notice a client aborting a transfer. A message without a NUL terminator is
+    ///     returned as <see langword="null" />.
     /// </summary>
     public static bool TryReadError(
         ReadOnlySpan<byte> datagram,

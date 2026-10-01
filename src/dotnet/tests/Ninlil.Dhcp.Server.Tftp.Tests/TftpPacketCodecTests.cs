@@ -5,9 +5,10 @@ using Ninlil.Dhcp.Server.Tftp.Wire;
 namespace Ninlil.Dhcp.Server.Tftp.Tests;
 
 /// <summary>
-///     This test covers <see cref="TftpPacketReader" />/<see cref="TftpPacketWriter" /> -- the
-///     RFC 1350 wire codec -- with exhaustive in-memory round trips, including every
-///     malformed/truncated-input shape.
+///     This class tests the TFTP codec, <see cref="TftpPacketReader" /> and
+///     <see cref="TftpPacketWriter" />, in memory: decoding requests, Acknowledgments and Errors,
+///     round trips through the writer, and rejection of empty, truncated, unterminated and
+///     wrong-opcode input.
 /// </summary>
 public sealed class TftpPacketCodecTests
 {
@@ -50,7 +51,7 @@ public sealed class TftpPacketCodecTests
     [Fact]
     public void TryReadRequest_RejectsAMissingFilenameTerminator()
     {
-        // Opcode (RRQ) plus a filename with no terminating NUL at all.
+        // RRQ opcode and a filename with no terminating NUL.
         byte[] datagram = [0x00, 0x01, .. Encoding.ASCII.GetBytes("no-terminator")];
 
         Assert.False(TftpPacketReader.TryReadRequest(datagram, out _, out string reason));
@@ -79,7 +80,7 @@ public sealed class TftpPacketCodecTests
         byte[] block = [1, 2, 3, 4, 5];
         byte[] dataPacket = TftpPacketWriter.WriteData(7, block);
 
-        // The opcode/block-number header is fixed-shape; slice past it to confirm the payload.
+        // Skip the 4-byte opcode and block number header to check the payload.
         Assert.Equal((byte)0, dataPacket[0]);
         Assert.Equal((byte)3, dataPacket[1]);
         Assert.Equal(block, dataPacket[4..]);
@@ -141,9 +142,8 @@ public sealed class TftpPacketCodecTests
     }
 
     /// <summary>
-    ///     This method builds a raw RRQ/WRQ datagram directly (not through
-    ///     <see cref="TftpPacketWriter" />, which deliberately never encodes a request -- this
-    ///     server only ever decodes one).
+    ///     This method builds a raw RRQ or WRQ datagram by hand, since
+    ///     <see cref="TftpPacketWriter" /> does not encode requests.
     /// </summary>
     private static byte[] BuildRequest(TftpOpcodeEnum opcode, string filename, string mode) =>
         [

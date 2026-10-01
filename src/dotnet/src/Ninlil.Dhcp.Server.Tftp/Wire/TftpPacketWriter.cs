@@ -5,17 +5,15 @@ using System.Text;
 namespace Ninlil.Dhcp.Server.Tftp.Wire;
 
 /// <summary>
-///     This class encodes the two TFTP packet shapes this server ever sends as part of a normal
-///     file transfer (Data, Acknowledgment is never sent by a server) plus Error -- this server
-///     never needs to encode a Request packet, since it never originates one.
+///     This class encodes the two TFTP packets a read-only server sends: Data and Error. It does
+///     not encode requests or Acknowledgments, which only a client sends to this server.
 /// </summary>
 public static class TftpPacketWriter
 {
     /// <summary>
-    ///     This method encodes a Data packet -- opcode, block number, and up to 512 bytes of
-    ///     file content (RFC 1350 Section 5's own per-block size cap; a shorter final block, or
-    ///     an empty one for a file whose length is an exact multiple of 512, signals end of
-    ///     transfer).
+    ///     This method encodes a Data packet: opcode, block number and the block content. The
+    ///     caller keeps the content to 512 bytes; a shorter block, possibly empty, marks the end of
+    ///     the transfer.
     /// </summary>
     public static byte[] WriteData(ushort blockNumber, ReadOnlySpan<byte> blockData)
     {
@@ -27,7 +25,8 @@ public static class TftpPacketWriter
     }
 
     /// <summary>
-    ///     This method encodes an Error packet.
+    ///     This method encodes an Error packet: opcode, error code and a NUL-terminated ASCII
+    ///     message. Non-ASCII characters become <c>?</c>.
     /// </summary>
     public static byte[] WriteError(TftpErrorCodeEnum errorCode, string errorMessage)
     {
@@ -37,8 +36,7 @@ public static class TftpPacketWriter
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), (ushort)errorCode);
         messageBytes.CopyTo(packet.AsSpan(4));
 
-        // The trailing NUL terminator is already present -- `new byte[]` zero-initializes, and
-        // the array is exactly one byte longer than messageBytes for it.
+        // The NUL terminator is the array's last byte, which is already zero.
         return packet;
     }
 }

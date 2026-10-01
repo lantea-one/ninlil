@@ -10,144 +10,94 @@ using Ninlil.Dhcp.Server.Tftp.Wire;
 namespace Ninlil.Dhcp.Server.Tftp;
 
 /// <summary>
-///     This class is Ninlil's real RFC 1350 TFTP server -- the "bundled read-only TFTP server"
-///     half of this project's own dnsmasq feature-checklist research finding for Phase 14
-///     (delivering a PXE client's own boot file, most commonly), matching its scope exactly:
-///     read requests only. A Write Request always receives an Access Violation error; this
-///     server never accepts an upload, and never needs write access to its own configured
-///     <see cref="TftpServerOptions.RootDirectory" /> at all.
+///     This class is Ninlil's read-only TFTP server (RFC 1350), mainly for delivering PXE boot
+///     files. It serves Read Requests only; a Write Request gets an Access Violation error, so the
+///     server never needs write access to <see cref="TftpServerOptions.RootDirectory" />.
 ///     <para>
-///         <b>Architecture</b>: mirrors <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>'s own
-///         shape for the one initial receive loop (a single socket bound to the configured
-///         listening port, gated by its own <see cref="TftpServerOptions.Enable" /> flag) but
-///         diverges from it after that: RFC 1350 Section 4's own transfer-ID mechanism has every
-///         individual file transfer proceed over its own separate, freshly-bound, OS-assigned
-///         ephemeral UDP socket, entirely independent of the main listening socket and of every
-///         other concurrent transfer's own socket -- so each Read Request this server accepts
-///         spawns its own detached transfer task with its own socket, never sharing one.
+///         <b>Sockets.</b> One socket on <see cref="TftpServerOptions.Port" /> receives requests,
+///         as in <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>. Under RFC 1350's transfer
+///         ID scheme (Section 4), each transfer then runs on a new socket with an ephemeral port,
+///         so every accepted request gets a separate socket and background task.
 ///     </para>
 ///     <para>
-///         <b>Only octet (binary) transfer mode is supported</b> -- a Read Request naming
-///         <c>netascii</c> or <c>mail</c> is rejected with an Illegal Operation error. A boot
-///         file (or any other file this server plausibly serves) is always binary; RFC 1350's own
-///         <c>netascii</c> mode exists for portable *text* file transfer between hosts with
-///         different native newline conventions, a need this server's own real-world use case
-///         never has, so implementing that translation would be real, untested complexity this
-///         project's own scope discipline does not justify adding.
+///         <b>Octet mode only.</b> A request for <c>netascii</c> or <c>mail</c> gets an Illegal
+///         Operation error. Boot files are binary, and <c>netascii</c> exists only to translate
+///         text line endings between hosts. TFTP options (RFC 2347, such as <c>blksize</c> and
+///         <c>tsize</c>) are ignored, so every transfer uses 512-byte blocks.
 ///     </para>
 ///     <para>
-///         <b>Path confinement</b>: <see cref="TryResolveRequestedFile" /> combines a request's
-///         own filename with the configured root directory and re-resolves the result via
-///         <see cref="Path.GetFullPath(string)" />, rejecting outright any request naming an
-///         absolute path or whose resolved path does not fall strictly within that root -- the
-///         one and only defensive check a read-only file server serving arbitrary client-supplied
-///         paths absolutely cannot skip.
+///         <b>Path confinement.</b> <see cref="TryResolveRequestedFile" /> rejects absolute paths,
+///         combines the filename with the root directory, normalizes the result with
+///         <see cref="Path.GetFullPath(string)" /> and rejects anything outside the root. The check
+///         works on the path text only; symbolic links inside the root are followed.
 ///     </para>
 ///     <para>
-///         <b>This class is a genuinely restartable <see cref="IDhcpProtocolService" /></b>, not a
-///         <see cref="Microsoft.Extensions.Hosting.BackgroundService" /> -- <see cref="StartAsync" />/
-///         <see cref="StopAsync" /> can be called repeatedly, in either order, for the rest of this
-///         process's life, each genuinely binding/releasing the main listening socket. It is
-///         registered as an ordinary dependency-injection singleton (never as an
-///         <see cref="Microsoft.Extensions.Hosting.IHostedService" /> itself) --
-///         <c>TftpServerHostedService</c> is the thin wrapper that starts this instance once,
-///         automatically, at host boot, only when <see cref="TftpServerOptions.Enable" /> is
-///         <see langword="true" />. <see cref="TftpServerOptions.RootDirectory" /> being blank or
-///         not actually existing is deliberately <b>not</b> a genuine start failure -- exactly as
-///         before this class became independently restartable, that precondition simply declines
-///         to bind (logged, <see cref="IsListening" /> stays <see langword="false" />,
-///         <see cref="StartAsync" /> returns normally) rather than throwing, the same "a real
-///         precondition is missing, so don't pretend to be running" posture
-///         <c>TransportListenersHealthCheck</c>'s own doc comment already documents for an
-///         analogous case elsewhere in this project (a transport that is enabled but declined to
-///         bind for a reason of its own) -- letting this one specific, plausibly-transient
-///         misconfiguration throw would crash this process's own startup outright whenever the
-///         thin hosted-service wrapper's boot-time auto-start calls this method with
-///         <see cref="TftpServerOptions.Enable" /> <see langword="true" /> but
-///         <see cref="TftpServerOptions.RootDirectory" /> not yet valid. A genuine socket-level
-///         bind failure (the configured port already in use, for instance) still propagates as a
-///         real exception, exactly like every other transport in this project.
+///         <b>Restartable.</b> The class is an <see cref="IDhcpProtocolService" />:
+///         <see cref="StartAsync" /> and <see cref="StopAsync" /> can be called any number of
+///         times, binding and releasing the listening socket each time. It is a plain singleton;
+///         <c>TftpServerHostedService</c> starts it at boot when
+///         <see cref="TftpServerOptions.Enable" /> is set. A blank or missing
+///         <see cref="TftpServerOptions.RootDirectory" /> is not an error: the server logs a
+///         warning, does not bind, and leaves <see cref="IsListening" /> false, so a bad path
+///         does not stop the host from booting. A failed bind, such as the port being in use,
+///         throws.
 ///     </para>
 ///     <para>
-///         <b>Design decision: a live <see cref="StopAsync" /> call aborts every in-flight transfer
-///         immediately, rather than letting it run to completion first.</b> This server's own real
-///         transfers (PXE boot files, most commonly) are short-lived, and
-///         <see cref="IDhcpProtocolService.StopAsync" />'s own documented contract is that it
-///         "returns only once ... so a caller ... can rely on the underlying port already being
-///         free" -- an operator-facing live stop that could instead block indefinitely behind an
-///         arbitrarily slow or stalled client's own transfer would violate that same deterministic
-///         contract. Every in-flight transfer this run dispatched shares this run's own
-///         cancellation token (through the same <c>stoppingToken</c> parameter
-///         <see cref="HandleRequestAsync" />/<see cref="TransferFileAsync" />/
-///         <see cref="SendWithRetriesAsync" /> already threaded through before this class became
-///         restartable), so cancelling it on <see cref="StopAsync" /> unblocks every transfer's own
-///         pending send/receive promptly and each one's own <c>using</c>-scoped per-transfer socket
-///         is released as that transfer's own task unwinds; <see cref="StopAsync" /> itself still
-///         waits for every such task to genuinely finish before returning, so no transfer is ever
-///         left running, or its socket left open, after a live stop completes.
+///         <b>Stopping aborts transfers.</b> <see cref="IDhcpProtocolService.StopAsync" /> promises
+///         that the port is free when it returns, so it cannot wait for a slow client. All
+///         transfers share the run's cancellation token. <see cref="StopAsync" /> cancels it,
+///         which unblocks every pending send and receive, and then waits for each transfer task to
+///         finish and release its socket.
 ///     </para>
 /// </summary>
-/// <param name="options">This server's own configured port, root directory, and retransmission policy.</param>
-/// <param name="logger">The logger this server records request/transfer failures to.</param>
+/// <param name="options">The port, root directory and retransmission settings.</param>
+/// <param name="logger">The logger request and transfer failures are recorded to.</param>
 public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<TftpServer> logger)
     : IDhcpProtocolService
 {
     /// <summary>
-    ///     This constant contains RFC 1350 Section 5's own per-block data size -- every Data
-    ///     packet this server sends carries exactly this many bytes, except the very last one of
-    ///     a transfer, which carries fewer (or zero, for a file whose length is an exact multiple
-    ///     of this) to signal that the transfer is complete.
+    ///     This constant contains the RFC 1350 data block size. Every Data packet carries this
+    ///     many bytes except the last, which carries fewer (zero when the file length is a
+    ///     multiple of 512) to mark the end of the transfer.
     /// </summary>
     private const int BlockSize = 512;
 
     /// <summary>
-    ///     This constant contains the largest datagram this server ever expects to receive as an
-    ///     incoming Read/Write Request, Acknowledgment, or Error -- generously larger than any of
-    ///     those three genuinely need (an Acknowledgment is 4 bytes; even a request with an
-    ///     implausibly long filename fits comfortably).
+    ///     This constant contains the receive buffer size for requests, Acknowledgments and
+    ///     Errors. An Acknowledgment is 4 bytes and a request is a filename and mode, so 1024 is
+    ///     ample; a longer datagram is truncated.
     /// </summary>
     private const int MaximumControlDatagramSize = 1024;
 
     /// <summary>
-    ///     This lock serializes every <see cref="StartAsync" />/<see cref="StopAsync" /> call
-    ///     against each other -- the same reasoning
-    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6UdpListener._lifecycleLock</c>'s own doc comment
-    ///     gives.
+    ///     This lock serializes <see cref="StartAsync" /> and <see cref="StopAsync" />, as in
+    ///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6UdpListener._lifecycleLock</c>.
     /// </summary>
     private readonly Lock _lifecycleLock = new();
 
     /// <summary>
-    ///     This field contains every in-flight transfer task this run's own receive loop has
-    ///     dispatched (keyed by the task itself, the value unused) -- tracked so
-    ///     <see cref="StopAsync" /> can genuinely wait for every one of them to finish (they all
-    ///     share this run's own cancellation token, so this resolves promptly once cancelled) --
-    ///     see this class's own doc comment for why a live stop aborts an in-flight transfer
-    ///     rather than letting it run to completion.
+    ///     This field contains the in-flight transfer tasks, used as a set (the value is unused),
+    ///     so <see cref="StopAsync" /> can wait for them after cancelling them.
     /// </summary>
     private readonly ConcurrentDictionary<Task, byte> _activeTransferTasks = new();
 
     private Socket _socket;
 
     /// <summary>
-    ///     This field contains the cancellation source that owns the currently running receive
-    ///     loop's own lifetime (and, through the same token, every in-flight transfer task it has
-    ///     dispatched), cancelled by <see cref="StopAsync" /> to unblock the loop's own pending
-    ///     receive call and every transfer's own pending send/receive, signalling all of them to
-    ///     exit.
+    ///     This field contains the cancellation source for the current run. Its token is passed to
+    ///     the receive loop and every transfer, and <see cref="StopAsync" /> cancels it to stop
+    ///     them all.
     /// </summary>
     private CancellationTokenSource _receiveLoopCts;
 
     /// <summary>
-    ///     This field contains the currently running receive loop's own task, awaited by
-    ///     <see cref="StopAsync" /> to confirm the loop has genuinely exited (and, with it, that no
-    ///     further use of <see cref="_socket" /> is still in flight) before that socket is
-    ///     disposed.
+    ///     This field contains the receive loop task. <see cref="StopAsync" /> awaits it so the
+    ///     loop is no longer using <see cref="_socket" /> when the socket is disposed.
     /// </summary>
     private Task _receiveLoopTask;
 
     /// <summary>
-    ///     This property reports whether this server's own listening socket is currently bound
-    ///     and accepting requests.
+    ///     This property reports whether the listening socket is bound and accepting requests.
     /// </summary>
     public bool IsListening { get; private set; }
 
@@ -155,10 +105,9 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     bool IDhcpProtocolService.IsRunning => IsListening;
 
     /// <summary>
-    ///     This property contains the port this server's own listening socket actually bound to
-    ///     -- the same as <see cref="TftpServerOptions.Port" /> in production, but lets a test
-    ///     configure <c>Port = 0</c> (an OS-assigned ephemeral port) and read back which one it
-    ///     actually got.
+    ///     This property contains the port the listening socket is bound to, or 0 when stopped.
+    ///     It equals <see cref="TftpServerOptions.Port" /> unless that is 0, which tests use to get
+    ///     an ephemeral port.
     /// </summary>
     public int BoundPort { get; private set; }
 
@@ -170,14 +119,11 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
 
         lock (_lifecycleLock)
         {
-            // Calling Start while already running is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Starting while running does nothing (see IDhcpProtocolService).
             if (IsListening)
                 return Task.CompletedTask;
 
-            // A blank/nonexistent RootDirectory is a real, plausibly-transient precondition
-            // failure, deliberately not a thrown exception -- see this class's own doc comment
-            // for why.
+            // A blank or missing RootDirectory is logged, not thrown (see the class summary).
             if (string.IsNullOrWhiteSpace(options.Value.RootDirectory))
             {
                 logger.LogWarning(
@@ -214,9 +160,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
             catch
             {
-                // A genuine bind failure (the port already in use, for instance) must leave this
-                // service reporting IsListening = false, not half-started -- propagate the
-                // exception to the caller rather than swallowing it.
+                // Leave the service stopped, not half-started, and let the caller see the error.
                 socket.Dispose();
                 throw;
             }
@@ -251,8 +195,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
 
         lock (_lifecycleLock)
         {
-            // Calling Stop while already stopped is a safe, harmless no-op -- see this class's
-            // own doc comment and IDhcpProtocolService's.
+            // Stopping while stopped does nothing (see IDhcpProtocolService).
             if (!IsListening)
                 return;
 
@@ -267,9 +210,8 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             BoundPort = 0;
         }
 
-        // Cancel the loop's (and, through the same token, every in-flight transfer's) own
-        // cancellation source and close the main listening socket -- closing it is what actually
-        // unblocks a pending ReceiveFromAsync call on it.
+        // Cancel the loop and all transfers, and close the listening socket so a pending
+        // ReceiveFromAsync returns.
         await receiveLoopCts.CancelAsync();
         socket.Close();
 
@@ -281,16 +223,13 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
             catch (OperationCanceledException)
             {
-                // Either this call's own cancellationToken fired while waiting, or the loop task
-                // itself completed via cancellation -- either way, the loop has stopped touching
-                // the main socket by the time this method returns.
+                // Either the caller's token fired while waiting or the loop ended by
+                // cancellation. Carry on with the cleanup either way.
             }
         }
 
-        // Wait for every in-flight transfer this run dispatched to genuinely finish -- see this
-        // class's own doc comment for why a live stop aborts them (via the same cancelled token)
-        // rather than letting them run to completion, and why this method still waits for that
-        // abort to actually land before returning.
+        // Wait for the cancelled transfers to finish and close their sockets (see the class
+        // summary).
         Task[] outstandingTransfers = [.. _activeTransferTasks.Keys];
 
         if (outstandingTransfers.Length > 0)
@@ -301,8 +240,8 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
             catch (OperationCanceledException)
             {
-                // Same reasoning as above -- every transfer shares the same cancelled token, so
-                // this resolves promptly regardless.
+                // Only the caller's token can end the wait early; transfers catch the
+                // cancellation themselves.
             }
         }
 
@@ -313,13 +252,11 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method runs one start/stop cycle's own receive loop -- mirroring
-    ///     <c>Dhcpv6UdpListener.RunReceiveLoopAsync</c>'s own "pass every socket/cancellation value
-    ///     explicitly rather than read it back off this instance's own fields" discipline, so a
-    ///     stale field from a previous cycle can never leak into a currently running loop. Every
-    ///     accepted request is dispatched as its own detached, tracked transfer task (see
-    ///     <see cref="_activeTransferTasks" />) -- this loop must never block on one client's own,
-    ///     possibly slow or unresponsive, transfer.
+    ///     This method runs the receive loop for one start/stop cycle. The socket, root directory
+    ///     and token are passed in, not read from fields, so a later cycle's values cannot leak
+    ///     in, as in <c>Dhcpv6UdpListener.RunReceiveLoopAsync</c>. Each datagram is handled by a
+    ///     tracked background task (see <see cref="_activeTransferTasks" />), so a slow client
+    ///     does not block the loop. There is no limit on concurrent transfers.
     /// </summary>
     private async Task RunReceiveLoopAsync(
         Socket socket,
@@ -361,10 +298,8 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             byte[] datagram = receiveBuffer[..result.ReceivedBytes];
             IPEndPoint clientEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
-            // Every request gets its own detached, tracked transfer task, per this class's own
-            // doc comment -- the main receive loop above must never block on one client's own,
-            // possibly slow or unresponsive, transfer, but StopAsync must still be able to wait
-            // for every one of them to genuinely finish.
+            // Not awaited, so the loop can take the next request; tracked so StopAsync can wait.
+            // HandleRequestAsync runs on this thread until its first await.
             Task transferTask = HandleRequestAsync(
                 datagram,
                 clientEndPoint,
@@ -380,11 +315,11 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method handles a single decoded Read/Write Request end to end: validating the
-    ///     request itself, then (for a Read Request naming a real, in-root file) transferring
-    ///     that file's own content over a fresh, per-transfer socket. Every exception (other than
-    ///     cancellation) is caught and logged -- one client's own malformed request or failed
-    ///     transfer must never affect any other.
+    ///     This method handles one datagram from the listening socket. It decodes the request,
+    ///     answers with an Error packet when the request is a write, uses another mode than octet,
+    ///     names a path outside the root or names a missing file, and otherwise sends the file.
+    ///     Every reply goes from a new per-transfer socket. All exceptions are caught and logged,
+    ///     so one bad request cannot affect another.
     /// </summary>
     private async Task HandleRequestAsync(
         byte[] datagram,
@@ -484,11 +419,8 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
         }
         catch (OperationCanceledException)
         {
-            // A live StopAsync call cancelled this transfer's own shared token -- see this
-            // class's own doc comment for why a live stop aborts an in-flight transfer rather
-            // than letting it run to completion. This is caught here, rather than left to
-            // propagate out of this method's own detached task, so that task always completes
-            // successfully (never faulted) regardless of how far the transfer had gotten.
+            // StopAsync cancelled the run (see the class summary). Catching it here means the
+            // task always completes normally instead of ending cancelled.
             logger.LogDebug(
                 "Aborted an in-flight TFTP transfer to {RemoteEndPoint}: the TFTP server was stopped.",
                 clientEndPoint
@@ -505,9 +437,9 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method transfers one file's own content, one 512-byte block at a time, over an
-    ///     already-bound per-transfer socket, per RFC 1350 Section 2's own "lock-step"
-    ///     data/acknowledgment exchange.
+    ///     This method sends a file in 512-byte blocks over the per-transfer socket, waiting for
+    ///     each block to be acknowledged before sending the next (the lock-step exchange of RFC
+    ///     1350). Block numbers start at 1 and wrap from 65535 to 0 on files over about 32 MB.
     /// </summary>
     private async Task TransferFileAsync(
         Socket transferSocket,
@@ -554,14 +486,16 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method sends one Data block, waiting for its own matching Acknowledgment,
-    ///     retransmitting on a timeout up to <see cref="TftpServerOptions.MaxRetransmissions" />
-    ///     times.
+    ///     This method sends one Data block and waits for its Acknowledgment, resending after each
+    ///     <see cref="TftpServerOptions.RetransmitTimeout" /> up to
+    ///     <see cref="TftpServerOptions.MaxRetransmissions" /> times. Packets from other endpoints,
+    ///     duplicate Acknowledgments and other packets are ignored without resending, which
+    ///     avoids the Sorcerer's Apprentice problem.
     /// </summary>
     /// <returns>
-    ///     <see langword="true" /> if the client acknowledged this exact block;
-    ///     <see langword="false" /> if every retransmission attempt timed out, or the client sent
-    ///     an Error packet aborting the transfer.
+    ///     <see langword="true" /> if the client acknowledged this block;
+    ///     <see langword="false" /> if every attempt timed out or the client sent an Error
+    ///     packet.
     /// </returns>
     private async Task<bool> SendWithRetriesAsync(
         Socket transferSocket,
@@ -591,9 +525,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                         timeoutCts.Token
                     );
 
-                    // A packet from anyone other than this exact transfer's own client is a
-                    // stray, unrelated datagram -- keep waiting within this same attempt's
-                    // timeout window rather than treating it as this block's own answer.
+                    // Not from this transfer's client: ignore it and keep waiting.
                     if (!clientEndPoint.Equals(result.RemoteEndPoint))
                         continue;
 
@@ -610,8 +542,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                         if (acknowledgedBlockNumber == blockNumber)
                             return true;
 
-                        // A stale acknowledgment for an earlier block (a duplicate the client
-                        // re-sent, most plausibly) -- keep waiting for the right one.
+                        // An Acknowledgment for an earlier block, usually a duplicate.
                         continue;
                     }
 
@@ -633,7 +564,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                         return false;
                     }
 
-                    // Anything else is not a packet this transfer cares about -- keep waiting.
+                    // Anything else is ignored.
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -642,7 +573,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
             catch (OperationCanceledException)
             {
-                // This attempt's own retransmit timeout elapsed -- fall through and resend.
+                // The retransmit timeout elapsed; resend.
             }
         }
 
@@ -650,8 +581,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method sends an Error packet, logging (rather than throwing) if the send itself
-    ///     fails.
+    ///     This method sends an Error packet, logging instead of throwing if the send fails.
     /// </summary>
     private async Task SendErrorAsync(
         Socket transferSocket,
@@ -678,10 +608,9 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method reads up to <see cref="BlockSize" /> bytes from a file stream, looping
-    ///     until either the buffer is full or the stream is exhausted -- a single
-    ///     <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)" /> call is not guaranteed
-    ///     to fill its whole buffer even when more data remains.
+    ///     This method fills the buffer from the stream, stopping early only at end of file. A
+    ///     single <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)" /> call may return
+    ///     fewer bytes even when more remain, and a short block would end the transfer.
     /// </summary>
     private static async Task<int> ReadFullBlockAsync(
         FileStream stream,
@@ -708,11 +637,10 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     }
 
     /// <summary>
-    ///     This method resolves a request's own filename against the configured root directory,
-    ///     rejecting an absolute path outright and re-confirming (via
-    ///     <see cref="Path.GetFullPath(string)" />) that the combined, resolved path still falls
-    ///     strictly within that root -- see this class's own doc comment for why this check can
-    ///     never be skipped.
+    ///     This method resolves a requested filename inside the root directory. It rejects an
+    ///     empty name and an absolute path (including a leading <c>/</c>), and rejects a path that
+    ///     <see cref="Path.GetFullPath(string)" /> resolves to outside the root, for example
+    ///     through <c>..</c> segments. Symbolic links are not resolved.
     /// </summary>
     private static bool TryResolveRequestedFile(
         string rootDirectoryWithTrailingSeparator,

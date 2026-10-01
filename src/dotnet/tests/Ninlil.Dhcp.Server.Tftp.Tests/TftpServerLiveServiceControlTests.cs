@@ -9,15 +9,14 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Server.Tftp.Tests;
 
 /// <summary>
-///     This test proves <see cref="TftpServer" /> is a genuinely restartable
-///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c> -- the TFTP analogue of
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c>/
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6LiveServiceControlTests</c>, with the same real
-///     start -&gt; answer -&gt; stop -&gt; confirm-truly-stopped -&gt; start-again-on-the-same-port
-///     -&gt; answer-again cycle, plus this server's own distinct concern (unlike a plain UDP
-///     datagram listener): a live stop genuinely aborts an in-flight transfer promptly rather than
-///     waiting for it to finish -- see <see cref="TftpServer" />'s own doc comment for why that is
-///     this class's own deliberate design decision.
+///     This class tests that <see cref="TftpServer" /> can be started and stopped at runtime as a
+///     <c>Ninlil.Dhcp.Common.Control.IDhcpProtocolService</c>, like
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests.Dhcpv4LiveServiceControlTests</c> and
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests.Dhcpv6LiveServiceControlTests</c>. One test runs start,
+///     download, stop, check that nothing answers, start again on the same port and download
+///     again, over loopback UDP with files in a temporary root directory. The other checks that
+///     stopping aborts a stalled transfer instead of waiting for it (see
+///     <see cref="TftpServer" />).
 /// </summary>
 public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
 {
@@ -59,29 +58,27 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         };
         TftpServer server = new(Options.Create(options), NullLogger<TftpServer>.Instance);
 
-        // First cycle: start, confirm a real download succeeds.
+        // First cycle: start and download.
         await server.StartAsync(CancellationToken.None);
         Assert.True(server.IsListening);
         Assert.Equal(port, server.BoundPort);
         Assert.Equal(content, await TryDownloadAsync(port, "boot.bin"));
 
-        // A second Start call while already running must be a safe no-op, not a crash or a
-        // second bind attempt on the same port.
+        // Starting again while running does nothing; no second bind.
         await server.StartAsync(CancellationToken.None);
         Assert.True(server.IsListening);
 
-        // Stop: the socket must genuinely be released -- a request sent while stopped must
-        // receive no reply at all.
+        // Stop: a request sent while stopped gets no reply.
         await server.StopAsync(CancellationToken.None);
         Assert.False(server.IsListening);
         Assert.Null(await TryDownloadAsync(port, "boot.bin"));
 
-        // A second Stop call while already stopped must also be a safe no-op.
+        // Stopping again while stopped does nothing.
         await server.StopAsync(CancellationToken.None);
         Assert.False(server.IsListening);
 
-        // Second cycle: start again, on the exact same port -- this only succeeds if StopAsync
-        // genuinely released the socket rather than merely stopping the receive loop.
+        // Second cycle: start on the same port, which works only if StopAsync released the
+        // socket.
         await server.StartAsync(CancellationToken.None);
 
         try
@@ -97,19 +94,16 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This test proves the design decision documented on <see cref="TftpServer" /> itself: a
-    ///     live <see cref="TftpServer.StopAsync" /> call aborts an in-flight transfer promptly,
-    ///     rather than blocking until that transfer's own (here, deliberately very long)
-    ///     retransmit window naturally elapses.
+    ///     This test checks that <see cref="TftpServer.StopAsync" /> aborts a transfer in progress
+    ///     promptly instead of waiting out its 30-second retransmit timeout.
     /// </summary>
     [Fact]
     public async Task StopAsync_WithAnInFlightTransfer_AbortsItPromptlyRatherThanWaitingForIt()
     {
         int port = GetFreeUdpPort();
 
-        // A file spanning several blocks, so the client can receive the first one and
-        // deliberately withhold its own Acknowledgment, leaving the server genuinely mid-transfer
-        // when Stop is called.
+        // Three blocks, so the client can receive the first, withhold its Acknowledgment and
+        // leave the server mid-transfer when Stop is called.
         byte[] content = new byte[1500];
         Random.Shared.NextBytes(content);
         File.WriteAllBytes(Path.Combine(_rootDirectory, "slow.bin"), content);
@@ -119,8 +113,7 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
             Enable = true,
             Port = port,
             RootDirectory = _rootDirectory,
-            // Deliberately long -- this test proves StopAsync does not wait anywhere near this
-            // long for the stalled client's own retransmission window to elapse.
+            // Long, so a stop that waited for the timeout would be obvious.
             RetransmitTimeout = TimeSpan.FromSeconds(30),
             MaxRetransmissions = 5,
         };
@@ -131,9 +124,8 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         IPEndPoint serverEndPoint = new(IPAddress.Loopback, port);
         await client.SendAsync(BuildReadRequest("slow.bin"), serverEndPoint);
 
-        // Receive the first block, but never acknowledge it -- the server's own transfer task is
-        // now genuinely blocked inside SendWithRetriesAsync, waiting on an Acknowledgment that
-        // will never come, well within its own 30-second retransmit window.
+        // Receive the first block without acknowledging it. The transfer task now waits in
+        // SendWithRetriesAsync for an Acknowledgment that never comes.
         UdpReceiveResult firstBlock = await client
             .ReceiveAsync()
             .WaitAsync(TimeSpan.FromSeconds(5));
@@ -145,16 +137,14 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
 
         Assert.False(server.IsListening);
 
-        // Nowhere near the 30-second retransmit window this transfer was genuinely blocked
-        // inside -- proving the stop aborted it rather than waiting it out.
+        // Far below the 30-second timeout, so the stop aborted the transfer.
         Assert.True(
             stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"StopAsync took {stopwatch.Elapsed}, which suggests it waited for the stalled "
                 + "transfer to finish naturally instead of aborting it."
         );
 
-        // No further block ever arrives -- the transfer genuinely never resumes after the stop,
-        // and the per-transfer socket was genuinely released rather than left dangling.
+        // No further block or retransmission arrives after the stop.
         using CancellationTokenSource noMoreDataTimeout = new(TimeSpan.FromMilliseconds(500));
 
         await Assert.ThrowsAnyAsync<Exception>(async () =>
@@ -163,10 +153,10 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method drives one real RRQ-DATA-ACK exchange for a whole file, over a fresh client
-    ///     socket, returning the reassembled content, or <see langword="null" /> if nothing
-    ///     answers at all within a short, bounded timeout -- the correct observable outcome of the
-    ///     server being stopped.
+    ///     This method downloads a whole file with a minimal TFTP client on a new socket and
+    ///     returns the content. It returns <see langword="null" /> if a block does not arrive
+    ///     within a second, which is the expected result when the server is stopped, or if a
+    ///     block arrives out of order.
     /// </summary>
     private static async Task<byte[]> TryDownloadAsync(int port, string filename)
     {
@@ -186,9 +176,8 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
                     .ReceiveAsync()
                     .WaitAsync(TimeSpan.FromSeconds(1));
 
-                // Every block transfer arrives from the server's own fresh, per-transfer
-                // ephemeral port, per RFC 1350 Section 4 -- follow it there for every subsequent
-                // Acknowledgment, not the original listening port.
+                // Blocks come from the per-transfer port (RFC 1350 Section 4), so acknowledge
+                // there, not to the listening port.
                 IPEndPoint transferEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
                 ushort blockNumber = (ushort)((result.Buffer[2] << 8) | result.Buffer[3]);
@@ -227,8 +216,8 @@ public sealed class TftpServerLiveServiceControlTests : IAsyncLifetime
         ];
 
     /// <summary>
-    ///     This method obtains a currently-unused, unprivileged UDP port -- the same approach
-    ///     <c>Dhcpv4LiveServiceControlTests.GetFreeUdpPort</c> already establishes.
+    ///     This method returns a free UDP port by binding to port 0 and releasing it, as in
+    ///     <c>Dhcpv4LiveServiceControlTests.GetFreeUdpPort</c>.
     /// </summary>
     private static int GetFreeUdpPort()
     {

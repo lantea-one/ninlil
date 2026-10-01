@@ -8,15 +8,11 @@ using Ninlil.Dhcp.Server.Tftp.Wire;
 namespace Ninlil.Dhcp.Server.Tftp.Tests;
 
 /// <summary>
-///     This test proves the real <see cref="TftpServer" /> against real UDP sockets end to end:
-///     a genuine multi-block file transfer, a Write Request rejection, a non-octet mode
-///     rejection, a file-not-found error, and a path-traversal rejection -- the same "prove it
-///     with real sockets, on a dynamically-chosen unprivileged port" discipline
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c> already establishes for the DHCPv4 transport
-///     (this server's own real, privileged, well-known port -- 69 -- is proven bindable
-///     separately, the same way DHCPv4's own ports 67/68 were, via a throwaway root-run
-///     scratchpad rather than a committed test, since an automated test suite does not run as
-///     root).
+///     This class tests <see cref="TftpServer" /> end to end over loopback UDP: transfers of one
+///     block, several blocks and exactly 512 bytes, and the errors for a missing file, a
+///     <c>..</c> path, a Write Request and a non-octet mode. Each test class instance starts a
+///     server on an ephemeral port with a temporary root directory. Port 69 is privileged and
+///     is not used, since the tests do not run as root.
 /// </summary>
 public sealed class TftpServerRoundTripTests : IAsyncLifetime
 {
@@ -43,8 +39,7 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
         _server = new TftpServer(Options.Create(options), NullLogger<TftpServer>.Instance);
         await _server.StartAsync(CancellationToken.None);
 
-        // Wait for the server's own real socket bind to complete before any test sends it a
-        // request.
+        // Make sure the server is listening before any test sends a request.
         DateTime deadline = DateTime.UtcNow.AddSeconds(5);
         while (!_server.IsListening && DateTime.UtcNow < deadline)
             await Task.Delay(10);
@@ -75,8 +70,7 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task ReadRequest_ForAFileSpanningMultipleBlocks_TransfersEveryBlockInOrder()
     {
-        // 1500 bytes spans three 512-byte blocks (512 + 512 + 476), proving this server's own
-        // multi-block lock-step loop, not just the single-block special case.
+        // 1500 bytes is three blocks (512 + 512 + 476), exercising the lock-step loop.
         byte[] content = new byte[1500];
         Random.Shared.NextBytes(content);
         File.WriteAllBytes(Path.Combine(_rootDirectory, "large.bin"), content);
@@ -89,8 +83,8 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task ReadRequest_ForAFileExactlyOneBlockLong_SendsATrailingEmptyFinalBlock()
     {
-        // Exactly 512 bytes: RFC 1350 requires a final, empty Data block to signal end of
-        // transfer, since a full 512-byte block is otherwise ambiguous with "more data follows".
+        // Exactly 512 bytes: a full block means more data follows (RFC 1350), so the server must
+        // send an empty final block.
         byte[] content = new byte[512];
         Random.Shared.NextBytes(content);
         File.WriteAllBytes(Path.Combine(_rootDirectory, "exact.bin"), content);
@@ -124,7 +118,7 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
     [Fact]
     public async Task ReadRequest_WithAPathTraversalAttempt_ReturnsAccessViolation()
     {
-        // A sibling file genuinely outside the configured root directory.
+        // A file next to the root directory, outside it.
         string outsideFile = Path.Combine(Path.GetDirectoryName(_rootDirectory)!, "secret.txt");
         File.WriteAllText(outsideFile, "should never be served");
 
@@ -218,8 +212,8 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method drives a complete, real RRQ-DATA-ACK exchange for one file, from a fresh
-    ///     client socket, and returns the file's own reassembled content.
+    ///     This method downloads one file with a minimal TFTP client on a new socket and returns
+    ///     the content.
     /// </summary>
     private async Task<byte[]> DownloadAsync(string filename)
     {
@@ -237,9 +231,8 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
                 .ReceiveAsync()
                 .WaitAsync(TimeSpan.FromSeconds(5));
 
-            // Every block transfer arrives from the server's own fresh, per-transfer ephemeral
-            // port, per RFC 1350 §4 -- this test's own client socket must follow it there for
-            // every subsequent Acknowledgment, not keep addressing the original listening port.
+            // Blocks come from the per-transfer port (RFC 1350 Section 4), so acknowledge there,
+            // not to the listening port.
             IPEndPoint transferEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
             ushort blockNumber = ReadBlockNumber(result.Buffer);
