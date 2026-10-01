@@ -5,18 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientListAssignments;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientListAssignmentDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="ClientListAssignmentDetail" />, as returned by
 ///     <see cref="Controllers.ClientListAssignmentsController.List" />.
 /// </summary>
 public class ClientListAssignmentDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientListAssignmentDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two assignments for the "Living Room TV" client -- the
-    ///     subscribed "Hagezi Pro Blocklist" <see cref="ClientListAssignmentDetailExample" />
-    ///     already shows, plus the local "Internal Allowlist", together demonstrating that a
-    ///     client may hold more than one direct assignment at once.
+    ///     This method returns two direct assignments for the "Living Room TV" client, the "Hagezi
+    ///     Pro Blocklist" from <see cref="ClientListAssignmentDetailExample" /> and the local
+    ///     "Internal Allowlist", showing that a client can hold several.
     /// </summary>
     public PagedResult<ClientListAssignmentDetail> GetExamples() =>
         new(

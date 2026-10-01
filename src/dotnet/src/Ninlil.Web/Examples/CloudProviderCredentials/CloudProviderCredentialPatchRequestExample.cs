@@ -5,23 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.CloudProviderCredentialsController.Patch" />'s own RFC 7396 JSON
-///     Merge Patch request body. The request parameter's own declared type is the generic
-///     <see cref="JsonElement" />, not a dedicated model class -- a field this project's merge
-///     patch endpoints leave out of the request body entirely is left untouched, which no
-///     strongly-typed C# model can represent.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.CloudProviderCredentialsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field, which is left as
+///     it is, from a present one; no typed model can express that.
 /// </summary>
 public class CloudProviderCredentialPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a metadata-only patch that omits <c>credentials</c> entirely,
-    ///     leaving the stored secret material completely untouched -- see
-    ///     <see cref="Controllers.CloudProviderCredentialsController.Patch" />'s own doc comment
-    ///     for the alternative shape (including <c>credentials</c> to rotate it atomically).
-    ///     <see cref="JsonDocument.RootElement" /> is cloned so the returned
-    ///     <see cref="JsonElement" /> stays valid independently of the parsed
-    ///     <see cref="JsonDocument" /> it originated from.
+    ///     This method returns a patch that changes only the comments and leaves out
+    ///     <c>credentials</c>, so the stored secrets stay as they are. Including <c>credentials</c>
+    ///     replaces them (see <see cref="Controllers.CloudProviderCredentialsController.Patch" />).
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

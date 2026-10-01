@@ -5,17 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroups;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientGroupDetail" />, referenced by
-///     <see cref="Controllers.ClientGroupsController.Get" /> and
+///     This class supplies the Swagger examples for <see cref="ClientGroupDetail" />, as returned
+///     by <see cref="Controllers.ClientGroupsController.Get" /> and
 ///     <see cref="Controllers.ClientGroupsController.Create" />.
 /// </summary>
 public class ClientGroupDetailExample : IMultipleExamplesProvider<ClientGroupDetail>
 {
     /// <summary>
-    ///     This method returns the same two groups <see cref="ClientGroupWriteRequestExample" />
-    ///     submits, as this server would report them back, each with its own identifier and
-    ///     timestamps.
+    ///     This method returns the two groups <see cref="ClientGroupWriteRequestExample" />
+    ///     submits, as the server reports them. The second is shown under an instant pause, with
+    ///     <c>IsCurrentlyPaused</c> set.
     /// </summary>
     public IEnumerable<SwaggerExample<ClientGroupDetail>> GetExamples() =>
         [

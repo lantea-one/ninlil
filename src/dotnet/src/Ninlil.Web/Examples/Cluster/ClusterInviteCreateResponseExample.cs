@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClusterInviteCreateResponse" />, referenced by
-///     <see cref="Controllers.ClusterController.CreateInvite" />.
+///     This class supplies the Swagger example for <see cref="ClusterInviteCreateResponse" />, as
+///     returned by <see cref="Controllers.ClusterController.CreateInvite" />.
 /// </summary>
 public class ClusterInviteCreateResponseExample : IExamplesProvider<ClusterInviteCreateResponse>
 {
     /// <summary>
-    ///     This method returns a freshly created, still-valid invite -- the real opaque code is
-    ///     shortened here for readability; a real one is considerably longer, carrying an entire
-    ///     base64url-encoded JSON payload.
+    ///     This method returns a new invite. The code is shortened for readability: a real one
+    ///     carries the whole base64url-encoded JSON payload, including the shared secret, and is
+    ///     much longer.
     /// </summary>
     public ClusterInviteCreateResponse GetExamples() =>
         new(

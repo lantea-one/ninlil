@@ -5,20 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroups;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientGroupWriteRequest" />, referenced by
-///     <see cref="Controllers.ClientGroupsController.Create" /> and
+///     This class supplies the Swagger examples for <see cref="ClientGroupWriteRequest" />, the
+///     request body of <see cref="Controllers.ClientGroupsController.Create" /> and
 ///     <see cref="Controllers.ClientGroupsController.Replace" />.
 /// </summary>
 public class ClientGroupWriteRequestExample : IMultipleExamplesProvider<ClientGroupWriteRequest>
 {
     /// <summary>
-    ///     This method returns two genuinely different group shapes -- the server-wide fallback
-    ///     group (<see cref="ClientGroupWriteRequest.IsDefault" /> <see langword="true" />) every
-    ///     client not matched by another group's own networks falls back to, and an ordinary,
-    ///     non-default group -- so a caller reading this example sees both shapes
-    ///     <see cref="Controllers.ClientGroupsController" />'s own "at most one default" rule
-    ///     applies to.
+    ///     This method returns the default fallback group
+    ///     (<see cref="ClientGroupWriteRequest.IsDefault" /> <see langword="true" />), which takes
+    ///     clients no other group's networks match, and an ordinary group. Only one group can be
+    ///     the default (see <see cref="Controllers.ClientGroupsController" />).
     /// </summary>
     public IEnumerable<SwaggerExample<ClientGroupWriteRequest>> GetExamples() =>
         [

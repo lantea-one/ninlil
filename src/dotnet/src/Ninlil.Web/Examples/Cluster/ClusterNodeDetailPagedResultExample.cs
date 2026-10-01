@@ -6,15 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClusterNodeDetail" />, referenced by
-///     <see cref="Controllers.ClusterController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ClusterNodeDetail" />, as
+///     returned by <see cref="Controllers.ClusterController.List" />.
 /// </summary>
 public class ClusterNodeDetailPagedResultExample : IExamplesProvider<PagedResult<ClusterNodeDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two peers -- a healthy one and an unreachable one, so
-    ///     a caller reading this example can see both statuses' own real shape.
+    ///     This method returns a page with a healthy peer and an unreachable one that has missed
+    ///     five heartbeats.
     /// </summary>
     public PagedResult<ClusterNodeDetail> GetExamples() =>
         new(

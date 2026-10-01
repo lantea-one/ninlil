@@ -5,17 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroups;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientGroupDetail" />, referenced by
-///     <see cref="Controllers.ClientGroupsController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ClientGroupDetail" />, as
+///     returned by <see cref="Controllers.ClientGroupsController.List" />.
 /// </summary>
 public class ClientGroupDetailPagedResultExample : IExamplesProvider<PagedResult<ClientGroupDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two groups -- the same default fallback group and
-    ///     non-default group <see cref="ClientGroupDetailExample" /> already shows individually,
-    ///     so a caller reading this example sees both shapes together, in the exact envelope a
-    ///     real list response carries.
+    ///     This method returns a page holding the default fallback group and the paused non-default
+    ///     group from <see cref="ClientGroupDetailExample" />.
     /// </summary>
     public PagedResult<ClientGroupDetail> GetExamples() =>
         new(

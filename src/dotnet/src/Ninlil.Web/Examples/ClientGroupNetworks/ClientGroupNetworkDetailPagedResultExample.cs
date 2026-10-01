@@ -5,18 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupNetworks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientGroupNetworkDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="ClientGroupNetworkDetail" />, as returned by
 ///     <see cref="Controllers.ClientGroupNetworksController.List" />.
 /// </summary>
 public class ClientGroupNetworkDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientGroupNetworkDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the same IPv4 and IPv6 networks
-    ///     <see cref="ClientGroupNetworkDetailExample" /> already shows individually, so a caller
-    ///     reading this example sees both address families together, in the exact envelope a real
-    ///     list response carries.
+    ///     This method returns a page holding the IPv4 and IPv6 networks from
+    ///     <see cref="ClientGroupNetworkDetailExample" />.
     /// </summary>
     public PagedResult<ClientGroupNetworkDetail> GetExamples() =>
         new(

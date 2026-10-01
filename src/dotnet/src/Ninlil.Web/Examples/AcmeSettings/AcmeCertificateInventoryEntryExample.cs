@@ -5,15 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AcmeSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a single
-///     <see cref="AcmeCertificateInventoryEntry" />, referenced by
-///     <see cref="Controllers.AcmeSettingsController.IssueOrRenewNow" />'s own response.
+///     This class supplies the Swagger example for one
+///     <see cref="AcmeCertificateInventoryEntry" />, as returned by
+///     <see cref="Controllers.AcmeSettingsController.IssueOrRenewNow" />.
 /// </summary>
 public class AcmeCertificateInventoryEntryExample : IExamplesProvider<AcmeCertificateInventoryEntry>
 {
     /// <summary>
-    ///     This method returns a domain whose manual "issue now" request just succeeded: a fresh
-    ///     certificate, not due for renewal, with no recorded failure.
+    ///     This method returns a domain whose "issue now" request has just succeeded: a new
+    ///     certificate, not due for renewal, with no failure recorded.
     /// </summary>
     public AcmeCertificateInventoryEntry GetExamples() =>
         new(

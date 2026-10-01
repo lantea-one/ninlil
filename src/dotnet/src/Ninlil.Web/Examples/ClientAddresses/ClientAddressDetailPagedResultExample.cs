@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientAddresses;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientAddressDetail" />, referenced by
-///     <see cref="Controllers.ClientAddressesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ClientAddressDetail" />, as
+///     returned by <see cref="Controllers.ClientAddressesController.List" />.
 /// </summary>
 public class ClientAddressDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientAddressDetail>>
 {
     /// <summary>
-    ///     This method returns the same address <see cref="ClientAddressDetailExample" /> already
-    ///     shows individually, in the exact envelope a real list response carries.
+    ///     This method returns a one-item page holding the address
+    ///     <see cref="ClientAddressDetailExample" /> shows.
     /// </summary>
     public PagedResult<ClientAddressDetail> GetExamples() =>
         new(

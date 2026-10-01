@@ -5,22 +5,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Auth;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="LoginResponse" />, referenced by
+///     This class supplies the Swagger example for <see cref="LoginResponse" />, as returned by
 ///     <see cref="Controllers.AuthController.Login" /> and
-///     <see cref="Controllers.AuthController.TwoFactorLogin" />, both of which return this same
-///     response shape.
+///     <see cref="Controllers.AuthController.TwoFactorLogin" />.
 /// </summary>
 public class LoginResponseExample : IExamplesProvider<LoginResponse>
 {
     /// <summary>
-    ///     This method returns the completed-sign-in shape of <see cref="LoginResponse" /> (the
-    ///     other real shape this endpoint can return sets <see cref="LoginResponse.RequiresTwoFactor" />
-    ///     instead, with every other field <see langword="null" />, per that record's own doc
-    ///     comment). Both the access token and refresh token values are obviously-fake placeholder
-    ///     strings -- a real access token is a signed JSON Web Token this project must never
-    ///     publish a genuine example of, since a reader could otherwise mistake a real leaked
-    ///     credential for documentation.
+    ///     This method returns the completed sign-in shape. (The other shape sets
+    ///     <see cref="LoginResponse.RequiresTwoFactor" /> and <see cref="LoginResponse.MfaToken" />
+    ///     and leaves the token fields <see langword="null" />.) Both tokens are obvious
+    ///     placeholders: a real access token is a signed JSON Web Token, and a realistic one in the
+    ///     documentation could be mistaken for a leaked credential.
     /// </summary>
     public LoginResponse GetExamples() =>
         new(

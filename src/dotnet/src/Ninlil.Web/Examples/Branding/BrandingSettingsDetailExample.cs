@@ -5,17 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Branding;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="BrandingSettingsDetail" />, referenced by
-///     <see cref="Controllers.BrandingSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="BrandingSettingsDetail" />, as
+///     returned by <see cref="Controllers.BrandingSettingsController.Get" />.
 /// </summary>
 public class BrandingSettingsDetailExample : IExamplesProvider<BrandingSettingsDetail>
 {
     /// <summary>
-    ///     This method returns this project's own compiled-in defaults (see
-    ///     <see cref="Options.BrandingOptions" />/<see cref="Ninlil.Dns.Server.Authoritative.Options.AuthoritativeServerOptions" />),
-    ///     not arbitrary values -- no logo/site title has been uploaded, and CHAOS queries are off
-    ///     by default.
+    ///     This method returns an unbranded install: no site title or logo, the default version
+    ///     string and CHAOS queries off, as in <see cref="Options.BrandingOptions" /> and
+    ///     <see cref="Ninlil.Dns.Server.Authoritative.Options.AuthoritativeServerOptions" />. The
+    ///     host name string defaults to the machine name; <c>dns-server</c> stands in for it.
     /// </summary>
     public BrandingSettingsDetail GetExamples() =>
         new(

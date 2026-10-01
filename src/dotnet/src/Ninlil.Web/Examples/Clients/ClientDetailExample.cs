@@ -6,17 +6,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientDetail" />, referenced by <see cref="Controllers.ClientsController.Get" />
-///     and <see cref="Controllers.ClientsController.Create" />.
+///     This class supplies the Swagger examples for <see cref="ClientDetail" />, as returned by
+///     <see cref="Controllers.ClientsController.Get" /> and
+///     <see cref="Controllers.ClientsController.Create" />.
 /// </summary>
 public class ClientDetailExample : IMultipleExamplesProvider<ClientDetail>
 {
     /// <summary>
-    ///     This method returns two genuinely different devices -- a manually registered IPv4
-    ///     device explicitly assigned to a group, and a DHCPv6-auto-discovered device with no
-    ///     group override and no operator-supplied display name yet -- so a caller reading this
-    ///     example sees both <see cref="DnsClientOriginEnum" /> values and both protocol versions.
+    ///     This method returns two devices that between them show both
+    ///     <see cref="DnsClientOriginEnum" /> values and both protocol versions. The first is
+    ///     entered by hand, assigned to a group and online, with an explicit icon beside the one
+    ///     suggested from its Raspberry Pi vendor. The second was found through a DHCPv6 lease, has
+    ///     no name or group, is paused, and has a randomized MAC address, so no vendor is reported.
     /// </summary>
     public IEnumerable<SwaggerExample<ClientDetail>> GetExamples() =>
         [

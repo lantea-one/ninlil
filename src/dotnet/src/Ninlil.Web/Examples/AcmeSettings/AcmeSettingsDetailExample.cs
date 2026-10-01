@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AcmeSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="AcmeSettingsDetail" />, referenced by
-///     <see cref="Controllers.AcmeSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="AcmeSettingsDetail" />, as returned
+///     by <see cref="Controllers.AcmeSettingsController.Get" />.
 /// </summary>
 public class AcmeSettingsDetailExample : IExamplesProvider<AcmeSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: ACME enabled
-    ///     against Let's Encrypt's real production directory, one contact address, two enrolled
-    ///     domains, this class's own compiled-in default renewal margin/poll interval, and global
-    ///     CAA auto-management enabled with a real issuer domain configured.
+    ///     This method returns an enabled configuration against the Let's Encrypt production
+    ///     directory with one contact address and two domains. The renewal margin (30 days) and
+    ///     poll interval (12 hours) are the defaults, and server-wide CAA auto-management is on.
     /// </summary>
     public AcmeSettingsDetail GetExamples() =>
         new(

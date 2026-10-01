@@ -6,17 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CloudProviderCredentialDetail" />, referenced by
-///     <see cref="Controllers.CloudProviderCredentialsController.Get" />.
+///     This class supplies the Swagger example for <see cref="CloudProviderCredentialDetail" />, as
+///     returned by <see cref="Controllers.CloudProviderCredentialsController.Get" />.
 /// </summary>
 public class CloudProviderCredentialDetailExample : IExamplesProvider<CloudProviderCredentialDetail>
 {
     /// <summary>
-    ///     This method returns a credential set's own metadata with no secret material at all, per
-    ///     <see cref="CloudProviderCredentialDetail" />'s own doc comment -- see
-    ///     <see cref="CloudProviderCredentialCreateResponseExample" /> for the one response shape
-    ///     that does include one.
+    ///     This method returns a Cloudflare credential set without its secrets; only
+    ///     <see cref="CloudProviderCredentialCreateResponseExample" /> shows those.
     /// </summary>
     public CloudProviderCredentialDetail GetExamples() =>
         new(

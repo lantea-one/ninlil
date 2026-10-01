@@ -5,18 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupListAssignments;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientGroupListAssignmentDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="ClientGroupListAssignmentDetail" />, as returned by
 ///     <see cref="Controllers.ClientGroupListAssignmentsController.List" />.
 /// </summary>
 public class ClientGroupListAssignmentDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientGroupListAssignmentDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two assignments for the "Trusted LAN" group -- the
-    ///     subscribed "Hagezi Pro Blocklist" <see cref="ClientGroupListAssignmentDetailExample" />
-    ///     already shows, plus the local "Internal Allowlist", together demonstrating that a group
-    ///     may hold more than one assignment at once.
+    ///     This method returns two assignments for the "Trusted LAN" group, the "Hagezi Pro
+    ///     Blocklist" from <see cref="ClientGroupListAssignmentDetailExample" /> and the local
+    ///     "Internal Allowlist", showing that a group can hold several.
     /// </summary>
     public PagedResult<ClientGroupListAssignmentDetail> GetExamples() =>
         new(

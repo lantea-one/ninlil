@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Auth;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="AuthenticationResult" />, referenced by
-///     <see cref="Controllers.AuthController.Refresh" />.
+///     This class supplies the Swagger example for <see cref="AuthenticationResult" />, as returned
+///     by <see cref="Controllers.AuthController.Refresh" />.
 /// </summary>
 public class AuthenticationResultExample : IExamplesProvider<AuthenticationResult>
 {
     /// <summary>
-    ///     This method returns a freshly-rotated access/refresh token pair. Both values are
-    ///     obviously-fake placeholder strings, for the identical reason
-    ///     <see cref="LoginResponseExample" /> already documents.
+    ///     This method returns a rotated access and refresh token pair. Both values are obvious
+    ///     placeholders, for the reason given on <see cref="LoginResponseExample" />.
     /// </summary>
     public AuthenticationResult GetExamples() =>
         new(

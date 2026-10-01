@@ -6,16 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientAddresses;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientAddressWriteRequest" />, referenced by
-///     <see cref="Controllers.ClientAddressesController.Create" />.
+///     This class supplies the Swagger example for <see cref="ClientAddressWriteRequest" />, the
+///     request body of <see cref="Controllers.ClientAddressesController.Create" />.
 /// </summary>
 public class ClientAddressWriteRequestExample : IExamplesProvider<ClientAddressWriteRequest>
 {
     /// <summary>
-    ///     This method returns a request linking a second, IPv6 identity onto an already-known
-    ///     device -- confirming that its own IPv6 DUID belongs to the same real hardware as its
-    ///     already-registered IPv4 MAC address.
+    ///     This method returns a request adding an IPv6 identity, a link-layer DUID (type 3)
+    ///     embedding the device's MAC address, to a device already known by its IPv4 MAC address.
     /// </summary>
     public ClientAddressWriteRequest GetExamples() =>
         new("00:03:00:01:aa:bb:cc:dd:ee:ff", InternetProtocolVersionEnum.IPv6);

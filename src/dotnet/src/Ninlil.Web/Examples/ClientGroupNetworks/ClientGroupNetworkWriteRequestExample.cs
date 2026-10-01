@@ -5,19 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupNetworks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientGroupNetworkWriteRequest" />, referenced by
-///     <see cref="Controllers.ClientGroupNetworksController.Create" /> and
+///     This class supplies the Swagger examples for <see cref="ClientGroupNetworkWriteRequest" />,
+///     the request body of <see cref="Controllers.ClientGroupNetworksController.Create" /> and
 ///     <see cref="Controllers.ClientGroupNetworksController.Replace" />.
 /// </summary>
 public class ClientGroupNetworkWriteRequestExample
     : IMultipleExamplesProvider<ClientGroupNetworkWriteRequest>
 {
     /// <summary>
-    ///     This method returns both an IPv4 and an IPv6 CIDR network -- a real deployment's own
-    ///     client group commonly needs to match clients arriving over either family, and
-    ///     <see cref="Controllers.ClientGroupNetworksController" />'s own <c>System.Net.IPNetwork</c>
-    ///     validation accepts both identically.
+    ///     This method returns an IPv4 and an IPv6 network, since a group usually has to match
+    ///     clients of both families, and a DNS-over-HTTPS ClientID row, which leaves <c>cidr</c>
+    ///     unset. Both networks carry a prefix length; a bare address is rejected.
     /// </summary>
     public IEnumerable<SwaggerExample<ClientGroupNetworkWriteRequest>> GetExamples() =>
         [

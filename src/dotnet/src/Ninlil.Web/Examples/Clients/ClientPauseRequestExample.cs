@@ -5,17 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="InstantPauseRequest" />, shared by <see cref="Controllers.ClientsController.Pause" />
-///     and <see cref="Controllers.ClientGroupsController.Pause" /> -- the request shape is
-///     identical at both the client and client-group level, so one example serves both.
+///     This class supplies the Swagger examples for <see cref="InstantPauseRequest" />, the request
+///     body of both <see cref="Controllers.ClientsController.Pause" /> and
+///     <see cref="Controllers.ClientGroupsController.Pause" />, which take the same shape.
 /// </summary>
 public class ClientPauseRequestExample : IMultipleExamplesProvider<InstantPauseRequest>
 {
     /// <summary>
-    ///     This method returns three of the quick-duration choices the Angular UI's own one-click
-    ///     pause buttons submit -- 15 minutes, 1 hour, and a longer "rest of the day" style span --
-    ///     so a caller sees the range of durations this action is meant for.
+    ///     This method returns three durations: the 15-minute and 1-hour choices the admin
+    ///     console's pause buttons send, and 600 minutes, about what its "until tomorrow morning"
+    ///     button computes from an evening start.
     /// </summary>
     public IEnumerable<SwaggerExample<InstantPauseRequest>> GetExamples() =>
         [

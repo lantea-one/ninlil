@@ -5,15 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClusterJoinRequest" />, referenced by
-///     <see cref="Controllers.ClusterController.Join" />.
+///     This class supplies the Swagger example for <see cref="ClusterJoinRequest" />, the request
+///     body of <see cref="Controllers.ClusterController.Join" />.
 /// </summary>
 public class ClusterJoinRequestExample : IExamplesProvider<ClusterJoinRequest>
 {
     /// <summary>
-    ///     This method returns an invite code pasted from an inviting node's own "Cluster" page,
-    ///     with a display name chosen for the new peer row this consumption creates locally.
+    ///     This method returns the shortened invite code from
+    ///     <see cref="ClusterInviteCreateResponseExample" />, pasted from the inviting node's
+    ///     Cluster page, with a display name for the peer row the join creates.
     /// </summary>
     public ClusterJoinRequest GetExamples() =>
         new(

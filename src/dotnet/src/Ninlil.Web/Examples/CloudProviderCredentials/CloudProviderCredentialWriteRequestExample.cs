@@ -6,20 +6,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CloudProviderCredentialWriteRequest" />, referenced by
+///     This class supplies the Swagger examples for
+///     <see cref="CloudProviderCredentialWriteRequest" />, the request body of
 ///     <see cref="Controllers.CloudProviderCredentialsController.Replace" />.
 /// </summary>
 public class CloudProviderCredentialWriteRequestExample
     : IMultipleExamplesProvider<CloudProviderCredentialWriteRequest>
 {
     /// <summary>
-    ///     This method returns the same two provider shapes
-    ///     <see cref="CloudProviderCredentialCreateRequestExample" /> submits, but as a full
-    ///     replacement, including a genuinely rotated secret value -- unlike
-    ///     <see cref="Controllers.TsigKeysController.Replace" />, a <c>PUT</c> here really does
-    ///     replace the stored secret material, per <see cref="CloudProviderCredentialWriteRequest" />'s
-    ///     own doc comment.
+    ///     This method returns the two credential sets from
+    ///     <see cref="CloudProviderCredentialCreateRequestExample" /> as full replacements, the
+    ///     Cloudflare one with a rotated token. Unlike
+    ///     <see cref="Controllers.TsigKeysController.Replace" />, a <c>PUT</c> here replaces the
+    ///     stored secrets (see <see cref="CloudProviderCredentialWriteRequest" />).
     /// </summary>
     public IEnumerable<SwaggerExample<CloudProviderCredentialWriteRequest>> GetExamples() =>
         [

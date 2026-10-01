@@ -5,18 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AcmeSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.AcmeSettingsController.Patch" />'s own RFC 7396 JSON Merge Patch
-///     request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.AcmeSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class AcmeSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns the single most common real-world patch this endpoint exists for:
-    ///     turning ACME on for a fresh install, naming the contact address and the one domain to
-    ///     enroll, and enabling global CAA auto-management for it in the same call.
+    ///     This method returns the usual first patch on a new install: turn ACME on, name the
+    ///     contact address and one domain, and turn on CAA auto-management in the same call.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

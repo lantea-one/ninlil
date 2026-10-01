@@ -5,14 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Auth;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ForgotPasswordRequest" />, referenced by
-///     <see cref="Controllers.AuthController.ForgotPassword" />.
+///     This class supplies the Swagger example for <see cref="ForgotPasswordRequest" />, the
+///     request body of <see cref="Controllers.AuthController.ForgotPassword" />.
 /// </summary>
 public class ForgotPasswordRequestExample : IExamplesProvider<ForgotPasswordRequest>
 {
     /// <summary>
-    ///     This method returns one realistic Forgot Password request.
+    ///     This method returns a Forgot Password request for one e-mail address.
     /// </summary>
     public ForgotPasswordRequest GetExamples() => new("jsmith@example.com");
 }

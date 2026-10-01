@@ -5,19 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AccessControlRules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsAccessControlRuleDetail" />, referenced by
-///     <see cref="Controllers.DnsAccessControlRulesController.Get" /> and
+///     This class supplies the Swagger examples for <see cref="DnsAccessControlRuleDetail" />, as
+///     returned by <see cref="Controllers.DnsAccessControlRulesController.Get" /> and
 ///     <see cref="Controllers.DnsAccessControlRulesController.Create" />.
 /// </summary>
 public class DnsAccessControlRuleDetailExample
     : IMultipleExamplesProvider<DnsAccessControlRuleDetail>
 {
     /// <summary>
-    ///     This method returns the same two rules
-    ///     <see cref="DnsAccessControlRuleWriteRequestExample" /> submits, as this server would
-    ///     report them back -- a trusted LAN granted both capabilities at once, and a single
-    ///     monitoring host granted only the rate-limit bypass.
+    ///     This method returns the two rules <see cref="DnsAccessControlRuleWriteRequestExample" />
+    ///     submits, as the server reports them: a trusted LAN with both capabilities and one
+    ///     monitoring host with only the rate-limit bypass.
     /// </summary>
     public IEnumerable<SwaggerExample<DnsAccessControlRuleDetail>> GetExamples() =>
         [

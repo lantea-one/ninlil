@@ -6,22 +6,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CloudProviderCredentialCreateResponse" />, referenced by
+///     This class supplies the Swagger examples for
+///     <see cref="CloudProviderCredentialCreateResponse" />, as returned by
 ///     <see cref="Controllers.CloudProviderCredentialsController.Create" />.
 /// </summary>
 public class CloudProviderCredentialCreateResponseExample
     : IMultipleExamplesProvider<CloudProviderCredentialCreateResponse>
 {
     /// <summary>
-    ///     This method returns the two provider shapes
-    ///     <see cref="CloudProviderCredentialCreateRequestExample" /> submits, alongside their own
-    ///     plaintext secret material. Every value in
-    ///     <see cref="CloudProviderCredentialCreateResponse.Secrets" /> here is an
-    ///     obviously-fake placeholder -- this response is the one and only place a real
-    ///     credential set's own secret material is ever returned, per
-    ///     <see cref="CloudProviderCredentialDetail" />'s own doc comment, so a documented example
-    ///     must never look like it could be mistaken for one.
+    ///     This method returns the two credential sets
+    ///     <see cref="CloudProviderCredentialCreateRequestExample" /> submits, with their secrets.
+    ///     This response is the only place secrets are returned, so the values are placeholders
+    ///     that cannot be mistaken for real credentials.
     /// </summary>
     public IEnumerable<SwaggerExample<CloudProviderCredentialCreateResponse>> GetExamples() =>
         [

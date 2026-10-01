@@ -5,15 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClusterSettingsDetail" />, referenced by
-///     <see cref="Controllers.ClusterSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="ClusterSettingsDetail" />, as
+///     returned by <see cref="Controllers.ClusterSettingsController.Get" />.
 /// </summary>
 public class ClusterSettingsDetailExample : IExamplesProvider<ClusterSettingsDetail>
 {
     /// <summary>
-    ///     This method returns clustering enabled and fully configured -- a fresh install with
-    ///     clustering never turned on would instead show <c>enable: false</c> and a blank
+    ///     This method returns clustering enabled with an advertised host and the default heartbeat
+    ///     timing. The advertised port is still the default 0, which invites cannot use; it must be
+    ///     set before invites work. A new install shows <c>enable: false</c> and an empty
     ///     <c>advertisedHost</c>.
     /// </summary>
     public ClusterSettingsDetail GetExamples() =>

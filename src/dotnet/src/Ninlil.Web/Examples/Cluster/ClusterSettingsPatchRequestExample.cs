@@ -5,18 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.ClusterSettingsController.Patch" />'s own RFC 7396 JSON Merge Patch
-///     request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.ClusterSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class ClusterSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns the single real-world patch every new cluster node needs before it
-    ///     can invite or join any other: turning clustering on and setting the address a peer
-    ///     should reach it at.
+    ///     This method returns a patch that turns clustering on and sets the host peers reach this
+    ///     node at. An <c>advertisedPort</c> from 1 to 65535 is also needed before an invite from
+    ///     this node can be used.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

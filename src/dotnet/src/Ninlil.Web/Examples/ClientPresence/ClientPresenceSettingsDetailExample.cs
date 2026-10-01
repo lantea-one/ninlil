@@ -5,8 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientPresence;
 
 /// <summary>
-///     This class provides the Swagger example for <see cref="ClientPresenceSettingsDetail" /> --
-///     the shipped defaults.
+///     This class supplies the Swagger example for <see cref="ClientPresenceSettingsDetail" />, as
+///     returned by <c>GET /api/client-presence-settings</c>: the defaults (a 10-minute online
+///     window, 30-second flushes, neighbor table sampling on every 15 seconds).
 /// </summary>
 public class ClientPresenceSettingsDetailExample : IExamplesProvider<ClientPresenceSettingsDetail>
 {

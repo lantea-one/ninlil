@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.BlockedServices;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="BlockedServiceDetail" />, referenced by
-///     <see cref="Controllers.BlockedServicesController.Enable" />.
+///     This class supplies the Swagger example for <see cref="BlockedServiceDetail" />, as returned
+///     by <see cref="Controllers.BlockedServicesController.Enable" />.
 /// </summary>
 public class BlockedServiceDetailExample : IExamplesProvider<BlockedServiceDetail>
 {
     /// <summary>
-    ///     This method returns TikTok freshly enabled, with its own managed filter list's
-    ///     identifier already assigned.
+    ///     This method returns the TikTok catalog entry just enabled, with the identifier of its
+    ///     managed filter list.
     /// </summary>
     public BlockedServiceDetail GetExamples() =>
         new(

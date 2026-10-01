@@ -6,18 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientSchedules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientScheduleDetail" />, referenced by
-///     <see cref="Controllers.ClientSchedulesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ClientScheduleDetail" />,
+///     as returned by <see cref="Controllers.ClientSchedulesController.List" />.
 /// </summary>
 public class ClientScheduleDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientScheduleDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two schedules for the "Living Room TV" client -- the
-    ///     school-night bedtime <see cref="ClientScheduleDetailExample" /> already shows, plus a
-    ///     currently-disabled weekend-morning schedule, demonstrating that a client may hold more
-    ///     than one schedule at once and that a disabled one is still listed.
+    ///     This method returns two schedules for the "Living Room TV" client: the school-night
+    ///     bedtime from <see cref="ClientScheduleDetailExample" /> and a disabled weekend-morning
+    ///     window, showing that a client can hold several and that disabled ones are listed.
     /// </summary>
     public PagedResult<ClientScheduleDetail> GetExamples() =>
         new(

@@ -5,16 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientWriteRequest" />, referenced by <see cref="Controllers.ClientsController.Replace" />.
-///     Deliberately carries no <c>clientIdentifier</c>/<c>protocolVersion</c> fields at all -- see
-///     <see cref="Controllers.ClientsController" />'s own doc comment for why neither can ever
-///     change once a client is registered.
+///     This class supplies the Swagger example for <see cref="ClientWriteRequest" />, the request
+///     body of <see cref="Controllers.ClientsController.Replace" />. It has no
+///     <c>clientIdentifier</c> or <c>protocolVersion</c>, because an address's identity never
+///     changes once registered (see <see cref="Controllers.ClientsController" />).
 /// </summary>
 public class ClientWriteRequestExample : IExamplesProvider<ClientWriteRequest>
 {
     /// <summary>
-    ///     This method returns a rename, re-assigning this client to a different client group.
+    ///     This method returns a rename of the "Living Room TV" client that keeps its group,
+    ///     comments, icon and favorite star.
     /// </summary>
     public ClientWriteRequest GetExamples() =>
         new(

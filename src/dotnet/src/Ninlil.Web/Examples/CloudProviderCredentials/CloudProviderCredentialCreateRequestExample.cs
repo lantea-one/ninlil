@@ -6,26 +6,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CloudProviderCredentialCreateRequest" />, referenced by
+///     This class supplies the Swagger examples for
+///     <see cref="CloudProviderCredentialCreateRequest" />, the request body of
 ///     <see cref="Controllers.CloudProviderCredentialsController.Create" />.
 /// </summary>
 public class CloudProviderCredentialCreateRequestExample
     : IMultipleExamplesProvider<CloudProviderCredentialCreateRequest>
 {
     /// <summary>
-    ///     This method returns two genuinely different provider shapes -- Cloudflare's single
-    ///     bearer-style <c>ApiToken</c> field, and Route 53's paired <c>AccessKeyId</c>/
-    ///     <c>SecretAccessKey</c> fields -- so a caller reading this example sees exactly what
-    ///     <see cref="Ninlil.Dns.Server.Authoritative.CloudSync.CloudCredentialValidator" /> actually requires
-    ///     for each <see cref="CloudDnsProviderTypeEnum" />, rather than guessing at
-    ///     <see cref="CloudProviderCredentialCreateRequest.Credentials" />'s own opaque shape.
-    ///     Every value here is an obviously-fake placeholder, never a value shaped to look like a
-    ///     real, genuinely-leakable credential -- Route 53's own pair reuses AWS's own widely
-    ///     published documentation example credentials
-    ///     (<c>AKIAIOSFODNN7EXAMPLE</c>/<c>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY</c>), the exact
-    ///     "reuse a universally-recognized demo value" precedent this project's own
-    ///     <c>AuthenticatorSetupResultExample</c> already established for a TOTP shared key.
+    ///     This method returns the two credential shapes
+    ///     <see cref="Ninlil.Dns.Server.Authoritative.CloudSync.CloudCredentialValidator" />
+    ///     accepts: Cloudflare's single <c>ApiToken</c> (DigitalOcean uses the same) and Route 53's
+    ///     <c>AccessKeyId</c> and <c>SecretAccessKey</c> pair. Every value is a placeholder; the
+    ///     Route 53 pair is the example key pair AWS publishes in its own documentation.
     /// </summary>
     public IEnumerable<SwaggerExample<CloudProviderCredentialCreateRequest>> GetExamples() =>
         [

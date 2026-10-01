@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Backup;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="BackupRestoreResponse" />, referenced by
-///     <see cref="Controllers.BackupController.Restore" />.
+///     This class supplies the Swagger example for <see cref="BackupRestoreResponse" />, as
+///     returned by <see cref="Controllers.BackupController.Restore" />.
 /// </summary>
 public class BackupRestoreResponseExample : IExamplesProvider<BackupRestoreResponse>
 {
     /// <summary>
-    ///     This method returns a plausible-sized successful restore outcome, spanning a handful
-    ///     of this server's own entity types, with the standard restart-required note every
-    ///     successful restore actually returns verbatim.
+    ///     This method returns a small restore across a few entity types (the counts add up to the
+    ///     total of 37) with the restart note every successful restore returns.
     /// </summary>
     public BackupRestoreResponse GetExamples() =>
         new(

@@ -6,16 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientAddresses;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientAddressDetail" />, referenced by
-///     <see cref="Controllers.ClientAddressesController.Get" /> and
+///     This class supplies the Swagger example for <see cref="ClientAddressDetail" />, as returned
+///     by <see cref="Controllers.ClientAddressesController.Get" /> and
 ///     <see cref="Controllers.ClientAddressesController.Create" />.
 /// </summary>
 public class ClientAddressDetailExample : IExamplesProvider<ClientAddressDetail>
 {
     /// <summary>
-    ///     This method returns an IPv4 address belonging to the "Living Room TV" client
-    ///     (<see cref="Clients.ClientDetailExample" />'s first example).
+    ///     This method returns the IPv4 address of the "Living Room TV" client from
+    ///     <see cref="Clients.ClientDetailExample" />: a Raspberry Pi MAC address with its vendor
+    ///     resolved.
     /// </summary>
     public ClientAddressDetail GetExamples() =>
         new(

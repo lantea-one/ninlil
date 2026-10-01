@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Auth;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="LoginRequest" />, referenced by <see cref="Controllers.AuthController.Login" />
-///     via a <c>SwaggerRequestExample</c> attribute.
+///     This class supplies the Swagger example for <see cref="LoginRequest" />, the request body of
+///     <see cref="Controllers.AuthController.Login" />.
 /// </summary>
 public class LoginRequestExample : IExamplesProvider<LoginRequest>
 {
     /// <summary>
-    ///     This method returns one realistic sign-in request. The password value is a plain,
-    ///     obviously-illustrative example -- it is a caller-supplied credential the caller already
-    ///     knows, not a server-generated secret this project needs to keep out of documentation.
+    ///     This method returns a sign-in request with the default <c>Body</c> refresh token
+    ///     delivery. The password is an obvious example; it is a credential the caller supplies,
+    ///     not a server-generated secret.
     /// </summary>
     public LoginRequest GetExamples() => new("jsmith", "CorrectHorseBatteryStaple1!");
 }

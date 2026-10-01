@@ -6,15 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Appearance;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="AppearanceSettingsDetail" />, referenced by
-///     <see cref="Controllers.AppearanceSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="AppearanceSettingsDetail" />, as
+///     returned by <see cref="Controllers.AppearanceSettingsController.Get" />.
 /// </summary>
 public class AppearanceSettingsDetailExample : IExamplesProvider<AppearanceSettingsDetail>
 {
     /// <summary>
-    ///     This method returns this server's own compiled-in defaults -- the teal palette,
-    ///     following the browser's own operating-system light/dark preference.
+    ///     This method returns the defaults: the teal palette, with light or dark mode following
+    ///     the operating system.
     /// </summary>
     public AppearanceSettingsDetail GetExamples() =>
         new(UiThemePaletteEnum.Teal, UiThemeModeEnum.System);

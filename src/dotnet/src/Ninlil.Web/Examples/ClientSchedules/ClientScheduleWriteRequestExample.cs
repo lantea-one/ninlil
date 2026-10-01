@@ -6,18 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientSchedules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientScheduleWriteRequest" />, referenced by
-///     <see cref="Controllers.ClientSchedulesController.Create" />/<see cref="Controllers.ClientSchedulesController.Replace" />.
+///     This class supplies the Swagger example for <see cref="ClientScheduleWriteRequest" />, the
+///     request body of <see cref="Controllers.ClientSchedulesController.Create" /> and
+///     <see cref="Controllers.ClientSchedulesController.Replace" />.
 /// </summary>
 public class ClientScheduleWriteRequestExample : IExamplesProvider<ClientScheduleWriteRequest>
 {
     /// <summary>
-    ///     This method returns a real, midnight-wrapping "school night" bedtime for a known
-    ///     client -- Sunday through Thursday, 21:00 to 07:00 local time in
-    ///     <c>"America/New_York"</c>, the classic case
-    ///     <c>Ninlil.Dns.Server.Core.ClientSchedule.DnsScheduleWindowEvaluator</c>'s own doc
-    ///     comment names directly.
+    ///     This method returns a school-night bedtime: Sunday to Thursday, 21:00 to 07:00 local
+    ///     time in <c>"America/New_York"</c>. The window crosses midnight, the case
+    ///     <c>Ninlil.Dns.Server.Core.ClientSchedule.DnsScheduleWindowEvaluator</c> describes.
     /// </summary>
     public ClientScheduleWriteRequest GetExamples() =>
         new(

@@ -6,16 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientSchedules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientScheduleDetail" />, referenced by
-///     <see cref="Controllers.ClientSchedulesController.Get" />/<see cref="Controllers.ClientSchedulesController.Create" />.
+///     This class supplies the Swagger example for <see cref="ClientScheduleDetail" />, as returned
+///     by <see cref="Controllers.ClientSchedulesController.Get" /> and
+///     <see cref="Controllers.ClientSchedulesController.Create" />.
 /// </summary>
 public class ClientScheduleDetailExample : IExamplesProvider<ClientScheduleDetail>
 {
     /// <summary>
-    ///     This method returns the same schedule <see cref="ClientScheduleWriteRequestExample" />
-    ///     submits, as this server would report it back, assigned to the "Living Room TV" client
-    ///     (<see cref="Clients.ClientDetailExample" />'s first example).
+    ///     This method returns the schedule <see cref="ClientScheduleWriteRequestExample" />
+    ///     submits, as the server reports it, on the "Living Room TV" client from
+    ///     <see cref="Clients.ClientDetailExample" />.
     /// </summary>
     public ClientScheduleDetail GetExamples() =>
         new(

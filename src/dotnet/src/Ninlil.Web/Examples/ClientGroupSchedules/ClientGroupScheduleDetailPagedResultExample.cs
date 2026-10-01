@@ -6,17 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupSchedules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientGroupScheduleDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="ClientGroupScheduleDetail" />, as returned by
 ///     <see cref="Controllers.ClientGroupSchedulesController.List" />.
 /// </summary>
 public class ClientGroupScheduleDetailPagedResultExample
     : IExamplesProvider<PagedResult<ClientGroupScheduleDetail>>
 {
     /// <summary>
-    ///     This method returns one page holding the single nightly schedule
-    ///     <see cref="ClientGroupScheduleDetailExample" /> already shows, assigned to the
-    ///     "Trusted LAN" group.
+    ///     This method returns a one-item page holding the nightly schedule from
+    ///     <see cref="ClientGroupScheduleDetailExample" />.
     /// </summary>
     public PagedResult<ClientGroupScheduleDetail> GetExamples() =>
         new(

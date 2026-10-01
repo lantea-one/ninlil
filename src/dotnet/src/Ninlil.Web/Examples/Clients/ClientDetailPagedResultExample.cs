@@ -6,15 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="ClientDetail" />, referenced by <see cref="Controllers.ClientsController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="ClientDetail" />, as
+///     returned by <see cref="Controllers.ClientsController.List" />.
 /// </summary>
 public class ClientDetailPagedResultExample : IExamplesProvider<PagedResult<ClientDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the same two clients <see cref="ClientDetailExample" />
-    ///     already shows individually, so a caller reading this example sees both shapes together,
-    ///     in the exact envelope a real list response carries.
+    ///     This method returns a page holding the two clients from
+    ///     <see cref="ClientDetailExample" />.
     /// </summary>
     public PagedResult<ClientDetail> GetExamples() =>
         new(

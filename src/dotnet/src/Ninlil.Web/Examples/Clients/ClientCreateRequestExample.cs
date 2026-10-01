@@ -6,14 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientCreateRequest" />, referenced by <see cref="Controllers.ClientsController.Create" />.
+///     This class supplies the Swagger example for <see cref="ClientCreateRequest" />, the request
+///     body of <see cref="Controllers.ClientsController.Create" />.
 /// </summary>
 public class ClientCreateRequestExample : IExamplesProvider<ClientCreateRequest>
 {
     /// <summary>
-    ///     This method returns a manually registered IPv4 client, explicitly assigned to a
-    ///     client group.
+    ///     This method returns a manually registered IPv4 client assigned to the "Trusted LAN"
+    ///     group, with an icon and the favorite star.
     /// </summary>
     public ClientCreateRequest GetExamples() =>
         new(

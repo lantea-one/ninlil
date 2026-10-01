@@ -5,19 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AcmeSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.AcmeSettingsController.Certificates" />'s own response -- three
-///     domains, each in a genuinely different state, so a reader of this example can see every
-///     field this endpoint actually distinguishes at a glance.
+///     This class supplies the Swagger example for the certificate inventory returned by
+///     <see cref="Controllers.AcmeSettingsController.Certificates" />, with one domain in each
+///     state the endpoint distinguishes.
 /// </summary>
 public class AcmeCertificateInventoryListExample
     : IExamplesProvider<IReadOnlyList<AcmeCertificateInventoryEntry>>
 {
     /// <summary>
-    ///     This method returns one domain with a healthy, current certificate; one domain that
-    ///     has never had a certificate issued at all (a real, distinct state, not silently
-    ///     indistinguishable from "not due yet"); and one domain whose most recent renewal
-    ///     attempt failed, with its own failure message and timestamp still visible.
+    ///     This method returns a domain with a current certificate, a domain that has never been
+    ///     issued one (due, but no failure), and a domain whose last attempt failed, with its
+    ///     failure time and message.
     /// </summary>
     public IReadOnlyList<AcmeCertificateInventoryEntry> GetExamples() =>
         [

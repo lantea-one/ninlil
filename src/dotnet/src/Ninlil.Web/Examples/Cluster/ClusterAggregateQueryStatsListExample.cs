@@ -5,10 +5,10 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Cluster;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.ClusterController.Stats" />: this node's own row, a healthy peer
-///     reporting real counts, and an unreachable peer reported with every count
-///     <see langword="null" /> rather than omitted.
+///     This class supplies the Swagger example for the response of
+///     <see cref="Controllers.ClusterController.Stats" />: the answering node's row, a reachable
+///     peer with counts, and an unreachable peer listed with every count <see langword="null" />
+///     rather than left out.
 /// </summary>
 public class ClusterAggregateQueryStatsListExample
     : IExamplesProvider<IReadOnlyList<ClusterAggregateQueryStatsDetail>>

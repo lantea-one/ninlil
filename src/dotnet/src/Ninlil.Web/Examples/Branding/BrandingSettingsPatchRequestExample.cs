@@ -5,19 +5,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Branding;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.BrandingSettingsController.Patch" />'s own RFC 7396 JSON Merge Patch
-///     request body -- see <see cref="Examples.Rewrites.DnsRewritePatchRequestExample" />'s own
-///     doc comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class. Deliberately omits <c>logoDataUri</c> from this example, since
-///     a real base64 image blob would make Swagger's own rendered example unreadable -- the field
-///     itself is fully documented on <see cref="Models.BrandingSettingsDetail" />.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.BrandingSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Examples.Rewrites.DnsRewritePatchRequestExample" />). It leaves out
+///     <c>logoDataUri</c>, since a base64 image would make the rendered example unreadable;
+///     <see cref="Models.BrandingSettingsDetail" /> documents the field.
 /// </summary>
 public class BrandingSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch setting a custom site title and enabling CHAOS-class
-    ///     fingerprinting queries with a custom hostname.
+    ///     This method returns a patch that sets a site title and turns on CHAOS identification
+    ///     queries with a custom host name.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

@@ -5,20 +5,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientListAssignments;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientListAssignmentDetail" />, referenced by
-///     <see cref="Controllers.ClientListAssignmentsController.Get" /> and
+///     This class supplies the Swagger example for <see cref="ClientListAssignmentDetail" />, as
+///     returned by <see cref="Controllers.ClientListAssignmentsController.Get" /> and
 ///     <see cref="Controllers.ClientListAssignmentsController.Create" />.
 /// </summary>
 public class ClientListAssignmentDetailExample : IExamplesProvider<ClientListAssignmentDetail>
 {
     /// <summary>
-    ///     This method returns the same assignment
-    ///     <see cref="ClientListAssignmentWriteRequestExample" /> submits, as this server would
-    ///     report it back -- the "Living Room TV" client
-    ///     (<see cref="Clients.ClientDetailExample" />'s first example) assigned the subscribed
-    ///     "Hagezi Pro Blocklist" directly, on top of whatever its own matched client group
-    ///     already contributes.
+    ///     This method returns the assignment
+    ///     <see cref="ClientListAssignmentWriteRequestExample" /> submits, as the server reports
+    ///     it: the "Living Room TV" client from <see cref="Clients.ClientDetailExample" /> assigned
+    ///     the "Hagezi Pro Blocklist" directly, in addition to whatever its client group
+    ///     contributes.
     /// </summary>
     public ClientListAssignmentDetail GetExamples() =>
         new(

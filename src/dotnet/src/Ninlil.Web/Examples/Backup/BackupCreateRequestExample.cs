@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Backup;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="BackupCreateRequest" />, referenced by
-///     <see cref="Controllers.BackupController.Create" />.
+///     This class supplies the Swagger example for <see cref="BackupCreateRequest" />, the request
+///     body of <see cref="Controllers.BackupController.Create" />.
 /// </summary>
 public class BackupCreateRequestExample : IExamplesProvider<BackupCreateRequest>
 {
     /// <summary>
-    ///     This method returns a plain, obviously-illustrative passphrase -- a caller-supplied
-    ///     value the caller already knows and chose themselves, not a server-generated secret
-    ///     this project needs to keep out of documentation, the same reasoning
-    ///     <c>LoginRequestExample</c>'s own password value already documents.
+    ///     This method returns an example passphrase, longer than the 12-character minimum. Like
+    ///     the password in <c>LoginRequestExample</c>, it is chosen by the caller, not a server
+    ///     secret.
     /// </summary>
     public BackupCreateRequest GetExamples() => new("CorrectHorseBatteryStaple1!");
 }

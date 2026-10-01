@@ -6,17 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.CloudProviderCredentials;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="CloudProviderCredentialDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="CloudProviderCredentialDetail" />, as returned by
 ///     <see cref="Controllers.CloudProviderCredentialsController.List" />.
 /// </summary>
 public class CloudProviderCredentialDetailPagedResultExample
     : IExamplesProvider<PagedResult<CloudProviderCredentialDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two credential sets -- a Cloudflare one and a Route 53
-    ///     one -- so a caller reading this example sees both provider types together, in the exact
-    ///     envelope a real list response carries, with neither carrying any secret material.
+    ///     This method returns a page with one Cloudflare and one Route 53 credential set, neither
+    ///     with secrets.
     /// </summary>
     public PagedResult<CloudProviderCredentialDetail> GetExamples() =>
         new(

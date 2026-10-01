@@ -5,16 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.AccessControlRules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DnsAccessControlRuleDetail" />, referenced by
+///     This class supplies the Swagger example for a page of
+///     <see cref="DnsAccessControlRuleDetail" />, as returned by
 ///     <see cref="Controllers.DnsAccessControlRulesController.List" />.
 /// </summary>
 public class DnsAccessControlRuleDetailPagedResultExample
     : IExamplesProvider<PagedResult<DnsAccessControlRuleDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the same two rules
-    ///     <see cref="DnsAccessControlRuleDetailExample" /> already shows individually.
+    ///     This method returns one page holding the two rules
+    ///     <see cref="DnsAccessControlRuleDetailExample" /> shows, with the default page size of
+    ///     50.
     /// </summary>
     public PagedResult<DnsAccessControlRuleDetail> GetExamples() =>
         new(

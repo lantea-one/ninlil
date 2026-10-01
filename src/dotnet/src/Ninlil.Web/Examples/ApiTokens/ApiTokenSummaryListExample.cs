@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ApiTokens;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for the list of
-///     <see cref="ApiTokenSummary" /> values <see cref="Controllers.ApiTokensController.List" />
-///     returns -- never any token's own secret value, per <see cref="ApiTokenSummary" />'s own
-///     doc comment.
+///     This class supplies the Swagger example for the list of <see cref="ApiTokenSummary" />
+///     returned by <see cref="Controllers.ApiTokensController.List" />, which never includes a
+///     token's secret value.
 /// </summary>
 public class ApiTokenSummaryListExample : IExamplesProvider<IReadOnlyList<ApiTokenSummary>>
 {
     /// <summary>
-    ///     This method returns two representative tokens: a still-active static token, and a
-    ///     one-time token that has already been consumed.
+    ///     This method returns two tokens: an active static token with an expiry date, and a
+    ///     one-time token that has been used.
     /// </summary>
     public IReadOnlyList<ApiTokenSummary> GetExamples() =>
         [

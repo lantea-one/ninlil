@@ -5,21 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Clients;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.ClientsController.Patch" />'s own RFC 7396 JSON Merge Patch request
-///     body. The request parameter's own declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class -- a field this project's merge patch endpoints leave out of
-///     the request body entirely is left untouched, which no strongly-typed C# model can
-///     represent.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.ClientsController.Patch" />. The body is a <see cref="JsonElement" />
+///     because a merge patch must tell an absent field, which is left as it is, from a present one;
+///     no typed model can express that.
 /// </summary>
 public class ClientPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that renames the client and stars it as a favorite, leaving
-    ///     every other field -- including its group assignment and device icon -- untouched.
-    ///     <see cref="JsonDocument.RootElement" /> is cloned so the returned
-    ///     <see cref="JsonElement" /> stays valid independently of the parsed
-    ///     <see cref="JsonDocument" /> it originated from.
+    ///     This method returns a patch that renames the client and stars it, leaving every other
+    ///     field, including its group and icon, as it is.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

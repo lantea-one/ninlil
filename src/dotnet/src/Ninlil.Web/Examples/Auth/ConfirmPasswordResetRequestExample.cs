@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Auth;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ConfirmPasswordResetRequest" />, referenced by
-///     <see cref="Controllers.AuthController.ResetPassword" />.
+///     This class supplies the Swagger example for <see cref="ConfirmPasswordResetRequest" />, the
+///     request body of <see cref="Controllers.AuthController.ResetPassword" />.
 /// </summary>
 public class ConfirmPasswordResetRequestExample : IExamplesProvider<ConfirmPasswordResetRequest>
 {
     /// <summary>
-    ///     This method returns a realistic confirm-reset submission -- the token value is an
-    ///     obviously-illustrative, Base64Url-shaped placeholder, exactly as it would arrive from
-    ///     the shared "set new password" landing page's own query string.
+    ///     This method returns a reset submission as the "set new password" page sends it. The
+    ///     token is a Base64Url-shaped placeholder that decodes to text saying it is not a real
+    ///     secret.
     /// </summary>
     public ConfirmPasswordResetRequest GetExamples() =>
         new(

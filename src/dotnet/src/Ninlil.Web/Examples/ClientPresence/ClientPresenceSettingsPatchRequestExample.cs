@@ -5,8 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientPresence;
 
 /// <summary>
-///     This class provides the Swagger example for a client presence settings merge patch --
-///     widening the online window so idle devices stay online longer.
+///     This class supplies the Swagger example for the client presence settings merge patch
+///     (<c>PATCH /api/client-presence-settings</c>): widening the online window to 30 minutes so
+///     idle devices stay online longer.
 /// </summary>
 public class ClientPresenceSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {

@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Appearance;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.AppearanceSettingsController.PatchMine" />'s own RFC 7396 JSON Merge
-///     Patch request body.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.AppearanceSettingsController.PatchMine" />.
 /// </summary>
 public class UserAppearancePreferencePatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that sets the caller's own mode override to dark while
-    ///     leaving their own palette override (if any) untouched. Sending a field with a JSON
-    ///     <c>null</c> value instead -- for example <c>{"mode": null}</c> -- clears that field's
-    ///     own override entirely, reverting the caller back to this host's own global default.
+    ///     This method returns a patch that sets the caller's mode to dark and leaves any palette
+    ///     choice as it is. Sending a field as JSON <c>null</c>, such as <c>{"mode": null}</c>,
+    ///     removes that override so the server-wide default applies.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

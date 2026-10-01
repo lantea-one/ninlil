@@ -6,18 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ApiTokens;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CreateApiTokenResponse" />, referenced by
-///     <see cref="Controllers.ApiTokensController.Create" />.
+///     This class supplies the Swagger example for <see cref="CreateApiTokenResponse" />, as
+///     returned by <see cref="Controllers.ApiTokensController.Create" />.
 /// </summary>
 public class CreateApiTokenResponseExample : IExamplesProvider<CreateApiTokenResponse>
 {
     /// <summary>
-    ///     This method returns a freshly-issued token. <see cref="CreateApiTokenResponse.RawToken" />
-    ///     is an obviously-fake placeholder string, not a value shaped to look like a real,
-    ///     genuinely-leakable base64url secret -- this response is the one and only place a real
-    ///     token's raw value is ever returned, per that record's own doc comment, so a documented
-    ///     example must never look like it could be mistaken for one.
+    ///     This method returns a newly issued token. <see cref="CreateApiTokenResponse.RawToken" />
+    ///     is an obvious placeholder rather than something shaped like a real base64url secret, so
+    ///     the documentation cannot be mistaken for a leaked token.
     /// </summary>
     public CreateApiTokenResponse GetExamples() =>
         new(

@@ -6,18 +6,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupSchedules;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientGroupScheduleWriteRequest" />, referenced by
-///     <see cref="Controllers.ClientGroupSchedulesController.Create" />/<see cref="Controllers.ClientGroupSchedulesController.Replace" />.
+///     This class supplies the Swagger example for <see cref="ClientGroupScheduleWriteRequest" />,
+///     the request body of <see cref="Controllers.ClientGroupSchedulesController.Create" /> and
+///     <see cref="Controllers.ClientGroupSchedulesController.Replace" />.
 /// </summary>
 public class ClientGroupScheduleWriteRequestExample
     : IExamplesProvider<ClientGroupScheduleWriteRequest>
 {
     /// <summary>
-    ///     This method returns a real, midnight-wrapping bedtime applied to every client in the
-    ///     "Trusted LAN" group (<see cref="ClientGroups.ClientGroupDetailExample" />'s second
-    ///     example) at once -- every day of the week, 22:00 to 06:30 local time in
-    ///     <c>"Europe/London"</c>.
+    ///     This method returns a bedtime for every client in the "Trusted LAN" group: every day,
+    ///     22:00 to 06:30 local time in <c>"Europe/London"</c>. The end is earlier than the start,
+    ///     so the window crosses midnight.
     /// </summary>
     public ClientGroupScheduleWriteRequest GetExamples() =>
         new(

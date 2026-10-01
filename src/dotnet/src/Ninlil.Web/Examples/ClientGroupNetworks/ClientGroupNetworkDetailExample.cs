@@ -5,18 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ClientGroupNetworks;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ClientGroupNetworkDetail" />, referenced by
-///     <see cref="Controllers.ClientGroupNetworksController.Get" /> and
+///     This class supplies the Swagger examples for <see cref="ClientGroupNetworkDetail" />, as
+///     returned by <see cref="Controllers.ClientGroupNetworksController.Get" /> and
 ///     <see cref="Controllers.ClientGroupNetworksController.Create" />.
 /// </summary>
 public class ClientGroupNetworkDetailExample : IMultipleExamplesProvider<ClientGroupNetworkDetail>
 {
     /// <summary>
-    ///     This method returns the same IPv4 and IPv6 networks
-    ///     <see cref="ClientGroupNetworkWriteRequestExample" /> submits, as this server would
-    ///     report them back, both belonging to the "Trusted LAN" group
-    ///     <see cref="ClientGroups.ClientGroupDetailExample" /> shows.
+    ///     This method returns the three rows <see cref="ClientGroupNetworkWriteRequestExample" />
+    ///     submits, as the server reports them, all in the "Trusted LAN" group from
+    ///     <see cref="ClientGroups.ClientGroupDetailExample" />: an IPv4 network, an IPv6 network
+    ///     and a DNS-over-HTTPS ClientID.
     /// </summary>
     public IEnumerable<SwaggerExample<ClientGroupNetworkDetail>> GetExamples() =>
         [
