@@ -13,12 +13,11 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Tests;
 
 /// <summary>
-///     This class proves <see cref="FilterListClusterConfigSyncApplier" /> (and, through it,
-///     <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />'s own shared create/update/
-///     delete/last-write-wins logic) against a real SQLite database -- not a mock repository.
-///     Chosen as the one concrete applier exercised end-to-end here since every other applier
-///     shares the exact same base-class logic; each applier's own remaining, genuinely
-///     independent surface (its own payload shape) is covered separately.
+///     This class tests <see cref="FilterListClusterConfigSyncApplier" />, and through it the
+///     create, update, delete and last-write-wins logic of
+///     <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />, against EF Core repositories
+///     on a temporary SQLite database. The other simple appliers share that base, so
+///     <see cref="RemainingAppliersTests" /> only checks their payload mapping.
 /// </summary>
 public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
 {
@@ -102,9 +101,8 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     This is the genuine, explicit last-write-wins conflict proof: two conflicting changes to
-    ///     the very same entity, carrying different timestamps, applied out of chronological order
-    ///     -- the later one must still win in the end regardless of arrival order.
+    ///     This test applies two conflicting changes to one entity out of order; the later one
+    ///     must end up on record whatever the arrival order.
     /// </summary>
     [Fact]
     public async Task TheLaterOfTwoConflictingChangesWinsEvenWhenTheEarlierOneArrivesSecond()
@@ -139,7 +137,7 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
             CancellationToken.None
         );
 
-        // The later change must still be the one on record -- arrival order must not matter.
+        // The later change is on record; arrival order does not matter.
         DnsFilterListEntity list = await _repository.GetByIdAsync(listId);
         Assert.NotNull(list);
         Assert.Equal("Renamed-By-B", list.Name);
@@ -208,7 +206,7 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
         );
         await _unitOfWork.SaveChangesAsync();
 
-        // A stale envelope, timestamped well before the local row's own last modification.
+        // A stale envelope, timestamped well before the local row's last change.
         await _applier.ApplyAsync(
             new ClusterConfigSyncEnvelope(
                 FilterListClusterConfigSyncApplier.EntityTypeName,
@@ -261,9 +259,9 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     A local edit that happens after a remote deletion's own timestamp must win -- the
-    ///     deletion is dropped, per <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />'s
-    ///     own documented "edits beat a stale delete" last-write-wins semantics.
+    ///     This test checks that a local edit newer than a remote deletion wins and the deletion
+    ///     is ignored, as last-write-wins in <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />
+    ///     gives.
     /// </summary>
     [Fact]
     public async Task ApplyAsyncKeepsALocalEditThatIsNewerThanAnIncomingDeletion()
@@ -286,7 +284,7 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
         );
         await _unitOfWork.SaveChangesAsync();
 
-        // A deletion timestamped BEFORE the local row's own last edit.
+        // A deletion timestamped BEFORE the local row's last edit.
         await _applier.ApplyAsync(
             new ClusterConfigSyncEnvelope(
                 FilterListClusterConfigSyncApplier.EntityTypeName,

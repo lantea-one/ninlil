@@ -14,8 +14,7 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 
 /// <summary>
 ///     This class is the sending-side subscriber for <see cref="DnsFilterListEntryChangedEvent" />
-///     -- see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared broadcast
-///     plumbing.
+///     (see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared flow).
 /// </summary>
 public class FilterListEntryClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,

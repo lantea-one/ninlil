@@ -14,12 +14,11 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Tests;
 
 /// <summary>
-///     This class proves <see cref="UserClusterConfigSyncApplier" /> against a real SQLite
-///     database -- ordinary create/update/delete/last-write-wins behavior, the decrypt/re-encrypt
-///     pipeline for a TOTP secret and recovery codes, role/permission-claim reconciliation, and
-///     identity federation's own headline mechanism: a genuine cluster-wide username collision between two
-///     independently-created accounts, resolved deterministically regardless of which side of the
-///     collision this node is processing.
+///     This class tests <see cref="UserClusterConfigSyncApplier" /> against EF Core repositories
+///     on a temporary SQLite database: create, update, delete and last-write-wins, encrypting
+///     the plaintext TOTP secret and recovery codes on arrival, role and permission
+///     reconciliation, and username collisions between accounts created on two nodes, resolved
+///     the same way whichever side is processed.
 /// </summary>
 public sealed class UserClusterConfigSyncApplierTests : IDisposable
 {
@@ -132,10 +131,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     This test proves the decrypt-at-sender/re-encrypt-at-receiver pipeline actually works:
-    ///     a plain-text TOTP secret carried by the payload is re-encrypted with this receiving
-    ///     node's own protector, and reading it back through that same protector yields the exact
-    ///     original secret.
+    ///     This test checks that a plaintext TOTP secret in the payload is stored encrypted with
+    ///     this node's protector and decrypts back to the original.
     /// </summary>
     [Fact]
     public async Task ApplyAsyncReEncryptsAnIncomingPlainTextTotpSecretWithThisNodesOwnProtector()
@@ -249,7 +246,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         Assert.Contains(claims, claim => claim.ClaimValue == "zones:read");
         Assert.Contains(claims, claim => claim.ClaimValue == "zones:write");
 
-        // A second, later envelope narrowing the permission set must remove the one dropped.
+        // A later envelope with fewer permissions must remove the one left out.
         await _applier.ApplyAsync(
             new ClusterConfigSyncEnvelope(
                 UserClusterConfigSyncApplier.EntityTypeName,
@@ -339,11 +336,9 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     This is identity federation's own headline scenario: two nodes each independently create an
-    ///     account named "alice" (two different ids) during a real network partition. When node A's
-    ///     own envelope for its account reaches a node that already has a *different* local "alice"
-    ///     (its own, created independently), the incoming account is newer, so the already-existing
-    ///     local account is the collision's loser -- renamed and flagged, never dropped.
+    ///     This test covers two nodes each creating an account named "alice" (different ids), for
+    ///     example during a partition. The incoming account is newer, so the local "alice" loses:
+    ///     it is renamed and flagged, not dropped.
     /// </summary>
     [Fact]
     public async Task ApplyAsyncRenamesAndFlagsTheAlreadyExistingLocalAccountWhenTheIncomingOneIsNewer()
@@ -353,7 +348,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         DateTimeOffset earlier = DateTimeOffset.UtcNow;
         DateTimeOffset later = earlier.AddMinutes(5);
 
-        // The local node's own independently-created "alice," earlier in time.
+        // This node's "alice", created earlier.
         await _userRepository.AddAsync(
             new UserEntity
             {
@@ -366,7 +361,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         );
         await _unitOfWork.SaveChangesAsync();
 
-        // A different node's own independently-created "alice" arrives, later in time -- it wins.
+        // Another node's "alice", created later, arrives and wins.
         await _applier.ApplyAsync(
             new ClusterConfigSyncEnvelope(
                 UserClusterConfigSyncApplier.EntityTypeName,
@@ -385,8 +380,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         Assert.Equal("alice", incoming.UserName);
         Assert.Null(incoming.ClusterConflictNote);
 
-        // The already-existing local account lost the collision: renamed and flagged, not
-        // dropped -- both accounts survive, under different names.
+        // The local account lost: renamed and flagged, so both accounts exist under different
+        // names.
         UserEntity local = await _userRepository.GetByIdAsync(localAccountId);
         Assert.NotNull(local);
         Assert.NotEqual("alice", local.UserName);
@@ -396,10 +391,9 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     The mirror image of the previous test: when the already-existing local account is
-    ///     newer than the incoming one, the incoming account is the collision's loser and is
-    ///     created locally under a renamed, flagged identity, while the local account keeps its
-    ///     original name untouched.
+    ///     This test is the reverse of the previous one: the local account is newer, so the
+    ///     incoming account is created under a renamed, flagged name and the local one keeps its
+    ///     name.
     /// </summary>
     [Fact]
     public async Task ApplyAsyncCreatesTheIncomingAccountUnderARenamedFlaggedIdentityWhenItIsOlder()
@@ -409,7 +403,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         DateTimeOffset earlier = DateTimeOffset.UtcNow;
         DateTimeOffset later = earlier.AddMinutes(5);
 
-        // The local node's own independently-created "alice," LATER in time -- it wins.
+        // This node's "alice", created LATER, which wins.
         await _userRepository.AddAsync(
             new UserEntity
             {
@@ -422,8 +416,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         );
         await _unitOfWork.SaveChangesAsync();
 
-        // A different node's own independently-created "alice" arrives, EARLIER in time -- it
-        // loses the collision.
+        // Another node's "alice", created EARLIER, arrives and loses.
         await _applier.ApplyAsync(
             new ClusterConfigSyncEnvelope(
                 UserClusterConfigSyncApplier.EntityTypeName,
@@ -441,7 +434,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         Assert.Equal("alice", local.UserName);
         Assert.Null(local.ClusterConflictNote);
 
-        // The incoming account is created under a renamed, flagged identity -- not dropped.
+        // The incoming account is created under a renamed, flagged name, not dropped.
         UserEntity incoming = await _userRepository.GetByIdAsync(incomingAccountId);
         Assert.NotNull(incoming);
         Assert.NotEqual("alice", incoming.UserName);
@@ -450,11 +443,9 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     This test proves the collision-resolution rule is genuinely symmetric: processing the
-    ///     exact same pair of accounts from the "other side" (the roles of "local" and "incoming"
-    ///     swapped) reaches the exact same conclusion about which one keeps the contested username
-    ///     -- the property that actually matters for every node in a cluster to converge on the
-    ///     same outcome, regardless of which node processes an envelope first.
+    ///     This test checks that the rule is symmetric: with "local" and "incoming" swapped, the
+    ///     same account keeps the username, so all nodes reach the same outcome whichever
+    ///     envelope they process first.
     /// </summary>
     [Fact]
     public async Task TheCollisionResolutionIsSymmetricRegardlessOfWhichSideIsProcessedAsLocal()
@@ -464,9 +455,9 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         DateTimeOffset accountOneTimestamp = DateTimeOffset.UtcNow;
         DateTimeOffset accountTwoTimestamp = accountOneTimestamp.AddMinutes(5);
 
-        // Scenario: this node already locally has accountOne (earlier); accountTwo (later)
-        // arrives from a peer. accountTwo should win, exactly as
-        // ApplyAsyncRenamesAndFlagsTheAlreadyExistingLocalAccountWhenTheIncomingOneIsNewer proved.
+        // This node has accountOne (earlier) and accountTwo (later) arrives from a peer;
+        // accountTwo wins, as in
+        // ApplyAsyncRenamesAndFlagsTheAlreadyExistingLocalAccountWhenTheIncomingOneIsNewer.
         await _userRepository.AddAsync(
             new UserEntity
             {
@@ -494,9 +485,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         UserEntity accountTwo = await _userRepository.GetByIdAsync(accountTwoId);
         UserEntity accountOne = await _userRepository.GetByIdAsync(accountOneId);
 
-        // accountTwo (later) wins in both orderings -- the same conclusion the mirror-image test
-        // above reached when accountOne was instead the one arriving as an incoming envelope
-        // against an already-existing, earlier local accountTwo.
+        // accountTwo (later) wins in both orders.
         Assert.Equal("alice", accountTwo.UserName);
         Assert.Null(accountTwo.ClusterConflictNote);
         Assert.NotEqual("alice", accountOne.UserName);

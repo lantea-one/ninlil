@@ -10,9 +10,8 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
-///     <see cref="DnsFilterListEntity" />'s own metadata -- see <see cref="ClusterConfigSyncApplierBase{TEntity}" />
-///     for the real create/update/delete/last-write-wins logic this class only supplies the
-///     entity-specific payload mapping for.
+///     <see cref="DnsFilterListEntity" /> metadata; <see cref="ClusterConfigSyncApplierBase{TEntity}" />
+///     does the work and this class maps the payload.
 /// </summary>
 public class FilterListClusterConfigSyncApplier(
     IDnsFilterListRepository repository,
@@ -21,8 +20,7 @@ public class FilterListClusterConfigSyncApplier(
 ) : ClusterConfigSyncApplierBase<DnsFilterListEntity>(repository, unitOfWork, logger)
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every filter-list envelope this
-    ///     project ever sends or receives carries.
+    ///     This constant contains the entity type of filter-list envelopes.
     /// </summary>
     public const string EntityTypeName = "FilterList";
 

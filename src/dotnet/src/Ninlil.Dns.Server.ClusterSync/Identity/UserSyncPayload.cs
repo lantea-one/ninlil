@@ -4,35 +4,23 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.ClusterSync.Identity;
 
 /// <summary>
-///     This record is the wire shape a <c>"User"</c> config-sync envelope's own
-///     <c>ClusterConfigSyncEnvelope.PayloadJson</c> carries -- built and serialized by
-///     <c>UserClusterSyncEventSubscriber</c> on the sending side, and deserialized by
-///     <c>UserClusterConfigSyncApplier</c> on the receiving side.
+///     This record is the JSON payload of a <c>"User"</c> config-sync envelope, built by
+///     <see cref="UserClusterSyncEventSubscriber" /> and applied by
+///     <see cref="UserClusterConfigSyncApplier" />.
 ///     <para>
-///         <b>The decrypt-at-sender/re-encrypt-at-receiver pipeline (Phase 9-6d's own decision
-///         record, decision #5)</b>: <see cref="TwoFactorTotpSecretPlain" />/
-///         <see cref="TwoFactorRecoveryCodesPlain" /> are deliberately carried in <em>plain text</em>
-///         here, not as the sending node's own <c>IDataProtector</c>-encrypted bytes -- a receiving
-///         node's own, fully independent Data Protection key ring (per this project's own
-///         "per-node key rings stay independent, never shared" invariant) could never decrypt a
-///         value protected under a different node's own key ring anyway. The sending side
-///         (<c>UserClusterSyncEventSubscriber</c>) decrypts with its own protector immediately
-///         before building this payload; the receiving side
-///         (<c>UserClusterConfigSyncApplier</c>) re-encrypts with <em>its own</em> protector
-///         immediately after deserializing it, before the plain-text value is ever persisted. This
-///         is exactly why the cluster channel needs the TLS layer Phase 9-6a already built on top
-///         of TSIG: TSIG only authenticates the envelope's own integrity/origin, it does not
-///         encrypt the payload in transit, so a real secret must never cross this wire without the
-///         TLS confidentiality the channel already provides.
+///         <b>Secrets in plaintext.</b> <see cref="TwoFactorTotpSecretPlain" /> and
+///         <see cref="TwoFactorRecoveryCodesPlain" /> are sent decrypted, because each node has
+///         its own Data Protection key ring and could not decrypt another node's ciphertext. The
+///         sender decrypts them just before building the payload and the receiver encrypts them
+///         with its own key ring before storing them. The HMAC signature does not encrypt
+///         anything; the cluster channel's TLS is what keeps these values confidential in
+///         transit.
 ///     </para>
 ///     <para>
-///         <see cref="PasswordHash" />/<see cref="SecurityStamp" />/<see cref="ConcurrencyStamp" />
-///         are carried as-is, with no protector involved at all: unlike the two TOTP fields above,
-///         none of these three is ever encrypted via <c>IDataProtector</c> in the first place --
-///         <see cref="PasswordHash" /> is already a one-way, salted hash (ASP.NET Core Identity's
-///         own <c>PasswordHasher</c>, portable by design across any two nodes running the same
-///         hashing algorithm), and the other two are opaque random tokens, not secrets that need
-///         decrypting to be usable.
+///         <see cref="PasswordHash" />, <see cref="SecurityStamp" /> and <see cref="ConcurrencyStamp" />
+///         are sent as they are: none is encrypted with <c>IDataProtector</c>. The password hash
+///         is a salted one-way hash from ASP.NET Core Identity's <c>PasswordHasher</c>, valid on
+///         any node, and the two stamps are random tokens.
 ///     </para>
 /// </summary>
 public sealed record UserSyncPayload(

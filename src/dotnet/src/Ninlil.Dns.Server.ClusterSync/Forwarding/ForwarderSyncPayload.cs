@@ -2,8 +2,7 @@
 namespace Ninlil.Dns.Server.ClusterSync.Forwarding;
 
 /// <summary>
-///     This record is the JSON shape a <c>DnsForwarderEntity</c>'s own config-sync envelope
-///     carries.
+///     This record is the JSON payload of a <c>DnsForwarderEntity</c> config-sync envelope.
 /// </summary>
 public sealed record ForwarderSyncPayload(
     string Name,

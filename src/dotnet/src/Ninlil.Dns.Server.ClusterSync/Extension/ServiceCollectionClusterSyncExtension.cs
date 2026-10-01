@@ -12,24 +12,20 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.ClusterSync.Extension;
 
 /// <summary>
-///     This class provides our <see cref="IServiceCollection" /> extension for wiring up Phase
-///     9-6c's operational config sync: one <see cref="IClusterConfigSyncApplier" /> and one
-///     event subscriber per synced category (filter lists, filter list entries, access-control
-///     rules, rewrites, forwarders). The composition root (<c>Ninlil.Web</c>'s own
-///     <c>Program.cs</c>) is expected to have already registered a real
-///     <see cref="IClusterConfigSyncBroadcaster" /> (<c>Ninlil.Dns.Server.Cluster</c>'s own
-///     <c>ClusterConfigSyncBroadcaster</c>) and every repository each applier/subscriber
-///     depends on.
+///     This class provides our <see cref="IServiceCollection" /> extension for wiring up cluster
+///     config sync: an <see cref="IClusterConfigSyncApplier" /> and an event subscriber for each
+///     synced category (filter lists, filter list entries, access-control rules, rewrites,
+///     forwarders, users, roles), plus the sending subscriber for settings sections, whose
+///     applier lives in <c>Ninlil.Web</c>. The composition root must also register an
+///     <see cref="IClusterConfigSyncBroadcaster" /> (<c>ClusterConfigSyncBroadcaster</c> in
+///     <c>Ninlil.Dns.Server.Cluster</c>) and the repositories.
 /// </summary>
 public static class ServiceCollectionClusterSyncExtension
 {
     /// <summary>
-    ///     This method registers every applier and subscriber this project provides. Both kinds
-    ///     are registered scoped -- an applier depends directly on a scoped repository/unit of
-    ///     work, and a subscriber is resolved by <c>DnsServerEventDispatcher</c> through a fresh
-    ///     scope per event regardless of its own declared lifetime, the same "scoped subscriber"
-    ///     convention every other <c>IDnsServerEventSubscriber{TEvent}</c> registration in this
-    ///     project already follows.
+    ///     This method registers every applier and subscriber in this project, all scoped: the
+    ///     appliers use scoped repositories, and <c>DnsServerEventDispatcher</c> resolves
+    ///     subscribers in a new scope per event.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

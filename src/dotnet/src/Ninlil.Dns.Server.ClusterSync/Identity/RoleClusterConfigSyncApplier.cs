@@ -11,13 +11,10 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
-///     <see cref="RoleEntity" />'s own name/description/permission-claim state. Mirrors
-///     <see cref="UserClusterConfigSyncApplier" />'s own shape exactly, minus the secret
-///     decrypt/re-encrypt pipeline a role has no need for -- see that class's own doc comment for
-///     the full reasoning behind not building this on <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />:
-///     a role's own <c>NormalizedName</c> carries the exact same database-enforced uniqueness
-///     constraint a username does, so the exact same real-partition collision shape applies here
-///     too.
+///     <see cref="RoleEntity" /> name, description and permissions. It works like
+///     <see cref="UserClusterConfigSyncApplier" /> without the secrets, and is not built on
+///     <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" /> for the same reason: role names
+///     are unique too, so a new id can collide on the name and is resolved the same way.
 /// </summary>
 /// <param name="roleRepository">The repository this applier reads and writes roles through.</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
@@ -29,8 +26,7 @@ public class RoleClusterConfigSyncApplier(
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every role envelope this project ever
-    ///     sends or receives carries.
+    ///     This constant contains the entity type of role envelopes.
     /// </summary>
     public const string EntityTypeName = "Role";
 
@@ -43,9 +39,7 @@ public class RoleClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // What/why: an envelope's entity key is always a serialized Guid; anything else means a
-        // malformed or foreign-format envelope reached this applier, so it is logged and dropped
-        // rather than allowed to throw further down.
+        // The entity key must be a Guid; anything else is logged and dropped.
         if (!Guid.TryParse(envelope.EntityKey, out Guid id))
         {
             logger.LogWarning(
@@ -59,20 +53,15 @@ public class RoleClusterConfigSyncApplier(
 
         RoleEntity local = await roleRepository.GetByIdAsync(id, stoppingToken);
 
-        // What/why: an id never seen locally before is the only branch where a genuine
-        // role-name collision can occur -- see ApplyToNewLocalRoleAsync's own doc comment and
-        // UserClusterConfigSyncApplier's own doc comment for the full collision-handling
-        // mechanism this mirrors.
+        // Only a new id can collide on the name (see ApplyToNewLocalRoleAsync).
         if (local is null)
         {
             await ApplyToNewLocalRoleAsync(id, envelope, stoppingToken);
             return;
         }
 
-        // How: the same deterministic (timestamp, then originating-node-id) tie-break every
-        // other synced entity in this project uses decides whether this incoming change is
-        // actually newer than what is already on record; a stale or duplicate re-delivery is
-        // silently discarded here.
+        // The usual tie-break (timestamp, then originating node id) decides; a stale or
+        // duplicate envelope is ignored.
         bool incomingWins = ClusterSyncConflictResolver.IncomingWins(
             local.GetLastModifiedUtc(),
             local.OriginatingNodeId,
@@ -90,8 +79,7 @@ public class RoleClusterConfigSyncApplier(
             return;
         }
 
-        // What: an ordinary update overwrites every mutable field from the incoming payload,
-        // then reconciles the role's own permission-claim set separately below.
+        // An update overwrites every field, then the permissions are reconciled below.
         RoleSyncPayload payload = JsonSerializer.Deserialize<RoleSyncPayload>(envelope.PayloadJson);
 
         local.Name = payload.Name;
@@ -108,10 +96,8 @@ public class RoleClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method handles the "we have never seen this role's own id before" branch, the
-    ///     only branch where a genuine role-name collision can actually happen -- see
-    ///     <see cref="UserClusterConfigSyncApplier.ApplyToNewLocalUserAsync" /> for the identical
-    ///     reasoning applied to a user account.
+    ///     This method handles a role id this node has not seen, resolving a name collision as
+    ///     <see cref="UserClusterConfigSyncApplier.ApplyToNewLocalUserAsync" /> does for users.
     /// </summary>
     private async Task ApplyToNewLocalRoleAsync(
         Guid id,
@@ -128,11 +114,7 @@ public class RoleClusterConfigSyncApplier(
         string effectiveNormalizedName = payload.NormalizedName;
         string conflictNote = null;
 
-        // What/why/how: the actual collision check is a lookup by normalized name, not by id --
-        // a genuine collision is, by definition, a *different* local id already holding the
-        // exact name this incoming, never-before-seen id also claims. A match under the very
-        // same id is not a collision at all (this node has simply never synced this role
-        // before), which the `conflicting.Id != id` guard below excludes.
+        // A collision is a different local id holding the same normalized name.
         RoleEntity conflicting = await roleRepository.FindByNormalizedNameAsync(
             payload.NormalizedName,
             stoppingToken
@@ -200,10 +182,8 @@ public class RoleClusterConfigSyncApplier(
             }
         }
 
-        // What/how: the new local row always uses `effectiveName`/`effectiveNormalizedName` --
-        // either the payload's own original values (no collision was found above) or the renamed
-        // values the losing side of a collision was assigned, so a colliding incoming role is
-        // never created under a name a different local role already holds.
+        // The new row uses the effective names: the payload's, or the renamed ones when the
+        // incoming role lost a collision.
         RoleEntity created = new()
         {
             Id = id,
@@ -224,8 +204,8 @@ public class RoleClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method replaces a role's own permission-claim set with the incoming payload's own
-    ///     snapshot, once the role row itself has already been created or updated.
+    ///     This method makes the role's permission claims match the payload, after the role row
+    ///     has been saved.
     /// </summary>
     private async Task ReconcileClaimsAsync(
         Guid roleId,
@@ -233,11 +213,8 @@ public class RoleClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // What/why/how: the role's own permission set is replaced by set difference rather than
-        // a wholesale delete-then-recreate -- only the actual additions/removals against what is
-        // currently on record are applied, filtered down to claims of the Permission claim type
-        // specifically, since a role's own claim set could in principle carry other claim types
-        // this reconciliation must never touch.
+        // Apply only the differences, and only for claims of the Permission type; other claim
+        // types are left alone.
         IReadOnlyList<RoleClaimEntity> currentClaims = await roleRepository.ListClaimsAsync(
             roleId,
             stoppingToken

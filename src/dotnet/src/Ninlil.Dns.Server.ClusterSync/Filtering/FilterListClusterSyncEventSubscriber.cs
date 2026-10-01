@@ -14,10 +14,8 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 
 /// <summary>
 ///     This class is the sending-side subscriber for <see cref="DnsFilterListChangedEvent" />,
-///     forwarding a local block/allow-list metadata change to every cluster peer over the
-///     existing cluster channel -- see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" />
-///     for the shared broadcast plumbing this class only supplies the entity-specific lookup and
-///     serialization for.
+///     sending block and allow-list metadata changes to every healthy peer (see
+///     <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared flow).
 /// </summary>
 public class FilterListClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,

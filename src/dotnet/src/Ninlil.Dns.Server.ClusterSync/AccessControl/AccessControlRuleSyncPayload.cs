@@ -4,8 +4,8 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.ClusterSync.AccessControl;
 
 /// <summary>
-///     This record is the JSON shape a <c>DnsAccessControlRuleEntity</c>'s own config-sync
-///     envelope carries.
+///     This record is the JSON payload of a <c>DnsAccessControlRuleEntity</c> config-sync
+///     envelope.
 /// </summary>
 public sealed record AccessControlRuleSyncPayload(
     string Name,

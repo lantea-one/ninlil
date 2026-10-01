@@ -4,10 +4,10 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Tests;
 
 /// <summary>
-///     This class proves <see cref="ClusterSyncConflictResolver.IncomingWins" /> implements
-///     the cluster's own last-write-wins rule exactly as documented: a strictly later timestamp
-///     always wins, and an exact tie is broken deterministically by comparing the two originating
-///     node ids' own canonical string form, ordinally.
+///     This class tests <see cref="ClusterSyncConflictResolver.IncomingWins" />, a pure function:
+///     a later timestamp wins, and on an equal timestamp the change whose originating node id
+///     (as a "D" string, a missing one counting as <see cref="Guid.Empty" />) sorts later
+///     ordinally wins. An identical change never wins.
 /// </summary>
 public class ClusterSyncConflictResolverTests
 {
@@ -37,11 +37,8 @@ public class ClusterSyncConflictResolverTests
     }
 
     /// <summary>
-    ///     This test is the genuine two-conflicting-changes proof: two changes carrying different
-    ///     timestamps, confirming the later one wins regardless of which one this method is asked about
-    ///     "first" (the resolver itself is stateless and order-independent, so calling it with
-    ///     either change cast as "incoming" against the other as "local" must agree on the same,
-    ///     single winner).
+    ///     This test checks two changes with different timestamps in both directions: whichever
+    ///     plays "incoming" and whichever "local", the later one wins.
     /// </summary>
     [Fact]
     public void TheLaterOfTwoConflictingChangesWinsRegardlessOfWhichIsTreatedAsIncoming()
@@ -49,9 +46,7 @@ public class ClusterSyncConflictResolverTests
         DateTimeOffset earlier = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
         DateTimeOffset later = DateTimeOffset.Parse("2026-01-01T00:00:05Z");
 
-        // Ask twice, in both directions -- the earlier change is never allowed to win over the
-        // later one, whichever role ("local" already on record, or "incoming" just arrived) each
-        // one plays.
+        // Ask in both directions; the earlier change never wins.
         bool laterWinsWhenIncoming = ClusterSyncConflictResolver.IncomingWins(
             earlier,
             NodeA,
@@ -74,8 +69,8 @@ public class ClusterSyncConflictResolverTests
     {
         DateTimeOffset sameInstant = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
 
-        // "bbbbbbbb-..." sorts after "aaaaaaaa-..." ordinally, so the incoming change (from Node
-        // B) should win a tie against a local change already recorded from Node A.
+        // "bbbbbbbb-..." sorts after "aaaaaaaa-...", so the incoming change from node B wins a
+        // tie against a local change from node A.
         bool incomingFromBWinsOverLocalFromA = ClusterSyncConflictResolver.IncomingWins(
             sameInstant,
             NodeA,
@@ -83,8 +78,7 @@ public class ClusterSyncConflictResolverTests
             NodeB
         );
 
-        // The reverse direction must be consistent: an incoming change from Node A never beats a
-        // local change already recorded from Node B on the same exact tie.
+        // And the reverse: an incoming change from node A does not beat a local one from node B.
         bool incomingFromALosesToLocalFromB = ClusterSyncConflictResolver.IncomingWins(
             sameInstant,
             NodeB,
@@ -101,9 +95,8 @@ public class ClusterSyncConflictResolverTests
     {
         DateTimeOffset sameInstant = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
 
-        // A null local originating node id (an entity that predates cluster config sync, or a
-        // still-single-node deployment) is treated as Guid.Empty for the tie-break -- any real,
-        // non-empty incoming node id sorts after it ordinally.
+        // A null local node id (for example a row written outside the sync-aware paths) counts
+        // as Guid.Empty, which any non-empty incoming node id sorts after.
         bool result = ClusterSyncConflictResolver.IncomingWins(
             sameInstant,
             null,
@@ -119,8 +112,7 @@ public class ClusterSyncConflictResolverTests
     {
         DateTimeOffset sameInstant = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
 
-        // A genuinely identical envelope (the same node re-delivering, or a duplicate broadcast)
-        // must never be treated as "incoming wins" -- there is nothing to apply again.
+        // An identical envelope (a duplicate delivery) must not win; there is nothing to apply.
         bool result = ClusterSyncConflictResolver.IncomingWins(
             sameInstant,
             NodeA,

@@ -12,10 +12,10 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Tests;
 
 /// <summary>
-///     This class proves <see cref="RoleClusterConfigSyncApplier" /> against a real SQLite
-///     database -- ordinary create/update/delete/last-write-wins behavior, permission-claim
-///     reconciliation, and the same genuine role-name collision handling
-///     <see cref="UserClusterConfigSyncApplierTests" /> already proves for a username.
+///     This class tests <see cref="RoleClusterConfigSyncApplier" /> against EF Core repositories
+///     on a temporary SQLite database: create, update, delete and last-write-wins, permission
+///     reconciliation, and role-name collisions, as <see cref="UserClusterConfigSyncApplierTests" />
+///     does for usernames.
 /// </summary>
 public sealed class RoleClusterConfigSyncApplierTests : IDisposable
 {
@@ -135,11 +135,9 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
     }
 
     /// <summary>
-    ///     The same genuine-partition role-name collision scenario
-    ///     <see cref="UserClusterConfigSyncApplierTests" /> proves for a username: two nodes each
-    ///     independently create a role named "Zone Administrator." The newer one wins the
-    ///     contested name; the older, already-existing local role is renamed and flagged, never
-    ///     dropped.
+    ///     This test covers a role-name collision, as <see cref="UserClusterConfigSyncApplierTests" />
+    ///     does for usernames: two nodes each create a role named "Zone Administrator". The newer
+    ///     one keeps the name; the older local role is renamed and flagged, not dropped.
     /// </summary>
     [Fact]
     public async Task ApplyAsyncRenamesAndFlagsTheAlreadyExistingLocalRoleWhenTheIncomingOneIsNewer()

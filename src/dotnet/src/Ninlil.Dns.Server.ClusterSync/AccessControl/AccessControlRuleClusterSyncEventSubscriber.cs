@@ -14,12 +14,9 @@ namespace Ninlil.Dns.Server.ClusterSync.AccessControl;
 
 /// <summary>
 ///     This class is the sending-side subscriber for <see cref="DnsAccessControlRuleChangedEvent" />
-///     -- see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared broadcast
-///     plumbing. Genuinely a second, independent subscriber to this same event alongside the
-///     already-existing <c>DnsAccessControlRuleChangedEventSubscriber</c> (which reloads
-///     <c>DnsAccessControlRuleCache</c>'s own in-memory snapshot) -- the event bus already
-///     supports any number of subscribers per event type, so adding this one for Phase 9-6c
-///     needed no change to that pre-existing subscriber at all.
+///     (see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared flow). It runs
+///     alongside <c>DnsAccessControlRuleChangedEventSubscriber</c>, which reloads
+///     <c>DnsAccessControlRuleCache</c>; the event bus calls every subscriber of an event.
 /// </summary>
 public class AccessControlRuleClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,

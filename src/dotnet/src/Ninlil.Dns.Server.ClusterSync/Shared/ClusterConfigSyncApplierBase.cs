@@ -7,22 +7,21 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Shared;
 
 /// <summary>
-///     This class implements the one real-work shape every entity-row
-///     <see cref="IClusterConfigSyncApplier" /> in this project shares, once: parse the
-///     envelope's own <see cref="ClusterConfigSyncEnvelope.EntityKey" /> as the entity's
-///     <see cref="Guid" /> id, look it up locally, decide whether the incoming change actually
-///     wins via <see cref="ClusterSyncConflictResolver.IncomingWins" />, and either create,
-///     update, or delete the local row accordingly. Every concrete applier
-///     (<c>FilterListClusterConfigSyncApplier</c>, <c>AccessControlRuleClusterConfigSyncApplier</c>,
-///     <c>RewriteClusterConfigSyncApplier</c>, <c>ForwarderClusterConfigSyncApplier</c>,
-///     <c>FilterListEntryClusterConfigSyncApplier</c>) only ever needs to supply
-///     <see cref="CreateFromPayload" />/<see cref="ApplyPayload" /> -- the JSON shape of its own
-///     entity's mutable fields -- never re-implement the lookup/compare/write flow itself.
+///     This class is the receiving-side flow shared by the simple
+///     <see cref="IClusterConfigSyncApplier" /> implementations (filter lists, filter list
+///     entries, access-control rules, rewrites, forwarders). <c>ClusterChannelController.ConfigSync</c>
+///     calls <see cref="ApplyAsync" />, which parses <see cref="ClusterConfigSyncEnvelope.EntityKey" />
+///     as the entity id, looks the row up, and creates, updates or deletes it when the incoming
+///     change wins under <see cref="ClusterSyncConflictResolver.IncomingWins" />. A subclass
+///     supplies only <see cref="CreateFromPayload" /> and <see cref="ApplyPayload" />, the JSON
+///     shape of its entity's fields. The repositories are written directly, so applying a
+///     change raises no change event and is not broadcast again. Deletions leave no record, so
+///     an older create or update that arrives after a delete brings the row back.
 /// </summary>
 /// <typeparam name="TEntity">The entity type this applier synchronizes.</typeparam>
 /// <param name="repository">The repository this applier reads and writes the entity through.</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
-/// <param name="logger">The logger a malformed/rejected envelope is recorded to.</param>
+/// <param name="logger">The logger a malformed envelope is recorded to.</param>
 public abstract class ClusterConfigSyncApplierBase<TEntity>(
     IRepository<TEntity> repository,
     IUnitOfWork unitOfWork,
@@ -34,15 +33,14 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
     public abstract string EntityType { get; }
 
     /// <summary>
-    ///     This method builds a brand-new local entity from an incoming envelope's own payload,
-    ///     for the case where this node has never seen this entity id before. The caller (this
-    ///     base class's own <see cref="ApplyAsync" />) has already set <see cref="EntityBase.Id" />
-    ///     /<see cref="EntityBase.CreatedAtUtc" />/<see cref="AuditableEntityBase.UpdatedAtUtc" />/
-    ///     <see cref="AuditableEntityBase.OriginatingNodeId" /> correctly on the returned instance
-    ///     before it is persisted; an implementation only needs to populate its own entity-specific
-    ///     fields from <paramref name="payloadJson" />.
+    ///     This method builds a new local entity from an envelope's payload, when this node does
+    ///     not have the id yet. <see cref="ApplyAsync" /> sets <see cref="EntityBase.Id" />,
+    ///     <see cref="EntityBase.CreatedAtUtc" />, <see cref="AuditableEntityBase.UpdatedAtUtc" />
+    ///     and <see cref="AuditableEntityBase.OriginatingNodeId" /> on the returned instance
+    ///     afterwards; an implementation fills only the entity's own fields from
+    ///     <paramref name="payloadJson" />.
     /// </summary>
-    /// <param name="id">The new entity's own identifier -- <paramref name="envelope" />'s own <see cref="ClusterConfigSyncEnvelope.EntityKey" />, already parsed.</param>
+    /// <param name="id">The new entity's identifier, parsed from <see cref="ClusterConfigSyncEnvelope.EntityKey" />.</param>
     /// <param name="payloadJson">The entity's serialized field content.</param>
     /// <param name="envelope">The full envelope, for any implementation that needs more than just the payload.</param>
     protected abstract TEntity CreateFromPayload(
@@ -52,11 +50,10 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
     );
 
     /// <summary>
-    ///     This method overwrites an already-existing local entity's own entity-specific fields
-    ///     from an incoming envelope's payload -- called only once this base class has already
-    ///     decided the incoming change wins. An implementation must not touch
-    ///     <see cref="AuditableEntityBase.UpdatedAtUtc" />/<see cref="AuditableEntityBase.OriginatingNodeId" />
-    ///     itself; the caller sets both immediately afterward.
+    ///     This method overwrites an existing entity's fields from an envelope's payload, once the
+    ///     incoming change has won. An implementation must not set
+    ///     <see cref="AuditableEntityBase.UpdatedAtUtc" /> or
+    ///     <see cref="AuditableEntityBase.OriginatingNodeId" />; the caller sets both afterwards.
     /// </summary>
     /// <param name="local">The already-tracked local entity to update in place.</param>
     /// <param name="payloadJson">The entity's serialized field content.</param>
@@ -68,10 +65,9 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
     );
 
     /// <summary>
-    ///     This method optionally validates that a create/update is actually applicable before it
-    ///     is staged (for example, <c>FilterListEntryClusterConfigSyncApplier</c> uses this to
-    ///     skip an entry whose own owning list does not exist locally yet). The default
-    ///     implementation always allows the write.
+    ///     This method can veto a create or update before it is staged (for example,
+    ///     <c>FilterListEntryClusterConfigSyncApplier</c> skips an entry whose list does not exist
+    ///     here yet). The default allows every write.
     /// </summary>
     /// <param name="payloadJson">The entity's serialized field content.</param>
     /// <param name="envelope">The full envelope.</param>
@@ -104,10 +100,7 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
 
         if (local is null)
         {
-            // We have never seen this entity before. A delete for something we never had is
-            // already a no-op; a create/update needs this base class's own CanApplyAsync check
-            // (for example, an entry whose own owning list has not arrived yet) before it stages
-            // a brand-new row.
+            // A new id: a delete is a no-op, and a create or update must pass CanApplyAsync.
             if (envelope.IsDeleted)
                 return;
 
@@ -125,9 +118,8 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
             return;
         }
 
-        // We already have this entity -- only overwrite it if the incoming change is genuinely
-        // newer (or wins the deterministic tie-break); a stale envelope (for example, one that
-        // arrived out of order, or a duplicate re-delivery) is silently discarded.
+        // A known id: apply only if the incoming change is newer or wins the tie-break; a stale
+        // or duplicate envelope is ignored.
         bool incomingWins = ClusterSyncConflictResolver.IncomingWins(
             local.GetLastModifiedUtc(),
             local.OriginatingNodeId,

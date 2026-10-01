@@ -15,30 +15,22 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.ClusterSync.Identity;
 
 /// <summary>
-///     This class is the sending-side subscriber for <see cref="UserAccountChangedEvent" />,
-///     forwarding a local user account's own identity/RBAC snapshot to every cluster peer over the
-///     existing cluster channel. Deliberately <em>not</em> built on
-///     <see cref="Shared.ClusterConfigSyncSubscriberBase{TEntity}" /> -- that shared base's own
-///     <c>Serialize(TEntity)</c> hook is synchronous, but building a full
-///     <see cref="UserSyncPayload" /> needs two genuinely asynchronous lookups (a user's own role
-///     memberships and directly-granted permission claims) the shared shape has no way to thread
-///     through; see <see cref="UserClusterConfigSyncApplier" />'s own doc comment for the parallel
-///     reasoning on the receiving side.
+///     This class is the sending-side subscriber for <see cref="UserAccountChangedEvent" />. It
+///     sends a user account's identity data, role memberships and direct permissions to every
+///     healthy peer. It is not built on <see cref="Shared.ClusterConfigSyncSubscriberBase{TEntity}" />,
+///     whose <c>Serialize</c> hook is synchronous, because the roles and claims need two
+///     asynchronous lookups.
 ///     <para>
-///         <b>The decrypt-at-sender half of Phase 9-6d's decrypt/re-encrypt pipeline</b>: this
-///         class decrypts <see cref="UserEntity.TwoFactorTotpSecretEncrypted" />/
-///         <see cref="UserEntity.TwoFactorRecoveryCodesEncrypted" /> with <em>this node's own</em>
-///         protector (the only protector that could ever have produced those bytes) before
-///         building the outbound payload -- see <see cref="UserSyncPayload" />'s own doc comment
-///         for why the payload itself always carries the plain-text value, relying on the cluster
-///         channel's existing TLS layer for confidentiality in transit, rather than attempting to
-///         re-encrypt for a receiving node whose own key ring this node has no access to at all.
+///         It decrypts <see cref="UserEntity.TwoFactorTotpSecretEncrypted" /> and
+///         <see cref="UserEntity.TwoFactorRecoveryCodesEncrypted" /> with this node's protectors,
+///         the only ones that can, and sends them in plaintext over the TLS channel (see
+///         <see cref="UserSyncPayload" />).
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped repository per event.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and a repository, per event.</param>
 /// <param name="broadcaster">The broadcaster this subscriber forwards a built envelope to.</param>
-/// <param name="clusterOptions">This node's own cluster configuration, read for its own node id.</param>
-/// <param name="dataProtectionProvider">This node's own Data Protection key ring.</param>
+/// <param name="clusterOptions">The cluster settings, read for this node's id.</param>
+/// <param name="dataProtectionProvider">This node's Data Protection provider.</param>
 /// <param name="logger">The logger a broadcast failure is recorded to.</param>
 public class UserClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,
@@ -49,14 +41,15 @@ public class UserClusterSyncEventSubscriber(
 ) : IDnsServerEventSubscriber<UserAccountChangedEvent>
 {
     /// <summary>
-    ///     This node's own protector for a TOTP authenticator key -- see this class's own doc
-    ///     comment for why decryption always happens with this node's own protector.
+    ///     This field contains the protector for TOTP authenticator keys, with the purpose
+    ///     <c>NinlilDnsUserStore</c> uses.
     /// </summary>
     private readonly IDataProtector _authenticatorKeyProtector =
         dataProtectionProvider.CreateProtector(NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose);
 
     /// <summary>
-    ///     This node's own protector for a two-factor recovery code set.
+    ///     This field contains the protector for two-factor recovery codes, with the purpose
+    ///     <c>NinlilDnsUserStore</c> uses.
     /// </summary>
     private readonly IDataProtector _recoveryCodesProtector =
         dataProtectionProvider.CreateProtector(NinlilDnsUserStore.RecoveryCodesProtectorPurpose);
@@ -77,11 +70,8 @@ public class UserClusterSyncEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work of building and broadcasting one user-account
-    ///     envelope, with every exception (other than cancellation) caught and logged so a
-    ///     broadcast failure never propagates back into <c>DnsServerEventDispatcher</c> -- the
-    ///     same "fire a detached background task, log rather than throw" shape every other
-    ///     cluster-sync subscriber in this project already establishes.
+    ///     This method builds and broadcasts one user envelope on a detached task, logging any
+    ///     exception other than cancellation, like the other config-sync subscribers.
     /// </summary>
     private async Task BroadcastChangeAsync(
         Guid userId,
@@ -116,8 +106,7 @@ public class UserClusterSyncEventSubscriber(
 
             UserEntity user = await userRepository.GetByIdAsync(userId, stoppingToken);
 
-            // A benign race: the account was already deleted again by the time this detached
-            // task actually ran. Nothing to broadcast.
+            // The account was deleted before this task ran; the delete has its own event.
             if (user is null)
                 return;
 

@@ -13,9 +13,8 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.ClusterSync.Rewrites;
 
 /// <summary>
-///     This class is the sending-side subscriber for <see cref="DnsRewriteChangedEvent" /> --
-///     see <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared broadcast
-///     plumbing.
+///     This class is the sending-side subscriber for <see cref="DnsRewriteChangedEvent" /> (see
+///     <see cref="ClusterConfigSyncSubscriberBase{TEntity}" /> for the shared flow).
 /// </summary>
 public class RewriteClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,

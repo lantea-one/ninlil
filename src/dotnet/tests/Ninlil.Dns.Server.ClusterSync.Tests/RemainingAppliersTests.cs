@@ -16,15 +16,13 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Tests;
 
 /// <summary>
-///     This class covers the one genuinely independent thing each of the remaining four
-///     appliers (<see cref="AccessControlRuleClusterConfigSyncApplier" />/
-///     <see cref="RewriteClusterConfigSyncApplier" />/<see cref="ForwarderClusterConfigSyncApplier" />/
-///     <see cref="FilterListEntryClusterConfigSyncApplier" />) adds on top of the shared
-///     create/update/delete/last-write-wins logic <see cref="FilterListClusterConfigSyncApplierTests" />
-///     already proves in full against <see cref="FilterListClusterConfigSyncApplier" />: that
-///     each one's own payload actually round-trips correctly through its own real entity and
-///     repository, plus <see cref="FilterListEntryClusterConfigSyncApplier" />'s own extra
-///     "owning list must already exist" gate.
+///     This class tests what the four other simple appliers
+///     (<see cref="AccessControlRuleClusterConfigSyncApplier" />,
+///     <see cref="RewriteClusterConfigSyncApplier" />, <see cref="ForwarderClusterConfigSyncApplier" />,
+///     <see cref="FilterListEntryClusterConfigSyncApplier" />) add to the shared base that
+///     <see cref="FilterListClusterConfigSyncApplierTests" /> covers: that each payload maps onto
+///     its entity and is stored through the EF Core repository on a temporary SQLite database,
+///     and that a filter list entry is skipped while its list does not exist.
 /// </summary>
 public sealed class RemainingAppliersTests : IDisposable
 {
@@ -197,8 +195,7 @@ public sealed class RemainingAppliersTests : IDisposable
             CancellationToken.None
         );
 
-        // The owning list was never provisioned locally, so the entry must not have been
-        // created either -- it converges only once the owning list itself arrives.
+        // The list does not exist here, so the entry must not have been created.
         Assert.Null(await entryRepository.GetByIdAsync(entryId));
     }
 

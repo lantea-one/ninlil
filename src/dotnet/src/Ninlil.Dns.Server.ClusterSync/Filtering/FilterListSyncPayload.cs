@@ -4,11 +4,9 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 
 /// <summary>
-///     This record is the JSON shape a <c>DnsFilterListEntity</c>'s own config-sync envelope
-///     carries -- every mutable field except <c>LastFetchedAtUtc</c>, which is deliberately
-///     excluded: it records when <em>this</em> node last refetched a subscribed list's own
-///     entries, a purely local operational fact each node tracks independently, not something a
-///     cluster-wide sync should ever overwrite with a different node's own fetch time.
+///     This record is the JSON payload of a <c>DnsFilterListEntity</c> config-sync envelope:
+///     every editable field except <c>LastFetchedAtUtc</c>, which records when this node last
+///     fetched a subscribed list and so stays local.
 /// </summary>
 public sealed record FilterListSyncPayload(
     string Name,

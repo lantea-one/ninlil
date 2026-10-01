@@ -13,14 +13,13 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dns.Server.ClusterSync.Identity;
 
 /// <summary>
-///     This class is the sending-side subscriber for <see cref="RoleChangedEvent" />, forwarding a
-///     local role's own name/description/permission-claim snapshot to every cluster peer. Mirrors
-///     <see cref="UserClusterSyncEventSubscriber" />'s own shape, minus the secret-decrypt step a
-///     role has no need for.
+///     This class is the sending-side subscriber for <see cref="RoleChangedEvent" />. It sends a
+///     role's name, description and permissions to every healthy peer, like
+///     <see cref="UserClusterSyncEventSubscriber" /> without the secrets.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped repository per event.</param>
+/// <param name="scopeFactory">The factory used to create a scope, and a repository, per event.</param>
 /// <param name="broadcaster">The broadcaster this subscriber forwards a built envelope to.</param>
-/// <param name="clusterOptions">This node's own cluster configuration, read for its own node id.</param>
+/// <param name="clusterOptions">The cluster settings, read for this node's id.</param>
 /// <param name="logger">The logger a broadcast failure is recorded to.</param>
 public class RoleClusterSyncEventSubscriber(
     IServiceScopeFactory scopeFactory,
@@ -42,8 +41,8 @@ public class RoleClusterSyncEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual work of building and broadcasting one role envelope, with
-    ///     every exception (other than cancellation) caught and logged.
+    ///     This method builds and broadcasts one role envelope on a detached task, logging any
+    ///     exception other than cancellation.
     /// </summary>
     private async Task BroadcastChangeAsync(
         Guid roleId,
@@ -78,8 +77,7 @@ public class RoleClusterSyncEventSubscriber(
 
             RoleEntity role = await roleRepository.GetByIdAsync(roleId, stoppingToken);
 
-            // A benign race: the role was already deleted again by the time this detached task
-            // actually ran. Nothing to broadcast.
+            // The role was deleted before this task ran; the delete has its own event.
             if (role is null)
                 return;
 

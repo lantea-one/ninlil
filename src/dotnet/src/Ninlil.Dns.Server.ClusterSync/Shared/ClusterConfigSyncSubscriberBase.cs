@@ -9,22 +9,20 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Shared;
 
 /// <summary>
-///     This class implements the sending-side shape every Phase 9-6c cluster-config-sync event
-///     subscriber shares, once: on a local change, re-read the affected entity fresh (a create
-///     or update) or synthesize a bare deletion envelope (there is nothing left to re-read), then
-///     hand the resulting <see cref="ClusterConfigSyncEnvelope" /> to
-///     <see cref="IClusterConfigSyncBroadcaster.BroadcastAsync" />. Mirrors
-///     <c>CatalogZoneAutoProvisioningEventSubscriber</c>'s own "open a fresh scope, do the real
-///     work in a detached background task, log rather than throw" shape exactly -- every concrete
-///     subscriber (<c>FilterListClusterSyncEventSubscriber</c> and its four siblings) only ever
-///     needs to supply <see cref="EntityType" />/<see cref="FindLocalAsync" />/<see cref="Serialize" />
-///     and call <see cref="BroadcastChangeAsync" /> (detached, via a discarded task) from its own
-///     <c>IDnsServerEventSubscriber{TEvent}.HandleAsync</c> implementation.
+///     This class is the sending-side flow shared by the simple config-sync event subscribers
+///     (<c>FilterListClusterSyncEventSubscriber</c> and the four like it). On a local change it
+///     reads the entity again in a new scope (create or update) or builds a bare deletion
+///     envelope, and hands the <see cref="ClusterConfigSyncEnvelope" /> to
+///     <see cref="IClusterConfigSyncBroadcaster.BroadcastAsync" />. A subclass supplies
+///     <see cref="EntityType" />, <see cref="FindLocalAsync" /> and <see cref="Serialize" />, and
+///     calls <see cref="BroadcastChangeAsync" /> on a detached task from its <c>HandleAsync</c>,
+///     like <c>CatalogZoneAutoProvisioningEventSubscriber</c>, so the event dispatcher is not
+///     held up.
 /// </summary>
-/// <typeparam name="TEntity">The entity type this subscriber's own event concerns.</typeparam>
-/// <param name="scopeFactory">The factory used to reach a fresh, scoped repository per event.</param>
+/// <typeparam name="TEntity">The entity type the subscriber's event concerns.</typeparam>
+/// <param name="scopeFactory">The factory used to create a scope, and a repository, per event.</param>
 /// <param name="broadcaster">The broadcaster this subscriber forwards a built envelope to.</param>
-/// <param name="clusterOptions">This node's own cluster configuration, read for its own node id.</param>
+/// <param name="clusterOptions">The cluster settings, read for this node's id.</param>
 /// <param name="logger">The logger a broadcast failure is recorded to.</param>
 public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
     IServiceScopeFactory scopeFactory,
@@ -35,20 +33,19 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
     where TEntity : AuditableEntityBase
 {
     /// <summary>
-    ///     This property contains the entity-type discriminator this subscriber's own envelopes
-    ///     carry -- must exactly match the matching <c>IClusterConfigSyncApplier.EntityType</c>
-    ///     on the receiving side.
+    ///     This property contains the entity type the envelopes carry, which must equal the
+    ///     receiving applier's <c>IClusterConfigSyncApplier.EntityType</c>.
     /// </summary>
     protected abstract string EntityType { get; }
 
     /// <summary>
-    ///     This method looks up the entity a create/update event concerns, fresh, from a
-    ///     newly-opened scope's own repository.
+    ///     This method reads the entity a create or update event concerns from the repository of
+    ///     a new scope.
     /// </summary>
-    /// <param name="services">The scope's own service provider, to resolve a repository from.</param>
+    /// <param name="services">The scope's service provider, to resolve a repository from.</param>
     /// <param name="id">The entity's identifier.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The entity, or <see langword="null" /> if it no longer exists (a benign race with a near-simultaneous local delete).</returns>
+    /// <returns>The entity, or <see langword="null" /> if it was deleted in the meantime.</returns>
     protected abstract Task<TEntity> FindLocalAsync(
         IServiceProvider services,
         Guid id,
@@ -56,25 +53,22 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
     );
 
     /// <summary>
-    ///     This method serializes an entity's own mutable fields into the JSON shape the matching
-    ///     <c>IClusterConfigSyncApplier</c> implementation expects.
+    ///     This method serializes an entity's fields into the JSON the matching
+    ///     <c>IClusterConfigSyncApplier</c> expects.
     /// </summary>
     protected abstract string Serialize(TEntity entity);
 
     /// <summary>
-    ///     This method does the actual work of building and broadcasting one envelope, with every
-    ///     exception (other than cancellation) caught and logged so a broadcast failure never
-    ///     propagates back into <c>DnsServerEventDispatcher</c>. Called as a detached task from
-    ///     each concrete subscriber's own <c>HandleAsync</c>, per this class's own doc comment.
+    ///     This method builds and broadcasts one envelope, logging any exception other than
+    ///     cancellation, since it runs as a detached task that nothing awaits.
     /// </summary>
     /// <param name="entityId">The identifier of the entity that changed.</param>
     /// <param name="isDeleted">Whether the change was a deletion.</param>
     /// <param name="occurredAtUtc">
-    ///     The event's own timestamp -- used verbatim as the envelope's own
-    ///     <see cref="ClusterConfigSyncEnvelope.LastModifiedUtc" /> only for a deletion, where
-    ///     there is no longer a local row to re-read a timestamp from; a create/update instead
-    ///     uses the freshly re-read entity's own <see cref="AuditableEntityBaseExtensions.GetLastModifiedUtc" />,
-    ///     which is what the local write path itself actually stamped.
+    ///     The event's timestamp, used as <see cref="ClusterConfigSyncEnvelope.LastModifiedUtc" />
+    ///     only for a deletion, where no row is left to read. A create or update uses the
+    ///     entity's <see cref="AuditableEntityBaseExtensions.GetLastModifiedUtc" />, the time the
+    ///     local write recorded.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     protected async Task BroadcastChangeAsync(
@@ -107,8 +101,7 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
             await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
             TEntity entity = await FindLocalAsync(scope.ServiceProvider, entityId, stoppingToken);
 
-            // A benign race: the entity was already deleted again (or never existed) by the time
-            // this detached task actually ran. Nothing to broadcast.
+            // The entity was deleted before this task ran; the delete has its own event.
             if (entity is null)
                 return;
 

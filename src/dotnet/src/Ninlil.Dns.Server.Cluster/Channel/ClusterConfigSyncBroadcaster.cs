@@ -27,9 +27,8 @@ namespace Ninlil.Dns.Server.Cluster.Channel;
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to create a scope for each broadcast, since this singleton (its callers
-///     are singleton event subscribers) cannot hold the scoped
-///     <see cref="IClusterNodeRepository" />.
+///     The factory used to create a scope for each broadcast, since this singleton cannot hold
+///     the scoped <see cref="IClusterNodeRepository" />.
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound request.</param>
 /// <param name="clusterOptions">The cluster settings.</param>

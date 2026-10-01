@@ -10,7 +10,8 @@ namespace Ninlil.Dns.Server.ClusterSync.Forwarding;
 
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
-///     <see cref="DnsForwarderEntity" />.
+///     <see cref="DnsForwarderEntity" />; <see cref="ClusterConfigSyncApplierBase{TEntity}" /> does
+///     the work and this class maps the payload.
 /// </summary>
 public class ForwarderClusterConfigSyncApplier(
     IDnsForwarderRepository repository,
@@ -19,8 +20,7 @@ public class ForwarderClusterConfigSyncApplier(
 ) : ClusterConfigSyncApplierBase<DnsForwarderEntity>(repository, unitOfWork, logger)
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every forwarder envelope this project
-    ///     ever sends or receives carries.
+    ///     This constant contains the entity type of forwarder envelopes.
     /// </summary>
     public const string EntityTypeName = "Forwarder";
 

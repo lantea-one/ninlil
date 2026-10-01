@@ -12,50 +12,34 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.ClusterSync.Identity;
 
 /// <summary>
-///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
-///     <see cref="UserEntity" />'s own identity/RBAC state -- Phase 9-6d's own highest-risk
-///     mechanism. Deliberately <em>not</em> built on <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" />
-///     the way every Phase 9-6c applier is: a user account carries a real, database-enforced
-///     unique-username constraint that none of those five entity types' own last-write-wins
-///     lookup-by-id shape ever had to consider, plus a decrypt/re-encrypt pipeline for its own
-///     protected secret fields -- both genuinely different enough concerns that reusing the shared
-///     base would have forced an ill-fitting hook onto code that five other, simpler appliers
-///     already depend on working exactly as-is.
+///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for user
+///     accounts, including password hash, two-factor state, roles and direct permissions. It
+///     is not built on <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" /> because of
+///     the unique username and the secret fields. It applies whatever an authenticated
+///     envelope contains, with no check of which peer sent it.
 ///     <para>
-///         <b>The decrypt-at-sender/re-encrypt-at-receiver pipeline</b>: this class owns its own
-///         <see cref="IDataProtector" /> pair, derived from the exact same purpose strings
-///         <c>NinlilDnsUserStore</c> uses (<see cref="NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose" />/
-///         <see cref="NinlilDnsUserStore.RecoveryCodesProtectorPurpose" />), but from <em>this
-///         node's own</em> <see cref="IDataProtectionProvider" /> -- never the sending node's. An
-///         incoming <see cref="UserSyncPayload" />'s two secret fields always arrive as plain text
-///         (see that record's own doc comment for why); this class re-encrypts them with its own
-///         protector the instant before the resulting <see cref="UserEntity" /> is persisted, so a
-///         later sign-in against this node reads back a value only this node's own key ring can
-///         ever decrypt again.
+///         <b>Secrets.</b> The two plaintext secret fields of <see cref="UserSyncPayload" /> are
+///         encrypted with protectors from this node's <see cref="IDataProtectionProvider" />,
+///         with the purposes <c>NinlilDnsUserStore</c> uses
+///         (<see cref="NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose" />,
+///         <see cref="NinlilDnsUserStore.RecoveryCodesProtectorPurpose" />), before the user is
+///         stored, so sign-in on this node can decrypt them.
 ///     </para>
 ///     <para>
-///         <b>Cluster-wide username-uniqueness collision resolution</b>: unlike every Phase 9-6c
-///         applier, this class's "have I never seen this id before" branch does not simply create
-///         a brand-new row. It first checks whether a <em>different</em> local user (a different
-///         <see cref="EntityBase.Id" />) already holds the incoming account's own
-///         <see cref="UserSyncPayload.NormalizedUserName" /> -- the one shape a genuine, real
-///         network-partition collision actually takes (two nodes each generate their own new
-///         <see cref="Guid" /> for what a human operator perceives as "the same new account"). When
-///         that happens, the exact same deterministic <see cref="ClusterSyncConflictResolver.IncomingWins" />
-///         rule already governing every other conflict in this project decides which of the two
-///         accounts keeps the contested username: the loser is renamed and flagged via
-///         <see cref="ClusterCollisionRenamer" /> (see <see cref="UserEntity.ClusterConflictNote" />'s
-///         own doc comment), never silently dropped or merged. Because the same deterministic rule
-///         is applied by <em>every</em> node considering the exact same pair of
-///         (timestamp, node id) values, every node in the cluster converges on the exact same
-///         choice of winner regardless of which side of the collision it is processing an envelope
-///         for -- proven by a dedicated test, not just asserted here.
+///         <b>Username collisions.</b> For an id this node has not seen, it first checks whether
+///         another local user already has the same <see cref="UserSyncPayload.NormalizedUserName" />,
+///         which is what happens when two nodes each create "the same" account. The
+///         <see cref="ClusterSyncConflictResolver.IncomingWins" /> rule decides which account
+///         keeps the name; the other is renamed and given a note by
+///         <see cref="ClusterCollisionRenamer" /> (see <see cref="UserEntity.ClusterConflictNote" />),
+///         never dropped or merged. Every node applies the same rule to the same timestamps and
+///         node ids, so all pick the same winner; a test checks this.
 ///     </para>
 /// </summary>
 /// <param name="userRepository">The repository this applier reads and writes user accounts through.</param>
-/// <param name="roleRepository">Used to validate that an incoming role assignment actually exists locally before applying it.</param>
+/// <param name="roleRepository">The repository used to check that an incoming role exists here before assigning it.</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
-/// <param name="dataProtectionProvider">This node's own Data Protection key ring, used to re-encrypt an incoming plain-text secret.</param>
+/// <param name="dataProtectionProvider">This node's Data Protection provider, used to encrypt incoming plaintext secrets.</param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
 public class UserClusterConfigSyncApplier(
     IUserRepository userRepository,
@@ -66,8 +50,7 @@ public class UserClusterConfigSyncApplier(
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every user-account envelope this project
-    ///     ever sends or receives carries.
+    ///     This constant contains the entity type of user envelopes.
     /// </summary>
     public const string EntityTypeName = "User";
 
@@ -75,14 +58,13 @@ public class UserClusterConfigSyncApplier(
     public string EntityType => EntityTypeName;
 
     /// <summary>
-    ///     This node's own protector for a TOTP authenticator key -- see this class's own doc
-    ///     comment for why it is derived from this node's own provider, never the sender's.
+    ///     This field contains this node's protector for TOTP authenticator keys.
     /// </summary>
     private readonly IDataProtector _authenticatorKeyProtector =
         dataProtectionProvider.CreateProtector(NinlilDnsUserStore.AuthenticatorKeyProtectorPurpose);
 
     /// <summary>
-    ///     This node's own protector for a two-factor recovery code set.
+    ///     This field contains this node's protector for two-factor recovery codes.
     /// </summary>
     private readonly IDataProtector _recoveryCodesProtector =
         dataProtectionProvider.CreateProtector(NinlilDnsUserStore.RecoveryCodesProtectorPurpose);
@@ -93,9 +75,7 @@ public class UserClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // What/why: an envelope's entity key is always a serialized Guid; anything else means a
-        // malformed or foreign-format envelope reached this applier, so it is logged and dropped
-        // rather than allowed to throw further down.
+        // The entity key must be a Guid; anything else is logged and dropped.
         if (!Guid.TryParse(envelope.EntityKey, out Guid id))
         {
             logger.LogWarning(
@@ -109,20 +89,15 @@ public class UserClusterConfigSyncApplier(
 
         UserEntity local = await userRepository.GetByIdAsync(id, stoppingToken);
 
-        // What/why: an id never seen locally before is the only branch where a genuine
-        // username collision can occur (two nodes each mint a fresh id for what an operator
-        // perceives as "the same new account") -- see ApplyToNewLocalUserAsync's own doc comment
-        // and this class's own doc comment for the full collision-handling mechanism.
+        // Only a new id can collide on the username (see ApplyToNewLocalUserAsync).
         if (local is null)
         {
             await ApplyToNewLocalUserAsync(id, envelope, stoppingToken);
             return;
         }
 
-        // How: the same deterministic (timestamp, then originating-node-id) tie-break every
-        // other synced entity in this project uses decides whether this incoming change is
-        // actually newer than what is already on record; a stale or duplicate re-delivery is
-        // silently discarded here.
+        // The usual tie-break (timestamp, then originating node id) decides; a stale or
+        // duplicate envelope is ignored.
         bool incomingWins = ClusterSyncConflictResolver.IncomingWins(
             local.GetLastModifiedUtc(),
             local.OriginatingNodeId,
@@ -140,10 +115,9 @@ public class UserClusterConfigSyncApplier(
             return;
         }
 
-        // What/how: an ordinary update overwrites every mutable field from the incoming
-        // payload -- the username fields directly here, and every other field (including the
-        // decrypt/re-encrypt of the two protected secret fields) via the shared
-        // ApplyCommonFields helper both this branch and the "new account" branch below use.
+        // An update overwrites every field: the username here, the rest (including encrypting
+        // the secrets) in ApplyCommonFields. A rename that collides with another local user is
+        // not checked on this path.
         UserSyncPayload payload = JsonSerializer.Deserialize<UserSyncPayload>(envelope.PayloadJson);
 
         local.UserName = payload.UserName;
@@ -159,10 +133,8 @@ public class UserClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method handles the "we have never seen this account's own id before" branch --
-    ///     the only branch where a genuine username collision can actually happen (see this
-    ///     class's own doc comment), so it is factored out from the ordinary update/delete branch
-    ///     above for clarity.
+    ///     This method handles an id this node has not seen, the case where a username collision
+    ///     is resolved (see the class summary).
     /// </summary>
     private async Task ApplyToNewLocalUserAsync(
         Guid id,
@@ -180,11 +152,7 @@ public class UserClusterConfigSyncApplier(
         string effectiveNormalizedUserName = payload.NormalizedUserName;
         string conflictNote = null;
 
-        // What/why/how: the actual collision check is a lookup by normalized username, not by
-        // id -- a genuine collision is, by definition, a *different* local id already holding
-        // the exact username this incoming, never-before-seen id also claims. A match under the
-        // very same id is not a collision at all (this node has simply never synced this account
-        // before), which the `conflicting.Id != id` guard below excludes.
+        // A collision is a different local id holding the same normalized username.
         UserEntity conflicting = await userRepository.FindByNormalizedUserNameAsync(
             payload.NormalizedUserName,
             stoppingToken
@@ -201,9 +169,8 @@ public class UserClusterConfigSyncApplier(
 
             if (incomingWinsTheCollision)
             {
-                // The already-existing local account is the collision's loser: rename and flag
-                // it in place, freeing up the contested username for the incoming account, which
-                // is created below exactly as its own payload named it.
+                // The local account loses: rename and flag it, freeing the name for the incoming
+                // account created below.
                 string renamedUserName = ClusterCollisionRenamer.BuildRenamedValue(
                     conflicting.UserName,
                     envelope.OriginatingNodeId
@@ -232,9 +199,8 @@ public class UserClusterConfigSyncApplier(
             }
             else
             {
-                // The incoming account is the collision's loser: create it locally under a
-                // renamed, flagged identity; the already-existing local account keeps its
-                // original name untouched.
+                // The incoming account loses: create it under a renamed, flagged name; the local
+                // account keeps its name.
                 effectiveUserName = ClusterCollisionRenamer.BuildRenamedValue(
                     payload.UserName,
                     conflicting.OriginatingNodeId ?? Guid.Empty
@@ -259,10 +225,8 @@ public class UserClusterConfigSyncApplier(
             }
         }
 
-        // What/how: the new local row always uses `effectiveUserName`/`effectiveNormalizedUserName`
-        // -- either the payload's own original values (no collision was found above) or the
-        // renamed values the losing side of a collision was assigned, so a colliding incoming
-        // account is never created under a username a different local account already holds.
+        // The new row uses the effective names: the payload's, or the renamed ones when the
+        // incoming account lost a collision.
         UserEntity created = new()
         {
             Id = id,
@@ -282,10 +246,9 @@ public class UserClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method copies every field of <see cref="UserSyncPayload" /> that is not part of
-    ///     this class's own username-collision handling onto <paramref name="entity" /> --
-    ///     including re-encrypting the two plain-text secret fields with this node's own
-    ///     protector, per this class's own doc comment.
+    ///     This method copies every <see cref="UserSyncPayload" /> field except the username onto
+    ///     <paramref name="entity" />, encrypting the two plaintext secrets with this node's
+    ///     protectors.
     /// </summary>
     private void ApplyCommonFields(UserEntity entity, UserSyncPayload payload)
     {
@@ -316,15 +279,13 @@ public class UserClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method reconciles a user's own role memberships and directly-granted permission
-    ///     claims against the incoming payload's own denormalized snapshot, once the user row
-    ///     itself has already been created or updated.
+    ///     This method makes the user's role memberships and direct permission claims match the
+    ///     payload, after the user row has been saved.
     ///     <para>
-    ///         A role id the payload names that does not (yet) exist locally is silently skipped,
-    ///         never treated as an error -- the same "no retry/backfill" limitation Phase 9-6c's
-    ///         own <c>FilterListEntryClusterConfigSyncApplier</c> already accepts for an entry
-    ///         whose owning list has not arrived yet: it converges only once a later change to
-    ///         this same user (or the role itself finally arriving) is synced again.
+    ///         A role id that does not exist here yet is skipped, like an entry whose list has not
+    ///         arrived in <c>FilterListEntryClusterConfigSyncApplier</c>. There is no retry; the
+    ///         membership appears only when a later change to this user is synced after the role
+    ///         has arrived.
     ///     </para>
     /// </summary>
     private async Task ReconcileRolesAndClaimsAsync(
@@ -333,12 +294,8 @@ public class UserClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // What/why/how: role membership is reconciled by set difference rather than a
-        // wholesale delete-then-recreate -- the payload's own denormalized RoleIds snapshot is
-        // compared against what this node currently has recorded, and only the actual additions/
-        // removals are applied. A role id the payload names that does not (yet) exist locally is
-        // silently skipped (see this method's own doc comment for why), never added as a dangling
-        // reference.
+        // Apply only the differences between the payload's role ids and the current ones,
+        // skipping role ids that do not exist here.
         IReadOnlyList<RoleEntity> currentRoles = await userRepository.ListRolesAsync(
             userId,
             stoppingToken
@@ -358,11 +315,8 @@ public class UserClusterConfigSyncApplier(
         foreach (Guid roleIdToRemove in currentRoleIds.Except(desiredRoleIds))
             await userRepository.RemoveFromRoleAsync(userId, roleIdToRemove, stoppingToken);
 
-        // What/why/how: directly-granted permission claims are reconciled the exact same
-        // set-difference way immediately above, filtered down to claims of the
-        // Permission claim type specifically -- a user's own claim set can carry other claim
-        // types this reconciliation must never touch, so only permission claims are read,
-        // diffed, and written back.
+        // Direct permission claims the same way. Only claims of the Permission type are
+        // compared and changed; other claim types are left alone.
         IReadOnlyList<UserClaimEntity> currentClaims = await userRepository.ListClaimsAsync(
             userId,
             stoppingToken

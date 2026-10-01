@@ -10,9 +10,9 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a single
-///     <see cref="DnsFilterListEntryEntity" />, only ever meaningful for an entry belonging to a
-///     <c>Local</c>-sourced list (a <c>Subscribed</c> list's own entries are never individually
-///     synced this way -- see <c>DnsFilterListEntryChangedEvent</c>'s own doc comment).
+///     <see cref="DnsFilterListEntryEntity" />. Only entries of <c>Local</c> lists are synced
+///     this way; a <c>Subscribed</c> list's entries are fetched by each node (see
+///     <c>DnsFilterListEntryChangedEvent</c>).
 /// </summary>
 public class FilterListEntryClusterConfigSyncApplier(
     IDnsFilterListEntryRepository entryRepository,
@@ -22,8 +22,7 @@ public class FilterListEntryClusterConfigSyncApplier(
 ) : ClusterConfigSyncApplierBase<DnsFilterListEntryEntity>(entryRepository, unitOfWork, logger)
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every filter-list-entry envelope this
-    ///     project ever sends or receives carries.
+    ///     This constant contains the entity type of filter-list-entry envelopes.
     /// </summary>
     public const string EntityTypeName = "FilterListEntry";
 
@@ -31,14 +30,10 @@ public class FilterListEntryClusterConfigSyncApplier(
     public override string EntityType => EntityTypeName;
 
     /// <summary>
-    ///     This method rejects an entry whose own owning list does not exist locally yet -- a
-    ///     real, if unusual, ordering hazard this sub-phase's own broadcaster does nothing to
-    ///     prevent (see <c>ClusterConfigSyncBroadcaster</c>'s own doc comment: envelopes are
-    ///     delivered independently, with no ordering guarantee between an entry's own change and
-    ///     its owning list's). Skipping silently here is the same "accept an ordering gap rather
-    ///     than build a queue/retry mechanism this sub-phase's own scope does not call for"
-    ///     tradeoff already made throughout Phase 9-6c -- a genuinely orphaned entry converges
-    ///     the next time anything about it changes again, once the owning list has arrived.
+    ///     This method skips an entry whose list does not exist here yet. Envelopes are delivered
+    ///     independently, with no ordering between an entry and its list (see
+    ///     <c>ClusterConfigSyncBroadcaster</c>), and there is no queue or retry, so a skipped entry
+    ///     arrives only when it changes again after its list has arrived.
     /// </summary>
     protected override async Task<bool> CanApplyAsync(
         string payloadJson,

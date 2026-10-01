@@ -47,7 +47,8 @@ public static class ServiceCollectionClusterExtension
 
         // The config-sync broadcaster, registered against the Server.Core abstraction so the
         // event subscribers in Ninlil.Dns.Server.ClusterSync do not depend on this project.
-        // Singleton, because its callers are singleton subscribers and hosted services.
+        // Singleton, like the peer HTTP client factory; it keeps no per-request state and
+        // reads peers through its own scope.
         instance.AddSingleton<IClusterConfigSyncBroadcaster, ClusterConfigSyncBroadcaster>();
 
         // The best-effort cluster-wide username check (see IClusterUsernameUniquenessChecker).

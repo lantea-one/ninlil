@@ -9,16 +9,14 @@ namespace Ninlil.Dns.Server.ClusterSync.Settings;
 
 /// <summary>
 ///     This class is the sending-side subscriber for <see cref="ClusterConfigSettingsChangedEvent" />.
-///     Simpler than every other Phase 9-6c subscriber: a settings section has no database row to
-///     re-read (its real content lives in the runtime JSON configuration file, written by
-///     <c>Ninlil.Web</c>'s own <c>ClusterConfigSyncSettingsRecorder</c> before this event was
-///     even published), so this class only ever needs to repackage what the event already carries
-///     into a <see cref="ClusterConfigSyncEnvelope" /> and forward it -- no
-///     <see cref="Microsoft.Extensions.DependencyInjection.IServiceScopeFactory" />, no
-///     repository.
+///     A settings section has no database row to read again: its content is in the runtime
+///     configuration file, written before <c>ClusterConfigSyncSettingsRecorder</c> in
+///     <c>Ninlil.Web</c> publishes the event, which carries the section JSON. So this class only
+///     wraps the event in a <see cref="ClusterConfigSyncEnvelope" /> and broadcasts it, on a
+///     detached task.
 /// </summary>
 /// <param name="broadcaster">The broadcaster this subscriber forwards a built envelope to.</param>
-/// <param name="clusterOptions">This node's own cluster configuration, read for its own node id.</param>
+/// <param name="clusterOptions">The cluster settings, read for this node's id.</param>
 /// <param name="logger">The logger a broadcast failure is recorded to.</param>
 public class SettingsClusterSyncEventSubscriber(
     IClusterConfigSyncBroadcaster broadcaster,
@@ -37,9 +35,8 @@ public class SettingsClusterSyncEventSubscriber(
     }
 
     /// <summary>
-    ///     This method does the actual broadcast, with every exception (other than cancellation)
-    ///     caught and logged so a failure never propagates back into
-    ///     <c>DnsServerEventDispatcher</c>.
+    ///     This method broadcasts the envelope, logging any exception other than cancellation,
+    ///     since nothing awaits it.
     /// </summary>
     private async Task BroadcastAsync(
         ClusterConfigSettingsChangedEvent domainEvent,

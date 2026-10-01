@@ -10,7 +10,8 @@ namespace Ninlil.Dns.Server.ClusterSync.Rewrites;
 
 /// <summary>
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a
-///     <see cref="DnsRewriteEntity" />.
+///     <see cref="DnsRewriteEntity" />; <see cref="ClusterConfigSyncApplierBase{TEntity}" /> does
+///     the work and this class maps the payload.
 /// </summary>
 public class RewriteClusterConfigSyncApplier(
     IDnsRewriteRepository repository,
@@ -19,8 +20,7 @@ public class RewriteClusterConfigSyncApplier(
 ) : ClusterConfigSyncApplierBase<DnsRewriteEntity>(repository, unitOfWork, logger)
 {
     /// <summary>
-    ///     This constant is the entity-type discriminator every rewrite envelope this project
-    ///     ever sends or receives carries.
+    ///     This constant contains the entity type of rewrite envelopes.
     /// </summary>
     public const string EntityTypeName = "Rewrite";
 

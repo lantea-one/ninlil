@@ -2,27 +2,22 @@
 namespace Ninlil.Dns.Server.ClusterSync.Shared;
 
 /// <summary>
-///     This class implements the one real, shared collision-resolution shape both
-///     <c>UserClusterConfigSyncApplier</c> and <c>RoleClusterConfigSyncApplier</c> need: when two
-///     nodes independently create an entity with the same unique name during a real network
-///     partition, the deterministic last-write-wins loser must be renamed to something
-///     unambiguous and flagged with a human-readable explanation, never silently dropped or
-///     silently merged into the winner -- see <c>UserEntity.ClusterConflictNote</c>'s own doc
-///     comment for the full design.
+///     This class builds the rename and note for a name collision, shared by
+///     <c>UserClusterConfigSyncApplier</c> and <c>RoleClusterConfigSyncApplier</c>. When two
+///     nodes create a user or role with the same unique name (for example during a network
+///     partition), the loser of the last-write-wins comparison is renamed and given an
+///     explanatory note, never dropped or merged (see <c>UserEntity.ClusterConflictNote</c>).
 /// </summary>
 public static class ClusterCollisionRenamer
 {
     /// <summary>
-    ///     This method builds the renamed value a collision loser is given -- the original value,
-    ///     with a short, deterministic, human-legible suffix identifying the node whose write
-    ///     caused the rename. Deterministic (not random) so that every node in the cluster,
-    ///     independently reaching the same collision-resolution decision, computes the exact same
-    ///     renamed value.
+    ///     This method builds the name a collision loser gets: the original value plus
+    ///     <c>-conflict-</c> and the other node's id, cut to 256 characters. It is deterministic,
+    ///     so nodes that pass the same node id compute the same name.
     /// </summary>
     /// <param name="originalValue">The value that collided (a username or a role name).</param>
     /// <param name="conflictingNodeId">
-    ///     The node id of the <em>other</em> side of the collision -- the side that is not being
-    ///     renamed.
+    ///     The node id of the other side of the collision, the one not renamed.
     /// </param>
     public static string BuildRenamedValue(string originalValue, Guid conflictingNodeId) =>
         $"{originalValue}-conflict-{conflictingNodeId:N}"[
@@ -30,11 +25,11 @@ public static class ClusterCollisionRenamer
         ];
 
     /// <summary>
-    ///     This method builds the human-readable explanation stored on the collision loser's own
-    ///     <c>ClusterConflictNote</c> field -- surfaced to an administrator via the REST API and
-    ///     the Angular admin SPA's own user/role list, so the rename is genuinely visible.
+    ///     This method builds the explanation stored in the loser's <c>ClusterConflictNote</c>,
+    ///     which the REST API and the user and role lists in the web UI show, so the rename is
+    ///     visible.
     /// </summary>
-    /// <param name="originalValue">The original, now-reassigned value (username or role name).</param>
+    /// <param name="originalValue">The original value (username or role name).</param>
     /// <param name="conflictingNodeId">The node id of the winning side of the collision.</param>
     /// <param name="detectedAtUtc">The UTC instant this collision was detected and resolved.</param>
     public static string BuildConflictNote(
