@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Roles;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="CreateRoleRequest" />, referenced by
-///     <see cref="Controllers.RolesController.Create" />.
+///     This class supplies the Swagger example for <see cref="CreateRoleRequest" />, the request
+///     body of <see cref="Controllers.RolesController.Create" />.
 /// </summary>
 public class CreateRoleRequestExample : IExamplesProvider<CreateRoleRequest>
 {
     /// <summary>
-    ///     This method returns a role scoped to DNS operations, deliberately not identity/
-    ///     administrative ones -- a realistic, least-privilege-shaped example rather than a
-    ///     wildcard-holding one.
+    ///     This method returns a least-privilege role for DNS operations only, with no identity or
+    ///     administration rights.
     /// </summary>
     public CreateRoleRequest GetExamples() =>
         new(

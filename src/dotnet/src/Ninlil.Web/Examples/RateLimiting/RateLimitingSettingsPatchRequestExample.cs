@@ -5,18 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.RateLimiting;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.RateLimitingSettingsController.Patch" />'s own RFC 7396 JSON Merge
-///     Patch request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.RateLimitingSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class RateLimitingSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that turns rate limiting on and tightens its own
-    ///     steady-state and burst allowances, leaving the tracked-client bookkeeping fields
-    ///     untouched.
+    ///     This method returns the patch the <c>Baseline</c> preset amounts to: rate limiting on at
+    ///     20 queries per second with a burst of 40, which are also the defaults.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

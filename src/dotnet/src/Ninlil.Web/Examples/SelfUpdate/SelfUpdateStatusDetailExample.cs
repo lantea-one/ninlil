@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.SelfUpdate;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="SelfUpdateStatusDetail" />, referenced by
-///     <see cref="Controllers.SelfUpdateController.Get" />/
+///     This class supplies the Swagger example for <see cref="SelfUpdateStatusDetail" />, as
+///     returned by <see cref="Controllers.SelfUpdateController.Get" /> and
 ///     <see cref="Controllers.SelfUpdateController.Check" />.
 /// </summary>
 public class SelfUpdateStatusDetailExample : IExamplesProvider<SelfUpdateStatusDetail>
 {
     /// <summary>
-    ///     This method returns a real, plausible "an update is available" status -- the shape an
-    ///     operator most needs to see illustrated, since "nothing to do" is otherwise the most
-    ///     common response.
+    ///     This method returns the "update available" case, the one worth illustrating, with the
+    ///     manual update instructions the server gives, since it does not update itself.
     /// </summary>
     public SelfUpdateStatusDetail GetExamples() =>
         new(

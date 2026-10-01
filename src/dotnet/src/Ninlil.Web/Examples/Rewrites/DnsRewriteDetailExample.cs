@@ -6,18 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Rewrites;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsRewriteDetail" />, referenced by
+///     This class supplies the Swagger example for <see cref="DnsRewriteDetail" />, as returned by
 ///     <see cref="Controllers.DnsRewritesController.Get" /> and
 ///     <see cref="Controllers.DnsRewritesController.Create" />.
 /// </summary>
 public class DnsRewriteDetailExample : IExamplesProvider<DnsRewriteDetail>
 {
     /// <summary>
-    ///     This method returns the same rewrite <see cref="DnsRewriteWriteRequestExample" />
-    ///     submits, as this server would report it back -- <see cref="DnsRewriteDetail.TargetKind" />
-    ///     is computed fresh at read time, never stored, so this example shows exactly what that
-    ///     computation would produce for an IPv4-literal target.
+    ///     This method returns the rewrite <see cref="DnsRewriteWriteRequestExample" /> submits, as
+    ///     the server reports it. <see cref="DnsRewriteDetail.TargetKind" /> is computed when the
+    ///     response is built; an IPv4 target classifies as <c>A</c>.
     /// </summary>
     public DnsRewriteDetail GetExamples() =>
         new(

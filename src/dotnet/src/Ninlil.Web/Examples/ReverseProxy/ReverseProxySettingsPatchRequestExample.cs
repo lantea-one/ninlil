@@ -5,19 +5,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.ReverseProxy;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.ReverseProxySettingsController.Patch" />'s own RFC 7396 JSON Merge
-///     Patch request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic
-///     <see cref="JsonElement" />, not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.ReverseProxySettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class ReverseProxySettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that both turns on the shared HTTP listener's own
-    ///     forwarded-header trust and, in the same request, sets DNS-over-TLS's own entirely
-    ///     separate <c>dnsOverTls</c> sub-object -- demonstrating that a single <c>PATCH</c> can
-    ///     touch both configuration sections at once.
+    ///     This method returns a patch that turns on forwarded-header trust for the HTTP listener
+    ///     and sets the separate <c>dnsOverTls</c> object in the same request, showing that one
+    ///     <c>PATCH</c> can change both.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

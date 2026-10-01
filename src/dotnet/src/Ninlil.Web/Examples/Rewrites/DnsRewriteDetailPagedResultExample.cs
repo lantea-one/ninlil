@@ -6,16 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Rewrites;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DnsRewriteDetail" />, referenced by
-///     <see cref="Controllers.DnsRewritesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="DnsRewriteDetail" />, as
+///     returned by <see cref="Controllers.DnsRewritesController.List" />.
 /// </summary>
 public class DnsRewriteDetailPagedResultExample : IExamplesProvider<PagedResult<DnsRewriteDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two rewrites -- one exact, A-target rewrite, and one
-    ///     CNAME-target wildcard rewrite, so a caller reading this example can see both classified
-    ///     target kinds and both domain-matching shapes in a single, small response.
+    ///     This method returns an exact-name rewrite to an IPv4 address and a wildcard rewrite to
+    ///     another name, showing both target kinds and both kinds of domain pattern.
     /// </summary>
     public PagedResult<DnsRewriteDetail> GetExamples() =>
         new(

@@ -5,15 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Roles;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a single
-///     <see cref="RoleSummary" />, referenced by <see cref="Controllers.RolesController.Get" />
-///     and <see cref="Controllers.RolesController.Create" />.
+///     This class supplies the Swagger example for one <see cref="RoleSummary" />, as returned by
+///     <see cref="Controllers.RolesController.Get" /> and
+///     <see cref="Controllers.RolesController.Create" />.
 /// </summary>
 public class RoleSummaryExample : IExamplesProvider<RoleSummary>
 {
     /// <summary>
-    ///     This method returns a role granting exactly the permissions
-    ///     <see cref="CreateRoleRequestExample" />'s own description promises, no more.
+    ///     This method returns the role from <see cref="CreateRoleRequestExample" /> with
+    ///     permissions for zones (which covers records) and forwarders, and nothing more.
     /// </summary>
     public RoleSummary GetExamples() =>
         new(

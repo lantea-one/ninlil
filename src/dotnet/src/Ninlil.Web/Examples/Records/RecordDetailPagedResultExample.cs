@@ -6,18 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Records;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="RecordDetail" />, referenced by <see cref="Controllers.RecordsController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="RecordDetail" />, as
+///     returned by <see cref="Controllers.RecordsController.List" />.
 /// </summary>
 public class RecordDetailPagedResultExample : IExamplesProvider<PagedResult<RecordDetail>>
 {
     /// <summary>
-    ///     This method returns one page of the small, realistic subset of
-    ///     <see cref="RecordExampleCatalog.Entries" /> (its own <c>SOA</c>/<c>A</c>/<c>MX</c>
-    ///     entries) an actual, freshly-bootstrapped <c>example.com</c> zone would carry, in the
-    ///     exact envelope a real list response uses -- rather than all 37, which would make this
-    ///     one example far less representative of what a real zone's own record list actually
-    ///     looks like.
+    ///     This method returns the SOA, A and MX entries of
+    ///     <see cref="RecordExampleCatalog.Entries" />, roughly what a new <c>example.com</c> zone
+    ///     holds, rather than all 37, which would look nothing like a real zone's record list.
     /// </summary>
     public PagedResult<RecordDetail> GetExamples()
     {

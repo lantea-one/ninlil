@@ -4,16 +4,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Permissions;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for the sorted list
-///     of permission strings <see cref="Controllers.PermissionsController.List" /> returns.
+///     This class supplies the Swagger example for the sorted permission list returned by
+///     <see cref="Controllers.PermissionsController.List" />.
 /// </summary>
 public class PermissionListExample : IExamplesProvider<IReadOnlyList<string>>
 {
     /// <summary>
-    ///     This method returns a representative subset of the real, sorted permission catalog --
-    ///     not every permission string this project registers, since the full set is large and
-    ///     grows automatically as new controllers are added; this sample is illustrative of the
-    ///     <c>resource:read</c>/<c>resource:write</c> naming convention every permission follows.
+    ///     This method returns a sorted sample of the catalog, which is too long to show in full,
+    ///     illustrating the <c>resource:read</c> and <c>resource:write</c> naming (some resources
+    ///     also have <c>resource:manage</c>).
     /// </summary>
     public IReadOnlyList<string> GetExamples() =>
         [

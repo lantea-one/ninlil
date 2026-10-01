@@ -5,14 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.QueryLog;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="QueryLogClearResult" />, referenced by
-///     <see cref="Controllers.QueryLogController.Clear" />.
+///     This class supplies the Swagger example for <see cref="QueryLogClearResult" />, as returned
+///     by <see cref="Controllers.QueryLogController.Clear" />.
 /// </summary>
 public class QueryLogClearResultExample : IExamplesProvider<QueryLogClearResult>
 {
     /// <summary>
-    ///     This method returns a plausible-sized "the log is now empty" outcome.
+    ///     This method returns the number of entries removed by clearing the log.
     /// </summary>
     public QueryLogClearResult GetExamples() => new(48213);
 }

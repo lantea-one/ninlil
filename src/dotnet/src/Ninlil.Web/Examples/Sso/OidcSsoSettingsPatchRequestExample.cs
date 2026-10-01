@@ -5,18 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Sso;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.OidcSsoSettingsController.Patch" />'s own RFC 7396 JSON Merge Patch
-///     request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own doc
-///     comment for why this parameter's declared type is the generic <see cref="JsonElement" />,
-///     not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.OidcSsoSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class OidcSsoSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a complete, first-time setup patch: turning the feature on and
-    ///     supplying every field a brand-new configuration needs, including a real (plaintext, as
-    ///     this endpoint's own caller must always supply it) client secret.
+    ///     This method returns a first-time setup patch with every field, including the plaintext
+    ///     client secret the caller always supplies.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument

@@ -6,16 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Services;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="ManagedServiceSummary" />, referenced by
-///     <see cref="Controllers.ServicesController.Start" />/
-///     <see cref="Controllers.ServicesController.Restart" /> -- a real transport listener,
-///     genuinely running after a successful start/restart.
+///     This class supplies the Swagger example for <see cref="ManagedServiceSummary" />, as
+///     returned by <see cref="Controllers.ServicesController.Start" /> and
+///     <see cref="Controllers.ServicesController.Restart" />.
 /// </summary>
 public class ManagedServiceSummaryExample : IExamplesProvider<ManagedServiceSummary>
 {
     /// <summary>
-    ///     This method returns Plain DNS's own UDP listener, running.
+    ///     This method returns the plain DNS UDP listener, running.
     /// </summary>
     public ManagedServiceSummary GetExamples() =>
         new("plain-udp", ManagedServiceCategoryEnum.Transport, true);

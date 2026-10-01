@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Roles;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RolePermissionRequest" />, referenced by
-///     <see cref="Controllers.RolesController.AddPermission" /> and
+///     This class supplies the Swagger example for <see cref="RolePermissionRequest" />, the
+///     request body of <see cref="Controllers.RolesController.AddPermission" /> and
 ///     <see cref="Controllers.RolesController.RemovePermission" />.
 /// </summary>
 public class RolePermissionRequestExample : IExamplesProvider<RolePermissionRequest>
 {
     /// <summary>
-    ///     This method returns a request naming one of this project's own real,
-    ///     already-registered permission strings, matching
-    ///     <see cref="RoleSummaryExample" />'s own catalog.
+    ///     This method returns a request naming a registered permission, one the role in
+    ///     <see cref="RoleSummaryExample" /> holds.
     /// </summary>
     public RolePermissionRequest GetExamples() => new("zones:write");
 }

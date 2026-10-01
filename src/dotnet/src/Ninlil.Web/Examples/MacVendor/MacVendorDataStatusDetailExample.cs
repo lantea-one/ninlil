@@ -6,8 +6,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.MacVendor;
 
 /// <summary>
-///     This class provides the Swagger example for <see cref="MacVendorDataStatusDetail" /> -- a
-///     successful refresh that downloaded newer registry data.
+///     This class supplies the Swagger example for <see cref="MacVendorDataStatusDetail" />, as
+///     returned by <c>POST /api/mac-vendor-settings/refresh</c>: a refresh that downloaded newer
+///     registry data. The three registry counts add up to the total.
 /// </summary>
 public class MacVendorDataStatusDetailExample : IExamplesProvider<MacVendorDataStatusDetail>
 {

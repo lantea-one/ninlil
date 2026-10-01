@@ -5,14 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Roles;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="RoleSummary" />, referenced by <see cref="Controllers.RolesController.List" />.
+///     This class supplies the Swagger example for a page of <see cref="RoleSummary" />, as
+///     returned by <see cref="Controllers.RolesController.List" />.
 /// </summary>
 public class RoleSummaryPagedResultExample : IExamplesProvider<PagedResult<RoleSummary>>
 {
     /// <summary>
-    ///     This method returns one page of two representative roles: a DNS-scoped operator role
-    ///     and a read-only auditor role, in the exact envelope a real list response carries.
+    ///     This method returns a DNS operator role and a read-only auditor role.
     /// </summary>
     public PagedResult<RoleSummary> GetExamples() =>
         new(

@@ -5,30 +5,27 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Examples.Records;
 
 /// <summary>
-///     This class carries one named example record, shared between <see cref="RecordWriteRequestExample" />
-///     and <see cref="RecordDetailExample" /> so both collections always describe the exact same
-///     record for a given key -- an operator switching between the two in Swagger UI's own example
-///     dropdown sees one coherent record, never two unrelated ones.
+///     This class carries one named example record, shared by
+///     <see cref="RecordWriteRequestExample" /> and <see cref="RecordDetailExample" /> so both
+///     show the same record under a given key in the Swagger UI example dropdown.
 /// </summary>
 /// <param name="Key">
-///     This example's own name in both collections' dropdowns -- the record type's short wire
-///     name (<c>"A"</c>, <c>"TLSA"</c>, and so on), the identifier an operator already recognizes
-///     from a real zone file or this project's own Angular admin SPA.
+///     The example's name in both dropdowns: the record type's mnemonic (<c>"A"</c>,
+///     <c>"TLSA"</c> and so on), as an operator knows it from zone files and the admin console.
 /// </param>
 /// <param name="Name">The example record's owner name.</param>
 /// <param name="Type">The example record's type.</param>
 /// <param name="TimeToLiveSeconds">The example record's time-to-live.</param>
-/// <param name="Data">The example record's type-specific data, already shaped as this API's own camelCase JSON.</param>
+/// <param name="Data">The example record's type-specific data, already shaped as the API's camelCase JSON.</param>
 /// <param name="Comments">Free-form operator notes for the example.</param>
-/// <param name="Id">The example record's own identifier, used only by <see cref="RecordDetailExample" />.</param>
-/// <param name="CreatedAtUtc">When the example record was created, used only by <see cref="RecordDetailExample" />.</param>
+/// <param name="Id">The example record's identifier, used only by the response examples.</param>
+/// <param name="CreatedAtUtc">When the example record was created, used only by the response examples.</param>
 /// <param name="DnsNameFields">
-///     The names of every top-level field inside <see cref="Data" /> that is backed by a
-///     <c>Ninlil.Dns.Common.Wire.DnsName</c> on the real record-data model -- used only by
-///     <see cref="RecordDetailExample" />, which appends the trailing dot
-///     <c>DnsNameJsonConverter.Write</c> always writes for such a field (via
-///     <c>DnsName.ToString()</c>), regardless of whether <see cref="RecordWriteRequestExample" />'s
-///     own matching request supplied one. Left empty for a record type with no such field.
+///     The top-level fields of <see cref="Data" /> backed by a
+///     <c>Ninlil.Dns.Common.Wire.DnsName</c> in the record data model, or <see langword="null" /> when there are none. The API writes
+///     such a field with a trailing dot (<c>DnsNameJsonConverter.Write</c>), but nothing reads
+///     this list yet, so <see cref="RecordDetailExample" /> shows the names as submitted, without
+///     the dot.
 /// </param>
 internal sealed record RecordExampleEntry(
     string Key,
@@ -43,77 +40,60 @@ internal sealed record RecordExampleEntry(
 );
 
 /// <summary>
-///     This class is the single source every one of this project's 37 hand-authored record-type
-///     examples is built from, so <see cref="RecordWriteRequestExample" /> and
-///     <see cref="RecordDetailExample" /> can never silently drift apart from each other -- each
-///     collection simply maps this same list into its own response shape. All 37 examples live
-///     inside the same imagined <c>example.com</c> zone this project's own
-///     <see cref="Zones.ZoneWriteRequestExample" />/<see cref="Zones.ZoneDetailExample" /> already
-///     describe (<see cref="ZoneId" />, matching <c>ZoneDetailExample</c>'s own "Primary,
-///     DNSSEC-signed zone" identifier), and reuse that same zone's own DNSSEC algorithm
-///     (<see cref="DnssecAlgorithmEnum.EcdsaP256Sha256" />) and NSEC3 salt (<c>a1b2c3d4</c>)
-///     wherever an example calls for either, so a reader following the documentation across
-///     controllers sees one consistent, internally coherent example deployment rather than 37
-///     unrelated fragments.
+///     This class is the single source of the 37 record type examples, one per type, so
+///     <see cref="RecordWriteRequestExample" /> and <see cref="RecordDetailExample" /> cannot drift
+///     apart: each maps this list into its own shape. All of them belong to the
+///     <c>example.com</c> zone of <see cref="Zones.ZoneWriteRequestExample" /> and
+///     <see cref="Zones.ZoneDetailExample" /> (<see cref="ZoneId" /> is the id of its "Primary,
+///     DNSSEC-signed zone" example) and reuse that zone's DNSSEC algorithm
+///     (<see cref="DnssecAlgorithmEnum.EcdsaP256Sha256" />) and NSEC3 salt (<c>a1b2c3d4</c>), so
+///     the examples across controllers describe one consistent deployment.
 ///     <para>
-///         Every <see langword="byte[]" />-backed field (a digest, a fingerprint, a public key, a
-///         signature) is built here from a real, computed value -- most from a genuine SHA-1/
-///         SHA-256 hash of a descriptive input string, exactly matching the length a real digest
-///         of that kind actually has (20 bytes for SHA-1, 32 for SHA-256, 64 for a raw
-///         concatenated ECDSA P-256 curve point per RFC 6605) -- rather than an arbitrary
-///         placeholder of the wrong length, since this is exactly the kind of field a real
-///         operator would look at and immediately recognize as implausible if it were not. Every
-///         such value is supplied here as a genuine <see langword="byte[]" /> and serialized
-///         through this project's own default <see langword="byte[]" />-to-base64 handling (see
-///         <see cref="Data" />'s own doc comment) -- the identical path <c>RecordDataValidator</c>
-///         itself uses -- rather than a hand-computed base64 string, so there is no risk of this
-///         class's own example ever encoding a byte sequence differently from what the real API
-///         would.
+///         Every <see langword="byte[]" /> field (a digest, fingerprint, public key or signature)
+///         is a computed value of the right length, mostly a SHA-1 or SHA-256 hash of a
+///         descriptive string (20 bytes for SHA-1, 32 for SHA-256, 64 for a raw ECDSA P-256 point
+///         per RFC 6605), because a wrong-length placeholder would look implausible to anyone who
+///         knows the format. The bytes are serialized with System.Text.Json's default base64
+///         handling (see <see cref="Data" />), the encoding the API reads, rather than written as
+///         hand-computed base64 that could disagree with it.
 ///     </para>
 /// </summary>
 internal static class RecordExampleCatalog
 {
     /// <summary>
-    ///     This constant contains the zone identifier every one of this project's 37 record
-    ///     examples belongs to -- the same <c>example.com</c> zone
-    ///     <see cref="Zones.ZoneDetailExample" />'s own "Primary, DNSSEC-signed zone" example
-    ///     describes.
+    ///     This field contains the identifier of the zone every record example belongs to: the
+    ///     <c>example.com</c> zone of the "Primary, DNSSEC-signed zone" example in
+    ///     <see cref="Zones.ZoneDetailExample" />.
     /// </summary>
     private static readonly Guid ZoneId = Guid.Parse("1a2b3c4d-5e6f-4708-9182-a3b4c5d6e7f8");
 
     /// <summary>
-    ///     This constant contains the timestamp every example record reports as its own creation
-    ///     time.
+    ///     This field contains the creation time every example record reports.
     /// </summary>
     private static readonly DateTimeOffset CreatedAtUtc = DateTimeOffset.Parse(
         "2026-08-15T10:00:00+00:00"
     );
 
     /// <summary>
-    ///     This property contains this zone's own identifier -- exposed for
-    ///     <see cref="RecordDetailExample" />/<see cref="RecordDetailPagedResultExample" /> to
-    ///     reference directly, rather than duplicating the literal.
+    ///     This property exposes <see cref="ZoneId" /> to <see cref="RecordDetailExample" /> and
+    ///     <see cref="RecordDetailPagedResultExample" />.
     /// </summary>
     public static Guid ExampleZoneId => ZoneId;
 
     /// <summary>
-    ///     This method serializes an anonymous (or otherwise plain) object into the
-    ///     <see cref="JsonElement" /> shape a record's own <c>data</c> field expects -- camelCase
-    ///     property names matching each anonymous object's own declared property names exactly
-    ///     (never a naming-policy transform, since every object below already names its own
-    ///     properties in camelCase directly), and a plain <see langword="byte[]" /> property
-    ///     serialized to base64, the identical default behavior <c>System.Text.Json</c> applies
-    ///     everywhere else in this codebase for an untyped <see langword="byte[]" /> (see
-    ///     <c>record-data-encoding.util.ts</c>'s own doc comment on the Angular side, which
-    ///     documents this exact fact from the frontend's own perspective).
+    ///     This method serializes an anonymous object into the <see cref="JsonElement" /> a
+    ///     record's <c>data</c> field expects. No naming policy is applied, because the objects
+    ///     below already use camelCase property names, and a <see langword="byte[]" /> becomes
+    ///     base64, the System.Text.Json default the API relies on (the Angular side documents the
+    ///     same in <c>record-data-encoding.util.ts</c>).
     /// </summary>
     private static JsonElement Data(object value) =>
         System.Text.Json.JsonSerializer.SerializeToElement(value);
 
     /// <summary>
-    ///     This property contains all 37 example records, one per record type
-    ///     <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c> registers a real
-    ///     codec for, in that same registry's own declaration order.
+    ///     This property contains the 37 example records, one for each record type
+    ///     <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c> has a codec for, in the
+    ///     registry's order.
     /// </summary>
     public static IReadOnlyList<RecordExampleEntry> Entries { get; } =
     [
@@ -270,8 +250,8 @@ internal static class RecordExampleCatalog
                 {
                     priority = 1,
                     targetName = "dns.example.com",
-                    // Parameter key 1 (alpn), value 0x03 'd' 'o' 't' -- a single, 3-byte ALPN
-                    // identifier ("dot"), per RFC 9460 §7.1.1's own length-prefixed encoding.
+                    // Parameter key 1 (alpn), value 0x03 'd' 'o' 't': one 3-byte ALPN identifier
+                    // ("dot") in the length-prefixed encoding of RFC 9460 §7.1.1.
                     parameters = new[]
                     {
                         new { key = 1, value = Convert.FromHexString("03646f74") },
@@ -421,8 +401,8 @@ internal static class RecordExampleCatalog
                 {
                     items = new object[]
                     {
-                        // A /24 IPv4 prefix carries only its first three significant octets
-                        // (192, 0, 2), not all four, per AplItem's own doc comment.
+                        // A /24 IPv4 prefix carries only its three significant octets (192, 0, 2),
+                        // not all four (see AplItem).
                         new
                         {
                             addressFamily = 1,
@@ -430,8 +410,8 @@ internal static class RecordExampleCatalog
                             negated = false,
                             addressFamilyDependentPart = new byte[] { 192, 0, 2 },
                         },
-                        // A /32 IPv4 prefix carries every one of its four octets, and
-                        // "negated" excludes this specific host from the list above.
+                        // A /32 IPv4 prefix carries all four octets, and "negated" excludes this
+                        // host from the network above.
                         new
                         {
                             addressFamily = 1,
@@ -474,9 +454,8 @@ internal static class RecordExampleCatalog
             Data: Data(
                 new
                 {
-                    // Algorithm 4 (Ed25519, RFC 7479); fingerprint type 2 (SHA-256, RFC 6594)
-                    // -- a real, 32-byte SHA-256 digest, matching a genuine SSHFP fingerprint's
-                    // own real-world length exactly.
+                    // Algorithm 4 (Ed25519, RFC 7479) and fingerprint type 2 (SHA-256, RFC 6594),
+                    // so the fingerprint is a 32-byte SHA-256 digest.
                     algorithm = 4,
                     fingerprintType = 2,
                     fingerprint = Convert.FromHexString(
@@ -497,7 +476,7 @@ internal static class RecordExampleCatalog
                 new
                 {
                     // Usage 1 (PKIX-EE), selector 1 (subject public key), matching type 1
-                    // (SHA-256) -- a real, 32-byte SHA-256 digest.
+                    // (SHA-256), so the data is a 32-byte SHA-256 digest.
                     certificateUsage = 1,
                     selector = 1,
                     matchingType = 1,
@@ -578,8 +557,8 @@ internal static class RecordExampleCatalog
             Data: Data(
                 new
                 {
-                    // Certificate type 1 (PKIX, an X.509 certificate), per IANA's own
-                    // "Certificate Type Values" registry.
+                    // Certificate type 1 (PKIX, an X.509 certificate) in IANA's "Certificate Type
+                    // Values" registry.
                     certificateType = 1,
                     keyTag = 54915,
                     algorithm = DnssecAlgorithmEnum.EcdsaP256Sha256,
@@ -602,8 +581,8 @@ internal static class RecordExampleCatalog
                 {
                     keyTag = 54915,
                     algorithm = DnssecAlgorithmEnum.EcdsaP256Sha256,
-                    // Digest type 2 (SHA-256, RFC 4509) -- a real, 32-byte SHA-256 digest of
-                    // the child zone's own DNSKEY.
+                    // Digest type 2 (SHA-256, RFC 4509): a 32-byte SHA-256 digest standing in for
+                    // the child zone's DNSKEY digest.
                     digestType = 2,
                     digest = Convert.FromHexString(
                         "124cc790550bb826f66f437fa675318e67ec346f63e0adc89fd2b187053f2418"
@@ -645,8 +624,8 @@ internal static class RecordExampleCatalog
                     isZoneKey = true,
                     isSecureEntryPoint = true,
                     algorithm = DnssecAlgorithmEnum.EcdsaP256Sha256,
-                    // A raw, concatenated 64-byte ECDSA P-256 curve point (32-byte X, 32-byte
-                    // Y), per RFC 6605's own encoding.
+                    // A raw 64-byte ECDSA P-256 public key (32-byte X then 32-byte Y), as RFC 6605
+                    // encodes it.
                     publicKey = Convert.FromHexString(
                         "1e2bb7f00a7dfb0b1a5eccfc6ef152ff325ade02b9699bb818c64cf4ba5bd14afe66e0da6cbe16261cf87cf2395f41e35011d06b9c33e7d40216ac36682588d1"
                     ),
@@ -694,8 +673,8 @@ internal static class RecordExampleCatalog
                     signatureInception = 1_769_961_600u,
                     keyTag = 54915,
                     signerName = "example.com",
-                    // A raw, concatenated 64-byte ECDSA P-256 signature (32-byte r, 32-byte
-                    // s), per RFC 6605's own encoding.
+                    // A raw 64-byte ECDSA P-256 signature (32-byte r then 32-byte s), as RFC 6605
+                    // encodes it.
                     signature = Convert.FromHexString(
                         "447811551c443070ebda3ecd76b6a88b08065cee5083ea9b31f29eaa0032ec2fbf5cbe2ecb08a1c2e1af303ebf1fcd30dee91bd15dd0175e9ab904ce985883e3"
                     ),
@@ -737,15 +716,14 @@ internal static class RecordExampleCatalog
             Data: Data(
                 new
                 {
-                    // Hash algorithm 1 (SHA-1, the only value ever assigned), 10 iterations
-                    // and the "a1b2c3d4" salt, matching this zone's own NSEC3 parameters
-                    // exactly (see ZoneDetailExample's own Nsec3Iterations/Nsec3SaltHex).
+                    // Hash algorithm 1 (SHA-1, the only one assigned), 10 iterations and salt
+                    // "a1b2c3d4", the zone's NSEC3 parameters in ZoneDetailExample.
                     hashAlgorithm = 1,
                     isOptOut = false,
                     iterations = 10,
                     salt = Convert.FromHexString("a1b2c3d4"),
-                    // A real, 20-byte SHA-1-length digest, standing in for the hashed form of
-                    // the next owner name in hash order.
+                    // A 20-byte SHA-1 digest standing in for the hash of the next owner name in
+                    // hash order.
                     nextHashedOwnerName = Convert.FromHexString(
                         "bfdf73d1b75b7d656abd5ff6835595bc58eb8f10"
                     ),
@@ -781,7 +759,7 @@ internal static class RecordExampleCatalog
     ];
 
     /// <summary>
-    ///     This method builds a stable, obviously-a-placeholder identifier for the
+    ///     This method builds a stable, obviously placeholder identifier for the
     ///     <paramref name="index" />-th example record.
     /// </summary>
     private static Guid RecordId(int index) => Guid.Parse($"00000000-0000-4000-8000-{index:D12}");

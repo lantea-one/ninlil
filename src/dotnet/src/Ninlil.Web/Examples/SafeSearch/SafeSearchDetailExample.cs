@@ -5,13 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.SafeSearch;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="SafeSearchDetail" />, referenced by
+///     This class supplies the Swagger example for <see cref="SafeSearchDetail" />, as returned by
 ///     <see cref="Controllers.SafeSearchController.Enable" />.
 /// </summary>
 public class SafeSearchDetailExample : IExamplesProvider<SafeSearchDetail>
 {
-    /// <summary>This method returns Google Search freshly enabled.</summary>
+    /// <summary>
+    ///     This method returns the Google Search entry, as the catalog has it, just enabled.
+    /// </summary>
     public SafeSearchDetail GetExamples() =>
         new(
             "google",

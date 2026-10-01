@@ -6,16 +6,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.QueryLog;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="QueryLoggingSettingsDetail" />, referenced by
-///     <see cref="Controllers.QueryLoggingSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="QueryLoggingSettingsDetail" />, as
+///     returned by <see cref="Controllers.QueryLoggingSettingsController.Get" />.
 /// </summary>
 public class QueryLoggingSettingsDetailExample : IExamplesProvider<QueryLoggingSettingsDetail>
 {
     /// <summary>
-    ///     This method returns this feature's own real, on-by-default settings, at a plausible
-    ///     operator-tuned retention period and this scale's own default privacy level (full
-    ///     detail, unchanged from before this level even existed).
+    ///     This method returns the defaults: logging on, 30 days or 1,000,000 entries kept, an
+    ///     hourly cleanup, and full detail.
     /// </summary>
     public QueryLoggingSettingsDetail GetExamples() =>
         new(

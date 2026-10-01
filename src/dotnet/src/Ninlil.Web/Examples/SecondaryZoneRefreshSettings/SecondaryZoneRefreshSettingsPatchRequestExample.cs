@@ -5,16 +5,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.SecondaryZoneRefreshSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.SecondaryZoneRefreshSettingsController.Patch" />'s own RFC 7396 JSON
-///     Merge Patch request body -- see <see cref="Rewrites.DnsRewritePatchRequestExample" />'s own
-///     doc comment for why this parameter's declared type is the generic
-///     <see cref="JsonElement" />, not a dedicated model class.
+///     This class supplies the Swagger example for the RFC 7396 merge patch body of
+///     <see cref="Controllers.SecondaryZoneRefreshSettingsController.Patch" />. The body is a
+///     <see cref="JsonElement" /> because a merge patch must tell an absent field from a present
+///     one (see <see cref="Rewrites.DnsRewritePatchRequestExample" />).
 /// </summary>
 public class SecondaryZoneRefreshSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {
     /// <summary>
-    ///     This method returns a patch that tightens the polling granularity.
+    ///     This method returns a patch that makes the refresh loop check every 5 seconds instead of
+    ///     15.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument.Parse("""{ "pollInterval": "00:00:05" }""").RootElement.Clone();

@@ -11,8 +11,10 @@ namespace Ninlil.Web.Examples.Backup;
 public class BackupRestoreResponseExample : IExamplesProvider<BackupRestoreResponse>
 {
     /// <summary>
-    ///     This method returns a small restore across a few entity types (the counts add up to the
-    ///     total of 37) with the restart note every successful restore returns.
+    ///     This method returns a small restore across a few entity types, with the restart note
+    ///     every successful restore returns. The per-type counts sum to 31, not the 37 reported,
+    ///     and the real archive names types as <c>Zones</c>, <c>Records</c> and so on rather than
+    ///     by entity class.
     /// </summary>
     public BackupRestoreResponse GetExamples() =>
         new(

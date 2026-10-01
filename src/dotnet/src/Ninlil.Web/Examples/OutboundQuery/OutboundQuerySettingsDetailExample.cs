@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.OutboundQuery;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="OutboundQuerySettingsDetail" />, referenced by
-///     <see cref="Controllers.OutboundQuerySettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="OutboundQuerySettingsDetail" />, as
+///     returned by <see cref="Controllers.OutboundQuerySettingsController.Get" />.
 /// </summary>
 public class OutboundQuerySettingsDetailExample : IExamplesProvider<OutboundQuerySettingsDetail>
 {
     /// <summary>
-    ///     This method returns this feature's own compiled-in defaults: pooling on (a pure
-    ///     hardening improvement with no new attack surface), 128 sockets per address family, and
-    ///     no excluded ports.
+    ///     This method returns the defaults: the socket pool on, 128 sockets per address family, no
+    ///     excluded ports.
     /// </summary>
     public OutboundQuerySettingsDetail GetExamples() => new(true, 128, []);
 }

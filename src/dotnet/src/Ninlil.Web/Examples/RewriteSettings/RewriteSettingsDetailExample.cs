@@ -5,15 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.RewriteSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RewriteSettingsDetail" />, referenced by
-///     <see cref="Controllers.RewriteSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="RewriteSettingsDetail" />, as
+///     returned by <see cref="Controllers.RewriteSettingsController.Get" />.
 /// </summary>
 public class RewriteSettingsDetailExample : IExamplesProvider<RewriteSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: rewrites on,
-    ///     this class's own compiled-in default synthesized-answer TTL.
+    ///     This method returns rewrites turned on with the default 300-second answer TTL.
     /// </summary>
     public RewriteSettingsDetail GetExamples() => new(Enable: true, TimeToLiveSeconds: 300);
 }

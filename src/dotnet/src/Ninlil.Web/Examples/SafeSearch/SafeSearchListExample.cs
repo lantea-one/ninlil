@@ -5,14 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.SafeSearch;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for the full Safe
-///     Search catalog list, referenced by <see cref="Controllers.SafeSearchController.List" />.
+///     This class supplies the Swagger example for the catalog list returned by
+///     <see cref="Controllers.SafeSearchController.List" />.
 /// </summary>
 public class SafeSearchListExample : IExamplesProvider<IReadOnlyList<SafeSearchDetail>>
 {
     /// <summary>
-    ///     This method returns a small, representative slice of the real catalog: one enabled
-    ///     entry and one still-disabled entry.
+    ///     This method returns two of the four catalog entries, as the catalog has them: Google
+    ///     Search enabled and YouTube Restricted Mode not enabled.
     /// </summary>
     public IReadOnlyList<SafeSearchDetail> GetExamples() =>
         [

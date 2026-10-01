@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Sso;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="OidcSsoSettingsDetail" />, referenced by
-///     <see cref="Controllers.OidcSsoSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="OidcSsoSettingsDetail" />, as
+///     returned by <see cref="Controllers.OidcSsoSettingsController.Get" />.
 /// </summary>
 public class OidcSsoSettingsDetailExample : IExamplesProvider<OidcSsoSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, fully-configured example rather than this feature's
-    ///     own compiled-in (disabled, blank) defaults, since an empty example would communicate
-    ///     little about the shape of a real deployment's own settings.
+    ///     This method returns a configured Authelia setup rather than the empty, disabled
+    ///     defaults, which would say little about the shape.
     /// </summary>
     public OidcSsoSettingsDetail GetExamples() =>
         new(

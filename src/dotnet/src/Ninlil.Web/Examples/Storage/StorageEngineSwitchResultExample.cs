@@ -6,10 +6,10 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Storage;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="StorageEngineSwitchResult" />, referenced by
-///     <see cref="Controllers.StorageController.Switch" /> -- a completed switch from SQLite to
-///     PostgreSQL, having carried a small, representative install's own data across.
+///     This class supplies the Swagger example for <see cref="StorageEngineSwitchResult" />, as
+///     returned by <see cref="Controllers.StorageController.Switch" />: a switch from SQLite to
+///     PostgreSQL that copied a small install's data. The listed counts sum to 34 rather than the
+///     reported 42; a real response lists every entity type.
 /// </summary>
 public class StorageEngineSwitchResultExample : IExamplesProvider<StorageEngineSwitchResult>
 {

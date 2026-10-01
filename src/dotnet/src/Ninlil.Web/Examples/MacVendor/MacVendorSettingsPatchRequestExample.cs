@@ -5,8 +5,9 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.MacVendor;
 
 /// <summary>
-///     This class provides the Swagger example for a MAC vendor settings merge patch --
-///     checking for registry updates monthly instead of fortnightly.
+///     This class supplies the Swagger example for the MAC vendor settings merge patch (<c>PATCH
+///     /api/mac-vendor-settings</c>): checking for registry updates every 30 days instead of every
+///     14.
 /// </summary>
 public class MacVendorSettingsPatchRequestExample : IExamplesProvider<JsonElement>
 {

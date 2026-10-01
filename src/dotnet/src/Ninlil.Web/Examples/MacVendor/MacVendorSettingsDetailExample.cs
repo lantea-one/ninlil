@@ -6,8 +6,10 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.MacVendor;
 
 /// <summary>
-///     This class provides the Swagger example for <see cref="MacVendorSettingsDetail" /> -- the
-///     shipped defaults, on a server that has refreshed once since installation.
+///     This class supplies the Swagger example for <see cref="MacVendorSettingsDetail" />, as
+///     returned by <c>GET /api/mac-vendor-settings</c>: the default settings on a server that has
+///     refreshed once. The data file path stands in for the default, which is under the application
+///     directory.
 /// </summary>
 public class MacVendorSettingsDetailExample : IExamplesProvider<MacVendorSettingsDetail>
 {

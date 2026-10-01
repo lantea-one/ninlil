@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.RateLimiting;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RateLimitingSettingsDetail" />, referenced by
-///     <see cref="Controllers.RateLimitingSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="RateLimitingSettingsDetail" />, as
+///     returned by <see cref="Controllers.RateLimitingSettingsController.Get" />.
 /// </summary>
 public class RateLimitingSettingsDetailExample : IExamplesProvider<RateLimitingSettingsDetail>
 {
     /// <summary>
-    ///     This method returns the exact settings the <c>Baseline</c> preset itself applies (see
-    ///     <see cref="Ninlil.Dns.Server.Presets.DnsServerPresetCatalog.Baseline" />), a realistic
-    ///     moderate-hardening posture rather than an arbitrary value.
+    ///     This method returns the settings after the <c>Baseline</c> preset (see
+    ///     <see cref="Ninlil.Dns.Server.Presets.DnsServerPresetCatalog.Baseline" />): rate limiting
+    ///     on, with every limit at its default.
     /// </summary>
     public RateLimitingSettingsDetail GetExamples() =>
         new(

@@ -5,14 +5,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Roles;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="UpdateRoleRequest" />, referenced by
-///     <see cref="Controllers.RolesController.Update" />.
+///     This class supplies the Swagger example for <see cref="UpdateRoleRequest" />, the request
+///     body of <see cref="Controllers.RolesController.Update" />.
 /// </summary>
 public class UpdateRoleRequestExample : IExamplesProvider<UpdateRoleRequest>
 {
     /// <summary>
-    ///     This method returns a revised, more specific description for an existing role.
+    ///     This method returns a revised description for an existing role.
     /// </summary>
     public UpdateRoleRequest GetExamples() =>
         new(

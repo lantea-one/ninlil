@@ -6,17 +6,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.QueryLog;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for a page of
-///     <see cref="DnsQueryLogEntryDetail" />, referenced by
-///     <see cref="Controllers.QueryLogController.Search" />.
+///     This class supplies the Swagger example for a page of <see cref="DnsQueryLogEntryDetail" />,
+///     as returned by <see cref="Controllers.QueryLogController.Search" />.
 /// </summary>
 public class DnsQueryLogEntryDetailPagedResultExample
     : IExamplesProvider<PagedResult<DnsQueryLogEntryDetail>>
 {
     /// <summary>
-    ///     This method returns one page of two entries -- a plain, answered A query, and an
-    ///     NXDOMAIN response for a name this server does not host -- so a caller reading this
-    ///     example sees both a successful and a negative response code rendered.
+    ///     This method returns two entries from one client: an answered A query, with the client's
+    ///     resolved identifier, and an NXDOMAIN for a name the server does not host, with no
+    ///     identifier.
     /// </summary>
     public PagedResult<DnsQueryLogEntryDetail> GetExamples() =>
         new(

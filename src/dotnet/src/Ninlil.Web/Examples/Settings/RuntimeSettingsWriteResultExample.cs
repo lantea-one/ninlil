@@ -5,17 +5,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Settings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RuntimeSettingsWriteResult" /> -- the shared response body every
-///     <c>IOptions</c>-backed runtime settings <c>PATCH</c> action across this REST API returns,
-///     referenced by (at least) <see cref="Controllers.QueryLoggingSettingsController.Patch" />
-///     and <see cref="Controllers.ReverseProxySettingsController.Patch" />.
+///     This class supplies the shared Swagger example for
+///     <see cref="RuntimeSettingsWriteResult" />, used by the <c>PATCH</c> actions of most settings
+///     controllers, such as <see cref="Controllers.QueryLoggingSettingsController.Patch" /> and
+///     <see cref="Controllers.ReverseProxySettingsController.Patch" />. Many of those actions
+///     return a different note, such as <see cref="RuntimeSettingsWriteResult.HotReloadedNote" />;
+///     <see cref="Appearance.AppearanceSettingsPatchResultExample" /> is the one
+///     controller-specific replacement.
 /// </summary>
 public class RuntimeSettingsWriteResultExample : IExamplesProvider<RuntimeSettingsWriteResult>
 {
     /// <summary>
-    ///     This method returns this record's own standard, shared restart-required note, exactly
-    ///     as every converted runtime settings <c>PATCH</c> action actually returns it.
+    ///     This method returns <see cref="RuntimeSettingsWriteResult.RestartRequiredNote" />.
     /// </summary>
     public RuntimeSettingsWriteResult GetExamples() =>
         new(RuntimeSettingsWriteResult.RestartRequiredNote);

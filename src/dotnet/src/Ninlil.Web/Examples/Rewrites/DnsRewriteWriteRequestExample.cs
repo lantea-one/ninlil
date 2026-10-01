@@ -5,16 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Rewrites;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="DnsRewriteWriteRequest" />, referenced by both
-///     <see cref="Controllers.DnsRewritesController.Create" /> and
+///     This class supplies the Swagger example for <see cref="DnsRewriteWriteRequest" />, the
+///     request body of <see cref="Controllers.DnsRewritesController.Create" /> and
 ///     <see cref="Controllers.DnsRewritesController.Replace" />.
 /// </summary>
 public class DnsRewriteWriteRequestExample : IExamplesProvider<DnsRewriteWriteRequest>
 {
     /// <summary>
-    ///     This method returns a plain, exact-domain, A-target rewrite -- the single most common
-    ///     shape this feature exists for, an internal hostname pointed at a LAN address.
+    ///     This method returns the most common kind of rewrite: an internal host name pointed at a
+    ///     LAN address.
     /// </summary>
     public DnsRewriteWriteRequest GetExamples() =>
         new(

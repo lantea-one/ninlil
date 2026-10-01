@@ -5,21 +5,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Records;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RecordWriteRequest" />, referenced by
-///     <see cref="Controllers.RecordsController.Create" /> and
-///     <see cref="Controllers.RecordsController.Replace" />. Names one example per record type
-///     <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c> registers a real codec
-///     for -- 37 in total -- each keyed by that type's own short wire name (<c>"A"</c>,
-///     <c>"TLSA"</c>, and so on), so an operator already familiar with a real zone file or this
-///     project's own Angular admin SPA recognizes the example they want immediately.
+///     This class supplies the Swagger examples for <see cref="RecordWriteRequest" />, the request
+///     body of <see cref="Controllers.RecordsController.Create" /> and
+///     <see cref="Controllers.RecordsController.Replace" />. There is one example for each of the
+///     37 record types <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c> has a codec
+///     for, keyed by the type's mnemonic (<c>"A"</c>, <c>"TLSA"</c> and so on).
 /// </summary>
 public class RecordWriteRequestExample : IMultipleExamplesProvider<RecordWriteRequest>
 {
     /// <summary>
     ///     This method returns one <see cref="RecordWriteRequest" /> per entry in
-    ///     <see cref="RecordExampleCatalog.Entries" /> -- see <see cref="RecordDetailExample" />
-    ///     for the matching response shape each of these same 37 keys produces once created.
+    ///     <see cref="RecordExampleCatalog.Entries" />; <see cref="RecordDetailExample" /> shows
+    ///     the record each one creates.
     /// </summary>
     public IEnumerable<SwaggerExample<RecordWriteRequest>> GetExamples() =>
         RecordExampleCatalog.Entries.Select(entry => new SwaggerExample<RecordWriteRequest>

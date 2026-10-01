@@ -5,16 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.SmtpSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="SmtpSettingsDetail" />, referenced by
-///     <see cref="Controllers.SmtpSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="SmtpSettingsDetail" />, as returned
+///     by <see cref="Controllers.SmtpSettingsController.Get" />.
 /// </summary>
 public class SmtpSettingsDetailExample : IExamplesProvider<SmtpSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-configured example: a real-world SMTP
-    ///     provider's own conventional submission port with STARTTLS and an authenticated
-    ///     username, a password already on file (never echoed back), and a real sender address.
+    ///     This method returns a configured server on the usual submission port 587 with TLS and a
+    ///     username, a password set (shown only as configured) and a sender address.
     /// </summary>
     public SmtpSettingsDetail GetExamples() =>
         new(

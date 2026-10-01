@@ -5,17 +5,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.RecursiveSettings;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="RecursiveSettingsDetail" />, referenced by
-///     <see cref="Controllers.RecursiveSettingsController.Get" />.
+///     This class supplies the Swagger example for <see cref="RecursiveSettingsDetail" />, as
+///     returned by <see cref="Controllers.RecursiveSettingsController.Get" />.
 /// </summary>
 public class RecursiveSettingsDetailExample : IExamplesProvider<RecursiveSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a realistic, deliberately-opted-in configuration: recursion,
-    ///     DNSSEC validation, and QNAME minimization all on, this class's own compiled-in default
-    ///     timeouts/bounds, no root-hints or trust-anchor override (the real internet root is
-    ///     used), and automatic RFC 5011 trust anchor rollover left on.
+    ///     This method returns recursion turned on; every other field is the default, including
+    ///     DNSSEC validation, QNAME minimization and RFC 5011 trust anchor updates on, and no root
+    ///     hint or trust anchor overrides (so the internet root is used).
     /// </summary>
     public RecursiveSettingsDetail GetExamples() =>
         new(

@@ -5,15 +5,14 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Presets;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="PresetApplyResult" />, referenced by
+///     This class supplies the Swagger example for <see cref="PresetApplyResult" />, as returned by
 ///     <see cref="Controllers.PresetsController.Apply" />.
 /// </summary>
 public class PresetApplyResultExample : IExamplesProvider<PresetApplyResult>
 {
     /// <summary>
-    ///     This method returns the result of applying the <c>Baseline</c> preset, carrying the
-    ///     same restart-caveat note every real application of this preset actually returns.
+    ///     This method returns the result of applying the <c>Baseline</c> preset, with the note
+    ///     every preset application returns.
     /// </summary>
     public PresetApplyResult GetExamples() =>
         new(

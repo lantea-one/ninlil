@@ -6,16 +6,15 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Examples.Presets;
 
 /// <summary>
-///     This class supplies the hand-authored example Swagger UI/ReDoc render for
-///     <see cref="Controllers.PresetsController.List" />'s own <see cref="PresetSummary" /> list.
+///     This class supplies the Swagger example for the <see cref="PresetSummary" /> list returned
+///     by <see cref="Controllers.PresetsController.List" />.
 /// </summary>
 public class PresetSummaryListExample : IExamplesProvider<IReadOnlyList<PresetSummary>>
 {
     /// <summary>
-    ///     This method returns every one of <see cref="DnsServerPresetCatalog" />'s own five
-    ///     built-in presets, in catalog order, with their real names, descriptions, and
-    ///     configuration-setting/filter-list-subscription counts -- not an invented subset, since
-    ///     the real catalog is small and stable enough to show in full.
+    ///     This method returns all five presets of <see cref="DnsServerPresetCatalog" /> in catalog
+    ///     order, with their names, descriptions and setting and subscription counts as the catalog
+    ///     has them.
     /// </summary>
     public IReadOnlyList<PresetSummary> GetExamples() =>
         [
