@@ -11,24 +11,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers which block/allow lists apply directly to a single known
-///     client, nested under it (<c>/api/clients/{clientId}/list-assignments</c>) since an
-///     assignment only ever makes sense in its owning client's own context -- the same nesting
-///     <see cref="ClientGroupListAssignmentsController" /> already establishes for a client
-///     group's own assigned lists. A client's own direct assignments here are unioned with
-///     whatever its matched <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" />
-///     already contributes -- see <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>
-///     for the real resolution logic that consumes this table. Every action requires the
-///     <c>clients:read</c> or <c>clients:write</c> permission, the same as
-///     <see cref="ClientsController" />. There is deliberately no <c>PUT</c>/<c>PATCH</c> here --
-///     an assignment is just a join between a client and a list with no mutable field of its own;
-///     changing which list is assigned means deleting one assignment and creating another, exactly
-///     like <see cref="ClientListAssignmentWriteRequest" /> already documents.
+///     This controller manages which block and allow lists apply directly to one known client,
+///     nested under it at <c>/api/clients/{clientId}/list-assignments</c>, as
+///     <see cref="ClientGroupListAssignmentsController" /> does for a group. A client's direct
+///     assignments are added to those of its matched
+///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity" /> (see
+///     <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine.ResolveApplicableListsAsync</c>). Reads need
+///     <c>clients:read</c> and changes need <c>clients:write</c>, as for
+///     <see cref="ClientsController" />. There is no PUT or PATCH: an assignment only joins a
+///     client to a list, so changing the list means deleting one assignment and creating another
+///     (see <see cref="ClientListAssignmentWriteRequest" />).
 /// </summary>
-/// <param name="clientRepository">The repository used to confirm the owning client exists.</param>
-/// <param name="filterListRepository">The repository used to confirm the assigned list actually exists.</param>
-/// <param name="listAssignmentRepository">The repository this controller reads and writes assignments through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientRepository">Confirms the client exists.</param>
+/// <param name="filterListRepository">Confirms the assigned list exists.</param>
+/// <param name="listAssignmentRepository">Reads and writes assignments.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/clients/{clientId:guid}/list-assignments")]
 public class ClientListAssignmentsController(
@@ -39,7 +36,8 @@ public class ClientListAssignmentsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every list assignment belonging to a known client.
+    ///     This action lists a client's direct list assignments, one page at a time. Returns 404
+    ///     for an unknown client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clients:read")]
@@ -81,7 +79,8 @@ public class ClientListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action looks up a single list assignment by its identifier.
+    ///     This action returns one list assignment. Returns 404 when it does not exist or belongs
+    ///     to another client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clients:read")]
@@ -103,16 +102,11 @@ public class ClientListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action assigns a block/allow list to the known client. Rejected with
-    ///     <c>400 Bad Request</c> if the referenced list does not exist -- treated as an invalid
-    ///     value on the assignment being created, not a lookup of the list itself, so this stays a
-    ///     <see cref="ValidationException" /> rather than a <see cref="NotFoundException" /> -- and
-    ///     <c>409 Conflict</c> if this exact client/list pairing is already assigned -- an
-    ///     unenforced duplicate would be harmless to <c>DnsFilterEngine</c> itself (it collects
-    ///     assigned list identifiers into a <see cref="HashSet{T}" /> before resolving them, see
-    ///     <c>DnsFilterEngine.ResolveApplicableListsAsync</c>), but is still rejected here to avoid
-    ///     letting an operator accumulate meaningless duplicate rows -- the same reasoning
-    ///     <see cref="ClientGroupListAssignmentsController.Create" /> already documents.
+    ///     This action assigns a block or allow list to the client. Returns 400 when the list does
+    ///     not exist (an invalid value in the request, not a missing resource), 404 for an unknown
+    ///     client, and 409 when the list is already assigned (refused to keep rows meaningful, as
+    ///     in <see cref="ClientGroupListAssignmentsController.Create" />). Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -165,7 +159,8 @@ public class ClientListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action removes a list assignment from the known client.
+    ///     This action removes a list assignment from the client. Returns 404 when it does not
+    ///     exist or belongs to another client. Requires <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -185,7 +180,7 @@ public class ClientListAssignmentsController(
     }
 
     /// <summary>
-    ///     This method converts a client list assignment entity into its REST representation.
+    ///     This method converts an assignment entity to its API representation.
     /// </summary>
     private static ClientListAssignmentDetail ToDetail(DnsClientListAssignmentEntity assignment) =>
         new(assignment.Id, assignment.ClientId, assignment.ListId, assignment.CreatedAtUtc);

@@ -11,20 +11,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the time-of-day parental-control schedules assigned to a
-///     single client group, nested under it (<c>/api/client-groups/{groupId}/schedules</c>) --
-///     mirrors <see cref="ClientSchedulesController" /> exactly, keyed by client group instead of
-///     a single client. Every client resolved into this group (via
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.ClientGroupId" />) is
-///     blocked by an active schedule here, independently of (unioned with) its own direct
-///     schedule -- see
-///     <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>. Every action
-///     requires the <c>clientgroups:read</c> or <c>clientgroups:write</c> permission, the same as
+///     This controller manages the time-of-day parental-control schedules of one client group,
+///     nested under it at <c>/api/client-groups/{groupId}/schedules</c>, as
+///     <see cref="ClientSchedulesController" /> does for one client. An active group schedule
+///     blocks every known client whose
+///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.ClientGroupId" /> is this
+///     group, in addition to that client's own schedules (see
+///     <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>). Reads need
+///     <c>clientgroups:read</c> and changes need <c>clientgroups:write</c>, as for
 ///     <see cref="ClientGroupsController" />.
 /// </summary>
-/// <param name="clientGroupRepository">The repository used to confirm the owning group exists.</param>
-/// <param name="scheduleRepository">The repository this controller reads and writes schedules through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientGroupRepository">Confirms the group exists.</param>
+/// <param name="scheduleRepository">Reads and writes schedules.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-groups/{groupId:guid}/schedules")]
 public class ClientGroupSchedulesController(
@@ -34,7 +33,8 @@ public class ClientGroupSchedulesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every schedule belonging to a client group.
+    ///     This action lists a group's schedules, one page at a time. Returns 404 for an unknown
+    ///     group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clientgroups:read")]
@@ -68,7 +68,8 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This action looks up a single schedule by its identifier.
+    ///     This action returns one schedule. Returns 404 when it does not exist or belongs to
+    ///     another group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clientgroups:read")]
@@ -90,7 +91,9 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This action adds a new schedule to the client group.
+    ///     This action adds a schedule to the group. Returns 400 for no days, an unrecognized time
+    ///     zone or equal start and end times, and 404 for an unknown group. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -131,8 +134,9 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing schedule's own fields, keeping its own
-    ///     identifier and owning client group.
+    ///     This action replaces a schedule's fields, keeping its id and group. Validation is as for
+    ///     <see cref="Create" />; returns 404 when the schedule does not exist or belongs to
+    ///     another group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -172,7 +176,8 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This action removes a schedule from the client group.
+    ///     This action removes a schedule from the group. Returns 404 when it does not exist or
+    ///     belongs to another group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -192,9 +197,8 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This method validates a schedule write request's own fields -- see
-    ///     <see cref="ClientSchedulesController.TryValidate" />'s own doc comment for the full
-    ///     reasoning, identical here.
+    ///     This method checks a schedule request with the same rules as
+    ///     <see cref="ClientSchedulesController.TryValidate" />.
     /// </summary>
     private static bool TryValidate(ClientGroupScheduleWriteRequest request, out string error)
     {
@@ -220,7 +224,7 @@ public class ClientGroupSchedulesController(
     }
 
     /// <summary>
-    ///     This method converts a client group schedule entity into its REST representation.
+    ///     This method converts a group schedule entity to its API representation.
     /// </summary>
     private static ClientGroupScheduleDetail ToDetail(DnsClientGroupScheduleEntity schedule) =>
         new(

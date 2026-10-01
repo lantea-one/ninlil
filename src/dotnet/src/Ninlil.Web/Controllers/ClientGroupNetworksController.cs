@@ -11,20 +11,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the CIDR networks that match clients into a single
-///     client group, nested under it (<c>/api/client-groups/{groupId}/networks</c>) since a
-///     network only ever makes sense in its owning group's own context -- the same nesting
-///     <see cref="RecordsController" /> already establishes for a zone's records. Every action
-///     requires the <c>clientgroups:read</c> or <c>clientgroups:write</c> permission, the same as
-///     <see cref="ClientGroupsController" />. There is deliberately no <c>PATCH</c> here -- a
-///     network has exactly one meaningful field at a time (either
-///     <see cref="DnsClientGroupNetworkEntity.Cidr" /> or
-///     <see cref="DnsClientGroupNetworkEntity.ClientId" />), so a partial update would be
-///     indistinguishable from a full <c>PUT</c>.
+///     This controller manages the members of one client group, nested under it at
+///     <c>/api/client-groups/{groupId}/networks</c>. Each member is either a CIDR network
+///     (<see cref="DnsClientGroupNetworkEntity.Cidr" />) or a DNS-over-HTTPS ClientID
+///     (<see cref="DnsClientGroupNetworkEntity.ClientId" />), never both. Reads need
+///     <c>clientgroups:read</c> and changes need <c>clientgroups:write</c>, as for
+///     <see cref="ClientGroupsController" />. There is no PATCH: a member has one meaningful
+///     field, so a partial update would be the same as a PUT.
 /// </summary>
-/// <param name="clientGroupRepository">The repository used to confirm the owning group exists.</param>
-/// <param name="networkRepository">The repository this controller reads and writes networks through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientGroupRepository">Confirms the group exists.</param>
+/// <param name="networkRepository">Reads and writes members.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-groups/{groupId:guid}/networks")]
 public class ClientGroupNetworksController(
@@ -34,7 +31,8 @@ public class ClientGroupNetworksController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every network belonging to a client group.
+    ///     This action lists a group's members, one page at a time. Returns 404 for an unknown
+    ///     group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clientgroups:read")]
@@ -68,7 +66,8 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This action looks up a single network by its identifier.
+    ///     This action returns one member. Returns 404 when it does not exist or belongs to another
+    ///     group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clientgroups:read")]
@@ -90,7 +89,9 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This action adds a new network to the client group.
+    ///     This action adds a member to the group. Returns 400 unless exactly one of <c>cidr</c>
+    ///     and <c>clientId</c> is given or when the CIDR does not parse, and 404 for an unknown
+    ///     group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -127,8 +128,9 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing network's own CIDR value, keeping its own
-    ///     identifier.
+    ///     This action replaces a member's CIDR or ClientID, keeping its id. Validation is as for
+    ///     <see cref="Create" />; returns 404 when the member does not exist or belongs to another
+    ///     group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -163,7 +165,8 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This action removes a network from the client group.
+    ///     This action removes a member from the group. Returns 404 when it does not exist or
+    ///     belongs to another group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -183,13 +186,10 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This method validates a write request against this entity's own "exactly one of
-    ///     <c>Cidr</c>/<c>ClientId</c>" rule, and -- when a CIDR was supplied -- that it at least
-    ///     parses as an IP network, via <c>System.Net.IPNetwork</c>'s own parser, matching what
-    ///     <c>DnsFilterEngine</c> itself uses at match time, so an entry this controller accepts
-    ///     is guaranteed to actually be usable by the engine rather than silently never matching
-    ///     anything. A <c>ClientId</c> has no comparable format to validate -- it is an
-    ///     operator-chosen free-text label, matched only by exact (case-insensitive) equality.
+    ///     This method checks that exactly one of <c>Cidr</c> and <c>ClientId</c> is set and that a
+    ///     CIDR parses with <c>System.Net.IPNetwork</c>, the parser <c>DnsFilterEngine</c> matches
+    ///     with, so an accepted network can match. A ClientID is an operator-chosen label matched
+    ///     by case-insensitive equality, so it has no format to check.
     /// </summary>
     private static bool TryValidateRequest(string cidr, string clientId, out string error)
     {
@@ -216,7 +216,7 @@ public class ClientGroupNetworksController(
     }
 
     /// <summary>
-    ///     This method converts a client group network entity into its REST representation.
+    ///     This method converts a group member entity to its API representation.
     /// </summary>
     private static ClientGroupNetworkDetail ToDetail(DnsClientGroupNetworkEntity network) =>
         new(

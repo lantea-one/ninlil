@@ -12,27 +12,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers which persistent identifiers (<see cref="DnsClientAddressEntity" />)
-///     a single known client device answers to, nested under it
-///     (<c>/api/clients/{clientId}/addresses</c>) since an address only ever makes sense in its
-///     owning device's own context -- the same nesting <see cref="ClientListAssignmentsController" />/
-///     <see cref="ClientSchedulesController" /> already establish for a client's own other child
-///     resources. This is the only way, alongside <see cref="ClientCreateRequest" />'s own initial
-///     address, that a device ever gains a further identifier -- for instance, linking a
-///     genuinely dual-stack device's own separate IPv4 MAC address and IPv6 DUID together under one
-///     device once an operator has confirmed both belong to the same real hardware, something no
-///     resolver in this project can safely infer on its own (see
-///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpClientRegistryAutoPopulationService</c>'s own doc
-///     comment for why). Every action requires the <c>clients:read</c> or <c>clients:write</c>
-///     permission, the same as <see cref="ClientsController" />. There is deliberately no
-///     <c>PUT</c>/<c>PATCH</c> here -- an address's own identifier/protocol pair is immutable once
-///     created (see <see cref="ClientsController" />'s own doc comment); changing it means removing
-///     one address and adding another.
+///     This controller manages the identifiers (<see cref="DnsClientAddressEntity" />) a known
+///     client device answers to, nested under it at <c>/api/clients/{clientId}/addresses</c>.
+///     Apart from the first address given to <see cref="ClientCreateRequest" />, this is how a
+///     device gains more identifiers; for example, joining a dual-stack device's IPv4 MAC address
+///     and IPv6 DUID once an operator has confirmed they are the same hardware, which the server
+///     cannot safely infer itself (see
+///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpClientRegistryAutoPopulationService</c>). Reads
+///     need <c>clients:read</c> and changes need <c>clients:write</c>, as for
+///     <see cref="ClientsController" />. There is no PUT or PATCH: an address cannot be edited
+///     (see <see cref="ClientsController" />), so it is removed and another added instead.
 /// </summary>
-/// <param name="clientRepository">The repository used to confirm the owning device exists.</param>
-/// <param name="clientAddressRepository">The repository this controller reads and writes addresses through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="vendorLookup">The MAC vendor lookup each address's vendor fields are computed through.</param>
+/// <param name="clientRepository">Confirms the device exists.</param>
+/// <param name="clientAddressRepository">Reads and writes addresses.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="vendorLookup">Looks up the vendor of each address's MAC address.</param>
 [ApiController]
 [Route("api/clients/{clientId:guid}/addresses")]
 public class ClientAddressesController(
@@ -43,7 +37,8 @@ public class ClientAddressesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every address belonging to a known client device.
+    ///     This action lists a device's addresses, one page at a time, each with its MAC vendor.
+    ///     Returns 404 for an unknown client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clients:read")]
@@ -86,7 +81,8 @@ public class ClientAddressesController(
     }
 
     /// <summary>
-    ///     This action looks up a single address by its identifier.
+    ///     This action returns one address. Returns 404 when it does not exist or belongs to
+    ///     another client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clients:read")]
@@ -108,12 +104,11 @@ public class ClientAddressesController(
     }
 
     /// <summary>
-    ///     This action adds a further address to the known client device. Rejected with
-    ///     <c>409 Conflict</c> when this exact identifier/protocol pair already belongs to any
-    ///     device (this one included) -- the same real, storage-level uniqueness
-    ///     <see cref="DnsClientAddressEntity" />'s own composite index enforces, translated here via
-    ///     a pre-check against <see cref="IDnsClientAddressRepository.GetByIdentifierAsync" />,
-    ///     mirroring <see cref="ClientsController.Create" />'s own identical pre-check.
+    ///     This action adds an address to a device. Returns 400 for a missing identifier, 404 for
+    ///     an unknown client, and 409 when the identifier and protocol pair already belongs to any
+    ///     device, this one included (the pair the address table's unique index covers, checked
+    ///     first through <see cref="IDnsClientAddressRepository.GetByIdentifierAsync" />). Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -169,11 +164,10 @@ public class ClientAddressesController(
     }
 
     /// <summary>
-    ///     This action removes an address from the known client device. Rejected with
-    ///     <c>409 Conflict</c> when this is the device's own last remaining address -- a device
-    ///     with no address at all could never be resolved by anything again, so removing one always
-    ///     leaves at least one behind; delete the whole device (<see cref="ClientsController.Delete" />)
-    ///     instead when it should no longer be tracked at all.
+    ///     This action removes an address from a device. Returns 409 when it is the device's last
+    ///     address, since a device with none could never be matched again; delete the device
+    ///     (<see cref="ClientsController.Delete" />) instead. Returns 404 when the address does not
+    ///     exist or belongs to another client. Requires <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]

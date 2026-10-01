@@ -12,23 +12,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the time-of-day parental-control schedules assigned directly
-///     to a single known client, nested under it
-///     (<c>/api/clients/{clientId}/schedules</c>) since a schedule only ever makes sense in its
-///     owning client's own context -- the same nesting <see cref="ClientListAssignmentsController" />
-///     already establishes for a client's own filter-list assignments. Unlike that controller's
-///     own pure-join resource, a schedule has real, mutable fields of its own (its days/times/
-///     time zone), so this controller also supports <c>PUT</c>, mirroring
-///     <see cref="DhcpReservationsController" />'s own "real child resource with its own fields"
-///     shape rather than <see cref="ClientListAssignmentsController" />'s thinner one. Every
-///     action requires the <c>clients:read</c> or <c>clients:write</c> permission, the same as
-///     <see cref="ClientsController" />. See
-///     <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c> for the real
-///     evaluation logic that consumes this resource at query-answering time.
+///     This controller manages the time-of-day parental-control schedules of one known client,
+///     nested under it at <c>/api/clients/{clientId}/schedules</c>. A schedule has its own fields
+///     (days, start and end times, time zone), so unlike the list-assignment join it also
+///     supports PUT. <c>Ninlil.Dns.Server.Core.ClientSchedule.IDnsClientScheduleEngine</c>
+///     evaluates schedules while answering queries. Reads need <c>clients:read</c> and changes
+///     need <c>clients:write</c>, as for <see cref="ClientsController" />.
 /// </summary>
-/// <param name="clientRepository">The repository used to confirm the owning client exists.</param>
-/// <param name="scheduleRepository">The repository this controller reads and writes schedules through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientRepository">Confirms the client exists.</param>
+/// <param name="scheduleRepository">Reads and writes schedules.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/clients/{clientId:guid}/schedules")]
 public class ClientSchedulesController(
@@ -38,7 +31,8 @@ public class ClientSchedulesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every schedule belonging to a known client.
+    ///     This action lists a client's schedules, one page at a time. Returns 404 for an unknown
+    ///     client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clients:read")]
@@ -72,7 +66,8 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This action looks up a single schedule by its identifier.
+    ///     This action returns one schedule. Returns 404 when it does not exist or belongs to
+    ///     another client. Requires <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clients:read")]
@@ -91,7 +86,9 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This action adds a new schedule to the known client.
+    ///     This action adds a schedule to the client. Returns 400 for no days, an unrecognized time
+    ///     zone or equal start and end times, and 404 for an unknown client. Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -132,8 +129,9 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing schedule's own fields, keeping its own
-    ///     identifier and owning client.
+    ///     This action replaces a schedule's fields, keeping its id and client. Validation is as
+    ///     for <see cref="Create" />; returns 404 when the schedule does not exist or belongs to
+    ///     another client. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -170,7 +168,8 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This action removes a schedule from the known client.
+    ///     This action removes a schedule from the client. Returns 404 when it does not exist or
+    ///     belongs to another client. Requires <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -187,12 +186,11 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This method validates a schedule write request's own fields: <c>daysOfWeek</c> must
-    ///     name at least one real day (a schedule matching no day at all is a real user error),
-    ///     <c>timeZoneId</c> must be a real, recognized IANA time zone id, and <c>startTime</c>
-    ///     must differ from <c>endTime</c> (a zero-length window, either way around the clock, is
-    ///     meaningless) -- <c>endTime</c> earlier than <c>startTime</c> is otherwise a real,
-    ///     accepted midnight-wrapping window, never rejected on its own.
+    ///     This method checks a schedule request: <c>daysOfWeek</c> must name at least one day,
+    ///     <c>timeZoneId</c> must be a time zone this host recognizes, and <c>startTime</c> must
+    ///     differ from <c>endTime</c>, since a zero-length window means nothing. An
+    ///     <c>endTime</c> earlier than <c>startTime</c> is a valid window that wraps past midnight.
+    ///     <see cref="ClientGroupSchedulesController" /> uses it too.
     /// </summary>
     internal static bool TryValidate(ClientScheduleWriteRequest request, out string error)
     {
@@ -230,8 +228,7 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This method checks whether a string is a real, recognized IANA time zone identifier on
-    ///     this host, without throwing.
+    ///     This method reports whether this host recognizes a time zone id, without throwing.
     /// </summary>
     internal static bool IsRecognizedTimeZone(string timeZoneId)
     {
@@ -248,7 +245,7 @@ public class ClientSchedulesController(
     }
 
     /// <summary>
-    ///     This method converts a client schedule entity into its REST representation.
+    ///     This method converts a schedule entity to its API representation.
     /// </summary>
     private static ClientScheduleDetail ToDetail(DnsClientScheduleEntity schedule) =>
         new(

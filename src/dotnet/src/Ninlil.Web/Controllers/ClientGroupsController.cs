@@ -14,20 +14,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own client groups -- the top-level
-///     resource; a group's own networks and filter-list assignments are managed separately,
-///     through the nested <see cref="ClientGroupNetworksController" />
+///     This controller manages client groups. A group's networks and filter-list assignments are
+///     managed through the nested <see cref="ClientGroupNetworksController" />
 ///     (<c>/api/client-groups/{groupId}/networks</c>) and
 ///     <see cref="ClientGroupListAssignmentsController" />
-///     (<c>/api/client-groups/{groupId}/list-assignments</c>). Every action requires the
-///     <c>clientgroups:read</c> or <c>clientgroups:write</c> permission -- reused for both nested
-///     controllers too, the same way <c>zones:read</c>/<c>zones:write</c> already cover
-///     <see cref="RecordsController" /> as a zone's own child resource.
+///     (<c>/api/client-groups/{groupId}/list-assignments</c>), which use the same permissions:
+///     <c>clientgroups:read</c> for reads and <c>clientgroups:write</c> for changes. It also
+///     pauses and resumes a whole group's DNS.
 /// </summary>
-/// <param name="clientGroupRepository">The repository this controller reads and writes groups through.</param>
-/// <param name="networkRepository">The repository used to remove a deleted group's own networks -- see <see cref="Delete" />.</param>
-/// <param name="listAssignmentRepository">The repository used to remove a deleted group's own list assignments -- see <see cref="Delete" />.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientGroupRepository">Reads and writes groups.</param>
+/// <param name="networkRepository">Removes a deleted group's networks (see <see cref="Delete" />).</param>
+/// <param name="listAssignmentRepository">Removes a deleted group's list assignments (see <see cref="Delete" />).</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-groups")]
 public class ClientGroupsController(
@@ -38,7 +36,7 @@ public class ClientGroupsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every client group this server knows about.
+    ///     This action lists client groups, one page at a time. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clientgroups:read")]
@@ -63,7 +61,8 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action looks up a single client group by its identifier.
+    ///     This action returns one client group. Returns 404 for an unknown id. Requires
+    ///     <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clientgroups:read")]
@@ -78,11 +77,11 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action creates a new client group. When <see cref="ClientGroupWriteRequest.IsDefault" />
-    ///     is <see langword="true" />, whichever other group currently holds
-    ///     <see cref="DnsClientGroupEntity.IsDefault" /> is demoted first -- see
-    ///     <see cref="DemoteExistingDefaultAsync" /> for why exactly one group may hold it at a
-    ///     time.
+    ///     This action creates a client group. When
+    ///     <see cref="ClientGroupWriteRequest.IsDefault" /> is <see langword="true" />, the group
+    ///     that currently holds <see cref="DnsClientGroupEntity.IsDefault" /> loses it (see
+    ///     <see cref="DemoteExistingDefaultAsync" />). Returns 400 for a missing name and 409 when
+    ///     the name is taken. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -118,7 +117,10 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing client group's metadata.
+    ///     This action replaces a client group's name, default flag and disabled flag; making it
+    ///     the default takes the flag from the current default group. Returns 400 for a missing
+    ///     name, 404 for an unknown id and 409 when the name is taken. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -158,9 +160,9 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing client group's metadata via RFC 7396 JSON
-    ///     Merge Patch: a field absent from the patch document is left untouched, and any other
-    ///     present field overwrites it.
+    ///     This action updates a client group as an RFC 7396 merge patch: an absent field is
+    ///     unchanged and a present one replaces it. Errors are as for <see cref="Replace" />.
+    ///     Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -211,11 +213,10 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a client group, every network it contains, and every
-    ///     filter-list assignment it holds -- removed explicitly, rather than relying on the
-    ///     relational backend's own cascade delete, since MongoDB has no equivalent mechanism at
-    ///     all, the same reasoning <see cref="ZonesController.Delete" /> already applies to a
-    ///     deleted zone's own records and DNSSEC keys.
+    ///     This action deletes a client group with its networks and filter-list assignments. They
+    ///     are removed explicitly rather than by a relational cascade delete, which MongoDB lacks,
+    ///     as <see cref="ZonesController.Delete" /> does. Returns 404 for an unknown id. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -242,12 +243,9 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This method clears <see cref="DnsClientGroupEntity.IsDefault" /> on whichever other
-    ///     group currently holds it. <c>DnsFilterEngine.GetDefaultAsync</c>'s own contract expects
-    ///     at most one group to ever hold it -- letting two groups both claim to be the fallback
-    ///     would leave which one the engine actually picks unspecified (a real ambiguity, not
-    ///     merely untidy data), so this project enforces "at most one default" here rather than
-    ///     leaving it to the operator's own discipline.
+    ///     This method clears <see cref="DnsClientGroupEntity.IsDefault" /> on the other group that
+    ///     holds it. <c>DnsFilterEngine.GetDefaultAsync</c> expects at most one default group; with
+    ///     two, which one the engine picks would be undefined, so the rule is enforced here.
     /// </summary>
     private async Task DemoteExistingDefaultAsync(Guid excludingId, CancellationToken stoppingToken)
     {
@@ -263,11 +261,13 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action starts, or replaces, an instant pause on a client group -- blocking every
-    ///     one of its members' own DNS queries outright, regardless of any schedule, filter-list,
-    ///     or rewrite that would otherwise apply, until <see cref="InstantPauseRequest.DurationMinutes" />
-    ///     minutes from now. Mirrors <see cref="ClientsController.Pause" /> exactly, at the group
-    ///     level instead of the client level -- see that action's own doc comment.
+    ///     This action pauses a client group now: the DNS queries of every known client whose
+    ///     <c>ClientGroupId</c> is this group are blocked, whatever schedules, filter lists or
+    ///     rewrites would apply, for
+    ///     <see cref="InstantPauseRequest.DurationMinutes" /> minutes, as
+    ///     <see cref="ClientsController.Pause" /> does for one client. Calling it during a pause
+    ///     replaces the pause. Returns 400 for a duration that is not positive and 404 for an
+    ///     unknown id. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/pause")]
     [RequirePermission("clientgroups:write")]
@@ -298,10 +298,9 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This action ends a client group's own instant pause immediately, clearing
-    ///     <see cref="DnsClientGroupEntity.PausedUntilUtc" /> back to <see langword="null" />
-    ///     regardless of how much time was left on it. A no-op, not an error, when the group was
-    ///     not currently paused at all.
+    ///     This action ends a client group's pause now by clearing
+    ///     <see cref="DnsClientGroupEntity.PausedUntilUtc" />. Resuming a group that is not paused
+    ///     is not an error. Returns 404 for an unknown id. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]
     [RequirePermission("clientgroups:write")]
@@ -325,7 +324,7 @@ public class ClientGroupsController(
     }
 
     /// <summary>
-    ///     This method converts a client group entity into its REST representation.
+    ///     This method converts a client group entity to its API representation.
     /// </summary>
     private static ClientGroupDetail ToDetail(DnsClientGroupEntity group)
     {

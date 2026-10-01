@@ -13,25 +13,22 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers the manual static address-to-client-identity mapping set --
-///     <see cref="DnsClientStaticAddressMappingEntity" />, the flat, top-level entity
-///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> consults
-///     first, ahead of both automatic resolvers, on every real client-identity resolution attempt.
-///     This is a flat, non-nested resource with no owning parent, the same
-///     <see cref="DnsAccessControlRulesController" />/<see cref="ForwardersController" /> route
-///     convention (<c>/api/client-static-address-mappings</c>, no parent segment). Every action
-///     requires the <c>clients:read</c> or <c>clients:write</c> permission -- the same permission
-///     pair <see cref="ClientsController" /> already uses, since this resource is one more way an
-///     operator manages the same "known client" surface.
+///     This controller manages static address mappings
+///     (<see cref="DnsClientStaticAddressMappingEntity" />): manual rules that say which client
+///     identifier an IP address or network belongs to.
+///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> checks
+///     them first, before the automatic resolvers, whenever a client's identity is resolved. The
+///     route is flat (<c>/api/client-static-address-mappings</c>). Reads need <c>clients:read</c>
+///     and changes need <c>clients:write</c>, as for <see cref="ClientsController" />, since this
+///     is part of managing known clients.
 ///     <para>
-///         <b>No event publish on write, unlike <see cref="DnsAccessControlRulesController" />.</b>
-///         The resolver this controller's writes affect re-queries its own repository fresh on
-///         every single call (see that resolver's own doc comment) rather than keeping an
-///         in-memory snapshot, so there is no cache to invalidate.
+///         <b>No event is published on a write</b> (unlike
+///         <see cref="DnsAccessControlRulesController" />): the resolver reads its repository on
+///         every call and keeps no snapshot, so there is nothing to refresh.
 ///     </para>
 /// </summary>
-/// <param name="mappingRepository">The repository this controller reads and writes mappings through.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="mappingRepository">Reads and writes mappings.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-static-address-mappings")]
 public class DnsClientStaticAddressMappingsController(
@@ -40,7 +37,8 @@ public class DnsClientStaticAddressMappingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every static address mapping this server knows about, enabled or not.
+    ///     This action lists static address mappings, enabled or not, one page at a time. Requires
+    ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clients:read")]
@@ -70,7 +68,8 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action looks up a single static address mapping by its identifier.
+    ///     This action returns one static address mapping. Returns 404 for an unknown id. Requires
+    ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clients:read")]
@@ -94,7 +93,9 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action creates a new static address mapping.
+    ///     This action creates a static address mapping. Returns 400 for a missing identifier, an
+    ///     address or network that does not parse, or a protocol version that does not match the
+    ///     address family. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -132,7 +133,8 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing static address mapping's own fields.
+    ///     This action replaces a static address mapping's fields. Validation is as for
+    ///     <see cref="Create" />; returns 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -170,7 +172,8 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a static address mapping.
+    ///     This action deletes a static address mapping. Returns 404 for an unknown id. Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -190,15 +193,14 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This method validates a write request's own fields up front, so a <c>POST</c>/<c>PUT</c>
-    ///     either fully succeeds or is rejected outright with no partial effect: <see cref="DnsClientStaticAddressMappingWriteRequest.Cidr" />
-    ///     must parse as either a bare IP address or a CIDR network (the same dual-format
-    ///     acceptance the real resolver matches against), <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" />
-    ///     must be non-empty, and <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" />
-    ///     must actually agree with <see cref="DnsClientStaticAddressMappingWriteRequest.Cidr" />'s
-    ///     own real address family -- an IPv4 network can never map to an IPv6 identifier space,
-    ///     and likewise for IPv6, per <see cref="DnsClientStaticAddressMappingEntity.ProtocolVersion" />'s
-    ///     own doc comment.
+    ///     This method checks a write request before anything is saved:
+    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.Cidr" /> must be a bare IP address
+    ///     or a CIDR network (the two forms the resolver matches),
+    ///     <see cref="DnsClientStaticAddressMappingWriteRequest.ClientIdentifier" /> must not be
+    ///     empty, and <see cref="DnsClientStaticAddressMappingWriteRequest.ProtocolVersion" /> must
+    ///     match the address family, since an IPv4 network cannot map into the IPv6 identifier
+    ///     space or the reverse (see
+    ///     <see cref="DnsClientStaticAddressMappingEntity.ProtocolVersion" />).
     /// </summary>
     private static bool TryValidate(
         DnsClientStaticAddressMappingWriteRequest request,
@@ -234,9 +236,8 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This method reports a caller-supplied value's own real address family, accepting either
-    ///     a bare address or a <c>/</c>-qualified CIDR network -- the same dual-format grammar
-    ///     <see cref="DnsClientStaticAddressMappingEntity.Cidr" />'s own doc comment describes.
+    ///     This method reports the address family of a bare address or a <c>/</c>-qualified CIDR
+    ///     network, the two forms <see cref="DnsClientStaticAddressMappingEntity.Cidr" /> accepts.
     /// </summary>
     private static bool TryParseAddressFamily(
         string value,
@@ -265,7 +266,7 @@ public class DnsClientStaticAddressMappingsController(
     }
 
     /// <summary>
-    ///     This method converts a static address mapping entity into its REST representation.
+    ///     This method converts a mapping entity to its API representation.
     /// </summary>
     private static DnsClientStaticAddressMappingDetail ToDetail(
         DnsClientStaticAddressMappingEntity mapping

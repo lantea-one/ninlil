@@ -11,21 +11,17 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers which block/allow lists apply to a single client
-///     group, nested under it (<c>/api/client-groups/{groupId}/list-assignments</c>) since an
-///     assignment only ever makes sense in its owning group's own context -- the same nesting
-///     <see cref="RecordsController" /> already establishes for a zone's records. Every action
-///     requires the <c>clientgroups:read</c> or <c>clientgroups:write</c> permission, the same as
-///     <see cref="ClientGroupsController" />. There is deliberately no <c>PUT</c>/<c>PATCH</c>
-///     here -- an assignment is just a join between a group and a list with no mutable field of
-///     its own; changing which list is assigned means deleting one assignment and creating
-///     another, exactly like <see cref="ClientGroupListAssignmentWriteRequest" /> already
-///     documents.
+///     This controller manages which block and allow lists apply to one client group, nested
+///     under it at <c>/api/client-groups/{groupId}/list-assignments</c>. Reads need
+///     <c>clientgroups:read</c> and changes need <c>clientgroups:write</c>, as for
+///     <see cref="ClientGroupsController" />. There is no PUT or PATCH: an assignment only joins a
+///     group to a list, so changing the list means deleting one assignment and creating another
+///     (see <see cref="ClientGroupListAssignmentWriteRequest" />).
 /// </summary>
-/// <param name="clientGroupRepository">The repository used to confirm the owning group exists.</param>
-/// <param name="filterListRepository">The repository used to confirm the assigned list actually exists.</param>
-/// <param name="listAssignmentRepository">The repository this controller reads and writes assignments through directly.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
+/// <param name="clientGroupRepository">Confirms the group exists.</param>
+/// <param name="filterListRepository">Confirms the assigned list exists.</param>
+/// <param name="listAssignmentRepository">Reads and writes assignments.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
 [ApiController]
 [Route("api/client-groups/{groupId:guid}/list-assignments")]
 public class ClientGroupListAssignmentsController(
@@ -36,7 +32,8 @@ public class ClientGroupListAssignmentsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every list assignment belonging to a client group.
+    ///     This action lists a group's list assignments, one page at a time. Returns 404 for an
+    ///     unknown group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("clientgroups:read")]
@@ -70,7 +67,8 @@ public class ClientGroupListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action looks up a single list assignment by its identifier.
+    ///     This action returns one list assignment. Returns 404 when it does not exist or belongs
+    ///     to another group. Requires <c>clientgroups:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clientgroups:read")]
@@ -95,15 +93,12 @@ public class ClientGroupListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action assigns a block/allow list to the client group. Rejected with
-    ///     <c>400 Bad Request</c> if the referenced list does not exist -- treated as an invalid
-    ///     value on the assignment being created, not a lookup of the list itself, so this stays a
-    ///     <see cref="ValidationException" /> rather than a <see cref="NotFoundException" /> -- and
-    ///     <c>409 Conflict</c> if this exact group/list pairing is already assigned -- an
-    ///     unenforced duplicate would be harmless to <c>DnsFilterEngine</c> itself (it collects
-    ///     assigned list identifiers into a <see cref="HashSet{T}" /> before resolving them, see
-    ///     <c>DnsFilterEngine.ResolveApplicableListsAsync</c>), but is still rejected here to avoid
-    ///     letting an operator accumulate meaningless duplicate rows.
+    ///     This action assigns a block or allow list to the group. Returns 400 when the list does
+    ///     not exist (an invalid value in the request, not a missing resource), 404 for an unknown
+    ///     group, and 409 when the list is already assigned. A duplicate would not change
+    ///     filtering, since <c>DnsFilterEngine.ResolveApplicableListsAsync</c> collects list ids
+    ///     into a <see cref="HashSet{T}" />, but it is refused to keep rows meaningful. Requires
+    ///     <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]
@@ -156,7 +151,8 @@ public class ClientGroupListAssignmentsController(
     }
 
     /// <summary>
-    ///     This action removes a list assignment from the client group.
+    ///     This action removes a list assignment from the group. Returns 404 when it does not exist
+    ///     or belongs to another group. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clientgroups:write")]
@@ -176,8 +172,7 @@ public class ClientGroupListAssignmentsController(
     }
 
     /// <summary>
-    ///     This method converts a client group list assignment entity into its REST
-    ///     representation.
+    ///     This method converts an assignment entity to its API representation.
     /// </summary>
     private static ClientGroupListAssignmentDetail ToDetail(
         DnsClientGroupListAssignmentEntity assignment

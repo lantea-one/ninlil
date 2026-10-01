@@ -17,51 +17,43 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers this server's own "known client" registry
-///     (<see cref="DnsClientEntity" />) -- devices this server has either been told about
-///     directly, through this controller, or has auto-discovered on its own the first time a DHCP
-///     lease was granted for a previously-unseen client identifier (see
-///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpClientRegistryAutoPopulationService</c>). This
-///     controller itself has no dependency on DHCP being present or enabled at all -- every action
-///     below works standalone against <see cref="IDnsClientRepository" /> regardless. Every action
-///     requires the <c>clients:read</c> or <c>clients:write</c> permission.
+///     This controller manages the known-client registry (<see cref="DnsClientEntity" />): devices
+///     an operator added here, or that
+///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpClientRegistryAutoPopulationService</c> added the
+///     first time a DHCP lease went to an unseen client identifier. It works with or without
+///     DHCP. It also lists and counts clients by presence, and pauses or resumes a client's DNS.
+///     Reads need <c>clients:read</c> and changes need <c>clients:write</c>.
 ///     <para>
-///         <b>An address, once created, is immutable.</b> Together
-///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity.ClientIdentifier" />/
+///         <b>An address cannot be edited once created.</b>
+///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity.ClientIdentifier" />
+///         and
 ///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity.ProtocolVersion" />
-///         are one address row's own entire identity: it is exactly the pair
-///         <c>IDnsClientRepository.GetByClientIdentifierAsync</c> looks a device up by, and the
-///         pair the DHCP-driven auto-population feature above uses to decide "have I seen this
-///         device before." Letting either half of this pair change would silently orphan that
-///         lookup -- a later DHCP lease grant for the device's own original identifier would
-///         simply never find this row again and would spawn a second, duplicate device instead --
-///         and would let an operator produce a row that is internally inconsistent in a way no
-///         real protocol ever produces (a DUID-shaped string tagged <c>IPv4</c>, for example,
-///         since a client identifier's own shape is dictated entirely by which protocol issued
-///         it). <see cref="ClientWriteRequest" /> (used for <see cref="Replace" />/
-///         <see cref="Patch" />) therefore carries no address field at all; to actually change a
-///         device's own address, remove it (<see cref="ClientAddressesController.Delete" />) and
-///         add a new one (<see cref="ClientAddressesController.Create" />), mirroring the exact
-///         "immutable field, delete and recreate" precedent <c>TsigKeysController</c> already
-///         establishes for a TSIG key's own shared secret. <see cref="Create" /> still accepts one
-///         initial address directly, since a device with no address at all could never be resolved
-///         by anything -- see <see cref="ClientCreateRequest" />'s own doc comment.
+///         together identify an address row: <c>IDnsClientRepository.GetByClientIdentifierAsync</c>
+///         looks devices up by that pair, and DHCP auto-population uses it to decide whether a
+///         device is new. Changing either would make a later lease for the original identifier miss
+///         the row and create a duplicate device, and could produce a combination no protocol
+///         issues (a DUID tagged <c>IPv4</c>, say). So <see cref="ClientWriteRequest" /> (for
+///         <see cref="Replace" /> and <see cref="Patch" />) has no address field; to change one,
+///         delete it (<see cref="ClientAddressesController.Delete" />) and add another
+///         (<see cref="ClientAddressesController.Create" />). <see cref="Create" /> takes one
+///         initial address, since a device without one could never be matched (see
+///         <see cref="ClientCreateRequest" />).
 ///     </para>
 ///     <para>
-///         <b>Vendor and suggested icon are computed at read time, never stored.</b> Every
-///         response resolves each address's embedded MAC address against the IEEE registries
-///         (<see cref="IMacVendorLookupService" />) and derives a suggested device icon from the
-///         result, so both follow a registry refresh automatically. Only an operator's explicit
-///         <see cref="DnsClientEntity.DeviceIconKey" /> choice and <see cref="DnsClientEntity.IsFavorite" />
-///         star are persisted.
+///         <b>Vendor and suggested icon are worked out on every read, never stored.</b> Each
+///         response looks up each address's embedded MAC address in the IEEE registries
+///         (<see cref="IMacVendorLookupService" />) and suggests an icon from the result, so both
+///         follow a registry refresh. Only the operator's
+///         <see cref="DnsClientEntity.DeviceIconKey" /> choice and
+///         <see cref="DnsClientEntity.IsFavorite" /> star are stored.
 ///     </para>
 /// </summary>
-/// <param name="clientRepository">The repository this controller reads and writes known clients through.</param>
-/// <param name="clientAddressRepository">The repository used to create a new client's own initial address, and to render every device's own address list.</param>
-/// <param name="clientGroupRepository">The repository used to confirm a client's own optional <see cref="ClientCreateRequest.ClientGroupId" /> names a real group.</param>
-/// <param name="unitOfWork">The unit of work every staged change is committed through.</param>
-/// <param name="presenceOptions">The live presence options, whose online window decides each device's reported <see cref="ClientDetail.IsOnline" />.</param>
-/// <param name="vendorLookup">The MAC vendor lookup each response's vendor fields are computed through.</param>
+/// <param name="clientRepository">Reads and writes clients.</param>
+/// <param name="clientAddressRepository">Creates a new client's first address and lists each client's addresses.</param>
+/// <param name="clientGroupRepository">Confirms a client's <see cref="ClientCreateRequest.ClientGroupId" /> names an existing group.</param>
+/// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="presenceOptions">The current presence options, whose online window decides <see cref="ClientDetail.IsOnline" />.</param>
+/// <param name="vendorLookup">Looks up the vendor of each address's MAC address.</param>
 [ApiController]
 [Route("api/clients")]
 public class ClientsController(
@@ -74,13 +66,12 @@ public class ClientsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every known client this server is tracking, optionally narrowed to
-    ///     favorites or non-favorites (<c>isFavorite</c>) and to devices currently online or
-    ///     offline (<c>presence</c>) and to devices registered since a given instant
-    ///     (<c>createdSinceUtc</c>), in the requested order (<c>sort</c>, creation order by
-    ///     default). Presence is evaluated against the live online window at the moment of the
-    ///     request -- the same cutoff each returned device's own <see cref="ClientDetail.IsOnline" />
-    ///     is computed from -- and every filter and ordering is pushed down to the storage engine.
+    ///     This action lists known clients, one page at a time, optionally narrowed by favorite
+    ///     star (<c>isFavorite</c>), online or offline (<c>presence</c>) and registration time
+    ///     (<c>createdSinceUtc</c>), in the requested order (<c>sort</c>; creation order by
+    ///     default). Presence uses the online window at the moment of the request, the same cutoff
+    ///     each device's <see cref="ClientDetail.IsOnline" /> uses. Filtering, ordering and paging
+    ///     run in the storage engine. Requires <c>clients:read</c>.
     /// </summary>
     /// <param name="pagination">The page to return.</param>
     /// <param name="isFavorite">When set, only clients whose favorite star matches this value are listed.</param>
@@ -102,7 +93,7 @@ public class ClientsController(
     {
         (int skip, int take) = (pagination ?? new PaginationQuery()).Normalize();
 
-        // "Online" means seen at or after now minus the window, exactly the inclusive boundary
+        // "Online" means seen at or after now minus the window, the same inclusive boundary
         // ClientPresenceOptions.IsOnline applies to each returned device.
         DateTimeOffset onlineCutoffUtc =
             DateTimeOffset.UtcNow - presenceOptions.CurrentValue.OnlineWindow;
@@ -116,9 +107,9 @@ public class ClientsController(
             SortOrder: sort ?? DnsClientSortOrderEnum.Created
         );
 
-        // Both the page itself and its total count are pushed down to the storage engine -- a
-        // real, translated WHERE/ORDER BY/OFFSET/LIMIT (or the MongoDB equivalent) -- rather than
-        // materializing every client into memory first.
+        // The page and the total count are both computed by the storage engine
+        // (WHERE/ORDER BY/OFFSET/LIMIT or the MongoDB equivalent), not by loading every client into
+        // memory.
         IReadOnlyList<DnsClientEntity> clients = await clientRepository.SearchAsync(
             criteria,
             skip,
@@ -127,9 +118,8 @@ public class ClientsController(
         );
         int totalCount = await clientRepository.CountAsync(criteria, stoppingToken);
 
-        // Each client's own address set is fetched in parallel -- one query per client (this
-        // page's own bounded size, never the whole table), acceptable at this project's own
-        // homelab/small-org target scale.
+        // Each client's addresses are loaded with one query per client on this page, all started
+        // at once.
         ClientDetail[] details = await Task.WhenAll(
             clients.Select(client => ToDetailAsync(client, stoppingToken))
         );
@@ -138,14 +128,15 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action reports the registry's headline counts -- total, online, offline, new, and
-    ///     favorites -- each a pushed-down count over the same filters <see cref="List" /> applies,
-    ///     so a count always agrees with the filtered list it summarizes.
+    ///     This action returns the registry's headline counts: total, online, offline, new and
+    ///     favorites, each counted in storage with the same filters <see cref="List" /> uses, so a
+    ///     count agrees with the matching list. Returns 400 when <c>newSinceUtc</c> is in the
+    ///     future. Requires <c>clients:read</c>.
     /// </summary>
     /// <param name="newSinceUtc">
-    ///     The instant "new" counts from. A caller showing "new today" passes its own local
-    ///     midnight, since this server cannot know the viewer's time zone; when omitted, the last
-    ///     24 hours are counted. A value in the future is rejected with a <c>400</c>.
+    ///     The instant "new" counts from. A caller showing "new today" passes its local midnight,
+    ///     since the server does not know the viewer's time zone; when omitted, the last 24 hours
+    ///     are counted.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     [HttpGet("summary")]
@@ -164,8 +155,8 @@ public class ClientsController(
         TimeSpan onlineWindow = presenceOptions.CurrentValue.OnlineWindow;
         DateTimeOffset onlineCutoffUtc = now - onlineWindow;
 
-        // Sequential rather than parallel: every count shares this request's one scoped
-        // repository, and a DbContext never allows two concurrent operations.
+        // Sequential rather than parallel: the counts share this request's scoped repository, and a
+        // DbContext does not allow two operations at once.
         int totalCount = await clientRepository.CountAsync(
             DnsClientSearchCriteria.All,
             stoppingToken
@@ -183,9 +174,8 @@ public class ClientsController(
             stoppingToken
         );
 
-        // Offline is the exact complement of online for the same cutoff, so it is derived rather
-        // than counted separately -- a device written between two count queries can never make
-        // the two disagree with the total.
+        // Offline is derived as total minus online for the same cutoff rather than counted, so a
+        // device written between two queries cannot make the numbers disagree.
         return Ok(
             new ClientSummaryDetail(
                 totalCount,
@@ -200,7 +190,8 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action looks up a single known client by its identifier.
+    ///     This action returns one known client. Returns 404 for an unknown id. Requires
+    ///     <c>clients:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("clients:read")]
@@ -215,16 +206,13 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action registers a new known client device together with its first address.
-    ///     Rejected with <c>409 Conflict</c> when a device already exists for the same
-    ///     <see cref="ClientCreateRequest.ClientIdentifier" />/<see cref="ClientCreateRequest.ProtocolVersion" />
-    ///     pair -- the same real, storage-level uniqueness
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity" />'s own
-    ///     composite index enforces, translated here via a pre-check against
-    ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />, mirroring exactly how
-    ///     every other controller in this project translates a storage-level uniqueness violation
-    ///     into a real <c>ConflictException</c> (see <see cref="TsigKeysController.Create" />'s own
-    ///     <c>FindByNameAsync</c> pre-check for the closest precedent).
+    ///     This action registers a client device with its first address. Returns 400 for a missing
+    ///     identifier, an unknown client group or an unknown icon name, and 409 when a device
+    ///     already has the same <see cref="ClientCreateRequest.ClientIdentifier" /> and
+    ///     <see cref="ClientCreateRequest.ProtocolVersion" /> (the pair the address table's unique
+    ///     index covers, checked first through
+    ///     <see cref="IDnsClientRepository.GetByClientIdentifierAsync" />). Requires
+    ///     <c>clients:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clients:write")]
@@ -295,9 +283,9 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action fully replaces an existing known client's own editable metadata -- see
-    ///     this class's own doc comment for why a device's own address(es) can never be changed
-    ///     this way.
+    ///     This action replaces a client's editable details; its addresses cannot be changed this
+    ///     way (see the class summary). Returns 400 for an unknown client group or icon name and
+    ///     404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -337,11 +325,10 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action partially updates an existing known client's own editable metadata via RFC
-    ///     7396 JSON Merge Patch: a field absent from the patch document is left untouched, and
-    ///     any other present field overwrites it. As with <see cref="Replace" />, this action
-    ///     never recognizes an address field -- a patch document naming one is simply ignored, the
-    ///     same way <c>TsigKeysController.Patch</c> never looks for a <c>secret</c> field at all.
+    ///     This action updates a client's editable details as an RFC 7396 merge patch: an absent
+    ///     field is unchanged, a JSON <c>null</c> clears a nullable field, and any other value
+    ///     replaces it. Address fields are not recognized and are ignored. Errors are as for
+    ///     <see cref="Replace" />. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -414,9 +401,9 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a known client. This has no effect on any lease/record
-    ///     the device may still hold -- this registry is purely descriptive metadata about a
-    ///     device, never the source of truth for its own address assignment or DNS content.
+    ///     This action deletes a known client and its addresses. Leases and DNS records the device
+    ///     holds are not affected; the registry only describes devices. Returns 404 for an unknown
+    ///     id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("clients:write")]
@@ -426,11 +413,10 @@ public class ClientsController(
         if (client is null)
             throw new NotFoundException("Client", id.ToString());
 
-        // Remove every address the device answers to alongside the device itself, in the same
-        // unit of work. An orphaned address row would keep its identifier reserved by the unique
-        // (ClientIdentifier, ProtocolVersion) index while every lookup through the device table
-        // came back empty -- so re-registering that identifier, manually or via DHCP
-        // auto-population, would fail on a duplicate key forever.
+        // The addresses go in the same unit of work. An orphaned address would keep its identifier
+        // reserved by the unique (ClientIdentifier, ProtocolVersion) index while lookups through
+        // the device table found nothing, so re-registering it, by hand or through DHCP, would fail
+        // on a duplicate key.
         foreach (
             DnsClientAddressEntity address in await clientAddressRepository.ListByClientIdAsync(
                 client.Id,
@@ -446,13 +432,11 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action starts, or replaces, an instant pause on a single known client --
-    ///     blocking every one of its own DNS queries outright, regardless of any schedule,
-    ///     filter-list, or rewrite that would otherwise apply, until
-    ///     <see cref="InstantPauseRequest.DurationMinutes" /> minutes from now. Calling this again
-    ///     while a pause is already active simply replaces it with a fresh one -- there is no
-    ///     "extend" semantic, matching how every other write action in this controller always
-    ///     fully overwrites the field(s) it targets.
+    ///     This action pauses one client now: all its DNS queries are blocked, whatever schedules,
+    ///     filter lists or rewrites would apply, for
+    ///     <see cref="InstantPauseRequest.DurationMinutes" /> minutes. Calling it during a pause
+    ///     replaces the pause rather than extending it. Returns 400 for a duration that is not
+    ///     positive and 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/pause")]
     [RequirePermission("clients:write")]
@@ -483,10 +467,9 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This action ends a client's own instant pause immediately, clearing
-    ///     <see cref="DnsClientEntity.PausedUntilUtc" /> back to <see langword="null" /> regardless
-    ///     of how much time was left on it. A no-op, not an error, when the client was not
-    ///     currently paused at all.
+    ///     This action ends a client's pause now by clearing
+    ///     <see cref="DnsClientEntity.PausedUntilUtc" />. Resuming a client that is not paused is
+    ///     not an error. Returns 404 for an unknown id. Requires <c>clients:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/resume")]
     [RequirePermission("clients:write")]
@@ -507,10 +490,8 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This method converts a known client entity into its REST representation, fetching its
-    ///     own current address set fresh from <see cref="IDnsClientAddressRepository" /> -- never
-    ///     cached, since an address can be added or removed independently of any client-level
-    ///     write this controller's own actions perform.
+    ///     This method converts a client entity to its API representation, loading its current
+    ///     addresses (never cached, since addresses change independently of the client).
     /// </summary>
     private async Task<ClientDetail> ToDetailAsync(
         DnsClientEntity client,
@@ -522,12 +503,12 @@ public class ClientsController(
         IReadOnlyList<DnsClientAddressEntity> addresses =
             await clientAddressRepository.ListByClientIdAsync(client.Id, stoppingToken);
 
-        // A device's own presence is its most recently seen address.
+        // A device's last-seen time is that of its most recently seen address.
         DateTimeOffset? lastSeenUtc = addresses.Max(address => address.LastSeenUtc);
 
-        // Resolve every address's vendor once. The device's vendor is the first address that
-        // yields one; it counts as randomized only when every MAC it embeds is randomized, so a
-        // device with one real and one private MAC still reports its real vendor.
+        // Each address's vendor is looked up once. The device's vendor is the first one found; it
+        // counts as randomized only when every MAC it embeds is randomized, so a device with one
+        // real and one private MAC still reports its real vendor.
         ClientAddressDetail[] addressDetails =
         [
             .. addresses.Select(address => ToAddressDetail(address, vendorLookup)),
@@ -567,9 +548,8 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This method converts a single client address entity into its REST representation,
-    ///     including the vendor its embedded MAC address resolves to -- shared with
-    ///     <see cref="ClientAddressesController" />'s own identical conversion need.
+    ///     This method converts one address entity to its API representation, including the vendor
+    ///     of its embedded MAC address. <see cref="ClientAddressesController" /> uses it too.
     /// </summary>
     /// <param name="address">The address to convert.</param>
     /// <param name="vendorLookup">The lookup the address's vendor fields are computed through.</param>
@@ -599,11 +579,10 @@ public class ClientsController(
     }
 
     /// <summary>
-    ///     This method validates a device icon named in a write request against the fixed
-    ///     <see cref="DnsClientDeviceIconEnum" /> catalog, by its exact wire name (case
-    ///     insensitive). A blank value clears the choice. Anything else -- including a numeric
-    ///     string, which a plain enum parse would otherwise accept -- is rejected rather than
-    ///     silently coerced to some other icon.
+    ///     This method checks a device icon name against <see cref="DnsClientDeviceIconEnum" />,
+    ///     ignoring case. A blank value clears the choice. Anything else, including a numeric
+    ///     string a plain enum parse would accept, returns 400 rather than being turned into some
+    ///     other icon.
     /// </summary>
     /// <param name="value">The requested icon name, or <see langword="null" />.</param>
     /// <returns>The parsed icon, or <see langword="null" /> for no explicit choice.</returns>
