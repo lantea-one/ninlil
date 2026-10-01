@@ -6,28 +6,21 @@ namespace Ninlil.Dns.Server.Cluster.Authentication;
 
 /// <summary>
 ///     This class computes and parses the HMAC-SHA256 signature every cluster-channel HTTP
-///     request carries in its own <see cref="ClusterTsigAuthenticationDefaults.SignatureHeaderName" />
-///     header. It reuses the exact same pre-shared-key storage, encryption
-///     (<c>TsigSecretProtector</c>), and MAC algorithm (HMAC-SHA256) as real RFC 8945 TSIG --
-///     the decision record for Phase 9-6a's node-to-node channel calls for "reusing the existing
-///     <c>Ninlil.Dns.Server.Tsig</c> key infrastructure for application-layer authentication,
-///     exactly like zone transfer already does." It deliberately does <b>not</b> reuse
-///     <c>ITsigService</c>/<c>TsigCodec</c> directly, though: those compute a MAC over RFC 8945's
-///     own DNS-message-specific "TSIG Variables" wire encoding, a format built for a binary DNS
-///     message, not a JSON HTTP request. This class instead signs a simple, HTTP-appropriate
-///     canonical string -- the request method, path, a Unix timestamp, and the raw request body
-///     -- which is the same key material and algorithm applied to a shape that actually fits an
-///     HTTP call.
+///     request carries in the <see cref="ClusterTsigAuthenticationDefaults.SignatureHeaderName" />
+///     header. It uses the TSIG key store and its encryption (<c>TsigSecretProtector</c>), the
+///     same keys zone transfers use, but not the RFC 8945 message format: <c>ITsigService</c>
+///     and <c>TsigCodec</c> sign DNS-message "TSIG Variables", which do not fit an HTTP request.
+///     Here the MAC covers the method, path, a Unix timestamp and the raw body.
+///     <see cref="Http.ClusterPeerHttpClientFactory" /> signs and
+///     <see cref="ClusterTsigAuthenticationHandler" /> verifies.
 /// </summary>
 public static class ClusterTsigRequestSigner
 {
     /// <summary>
     ///     This constant contains how many seconds of clock skew between the signing and
-    ///     verifying node are tolerated before a signature is rejected as stale -- matching RFC
-    ///     8945's own recommended TSIG fudge default (<c>TsigServiceOptions.DefaultFudgeSeconds</c>)
-    ///     exactly, for the same reasoning: long enough to absorb ordinary clock drift between
-    ///     two independent hosts, short enough that a captured, signed request cannot be replayed
-    ///     indefinitely.
+    ///     verifying node are allowed before a signature is rejected: 300, the RFC 8945 TSIG fudge
+    ///     recommendation. That absorbs ordinary clock drift and limits replay of a captured
+    ///     request to that window; there is no nonce, so a replay inside it is accepted.
     /// </summary>
     public const int ClockSkewToleranceSeconds = 300;
 
@@ -35,8 +28,8 @@ public static class ClusterTsigRequestSigner
     ///     This method computes the HMAC-SHA256 MAC for one cluster-channel request.
     /// </summary>
     /// <param name="secret">The shared secret to sign with, already decrypted.</param>
-    /// <param name="httpMethod">The request's own HTTP method (for example, <c>"POST"</c>).</param>
-    /// <param name="path">The request's own absolute path (for example, <c>"/api/cluster/channel/heartbeat"</c>).</param>
+    /// <param name="httpMethod">The request's HTTP method (for example, <c>"POST"</c>).</param>
+    /// <param name="path">The request's absolute path (for example, <c>"/api/cluster/channel/heartbeat"</c>).</param>
     /// <param name="unixTimestampSeconds">The Unix timestamp the request is being signed at.</param>
     /// <param name="bodyBytes">The exact raw bytes of the request body.</param>
     /// <returns>The computed MAC.</returns>
@@ -48,12 +41,9 @@ public static class ClusterTsigRequestSigner
         byte[] bodyBytes
     )
     {
-        // What/how: the canonical string this class's own doc comment describes is built as a
-        // newline-separated method/path/timestamp header, then the raw body bytes are appended
-        // after it -- binding all four pieces into one MAC means an attacker who captures a
-        // valid, signed request can never replay it against a different path, method, or body
-        // (each would change the canonical input and therefore invalidate the MAC), nor merely
-        // adjust its timestamp to extend its validity window.
+        // Method, path and timestamp, each followed by a newline, then the raw body. Covering all
+        // four means a captured request cannot be reused with another method, path or body, or
+        // with a later timestamp.
         byte[] canonicalPrefix = Encoding.UTF8.GetBytes(
             $"{httpMethod.ToUpperInvariant()}\n{path}\n{unixTimestampSeconds}\n"
         );
@@ -76,8 +66,7 @@ public static class ClusterTsigRequestSigner
     ) => $"{tsigKeyName}:{unixTimestampSeconds}:{Convert.ToBase64String(mac)}";
 
     /// <summary>
-    ///     This method parses a cluster-channel request's own signature header value back into
-    ///     its three parts.
+    ///     This method parses a signature header value into its three parts.
     /// </summary>
     /// <param name="headerValue">The raw header value to parse.</param>
     /// <param name="tsigKeyName">The parsed key name, or <see langword="null" /> on failure.</param>
@@ -98,9 +87,8 @@ public static class ClusterTsigRequestSigner
         if (string.IsNullOrWhiteSpace(headerValue))
             return false;
 
-        // The key name itself is a DNS name in presentation form, which may legally contain a
-        // colon-free but otherwise arbitrary label set; splitting into at most three parts (key
-        // name, timestamp, MAC) rather than on every colon keeps this parse correct even so.
+        // Split into at most three parts, so the base64 MAC (which has no colon) is the last.
+        // A key name containing a colon would still break the parse.
         string[] parts = headerValue.Split(':', 3);
         if (parts.Length != 3)
             return false;

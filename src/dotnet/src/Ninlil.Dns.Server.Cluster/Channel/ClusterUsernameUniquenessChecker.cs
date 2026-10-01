@@ -13,22 +13,18 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.Cluster.Channel;
 
 /// <summary>
-///     This class is the one real implementation of <see cref="IClusterUsernameUniquenessChecker" />
-///     -- Phase 9-6d's own best-effort, cluster-wide username-uniqueness check. Reuses 9-6a's own
-///     peer registry and TSIG-authenticated + TLS-encrypted HTTP client exactly the way
-///     <see cref="ClusterConfigSyncBroadcaster" /> already does, querying
-///     <c>POST /api/cluster/channel/username-check</c> on every currently
-///     <see cref="ClusterNodeStatusEnum.Healthy" /> peer, in parallel.
+///     This class implements <see cref="IClusterUsernameUniquenessChecker" />, the best-effort
+///     cluster-wide username check made when a user is created. Like
+///     <see cref="ClusterConfigSyncBroadcaster" />, it uses the peer registry and the signed,
+///     pinned client, asking every <see cref="ClusterNodeStatusEnum.Healthy" /> peer in parallel
+///     through <c>POST /api/cluster/channel/username-check</c>.
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to create a fresh dependency injection scope for the peer-registry lookup
-///     -- this class is registered as a singleton (its own caller, <c>UsersController</c>, is
-///     scoped, but nothing here prevents a singleton registration, and matching
-///     <see cref="ClusterConfigSyncBroadcaster" />'s own lifetime keeps both cluster-channel
-///     callers consistent).
+///     The factory used to create a scope for the peer-registry lookup, since this class is a
+///     singleton like the other cluster-channel callers.
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound request.</param>
-/// <param name="clusterOptions">This node's own cluster configuration.</param>
+/// <param name="clusterOptions">The cluster settings.</param>
 /// <param name="logger">The logger a per-peer failure is recorded to.</param>
 public class ClusterUsernameUniquenessChecker(
     IServiceScopeFactory scopeFactory,
@@ -38,17 +34,14 @@ public class ClusterUsernameUniquenessChecker(
 ) : IClusterUsernameUniquenessChecker
 {
     /// <summary>
-    ///     This constant contains the inbound path every peer's own <c>ClusterChannelController</c>
-    ///     exposes for a username-uniqueness check -- see that controller's own
-    ///     <c>UsernameCheck</c> action.
+    ///     This constant contains the path of the <c>ClusterChannelController.UsernameCheck</c>
+    ///     action.
     /// </summary>
     private const string UsernameCheckPath = "/api/cluster/channel/username-check";
 
     /// <summary>
-    ///     This constant contains how long a single peer's own response may take before it is
-    ///     treated as unreachable and simply skipped -- deliberately short, since this check runs
-    ///     synchronously inside a real user-creation REST call and must never make account
-    ///     management feel slow because one peer is having a bad day.
+    ///     This field contains how long one peer may take to answer. It is short because the check
+    ///     runs inside the user-creation request.
     /// </summary>
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(3);
 
@@ -79,8 +72,7 @@ public class ClusterUsernameUniquenessChecker(
             new ClusterUsernameCheckRequest(normalizedUserName)
         );
 
-        // Every peer is queried concurrently -- an unreachable or slow peer must never delay,
-        // and must never be conflated with a peer that genuinely reports a collision.
+        // Queried concurrently, so one slow peer does not delay the others.
         bool[] results = await Task.WhenAll(
             healthyPeers.Select(peer => CheckOnePeerAsync(peer, requestBody, stoppingToken))
         );
@@ -89,9 +81,10 @@ public class ClusterUsernameUniquenessChecker(
     }
 
     /// <summary>
-    ///     This method queries one peer, returning <see langword="false" /> (never treated as a
-    ///     collision) for any failure, timeout, or unreachable peer -- see this class's own doc
-    ///     comment for why an unreachable peer must never be conflated with a genuine collision.
+    ///     This method asks one peer, returning <see langword="false" /> for a rejection or
+    ///     failure, so an unreachable peer never blocks user creation. A timeout is a
+    ///     <see cref="TaskCanceledException" />, which the catch filter does not handle, so it
+    ///     propagates.
     /// </summary>
     private async Task<bool> CheckOnePeerAsync(
         ClusterNodeEntity peer,

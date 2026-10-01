@@ -5,9 +5,9 @@ using Ninlil.Dns.Server.Cluster.Authentication;
 namespace Ninlil.Dns.Server.Cluster.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterTsigRequestSigner" />: MAC computation is
-///     deterministic and sensitive to every input it claims to cover, and the header
-///     format/parse pair round-trips exactly.
+///     This class tests <see cref="ClusterTsigRequestSigner" /> as pure functions: the MAC is
+///     deterministic and changes with each covered input (secret, method, path, timestamp,
+///     body), and header values format and parse back unchanged, with malformed ones rejected.
 /// </summary>
 public class ClusterTsigRequestSignerTests
 {
@@ -56,8 +56,7 @@ public class ClusterTsigRequestSignerTests
             "{}"u8.ToArray()
         );
 
-        // "post" lowercase is normalized to uppercase internally, so it must match the baseline;
-        // a genuinely different method ("GET") must not.
+        // Lowercase "post" is upper-cased, so it must match the baseline; "GET" must not.
         if (string.Equals(differentMethod, "POST", StringComparison.OrdinalIgnoreCase))
             Assert.Equal(baseline, varied);
         else
@@ -198,12 +197,8 @@ public class ClusterTsigRequestSignerTests
     [Fact]
     public void TryParseHeaderValue_WithAColonInTheKeyName_StillParsesCorrectly()
     {
-        // The key name itself is split at most three ways specifically so a colon-free-in-
-        // practice but not-technically-forbidden key name still parses -- this test uses a
-        // realistic key name (no colon) but confirms the split-into-three behavior directly by
-        // constructing a header whose "body" (MAC) is base64, which itself can never contain a
-        // colon, so this mostly documents the real-world shape rather than exercising an edge
-        // case that cannot occur with this project's own generated key names.
+        // Despite the test name, the key name here has no colon: a key name with a colon would
+        // be split at that colon and fail to parse. This checks the normal three-part shape.
         Assert.True(
             ClusterTsigRequestSigner.TryParseHeaderValue(
                 "cluster-a1b2c3:1700000000:QUJD",

@@ -6,9 +6,10 @@ using Ninlil.Dns.Server.Cluster.Http;
 namespace Ninlil.Dns.Server.Cluster.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterPeerCertificateValidator" /> against real, generated
-///     self-signed certificates -- the exact shape a Ninlil cluster channel actually presents
-///     (<c>TlsCertificateOptions</c>'s own default), not a mock.
+///     This class tests <see cref="ClusterPeerCertificateValidator" /> with self-signed
+///     certificates generated in the test, the kind a node presents by default
+///     (<c>TlsCertificateOptions</c>): thumbprint format, matching, case, and rejection of other
+///     certificates and missing input.
 /// </summary>
 public class ClusterPeerCertificateValidatorTests
 {
@@ -87,8 +88,8 @@ public class ClusterPeerCertificateValidatorTests
         using X509Certificate2 attacker = CreateSelfSignedCertificate("CN=an-impostor");
         string pinnedToTheRealPeer = ClusterPeerCertificateValidator.ComputeThumbprint(presented);
 
-        // The whole point of pinning: a certificate presenting a different key entirely, even
-        // one with a plausible-looking subject name, is rejected outright.
+        // The point of pinning: a certificate with a different key is rejected, whatever its
+        // subject name.
         Assert.False(ClusterPeerCertificateValidator.IsTrusted(attacker, pinnedToTheRealPeer));
     }
 

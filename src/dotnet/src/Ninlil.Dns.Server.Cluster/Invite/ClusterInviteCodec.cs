@@ -4,22 +4,17 @@ using System.Text.Json;
 namespace Ninlil.Dns.Server.Cluster.Invite;
 
 /// <summary>
-///     This class encodes a <see cref="ClusterInviteCode" /> into a single opaque string an
-///     operator copies from the inviting node's own Angular "Cluster" page into the joining
-///     node's -- and decodes it back. The encoding itself (JSON, then base64url) carries no
-///     security property of its own; the payload's own secret is protected purely by staying off
-///     the wire except over this project's own TLS-protected admin REST API (JWT-authenticated,
-///     served only over Kestrel's HTTPS listener) and by the operator's own out-of-band copy/paste
-///     step, exactly like <c>TsigKeyCreateResponse</c>'s own plaintext secret already is.
+///     This class encodes a <see cref="ClusterInviteCode" /> into the string an operator copies
+///     from the inviting node's Cluster page to the joining node's, and decodes it again. The
+///     encoding (JSON, then base64url) protects nothing: the secret in it is protected only by
+///     travelling over the authenticated HTTPS admin API and by the operator's copy and paste,
+///     like the plaintext secret in <c>TsigKeyCreateResponse</c>.
 /// </summary>
 public static class ClusterInviteCodec
 {
     /// <summary>
-    ///     This constant contains a short, human-visible prefix every invite code starts with, so
-    ///     an operator (or this project's own <c>ClusterController.Join</c> validation) can tell
-    ///     an obviously-wrong paste (an empty field, a TSIG secret pasted into the wrong box) apart
-    ///     from a real, if perhaps expired or otherwise invalid, invite code before ever
-    ///     attempting to decode it.
+    ///     This constant contains the readable prefix every invite code starts with, so an obvious
+    ///     wrong paste (for example a TSIG secret) is reported as such before decoding.
     /// </summary>
     private const string Prefix = "ninlil-cluster-invite-1.";
 
@@ -31,16 +26,16 @@ public static class ClusterInviteCodec
     {
         byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(invite);
 
-        // How: ordinary base64's '+'/'/' characters and '=' padding are not safe to copy/paste
-        // or embed in a URL/form field without escaping, so the standard base64 alphabet is
-        // converted to the base64url variant (RFC 4648 §5: '+' -> '-', '/' -> '_') and its
-        // padding is trimmed entirely -- TryDecode below reverses both transformations exactly.
+        // Base64url (RFC 4648 §5: '+' becomes '-', '/' becomes '_') without '=' padding, so the
+        // code survives copy and paste and form fields unescaped. TryDecode reverses both.
         return Prefix
             + Convert.ToBase64String(jsonBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     /// <summary>
-    ///     This method decodes an opaque invite code string back into its payload.
+    ///     This method decodes an invite code and checks the version and required fields
+    ///     (a non-empty node id, host, key name, secret and thumbprint, and a port from 1 to
+    ///     65535). It does not check expiry; <c>ClusterJoinService.JoinAsync</c> does.
     /// </summary>
     /// <param name="inviteCode">The opaque string to decode.</param>
     /// <param name="invite">The decoded payload, or <see langword="null" /> on failure.</param>

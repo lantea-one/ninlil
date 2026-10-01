@@ -16,27 +16,25 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Cluster.Join;
 
 /// <summary>
-///     This class consumes a cluster invite code: the joining-side half of Phase 9-6a's join
-///     handshake -- see <see cref="Invite.ClusterInviteCode" />'s own doc comment for the full
-///     design, and <see cref="ClusterInviteService" /> for the inviting-side half. Joining is a
-///     single operator action on the joining node alone: no further round trip back to the
-///     inviter's own operator is needed, because <see cref="JoinAsync" /> itself completes the
-///     handshake by calling back to the inviter over the very channel this sub-phase builds,
-///     authenticated with the shared secret the invite carried.
+///     This class handles both ends of the join callback. On the joining node,
+///     <see cref="JoinAsync" /> uses an invite code (see <see cref="Invite.ClusterInviteCode" />
+///     and <see cref="ClusterInviteService" />) and completes the handshake by calling the
+///     inviter's cluster channel, signed with the invite's secret, so the operator acts only on
+///     the joining node. On the inviting node, <see cref="HandleJoinCompleteAsync" /> records the
+///     joiner when that callback arrives.
 ///     <para>
-///         Nothing is written to this node's own storage until that callback has actually
-///         succeeded: a join that fails partway through (an unreachable inviter, a rejected
-///         callback, an expired invite) leaves no trace in this node's own TSIG key or cluster
-///         node registries, so a failed attempt can always be retried cleanly with a fresh invite.
+///         The joining node writes nothing until the callback has succeeded, so a failed join (an
+///         unreachable inviter, a rejected callback, an expired invite) leaves no key or peer row
+///         behind and can be retried.
 ///     </para>
 /// </summary>
 /// <param name="clusterNodeRepository">The repository the new peer row is persisted through.</param>
-/// <param name="tsigKeyRepository">The repository used both to check for (and then persist) the shared key locally.</param>
+/// <param name="tsigKeyRepository">The repository used to check for, and then store, the shared key.</param>
 /// <param name="unitOfWork">The unit of work the new key and peer row are committed through together.</param>
-/// <param name="secretProtector">The protector used to encrypt the shared secret at rest, locally.</param>
+/// <param name="secretProtector">The protector used to encrypt the shared secret at rest.</param>
 /// <param name="httpClientFactory">The factory used to build and sign the callback request to the inviter.</param>
-/// <param name="clusterOptions">This node's own cluster identity/address.</param>
-/// <param name="certificateProvider">The provider this node's own cluster channel TLS certificate is read from.</param>
+/// <param name="clusterOptions">This node's cluster identity and address.</param>
+/// <param name="certificateProvider">The provider of this node's TLS certificate, whose thumbprint goes into the callback.</param>
 public class ClusterJoinService(
     IClusterNodeRepository clusterNodeRepository,
     ITsigKeyRepository tsigKeyRepository,
@@ -48,30 +46,31 @@ public class ClusterJoinService(
 )
 {
     /// <summary>
-    ///     This property contains the canonical, dot-stripped presentation form of the only MAC
-    ///     algorithm Ninlil implements.
+    ///     This field contains the HMAC-SHA256 algorithm name without the trailing dot, as stored
+    ///     on TSIG keys.
     /// </summary>
     private static readonly string HmacSha256AlgorithmName = DnsTsigOptions
         .HmacSha256AlgorithmName.ToString()
         .TrimEnd('.');
 
     /// <summary>
-    ///     This method consumes an invite code, completing the join handshake against the
-    ///     inviting node.
+    ///     This method uses an invite code to join the inviting node: it checks the code, calls the
+    ///     inviter's join-complete endpoint, and then stores the shared key and a peer row for the
+    ///     inviter in <see cref="ClusterNodeStatusEnum.Joining" /> state until a heartbeat succeeds.
     /// </summary>
-    /// <param name="inviteCode">The opaque invite code an operator copied from the inviting node.</param>
+    /// <param name="inviteCode">The invite code the operator copied from the inviting node.</param>
     /// <param name="displayName">
-    ///     An optional, operator-chosen display name for the new peer row this creates -- falls
-    ///     back to a name derived from the inviter's own node identifier when omitted.
+    ///     An optional display name, used for the new peer row and sent to the inviter for its
+    ///     row; without one, a name derived from the node identifier is used.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The newly created peer registry row.</returns>
     /// <exception cref="ValidationException">
-    ///     Thrown when clustering is disabled or unconfigured locally, the invite code cannot be
-    ///     decoded, has expired, names this node itself, or the inviter's own callback rejects the
-    ///     join.
+    ///     Thrown when clustering is disabled or <c>AdvertisedHost</c> is not set here, the invite
+    ///     code cannot be decoded, has expired or names this node, or the inviter cannot be
+    ///     reached or rejects the callback.
     /// </exception>
-    /// <exception cref="ConflictException">Thrown when this inviter is already a known peer.</exception>
+    /// <exception cref="ConflictException">Thrown when the inviter is already a known peer or the key name already exists here.</exception>
     public async Task<ClusterNodeEntity> JoinAsync(
         string inviteCode,
         string displayName,
@@ -116,14 +115,10 @@ public class ClusterJoinService(
                 $"A TSIG key named '{invite.TsigKeyName}' already exists locally -- this invite cannot be consumed."
             );
 
-        // What/why/how: this is the actual handshake round trip -- this node signs its own
-        // callback with the invite's raw secret (never yet persisted locally, so
-        // SendSignedWithSecretAsync is used rather than the ordinary by-name signing path) and
-        // posts its own identity/address/certificate back to the inviter's own
-        // /join-complete endpoint, over a client pinned to the inviter's own certificate
-        // thumbprint. Only a success response here proves the inviter actually accepted this
-        // node as a peer; nothing is written locally until that happens (per this class's own
-        // doc comment).
+        // The handshake: sign the callback with the invite's secret (not stored yet, hence
+        // SendSignedWithSecretAsync) and post this node's id, address and certificate to the
+        // inviter's join-complete endpoint over a client pinned to the inviter's certificate.
+        // Only a success response means the inviter accepted this node.
         byte[] secretBytes = Convert.FromBase64String(invite.TsigKeySecretBase64);
         string ownThumbprint = ClusterPeerCertificateValidator.ComputeThumbprint(
             certificateProvider.Current
@@ -170,8 +165,7 @@ public class ClusterJoinService(
                 $"The inviting node rejected the join (HTTP {(int)response.StatusCode})."
             );
 
-        // The callback succeeded -- only now persist the shared key and the new peer row, exactly
-        // as this class's own doc comment promises.
+        // The callback succeeded; now store the shared key and the peer row.
         TsigKeyEntity key = new()
         {
             Id = Guid.NewGuid(),
@@ -206,24 +200,23 @@ public class ClusterJoinService(
     }
 
     /// <summary>
-    ///     This method handles the inviting node's own side of a join callback (see
-    ///     <c>ClusterChannelController.JoinComplete</c>, which authenticates the request before
-    ///     ever calling this): the caller has already proven, by successfully signing this
-    ///     request with the shared key this node itself generated for this exact invite, that it
-    ///     is the intended joiner -- nothing further is required to record it as a trusted peer.
-    ///     Idempotent: a retried callback for a node id already on record (the joiner's own
-    ///     request timed out locally but actually succeeded, for example) refreshes that row's
-    ///     address/certificate/name rather than failing.
+    ///     This method handles a join callback on the inviting node, after
+    ///     <c>ClusterChannelController.JoinComplete</c> has authenticated it. The valid signature
+    ///     is the only check: the signing key is not checked to be one an invite created, so any
+    ///     enabled TSIG key (see <see cref="Authentication.ClusterTsigAuthenticationHandler" />)
+    ///     can register a peer, and the invite's expiry is not checked. The new peer is recorded
+    ///     as <see cref="ClusterNodeStatusEnum.Healthy" />. A repeated callback for a node id
+    ///     already registered under the same key (for example after the joiner timed out)
+    ///     updates the row's address, port, certificate and name instead of failing.
     /// </summary>
     /// <param name="authenticatedTsigKeyName">
     ///     The name of the TSIG key <see cref="Authentication.ClusterTsigAuthenticationHandler" />
-    ///     already verified this request against -- a real, in-assembly reference, since this
-    ///     class and that handler are both part of <c>Ninlil.Dns.Server.Cluster</c>.
+    ///     verified the request with.
     /// </param>
-    /// <param name="request">The joiner's own callback payload.</param>
+    /// <param name="request">The joiner's callback body.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The peer registry row now on record for the joiner.</returns>
-    /// <exception cref="ValidationException">Thrown when clustering is disabled, or the joiner claims this node's own identifier.</exception>
+    /// <exception cref="ValidationException">Thrown when clustering is disabled, or the joiner claims this node's identifier.</exception>
     /// <exception cref="ConflictException">Thrown when the claimed node id is already on record under a different key.</exception>
     public async Task<ClusterNodeEntity> HandleJoinCompleteAsync(
         string authenticatedTsigKeyName,
@@ -257,8 +250,8 @@ public class ClusterJoinService(
                     "This node id is already registered locally under a different key."
                 );
 
-            // An idempotent retry: refresh this row's address/certificate/name, but leave its
-            // own observed Status/heartbeat history exactly as it was.
+            // A repeated callback: update address, certificate and name, but keep the status and
+            // heartbeat history.
             existing.Host = request.JoinerHost;
             existing.Port = request.JoinerPort;
             existing.TlsCertificateThumbprint = request.JoinerCertificateThumbprint;
@@ -283,9 +276,9 @@ public class ClusterJoinService(
             TsigKeyName = authenticatedTsigKeyName,
             TlsCertificateThumbprint = request.JoinerCertificateThumbprint,
 
-            // A successful, authenticated callback is itself live proof this direction of the
-            // channel works -- there is no reason to leave this row in Joining until the next
-            // scheduled heartbeat probe confirms what this request already just demonstrated.
+            // The authenticated callback shows the joiner holds the key and can reach this node,
+            // so the row starts Healthy rather than Joining, although no probe from this node to
+            // the joiner has succeeded yet.
             Status = ClusterNodeStatusEnum.Healthy,
             LastHeartbeatAtUtc = DateTimeOffset.UtcNow,
             CreatedAtUtc = DateTimeOffset.UtcNow,

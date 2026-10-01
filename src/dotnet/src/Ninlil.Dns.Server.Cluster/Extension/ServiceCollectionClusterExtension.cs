@@ -14,24 +14,20 @@ namespace Ninlil.Dns.Server.Cluster.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
-///     Ninlil's cluster membership foundation: <see cref="ClusterOptions" />, the invite/join
-///     handshake services, the outbound peer HTTP client factory, and the background heartbeat
-///     engine. It deliberately does <b>not</b> register the <see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />
-///     authentication scheme itself -- that needs to be layered onto the very same
-///     <see cref="Microsoft.AspNetCore.Authentication.AuthenticationBuilder" /> the composition
-///     root's own <c>AddNinlilDnsAuthentication</c> call already built, which only the
-///     composition root (<c>Ninlil.Web</c>'s own <c>Program.cs</c>) has a handle to; see
-///     <see cref="AddNinlilDnsServerClusterAuthentication" /> for that half.
+///     Ninlil's clustering: <see cref="ClusterOptions" />, the invite and join services, the peer
+///     HTTP client factory, the heartbeat service, and the config-sync broadcaster, username
+///     checker and statistics aggregator. The <see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />
+///     scheme is registered separately by <see cref="AddNinlilDnsServerClusterAuthentication" />,
+///     which <c>Program.cs</c> calls after setting up the other authentication schemes.
 /// </summary>
 public static class ServiceCollectionClusterExtension
 {
     /// <summary>
-    ///     This method registers every non-authentication service Phase 9-6a's cluster
-    ///     membership foundation needs. The composition root is still expected to have already
-    ///     registered an <see cref="Ninlil.Dns.Data.Abstractions.Repository.IClusterNodeRepository" />
-    ///     and an <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />
-    ///     implementation, and to have already called <c>AddNinlilDnsServerTsig</c> for
-    ///     <c>TsigSecretProtector</c>.
+    ///     This method registers the clustering services other than authentication. The
+    ///     composition root must also register
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IClusterNodeRepository" /> and
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />, and call
+    ///     <c>AddNinlilDnsServerTsig</c> for <c>TsigSecretProtector</c>.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read cluster settings from.</param>
@@ -49,24 +45,18 @@ public static class ServiceCollectionClusterExtension
 
         instance.AddHostedService<ClusterHeartbeatBackgroundService>();
 
-        // Phase 9-6c's operational config sync broadcaster -- registered here, against Core's
-        // own IClusterConfigSyncBroadcaster abstraction, so every per-category event subscriber
-        // (living in Ninlil.Dns.Server.ClusterSync) can depend on that abstraction alone, never
-        // on this project directly. Singleton, matching ClusterPeerHttpClientFactory's own
-        // lifetime -- both are called from singleton-lifetime event subscribers/hosted services.
+        // The config-sync broadcaster, registered against the Server.Core abstraction so the
+        // event subscribers in Ninlil.Dns.Server.ClusterSync do not depend on this project.
+        // Singleton, because its callers are singleton subscribers and hosted services.
         instance.AddSingleton<IClusterConfigSyncBroadcaster, ClusterConfigSyncBroadcaster>();
 
-        // Phase 9-6d's own best-effort, cluster-wide username-uniqueness check -- see
-        // IClusterUsernameUniquenessChecker's own doc comment. Singleton, the same reasoning as
-        // IClusterConfigSyncBroadcaster immediately above.
+        // The best-effort cluster-wide username check (see IClusterUsernameUniquenessChecker).
         instance.AddSingleton<
             IClusterUsernameUniquenessChecker,
             ClusterUsernameUniquenessChecker
         >();
 
-        // Phase 9-6e's own aggregate cluster dashboard query-stats collector -- see
-        // IClusterQueryStatsAggregator's own doc comment. Singleton, the same reasoning as every
-        // other cluster-channel caller above.
+        // The cluster dashboard statistics collector (see IClusterQueryStatsAggregator).
         instance.AddSingleton<IClusterQueryStatsAggregator, ClusterQueryStatsAggregator>();
 
         // We're done, return the IServiceCollection instance.
@@ -75,20 +65,12 @@ public static class ServiceCollectionClusterExtension
 
     /// <summary>
     ///     This method registers the <see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />
-    ///     scheme onto the application's own existing authentication builder. Called separately
-    ///     from <see cref="AddNinlilDnsServerCluster" />, and after <c>AddNinlilDnsAuthentication</c>
-    ///     has already run, because ASP.NET Core's own <c>AddAuthentication()</c> no-argument
-    ///     overload simply returns a builder wrapping whatever authentication configuration
-    ///     already exists rather than resetting it -- calling it again here, with no configure
-    ///     delegate of its own, adds this one additional scheme without touching the
-    ///     <c>DefaultScheme</c>/<c>DefaultChallengeScheme</c>/JWT-or-API-token forwarding
-    ///     selection <c>ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication</c>
-    ///     already configured. This scheme is deliberately never part of that forwarding
-    ///     selection at all: every cluster-channel controller action names it explicitly via its
-    ///     own <c>[Authorize(AuthenticationSchemes = ClusterTsigAuthenticationDefaults.AuthenticationScheme)]</c>
-    ///     attribute, so a human operator's JWT can never authenticate against a peer-only
-    ///     endpoint, and a peer's TSIG signature can never authenticate against a human-operator
-    ///     endpoint.
+    ///     scheme. It is called after <c>AddNinlilDnsAuthentication</c>: the parameterless
+    ///     <c>AddAuthentication()</c> returns a builder over the existing configuration, so this
+    ///     adds one scheme without changing the default scheme or the JWT/API-token selection.
+    ///     The scheme is not part of that selection; cluster-channel actions name it in their
+    ///     <c>[Authorize(AuthenticationSchemes = ...)]</c> attribute, so an operator's token cannot
+    ///     reach a peer endpoint and a peer signature cannot reach an operator endpoint.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

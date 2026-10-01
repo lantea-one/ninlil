@@ -2,21 +2,19 @@
 namespace Ninlil.Dns.Server.Cluster.Channel;
 
 /// <summary>
-///     This class is the body a joining node's own callback to its inviter carries, completing
-///     the second half of the join handshake -- see <c>ClusterJoinService.JoinAsync</c> (the
-///     sender) and <c>ClusterChannelController.JoinComplete</c> (the receiver) for the full
-///     handshake. Successfully authenticating this request (via the shared TSIG key the invite
-///     itself carried) is, by itself, proof the joining node possesses that key, so the inviter
-///     needs nothing further to record the joiner as a trusted peer.
+///     This record is the body of the joining node's callback to its inviter, the second half of
+///     the join handshake. <see cref="Join.ClusterJoinService.JoinAsync" /> sends it and
+///     <c>ClusterChannelController.JoinComplete</c> receives it. The inviter records the joiner
+///     as a peer on the strength of the request's signature alone (see
+///     <see cref="Join.ClusterJoinService.HandleJoinCompleteAsync" />).
 /// </summary>
-/// <param name="JoinerNodeId">The joining node's own stable <c>ClusterOptions.NodeId</c>.</param>
-/// <param name="JoinerHost">The hostname/IP address the inviter should reach the joiner's own cluster channel at.</param>
-/// <param name="JoinerPort">The TCP port the inviter should reach the joiner's own cluster channel at.</param>
-/// <param name="JoinerCertificateThumbprint">The SHA-256 thumbprint of the TLS certificate the joiner presents on its own cluster channel, to pin for future heartbeat probes.</param>
+/// <param name="JoinerNodeId">The joining node's <c>ClusterOptions.NodeId</c>.</param>
+/// <param name="JoinerHost">The host name or IP address at which the inviter reaches the joiner's cluster channel.</param>
+/// <param name="JoinerPort">The TCP port at which the inviter reaches the joiner's cluster channel.</param>
+/// <param name="JoinerCertificateThumbprint">The SHA-256 thumbprint of the joiner's TLS certificate, pinned for later requests.</param>
 /// <param name="JoinerDisplayName">
-///     An optional, operator-chosen display name for the joiner, shown in the inviter's own
-///     Angular "Cluster" page for this row -- falls back to a name derived from
-///     <paramref name="JoinerNodeId" /> when omitted.
+///     An optional display name for the joiner, shown on the inviter's Cluster page; without
+///     one, a name derived from <paramref name="JoinerNodeId" /> is used.
 /// </param>
 public record ClusterJoinCompleteRequest(
     Guid JoinerNodeId,

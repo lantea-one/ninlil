@@ -4,9 +4,9 @@ using Ninlil.Dns.Server.Cluster.Invite;
 namespace Ninlil.Dns.Server.Cluster.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterInviteCodec" />: a real invite round-trips exactly,
-///     and every malformed/tampered shape is rejected with a real error message rather than
-///     throwing or silently misparsing.
+///     This class tests <see cref="ClusterInviteCodec" /> as pure functions: an invite encodes
+///     and decodes unchanged, and malformed or incomplete codes are rejected with an error
+///     message instead of throwing or being misread.
 /// </summary>
 public class ClusterInviteCodecTests
 {

@@ -13,24 +13,20 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Cluster.Invite;
 
 /// <summary>
-///     This class creates a cluster invite code: the inviting-side half of Phase 9-6a's join
-///     handshake (see <see cref="ClusterInviteCode" />'s own doc comment for the full design, and
-///     <c>ClusterJoinService</c> for the joining-side half). Creating an invite generates and
-///     persists a brand-new, dedicated TSIG key up front, before the invite code is ever handed to
-///     an operator -- <c>ClusterChannelController.JoinComplete</c> needs that key to already exist
-///     locally the moment a real join callback arrives, and there is no separate "pending invite"
-///     record kept anywhere: possessing the invite code (and therefore the key's own shared
-///     secret it carries) <em>is</em> this project's whole proof of authorization to join, exactly
-///     the way possessing a freshly generated TSIG key's own one-time-revealed secret already
-///     authorizes a zone transfer client. An invite that is never consumed before it expires
-///     leaves its own now-useless TSIG key on record, harmlessly unused -- a known, accepted
-///     loose end, not addressed by an automatic cleanup sweep here.
+///     This class creates cluster invite codes, the inviting half of the join handshake (see
+///     <see cref="ClusterInviteCode" />, and <see cref="Join.ClusterJoinService" /> for the joining
+///     half). It generates and stores a new TSIG key before handing out the code, because the
+///     join callback (<c>ClusterChannelController.JoinComplete</c>) is authenticated with that
+///     key. No "pending invite" record is kept: holding the code, and so the key's secret, is the
+///     authorization to join. An invite that is never used leaves its key stored and enabled;
+///     nothing removes it, and since the inviter does not check the invite's expiry, the key
+///     still lets its holder join after the invite has expired.
 /// </summary>
-/// <param name="tsigKeyRepository">The repository this service persists the invite's own fresh key through.</param>
+/// <param name="tsigKeyRepository">The repository the invite's new key is stored through.</param>
 /// <param name="unitOfWork">The unit of work the new key is committed through.</param>
-/// <param name="secretProtector">The protector used to encrypt the new key's own shared secret at rest.</param>
-/// <param name="clusterOptions">This node's own cluster identity/address.</param>
-/// <param name="certificateProvider">The provider this node's own cluster channel TLS certificate is read from.</param>
+/// <param name="secretProtector">The protector used to encrypt the new key's secret at rest.</param>
+/// <param name="clusterOptions">This node's cluster identity and address.</param>
+/// <param name="certificateProvider">The provider of this node's TLS certificate, whose thumbprint goes into the invite.</param>
 public class ClusterInviteService(
     ITsigKeyRepository tsigKeyRepository,
     IUnitOfWork unitOfWork,
@@ -40,40 +36,36 @@ public class ClusterInviteService(
 )
 {
     /// <summary>
-    ///     This constant contains how long a freshly created invite stays valid for. Long enough
-    ///     for an operator to copy the code out of this node's own Angular "Cluster" page and
-    ///     paste it into the joining node's, even across two entirely separate browser sessions on
-    ///     different machines; short enough that a leaked or simply forgotten, never-consumed
-    ///     invite cannot be used long after the operator moved on.
+    ///     This field contains how long a new invite is valid: long enough to copy it from this
+    ///     node's Cluster page to the joining node's, even across browser sessions, and short
+    ///     enough that a forgotten invite stops being accepted by a joining node soon after.
     /// </summary>
     public static readonly TimeSpan DefaultValidity = TimeSpan.FromMinutes(15);
 
     /// <summary>
-    ///     This constant contains the length, in bytes, of the invite's own freshly generated TSIG
-    ///     shared secret -- matching HMAC-SHA256's own 256-bit block size, the only algorithm
-    ///     Ninlil implements (the same constant <c>TsigKeysController</c> itself uses for an
-    ///     operator-generated key).
+    ///     This constant contains the length, in bytes, of the new key's secret: 256 bits, the
+    ///     HMAC-SHA256 output size, as <c>TsigKeysController</c> uses for a generated key.
     /// </summary>
     private const int GeneratedSecretLengthBytes = 32;
 
     /// <summary>
-    ///     This property contains the canonical, dot-stripped presentation form of the only MAC
-    ///     algorithm Ninlil implements.
+    ///     This field contains the HMAC-SHA256 algorithm name without the trailing dot, as stored
+    ///     on TSIG keys.
     /// </summary>
     private static readonly string HmacSha256AlgorithmName = DnsTsigOptions
         .HmacSha256AlgorithmName.ToString()
         .TrimEnd('.');
 
     /// <summary>
-    ///     This method creates a new invite: a fresh TSIG key, persisted immediately, and this
-    ///     node's own current identity/address/certificate, encoded into one opaque invite code.
+    ///     This method creates an invite: it stores a new TSIG key and encodes it with this node's
+    ///     identifier, advertised address and port, and certificate thumbprint into an invite code.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The opaque invite code to hand to the joining node's own operator.</returns>
+    /// <returns>The invite code for the joining node's operator.</returns>
     /// <exception cref="ValidationException">
-    ///     Thrown when clustering is disabled, or this node's own <c>ClusterOptions.AdvertisedHost</c>
-    ///     has not been configured -- an invite naming an unreachable or unset address would be
-    ///     useless to whoever receives it.
+    ///     Thrown when clustering is disabled or <c>ClusterOptions.AdvertisedHost</c> is not set.
+    ///     <c>ClusterOptions.AdvertisedPort</c> is not checked here, but an invite with port 0 is
+    ///     rejected when the joining node decodes it.
     /// </exception>
     public async Task<string> CreateInviteAsync(CancellationToken stoppingToken = default)
     {
@@ -89,11 +81,8 @@ public class ClusterInviteService(
                 "This node's own 'Cluster:AdvertisedHost' has not been configured -- a peer would have no way to reach it."
             );
 
-        // What/why/how: a brand-new, cryptographically random secret and a globally unique key
-        // name are generated fresh for every invite, rather than reusing an existing key -- the
-        // invite code itself is this project's whole proof of authorization to join (per this
-        // class's own doc comment), so each invite must carry its own dedicated, single-purpose
-        // key that can later be individually disabled or traced back to exactly one join attempt.
+        // A new random secret and unique key name per invite, so each join has its own key that
+        // can be disabled or traced on its own.
         byte[] secretBytes = RandomNumberGenerator.GetBytes(GeneratedSecretLengthBytes);
         string keyName = $"cluster-{Guid.NewGuid():N}";
 
@@ -112,13 +101,9 @@ public class ClusterInviteService(
         await tsigKeyRepository.AddAsync(key, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        // What/why/how: the fresh key is persisted locally before the invite payload is even
-        // built, since the joining node's own callback (ClusterJoinService.HandleJoinCompleteAsync)
-        // must find this exact key already on record the moment it arrives. The invite payload
-        // itself then bundles this node's own reachable identity (address/port/node id), the raw
-        // (not yet encrypted) secret the joiner needs to sign its own callback with, and this
-        // node's own TLS certificate thumbprint the joiner will pin against -- everything the
-        // other side of the handshake needs, in one self-contained, time-limited package.
+        // The key is stored first, because the joiner's callback is authenticated against it.
+        // The invite then carries this node's id, address and port, the plaintext secret the
+        // joiner signs its callback with, and the certificate thumbprint the joiner pins.
         ClusterInviteCode invite = new()
         {
             InviterNodeId = options.NodeId,

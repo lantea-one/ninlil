@@ -2,7 +2,8 @@
 namespace Ninlil.Dns.Server.Cluster.Channel;
 
 /// <summary>
-///     This class is the body <c>ClusterChannelController.UsernameCheck</c> answers with.
+///     This record is the body <c>ClusterChannelController.UsernameCheck</c> answers with, read
+///     by <see cref="ClusterUsernameUniquenessChecker" />.
 /// </summary>
 /// <param name="Exists">
 ///     Whether the responding peer already has an account with the requested normalized username.

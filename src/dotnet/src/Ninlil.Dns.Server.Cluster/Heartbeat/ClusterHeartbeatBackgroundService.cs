@@ -14,32 +14,22 @@ using Ninlil.Dns.Server.Cluster.Options;
 namespace Ninlil.Dns.Server.Cluster.Heartbeat;
 
 /// <summary>
-///     This class is the real background heartbeat engine Phase 9-6a's own decision record calls
-///     for: on a fixed interval (<see cref="ClusterOptions.HeartbeatInterval" />), it probes every
-///     known peer over the TSIG-authenticated + TLS-encrypted cluster channel and updates that
-///     peer's own <see cref="ClusterNodeEntity.Status" /> based purely on whether <em>this</em>
-///     node's own probe succeeded.
+///     This hosted service probes every known peer every <see cref="ClusterOptions.HeartbeatInterval" />
+///     over the signed, TLS-pinned cluster channel, while clustering is enabled, and sets the
+///     peer's <see cref="ClusterNodeEntity.Status" /> from whether this node's probe succeeded.
 ///     <para>
-///         This is a deliberately one-directional, locally-observed health model, not a
-///         cluster-wide consensus: node A's own view of node B's health reflects only whether A's
-///         own probes to B are currently succeeding, never anything B itself reports about A or
-///         about a third node. Node B independently runs the exact same engine against A, so both
-///         directions of the channel get probed, but the two nodes' own registries can briefly
-///         disagree about a peer's status -- an accepted, documented simplification for this
-///         project's homelab-scale deployment target (<c>ClusterNodeStatusEnum</c>'s own doc
-///         comment covers this in more depth), the same kind of tradeoff already accepted
-///         elsewhere in this project (the DNS-query rate limiter's own fail-open behavior, RFC
-///         5011's partial state coverage).
+///         Health is what each node observes, not cluster-wide consensus: node A's view of B
+///         reflects only A's probes to B. B probes A in the same way, so both directions are
+///         checked, but the two registries can disagree for a while (see
+///         <c>ClusterNodeStatusEnum</c>). That is acceptable for a small cluster.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to create a fresh dependency injection scope for each heartbeat round,
-///     rather than holding a single long-lived scope for this service's entire lifetime -- the
-///     same pattern every other long-running hosted service in this project already follows for a
-///     scoped repository/unit-of-work dependency.
+///     The factory used to create a scope for each round, for the scoped repository and unit of
+///     work.
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound probe.</param>
-/// <param name="clusterOptions">This node's own cluster configuration.</param>
+/// <param name="clusterOptions">The cluster settings, read on every round (except the interval).</param>
 /// <param name="logger">The logger this service records a status transition, or a probe failure, to.</param>
 public class ClusterHeartbeatBackgroundService(
     IServiceScopeFactory scopeFactory,
@@ -51,9 +41,9 @@ public class ClusterHeartbeatBackgroundService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // The interval is read once, at startup -- like every other runtime settings write in
-        // this project, a change to Cluster:HeartbeatInterval takes effect on the next restart,
-        // not live; see ClusterController's own PATCH action doc comment.
+        // The interval is read once, at startup, so a change to Cluster:HeartbeatInterval needs a
+        // restart (see ClusterSettingsController). The first round runs one interval after
+        // startup.
         using PeriodicTimer timer = new(clusterOptions.CurrentValue.HeartbeatInterval);
 
         while (await WaitForNextTickAsync(timer, stoppingToken))
@@ -68,21 +58,16 @@ public class ClusterHeartbeatBackgroundService(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // A single bad round (a transient database blip, for example) must never take
-                // down this whole background service -- the next scheduled tick simply tries
-                // again, the same resilience posture every other periodic hosted service in this
-                // project already follows.
+                // A failed round (for example a database error) must not stop the service; the
+                // next tick tries again. Status changes from the failed round are not saved.
                 logger.LogWarning(exception, "A cluster heartbeat round failed unexpectedly.");
             }
         }
     }
 
     /// <summary>
-    ///     This method waits for the timer's next tick, translating the
-    ///     <see cref="OperationCanceledException" /> a cancelled wait throws into a clean
-    ///     <see langword="false" /> return instead, so the caller's own <see langword="while" />
-    ///     loop can exit normally on shutdown rather than needing its own try/catch around every
-    ///     iteration.
+    ///     This method waits for the timer's next tick and returns <see langword="false" /> instead
+    ///     of throwing when the wait is cancelled, so the loop ends cleanly on shutdown.
     /// </summary>
     private static async Task<bool> WaitForNextTickAsync(
         PeriodicTimer timer,
@@ -100,8 +85,7 @@ public class ClusterHeartbeatBackgroundService(
     }
 
     /// <summary>
-    ///     This method probes every currently known peer once, in parallel, and persists whatever
-    ///     status changes resulted.
+    ///     This method probes every known peer once, in parallel, and saves the results together.
     /// </summary>
     private async Task RunOneRoundAsync(ClusterOptions options, CancellationToken stoppingToken)
     {
@@ -117,8 +101,7 @@ public class ClusterHeartbeatBackgroundService(
         if (peers.Count == 0)
             return;
 
-        // Every peer is probed concurrently -- a slow or unreachable peer must never delay this
-        // round's probe of every other, healthy peer.
+        // Probed concurrently, so a slow peer does not delay the others.
         await Task.WhenAll(peers.Select(peer => ProbeOneAsync(peer, options, stoppingToken)));
 
         foreach (ClusterNodeEntity peer in peers)
@@ -128,9 +111,10 @@ public class ClusterHeartbeatBackgroundService(
     }
 
     /// <summary>
-    ///     This method probes a single peer and updates its own in-memory
-    ///     <see cref="ClusterNodeEntity" /> instance in place -- the caller persists every peer's
-    ///     own updated state together, once, after every probe in the round has finished.
+    ///     This method probes one peer and updates its <see cref="ClusterNodeEntity" /> in memory;
+    ///     the caller saves all peers together. A failure is counted as a missed heartbeat, except
+    ///     an <see cref="OperationCanceledException" />, which also covers the
+    ///     <see cref="TaskCanceledException" /> of a probe timeout and propagates.
     /// </summary>
     private async Task ProbeOneAsync(
         ClusterNodeEntity peer,

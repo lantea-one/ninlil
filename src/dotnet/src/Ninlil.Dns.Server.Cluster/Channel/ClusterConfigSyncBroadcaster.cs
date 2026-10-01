@@ -13,35 +13,26 @@ using Ninlil.Dns.Server.Core.ClusterSync;
 namespace Ninlil.Dns.Server.Cluster.Channel;
 
 /// <summary>
-///     This class is the one real implementation of <see cref="IClusterConfigSyncBroadcaster" />
-///     -- Phase 9-6c's sending half. It reuses Phase 9-6a's own peer registry and
-///     TSIG-authenticated + TLS-encrypted HTTP client exactly the way
-///     <c>ClusterHeartbeatBackgroundService</c> already does for a heartbeat probe, sending each
-///     envelope to <c>POST /api/cluster/channel/config-sync</c> on every currently
-///     <see cref="ClusterNodeStatusEnum.Healthy" /> peer, in parallel.
+///     This class implements <see cref="IClusterConfigSyncBroadcaster" />, the sending side of
+///     config sync. The ClusterSync event subscribers call it with an envelope, which it sends,
+///     with the signed, pinned client the heartbeat uses, to
+///     <c>POST /api/cluster/channel/config-sync</c> on every
+///     <see cref="ClusterNodeStatusEnum.Healthy" /> peer in parallel.
 ///     <para>
-///         <b>A known, deliberately accepted limitation, not silently patched over</b>: a peer
-///         that is <see cref="ClusterNodeStatusEnum.Unreachable" /> or <see cref="ClusterNodeStatusEnum.Joining" />
-///         at broadcast time is skipped outright -- there is no retry queue, no backlog, and no
-///         periodic reconciliation pass that would let it catch up once it becomes healthy again.
-///         It will only ever converge if and when some <em>later</em> change to the very same
-///         entity happens to reach it after it recovers, or via an operator's own manual
-///         intervention. This is the same kind of homelab-scale tradeoff already accepted
-///         elsewhere in this project (the DNS-query rate limiter's fail-open posture, RFC 5011's
-///         partial state coverage) -- a full backfill/reconciliation mechanism is deliberately not
-///         built; this is a known, accepted limitation.
+///         <b>Known limitation</b>: a peer that is <see cref="ClusterNodeStatusEnum.Unreachable" />
+///         or <see cref="ClusterNodeStatusEnum.Joining" /> at that moment is skipped, and a failed
+///         delivery is only logged. There is no retry, backlog or catch-up pass; the peer gets
+///         the entity again only when a later change to it is broadcast while the peer is
+///         healthy, or when an operator intervenes.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to create a fresh dependency injection scope for each broadcast, the
-///     same pattern <see cref="Heartbeat.ClusterHeartbeatBackgroundService" /> and
-///     <see cref="ClusterPeerHttpClientFactory" /> themselves already use for their own scoped
-///     dependencies -- this class is registered as a singleton (every subscriber that calls it
-///     is itself a singleton-lifetime event subscriber), so it cannot hold a scoped
-///     <see cref="IClusterNodeRepository" /> directly.
+///     The factory used to create a scope for each broadcast, since this singleton (its callers
+///     are singleton event subscribers) cannot hold the scoped
+///     <see cref="IClusterNodeRepository" />.
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound request.</param>
-/// <param name="clusterOptions">This node's own cluster configuration.</param>
+/// <param name="clusterOptions">The cluster settings.</param>
 /// <param name="logger">The logger this class records a per-peer delivery failure to.</param>
 public class ClusterConfigSyncBroadcaster(
     IServiceScopeFactory scopeFactory,
@@ -51,17 +42,14 @@ public class ClusterConfigSyncBroadcaster(
 ) : IClusterConfigSyncBroadcaster
 {
     /// <summary>
-    ///     This constant contains the inbound path every peer's own <c>ClusterChannelController</c>
-    ///     exposes for a config-sync envelope -- see that controller's own <c>ConfigSync</c>
-    ///     action.
+    ///     This constant contains the path of the <c>ClusterChannelController.ConfigSync</c> action.
     /// </summary>
     private const string ConfigSyncPath = "/api/cluster/channel/config-sync";
 
     /// <summary>
-    ///     This constant contains how long a single peer's own delivery attempt may take before
-    ///     it is abandoned -- the same generous default <see cref="ClusterOptions.HeartbeatTimeout" />
-    ///     itself uses, since a config-sync payload is smaller and simpler than nothing this
-    ///     timeout could not already comfortably cover.
+    ///     This field contains how long one delivery may take before it is abandoned: 10 seconds,
+    ///     the default of <see cref="ClusterOptions.HeartbeatTimeout" />, which is ample for an
+    ///     envelope.
     /// </summary>
     private static readonly TimeSpan DeliveryTimeout = TimeSpan.FromSeconds(10);
 
@@ -90,10 +78,7 @@ public class ClusterConfigSyncBroadcaster(
 
         string requestBody = JsonSerializer.Serialize(envelope);
 
-        // Every peer is delivered to concurrently -- a slow or unreachable peer must never delay
-        // delivery to any other, healthy peer, the same reasoning
-        // ClusterHeartbeatBackgroundService.RunOneRoundAsync already establishes for a heartbeat
-        // round.
+        // Delivered concurrently, so one slow peer does not delay the others.
         await Task.WhenAll(
             healthyPeers.Select(peer =>
                 DeliverToOneAsync(peer, requestBody, envelope, stoppingToken)
@@ -102,9 +87,9 @@ public class ClusterConfigSyncBroadcaster(
     }
 
     /// <summary>
-    ///     This method delivers one envelope to one peer, logging (rather than throwing) any
-    ///     failure -- see this class's own doc comment for why a failed delivery is never
-    ///     retried.
+    ///     This method delivers one envelope to one peer and logs a rejection or failure instead
+    ///     of throwing (see the class summary). A timeout is a <see cref="TaskCanceledException" />,
+    ///     which the catch filter does not handle, so it propagates.
     /// </summary>
     private async Task DeliverToOneAsync(
         ClusterNodeEntity peer,

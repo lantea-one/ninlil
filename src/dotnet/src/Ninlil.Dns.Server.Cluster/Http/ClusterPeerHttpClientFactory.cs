@@ -10,39 +10,30 @@ using Ninlil.Dns.Server.Tsig;
 namespace Ninlil.Dns.Server.Cluster.Http;
 
 /// <summary>
-///     This class builds the <see cref="HttpClient" /> instances every outbound cluster-channel
-///     call (a join-completion callback, a heartbeat probe) uses, and signs the requests sent
-///     through them. Each call gets its own freshly built client, pinned to the exact peer
-///     certificate thumbprint that call is targeting -- unlike the ordinary outbound HTTP clients
-///     <c>Server.Forwarding</c>/<c>Server.Acme</c> use, a cluster-channel client's own trust
-///     decision (<see cref="ClusterPeerCertificateValidator" />) is peer-specific, so it cannot be
-///     built once and shared via the ordinary <see cref="System.Net.Http.IHttpClientFactory" />
-///     named-client pattern without a distinct registration per peer -- and with a genuine
-///     homelab-scale peer count (a handful of nodes at most), a plain, per-call
-///     <see cref="HttpClient" /> is simpler and avoids that indirection entirely.
+///     This class builds the <see cref="HttpClient" /> for every outbound cluster-channel call
+///     (join callback, heartbeat, config sync, username check, statistics) and signs the
+///     requests. Each call gets a new client and handler pinned to the target peer's certificate
+///     thumbprint (<see cref="ClusterPeerCertificateValidator" />). Because the trust decision is
+///     per peer, a shared <see cref="System.Net.Http.IHttpClientFactory" /> named client does not
+///     fit, and with a handful of peers a client per call is simpler.
 /// </summary>
 /// <param name="scopeFactory">
-///     The factory used to create a fresh dependency injection scope for every signing lookup --
-///     this class is itself registered as a singleton (see its own registration in
-///     <c>ServiceCollectionClusterExtension</c>, since <c>ClusterHeartbeatBackgroundService</c>,
-///     also a singleton-lifetime hosted service, depends on it directly), so it cannot hold a
-///     constructor-injected <see cref="ITsigKeyRepository" /> itself -- that service is scoped,
-///     and a singleton capturing a scoped dependency is a real, ASP.NET Core-detected DI
-///     validation error, not merely a style preference. Resolving it fresh, per call, through its
-///     own short-lived scope is the same pattern <see cref="Heartbeat.ClusterHeartbeatBackgroundService" />
-///     itself already uses for its own scoped dependencies.
+///     The factory used to create a scope for each key lookup. This class is a singleton (used
+///     by singleton services such as <see cref="Heartbeat.ClusterHeartbeatBackgroundService" />),
+///     so it cannot take the scoped <see cref="ITsigKeyRepository" /> in its constructor.
 /// </param>
-/// <param name="secretProtector">The protector used to decrypt a signing key's own shared secret.</param>
+/// <param name="secretProtector">The protector used to decrypt a signing key's secret.</param>
 public class ClusterPeerHttpClientFactory(
     IServiceScopeFactory scopeFactory,
     TsigSecretProtector secretProtector
 )
 {
     /// <summary>
-    ///     This method builds an <see cref="HttpClient" /> that trusts exactly one certificate --
-    ///     see <see cref="ClusterPeerCertificateValidator" />.
+    ///     This method builds an <see cref="HttpClient" /> that trusts only the certificate with the
+    ///     given thumbprint (see <see cref="ClusterPeerCertificateValidator" />). A request that
+    ///     exceeds <paramref name="timeout" /> throws <see cref="TaskCanceledException" />.
     /// </summary>
-    /// <param name="pinnedCertificateThumbprintHex">The peer's own known-good certificate thumbprint.</param>
+    /// <param name="pinnedCertificateThumbprintHex">The peer's pinned certificate thumbprint.</param>
     /// <param name="timeout">How long a request through this client may take before it is abandoned.</param>
     public HttpClient CreateClient(string pinnedCertificateThumbprintHex, TimeSpan timeout)
     {
@@ -60,16 +51,16 @@ public class ClusterPeerHttpClientFactory(
     }
 
     /// <summary>
-    ///     This method signs and sends one cluster-channel request, looking up the named signing
-    ///     key's own shared secret from this node's own local TSIG key registry.
+    ///     This method signs and sends one cluster-channel POST request, reading the named key's
+    ///     secret from the local TSIG key store.
     /// </summary>
-    /// <param name="client">The client to send through -- see <see cref="CreateClient" />.</param>
-    /// <param name="baseUrl">The peer's own base URL, for example <c>"https://192.168.1.20:443"</c>.</param>
+    /// <param name="client">The client to send through (see <see cref="CreateClient" />).</param>
+    /// <param name="baseUrl">The peer's base URL, for example <c>"https://192.168.1.20:443"</c>.</param>
     /// <param name="path">The absolute path to request, for example <c>"/api/cluster/channel/heartbeat"</c>.</param>
     /// <param name="tsigKeyName">The name of the locally known key to sign with.</param>
     /// <param name="jsonBody">The request body, already serialized to JSON.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    /// <returns>The peer's own response.</returns>
+    /// <returns>The peer's response.</returns>
     /// <exception cref="InvalidOperationException">Thrown when no key named <paramref name="tsigKeyName" /> exists locally.</exception>
     public async Task<HttpResponseMessage> SendSignedAsync(
         HttpClient client,
@@ -104,14 +95,10 @@ public class ClusterPeerHttpClientFactory(
     }
 
     /// <summary>
-    ///     This method signs and sends one cluster-channel request using a raw shared secret
-    ///     rather than a locally registered key -- the one case
-    ///     <see cref="SendSignedAsync(HttpClient,string,string,string,string,CancellationToken)" />
-    ///     itself cannot cover: the very first callback a joining node makes back to its inviter
-    ///     (see <c>ClusterJoinService.JoinAsync</c>), before the shared key handed over in the
-    ///     invite has been persisted locally at all -- persisting it before this callback even
-    ///     succeeds would leave a real, usable TSIG key on record for a join that never actually
-    ///     completed.
+    ///     This method signs and sends one cluster-channel POST request with a given secret
+    ///     instead of a stored key. <c>ClusterJoinService.JoinAsync</c> needs it for the join
+    ///     callback, which is sent before the invite's key is stored, so a failed join leaves no
+    ///     usable key behind.
     /// </summary>
     public async Task<HttpResponseMessage> SendSignedWithSecretAsync(
         HttpClient client,
@@ -123,11 +110,9 @@ public class ClusterPeerHttpClientFactory(
         CancellationToken stoppingToken = default
     )
     {
-        // What/why/how: every outbound cluster-channel request is signed the same way --
-        // timestamp it now, compute an HMAC over method/path/timestamp/body (the receiving
-        // node's own ClusterTsigAuthenticationHandler recomputes this exact MAC to verify it),
-        // then pack the key name/timestamp/MAC into one header value so the receiver can parse
-        // and re-derive everything it needs to check.
+        // Timestamp now, MAC over method, path, timestamp and body (which
+        // ClusterTsigAuthenticationHandler recomputes), and key name, timestamp and MAC in one
+        // header.
         byte[] bodyBytes = Encoding.UTF8.GetBytes(jsonBody ?? "");
         long unixTimestampSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -139,9 +124,7 @@ public class ClusterPeerHttpClientFactory(
             bodyBytes
         );
 
-        // How: the signature travels in its own dedicated header rather than folded into the
-        // body, so the JSON payload itself never needs to be re-parsed or mutated just to attach
-        // authentication -- the body is instead handed to HttpContent completely unchanged.
+        // The signature goes in a header, so the body is sent exactly as signed.
         using HttpRequestMessage request = new(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}{path}");
         request.Headers.Add(
             ClusterTsigAuthenticationDefaults.SignatureHeaderName,
