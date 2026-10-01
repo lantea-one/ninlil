@@ -2,23 +2,18 @@
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents a single DHCPv6 option exactly as it appears on the wire: a 2-byte
-///     "option-code" identifying what it is, and its raw "option-data" value bytes, per RFC 8415
-///     Section 21.1. Giving meaning to a particular code's value is deliberately kept out of this
-///     class; that belongs to <see cref="Dhcpv6MessageOptionExtensions" />. This class only needs
-///     to move an option's bytes faithfully, whether or not anything in this project understands
-///     what they mean yet -- the DHCPv6 analogue of <see cref="Dhcpv4Option" />, differing only in
-///     that DHCPv6 has no Pad/End structural framing codes to carry separately from an ordinary
-///     option (see <see cref="Enum.Dhcpv6OptionCodeEnum" />'s own doc comment).
+///     This class represents one DHCPv6 option as it appears on the wire: a 2-byte
+///     "option-code" and the raw "option-data" bytes (RFC 8415 Section 21.1). Interpreting a value
+///     belongs to <see cref="Dhcpv6MessageOptionExtensions" />; this class carries the bytes
+///     whether or not the code is understood. It is the DHCPv6 counterpart of
+///     <see cref="Dhcpv4Option" />.
 ///     <para>
-///         This is a plain class rather than a record for the same reason <see cref="Dhcpv4Option" />
-///         is: <see cref="Data" /> is a <see langword="byte[]" />, and the compiler-generated
-///         equality a record would give this type compares two arrays by reference, not by
-///         content.
+///         It is a class rather than a record for the same reason as <see cref="Dhcpv4Option" />:
+///         record equality would compare the <see cref="Data" /> arrays by reference.
 ///     </para>
 /// </summary>
 /// <param name="code">This option's 2-byte option code.</param>
-/// <param name="data">This option's raw value bytes, exactly as they appear on the wire.</param>
+/// <param name="data">This option's raw value bytes, as they appear on the wire.</param>
 public class Dhcpv6Option(ushort code, byte[] data) : IEquatable<Dhcpv6Option>
 {
     /// <summary>
@@ -27,8 +22,7 @@ public class Dhcpv6Option(ushort code, byte[] data) : IEquatable<Dhcpv6Option>
     public ushort Code { get; } = code;
 
     /// <summary>
-    ///     This property contains this option's raw value bytes, exactly as they appear on the
-    ///     wire.
+    ///     This property contains this option's raw value bytes, as they appear on the wire.
     /// </summary>
     public byte[] Data { get; } = data;
 

@@ -2,19 +2,17 @@
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class represents a complete Router Solicitation message -- RFC 4861 Section 4.1's
-///     ICMPv6 type-133 message a host sends asking every router on its link to send an immediate
-///     Router Advertisement rather than waiting for the next unsolicited one.
+///     This class represents a decoded Router Solicitation: the RFC 4861 Section 4.1 ICMPv6
+///     type-133 message a host sends to ask every router on the link for an immediate Router
+///     Advertisement instead of waiting for the next unsolicited one.
 /// </summary>
 public class RouterSolicitationMessage
 {
     /// <summary>
-    ///     This property contains every RFC 4861 Section 4.6 option this message carries, in the
-    ///     order they appeared on the wire -- in practice, at most a Source Link-Layer Address
-    ///     option (RFC 4861 Section 4.1 says a host omits it only when soliciting from the
-    ///     unspecified address, before it has configured one of its own). Prefer
-    ///     <see cref="RaMessageOptionExtensions" />'s strongly-typed accessors to read a specific
-    ///     well-known option rather than searching this list by hand.
+    ///     This property contains the message's options in wire order. In practice this is at
+    ///     most a Source Link-Layer Address option, which RFC 4861 Section 4.1 leaves out only
+    ///     when the host solicits from the unspecified address. Use the accessors in
+    ///     <see cref="RaMessageOptionExtensions" /> rather than searching this list.
     /// </summary>
     public List<RaOption> Options { get; } = [];
 }

@@ -2,39 +2,35 @@
 namespace Ninlil.Dhcp.Common.OptionCatalog;
 
 /// <summary>
-///     This record names one DHCPv4 or DHCPv6 option <see cref="Dhcpv4OptionCatalog" />/
-///     <see cref="Dhcpv6OptionCatalog" /> knows about: its real IANA-assigned tag/code number, a
-///     human-readable name and description, the shape of value its defining RFC gives it (see
-///     <see cref="DhcpOptionValueTypeEnum" />), and whether "use this server's own address" is a
-///     sensible value source for it (see <see cref="IsServerAddressEligible" />'s own doc comment).
-///     This is metadata only -- nothing in this project's real option encoding/decoding or delivery
-///     code (<c>Ninlil.Dhcp.Server.Core.Options.*</c>) reads a catalog entry; the admin console uses it to
-///     offer typed, operator-facing value entry for scope and tag-rule options.
+///     This record describes one DHCPv4 or DHCPv6 option in <see cref="Dhcpv4OptionCatalog" /> or
+///     <see cref="Dhcpv6OptionCatalog" />: its IANA tag or code, a name and description, the shape
+///     of its value (see <see cref="DhcpOptionValueTypeEnum" />), and whether "use this server's
+///     address" makes sense as its value. It is metadata only: option delivery
+///     (<c>Ninlil.Dhcp.Server.Core.Options.*</c>) never reads it. <c>DhcpOptionCatalogController</c>
+///     serves it so the admin console can offer typed value entry for scope and tag-rule options.
 /// </summary>
 /// <param name="Code">
-///     The option's own raw numeric tag/code, the exact value carried on the wire -- 0-255 for a
-///     DHCPv4 tag (RFC 2132's own <c>Dhcpv4Option.Tag</c> byte), 0-65535 for a DHCPv6 code (RFC
-///     8415's own 2-octet option-code field). For an option this project already gives a
-///     strongly-typed accessor to, this is the exact same numeric value as the matching
-///     <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv4OptionTagEnum" />/
-///     <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv6OptionCodeEnum" /> member.
+///     The option's tag or code as carried on the wire: 0-255 for a DHCPv4 tag
+///     (<c>Dhcpv4Option.Tag</c>), 0-65535 for a DHCPv6 code (the RFC 8415 2-octet option code).
+///     It matches the <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv4OptionTagEnum" /> or
+///     <see cref="Ninlil.Dhcp.Common.Enum.Dhcpv6OptionCodeEnum" /> member when there is one.
 /// </param>
-/// <param name="Name">A short, human-readable name for this option, matching its defining RFC's own section title.</param>
+/// <param name="Name">A short name for the option, matching the defining RFC's section title.</param>
 /// <param name="Description">
-///     A longer, human-readable description of what this option carries, and which RFC/section
-///     defines it -- sourced directly from that RFC's own text, per this project's clean-room rule
-///     (see <c>NOTICE.md</c>), never from a copyleft competitor's own documentation or option
-///     naming.
+///     A longer description of what the option carries and which RFC section defines it, written
+///     from the RFC text under the clean-room rule in <c>NOTICE.md</c>, never from another DHCP
+///     server's documentation.
 /// </param>
-/// <param name="ValueType">The shape of value this option's own defining RFC gives it.</param>
+/// <param name="ValueType">The shape of the option's value, as its defining RFC gives it.</param>
 /// <param name="IsServerAddressEligible">
-///     Whether an operator picking this option's value should be offered "use this server's own
-///     address" as an alternative to typing one in -- see <see cref="Dhcpv4OptionCatalog" />'s own
-///     doc comment for the full eligibility reasoning. Always <see langword="false" /> unless
-///     <see cref="ValueType" /> is itself address-shaped (<see cref="DhcpOptionValueTypeEnum.IPv4Address" />/
-///     <see cref="DhcpOptionValueTypeEnum.IPv4AddressList" />/<see cref="DhcpOptionValueTypeEnum.IPv6Address" />/
-///     <see cref="DhcpOptionValueTypeEnum.IPv6AddressList" />) -- a real, enforced invariant (see
-///     this catalog's own committed test coverage), not merely a convention.
+///     Whether the UI offers "use this server's address" instead of a typed value (see
+///     <see cref="Dhcpv4OptionCatalog" /> for the reasoning). It is only <see langword="true" />
+///     when <see cref="ValueType" /> is address-shaped
+///     (<see cref="DhcpOptionValueTypeEnum.IPv4Address" />,
+///     <see cref="DhcpOptionValueTypeEnum.IPv4AddressList" />,
+///     <see cref="DhcpOptionValueTypeEnum.IPv6Address" /> or
+///     <see cref="DhcpOptionValueTypeEnum.IPv6AddressList" />); <c>DhcpOptionCatalogTests</c>
+///     checks this.
 /// </param>
 public sealed record DhcpOptionCatalogEntry(
     int Code,

@@ -7,105 +7,88 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class represents RFC 4191 Section 2.3's Route Information option: one specific route
-///     this router advertises -- a prefix, a preference relative to any other route or default
-///     router on the link, and how long the route stays valid -- distinct from
-///     <see cref="RaPrefixInformationOption" />'s own on-link/SLAAC purpose. A host that
-///     understands this option uses it for genuine route selection among several routers/routes
-///     on the same link; a host that does not understand it simply ignores it, per RFC 4191
-///     Section 1's own backward-compatibility design.
+///     This class represents RFC 4191 Section 2.3's Route Information option: one route this
+///     router advertises, with a prefix, a preference relative to other routes and default
+///     routers on the link, and a lifetime. It is separate from the on-link and SLAAC role of
+///     <see cref="RaPrefixInformationOption" />. Hosts that understand it use it to choose between
+///     routers; others ignore it.
 ///     <para>
-///         <b>This option's own value has a genuinely variable length</b>, unlike
-///         <see cref="RaPrefixInformationOption" />'s fixed 30 bytes: RFC 4191 Section 2.3 defines
-///         exactly three legal shapes, selected by how many significant bits
-///         <see cref="PrefixLength" /> actually has --
+///         <b>The value length varies</b>, unlike the fixed 30 bytes of
+///         <see cref="RaPrefixInformationOption" />. The prefix field holds 0, 8 or 16 octets.
+///         <see cref="Encode" /> always writes the smallest form <see cref="PrefixLength" />
+///         allows:
 ///         <list type="bullet">
 ///             <item>
-///                 <see cref="PrefixLength" /> is <c>0</c>: no <see cref="Prefix" /> octets are
-///                 present at all (a "default route preference only" entry, functionally
-///                 equivalent to <c>::/0</c>);
+///                 <see cref="PrefixLength" /> <c>0</c>: no prefix octets (a preference for the
+///                 default route, equivalent to <c>::/0</c>);
 ///             </item>
-///             <item>
-///                 <see cref="PrefixLength" /> is <c>1</c>-<c>64</c>: exactly 8 octets of
-///                 <see cref="Prefix" /> are present;
-///             </item>
-///             <item>
-///                 <see cref="PrefixLength" /> is <c>65</c>-<c>128</c>: exactly 16 octets of
-///                 <see cref="Prefix" /> are present.
-///             </item>
+///             <item><see cref="PrefixLength" /> <c>1</c>-<c>64</c>: 8 prefix octets;</item>
+///             <item><see cref="PrefixLength" /> <c>65</c>-<c>128</c>: 16 prefix octets.</item>
 ///         </list>
-///         <see cref="Encode" /> always chooses the smallest of these three shapes a given
-///         <see cref="PrefixLength" /> allows, per RFC 4191 Section 2.3's own stated convention;
-///         <see cref="TryDecode" /> rejects a value whose own byte length does not exactly match
-///         one of the three, or whose <see cref="PrefixLength" /> does not fall within the range
-///         that specific shape implies, as a genuine decode failure rather than silently accepting
-///         a non-conformant combination.
+///         <see cref="TryDecode" /> accepts only these smallest forms. RFC 4191 also allows a
+///         longer prefix field than needed (8 or 16 octets for length 0, 16 for lengths 1-64),
+///         which this decoder rejects; only tests decode Router Advertisements.
 ///     </para>
 /// </summary>
 public class RaRouteInformationOption
 {
     /// <summary>
-    ///     This constant contains the fixed portion of this option's own value that precedes its
-    ///     variable-length prefix -- a 1-byte prefix length, a 1-byte packed
-    ///     reserved/preference/reserved field, and a 4-byte route lifetime.
+    ///     This constant contains the length of the fixed part of the value before the prefix: a
+    ///     1-byte prefix length, a 1-byte field holding the preference between reserved bits, and
+    ///     a 4-byte route lifetime.
     /// </summary>
     private const int FixedHeaderLength = 6;
 
     /// <summary>
-    ///     This constant contains RFC 4191 Section 2.3's own bit position (counted from the
-    ///     field's least-significant bit) the two-bit preference value is packed at, within this
-    ///     option's own second value byte -- three reserved bits above it, three reserved bits
-    ///     below it.
+    ///     This constant contains the bit position (from the least-significant bit) of the
+    ///     two-bit preference in the second value byte, with three reserved bits on each side
+    ///     (RFC 4191 Section 2.3).
     /// </summary>
     private const int PreferenceBitOffset = 3;
 
     /// <summary>
-    ///     This constant contains the two-bit mask isolating a preference value once it has been
-    ///     shifted down to bit position zero.
+    ///     This constant contains the two-bit mask for the preference after shifting it to bit 0.
     /// </summary>
     private const byte PreferenceMask = 0b0000_0011;
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.6.2's own sentinel value, reused here since RFC
-    ///     4191 Section 2.3 gives this option's own Route Lifetime field the identical "all-ones
-    ///     means infinity" convention every other Neighbor Discovery lifetime field in this
-    ///     project's own codec already follows.
+    ///     This field holds the all-ones Route Lifetime, which RFC 4191 Section 2.3 defines as
+    ///     infinity, like the RFC 4861 Prefix Information lifetimes.
     /// </summary>
     public static readonly TimeSpan InfiniteLifetime = TimeSpan.FromSeconds(uint.MaxValue);
 
     /// <summary>
-    ///     This property contains the number of leading significant bits of <see cref="Prefix" />
-    ///     -- <c>0</c> through <c>128</c>. A value of <c>0</c> means this option carries no real
-    ///     prefix at all, advertising only a route preference for the link's own default route.
+    ///     This property contains the number of leading significant bits of <see cref="Prefix" />,
+    ///     <c>0</c> through <c>128</c>. <c>0</c> means no prefix: the option only sets a
+    ///     preference for the default route.
     /// </summary>
     public byte PrefixLength { get; set; }
 
     /// <summary>
-    ///     This property contains this route's own preference relative to any other route (or
-    ///     default router) known on the same link -- RFC 4191 Section 2.1's own signed two-bit
-    ///     field.
+    ///     This property contains the route's preference relative to other routes and default
+    ///     routers on the link (RFC 4191 Section 2.1's signed two-bit field). The default is
+    ///     <see cref="RaRoutePreferenceEnum.Medium" />.
     /// </summary>
     public RaRoutePreferenceEnum Preference { get; set; } = RaRoutePreferenceEnum.Medium;
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the route
-    ///     described by <see cref="Prefix" />/<see cref="PrefixLength" /> remains valid -- RFC
-    ///     4191 Section 2.3's own "Route Lifetime" field, a 32-bit number of seconds on the wire,
-    ///     or <see cref="InfiniteLifetime" /> for "never expires."
+    ///     This property contains how long after this option is sent the route stays valid (RFC
+    ///     4191 Section 2.3's "Route Lifetime", 32-bit seconds on the wire), or
+    ///     <see cref="InfiniteLifetime" />.
     /// </summary>
     public TimeSpan RouteLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains the advertised route's own prefix, as a full 128-bit address
-    ///     whose own leading <see cref="PrefixLength" /> bits are significant --
-    ///     <see cref="IPAddress.IPv6Any" /> (<c>::</c>) when <see cref="PrefixLength" /> is
-    ///     <c>0</c>, since no real prefix octets exist on the wire in that case at all.
+    ///     This property contains the route's prefix as a 128-bit address whose leading
+    ///     <see cref="PrefixLength" /> bits are significant. It is <see cref="IPAddress.IPv6Any" />
+    ///     (<c>::</c>) by default and when <see cref="PrefixLength" /> is <c>0</c>.
     /// </summary>
     public IPAddress Prefix { get; set; } = IPAddress.IPv6Any;
 
     /// <summary>
-    ///     This method decodes a Route Information option's own value bytes (everything after its
-    ///     own type/length header).
+    ///     This method decodes a Route Information option's value (everything after the
+    ///     type/length header). It rejects a length that is not one of the smallest forms (see
+    ///     the class summary) and the reserved preference value.
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -150,9 +133,7 @@ public class RaRouteInformationOption
 
         uint lifetimeSeconds = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(2, 4));
 
-        // Every prefix octet beyond what this option's own value actually carries is implicitly
-        // zero -- the same "reconstruct a full 128-bit address from a shorter significant prefix"
-        // shape RFC 4191 Section 2.3 itself describes.
+        // Prefix octets not carried on the wire are zero (RFC 4191 Section 2.3).
         Span<byte> fullPrefix = stackalloc byte[16];
         if (prefixOctets > 0)
             data.Slice(FixedHeaderLength, prefixOctets).CopyTo(fullPrefix);
@@ -169,10 +150,9 @@ public class RaRouteInformationOption
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     type/length header, which the caller -- <see cref="RaMessageOptionExtensions" /> --
-    ///     adds separately), always choosing the smallest of RFC 4191 Section 2.3's own three
-    ///     length variants that <see cref="PrefixLength" /> allows.
+    ///     This method encodes this option's value (everything after the type/length header,
+    ///     which <see cref="RaMessageOptionExtensions" /> adds), using the smallest prefix field
+    ///     <see cref="PrefixLength" /> allows.
     /// </summary>
     internal byte[] Encode()
     {
@@ -212,8 +192,8 @@ public class RaRouteInformationOption
     }
 
     /// <summary>
-    ///     This method reports whether a prefix length falls within the specific range RFC 4191
-    ///     Section 2.3 requires for a given number of on-wire prefix octets.
+    ///     This method reports whether a prefix length matches the smallest prefix field of the
+    ///     given size: 0 octets for length 0, 8 for 1-64, 16 for 65-128.
     /// </summary>
     private static bool IsPrefixLengthConsistentWithItsOwnOctetCount(
         byte prefixLength,
@@ -228,8 +208,8 @@ public class RaRouteInformationOption
         };
 
     /// <summary>
-    ///     This method maps a raw two-bit wire value onto its own <see cref="RaRoutePreferenceEnum" />
-    ///     member, rejecting RFC 4191 Section 2.1's own reserved binary <c>10</c> pattern.
+    ///     This method maps a raw two-bit value to its <see cref="RaRoutePreferenceEnum" /> member,
+    ///     rejecting the reserved binary <c>10</c> pattern (RFC 4191 Section 2.1).
     /// </summary>
     private static bool TryMapRawPreference(
         byte rawPreference,
@@ -254,10 +234,9 @@ public class RaRouteInformationOption
     }
 
     /// <summary>
-    ///     This method converts a lifetime to the unsigned 32-bit number of seconds RFC 4191
-    ///     writes it as, clamping to <see cref="uint.MaxValue" /> (this option's own "infinite"
-    ///     sentinel) rather than throwing on an out-of-range value, mirroring
-    ///     <see cref="RaPrefixInformationOption" />'s own identical helper.
+    ///     This method converts a lifetime to unsigned 32-bit seconds, writing a value at or above
+    ///     <see cref="uint.MaxValue" /> seconds as infinity, like the helper in
+    ///     <see cref="RaPrefixInformationOption" />. A negative value throws.
     /// </summary>
     private static uint ToWireSeconds(TimeSpan lifetime)
     {

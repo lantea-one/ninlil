@@ -5,16 +5,14 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class decodes a Router Solicitation/Advertisement datagram's own raw bytes into a
-///     <see cref="RouterSolicitationMessage" />/<see cref="RouterAdvertisementMessage" /> --
-///     the Router Advertisement analogue of <see cref="Dhcpv6MessageReader" />.
+///     This class decodes a Router Solicitation or Router Advertisement datagram into a
+///     <see cref="RouterSolicitationMessage" /> or <see cref="RouterAdvertisementMessage" />. It
+///     is the Router Advertisement counterpart of <see cref="Dhcpv6MessageReader" /> and reports
+///     malformed input through its return value.
 ///     <para>
-///         <b>The ICMPv6 checksum is never independently verified</b>: a raw ICMPv6 socket, per
-///         RFC 3542 Section 3.1, has its checksum both computed by the kernel on send and
-///         validated by the kernel on receive before a datagram is ever delivered to this
-///         project's own listener at all -- re-validating it here, which would need the
-///         surrounding IPv6 pseudo-header this per-datagram decode does not have access to, would
-///         be redundant with a guarantee the operating system's own network stack already gives.
+///         <b>The ICMPv6 checksum is not checked here.</b> Per RFC 3542 Section 3.1 the kernel
+///         computes it on send and verifies it on receive for raw ICMPv6 sockets, and checking it
+///         here would need the IPv6 pseudo-header, which this class does not have.
 ///     </para>
 /// </summary>
 public static class RaMessageReader
@@ -24,7 +22,7 @@ public static class RaMessageReader
     /// </summary>
     /// <param name="datagram">The raw ICMPv6 datagram to decode.</param>
     /// <param name="message">The decoded message, or <see langword="null" /> on failure.</param>
-    /// <param name="failureReason">A human-readable failure reason, or <see langword="null" /> on success.</param>
+    /// <param name="failureReason">A short failure reason, or <see langword="null" /> on success.</param>
     /// <returns><see langword="true" /> if decoding succeeded.</returns>
     public static bool TryReadRouterSolicitation(
         ReadOnlySpan<byte> datagram,
@@ -63,7 +61,7 @@ public static class RaMessageReader
     /// </summary>
     /// <param name="datagram">The raw ICMPv6 datagram to decode.</param>
     /// <param name="message">The decoded message, or <see langword="null" /> on failure.</param>
-    /// <param name="failureReason">A human-readable failure reason, or <see langword="null" /> on success.</param>
+    /// <param name="failureReason">A short failure reason, or <see langword="null" /> on success.</param>
     /// <returns><see langword="true" /> if decoding succeeded.</returns>
     public static bool TryReadRouterAdvertisement(
         ReadOnlySpan<byte> datagram,
@@ -116,8 +114,8 @@ public static class RaMessageReader
     }
 
     /// <summary>
-    ///     This method validates the ICMPv6 header (type/code) plus the fixed-length body every
-    ///     message shares before its own options area -- shared by both public methods above.
+    ///     This method checks the ICMPv6 type and code, and that the datagram is long enough for
+    ///     the header and fixed body. Both public methods use it.
     /// </summary>
     private static bool TryReadCommonHeader(
         ReadOnlySpan<byte> datagram,
@@ -153,8 +151,9 @@ public static class RaMessageReader
     }
 
     /// <summary>
-    ///     This method decodes a Neighbor Discovery options area, per RFC 4861 Section 4.6's own
-    ///     1-byte type/1-byte length (in 8-octet units, inclusive of this 2-byte header) framing.
+    ///     This method decodes a Neighbor Discovery options area with the RFC 4861 Section 4.6
+    ///     framing (1-byte type, 1-byte length in 8-octet units including the header). A zero
+    ///     length is rejected, as RFC 4861 requires.
     /// </summary>
     private static bool TryReadOptions(
         ReadOnlySpan<byte> data,

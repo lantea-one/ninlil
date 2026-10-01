@@ -6,31 +6,33 @@ namespace Ninlil.Dhcp.Common.Identity;
 /// <summary>
 ///     This static class derives the hardware-level facts a stored DHCP client identifier embeds,
 ///     so a DHCPv4 identity and a DHCPv6 identity belonging to the same physical device can be
-///     recognized as one. A dual-stack device presents two unrelated-looking identifiers -- a
-///     MAC-address-based one to DHCPv4 and a DHCP Unique Identifier (DUID) to DHCPv6 -- but very
-///     often one is recoverable from the other:
+///     recognized as one. A dual-stack device presents two unrelated-looking identifiers, a
+///     MAC-based one to DHCPv4 and a DHCP Unique Identifier (DUID) to DHCPv6, but often one can be
+///     recovered from the other:
 ///     <list type="bullet">
 ///         <item>
 ///             A DUID-LLT (type 1, RFC 8415 Section 11.2) or DUID-LL (type 3, RFC 8415
 ///             Section 11.4) carries a hardware type and a link-layer address; with hardware type 1
 ///             (Ethernet, IANA's ARP hardware-type registry) and a 6-octet address, that address is
-///             the device's own MAC.
+///             the device's MAC.
 ///         </item>
 ///         <item>
 ///             A DHCPv4 identifier is either a raw 6-octet <c>chaddr</c> (a MAC), an RFC 2132
 ///             Section 9.14 Client-identifier of hardware type 1 followed by a 6-octet MAC, or an
-///             RFC 4361 Section 6.1 Client-identifier -- type 255, a 4-octet IAID, then the very
-///             same DUID the client uses for DHCPv6, which links the two even when that DUID
-///             embeds no MAC at all (a DUID-EN or DUID-UUID).
+///             RFC 4361 Section 6.1 Client-identifier: type 255, a 4-octet IAID, then the same
+///             DUID the client uses for DHCPv6, which links the two even when that DUID embeds no
+///             MAC (a DUID-EN or DUID-UUID).
 ///         </item>
 ///     </list>
 ///     Each fact becomes one opaque "link key" string (<c>mac:</c> or <c>duid:</c> followed by
 ///     lowercase hexadecimal); two identifiers are the same device when their key sets intersect.
+///     <c>DhcpClientRegistryAutoPopulationService</c>, <c>MacVendorLookupService</c> and
+///     <c>ClientPresenceFlushService</c> use it.
 ///     <para>
 ///         Input is the colon-separated lowercase hexadecimal form DHCP leases store identifiers
-///         in, though any separator and case are tolerated. An identifier this class cannot
-///         interpret simply yields no keys -- never a guess -- so an unrecognized shape can only
-///         ever cause a missed merge, never a false one.
+///         in, though <c>:</c>, <c>-</c> and <c>.</c> separators and either case are accepted.
+///         An identifier this class cannot interpret yields no keys rather than a guess, so an
+///         unrecognized shape can cause a missed merge but never a false one.
 ///     </para>
 /// </summary>
 public static class DhcpClientIdentifierLinkKeys
@@ -59,7 +61,7 @@ public static class DhcpClientIdentifierLinkKeys
         // RFC 2132 Section 9.14: hardware type 1 followed by the MAC.
         else if (bytes.Length == 1 + MacAddressLength && bytes[0] == EthernetHardwareType)
             keys.Add(MacKey(bytes.AsSpan(1)));
-        // RFC 4361 Section 6.1: type 255, a 4-octet IAID, then the client's own DUID.
+        // RFC 4361 Section 6.1: type 255, a 4-octet IAID, then the client's DUID.
         else if (bytes.Length > 5 && bytes[0] == 0xFF)
             AddDuidKeys(bytes.AsSpan(5), keys);
 
@@ -81,12 +83,12 @@ public static class DhcpClientIdentifierLinkKeys
     }
 
     /// <summary>
-    ///     This method adds a DUID's own key, plus its embedded MAC's key when it carries one.
+    ///     This method adds a DUID's key, plus its embedded MAC's key when it carries one.
     /// </summary>
     private static void AddDuidKeys(ReadOnlySpan<byte> duid, HashSet<string> keys)
     {
         // Every DUID begins with a 2-octet type code (RFC 8415 Section 11.1); anything shorter,
-        // or with nothing after the type, is not a real DUID.
+        // or with nothing after the type, is not a valid DUID.
         if (duid.Length <= 2)
             return;
 

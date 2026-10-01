@@ -9,21 +9,20 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class encodes a <see cref="Dhcpv4Message" /> into the raw bytes RFC 2131 Section 2/3
-///     describes. Unlike <see cref="Dhcpv4MessageReader" />, which must tolerate arbitrary,
-///     possibly hostile input off the network, this writer is only ever handed a message this
-///     project itself constructed, so it validates its input strictly and throws
-///     <see cref="ArgumentException" /> on a shape a caller should never have produced (an
-///     oversized hardware address, a non-IPv4 address, an option value longer than a single byte
-///     can express its length in) rather than trying to silently tolerate it.
+///     This class encodes a <see cref="Dhcpv4Message" /> into bytes (RFC 2131 Sections 2 and 3).
+///     Unlike <see cref="Dhcpv4MessageReader" />, which must tolerate hostile input, it encodes
+///     messages built by Ninlil, so it throws <see cref="ArgumentException" /> on an invalid shape
+///     (a hardware address or name too long for its field, a missing or non-IPv4 address, an
+///     option value over 255 bytes) instead of tolerating it.
 /// </summary>
 public static class Dhcpv4MessageWriter
 {
     /// <summary>
-    ///     This method encodes a complete DHCPv4 message.
+    ///     This method encodes a DHCPv4 message, ending the options with End and padding to the
+    ///     minimum length.
     /// </summary>
     /// <param name="message">The message to encode.</param>
-    /// <returns>The encoded message, at least <see cref="Dhcpv4Constants.MinimumMessageLength" /> bytes long, ready to hand to any transport.</returns>
+    /// <returns>The encoded message, at least <see cref="Dhcpv4Constants.MinimumMessageLength" /> bytes long.</returns>
     public static byte[] Write(Dhcpv4Message message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -39,8 +38,8 @@ public static class Dhcpv4MessageWriter
 
         WriteUInt32(buffer, message.TransactionId);
         WriteUInt16(buffer, message.SecondsElapsed);
-        // RFC 2131 requires every reserved bit of "flags" to be zero, so only the one meaningful
-        // bit -- the broadcast bit -- is ever actually written here.
+        // RFC 2131 requires the reserved bits of "flags" to be zero, so only the broadcast bit is
+        // written.
         WriteUInt16(buffer, (ushort)(message.BroadcastFlagSet ? 0x8000 : 0x0000));
 
         WriteIpv4Address(buffer, message.ClientIpAddress, nameof(message.ClientIpAddress));
@@ -90,9 +89,8 @@ public static class Dhcpv4MessageWriter
         buffer.GetSpan(1)[0] = (byte)Dhcpv4OptionTagEnum.End;
         buffer.Advance(1);
 
-        // Per RFC 1542 Section 2, pad the whole message up to a minimum total size so a relay
-        // agent or client still following the original BOOTP minimum-size convention never
-        // discards an otherwise-valid, merely-short message.
+        // RFC 1542 Section 2: pad to the BOOTP minimum size so a relay agent or client that
+        // enforces it does not discard a short message.
         int paddingNeeded = Dhcpv4Constants.MinimumMessageLength - buffer.WrittenCount;
 
         if (paddingNeeded > 0)
@@ -125,10 +123,8 @@ public static class Dhcpv4MessageWriter
     }
 
     /// <summary>
-    ///     This method writes one of the message's four fixed-format address fields
-    ///     (ciaddr/yiaddr/siaddr/giaddr), each exactly 4 bytes on the wire -- DHCPv4 is an
-    ///     IPv4-only protocol, so an address of any other family here is a caller bug, not
-    ///     tolerable input to quietly work around.
+    ///     This method writes one of the four 4-byte address fields (ciaddr, yiaddr, siaddr,
+    ///     giaddr). DHCPv4 is IPv4-only, so a null or non-IPv4 address is a caller bug and throws.
     /// </summary>
     private static void WriteIpv4Address(
         ArrayBufferWriter<byte> buffer,
@@ -148,9 +144,9 @@ public static class Dhcpv4MessageWriter
     }
 
     /// <summary>
-    ///     This method writes a fixed-size wire field, zero-filling every byte
-    ///     <paramref name="value" /> did not itself supply -- used for "chaddr", and (via
-    ///     <see cref="WriteFixedAsciiField" />) "sname"/"file".
+    ///     This method writes a fixed-size field, zero-filling the bytes
+    ///     <paramref name="value" /> does not cover. It is used for "chaddr" and, through
+    ///     <see cref="WriteFixedAsciiField" />, for "sname" and "file".
     /// </summary>
     private static void WriteFixedField(
         ArrayBufferWriter<byte> buffer,
@@ -171,8 +167,8 @@ public static class Dhcpv4MessageWriter
     }
 
     /// <summary>
-    ///     This method writes a fixed-size wire field ("sname" or "file") from an NVT ASCII
-    ///     string, per RFC 2131's own description of both fields.
+    ///     This method writes a fixed-size field ("sname" or "file") from an ASCII string, as
+    ///     RFC 2131 defines them.
     /// </summary>
     private static void WriteFixedAsciiField(
         ArrayBufferWriter<byte> buffer,

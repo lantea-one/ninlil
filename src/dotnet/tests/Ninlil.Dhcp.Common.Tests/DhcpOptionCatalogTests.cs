@@ -4,21 +4,19 @@ using Ninlil.Dhcp.Common.OptionCatalog;
 namespace Ninlil.Dhcp.Common.Tests;
 
 /// <summary>
-///     This test class proves the real data-integrity invariants <see cref="Dhcpv4OptionCatalog" />/
-///     <see cref="Dhcpv6OptionCatalog" /> must hold for a future value-entry UI (a later sub-phase)
-///     to be able to trust this catalog blindly -- a non-empty name/description on every entry, no
-///     duplicate tag/code within either protocol's own list, and the "use this server's own
-///     address" flag only ever set on a genuinely address-shaped option, never merely asserting the
-///     catalog is non-empty.
+///     This test class checks the invariants of <see cref="Dhcpv4OptionCatalog" /> and
+///     <see cref="Dhcpv6OptionCatalog" /> that the admin console's value entry relies on: every
+///     entry has a name and description, no tag or code repeats within a protocol, and the "use
+///     this server's address" flag is set only on address-shaped options (and on at least one
+///     option per protocol). It runs against the static catalogs in memory.
 /// </summary>
 public class DhcpOptionCatalogTests
 {
     [Fact]
     public void Dhcpv4Catalog_IsNotEmpty_AndExpandsWellBeyondTheOriginalEighteenMemberEnum()
     {
-        // The original Dhcpv4OptionTagEnum named 18 members (16 real option tags plus the Pad/End
-        // structural framing tags, which never appear in this catalog at all) -- this sub-phase's
-        // own job is expanding real, operator-configurable option coverage well beyond that.
+        // Dhcpv4OptionTagEnum names 18 tags (Pad and End included); the catalog is meant to
+        // cover many more configurable options than that.
         Assert.True(
             Dhcpv4OptionCatalog.Entries.Count > 18,
             "The DHCPv4 catalog should expand well beyond the original 18-member enum."
@@ -84,8 +82,8 @@ public class DhcpOptionCatalogTests
     [Fact]
     public void Dhcpv4Catalog_ContainsAtLeastOneGenuineServerAddressEligibleEntry()
     {
-        // A real, positive assertion -- not merely that the invariant above is never violated, but
-        // that the flag is genuinely used at all (Domain Name Server, at minimum).
+        // The invariant above holds trivially if no entry sets the flag, so check that one does
+        // (Domain Name Server, at least).
         Assert.Contains(Dhcpv4OptionCatalog.Entries, entry => entry.IsServerAddressEligible);
     }
 

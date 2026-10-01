@@ -6,13 +6,13 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Common.Tests;
 
 /// <summary>
-///     This test class proves <see cref="Dhcpv6RelayMessageWriter" />/
-///     <see cref="Dhcpv6RelayMessageReader" /> round-trip a <see cref="Dhcpv6RelayMessage" />
-///     correctly, purely in memory -- no socket involved, the relay-message sibling of
-///     <see cref="Dhcpv6MessageCodecTests" />. The real socket-level proof lives in
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests</c>/<c>Ninlil.Dhcp.Server.Core.Tests</c>/
-///     <c>Ninlil.Dhcp.Server.Relay.Tests</c>, alongside the transports/engines that actually use
-///     this codec.
+///     This test class checks that <see cref="Dhcpv6RelayMessageWriter" /> and
+///     <see cref="Dhcpv6RelayMessageReader" /> round-trip a <see cref="Dhcpv6RelayMessage" />, in
+///     memory with no socket, and that the reader rejects client/server messages, a missing Relay
+///     Message option and a chain of relays. It is the relay counterpart of
+///     <see cref="Dhcpv6MessageCodecTests" />; the code that uses the codec is tested in
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests</c>, <c>Ninlil.Dhcp.Server.Core.Tests</c> and
+///     <c>Ninlil.Dhcp.Server.Relay.Tests</c>.
 /// </summary>
 public class Dhcpv6RelayMessageCodecTests
 {
@@ -177,8 +177,7 @@ public class Dhcpv6RelayMessageCodecTests
     [Fact]
     public void TryRead_OrdinaryClientServerMessageType_ReturnsFalseWithAReason()
     {
-        // A well-formed ordinary SOLICIT is not a RELAY-FORW/RELAY-REPL at all -- must be rejected
-        // by this reader, not misread as one.
+        // A valid SOLICIT is not a relay message, so the relay reader must reject it.
         byte[] bytes = Dhcpv6MessageWriter.Write(BuildInnerSolicit());
 
         Assert.False(
@@ -195,11 +194,9 @@ public class Dhcpv6RelayMessageCodecTests
     [Fact]
     public void TryRead_MissingRelayMessageOption_ReturnsFalseWithAReason()
     {
-        // A structurally valid RELAY-FORW header, but its own options area carries no Relay
-        // Message option at all -- RFC 8415 Section 21.10 makes that option mandatory. Built by
-        // hand, bypassing the writer, since nothing in this project's own normal usage would ever
-        // construct a Dhcpv6RelayMessage missing that option in the first place: a 34-byte fixed
-        // header followed by zero option bytes.
+        // A valid 34-byte RELAY-FORW header with no options, so no Relay Message option, which
+        // RFC 8415 Section 21.10 makes mandatory. It is built by hand because the code never
+        // produces such a message through the writer.
         byte[] bytes = new byte[34];
         bytes[0] = (byte)Dhcpv6MessageTypeEnum.RelayForward;
         LinkAddress.GetAddressBytes().CopyTo(bytes, 2);
@@ -219,11 +216,9 @@ public class Dhcpv6RelayMessageCodecTests
     [Fact]
     public void TryRead_NestedRelayForwardWithinRelayForward_ReturnsFalseWithAReason()
     {
-        // A genuine multi-relay chain: the Relay Message option's own nested payload is itself
-        // another RELAY-FORW -- this project's own codec deliberately supports only a single relay
-        // hop (see Dhcpv6RelayMessage's own doc comment) and must reject this outright rather than
-        // silently misread the nested RELAY-FORW's own fixed fields as if they were an ordinary
-        // client/server message.
+        // A chain of relays: the Relay Message payload is itself a RELAY-FORW. The codec supports
+        // one hop only (see Dhcpv6RelayMessage) and must reject this rather than misread the
+        // nested header as a client/server message.
         Dhcpv6RelayMessage innerRelayForward = BuildRelayForward(BuildInnerSolicit());
         byte[] innerRelayForwardBytes = Dhcpv6RelayMessageWriter.Write(innerRelayForward);
 

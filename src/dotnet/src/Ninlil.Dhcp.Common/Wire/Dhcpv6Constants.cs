@@ -2,48 +2,40 @@
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class holds the fixed sizes RFC 8415's client/server and relay wire formats are built
-///     from, shared between <see cref="Dhcpv6MessageReader" />/<see cref="Dhcpv6MessageWriter" />
-///     and <see cref="Dhcpv6RelayMessageReader" />/<see cref="Dhcpv6RelayMessageWriter" />
-///     respectively, so none of the four can ever quietly drift out of sync with the others.
-///     Unlike <c>Dhcpv4Constants</c>, DHCPv6 has no magic cookie and no BOOTP-era
-///     minimum-message-size convention to carry forward -- RFC 8415's own client/server header is
-///     simply msg-type followed by a 3-octet transaction ID, with nothing else fixed before the
-///     options area begins.
+///     This class holds the fixed sizes of the RFC 8415 client/server and relay wire formats,
+///     shared by <see cref="Dhcpv6MessageReader" />, <see cref="Dhcpv6MessageWriter" />,
+///     <see cref="Dhcpv6RelayMessageReader" /> and <see cref="Dhcpv6RelayMessageWriter" /> so they
+///     cannot drift apart. Unlike <c>Dhcpv4Constants</c> there is no magic cookie and no minimum
+///     message size: the client/server header is just msg-type and a 3-octet transaction ID.
 /// </summary>
 public static class Dhcpv6Constants
 {
     /// <summary>
-    ///     The length, in bytes, of a client/server DHCPv6 message's fixed header -- the one-byte
-    ///     "msg-type" field plus the 3-byte "transaction-id" field, per RFC 8415 Section 8 --
-    ///     before the variable-length options area that follows it. This does not apply to a
-    ///     RELAY-FORW/RELAY-REPL message, whose own fixed header has a completely different shape
-    ///     -- see <see cref="RelayFixedHeaderLength" />.
+    ///     The length, in bytes, of a client/server message's fixed header: the one-byte
+    ///     "msg-type" and the 3-byte "transaction-id" (RFC 8415 Section 8). Relay messages use
+    ///     <see cref="RelayFixedHeaderLength" /> instead.
     /// </summary>
     public const int FixedHeaderLength = 4;
 
     /// <summary>
-    ///     The length, in bytes, of a RELAY-FORW/RELAY-REPL message's own fixed header, per RFC
-    ///     8415 Section 7.1/7.2: a one-byte "msg-type" field, a one-byte "hop-count" field, a
-    ///     16-byte "link-address" field, and a 16-byte "peer-address" field -- before the
-    ///     variable-length options area that follows it (which must carry a Relay Message option
-    ///     nesting the message actually being relayed, per Section 21.10).
+    ///     The length, in bytes, of a RELAY-FORW or RELAY-REPL fixed header (RFC 8415 Section
+    ///     7.1/7.2): one-byte "msg-type", one-byte "hop-count", 16-byte "link-address" and 16-byte
+    ///     "peer-address". The options that follow must carry a Relay Message option (Section
+    ///     21.10) holding the relayed message.
     /// </summary>
     public const int RelayFixedHeaderLength = 34;
 
     /// <summary>
-    ///     The largest value RFC 8415 Section 8's own 3-octet "transaction-id" field can hold.
+    ///     The largest value the 3-octet "transaction-id" field (RFC 8415 Section 8) can hold.
     ///     <see cref="Dhcpv6MessageWriter" /> rejects a larger value as a caller bug rather than
     ///     silently truncating it.
     /// </summary>
     public const uint MaximumTransactionId = 0xFFFFFF;
 
     /// <summary>
-    ///     The length, in bytes, of one option's own fixed tag/length header -- a 2-byte
-    ///     "option-code" followed by a 2-byte "option-len", per RFC 8415 Section 21.1 -- before
-    ///     that option's own value bytes. This is shared by every options area this codec reads or
-    ///     writes, whether at a message's own top level or nested inside an IA_NA/IA_TA/IA_PD/
-    ///     IAADDR/IAPREFIX option's own value.
+    ///     The length, in bytes, of an option header: a 2-byte "option-code" and a 2-byte
+    ///     "option-len" (RFC 8415 Section 21.1). Every options area uses it, at the top level of a
+    ///     message and nested inside IA_NA, IA_TA, IA_PD, IAADDR and IAPREFIX values.
     /// </summary>
     public const int OptionHeaderLength = 4;
 }

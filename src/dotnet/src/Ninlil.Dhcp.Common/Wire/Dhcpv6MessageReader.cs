@@ -5,27 +5,25 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class decodes a raw client/server DHCPv6 message off the wire, per RFC 8415 Section
-///     8's fixed header and Section 21's tag/length/value options area, into a
-///     <see cref="Dhcpv6Message" />.
+///     This class decodes a client/server DHCPv6 message (the RFC 8415 Section 8 header and the
+///     Section 21 options) into a <see cref="Dhcpv6Message" />.
 ///     <para>
-///         Like <see cref="Dhcpv4MessageReader" />, and for the same reason (DHCPv6 has no shared
-///         processing pipeline of its own for a listener to lean on the way the DNS side's
-///         <c>DnsQueryProcessingPipeline</c> does), this reader never throws for malformed or
-///         truncated input -- it reports failure through <see cref="TryRead" />'s own boolean
-///         return value instead.
+///         Like <see cref="Dhcpv4MessageReader" />, and for the same reason, it never throws on
+///         malformed or truncated input; <see cref="TryRead" /> returns <see langword="false" />
+///         with a reason.
 ///     </para>
 /// </summary>
 public static class Dhcpv6MessageReader
 {
     /// <summary>
-    ///     This method attempts to decode a complete client/server DHCPv6 message.
+    ///     This method attempts to decode a client/server DHCPv6 message. Relay messages are
+    ///     rejected; use <see cref="Dhcpv6RelayMessageReader" /> for those.
     /// </summary>
-    /// <param name="buffer">The raw message bytes, exactly as received from the wire.</param>
+    /// <param name="buffer">The raw message bytes, as received.</param>
     /// <param name="message">On success, the decoded message; on failure, <see langword="null" />.</param>
     /// <param name="failureReason">
-    ///     On failure, a short, human-readable explanation suitable for a diagnostic log message;
-    ///     on success, <see langword="null" />.
+    ///     On failure, a short explanation for a diagnostic log message; on success,
+    ///     <see langword="null" />.
     /// </param>
     /// <returns><see langword="true" /> if <paramref name="buffer" /> decoded successfully.</returns>
     public static bool TryRead(
@@ -40,11 +38,8 @@ public static class Dhcpv6MessageReader
         }
         catch (Exception)
         {
-            // Defense in depth: every bounds check below is meant to catch a malformed or
-            // truncated buffer before it can ever throw, but a brand-new, network-facing parser
-            // reading arbitrary, possibly hostile bytes must never let a bug in one of those
-            // checks escape as an unhandled exception and take down whatever hosts it -- report
-            // failure instead, the same posture TryRead's own contract already promises callers.
+            // Defense in depth: the bounds checks should catch bad input before anything throws,
+            // but a bug in one of them must not let hostile network bytes crash the listener.
             message = null;
             failureReason = "The buffer could not be parsed as a DHCPv6 message.";
             return false;
@@ -52,8 +47,7 @@ public static class Dhcpv6MessageReader
     }
 
     /// <summary>
-    ///     This method does the actual decoding <see cref="TryRead" /> wraps with a single,
-    ///     consistent exception-to-failure translation.
+    ///     This method does the decoding that <see cref="TryRead" /> wraps.
     /// </summary>
     private static bool TryReadCore(
         ReadOnlySpan<byte> buffer,
@@ -71,12 +65,9 @@ public static class Dhcpv6MessageReader
 
         byte messageTypeByte = buffer[0];
 
-        // A RELAY-FORW/RELAY-REPL message's own fixed header (hop-count/link-address/
-        // peer-address) is a completely different shape from the transaction-id header every
-        // other message type shares -- reading it as if it were an ordinary client/server message
-        // would silently misinterpret those bytes as a transaction ID and options area, rather
-        // than failing loudly. See Dhcpv6RelayMessageReader for this project's own dedicated
-        // decoder for that genuinely different shape.
+        // A relay message has a different header (hop count, link address, peer address);
+        // reading it here would misread those bytes as a transaction ID and options. Fail
+        // instead; Dhcpv6RelayMessageReader decodes relay messages.
         if (
             messageTypeByte == (byte)Dhcpv6MessageTypeEnum.RelayForward
             || messageTypeByte == (byte)Dhcpv6MessageTypeEnum.RelayReply
@@ -87,9 +78,7 @@ public static class Dhcpv6MessageReader
             return false;
         }
 
-        // The transaction-id is only 3 octets on the wire; reading it as if a 4th, leading zero
-        // byte preceded it (rather than the msg-type byte we already consumed above) yields the
-        // correct big-endian 24-bit value in a 32-bit result.
+        // The transaction-id is 3 octets, big-endian.
         uint transactionId = ((uint)buffer[1] << 16) | ((uint)buffer[2] << 8) | buffer[3];
 
         Dhcpv6Message result = new()
@@ -113,22 +102,19 @@ public static class Dhcpv6MessageReader
     }
 
     /// <summary>
-    ///     This method decodes a tag/length/value options area -- shared between a whole
-    ///     message's own top-level options (called by <see cref="TryReadCore" /> above) and a
-    ///     single IA_NA/IA_TA/IA_PD/IAADDR/IAPREFIX option's own nested options area (called by
-    ///     <see cref="Dhcpv6MessageOptionExtensions" />), since RFC 8415 Section 21 defines exactly
-    ///     one tag/length/value shape used everywhere in this protocol, unlike DHCPv4's separate
-    ///     Pad/End-aware top-level format versus RFC 3046's own differently-shaped sub-option TLV
-    ///     list.
+    ///     This method decodes a code/length/value options area. RFC 8415 Section 21 uses one
+    ///     shape everywhere, so the top-level options, the relay message options
+    ///     (<see cref="Dhcpv6RelayMessageReader" />) and the nested options of IA_NA, IA_TA, IA_PD,
+    ///     IAADDR and IAPREFIX are all decoded here. DHCPv4, by contrast, has Pad and End at the
+    ///     top level and a different sub-option format for RFC 3046.
     /// </summary>
     /// <param name="buffer">
-    ///     The options-area bytes to decode, already sliced to exactly this options area's own
-    ///     length (the caller -- either the end of the whole message, or a container option's own
-    ///     declared length -- has already established that boundary).
+    ///     The options-area bytes, already sliced to the area's length (the end of the message or
+    ///     the containing option's declared length).
     /// </param>
     /// <param name="options">The list every decoded option is appended to, in wire order.</param>
     /// <param name="failureReason">
-    ///     On failure, a short, human-readable explanation; on success, <see langword="null" />.
+    ///     On failure, a short explanation; on success, <see langword="null" />.
     /// </param>
     /// <returns><see langword="true" /> if every option in <paramref name="buffer" /> decoded successfully.</returns>
     internal static bool TryReadOptions(

@@ -6,19 +6,16 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Common.Tests;
 
 /// <summary>
-///     This test class proves <see cref="Dhcpv4MessageWriter" />/<see cref="Dhcpv4MessageReader" />
-///     round-trip a <see cref="Dhcpv4Message" /> correctly, purely in memory -- no socket
-///     involved. The real socket-level proof lives in
-///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c>, alongside the transport that actually uses this
-///     codec; this class is the fast, exhaustive layer underneath it, exercising shapes (a
-///     truncated buffer, a bad magic cookie, a hardware address shorter than 16 bytes) that a
-///     real socket round trip would be a slow and awkward way to cover.
+///     This test class checks that <see cref="Dhcpv4MessageWriter" /> and
+///     <see cref="Dhcpv4MessageReader" /> round-trip a <see cref="Dhcpv4Message" />, in memory
+///     with no socket, and that the reader rejects malformed input (a truncated buffer, a bad
+///     magic cookie, a dangling or overlong option). Socket-level tests live in
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Tests</c>.
 /// </summary>
 public class Dhcpv4MessageCodecTests
 {
     /// <summary>
-    ///     This method builds a minimal but otherwise realistic DHCPDISCOVER, used as a starting
-    ///     point by several tests below.
+    ///     This method builds a minimal DHCPDISCOVER that several tests start from.
     /// </summary>
     private static Dhcpv4Message BuildDiscover()
     {
@@ -217,8 +214,7 @@ public class Dhcpv4MessageCodecTests
     [Fact]
     public void TryRead_OptionWithNoLengthByte_ReturnsFalseWithAReason()
     {
-        // A well-formed header/cookie, immediately followed by a single dangling option tag with
-        // no length byte at all -- an intentionally truncated, hostile-shaped buffer.
+        // A valid header and cookie followed by one option tag with no length byte.
         byte[] header = new byte[Dhcpv4Constants.FixedHeaderLength];
         byte[] bytes =
         [
@@ -238,7 +234,7 @@ public class Dhcpv4MessageCodecTests
     public void TryRead_OptionLengthRunsPastTheBuffer_ReturnsFalseWithAReason()
     {
         byte[] header = new byte[Dhcpv4Constants.FixedHeaderLength];
-        // Tag 1 (Subnet Mask), claiming a 4-byte value, but only 1 byte actually follows.
+        // Tag 1 (Subnet Mask), claiming a 4-byte value, with only 1 byte following.
         byte[] bytes =
         [
             .. header,

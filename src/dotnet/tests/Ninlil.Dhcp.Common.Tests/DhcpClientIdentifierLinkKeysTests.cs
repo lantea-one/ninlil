@@ -56,7 +56,7 @@ public class DhcpClientIdentifierLinkKeysTests
         );
 
     /// <summary>
-    ///     This test proves a DUID-UUID yields only its DUID key -- it embeds no MAC.
+    ///     This test proves a DUID-UUID yields only its DUID key, since it embeds no MAC.
     /// </summary>
     [Fact]
     public void ADuidUuidYieldsOnlyItsDuid()
@@ -80,7 +80,7 @@ public class DhcpClientIdentifierLinkKeysTests
 
     /// <summary>
     ///     This test proves an RFC 4361 DHCPv4 identifier shares its DUID key with the same
-    ///     client's own DHCPv6 identifier, even for a DUID that embeds no MAC at all.
+    ///     client's DHCPv6 identifier, even for a DUID that embeds no MAC.
     /// </summary>
     [Fact]
     public void AnRfc4361ClientIdentifierLinksToTheSameDuidOverDhcpv6()

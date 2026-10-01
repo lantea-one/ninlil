@@ -6,11 +6,12 @@ using Ninlil.Dhcp.Common.Wire;
 namespace Ninlil.Dhcp.Common.Tests;
 
 /// <summary>
-///     This test class proves <see cref="Dhcpv6MessageWriter" />/<see cref="Dhcpv6MessageReader" />
-///     round-trip a <see cref="Dhcpv6Message" /> correctly, purely in memory -- no socket
-///     involved, the DHCPv6 analogue of <see cref="Dhcpv4MessageCodecTests" />. The real
-///     socket-level proof lives in <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests</c>, alongside the
-///     transport that actually uses this codec.
+///     This test class checks that <see cref="Dhcpv6MessageWriter" /> and
+///     <see cref="Dhcpv6MessageReader" /> round-trip a <see cref="Dhcpv6Message" /> and its typed
+///     options (IAs, Status Code, Domain Search List, Client FQDN, User and Vendor Class), in
+///     memory with no socket, and that malformed input is rejected. It is the DHCPv6 counterpart
+///     of <see cref="Dhcpv4MessageCodecTests" />; socket-level tests live in
+///     <c>Ninlil.Dhcp.Protocol.Dhcpv6.Tests</c>.
 /// </summary>
 public class Dhcpv6MessageCodecTests
 {
@@ -315,8 +316,7 @@ public class Dhcpv6MessageCodecTests
     [Fact]
     public void TryRead_OptionHeaderRunsPastTheBuffer_ReturnsFalseWithAReason()
     {
-        // A well-formed 4-byte header, immediately followed by a single dangling option-code byte
-        // pair with no complete option-len -- an intentionally truncated, hostile-shaped buffer.
+        // A valid 4-byte header followed by an option code with no complete option-len.
         byte[] bytes = [(byte)Dhcpv6MessageTypeEnum.Solicit, 0, 0, 1, 0, 1];
 
         Assert.False(
@@ -343,9 +343,8 @@ public class Dhcpv6MessageCodecTests
     public void TryGetDomainSearchList_CompressedName_ReturnsFalse()
     {
         Dhcpv6Message message = new();
-        // A label-length byte with its top two bits set is a compression pointer, which this
-        // project's own decoder deliberately does not support (see
-        // Dhcpv6MessageOptionExtensions.TryGetDomainSearchList's own doc comment).
+        // A label-length byte with its top two bits set is a compression pointer, which the
+        // decoder does not support (see Dhcpv6MessageOptionExtensions.TryGetDomainSearchList).
         message.SetRawOption((ushort)Dhcpv6OptionCodeEnum.DomainSearchList, [0xC0, 0x00]);
 
         Assert.False(message.TryGetDomainSearchList(out IReadOnlyList<string> domains));
@@ -503,9 +502,8 @@ public class Dhcpv6MessageCodecTests
     public void TryGetClientFqdn_CompressedName_ReturnsFalse()
     {
         Dhcpv6Message message = new();
-        // Flags octet (0x00) followed by a compression-pointer-shaped label length -- this
-        // project's own decoder never resolves an RFC 1035 Section 4.1.4 compression pointer for
-        // any DHCPv6 option, the same restriction TryGetDomainSearchList already documents.
+        // Flags octet (0x00) followed by a compression pointer, which is not supported here
+        // either (see TryGetDomainSearchList).
         message.SetRawOption((ushort)Dhcpv6OptionCodeEnum.ClientFqdn, [0x00, 0xC0, 0x00]);
 
         Assert.False(message.TryGetClientFqdn(out _, out _, out _, out string domainName, out _));
@@ -516,7 +514,7 @@ public class Dhcpv6MessageCodecTests
     public void TryGetClientFqdn_TruncatedLabel_ReturnsFalse()
     {
         Dhcpv6Message message = new();
-        // Flags octet (0x00), then a label claiming 10 bytes with only 4 actually present.
+        // Flags octet (0x00), then a label claiming 10 bytes with only 4 present.
         message.SetRawOption(
             (ushort)Dhcpv6OptionCodeEnum.ClientFqdn,
             [0x00, 10, (byte)'h', (byte)'o', (byte)'s', (byte)'t']
@@ -530,8 +528,8 @@ public class Dhcpv6MessageCodecTests
     public void TryGetClientFqdn_TrailingBytesAfterRootLabel_ReturnsFalse()
     {
         Dhcpv6Message message = new();
-        // Flags octet (0x00), a fully-qualified "a" (one label, then the root label), then one
-        // dangling extra byte this option's own single-name shape never permits.
+        // Flags octet (0x00), a fully qualified "a" (one label, then the root label), then an
+        // extra byte, which the single-name option does not allow.
         message.SetRawOption(
             (ushort)Dhcpv6OptionCodeEnum.ClientFqdn,
             [0x00, 1, (byte)'a', 0x00, 0xFF]
@@ -565,7 +563,7 @@ public class Dhcpv6MessageCodecTests
     {
         Dhcpv6Message message = new();
         // One whole "ok" instance (2-octet length 2, then "ok"), then a length field (5) claiming
-        // more data than actually follows.
+        // more data than follows.
         message.SetRawOption(
             (ushort)Dhcpv6OptionCodeEnum.UserClass,
             [0x00, 0x02, (byte)'o', (byte)'k', 0x00, 0x05, (byte)'x']

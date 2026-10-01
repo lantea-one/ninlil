@@ -7,60 +7,54 @@ using System.Net.Sockets;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.22's IA Prefix (IAPREFIX) option: one specific
-///     prefix a server has delegated (or a client is requesting/renewing), plus that prefix's own
-///     preferred/valid lifetimes -- the Prefix Delegation analogue of
-///     <see cref="Dhcpv6IdentityAssociationAddress" />. This option is never carried at a
-///     message's own top level -- it is always nested inside an
-///     <see cref="Dhcpv6IdentityAssociationForPrefixDelegation" /> option's own options area.
+///     This class represents RFC 8415 Section 21.22's IA Prefix (IAPREFIX) option: one prefix a
+///     server has delegated (or a client is requesting or renewing) with its preferred and valid
+///     lifetimes, the prefix counterpart of <see cref="Dhcpv6IdentityAssociationAddress" />. It
+///     only appears nested inside a <see cref="Dhcpv6IdentityAssociationForPrefixDelegation" />
+///     option.
 /// </summary>
 public class Dhcpv6IdentityAssociationPrefix
 {
     /// <summary>
-    ///     This constant contains the fixed portion of this option's own wire size -- the two
-    ///     4-byte lifetime fields, the 1-byte prefix length, and the 16-byte prefix itself --
-    ///     before its own nested options area.
+    ///     This constant contains the length of the fixed part (two 4-byte lifetimes, the 1-byte
+    ///     prefix length and the 16-byte prefix) before the nested options.
     /// </summary>
     private const int FixedLength = 25;
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the prefix
-    ///     remains preferred -- RFC 8415 Section 21.22's "preferred-lifetime" field, in seconds
-    ///     on the wire.
+    ///     This property contains how long after this option is sent the prefix stays preferred.
+    ///     This is RFC 8415 Section 21.22's "preferred-lifetime" field, in whole seconds on the
+    ///     wire.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the prefix
-    ///     remains valid at all -- RFC 8415 Section 21.22's "valid-lifetime" field, in seconds on
-    ///     the wire.
+    ///     This property contains how long after this option is sent the prefix stays valid.
+    ///     This is RFC 8415 Section 21.22's "valid-lifetime" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; }
 
     /// <summary>
     ///     This property contains the number of significant leading bits of <see cref="Prefix" />
-    ///     -- RFC 8415 Section 21.22's own "prefix-length" field.
+    ///     (RFC 8415 Section 21.22's "prefix-length" field).
     /// </summary>
     public byte PrefixLength { get; set; }
 
     /// <summary>
-    ///     This property contains the delegated prefix itself, as a full 128-bit address whose
-    ///     own leading <see cref="PrefixLength" /> bits are significant (its trailing bits are
-    ///     conventionally zero, per RFC 8415 Section 21.22, though this project does not itself
-    ///     enforce that on decode).
+    ///     This property contains the delegated prefix as a 128-bit address whose leading
+    ///     <see cref="PrefixLength" /> bits are significant. The remaining bits should be zero,
+    ///     but decoding does not check this.
     /// </summary>
     public IPAddress Prefix { get; set; }
 
     /// <summary>
-    ///     This property contains this option's own nested options area (RFC 8415 Section 21.22
-    ///     allows one, most commonly a Status Code option reporting a problem with this specific
-    ///     prefix). Empty in the overwhelmingly common case.
+    ///     This property contains the nested options RFC 8415 Section 21.22 allows, usually a
+    ///     Status Code option about this prefix. It is normally empty.
     /// </summary>
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This method decodes an IAPREFIX option's own value bytes (everything after its own
-    ///     option-code/option-len header).
+    ///     This method decodes an IAPREFIX option's value (everything after the option header).
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -103,9 +97,8 @@ public class Dhcpv6IdentityAssociationPrefix
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     option-code/option-len header, which the caller -- <see cref="Dhcpv6MessageOptionExtensions" />
-    ///     -- adds separately).
+    ///     This method encodes this option's value (everything after the option header, which
+    ///     the containing IA_PD adds). It throws when <see cref="Prefix" /> is not IPv6.
     /// </summary>
     internal byte[] Encode()
     {

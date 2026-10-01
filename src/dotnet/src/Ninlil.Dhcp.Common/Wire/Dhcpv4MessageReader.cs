@@ -7,18 +7,14 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class decodes a raw DHCPv4 message off the wire, per RFC 2131 Section 2's
-///     fixed-format header and RFC 2132's tag/length/value options area, into a
-///     <see cref="Dhcpv4Message" />.
+///     This class decodes a DHCPv4 message (the RFC 2131 Section 2 fixed header and the RFC 2132
+///     options) into a <see cref="Dhcpv4Message" />.
 ///     <para>
-///         Unlike <c>Ninlil.Dns.Common.Wire.DnsMessageReader</c>, which throws a
-///         <see cref="FormatException" /> on malformed input, this reader never throws for
-///         malformed or truncated input -- it reports failure through <see cref="TryRead" />'s
-///         own boolean return value instead. DHCPv4 has no shared processing pipeline of its own
-///         yet (the DNS side's <c>DnsQueryProcessingPipeline</c> is what standardizes on catching
-///         a thrown <see cref="FormatException" /> there) for a listener to lean on; a boolean
-///         result that can never itself throw is the simpler, equally safe contract for a
-///         brand-new UDP listener reading arbitrary bytes directly off the network to build on.
+///         Unlike <c>Ninlil.Dns.Common.Wire.DnsMessageReader</c>, which throws
+///         <see cref="FormatException" />, this reader never throws on malformed or truncated
+///         input; <see cref="TryRead" /> returns <see langword="false" /> with a reason. The DNS
+///         side relies on <c>DnsQueryProcessingPipeline</c> catching the exception; the DHCP
+///         listeners have no such pipeline, so a non-throwing result is the simpler contract.
 ///     </para>
 /// </summary>
 public static class Dhcpv4MessageReader
@@ -26,11 +22,11 @@ public static class Dhcpv4MessageReader
     /// <summary>
     ///     This method attempts to decode a complete DHCPv4 message.
     /// </summary>
-    /// <param name="buffer">The raw message bytes, exactly as received from the wire.</param>
+    /// <param name="buffer">The raw message bytes, as received.</param>
     /// <param name="message">On success, the decoded message; on failure, <see langword="null" />.</param>
     /// <param name="failureReason">
-    ///     On failure, a short, human-readable explanation suitable for a diagnostic log message;
-    ///     on success, <see langword="null" />.
+    ///     On failure, a short explanation for a diagnostic log message; on success,
+    ///     <see langword="null" />.
     /// </param>
     /// <returns><see langword="true" /> if <paramref name="buffer" /> decoded successfully.</returns>
     public static bool TryRead(
@@ -45,11 +41,8 @@ public static class Dhcpv4MessageReader
         }
         catch (Exception)
         {
-            // Defense in depth: every bounds check below is meant to catch a malformed or
-            // truncated buffer before it can ever throw, but a brand-new, network-facing parser
-            // reading arbitrary, possibly hostile bytes must never let a bug in one of those
-            // checks escape as an unhandled exception and take down whatever hosts it -- report
-            // failure instead, the same posture TryRead's own contract already promises callers.
+            // Defense in depth: the bounds checks should catch bad input before anything throws,
+            // but a bug in one of them must not let hostile network bytes crash the listener.
             message = null;
             failureReason = "The buffer could not be parsed as a DHCPv4 message.";
             return false;
@@ -57,8 +50,7 @@ public static class Dhcpv4MessageReader
     }
 
     /// <summary>
-    ///     This method does the actual decoding <see cref="TryRead" /> wraps with a single,
-    ///     consistent exception-to-failure translation.
+    ///     This method does the decoding that <see cref="TryRead" /> wraps.
     /// </summary>
     private static bool TryReadCore(
         ReadOnlySpan<byte> buffer,
@@ -98,9 +90,8 @@ public static class Dhcpv4MessageReader
         IPAddress serverIpAddress = new(buffer.Slice(20, 4).ToArray());
         IPAddress relayAgentIpAddress = new(buffer.Slice(24, 4).ToArray());
 
-        // Only the first hlen bytes of the wire format's fixed 16-byte chaddr field are ever
-        // meaningful; the rest is zero-padding Dhcpv4MessageWriter itself adds back on write, so
-        // there is no reason for a reader to surface it too.
+        // Only the first hlen bytes of the 16-byte chaddr field are meaningful; the rest is
+        // padding, which Dhcpv4MessageWriter adds back.
         byte[] rawClientHardwareAddress = buffer
             .Slice(28, Dhcpv4Constants.ClientHardwareAddressFieldLength)
             .ToArray();
@@ -138,11 +129,9 @@ public static class Dhcpv4MessageReader
 
         int offset = Dhcpv4Constants.FixedHeaderLength + Dhcpv4Constants.MagicCookie.Length;
 
-        // Walk the options area one tag at a time. Pad bytes are skipped silently; End stops
-        // parsing outright (anything after it is padding, not another option); anything else
-        // must be followed by a length byte and that many value bytes, both bounds-checked
-        // against the buffer's own real length rather than trusted at face value, since this
-        // buffer may be hostile, truncated, or simply corrupt.
+        // Walk the options one tag at a time. Pad is skipped; End stops parsing (what follows is
+        // padding). Any other tag needs a length byte and that many value bytes, both checked
+        // against the buffer length, since the input may be hostile or truncated.
         while (offset < buffer.Length)
         {
             byte tag = buffer[offset];
@@ -180,10 +169,9 @@ public static class Dhcpv4MessageReader
     }
 
     /// <summary>
-    ///     This method decodes a fixed-size wire field ("sname" or "file") into a string, per RFC
-    ///     2131's own description of both as null-terminated NVT ASCII: everything up to the
-    ///     first zero byte is the real content, and everything from there to the end of the field
-    ///     is zero-padding, not part of the value.
+    ///     This method decodes a fixed-size field ("sname" or "file"), which RFC 2131 defines as
+    ///     null-terminated NVT ASCII: the value ends at the first zero byte, or at the end of the
+    ///     field if there is none.
     /// </summary>
     private static string DecodeFixedAsciiField(byte[] rawField)
     {

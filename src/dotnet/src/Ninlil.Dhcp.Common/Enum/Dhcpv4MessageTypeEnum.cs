@@ -3,11 +3,9 @@ namespace Ninlil.Dhcp.Common.Enum;
 
 /// <summary>
 ///     This enumeration is the value carried by the DHCP Message Type option (RFC 2132 Section
-///     9.6, tag 53) -- the field that actually distinguishes DISCOVER/OFFER/REQUEST/DECLINE/ACK/
-///     NAK/RELEASE/INFORM from one another. RFC 2131 Section 2's own "op" field
-///     (<see cref="Dhcpv4OperationCodeEnum" />) only ever distinguishes a client-originated
-///     request from a server-originated reply, so this option is what a real DHCP exchange
-///     actually keys its state machine on.
+///     9.6, tag 53), which tells DISCOVER, OFFER, REQUEST, DECLINE, ACK, NAK, RELEASE and INFORM
+///     apart. The RFC 2131 "op" header field (<see cref="Dhcpv4OperationCodeEnum" />) only
+///     separates requests from replies, so the server's handling keys on this option.
 /// </summary>
 public enum Dhcpv4MessageTypeEnum : byte
 {

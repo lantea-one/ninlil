@@ -7,57 +7,52 @@ namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
 ///     This class represents RFC 8415 Section 21.21's Identity Association for Prefix Delegation
-///     (IA_PD) option -- the Prefix Delegation analogue of
-///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />: a container identified by
-///     a client-chosen IAID, carrying the same T1/T2 renewal timers plus a nested options area,
-///     but nesting <see cref="Dhcpv6IdentityAssociationPrefix" /> options rather than
-///     <see cref="Dhcpv6IdentityAssociationAddress" /> ones.
+///     (IA_PD) option, the prefix counterpart of
+///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />: a container named by a
+///     client-chosen IAID, with T1/T2 timers and nested options, holding
+///     <see cref="Dhcpv6IdentityAssociationPrefix" /> options instead of addresses.
 /// </summary>
 public class Dhcpv6IdentityAssociationForPrefixDelegation
 {
     /// <summary>
-    ///     This constant contains the fixed portion of this option's own wire size -- the IAID
-    ///     plus the two 4-byte T1/T2 fields -- before its own nested options area.
+    ///     This constant contains the length of the fixed part (the IAID and the 4-byte T1 and T2
+    ///     fields) before the nested options.
     /// </summary>
     private const int FixedLength = 12;
 
     /// <summary>
-    ///     This property contains the client-chosen Identity Association Identifier that names
-    ///     this specific association, unique among all of this client's own IA_NA/IA_TA/IA_PD
-    ///     associations.
+    ///     This property contains the client-chosen Identity Association Identifier (IAID), unique
+    ///     among the client's associations of this type.
     /// </summary>
     public uint IdentityAssociationId { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the client
-    ///     should wait before contacting the server that delegated these prefixes to renew them
-    ///     -- RFC 8415 Section 21.21's own "T1" field, in seconds on the wire.
+    ///     This property contains how long after this option is sent the client should wait
+    ///     before asking the delegating server to renew the prefixes. This is RFC 8415 Section
+    ///     21.21's "T1" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T1 { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the client
-    ///     should wait before contacting any available server to renew these prefixes -- RFC 8415
-    ///     Section 21.21's own "T2" field, in seconds on the wire.
+    ///     This property contains how long after this option is sent the client should wait
+    ///     before asking any server to extend the prefixes. This is RFC 8415 Section 21.21's "T2"
+    ///     field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T2 { get; set; }
 
     /// <summary>
-    ///     This property contains every prefix delegated to (or requested for) this association,
-    ///     decoded from this option's own nested <see cref="Dhcpv6IdentityAssociationPrefix" />
-    ///     options.
+    ///     This property contains the prefixes delegated to (or requested for) this association,
+    ///     decoded from its nested IA Prefix options.
     /// </summary>
     public List<Dhcpv6IdentityAssociationPrefix> Prefixes { get; } = [];
 
     /// <summary>
-    ///     This property contains every other nested option this association carries (most
-    ///     commonly a Status Code option).
+    ///     This property contains the other nested options (usually a Status Code option).
     /// </summary>
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This method decodes an IA_PD option's own value bytes (everything after its own
-    ///     option-code/option-len header).
+    ///     This method decodes an IA_PD option's value (everything after the option header).
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -118,9 +113,9 @@ public class Dhcpv6IdentityAssociationForPrefixDelegation
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     option-code/option-len header, which the caller -- <see cref="Dhcpv6MessageOptionExtensions" />
-    ///     -- adds separately).
+    ///     This method encodes this option's value (everything after the option header, which
+    ///     <see cref="Dhcpv6MessageOptionExtensions" /> adds). <see cref="Prefixes" /> are written
+    ///     before <see cref="Options" />.
     /// </summary>
     internal byte[] Encode()
     {

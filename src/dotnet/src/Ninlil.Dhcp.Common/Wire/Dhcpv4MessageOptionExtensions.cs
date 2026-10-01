@@ -7,22 +7,16 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class provides strongly-typed accessors for the handful of RFC 2132 options a
-///     DHCPv4 exchange cannot function without, layered on top of the raw
-///     <see cref="Dhcpv4Option" /> tag/length/value list every <see cref="Dhcpv4Message" />
-///     carries in <see cref="Dhcpv4Message.Options" />.
+///     This class provides typed accessors for the DHCPv4 options the server and relay agent
+///     work with, on top of the raw <see cref="Dhcpv4Message.Options" /> list, plus
+///     <see cref="TryGetRawOption" /> and <see cref="SetRawOption" /> for any other tag.
 ///     <para>
-///         DHCP's option set is far smaller, and far less structurally varied, than DNS's own
-///         37-type record-data catalog -- most options here are simply "one IPv4 address," "a
-///         list of IPv4 addresses," "a 32-bit integer," or "an NVT ASCII string" -- so this
-///         project does not reach for a polymorphic per-type codec registry the way
-///         <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c> does for DNS record
-///         data. Instead, each option gets one <c>TryGetX</c>/<c>SetX</c> extension-method pair
-///         here, built on a handful of small, shared, private encode/decode primitives for those
-///         few underlying shapes. Adding a new option later needs only one more such pair (or,
-///         for a shape this class has no primitive for yet, one more small primitive plus a pair
-///         built on it) -- no new abstraction, no registration step, and no risk of colliding
-///         with how any other option already works.
+///         Most DHCP options are one of a few shapes (one IPv4 address, a list of them, a 32-bit
+///         integer, an ASCII string), so there is no per-type codec registry like
+///         <c>Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry</c>. Each option gets a
+///         <c>TryGetX</c>/<c>SetX</c> pair built on a few private encode and decode helpers. A
+///         <c>TryGetX</c> method returns <see langword="false" /> when the option is missing or
+///         malformed; a <c>SetX</c> method replaces any existing instance of the option.
 ///     </para>
 /// </summary>
 public static class Dhcpv4MessageOptionExtensions
@@ -155,8 +149,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Router option (tag 3) -- one or more router
-    ///     addresses, in the server's own order of preference.
+    ///     This method attempts to read the Router option (tag 3): one or more router addresses,
+    ///     in order of preference.
     /// </summary>
     public static bool TryGetRouters(
         this Dhcpv4Message message,
@@ -174,8 +168,8 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the Domain Name Server option (tag 6) -- one or more DNS
-    ///     server addresses, in the server's own order of preference.
+    ///     This method attempts to read the Domain Name Server option (tag 6): one or more DNS
+    ///     server addresses, in order of preference.
     /// </summary>
     public static bool TryGetDomainNameServers(
         this Dhcpv4Message message,
@@ -227,8 +221,8 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the TFTP Server Name option (tag 66) -- see
-    ///     <see cref="Dhcpv4OptionTagEnum.TftpServerName" />'s own doc comment.
+    ///     This method attempts to read the TFTP Server Name option (tag 66) as ASCII text (see
+    ///     <see cref="Dhcpv4OptionTagEnum.TftpServerName" />).
     /// </summary>
     public static bool TryGetTftpServerNameOption(
         this Dhcpv4Message message,
@@ -258,8 +252,8 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the Bootfile Name option (tag 67) -- see
-    ///     <see cref="Dhcpv4OptionTagEnum.BootfileName" />'s own doc comment.
+    ///     This method attempts to read the Bootfile Name option (tag 67) as ASCII text (see
+    ///     <see cref="Dhcpv4OptionTagEnum.BootfileName" />).
     /// </summary>
     public static bool TryGetBootfileNameOption(this Dhcpv4Message message, out string bootfileName)
     {
@@ -286,8 +280,8 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the Parameter Request List option (tag 55) -- the raw
-    ///     list of other option tags a client is asking a server to include in its reply.
+    ///     This method attempts to read the Parameter Request List option (tag 55): the option
+    ///     tags a client wants in the reply.
     /// </summary>
     public static bool TryGetParameterRequestList(
         this Dhcpv4Message message,
@@ -320,10 +314,9 @@ public static class Dhcpv4MessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the Client-identifier option (tag 61). Per RFC 2132
-    ///     Section 9.14, this option's value is an opaque type octet followed by at least one
-    ///     more identifier byte (most commonly the client's own hardware address again); this
-    ///     project does not interpret either part further, leaving that to whichever consumer
-    ///     (a real DHCP server engine, matching a reservation by client identifier) needs to.
+    ///     Section 9.14, the value is a type octet followed by at least one identifier byte
+    ///     (usually the hardware address again). Values shorter than 2 bytes count as absent;
+    ///     the bytes are not interpreted further here.
     /// </summary>
     public static bool TryGetClientIdentifier(
         this Dhcpv4Message message,
@@ -343,7 +336,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Client-identifier option (tag 61).
+    ///     This method sets the Client-identifier option (tag 61). The value must be at least 2
+    ///     bytes.
     /// </summary>
     public static void SetClientIdentifier(this Dhcpv4Message message, byte[] clientIdentifier)
     {
@@ -357,11 +351,10 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Vendor Class Identifier option (tag 60), per RFC 2132
-    ///     Section 9.13 -- an opaque string a client uses to identify its own vendor/hardware
-    ///     class. This project treats it as raw ASCII text, exactly like <see cref="TryGetHostName" />
-    ///     already does for the Host Name option, and applies no further structure to it (RFC 2132
-    ///     itself does not define one).
+    ///     This method attempts to read the Vendor Class Identifier option (tag 60, RFC 2132
+    ///     Section 9.13), an opaque string naming the client's vendor or hardware class. It is
+    ///     read as ASCII text, like <see cref="TryGetHostName" />; RFC 2132 defines no further
+    ///     structure.
     /// </summary>
     public static bool TryGetVendorClassIdentifier(
         this Dhcpv4Message message,
@@ -394,11 +387,10 @@ public static class Dhcpv4MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read the User Class option (tag 77), per RFC 3004 Section 3 --
-    ///     one or more "User Class Data" instances packed back-to-back, each its own one-byte
-    ///     length followed by that many bytes of opaque ASCII text (no type octet, unlike RFC
-    ///     3046's own sub-option TLV shape below -- RFC 3004's own instances are simply
-    ///     length-prefixed).
+    ///     This method attempts to read the User Class option (tag 77, RFC 3004 Section 3): one or
+    ///     more "User Class Data" instances back to back, each a one-byte length followed by that
+    ///     many bytes, read as ASCII. Unlike the RFC 3046 sub-options below, there is no type
+    ///     octet.
     /// </summary>
     public static bool TryGetUserClasses(
         this Dhcpv4Message message,
@@ -421,9 +413,8 @@ public static class Dhcpv4MessageOptionExtensions
             int length = option.Data[offset];
             offset++;
 
-            // A malformed instance (its own declared length runs past the end of the option's
-            // data) is not sensible to partially trust -- stop, keeping whatever whole instances
-            // were already decoded rather than throwing away the entire option.
+            // On a zero length or one that runs past the end, stop and keep the instances
+            // already decoded rather than discarding the whole option.
             if (length == 0 || offset + length > option.Data.Length)
                 break;
 
@@ -474,21 +465,21 @@ public static class Dhcpv4MessageOptionExtensions
 
     /// <summary>
     ///     This constant contains RFC 3046 Section 2.1's Agent Circuit ID sub-option tag, nested
-    ///     inside the Relay Agent Information option's own value.
+    ///     inside the Relay Agent Information option.
     /// </summary>
     private const byte RelayAgentCircuitIdSubOption = 1;
 
     /// <summary>
     ///     This constant contains RFC 3046 Section 2.2's Agent Remote ID sub-option tag, nested
-    ///     inside the Relay Agent Information option's own value.
+    ///     inside the Relay Agent Information option.
     /// </summary>
     private const byte RelayAgentRemoteIdSubOption = 2;
 
     /// <summary>
     ///     This method attempts to read the Agent Circuit ID sub-option (RFC 3046 Section 2.1)
-    ///     nested inside the Relay Agent Information option (tag 82). This project only ever reads
-    ///     this from an already-relayed inbound packet -- see <see cref="Dhcpv4OptionTagEnum.RelayAgentInformation" />'s
-    ///     own doc comment for why this project never writes it.
+    ///     nested inside the Relay Agent Information option (tag 82). The server engine reads it
+    ///     from relayed requests for tag rules (see
+    ///     <see cref="Dhcpv4OptionTagEnum.RelayAgentInformation" />).
     /// </summary>
     public static bool TryGetRelayAgentCircuitId(
         this Dhcpv4Message message,
@@ -503,11 +494,11 @@ public static class Dhcpv4MessageOptionExtensions
         TryFindRelayAgentSubOption(message, RelayAgentRemoteIdSubOption, out remoteId);
 
     /// <summary>
-    ///     This method sets the Relay Agent Information option (tag 82) from an Agent Circuit ID
-    ///     and/or Agent Remote ID sub-option -- used both by this project's own relay agent
-    ///     (<c>Ninlil.Dhcp.Server.Relay</c>) to add its own operator-configured Circuit ID/Remote
-    ///     ID to every request it forwards, and by this project's own test suite to construct a
-    ///     realistic relayed request.
+    ///     This method sets the Relay Agent Information option (tag 82) from an Agent Circuit ID,
+    ///     an Agent Remote ID, or both; at least one must be non-empty. The relay agent
+    ///     (<c>Ninlil.Dhcp.Server.Relay</c>) uses it to add its configured IDs to forwarded
+    ///     requests, and tests use it to build relayed requests. Each value must fit a one-byte
+    ///     length; a longer value is not rejected and produces a malformed sub-option.
     /// </summary>
     public static void SetRelayAgentInformation(
         this Dhcpv4Message message,
@@ -541,8 +532,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method decodes the Relay Agent Information option's own nested sub-option TLV list
-    ///     and finds a specific sub-option's value by its own sub-option tag.
+    ///     This method walks the Relay Agent Information option's sub-options and returns the
+    ///     value of the first one with the given tag.
     /// </summary>
     private static bool TryFindRelayAgentSubOption(
         Dhcpv4Message message,
@@ -566,8 +557,7 @@ public static class Dhcpv4MessageOptionExtensions
             byte length = option.Data[offset + 1];
             offset += 2;
 
-            // A malformed sub-option (its own declared length runs past the end of the option's
-            // data) leaves nothing sensible to trust for any sub-option after it either.
+            // A sub-option whose length runs past the end leaves nothing after it to trust.
             if (offset + length > option.Data.Length)
                 break;
 
@@ -585,11 +575,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read an arbitrary option's raw value bytes by its own numeric
-    ///     tag, with no type-specific decoding -- used by custom option delivery and tag-based
-    ///     conditional option delivery (<c>Ninlil.Dhcp.Server.Core</c>), which both hand an
-    ///     operator-configured raw tag/value pair through unchanged rather than needing this
-    ///     project to understand every possible option's own shape.
+    ///     This method attempts to read any option's raw value by tag, with no decoding. It is the
+    ///     reading counterpart of <see cref="SetRawOption" />.
     /// </summary>
     public static bool TryGetRawOption(this Dhcpv4Message message, byte tag, out byte[] data)
     {
@@ -609,16 +596,17 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets (replacing any existing instance of the same tag, per <see cref="SetOption" />'s
-    ///     own doc comment) an arbitrary option's raw value bytes by its own numeric tag -- the
-    ///     same use case <see cref="TryGetRawOption" /> documents.
+    ///     This method sets any option's raw value by tag, replacing an existing instance. Custom
+    ///     options and tag-rule options (<c>Dhcpv4OptionOverlayService</c>) use it to pass
+    ///     configured tag/value pairs through unchanged. A <see langword="null" /> value is stored
+    ///     as empty.
     /// </summary>
     public static void SetRawOption(this Dhcpv4Message message, byte tag, byte[] data) =>
         SetOption(message, (Dhcpv4OptionTagEnum)tag, data ?? []);
 
     /// <summary>
-    ///     This method finds the first (and, in a well-formed message, only) option carrying a
-    ///     given tag, or <see langword="null" /> if the message carries none.
+    ///     This method finds the first (in a well-formed message, the only) option with a given
+    ///     tag, or <see langword="null" /> if there is none.
     /// </summary>
     private static Dhcpv4Option FindOption(Dhcpv4Message message, Dhcpv4OptionTagEnum tag)
     {
@@ -633,9 +621,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method replaces (or adds, if absent) the option carrying a given tag. A message
-    ///     is only ever meant to carry one instance of a given option, so any existing one is
-    ///     removed first rather than left behind alongside the new value.
+    ///     This method replaces (or adds) the option with a given tag. A message should carry one
+    ///     instance of an option, so existing ones are removed first.
     /// </summary>
     private static void SetOption(Dhcpv4Message message, Dhcpv4OptionTagEnum tag, byte[] data)
     {
@@ -675,9 +662,8 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to decode an option value that packs one or more IPv4 addresses
-    ///     back-to-back, per RFC 2132's own description of the Router/Domain Name Server options
-    ///     (and several others this project does not yet give a typed accessor for).
+    ///     This method attempts to decode a value of one or more IPv4 addresses back to back, the
+    ///     shape RFC 2132 gives the Router and Domain Name Server options among others.
     /// </summary>
     private static bool TryDecodeIpAddressList(
         Dhcpv4Option option,
@@ -700,7 +686,7 @@ public static class Dhcpv4MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method encodes one or more IPv4 addresses back-to-back into an option value.
+    ///     This method encodes one or more IPv4 addresses back to back into an option value.
     /// </summary>
     private static byte[] EncodeIpAddressList(
         IReadOnlyList<IPAddress> addresses,

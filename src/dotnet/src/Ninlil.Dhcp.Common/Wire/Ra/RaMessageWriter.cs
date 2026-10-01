@@ -6,22 +6,20 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class encodes a <see cref="RouterSolicitationMessage" />/
-///     <see cref="RouterAdvertisementMessage" /> into the raw bytes a real ICMPv6 socket sends --
-///     the Router Advertisement analogue of <see cref="Dhcpv6MessageWriter" />.
+///     This class encodes a <see cref="RouterSolicitationMessage" /> or
+///     <see cref="RouterAdvertisementMessage" /> into the bytes sent on a raw ICMPv6 socket. It is
+///     the Router Advertisement counterpart of <see cref="Dhcpv6MessageWriter" />, and throws on
+///     options or timers that do not fit their fields.
 ///     <para>
-///         <b>The ICMPv6 checksum field is always written as zero</b>: per RFC 3542 Section 3.1,
-///         the kernel computes and fills in the real checksum for an outgoing datagram sent over
-///         a raw ICMPv6 socket itself, using the surrounding IPv6 pseudo-header this per-datagram
-///         encode has no access to -- writing anything else here would simply be overwritten (or,
-///         on a platform that does not overwrite it, would be wrong, since this class has no
-///         pseudo-header to compute a real value from either way).
+///         <b>The ICMPv6 checksum is written as zero.</b> Per RFC 3542 Section 3.1 the kernel
+///         computes the checksum for a raw ICMPv6 socket, using the IPv6 pseudo-header this class
+///         does not have.
 ///     </para>
 /// </summary>
 public static class RaMessageWriter
 {
     /// <summary>
-    ///     This method encodes a Router Solicitation message into its own raw wire bytes.
+    ///     This method encodes a Router Solicitation message.
     /// </summary>
     /// <param name="message">The message to encode.</param>
     /// <returns>The encoded datagram bytes.</returns>
@@ -35,7 +33,7 @@ public static class RaMessageWriter
 
         WriteCommonHeader(buffer, RaMessageTypeEnum.RouterSolicitation);
 
-        // RFC 4861 Section 4.1's own 4-byte reserved field -- always written as zero.
+        // RFC 4861 Section 4.1's 4-byte reserved field, written as zero.
         buffer.GetSpan(RaConstants.RouterSolicitationFixedBodyLength).Clear();
         buffer.Advance(RaConstants.RouterSolicitationFixedBodyLength);
 
@@ -45,7 +43,7 @@ public static class RaMessageWriter
     }
 
     /// <summary>
-    ///     This method encodes a Router Advertisement message into its own raw wire bytes.
+    ///     This method encodes a Router Advertisement message.
     /// </summary>
     /// <param name="message">The message to encode.</param>
     /// <returns>The encoded datagram bytes.</returns>
@@ -89,22 +87,23 @@ public static class RaMessageWriter
     }
 
     /// <summary>
-    ///     This method writes the 4-byte ICMPv6 header (type, code, and a zeroed checksum -- see
-    ///     this class's own doc comment for why) shared by both message types.
+    ///     This method writes the 4-byte ICMPv6 header: type, code and a zeroed checksum (see the
+    ///     class summary).
     /// </summary>
     private static void WriteCommonHeader(ArrayBufferWriter<byte> buffer, RaMessageTypeEnum type)
     {
         Span<byte> header = buffer.GetSpan(RaConstants.Icmpv6HeaderLength);
         header[0] = (byte)type;
         header[1] = 0; // ICMPv6 code, always 0 for both message types this codec writes.
-        header[2] = 0; // Checksum, high byte -- see this class's own doc comment.
+        header[2] = 0; // Checksum, high byte; the kernel fills it in.
         header[3] = 0; // Checksum, low byte.
         buffer.Advance(RaConstants.Icmpv6HeaderLength);
     }
 
     /// <summary>
-    ///     This method writes a Neighbor Discovery options area, per RFC 4861 Section 4.6's own
-    ///     1-byte type/1-byte length (in 8-octet units, inclusive of this 2-byte header) framing.
+    ///     This method writes a Neighbor Discovery options area with the RFC 4861 Section 4.6
+    ///     framing (1-byte type, 1-byte length in 8-octet units including the header). Each
+    ///     option's total length must be a multiple of 8 and at most 255 units.
     /// </summary>
     private static void WriteOptions(ArrayBufferWriter<byte> buffer, List<RaOption> options)
     {
@@ -137,9 +136,8 @@ public static class RaMessageWriter
     }
 
     /// <summary>
-    ///     This method converts a lifetime to the unsigned 16-bit number of seconds RFC 4861's own
-    ///     Router Lifetime field writes it as, throwing rather than silently truncating a value
-    ///     this project should never itself produce.
+    ///     This method converts a lifetime to the unsigned 16-bit seconds of the RFC 4861 Router
+    ///     Lifetime field, throwing on a negative or too-large value rather than truncating it.
     /// </summary>
     private static ushort ToWireSeconds16(TimeSpan lifetime)
     {
@@ -156,8 +154,8 @@ public static class RaMessageWriter
     }
 
     /// <summary>
-    ///     This method converts a duration to the unsigned 32-bit number of milliseconds RFC
-    ///     4861's own Reachable Time/Retrans Timer fields write it as.
+    ///     This method converts a duration to the unsigned 32-bit milliseconds of the RFC 4861
+    ///     Reachable Time and Retrans Timer fields, throwing when it does not fit.
     /// </summary>
     private static uint ToWireMilliseconds(TimeSpan value)
     {

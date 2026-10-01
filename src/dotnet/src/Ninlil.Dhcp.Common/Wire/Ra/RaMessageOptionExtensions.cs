@@ -7,10 +7,12 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class provides strongly-typed accessors for the handful of RFC 4861/RFC 8106 options
-///     a Router Solicitation/Advertisement exchange actually needs -- the Router Advertisement
-///     analogue of <see cref="Dhcpv6MessageOptionExtensions" />, following the exact same "one raw
-///     options list, typed accessors filter it on demand" shape.
+///     This class provides typed accessors for the Neighbor Discovery options (RFC 4861, RFC 4191,
+///     RFC 8106) used in Router Solicitations and Advertisements. It is the Router Advertisement
+///     counterpart of <see cref="Dhcpv6MessageOptionExtensions" />: the message keeps one raw
+///     options list, <c>TryGetX</c> returns <see langword="false" /> for a missing or malformed
+///     option, <c>SetX</c> replaces an existing one, and the repeatable Prefix Information and
+///     Route Information options are appended with <c>AddX</c>.
 /// </summary>
 public static class RaMessageOptionExtensions
 {
@@ -33,7 +35,7 @@ public static class RaMessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the Source Link-Layer Address option (RFC 4861 Section
-    ///     4.6.1, type 1) a Router Advertisement carries -- this router's own link-layer address.
+    ///     4.6.1, type 1) of a Router Advertisement: the router's link-layer address.
     /// </summary>
     public static bool TryGetSourceLinkLayerAddress(
         this RouterAdvertisementMessage message,
@@ -61,7 +63,7 @@ public static class RaMessageOptionExtensions
             return false;
         }
 
-        // The option's own value is a 2-byte reserved field followed by the 4-byte MTU itself.
+        // The value is a 2-byte reserved field followed by the 4-byte MTU.
         mtu = BinaryPrimitives.ReadUInt32BigEndian(option.Data.AsSpan(2, 4));
         return true;
     }
@@ -78,8 +80,8 @@ public static class RaMessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read every Prefix Information option (RFC 4861 Section 4.6.2,
-    ///     type 3) a Router Advertisement carries -- a message can carry more than one (a router
-    ///     advertising several distinct on-link prefixes at once).
+    ///     type 3) in a Router Advertisement; there can be several. A malformed one is skipped,
+    ///     and the method returns <see langword="false" /> when none decodes.
     /// </summary>
     public static bool TryGetPrefixInformationOptions(
         this RouterAdvertisementMessage message,
@@ -117,8 +119,8 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method appends one more Prefix Information option -- appends, rather than
-    ///     replaces, since a message can legitimately carry more than one.
+    ///     This method appends a Prefix Information option. It appends rather than replaces,
+    ///     since a message can carry several.
     /// </summary>
     public static void AddPrefixInformation(
         this RouterAdvertisementMessage message,
@@ -134,9 +136,8 @@ public static class RaMessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read every Route Information option (RFC 4191 Section 2.3,
-    ///     type 24) a Router Advertisement carries -- a message can carry more than one (a router
-    ///     advertising several distinct routes at once), exactly like
-    ///     <see cref="TryGetPrefixInformationOptions" />.
+    ///     type 24) in a Router Advertisement. Like <see cref="TryGetPrefixInformationOptions" />,
+    ///     it skips malformed ones and returns <see langword="false" /> when none decodes.
     /// </summary>
     public static bool TryGetRouteInformationOptions(
         this RouterAdvertisementMessage message,
@@ -174,8 +175,8 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method appends one more Route Information option -- appends, rather than
-    ///     replaces, since a message can legitimately carry more than one.
+    ///     This method appends a Route Information option. It appends rather than replaces, since
+    ///     a message can carry several.
     /// </summary>
     public static void AddRouteInformation(
         this RouterAdvertisementMessage message,
@@ -189,7 +190,7 @@ public static class RaMessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the Recursive DNS Server option (RFC 8106 Section 5.1,
-    ///     type 25) -- one or more DNS resolver addresses, and how long a host should trust them.
+    ///     type 25): one or more DNS resolver addresses and how long a host may use them.
     /// </summary>
     public static bool TryGetRecursiveDnsServers(
         this RouterAdvertisementMessage message,
@@ -200,7 +201,7 @@ public static class RaMessageOptionExtensions
         RaOption option = FindOption(message.Options, (byte)RaOptionCodeEnum.RecursiveDnsServer);
 
         // RFC 8106 Section 5.1: a 2-byte reserved field, a 4-byte lifetime, then one or more
-        // 16-byte addresses -- at least one address is required for the option to be meaningful.
+        // 16-byte addresses. At least one address is required.
         if (option is not { Data.Length: >= 22 } || (option.Data.Length - 6) % 16 != 0)
         {
             lifetime = default;
@@ -222,7 +223,8 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Recursive DNS Server option (RFC 8106 Section 5.1, type 25).
+    ///     This method sets the Recursive DNS Server option (RFC 8106 Section 5.1, type 25). Every
+    ///     address must be IPv6.
     /// </summary>
     public static void SetRecursiveDnsServers(
         this RouterAdvertisementMessage message,
@@ -255,9 +257,8 @@ public static class RaMessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the DNS Search List option (RFC 8106 Section 5.2, type
-    ///     31) -- one or more DNS search domain suffixes, and how long a host should trust them.
-    ///     See <see cref="RaDnsSearchListOption" />'s own doc comment for its dedicated,
-    ///     compression-free domain-name decoding.
+    ///     31): one or more search domain suffixes and how long a host may use them. See
+    ///     <see cref="RaDnsSearchListOption" /> for the compression-free name decoding.
     /// </summary>
     public static bool TryGetDnsSearchList(
         this RouterAdvertisementMessage message,
@@ -310,8 +311,8 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read a Source Link-Layer Address option's own raw address
-    ///     bytes -- shared by both message types' own public accessors above.
+    ///     This method attempts to read a Source Link-Layer Address option's raw address bytes,
+    ///     for both message types.
     /// </summary>
     private static bool TryGetSourceLinkLayerAddress(
         List<RaOption> options,
@@ -331,8 +332,9 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets a Source Link-Layer Address option's own raw address bytes -- shared
-    ///     by both message types' own public accessors above.
+    ///     This method sets a Source Link-Layer Address option's raw address bytes, for both
+    ///     message types. The bytes are not padded, so their length plus the 2-byte header must
+    ///     be a multiple of 8 (a 6-byte MAC fits) or <see cref="RaMessageWriter" /> throws.
     /// </summary>
     private static void SetSourceLinkLayerAddress(List<RaOption> options, byte[] linkLayerAddress)
     {
@@ -343,8 +345,8 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method converts a lifetime to the unsigned 32-bit number of seconds RFC 8106
-    ///     writes it as.
+    ///     This method converts an RDNSS lifetime to unsigned 32-bit seconds, writing a value at
+    ///     or above <see cref="uint.MaxValue" /> seconds as infinity. A negative value throws.
     /// </summary>
     private static uint ToWireSeconds(TimeSpan lifetime)
     {
@@ -360,18 +362,16 @@ public static class RaMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method finds the first option carrying a given type, or <see langword="null" /> if
-    ///     none is present -- correct for every option this class gives a typed accessor to except
-    ///     Prefix Information, which uses a plain <c>Where</c> filter instead since a message can
-    ///     carry more than one.
+    ///     This method finds the first option with a given type, or <see langword="null" /> if
+    ///     there is none. The repeatable Prefix Information and Route Information options use a
+    ///     <c>Where</c> filter instead.
     /// </summary>
     private static RaOption FindOption(List<RaOption> options, byte type) =>
         options.FirstOrDefault(option => option.Type == type);
 
     /// <summary>
-    ///     This method replaces (or adds, if absent) the option carrying a given type. Used only
-    ///     by the single-instance options above -- Prefix Information is always appended directly
-    ///     instead, since a message can carry more than one.
+    ///     This method replaces (or adds) the option with a given type. It is for single-instance
+    ///     options; Prefix Information and Route Information are appended instead.
     /// </summary>
     private static void SetOption(List<RaOption> options, byte type, byte[] data)
     {

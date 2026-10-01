@@ -4,25 +4,19 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class provides strongly-typed accessors for the options a
-///     <see cref="Dhcpv6RelayMessage" /> actually carries -- the Relay Message option (RFC 8415
-///     Section 21.10, mandatory), the Interface-ID option (RFC 8415 Section 21.18, optional), and
-///     the Remote-ID option (RFC 4649, optional) -- the relay-message sibling of
-///     <see cref="Dhcpv6MessageOptionExtensions" />. Every option here is treated as an opaque byte
-///     string, the same "this project's own wire/transport layer needs no further interpretation"
-///     reasoning <see cref="Dhcpv6OptionCodeEnum.ClientIdentifier" />'s own doc comment already
-///     gives for a DUID -- for the Remote-ID option specifically, this means its own 4-octet
-///     enterprise-number prefix and variable-length remote-id value are kept together as one raw
-///     value rather than split apart, since a tag rule matching it (see
-///     <c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c>) only ever needs
-///     byte-for-byte equality against an operator-configured value, never to inspect either field
-///     individually.
+///     This class provides typed accessors for the options of a <see cref="Dhcpv6RelayMessage" />:
+///     Relay Message (RFC 8415 Section 21.10, mandatory), Interface-ID (RFC 8415 Section 21.18,
+///     optional) and Remote-ID (RFC 4649, optional). It is the relay counterpart of
+///     <see cref="Dhcpv6MessageOptionExtensions" />. All three values are opaque byte strings. The
+///     Remote-ID's 4-octet enterprise number and remote-id value are kept together, because tag
+///     rules (<c>Ninlil.Dhcp.Server.Core.Options.Dhcpv6OptionOverlayService</c>) only compare the
+///     whole value with a configured one.
 /// </summary>
 public static class Dhcpv6RelayMessageOptionExtensions
 {
     /// <summary>
-    ///     This method attempts to read the Relay Message option's own nested payload -- the raw,
-    ///     still-encoded bytes of the message actually being relayed (RFC 8415 Section 21.10).
+    ///     This method attempts to read the Relay Message option's payload: the encoded message
+    ///     being relayed (RFC 8415 Section 21.10).
     /// </summary>
     public static bool TryGetRelayMessagePayload(
         this Dhcpv6RelayMessage message,
@@ -43,8 +37,8 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets (replacing any existing instance) the Relay Message option's own
-    ///     nested payload.
+    ///     This method sets the Relay Message option's payload, replacing any existing one. The
+    ///     payload must not be empty.
     /// </summary>
     public static void SetRelayMessagePayload(this Dhcpv6RelayMessage message, byte[] payload)
     {
@@ -57,8 +51,8 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Interface-ID option's own opaque bytes (RFC 8415
-    ///     Section 21.18).
+    ///     This method attempts to read the Interface-ID option (RFC 8415 Section 21.18). An empty
+    ///     option counts as absent.
     /// </summary>
     public static bool TryGetInterfaceId(this Dhcpv6RelayMessage message, out byte[] interfaceId)
     {
@@ -76,8 +70,8 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets (replacing any existing instance) the Interface-ID option's own opaque
-    ///     bytes.
+    ///     This method sets the Interface-ID option, replacing any existing one. The value must
+    ///     not be empty.
     /// </summary>
     public static void SetInterfaceId(this Dhcpv6RelayMessage message, byte[] interfaceId)
     {
@@ -90,17 +84,16 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Remote-ID option's own raw value bytes (RFC 4649, code
-    ///     37) -- the 4-octet enterprise number and variable-length remote-id value together,
-    ///     unparsed. See this class's own doc comment for why the two fields are not split apart.
+    ///     This method attempts to read the Remote-ID option (RFC 4649, code 37): the 4-octet
+    ///     enterprise number and the remote-id value together, unparsed (see the class summary).
     /// </summary>
     public static bool TryGetRemoteId(this Dhcpv6RelayMessage message, out byte[] remoteId)
     {
         ArgumentNullException.ThrowIfNull(message);
         Dhcpv6Option option = FindOption(message, Dhcpv6OptionCodeEnum.RemoteId);
 
-        // RFC 4649's own wire format always carries at least the 4-octet enterprise number, even
-        // when the relay agent's own remote-id value is empty -- fewer than 4 bytes is malformed.
+        // The option always carries the 4-octet enterprise number, even with an empty remote-id,
+        // so fewer than 4 bytes is malformed.
         if (option is not { Data.Length: >= 4 })
         {
             remoteId = null;
@@ -112,10 +105,9 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets (replacing any existing instance) the Remote-ID option's own raw value
-    ///     bytes (RFC 4649, code 37) -- used only by this project's own test suite to construct a
-    ///     realistic relayed request, since this project never itself originates a RELAY-FORW
-    ///     carrying one (only a real external relay agent would).
+    ///     This method sets the Remote-ID option (RFC 4649, code 37), replacing any existing one.
+    ///     Only tests use it, to build relayed requests: Ninlil's relay agent does not send a
+    ///     Remote-ID; external relay agents do.
     /// </summary>
     public static void SetRemoteId(this Dhcpv6RelayMessage message, byte[] remoteId)
     {

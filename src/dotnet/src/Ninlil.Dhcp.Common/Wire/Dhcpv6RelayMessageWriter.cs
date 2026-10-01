@@ -7,19 +7,16 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class encodes a <see cref="Dhcpv6RelayMessage" /> into the raw bytes RFC 8415 Section
-///     7.1/7.2/21 describes -- the relay-message sibling of <see cref="Dhcpv6MessageWriter" />,
-///     sharing that class's own tag/length/value options-area encoding
-///     (<see cref="Dhcpv6MessageWriter.WriteOptions" />) but not its ordinary client/server
-///     fixed-header shape. Like <see cref="Dhcpv6MessageWriter" />, this writer is only ever
-///     handed a message this project itself constructed, so it validates its input strictly and
-///     throws <see cref="ArgumentException" /> on a shape a caller should never have produced
-///     rather than trying to silently tolerate it.
+///     This class encodes a <see cref="Dhcpv6RelayMessage" /> into bytes (RFC 8415 Sections 7.1,
+///     7.2 and 21). It writes the relay header itself and the options with
+///     <see cref="Dhcpv6MessageWriter.WriteOptions" />. Like <see cref="Dhcpv6MessageWriter" />, it
+///     encodes messages Ninlil builds, so it throws <see cref="ArgumentException" /> on an invalid
+///     shape (wrong message type, missing or non-IPv6 address) instead of tolerating it.
 /// </summary>
 public static class Dhcpv6RelayMessageWriter
 {
     /// <summary>
-    ///     This method encodes a complete RELAY-FORW/RELAY-REPL message.
+    ///     This method encodes a RELAY-FORW or RELAY-REPL message.
     /// </summary>
     /// <param name="message">The message to encode.</param>
     /// <returns>The encoded message, ready to hand to any transport.</returns>

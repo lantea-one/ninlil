@@ -4,65 +4,58 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.OptionCatalog;
 
 /// <summary>
-///     This static class is the read-only, typed metadata catalog of DHCPv4 options this project
-///     knows about -- one <see cref="DhcpOptionCatalogEntry" /> per option, sourced directly from
-///     the IANA BOOTP/DHCP Parameters registry (<c>https://www.iana.org/assignments/bootp-dhcp-parameters/</c>)
-///     and RFC 2132's own defining text, per this project's clean-room rule (see <c>NOTICE.md</c>)
-///     -- never from Technitium's or dnsmasq's own code or documentation, even indirectly.
+///     This static class is the read-only metadata catalog of DHCPv4 options, one
+///     <see cref="DhcpOptionCatalogEntry" /> per option. It is written from the IANA BOOTP/DHCP
+///     Parameters registry (<c>https://www.iana.org/assignments/bootp-dhcp-parameters/</c>) and
+///     the RFC 2132 text, under the clean-room rule in <c>NOTICE.md</c>, never from Technitium's
+///     or dnsmasq's code or documentation.
 ///     <para>
-///         <b>Scope</b>: RFC 2132 defines well over 60 options; this catalog deliberately covers a
-///         pragmatic subset a real home/homelab network operator would plausibly want to
-///         hand-configure, not the whole registry. Excluded, by deliberate choice: every option
-///         this project already computes and delivers automatically through a scope's own
-///         first-class fields with no custom-option detour needed (<c>DhcpScopeEntity.GatewayAddresses</c>/
-///         <c>DnsServerAddresses</c>/<c>SubnetPrefixLength</c> are still included here anyway,
-///         matching <c>DhcpScopeCustomOptionEntity</c>'s own documented "a custom option always
-///         wins over the standard-computed value" precedent -- an operator can legitimately want to
-///         override one); every option that is inherently client-to-server-only information a
-///         server never delivers a value for (Parameter Request List, Client-identifier, Vendor
-///         Class Identifier, User Class, Requested IP Address); every option that is purely
-///         protocol mechanics, already computed/negotiated automatically and never a value an
-///         operator configures (DHCP Message Type, Server Identifier, Message, Maximum DHCP Message
-///         Size, Option Overload, Relay Agent Information); and a long tail of options this RFC
-///         defines for protocols/deployment shapes with no genuine remaining relevance to a modern
-///         home/homelab network -- 1980s/1990s diskless-workstation-era services (Boot File Size,
-///         Merit Dump File, Swap Server, Extensions Path, X Window System Font Server/Display
-///         Manager), legacy application-layer service discovery long since replaced by DNS-based
-///         discovery or simply abandoned (Time Server, IEN-116 Name Server, Cookie Server, LPR
-///         Server, Impress Server, Resource Location Server, SUN NIS Domain/Servers), obsolete
-///         ICMP-era host-autoconfiguration flags DHCP's own Router option superseded decades ago
-///         (Non-Local Source Routing, Policy Filter, All Subnets Are Local, Perform Mask
-///         Discovery/Mask Supplier, Perform Router Discovery, Router Solicitation Address, Trailer/
-///         Ethernet Encapsulation), deprecated Path MTU Discovery tuning (Path MTU Aging
-///         Timeout/Plateau Table), and TCP/ARP stack tuning essentially never set via DHCP in
-///         practice (Maximum Datagram Reassembly Size, Default IP Time-to-live's TCP-adjacent
-///         siblings ARP Cache Timeout/TCP Default TTL/TCP Keepalive Interval/TCP Keepalive
-///         Garbage). None of this is a judgment that these options are invalid or never used
-///         anywhere -- only that they fall outside this catalog's own stated pragmatic-homelab
-///         scope; RFC 2132 §8.4's own site-specific/vendor-extension range (tags 128-254) is
-///         likewise excluded wholesale, since IANA itself assigns no fixed name/shape to any tag
-///         in that range for this catalog to describe. One further named exclusion worth calling
-///         out explicitly: the informally-known "WPAD" proxy-autoconfiguration option (commonly
-///         tag 252 in real-world DHCP server implementations) is <b>not</b> an IANA-assigned or
-///         RFC-defined option at all -- tag 252 falls inside RFC 2132 §8.4's own site-specific
-///         range, and its "WPAD" meaning is purely a widely-adopted implementation convention, not
-///         a real option number this catalog's own IANA/RFC sourcing rule can cite. It is excluded
-///         for exactly that reason, not overlooked.
+///         <b>Scope.</b> RFC 2132 defines over 60 options; this catalog covers the ones a home or
+///         homelab operator is likely to set by hand. Subnet Mask, Router, Domain Name Server and
+///         IP Address Lease Time are normally filled from scope fields, but are listed because a
+///         custom option overrides the computed value (see <c>DhcpScopeCustomOptionEntity</c>).
+///         Left out:
+///         <list type="bullet">
+///             <item>
+///                 Options only clients send (Parameter Request List, Client-identifier, Vendor
+///                 Class Identifier, User Class, Requested IP Address).
+///             </item>
+///             <item>
+///                 Protocol mechanics the server negotiates itself (DHCP Message Type, Server
+///                 Identifier, Message, Maximum DHCP Message Size, Option Overload, Relay Agent
+///                 Information).
+///             </item>
+///             <item>
+///                 Options with no place on a modern home network: diskless-workstation services
+///                 (Boot File Size, Merit Dump File, Swap Server, Extensions Path, X Window System
+///                 Font Server and Display Manager), service discovery long replaced or abandoned
+///                 (Time Server, IEN-116 Name Server, Cookie Server, LPR Server, Impress Server,
+///                 Resource Location Server, SUN NIS Domain and Servers), host flags the Router
+///                 option superseded (Non-Local Source Routing, Policy Filter, All Subnets Are
+///                 Local, Perform Mask Discovery, Mask Supplier, Perform Router Discovery, Router
+///                 Solicitation Address, Trailer and Ethernet Encapsulation), Path MTU Aging
+///                 Timeout and Plateau Table, and TCP/ARP tuning rarely set by DHCP (Maximum
+///                 Datagram Reassembly Size, ARP Cache Timeout, TCP Default TTL, TCP Keepalive
+///                 Interval and Garbage).
+///             </item>
+///             <item>
+///                 The RFC 2132 §8.4 site-specific range (tags 128-254), which has no IANA names
+///                 or shapes. This includes the "WPAD" option that many servers put at tag 252: it
+///                 is a convention, not an IANA or RFC option.
+///             </item>
+///         </list>
+///         Leaving an option out is a scope choice, not a claim that it is invalid. Any tag can
+///         still be configured as a raw custom option.
 ///     </para>
 ///     <para>
-///         <b>"Server-address-eligible" reasoning</b> (see <see cref="DhcpOptionCatalogEntry.IsServerAddressEligible" />):
-///         marked <see langword="true" /> only for an address-shaped option whose value is
-///         plausibly this same box's own address in a real homelab deployment -- Domain Name
-///         Server (this project <i>is</i> a DNS server), TFTP Server Name (this project's own
-///         <c>Ninlil.Dhcp.Server.Tftp</c> genuinely runs a TFTP server), and Network Time Protocol
-///         Servers (a homelab operator who also runs an NTP daemon, e.g. <c>chrony</c>, on this
-///         same host plausibly wants to advertise it the same way, even though Ninlil itself does
-///         not implement NTP). Every other address-shaped option here (Subnet Mask, Router,
-///         Broadcast Address, Static Route, the two NetBIOS server options) is deliberately left
-///         <see langword="false" /> -- a subnet mask/broadcast address is network-derived, not a
-///         server identity; a router/gateway is conventionally a distinct device from this DNS/DHCP
-///         server; and this project implements neither NetBIOS Name Service nor Datagram
-///         Distribution, so offering its own address for either would be actively misleading.
+///         <b>Server-address eligibility</b> (see <see cref="DhcpOptionCatalogEntry.IsServerAddressEligible" />)
+///         is set only for address-shaped options whose value is plausibly this host: Domain Name
+///         Server (Ninlil is a DNS server), TFTP Server Name (<c>Ninlil.Dhcp.Server.Tftp</c> runs a
+///         TFTP server), and Network Time Protocol Servers (an operator may run an NTP daemon such
+///         as <c>chrony</c> on the same host, although Ninlil has no NTP service). Subnet Mask and
+///         Broadcast Address are network values, not a server identity; the router is usually a
+///         different device; and Ninlil has no NetBIOS name or datagram service, so offering its
+///         address for those options would mislead.
 ///     </para>
 /// </summary>
 public static class Dhcpv4OptionCatalog
@@ -73,9 +66,8 @@ public static class Dhcpv4OptionCatalog
     /// </summary>
     public static IReadOnlyList<DhcpOptionCatalogEntry> Entries { get; } =
     [
-        // RFC 2132 §3.3 -- computed automatically from DhcpScopeEntity.SubnetPrefixLength, but
-        // a custom option for this tag can still override it per DhcpScopeCustomOptionEntity's
-        // own documented precedence rule.
+        // RFC 2132 §3.3: normally filled from DhcpScopeEntity.SubnetPrefixLength; a custom option
+        // with this tag overrides it (see DhcpScopeCustomOptionEntity).
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.SubnetMask,
             "Subnet Mask",
@@ -83,8 +75,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.IPv4Address,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §3.5 -- computed automatically from DhcpScopeEntity.GatewayAddresses, same
-        // override precedence as above.
+        // RFC 2132 §3.5: normally filled from DhcpScopeEntity.GatewayAddresses; overridable as
+        // above.
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.Router,
             "Router",
@@ -92,9 +84,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.IPv4AddressList,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §3.8 -- computed automatically from DhcpScopeEntity.DnsServerAddresses, same
-        // override precedence as above. Server-address-eligible: this project is itself a DNS
-        // server.
+        // RFC 2132 §3.8: normally filled from DhcpScopeEntity.DnsServerAddresses; overridable as
+        // above. Server-address eligible because Ninlil is a DNS server.
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.DomainNameServer,
             "Domain Name Server",
@@ -158,11 +149,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.IPv4Address,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §5.8 -- a real wire shape this catalog's own vocabulary does not decompose:
-        // one or more (destination, router) address pairs packed back-to-back. Recorded as
-        // opaque; a future delivery implementation is expected to give it its own dedicated
-        // structured editor rather than forcing it through this catalog's plain address-list
-        // shape.
+        // RFC 2132 §5.8: one or more (destination, router) address pairs back to back. The value
+        // types here cannot describe pairs, so it is entered as raw hex.
         new DhcpOptionCatalogEntry(
             33,
             "Static Route",
@@ -170,9 +158,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.OpaqueHex,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §8.3. Server-address-eligible: a homelab operator running an NTP daemon
-        // (e.g. chrony) on this same host may plausibly want to advertise it here, even though
-        // Ninlil itself implements no NTP service of its own.
+        // RFC 2132 §8.3. Server-address eligible: an operator running an NTP daemon (e.g.
+        // chrony) on this host may want to advertise it, although Ninlil has no NTP service.
         new DhcpOptionCatalogEntry(
             42,
             "Network Time Protocol Servers",
@@ -180,8 +167,7 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.IPv4AddressList,
             IsServerAddressEligible: true
         ),
-        // RFC 2132 §8.4 -- genuinely unstructured by this RFC's own definition (an opaque
-        // vendor-defined byte string).
+        // RFC 2132 §8.4: an opaque, vendor-defined byte string.
         new DhcpOptionCatalogEntry(
             43,
             "Vendor Specific Information",
@@ -189,8 +175,7 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.OpaqueHex,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §8.5. Not server-address-eligible: this project implements no NetBIOS Name
-        // Service of its own.
+        // RFC 2132 §8.5. Not server-address eligible: Ninlil has no NetBIOS Name Service.
         new DhcpOptionCatalogEntry(
             44,
             "NetBIOS over TCP/IP Name Server",
@@ -198,8 +183,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.IPv4AddressList,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §8.6. Not server-address-eligible: this project implements no NetBIOS
-        // Datagram Distribution Service of its own.
+        // RFC 2132 §8.6. Not server-address eligible: Ninlil has no NetBIOS Datagram
+        // Distribution Service.
         new DhcpOptionCatalogEntry(
             45,
             "NetBIOS over TCP/IP Datagram Distribution Server",
@@ -223,9 +208,8 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.String,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §9.2 -- computed automatically from DhcpScopeEntity.DefaultLeaseDuration/
-        // MaxLeaseDuration, same override precedence as Subnet Mask/Router/Domain Name Server
-        // above.
+        // RFC 2132 §9.2: normally computed from DhcpScopeEntity.DefaultLeaseDuration and
+        // MaxLeaseDuration; overridable like Subnet Mask, Router and Domain Name Server.
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.IpAddressLeaseTime,
             "IP Address Lease Time",
@@ -249,11 +233,10 @@ public static class Dhcpv4OptionCatalog
             DhcpOptionValueTypeEnum.Duration,
             IsServerAddressEligible: false
         ),
-        // RFC 2132 §9.4. Server-address-eligible: this project's own Ninlil.Dhcp.Server.Tftp
-        // genuinely runs a real TFTP server -- unlike Domain Name Server/NTP Servers above,
-        // this is modeled as a single address (RFC 2132 describes it as "a string", but this
-        // project's own Dhcpv4OptionDeliveryService already always populates it from a single
-        // resolved IPv4Address, matching real-world usage).
+        // RFC 2132 §9.4. Server-address eligible: Ninlil.Dhcp.Server.Tftp runs a TFTP server.
+        // Modeled as a single IPv4 address, although RFC 2132 defines the value as a string and
+        // Dhcpv4OptionDeliveryService sends the address in text form; a value entered or
+        // substituted through this entry is sent as 4 binary octets.
         new DhcpOptionCatalogEntry(
             (int)Dhcpv4OptionTagEnum.TftpServerName,
             "TFTP Server Name",

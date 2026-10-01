@@ -6,13 +6,13 @@ using Ninlil.Dhcp.Common.Wire.Ra;
 namespace Ninlil.Dhcp.Common.Tests;
 
 /// <summary>
-///     This test class proves <see cref="RaMessageWriter" />/<see cref="RaMessageReader" />
-///     round-trip a <see cref="RouterSolicitationMessage" />/<see cref="RouterAdvertisementMessage" />
-///     correctly, purely in memory -- no socket involved, the Router Advertisement analogue of
-///     <see cref="Dhcpv6MessageCodecTests" />. The real, root-run privileged-socket proof lives in
-///     a throwaway scratchpad console app, per this sub-phase's own doc comment on why a raw
-///     ICMPv6 socket has no unprivileged equivalent an automated test could exercise instead (see
-///     <c>Ninlil.Dhcp.Protocol.Ra.Icmpv6RaListener</c>'s own doc comment).
+///     This test class checks that <see cref="RaMessageWriter" /> and <see cref="RaMessageReader" />
+///     round-trip a <see cref="RouterSolicitationMessage" /> and a
+///     <see cref="RouterAdvertisementMessage" /> with their options, in memory with no socket, and
+///     that malformed input is rejected or the bad option skipped. It is the Router Advertisement
+///     counterpart of <see cref="Dhcpv6MessageCodecTests" />. The raw ICMPv6 socket needs
+///     <c>CAP_NET_RAW</c>; <c>Icmpv6RaListenerLiveServiceControlTests</c> exercises it when that
+///     is available (see <c>Ninlil.Dhcp.Protocol.Ra.Icmpv6RaListener</c>).
 /// </summary>
 public class RaMessageCodecTests
 {
@@ -212,9 +212,8 @@ public class RaMessageCodecTests
 
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // The option's own total length (2-byte header + 6-byte reserved/lifetime + domain
-        // portion) must land on an 8-octet-unit boundary, per RFC 4861 Section 4.6's own general
-        // option framing.
+        // The option's total length (2-byte header, 6-byte reserved and lifetime, the names) must
+        // be a multiple of 8 octets (RFC 4861 Section 4.6).
         Assert.Equal(0, bytes.Length % RaConstants.OptionLengthUnitBytes);
 
         Assert.True(
@@ -238,9 +237,7 @@ public class RaMessageCodecTests
     [Fact]
     public void RouterAdvertisement_RoundTrips_DnsSearchListWithASingleShortDomain()
     {
-        // A single short domain name (well under the 8-octet padding boundary) exercises this
-        // option's own zero-padding path -- the domain-name portion here is nowhere near a
-        // multiple of 8 bytes on its own, so the encoder must pad it out.
+        // One short domain name is not a multiple of 8 bytes, so this exercises the zero padding.
         RouterAdvertisementMessage advertisement = new();
         advertisement.SetDnsSearchList(TimeSpan.FromSeconds(600), ["a.io"]);
 
@@ -267,9 +264,8 @@ public class RaMessageCodecTests
     [Fact]
     public void RouterAdvertisement_RoundTrips_DnsSearchListAlongsideRdnssAndPrefixInformation()
     {
-        // A real advertisement carries several options together -- proving DNSSL decodes
-        // correctly when it is not the only (or the last) option in the message guards against a
-        // length/offset mistake that only a single-option test would miss.
+        // With DNSSL among other options (and not last), a length or offset mistake that a
+        // single-option test would miss shows up.
         RouterAdvertisementMessage advertisement = new();
         advertisement.AddPrefixInformation(
             new RaPrefixInformationOption
@@ -414,8 +410,8 @@ public class RaMessageCodecTests
 
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // Every option's own total length (header plus value) must land on an 8-octet-unit
-        // boundary, per RFC 4861 Section 4.6's own general option framing.
+        // Every option's total length (header plus value) must be a multiple of 8 octets (RFC
+        // 4861 Section 4.6).
         Assert.Equal(0, bytes.Length % RaConstants.OptionLengthUnitBytes);
 
         Assert.True(
@@ -482,17 +478,14 @@ public class RaMessageCodecTests
         );
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // The Route Information option starts right after the 4-byte ICMPv6 header and 12-byte
-        // Router Advertisement body (byte 16 is its own Type, byte 17 its own Length); byte 19 is
-        // its own packed reserved/preference/reserved byte -- overwrite it with RFC 4191 Section
-        // 2.1's own reserved two-bit pattern (binary 10, packed at bits 3-4) that "MUST NOT be
-        // sent."
+        // The Route Information option starts after the 4-byte ICMPv6 header and the 12-byte
+        // body (byte 16 is its Type, byte 17 its Length). Byte 19 holds the preference; set it
+        // to the reserved pattern binary 10 (at bits 3-4), which RFC 4191 Section 2.1 says "MUST
+        // NOT be sent".
         bytes[19] = 0b0001_0000;
 
-        // The message as a whole still decodes fine -- this is a real DNS/ND-style tolerant
-        // decode, where one malformed option is silently dropped rather than failing the entire
-        // message, exactly like an unparseable Prefix Information/DNS Search List option already
-        // is.
+        // The message still decodes; the malformed option is skipped rather than failing the
+        // whole message, as with a bad Prefix Information or DNS Search List option.
         Assert.True(
             RaMessageReader.TryReadRouterAdvertisement(
                 bytes,
@@ -519,10 +512,8 @@ public class RaMessageCodecTests
         );
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // Byte 18 is this option's own Prefix Length value byte -- overwrite the real value (64,
-        // which legitimately carries 8 prefix octets) with 0, which RFC 4191 Section 2.3 requires
-        // to carry zero prefix octets instead. The option's own on-wire octet count (unaffected by
-        // this edit) no longer matches what its own Prefix Length claims.
+        // Byte 18 is the Prefix Length. Changing 64 (8 prefix octets) to 0 leaves 8 prefix
+        // octets for a length the decoder accepts only with none, so the option is skipped.
         bytes[18] = 0;
 
         Assert.True(
@@ -589,7 +580,7 @@ public class RaMessageCodecTests
     public void TryReadRouterAdvertisement_RejectsANonZeroIcmpv6Code()
     {
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(new RouterAdvertisementMessage());
-        bytes[1] = 1; // Corrupt the ICMPv6 "code" field, which RFC 4861 always requires to be 0.
+        bytes[1] = 1; // Corrupt the ICMPv6 "code" field, which RFC 4861 requires to be 0.
 
         Assert.False(
             RaMessageReader.TryReadRouterAdvertisement(
@@ -626,8 +617,8 @@ public class RaMessageCodecTests
         advertisement.SetMtu(1500);
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // Corrupt the MTU option's own length field (immediately after the 12-byte fixed body) to
-        // zero -- a real, malformed-input shape RFC 4861 Section 4.6 forbids outright.
+        // Set the MTU option's length field (right after the 12-byte fixed body) to zero, which
+        // RFC 4861 Section 4.6 forbids.
         bytes[16 + 1] = 0;
 
         Assert.False(
@@ -648,8 +639,7 @@ public class RaMessageCodecTests
         advertisement.SetMtu(1500);
         byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
 
-        // Corrupt the MTU option's own length field to claim far more data than the datagram
-        // actually carries.
+        // Set the MTU option's length field to claim far more data than the datagram carries.
         bytes[16 + 1] = 0xff;
 
         Assert.False(

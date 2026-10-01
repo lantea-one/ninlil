@@ -7,35 +7,34 @@ using System.Net.Sockets;
 namespace Ninlil.Dhcp.Common.Wire.Ra;
 
 /// <summary>
-///     This class represents RFC 4861 Section 4.6.2's Prefix Information option: one on-link
-///     prefix this router advertises, plus its own on-link/autonomous flags and lifetimes -- the
-///     option a host's own RFC 4862 Stateless Address Autoconfiguration logic reads to decide
-///     which prefix(es) to self-configure an address from.
+///     This class represents RFC 4861 Section 4.6.2's Prefix Information option: one prefix this
+///     router advertises, with its on-link and autonomous flags and lifetimes. Hosts use it for
+///     RFC 4862 Stateless Address Autoconfiguration (SLAAC) to decide which prefixes to build
+///     addresses from.
 /// </summary>
 public class RaPrefixInformationOption
 {
     /// <summary>
-    ///     This constant contains the fixed value length of this option, in bytes -- everything
-    ///     after its own 2-byte type/length header: a 1-byte prefix length, a 1-byte flags field,
-    ///     two 4-byte lifetime fields, a 4-byte reserved field, and the 16-byte prefix itself.
+    ///     This constant contains the value length of this option in bytes (after the 2-byte
+    ///     header): a 1-byte prefix length, a 1-byte flags field, two 4-byte lifetimes, a 4-byte
+    ///     reserved field and the 16-byte prefix.
     /// </summary>
     private const int FixedLength = 30;
 
     /// <summary>
-    ///     RFC 4861 Section 4.6.2's own "L" (on-link) flag bit, within this option's own 1-byte
-    ///     flags field.
+    ///     RFC 4861 Section 4.6.2's "L" (on-link) flag bit in the flags field.
     /// </summary>
     private const byte OnLinkFlagBit = 0b1000_0000;
 
     /// <summary>
-    ///     RFC 4861 Section 4.6.2's own "A" (autonomous address-configuration) flag bit, within
-    ///     this option's own 1-byte flags field.
+    ///     RFC 4861 Section 4.6.2's "A" (autonomous address-configuration) flag bit in the flags
+    ///     field.
     /// </summary>
     private const byte AutonomousFlagBit = 0b0100_0000;
 
     /// <summary>
-    ///     RFC 4861 Section 4.6.2's own sentinel value meaning "infinite lifetime, never expires"
-    ///     for both <see cref="ValidLifetime" /> and <see cref="PreferredLifetime" />.
+    ///     RFC 4861 Section 4.6.2's all-ones value, meaning an infinite lifetime, for
+    ///     <see cref="ValidLifetime" /> and <see cref="PreferredLifetime" />.
     /// </summary>
     public static readonly TimeSpan InfiniteLifetime = TimeSpan.FromSeconds(uint.MaxValue);
 
@@ -45,41 +44,40 @@ public class RaPrefixInformationOption
     public byte PrefixLength { get; set; }
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.6.2's own "L" flag: hosts on this link may consider
+    ///     This property is RFC 4861 Section 4.6.2's "L" flag: hosts on this link may consider
     ///     <see cref="Prefix" /> on-link (directly reachable without going through a router).
     /// </summary>
     public bool OnLink { get; set; }
 
     /// <summary>
-    ///     This property is RFC 4861 Section 4.6.2's own "A" flag: a host may use
+    ///     This property is RFC 4861 Section 4.6.2's "A" flag: a host may use
     ///     <see cref="Prefix" /> for RFC 4862 Stateless Address Autoconfiguration.
     /// </summary>
     public bool Autonomous { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, an address
-    ///     autoconfigured from <see cref="Prefix" /> remains valid -- RFC 4861 Section 4.6.2's own
-    ///     "Valid Lifetime" field, a 32-bit number of seconds on the wire, or
-    ///     <see cref="InfiniteLifetime" /> for "never expires."
+    ///     This property contains how long after this option is sent the prefix stays valid for
+    ///     on-link determination and for addresses built from it (RFC 4861 Section 4.6.2's "Valid
+    ///     Lifetime", 32-bit seconds on the wire), or <see cref="InfiniteLifetime" />.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, an address
-    ///     autoconfigured from <see cref="Prefix" /> remains preferred -- RFC 4861 Section 4.6.2's
-    ///     own "Preferred Lifetime" field.
+    ///     This property contains how long after this option is sent an address built from
+    ///     <see cref="Prefix" /> stays preferred (RFC 4861 Section 4.6.2's "Preferred Lifetime"),
+    ///     or <see cref="InfiniteLifetime" />.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains the advertised prefix itself, as a full 128-bit address whose
-    ///     own leading <see cref="PrefixLength" /> bits are significant.
+    ///     This property contains the advertised prefix as a 128-bit address whose leading
+    ///     <see cref="PrefixLength" /> bits are significant.
     /// </summary>
     public IPAddress Prefix { get; set; }
 
     /// <summary>
-    ///     This method decodes a Prefix Information option's own value bytes (everything after its
-    ///     own type/length header).
+    ///     This method decodes a Prefix Information option's value (everything after the
+    ///     type/length header), which must be exactly <see cref="FixedLength" /> bytes.
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -116,9 +114,9 @@ public class RaPrefixInformationOption
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     type/length header, which the caller -- <see cref="RaMessageOptionExtensions" /> --
-    ///     adds separately).
+    ///     This method encodes this option's value (everything after the type/length header,
+    ///     which <see cref="RaMessageOptionExtensions" /> adds). It throws when
+    ///     <see cref="Prefix" /> is not IPv6.
     /// </summary>
     internal byte[] Encode()
     {
@@ -145,7 +143,7 @@ public class RaPrefixInformationOption
         BinaryPrimitives.WriteUInt32BigEndian(lifetimes[4..], ToWireSeconds(PreferredLifetime));
         buffer.Advance(8);
 
-        // RFC 4861 Section 4.6.2's own 4-byte reserved field -- always written as zero.
+        // RFC 4861 Section 4.6.2's 4-byte reserved field, written as zero.
         buffer.GetSpan(4).Clear();
         buffer.Advance(4);
 
@@ -156,10 +154,10 @@ public class RaPrefixInformationOption
     }
 
     /// <summary>
-    ///     This method converts a lifetime to the unsigned 32-bit number of seconds RFC 4861
-    ///     writes it as, clamping to <see cref="uint.MaxValue" /> (RFC 4861's own "infinite"
-    ///     sentinel) rather than throwing on an out-of-range value, since
-    ///     <see cref="InfiniteLifetime" /> itself is exactly that boundary value.
+    ///     This method converts a lifetime to unsigned 32-bit seconds. A value at or above
+    ///     <see cref="uint.MaxValue" /> seconds is written as the infinite value rather than
+    ///     rejected, since <see cref="InfiniteLifetime" /> is that boundary. A negative value
+    ///     throws.
     /// </summary>
     private static uint ToWireSeconds(TimeSpan lifetime)
     {

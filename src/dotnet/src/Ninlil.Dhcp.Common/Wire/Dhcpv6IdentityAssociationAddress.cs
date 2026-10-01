@@ -8,51 +8,49 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.6's IA Address (IAADDR) option: one specific
-///     address a server has assigned (or a client is requesting/renewing), plus that address's
-///     own preferred/valid lifetimes. This option is never carried at a message's own top level --
-///     it is always nested inside an <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />
-///     or <see cref="Dhcpv6IdentityAssociationForTemporaryAddresses" /> option's own options area.
+///     This class represents RFC 8415 Section 21.6's IA Address (IAADDR) option: one address a
+///     server has assigned (or a client is requesting or renewing) with its preferred and valid
+///     lifetimes. It only appears nested inside a
+///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" /> or
+///     <see cref="Dhcpv6IdentityAssociationForTemporaryAddresses" /> option.
 /// </summary>
 public class Dhcpv6IdentityAssociationAddress
 {
     /// <summary>
-    ///     This constant contains the fixed portion of this option's own wire size -- the 16-byte
-    ///     address plus the two 4-byte lifetime fields -- before its own nested options area.
+    ///     This constant contains the length of the fixed part (the 16-byte address and the two
+    ///     4-byte lifetimes) before the nested options.
     /// </summary>
     private const int FixedLength = 24;
 
     /// <summary>
-    ///     This property contains the assigned/requested address itself.
+    ///     This property contains the assigned or requested address.
     /// </summary>
     public IPAddress Address { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the address
-    ///     remains preferred (usable for establishing new connections) -- RFC 8415 Section 21.6's
-    ///     "preferred-lifetime" field, in seconds on the wire.
+    ///     This property contains how long after this option is sent the address stays preferred
+    ///     (usable for new connections). This is RFC 8415 Section 21.6's "preferred-lifetime"
+    ///     field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains how long, from the moment this option was sent, the address
-    ///     remains valid at all (existing connections may keep using it, but no new ones should be
-    ///     established once it is no longer preferred) -- RFC 8415 Section 21.6's
-    ///     "valid-lifetime" field, in seconds on the wire.
+    ///     This property contains how long after this option is sent the address stays valid at
+    ///     all (once it is no longer preferred, existing connections may keep using it but new
+    ///     ones should not). This is RFC 8415 Section 21.6's "valid-lifetime" field, in whole
+    ///     seconds on the wire.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains this option's own nested options area (RFC 8415 Section 21.6
-    ///     allows one, most commonly a <see cref="Dhcpv6StatusCodeEnum" />-carrying Status Code
-    ///     option reporting a problem with this specific address). Empty in the overwhelmingly
-    ///     common case.
+    ///     This property contains the nested options RFC 8415 Section 21.6 allows, usually a
+    ///     Status Code option (<see cref="Dhcpv6StatusCodeEnum" />) about this address. It is
+    ///     normally empty.
     /// </summary>
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This method decodes an IAADDR option's own value bytes (everything after its own
-    ///     option-code/option-len header).
+    ///     This method decodes an IAADDR option's value (everything after the option header).
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -94,9 +92,8 @@ public class Dhcpv6IdentityAssociationAddress
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     option-code/option-len header, which the caller -- <see cref="Dhcpv6MessageOptionExtensions" />
-    ///     -- adds separately).
+    ///     This method encodes this option's value (everything after the option header, which
+    ///     the containing IA adds). It throws when <see cref="Address" /> is not IPv6.
     /// </summary>
     internal byte[] Encode()
     {
@@ -119,9 +116,9 @@ public class Dhcpv6IdentityAssociationAddress
     }
 
     /// <summary>
-    ///     This method converts a lifetime to the unsigned 32-bit number of seconds RFC 8415
-    ///     writes it as, throwing rather than silently truncating a value this project should
-    ///     never itself produce.
+    ///     This method converts a lifetime or timer to the unsigned 32-bit seconds RFC 8415 uses.
+    ///     A negative or too-large value throws instead of being truncated; fractional seconds are
+    ///     dropped.
     /// </summary>
     internal static uint ToWireSeconds(TimeSpan lifetime)
     {

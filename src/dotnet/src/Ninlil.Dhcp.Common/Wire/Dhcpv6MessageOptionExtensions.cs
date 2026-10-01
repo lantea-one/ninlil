@@ -8,24 +8,21 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class provides strongly-typed accessors for the handful of RFC 8415 (plus RFC 3646)
-///     options a DHCPv6 exchange cannot function without, layered on top of the raw
-///     <see cref="Dhcpv6Option" /> tag/length/value list every <see cref="Dhcpv6Message" />
-///     carries in <see cref="Dhcpv6Message.Options" /> -- the DHCPv6 analogue of
-///     <see cref="Dhcpv4MessageOptionExtensions" />. Most options here follow that same small
-///     shared-primitive shape; the IA_NA/IA_TA/IA_PD family is the one genuine structural
-///     departure DHCPv6 introduces over DHCPv4 -- each is its own small container type
-///     (<see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" /> and siblings) with its
-///     own dedicated encode/decode, and because a message can carry more than one of a given kind
-///     (a client requesting several addresses/prefixes at once), those accessors return/append a
-///     list rather than get/set a single value.
+///     This class provides typed accessors for the DHCPv6 options the server works with (RFC
+///     8415, RFC 3646 and RFC 4704) on top of the raw <see cref="Dhcpv6Message.Options" /> list.
+///     It is the DHCPv6 counterpart of <see cref="Dhcpv4MessageOptionExtensions" /> and follows
+///     the same pattern: <c>TryGetX</c> returns <see langword="false" /> when an option is missing
+///     or malformed, and <c>SetX</c> replaces any existing instance. The IA_NA, IA_TA and IA_PD
+///     options are the exception: each is a container type
+///     (<see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" /> and its siblings), and a
+///     message can carry several, so their accessors return a list and their setters append.
 /// </summary>
 public static class Dhcpv6MessageOptionExtensions
 {
     /// <summary>
-    ///     This method attempts to read the Client Identifier option's own DUID bytes (code 1).
-    ///     See <see cref="Dhcpv6OptionCodeEnum.ClientIdentifier" />'s own doc comment for why this
-    ///     project treats a DUID as opaque.
+    ///     This method attempts to read the Client Identifier option's DUID (code 1). The DUID is
+    ///     opaque (see <see cref="Dhcpv6OptionCodeEnum.ClientIdentifier" />); an empty option
+    ///     counts as absent.
     /// </summary>
     public static bool TryGetClientIdentifier(this Dhcpv6Message message, out byte[] duid) =>
         TryGetNonEmptyRawOption(message, Dhcpv6OptionCodeEnum.ClientIdentifier, out duid);
@@ -37,7 +34,7 @@ public static class Dhcpv6MessageOptionExtensions
         SetNonEmptyRawOption(message, Dhcpv6OptionCodeEnum.ClientIdentifier, duid, nameof(duid));
 
     /// <summary>
-    ///     This method attempts to read the Server Identifier option's own DUID bytes (code 2).
+    ///     This method attempts to read the Server Identifier option's DUID (code 2).
     /// </summary>
     public static bool TryGetServerIdentifier(this Dhcpv6Message message, out byte[] duid) =>
         TryGetNonEmptyRawOption(message, Dhcpv6OptionCodeEnum.ServerIdentifier, out duid);
@@ -49,9 +46,8 @@ public static class Dhcpv6MessageOptionExtensions
         SetNonEmptyRawOption(message, Dhcpv6OptionCodeEnum.ServerIdentifier, duid, nameof(duid));
 
     /// <summary>
-    ///     This method attempts to read the Option Request Option (code 6) -- the list of other
-    ///     option codes a client is asking a server to include in its reply, if the server has
-    ///     values for them.
+    ///     This method attempts to read the Option Request Option (code 6): the option codes a
+    ///     client wants in the reply. An empty or odd-length value counts as malformed.
     /// </summary>
     public static bool TryGetOptionRequest(
         this Dhcpv6Message message,
@@ -122,10 +118,8 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the Elapsed Time option (code 8). Per RFC 8415 Section
-    ///     21.9, the wire value is hundredths of a second, capped at 0xFFFF (about 655.35
-    ///     seconds) to mean "more than that" -- this method reports the capped value as-is rather
-    ///     than trying to distinguish an exact 655.35-second elapsed time from a longer one the
-    ///     wire format cannot represent precisely.
+    ///     21.9 the value is in hundredths of a second, and 0xFFFF (655.35 seconds) means "that or
+    ///     longer"; the capped value is returned as-is.
     /// </summary>
     public static bool TryGetElapsedTime(this Dhcpv6Message message, out TimeSpan elapsed)
     {
@@ -143,10 +137,9 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Elapsed Time option (code 8), clamping a value that would not fit
-    ///     the wire format's own 16-bit hundredths-of-a-second field to its maximum
-    ///     representable value rather than throwing -- RFC 8415 Section 21.9 defines that exact
-    ///     clamped value ("more than 655.35 seconds") as meaningful, not an error.
+    ///     This method sets the Elapsed Time option (code 8). A value too large for the 16-bit
+    ///     field is clamped to 0xFFFF rather than rejected, since RFC 8415 Section 21.9 gives that
+    ///     value the meaning "655.35 seconds or more". A negative value throws.
     /// </summary>
     public static void SetElapsedTime(this Dhcpv6Message message, TimeSpan elapsed)
     {
@@ -166,10 +159,10 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Status Code option (code 13) carried at this
-    ///     message's own top level. A Status Code option nested inside a specific IA_NA/IA_TA/
-    ///     IA_PD is reached through that association's own <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses.Options" />/
-    ///     equivalent list instead, via <see cref="TryGetStatusCode(IReadOnlyList{Dhcpv6Option},out Dhcpv6StatusCodeEnum,out string)" />.
+    ///     This method attempts to read the top-level Status Code option (code 13). For a Status
+    ///     Code nested in an IA_NA, IA_TA or IA_PD, pass that association's options (e.g.
+    ///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses.Options" />) to
+    ///     <see cref="TryGetStatusCode(IReadOnlyList{Dhcpv6Option},out Dhcpv6StatusCodeEnum,out string)" />.
     /// </summary>
     public static bool TryGetStatusCode(
         this Dhcpv6Message message,
@@ -183,8 +176,8 @@ public static class Dhcpv6MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method attempts to read a Status Code option (code 13) out of an arbitrary nested
-    ///     options list -- an IA_NA/IA_TA/IA_PD association's own <c>Options</c> property.
+    ///     This method attempts to read a Status Code option (code 13) from a nested options
+    ///     list, such as an IA_NA, IA_TA or IA_PD association's <c>Options</c>.
     /// </summary>
     public static bool TryGetStatusCode(
         this IReadOnlyList<Dhcpv6Option> nestedOptions,
@@ -202,8 +195,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method decodes a Status Code option's own value bytes, shared by both of this
-    ///     class's own public <c>TryGetStatusCode</c> overloads above.
+    ///     This method decodes a Status Code option's value for both public
+    ///     <c>TryGetStatusCode</c> overloads. The message text is read as UTF-8.
     /// </summary>
     private static bool TryGetStatusCode(
         Dhcpv6Option option,
@@ -227,7 +220,7 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Status Code option (code 13) at this message's own top level.
+    ///     This method sets the top-level Status Code option (code 13).
     /// </summary>
     public static void SetStatusCode(
         this Dhcpv6Message message,
@@ -241,10 +234,9 @@ public static class Dhcpv6MessageOptionExtensions
         );
 
     /// <summary>
-    ///     This method encodes a Status Code option's own value bytes -- shared by
-    ///     <see cref="SetStatusCode(Dhcpv6Message,Dhcpv6StatusCodeEnum,string)" /> and by any
-    ///     future caller building a nested Status Code option for an IA_NA/IA_TA/IA_PD
-    ///     association's own <c>Options</c> list directly.
+    ///     This method encodes a Status Code option's value (the code and a UTF-8 message). It is
+    ///     used by <see cref="SetStatusCode(Dhcpv6Message,Dhcpv6StatusCodeEnum,string)" /> and by
+    ///     <c>Dhcpv6RequestHandler</c> to build Status Code options nested in an association.
     /// </summary>
     public static byte[] EncodeStatusCode(
         Dhcpv6StatusCodeEnum statusCode,
@@ -259,8 +251,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Rapid Commit option (code 14) -- a zero-length
-    ///     presence marker, so its only meaningful signal is whether it is present at all.
+    ///     This method reports whether the Rapid Commit option (code 14) is present; it is an
+    ///     empty marker with no value.
     /// </summary>
     public static bool TryGetRapidCommit(this Dhcpv6Message message) =>
         FindOption(message, Dhcpv6OptionCodeEnum.RapidCommit) is not null;
@@ -272,10 +264,9 @@ public static class Dhcpv6MessageOptionExtensions
         SetOption(message, Dhcpv6OptionCodeEnum.RapidCommit, []);
 
     /// <summary>
-    ///     This method attempts to read the User Class option (RFC 8415 Section 21.15, code 15) --
-    ///     one or more "user-class-data" instances packed back-to-back, each its own 2-octet length
-    ///     followed by that many octets of opaque text, decoded as ASCII the same way this project
-    ///     already treats DHCPv4's structurally near-identical User Class option
+    ///     This method attempts to read the User Class option (RFC 8415 Section 21.15, code 15):
+    ///     one or more "user-class-data" instances back to back, each a 2-octet length followed by
+    ///     that many octets, read as ASCII like the DHCPv4 User Class
     ///     (<see cref="Dhcpv4MessageOptionExtensions.TryGetUserClasses" />).
     /// </summary>
     public static bool TryGetUserClasses(
@@ -296,18 +287,15 @@ public static class Dhcpv6MessageOptionExtensions
 
         while (offset < option.Data.Length)
         {
-            // Each instance is its own 2-octet length field (unlike DHCPv4's 1-octet field)
-            // followed by that many octets of opaque data.
+            // Each instance is a 2-octet length (1 octet in DHCPv4) followed by the data.
             if (offset + 2 > option.Data.Length)
                 break;
 
             ushort length = BinaryPrimitives.ReadUInt16BigEndian(option.Data.AsSpan(offset, 2));
             offset += 2;
 
-            // A malformed instance (its own declared length runs past the end of the option's
-            // data) is not sensible to partially trust -- stop, keeping whatever whole instances
-            // were already decoded rather than throwing away the entire option, mirroring
-            // Dhcpv4MessageOptionExtensions.TryGetUserClasses's own identical guard.
+            // On a zero length or one that runs past the end, stop and keep the instances
+            // already decoded, as the DHCPv4 version does.
             if (length == 0 || offset + length > option.Data.Length)
                 break;
 
@@ -358,13 +346,13 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Vendor Class option (RFC 8415 Section 21.16, code 16)
-    ///     -- a 4-octet IANA Enterprise Number followed by one or more "vendor-class-data"
-    ///     instances, each its own 2-octet length followed by that many octets of opaque text.
+    ///     This method attempts to read the Vendor Class option (RFC 8415 Section 21.16, code 16):
+    ///     a 4-octet IANA Enterprise Number followed by "vendor-class-data" instances, each a
+    ///     2-octet length and that many octets, read as ASCII.
     /// </summary>
     /// <param name="message">The message to read the option from.</param>
-    /// <param name="enterpriseNumber">Receives the vendor's own IANA Enterprise Number.</param>
-    /// <param name="vendorClassData">Receives every decoded vendor-class-data instance, in wire order.</param>
+    /// <param name="enterpriseNumber">Receives the vendor's IANA Enterprise Number.</param>
+    /// <param name="vendorClassData">Receives the decoded vendor-class-data instances, in wire order; may be empty.</param>
     public static bool TryGetVendorClass(
         this Dhcpv6Message message,
         out uint enterpriseNumber,
@@ -393,7 +381,7 @@ public static class Dhcpv6MessageOptionExtensions
             ushort length = BinaryPrimitives.ReadUInt16BigEndian(option.Data.AsSpan(offset, 2));
             offset += 2;
 
-            // Same "stop, keep what already decoded" tolerance TryGetUserClasses applies.
+            // Stop on a malformed instance and keep what was decoded, as TryGetUserClasses does.
             if (length == 0 || offset + length > option.Data.Length)
                 break;
 
@@ -401,10 +389,8 @@ public static class Dhcpv6MessageOptionExtensions
             offset += length;
         }
 
-        // The enterprise number alone (with zero vendor-class-data instances) is a degenerate but
-        // still meaningful wire shape -- RFC 8415 Section 21.16 does not require at least one
-        // instance the way it does for the Vendor-specific Information option's own sub-options,
-        // so this is reported successfully with an empty list rather than failing outright.
+        // An enterprise number with no instances still identifies the vendor, so it is reported
+        // as success with an empty list.
         vendorClassData = result;
         return true;
     }
@@ -413,8 +399,8 @@ public static class Dhcpv6MessageOptionExtensions
     ///     This method sets the Vendor Class option (RFC 8415 Section 21.16, code 16).
     /// </summary>
     /// <param name="message">The message to set the option on.</param>
-    /// <param name="enterpriseNumber">The vendor's own IANA Enterprise Number.</param>
-    /// <param name="vendorClassData">Every vendor-class-data instance to encode, in order -- may be empty.</param>
+    /// <param name="enterpriseNumber">The vendor's IANA Enterprise Number.</param>
+    /// <param name="vendorClassData">The vendor-class-data instances to encode, in order; may be empty.</param>
     public static void SetVendorClass(
         this Dhcpv6Message message,
         uint enterpriseNumber,
@@ -448,8 +434,7 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read the DNS Recursive Name Server option (RFC 3646 Section 3,
-    ///     code 23) -- one or more recursive DNS server addresses, in the server's own order of
-    ///     preference.
+    ///     code 23): one or more recursive DNS server addresses, in order of preference.
     /// </summary>
     public static bool TryGetDnsServers(
         this Dhcpv6Message message,
@@ -504,14 +489,11 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Domain Search List option (RFC 3646 Section 3.1, code
-    ///     24) -- one or more domain names for a client to search when resolving an unqualified
-    ///     host name. This project decodes only ordinary, uncompressed RFC 1035 label sequences;
-    ///     a name using RFC 1035 Section 4.1.4 compression (a pointer back into the option's own
-    ///     bytes, or beyond them into the rest of the message) is rejected rather than resolved --
-    ///     compression is optional per RFC 3646, and resolving a pointer correctly would need
-    ///     access to the whole message's own bytes, not just this one option's, which this
-    ///     project's per-option decode does not have.
+    ///     This method attempts to read the Domain Search List option (RFC 3646, code 24): one or
+    ///     more domain names for a client to search when resolving an unqualified host name. Only
+    ///     uncompressed RFC 1035 label sequences are decoded. A name with an RFC 1035 Section 4.1.4
+    ///     compression pointer is rejected, because resolving the pointer would need the whole
+    ///     message and this method sees only the option.
     /// </summary>
     public static bool TryGetDomainSearchList(
         this Dhcpv6Message message,
@@ -537,9 +519,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Domain Search List option (RFC 3646 Section 3.1, code 24), always
-    ///     writing plain, uncompressed RFC 1035 label sequences (see <see cref="TryGetDomainSearchList" />'s
-    ///     own doc comment for why this project never emits compression either).
+    ///     This method sets the Domain Search List option (RFC 3646, code 24), writing
+    ///     uncompressed RFC 1035 label sequences.
     /// </summary>
     public static void SetDomainSearchList(
         this Dhcpv6Message message,
@@ -558,10 +539,9 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This constant contains the RFC 4704 Section 4.1 "S" bit -- the lowest-order bit of the
-    ///     Client FQDN option's own single flags octet, per that section's own field diagram
-    ///     (<c>0 1 2 3 4 5 6 7 | MBZ |N|O|S|</c>, bit 0 leftmost/high-order, bit 7 rightmost/
-    ///     low-order). Quoting Section 4.1 directly: "The 'S' bit indicates whether the server
+    ///     This constant contains the RFC 4704 Section 4.1 "S" bit, the lowest-order bit of the
+    ///     Client FQDN flags octet (<c>0 1 2 3 4 5 6 7 | MBZ |N|O|S|</c>, bit 0 high-order). From
+    ///     Section 4.1: "The 'S' bit indicates whether the server
     ///     SHOULD or SHOULD NOT perform the AAAA RR (FQDN-to-address) DNS updates ... The state of
     ///     the bit in the reply from the server indicates the action to be taken by the server; if
     ///     it is 1, the server has taken responsibility for AAAA RR updates for the FQDN."
@@ -569,8 +549,8 @@ public static class Dhcpv6MessageOptionExtensions
     private const byte ClientFqdnServerPerformsAaaaUpdateBit = 0x01;
 
     /// <summary>
-    ///     This constant contains the RFC 4704 Section 4.1 "O" bit -- the middle bit of the same
-    ///     flags octet. Quoting Section 4.1 directly: "The 'O' bit indicates whether the server has
+    ///     This constant contains the RFC 4704 Section 4.1 "O" bit, the middle of the three flag
+    ///     bits. From Section 4.1: "The 'O' bit indicates whether the server has
     ///     overridden the client's preference for the 'S' bit. A client MUST set this bit to 0. A
     ///     server MUST set this bit to 1 if the 'S' bit in its reply to the client does not match
     ///     the 'S' bit received from the client."
@@ -578,8 +558,8 @@ public static class Dhcpv6MessageOptionExtensions
     private const byte ClientFqdnServerOverrodeClientPreferenceBit = 0x02;
 
     /// <summary>
-    ///     This constant contains the RFC 4704 Section 4.1 "N" bit -- the highest-order bit of the
-    ///     same flags octet. Quoting Section 4.1 directly: "The 'N' bit indicates whether the
+    ///     This constant contains the RFC 4704 Section 4.1 "N" bit, the highest of the three flag
+    ///     bits. From Section 4.1: "The 'N' bit indicates whether the
     ///     server SHOULD NOT perform any DNS updates ... A server sets the 'N' bit to indicate
     ///     whether the server SHALL (0) or SHALL NOT (1) perform DNS updates. If the 'N' bit is 1,
     ///     the 'S' bit MUST be 0."
@@ -587,14 +567,12 @@ public static class Dhcpv6MessageOptionExtensions
     private const byte ClientFqdnServerShouldNotPerformAnyDnsUpdatesBit = 0x04;
 
     /// <summary>
-    ///     This method attempts to read the Client FQDN option (RFC 4704, code 39) -- a client's
-    ///     own presented (fully-qualified or partial) domain name, plus the N/O/S flag bits (see
-    ///     <see cref="ClientFqdnServerShouldNotPerformAnyDnsUpdatesBit" />/
-    ///     <see cref="ClientFqdnServerOverrodeClientPreferenceBit" />/
-    ///     <see cref="ClientFqdnServerPerformsAaaaUpdateBit" />'s own doc comments for the exact
-    ///     RFC 4704 Section 4.1 semantics of each). This same accessor decodes both a client's
-    ///     request and a server's own reply -- the wire shape is identical either direction, only
-    ///     the meaning of each flag's sender changes.
+    ///     This method attempts to read the Client FQDN option (RFC 4704, code 39): a fully
+    ///     qualified or partial domain name plus the N, O and S flags (see
+    ///     <see cref="ClientFqdnServerShouldNotPerformAnyDnsUpdatesBit" />,
+    ///     <see cref="ClientFqdnServerOverrodeClientPreferenceBit" /> and
+    ///     <see cref="ClientFqdnServerPerformsAaaaUpdateBit" /> for their meaning). The format is
+    ///     the same in requests and replies; only who sets the flags differs.
     /// </summary>
     /// <param name="message">The message to read the option from.</param>
     /// <param name="serverShouldNotPerformAnyDnsUpdates">Receives the "N" bit.</param>
@@ -602,21 +580,18 @@ public static class Dhcpv6MessageOptionExtensions
     /// <param name="serverPerformsAaaaUpdate">Receives the "S" bit.</param>
     /// <param name="domainName">
     ///     Receives the decoded domain name (dot-joined labels), or <see langword="null" /> when
-    ///     the Domain Name field was left empty -- RFC 4704 Section 4.2's own signal that "a client
-    ///     ... desires the server to provide a name."
+    ///     the Domain Name field is empty, which in a request means the client wants the server
+    ///     to provide a name (RFC 4704 Section 4.2).
     /// </param>
     /// <param name="isFullyQualified">
-    ///     Receives whether the Domain Name field carried a terminating zero-length root label
-    ///     (RFC 4704 Section 4.2's "fully qualified" form) rather than ending mid-name (that
-    ///     section's own "partial name" form, sent "without the terminating zero-length label").
+    ///     Receives whether the Domain Name field ends with a zero-length root label (a fully
+    ///     qualified name in RFC 4704 Section 4.2 terms) rather than without one (a partial name).
     /// </param>
     /// <returns>
-    ///     <see langword="true" /> if the option was present and its Domain Name field decoded
-    ///     successfully; <see langword="false" /> if the option is absent, or its Domain Name
-    ///     field is malformed (a truncated label, or an RFC 1035 Section 4.1.4 compression pointer
-    ///     -- this project decodes only plain, uncompressed label sequences here, the same
-    ///     restriction <see cref="TryGetDomainSearchList" /> already documents for RFC 3646's own
-    ///     Domain Search List option).
+    ///     <see langword="true" /> if the option is present and its Domain Name field decodes;
+    ///     <see langword="false" /> if the option is absent or empty, or the name is malformed (a
+    ///     truncated label, trailing bytes, or a compression pointer, which is not supported here
+    ///     either; see <see cref="TryGetDomainSearchList" />).
     /// </returns>
     public static bool TryGetClientFqdn(
         this Dhcpv6Message message,
@@ -651,23 +626,22 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Client FQDN option (RFC 4704, code 39), used both by a client
-    ///     building a request and (this project's own only real use) a server building its own
-    ///     reply -- see <see cref="TryGetClientFqdn" />'s own doc comment for the shared wire shape.
+    ///     This method sets the Client FQDN option (RFC 4704, code 39). The server uses it for
+    ///     its reply; tests also use it to build requests. See <see cref="TryGetClientFqdn" /> for
+    ///     the format.
     /// </summary>
     /// <param name="message">The message to set the option on.</param>
     /// <param name="serverShouldNotPerformAnyDnsUpdates">The "N" bit to encode.</param>
     /// <param name="serverOverrodeClientPreference">The "O" bit to encode.</param>
     /// <param name="serverPerformsAaaaUpdate">The "S" bit to encode.</param>
     /// <param name="domainName">
-    ///     The domain name to encode (dot-joined labels), or <see langword="null" />/empty to
-    ///     write an empty Domain Name field (RFC 4704 Section 4.2's "the server provides no name"
-    ///     counterpart to a client leaving the field empty to ask for one).
+    ///     The domain name to encode (dot-joined labels), or <see langword="null" /> or empty to
+    ///     write an empty Domain Name field.
     /// </param>
     /// <param name="isFullyQualified">
-    ///     Whether to terminate the encoded name with a zero-length root label (a fully-qualified
-    ///     name) or leave it unterminated (a partial name) -- ignored when
-    ///     <paramref name="domainName" /> is <see langword="null" />/empty.
+    ///     Whether to end the name with a zero-length root label (fully qualified) or not
+    ///     (partial). Ignored when <paramref name="domainName" /> is <see langword="null" /> or
+    ///     empty.
     /// </param>
     public static void SetClientFqdn(
         this Dhcpv6Message message,
@@ -697,7 +671,8 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read every Identity Association for Non-temporary Addresses
-    ///     (IA_NA, code 3) option this message carries.
+    ///     (IA_NA, code 3) option in the message. A malformed IA_NA is skipped; the method returns
+    ///     <see langword="false" /> when none decodes.
     /// </summary>
     public static bool TryGetIdentityAssociationsForNonTemporaryAddresses(
         this Dhcpv6Message message,
@@ -731,9 +706,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method appends one more Identity Association for Non-temporary Addresses (IA_NA,
-    ///     code 3) option -- appends, rather than replaces, since a message can legitimately carry
-    ///     more than one (a client requesting several non-temporary addresses at once).
+    ///     This method appends an Identity Association for Non-temporary Addresses (IA_NA, code 3)
+    ///     option. It appends rather than replaces, since a message can carry several.
     /// </summary>
     public static void AddIdentityAssociationForNonTemporaryAddresses(
         this Dhcpv6Message message,
@@ -748,8 +722,9 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read every Identity Association for Temporary Addresses
-    ///     (IA_TA, code 4) option this message carries.
+    ///     This method attempts to read every Identity Association for Temporary Addresses (IA_TA,
+    ///     code 4) option in the message. A malformed IA_TA is skipped; the method returns
+    ///     <see langword="false" /> when none decodes.
     /// </summary>
     public static bool TryGetIdentityAssociationsForTemporaryAddresses(
         this Dhcpv6Message message,
@@ -783,8 +758,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method appends one more Identity Association for Temporary Addresses (IA_TA,
-    ///     code 4) option.
+    ///     This method appends an Identity Association for Temporary Addresses (IA_TA, code 4)
+    ///     option.
     /// </summary>
     public static void AddIdentityAssociationForTemporaryAddresses(
         this Dhcpv6Message message,
@@ -800,7 +775,8 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method attempts to read every Identity Association for Prefix Delegation (IA_PD,
-    ///     code 25) option this message carries.
+    ///     code 25) option in the message. A malformed IA_PD is skipped; the method returns
+    ///     <see langword="false" /> when none decodes.
     /// </summary>
     public static bool TryGetIdentityAssociationsForPrefixDelegation(
         this Dhcpv6Message message,
@@ -834,8 +810,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method appends one more Identity Association for Prefix Delegation (IA_PD, code
-    ///     25) option.
+    ///     This method appends an Identity Association for Prefix Delegation (IA_PD, code 25)
+    ///     option.
     /// </summary>
     public static void AddIdentityAssociationForPrefixDelegation(
         this Dhcpv6Message message,
@@ -850,11 +826,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read an arbitrary option's raw value bytes by its own numeric
-    ///     code, with no type-specific decoding -- the same escape hatch
-    ///     <see cref="Dhcpv4MessageOptionExtensions.TryGetRawOption" /> provides for DHCPv4, kept
-    ///     available here for whichever future DHCPv6 server engine/option-delivery feature needs
-    ///     it.
+    ///     This method attempts to read any option's raw value by code, with no decoding, like
+    ///     <see cref="Dhcpv4MessageOptionExtensions.TryGetRawOption" />.
     /// </summary>
     public static bool TryGetRawOption(this Dhcpv6Message message, ushort code, out byte[] data)
     {
@@ -871,15 +844,16 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets (replacing any existing instance of the same code) an arbitrary
-    ///     option's raw value bytes by its own numeric code.
+    ///     This method sets any option's raw value by code, replacing an existing instance.
+    ///     Custom options and tag-rule options (<c>Dhcpv6OptionOverlayService</c>) use it. A
+    ///     <see langword="null" /> value is stored as empty.
     /// </summary>
     public static void SetRawOption(this Dhcpv6Message message, ushort code, byte[] data) =>
         SetOption(message, (Dhcpv6OptionCodeEnum)code, data ?? []);
 
     /// <summary>
-    ///     This method attempts to read a non-empty raw option value -- the shape both DUID
-    ///     options (Client/Server Identifier) share.
+    ///     This method attempts to read a non-empty raw option value, the shape of both DUID
+    ///     options (Client and Server Identifier).
     /// </summary>
     private static bool TryGetNonEmptyRawOption(
         Dhcpv6Message message,
@@ -900,8 +874,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets a non-empty raw option value, throwing on an empty/missing value
-    ///     rather than silently writing a meaningless zero-length DUID.
+    ///     This method sets a non-empty raw option value, throwing on an empty or missing value
+    ///     rather than writing a zero-length DUID.
     /// </summary>
     private static void SetNonEmptyRawOption(
         Dhcpv6Message message,
@@ -917,10 +891,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method finds the first option carrying a given code, or <see langword="null" />
-    ///     if the message carries none -- correct for every option this class gives a typed
-    ///     accessor to except IA_NA/IA_TA/IA_PD, which use <see cref="FindOptions" /> instead
-    ///     since a message can carry more than one of those.
+    ///     This method finds the first option with a given code, or <see langword="null" /> if
+    ///     there is none. IA_NA, IA_TA and IA_PD can repeat and use <see cref="FindOptions" />.
     /// </summary>
     private static Dhcpv6Option FindOption(Dhcpv6Message message, Dhcpv6OptionCodeEnum code)
     {
@@ -948,9 +920,8 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method replaces (or adds, if absent) the option carrying a given code. Used only
-    ///     by the single-instance options above -- IA_NA/IA_TA/IA_PD are always appended directly
-    ///     instead, since a message can carry more than one.
+    ///     This method replaces (or adds) the option with a given code. It is for single-instance
+    ///     options; IA_NA, IA_TA and IA_PD are appended instead.
     /// </summary>
     private static void SetOption(Dhcpv6Message message, Dhcpv6OptionCodeEnum code, byte[] data)
     {
@@ -961,9 +932,9 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method decodes one or more RFC 1035-style, length-prefixed domain names packed
-    ///     back-to-back, each terminated by a zero-length root label, with no compression
-    ///     supported (see <see cref="TryGetDomainSearchList" />'s own doc comment for why).
+    ///     This method decodes one or more RFC 1035 length-prefixed domain names back to back,
+    ///     each ending in a zero-length root label. Compression is not supported (see
+    ///     <see cref="TryGetDomainSearchList" />).
     /// </summary>
     private static bool TryDecodeDomainNames(byte[] data, out List<string> domains)
     {
@@ -980,9 +951,8 @@ public static class Dhcpv6MessageOptionExtensions
                 byte labelLength = data[offset];
                 offset++;
 
-                // The top two bits set would mean an RFC 1035 Section 4.1.4 compression pointer,
-                // which this method deliberately does not support (see this class's own
-                // TryGetDomainSearchList doc comment).
+                // Either of the top two bits set marks an RFC 1035 Section 4.1.4 compression
+                // pointer (or a reserved label type), which is not supported.
                 if ((labelLength & 0xC0) != 0)
                     return false;
 
@@ -1012,8 +982,9 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method encodes one RFC 1035-style, length-prefixed domain name, terminated by a
-    ///     zero-length root label, into <paramref name="buffer" />.
+    ///     This method encodes one RFC 1035 length-prefixed domain name, ending in a zero-length
+    ///     root label, into <paramref name="buffer" />. Empty labels (from doubled or trailing
+    ///     dots) are dropped.
     /// </summary>
     private static void EncodeDomainName(string domain, MemoryStream buffer)
     {
@@ -1038,30 +1009,19 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method decodes the Client FQDN option's own Domain Name field (RFC 4704 Section
-    ///     4.2), which needs its own decoder distinct from <see cref="TryDecodeDomainNames" />
-    ///     rather than reusing it: that method always requires every name it decodes to end in a
-    ///     zero-length root label (correct for RFC 3646's Domain Search List, which packs several
-    ///     complete names back-to-back and needs that terminator to know where one name ends and
-    ///     the next begins), where RFC 4704 Section 4.2 instead defines three genuinely different,
-    ///     meaningful shapes for this option's own single name: empty (zero bytes -- "a client MAY
-    ///     ... leave the Domain Name field empty if it desires the server to provide a name"), a
-    ///     terminated "fully qualified" name ("the Domain Name field is set to the DNS-encoded
-    ///     domain name including the terminating zero-length label"), and an unterminated "partial"
-    ///     name ("the Domain Name field is set to the DNS-encoded domain name without the
-    ///     terminating zero-length label"). Reusing <c>Ninlil.Dns.Common.Wire.DnsName</c>
-    ///     was considered instead of this small local decoder, but rejected for two reasons: doing
-    ///     so would give <c>Ninlil.Dhcp.Common</c> a project reference onto <c>Ninlil.Dns.Common</c>
-    ///     it has never needed before (this project's DHCP wire layer is deliberately as
-    ///     dependency-free as its DNS counterpart, not a consumer of it), and that class's own model
-    ///     -- a name is always a complete, well-formed <c>Ninlil.Dns.Common.Wire.DnsName</c>
-    ///     instance -- has no representation at all for this option's own genuinely valid "partial,
-    ///     unterminated name" and "empty, no name at all" wire shapes without first wrapping it in
-    ///     new code anyway, at which point a small, self-contained decoder mirroring this file's own
-    ///     existing <see cref="TryDecodeDomainNames" />/<see cref="EncodeDomainName" /> precedent
-    ///     for RFC 3646's option is the more consistent choice.
+    ///     This method decodes the Client FQDN Domain Name field (RFC 4704 Section 4.2). It cannot
+    ///     reuse <see cref="TryDecodeDomainNames" />, which requires every name to end in a root
+    ///     label so it can split a packed list. RFC 4704 allows three forms of the single name:
+    ///     empty ("a client MAY ... leave the Domain Name field empty if it desires the server to
+    ///     provide a name"), fully qualified ("including the terminating zero-length label"), and
+    ///     partial ("without the terminating zero-length label").
+    ///     <para>
+    ///         <c>Ninlil.Dns.Common.Wire.DnsName</c> is not used because <c>Ninlil.Dhcp.Common</c>
+    ///         does not reference <c>Ninlil.Dns.Common</c>, and that type cannot represent a
+    ///         partial or empty name.
+    ///     </para>
     /// </summary>
-    /// <param name="data">The Domain Name field's own raw bytes (the option's data, minus its leading flags octet).</param>
+    /// <param name="data">The Domain Name field (the option's data without the leading flags octet).</param>
     /// <param name="domainName">
     ///     Receives the decoded, dot-joined domain name, or <see langword="null" /> when
     ///     <paramref name="data" /> was empty or decoded to the root name alone.
@@ -1094,8 +1054,7 @@ public static class Dhcpv6MessageOptionExtensions
             byte labelLength = data[offset];
             offset++;
 
-            // See TryDecodeDomainNames's own identical guard -- this project never decodes an
-            // RFC 1035 Section 4.1.4 compression pointer for a DHCPv6 option.
+            // Compression pointers are not supported, as in TryDecodeDomainNames.
             if ((labelLength & 0xC0) != 0)
                 return false;
 
@@ -1115,9 +1074,7 @@ public static class Dhcpv6MessageOptionExtensions
             offset += labelLength;
         }
 
-        // A root label found before the data actually ends means genuine trailing garbage after
-        // the name -- this option carries exactly one name, never several packed back-to-back the
-        // way RFC 3646's Domain Search List does.
+        // This option carries one name, so bytes after the root label are trailing garbage.
         if (isFullyQualified && offset != data.Length)
         {
             domainName = null;
@@ -1130,13 +1087,13 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method encodes the Client FQDN option's own Domain Name field -- the inverse of
-    ///     <see cref="TryDecodeClientFqdnDomainName" />, sharing that method's own doc comment for
-    ///     why this option needs its own encoder distinct from <see cref="EncodeDomainName" />.
+    ///     This method encodes the Client FQDN Domain Name field, the inverse of
+    ///     <see cref="TryDecodeClientFqdnDomainName" /> (which explains why it is separate from
+    ///     <see cref="EncodeDomainName" />).
     /// </summary>
-    /// <param name="domainName">The dot-joined domain name to encode, or <see langword="null" />/empty for an empty field.</param>
+    /// <param name="domainName">The dot-joined domain name to encode, or <see langword="null" /> or empty for an empty field.</param>
     /// <param name="isFullyQualified">Whether to terminate the encoded name with a zero-length root label.</param>
-    /// <returns>The encoded Domain Name field bytes -- zero-length when <paramref name="domainName" /> is <see langword="null" />/empty.</returns>
+    /// <returns>The encoded Domain Name field; empty when <paramref name="domainName" /> is <see langword="null" /> or empty.</returns>
     private static byte[] EncodeClientFqdnDomainName(string domainName, bool isFullyQualified)
     {
         if (string.IsNullOrEmpty(domainName))

@@ -7,42 +7,37 @@ namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
 ///     This class represents RFC 8415 Section 21.5's Identity Association for Temporary
-///     Addresses (IA_TA) option -- the same nested-<see cref="Dhcpv6IdentityAssociationAddress" />
-///     shape as <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />, but with no
-///     T1/T2 renewal timers of its own: RFC 8415 Section 21.5 deliberately omits them because a
-///     temporary address is never renewed, only re-requested from scratch.
+///     Addresses (IA_TA) option. It nests <see cref="Dhcpv6IdentityAssociationAddress" /> options
+///     like <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" />, but has no T1/T2
+///     timers, since temporary addresses are not renewed.
 /// </summary>
 public class Dhcpv6IdentityAssociationForTemporaryAddresses
 {
     /// <summary>
-    ///     This constant contains the fixed portion of this option's own wire size -- just the
-    ///     IAID -- before its own nested options area.
+    ///     This constant contains the length of the fixed part (the IAID) before the nested
+    ///     options.
     /// </summary>
     private const int FixedLength = 4;
 
     /// <summary>
-    ///     This property contains the client-chosen Identity Association Identifier that names
-    ///     this specific association, unique among all of this client's own IA_NA/IA_TA/IA_PD
-    ///     associations.
+    ///     This property contains the client-chosen Identity Association Identifier (IAID), unique
+    ///     among the client's associations of this type.
     /// </summary>
     public uint IdentityAssociationId { get; set; }
 
     /// <summary>
-    ///     This property contains every address assigned to (or requested for) this association,
-    ///     decoded from this option's own nested <see cref="Dhcpv6IdentityAssociationAddress" />
-    ///     options.
+    ///     This property contains the addresses assigned to (or requested for) this association,
+    ///     decoded from its nested IA Address options.
     /// </summary>
     public List<Dhcpv6IdentityAssociationAddress> Addresses { get; } = [];
 
     /// <summary>
-    ///     This property contains every other nested option this association carries (most
-    ///     commonly a Status Code option).
+    ///     This property contains the other nested options (usually a Status Code option).
     /// </summary>
     public List<Dhcpv6Option> Options { get; } = [];
 
     /// <summary>
-    ///     This method decodes an IA_TA option's own value bytes (everything after its own
-    ///     option-code/option-len header).
+    ///     This method decodes an IA_TA option's value (everything after the option header).
     /// </summary>
     internal static bool TryDecode(
         ReadOnlySpan<byte> data,
@@ -101,9 +96,9 @@ public class Dhcpv6IdentityAssociationForTemporaryAddresses
     }
 
     /// <summary>
-    ///     This method encodes this option's own value bytes (everything after its own
-    ///     option-code/option-len header, which the caller -- <see cref="Dhcpv6MessageOptionExtensions" />
-    ///     -- adds separately).
+    ///     This method encodes this option's value (everything after the option header, which
+    ///     <see cref="Dhcpv6MessageOptionExtensions" /> adds). <see cref="Addresses" /> are written
+    ///     before <see cref="Options" />.
     /// </summary>
     internal byte[] Encode()
     {
