@@ -10,23 +10,23 @@
 
 
 /**
- * This class carries one node\'s own aggregate query-stats row for the cluster dashboard (`GET /api/cluster/nodes/stats`) -- either this node itself (Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelftrue, always Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.Reachable) or one known peer, reported unreachable rather than omitted when its own live snapshot could not be collected. See Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator\'s own doc comment for why an unreachable peer is never simply left out of the list.
+ * This class carries one node\'s query statistics for the cluster dashboard (`GET /api/cluster/nodes/stats`). A row is either the answering node (Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelf is true and it is always Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.Reachable) or a known peer. A peer whose snapshot could not be collected is reported unreachable rather than left out (see Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator).
  */
 export interface ClusterAggregateQueryStatsDetail { 
     /**
-     * This node\'s own local registry row id for the peer, or null for Ninlil.Web.Models.ClusterAggregateQueryStatsDetail.IsSelf\'s own row (this node has no registry entry for itself).
+     * The id of the peer\'s row in this node\'s registry, or null for the answering node, which has no row for itself.
      */
     clusterNodeRegistryId?: string | null;
     /**
-     * The node\'s own display name.
+     * The node\'s display name.
      */
     nodeName?: string | null;
     /**
-     * Whether this row describes the node answering the request itself.
+     * Whether this row describes the node answering the request.
      */
     isSelf?: boolean;
     /**
-     * Whether a live snapshot was actually collected for this row.
+     * Whether a live snapshot was collected for this row.
      */
     reachable?: boolean;
     /**

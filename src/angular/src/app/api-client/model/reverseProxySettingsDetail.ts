@@ -11,36 +11,36 @@ import { DnsOverTlsProxyProtocolSettingsDetail } from './dnsOverTlsProxyProtocol
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective reverse-proxy trust configuration. Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured reports whether a shared secret is set without ever revealing its value -- the same \"configured/not configured\" indicator `TwoFactorStatus.HasAuthenticator` and a webhook subscription\'s own read-only HMAC-signing-secret indicator already use for a secret this endpoint\'s own `Get` action never returns.
+ * This record is the reverse proxy trust configuration that `GET /api/reverse-proxy-settings` returns. The shared secret is never returned; Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured says whether one is set, as `TwoFactorStatus.HasAuthenticator` does for an authenticator. A `PATCH` accepts these fields with `sharedSecret` in place of Ninlil.Web.Models.ReverseProxySettingsDetail.SharedSecretConfigured; the last two fields are read-only.
  */
 export interface ReverseProxySettingsDetail { 
     /**
-     * Whether forwarded headers are currently honored at all.
+     * Whether forwarded headers are honored at all.
      */
     enable?: boolean;
     /**
-     * Every individual IP address allowed to claim a forwarded client address.
+     * The individual IP addresses allowed to supply a forwarded client address.
      */
     knownProxies?: Array<string> | null;
     /**
-     * Every CIDR network allowed to claim a forwarded client address.
+     * The CIDR networks allowed to supply a forwarded client address.
      */
     knownNetworks?: Array<string> | null;
     /**
-     * The request header a shared secret is read from, when one is configured.
+     * The request header a shared secret is read from, when one is set.
      */
     sharedSecretHeaderName?: string | null;
     /**
-     * Whether a shared secret is currently configured.
+     * Whether a shared secret is set.
      */
     sharedSecretConfigured?: boolean;
     dnsOverTls?: DnsOverTlsProxyProtocolSettingsDetail;
     /**
-     * When this settings section was last written (the cluster\'s own operational config sync), or null if it has never been written through this REST surface.
+     * When the settings were last written through the REST API, used by cluster config sync, or null if they never have been.
      */
     lastModifiedUtc?: string | null;
     /**
-     * The cluster node this settings section was last written on, or null alongside Ninlil.Web.Models.ReverseProxySettingsDetail.LastModifiedUtc.
+     * The cluster node the settings were last written on, or null together with Ninlil.Web.Models.ReverseProxySettingsDetail.LastModifiedUtc.
      */
     originatingNodeId?: string | null;
 }

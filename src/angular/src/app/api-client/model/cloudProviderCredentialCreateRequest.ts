@@ -15,12 +15,12 @@ import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
  */
 export interface CloudProviderCredentialCreateRequest { 
     /**
-     * An operator-chosen, human-readable, unique name for this credential set.
+     * An operator-chosen, human-readable, unique name for the credential set.
      */
     name?: string | null;
     providerType?: CloudDnsProviderTypeEnum;
     /**
-     * The credential set\'s own secret material, keyed by field name -- shape depends on Ninlil.Web.Models.CloudProviderCredentialCreateRequest.ProviderType. Encrypted at rest immediately; the exact values supplied here are returned exactly once, in this endpoint\'s own response, and never again afterward.
+     * The secret material, keyed by field name; the keys depend on Ninlil.Web.Models.CloudProviderCredentialCreateRequest.ProviderType. It is stored encrypted, and the values are returned once, in this endpoint\'s response.
      */
     credentials?: { [key: string]: string | null; } | null;
     /**

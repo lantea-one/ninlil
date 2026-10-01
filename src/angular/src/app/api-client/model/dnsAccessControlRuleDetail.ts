@@ -10,39 +10,39 @@
 
 
 /**
- * This class carries a single access-control rule\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity, so, unlike `TsigKeyDetail`/`DnssecKeyDetail`/ `CloudProviderCredentialDetail`, there is no reveal-once policy to apply here at all.
+ * This class carries an access-control rule, as returned by the list, get and write endpoints of `/api/access-control-rules`. Nothing in it is secret, so there is no reveal-once handling as with `TsigKeyDetail` or `CloudProviderCredentialDetail`.
  */
 export interface DnsAccessControlRuleDetail { 
     /**
-     * This rule\'s own identifier.
+     * The rule\'s identifier.
      */
     id?: string;
     /**
-     * This rule\'s own human-readable name.
+     * The rule\'s human-readable name.
      */
     name?: string | null;
     /**
-     * This rule\'s own network, in CIDR notation, exactly as stored.
+     * The rule\'s network in CIDR notation, as stored.
      */
     cidr?: string | null;
     /**
-     * Every capability this rule currently grants, as an explicit array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names -- see Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Capabilities\'s own doc comment for why this is not the raw stored bitmask.
+     * The capabilities the rule grants, as an array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names (see Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Capabilities).
      */
     capabilities?: Array<string> | null;
     /**
-     * Whether this rule is currently disabled -- a disabled rule is never consulted by the enforcement engine, per Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity.IsDisabled\'s own doc comment.
+     * Whether the rule is disabled. The enforcement engine ignores a disabled rule (see Ninlil.Dns.Data.Abstractions.Entity.DnsAccessControlRuleEntity.IsDisabled).
      */
     isDisabled?: boolean;
     /**
-     * When this rule was created.
+     * When the rule was created.
      */
     createdAtUtc?: string;
     /**
-     * When this rule was last modified, or null if never.
+     * When the rule was last modified, or null if never.
      */
     updatedAtUtc?: string | null;
     /**
-     * The cluster node this rule was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     * The cluster node the rule was last created or modified on, used by cluster config sync, or null if it was never written with clustering enabled.
      */
     originatingNodeId?: string | null;
 }

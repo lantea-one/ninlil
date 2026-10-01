@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single verification code, used both to confirm a newly-enrolled authenticator and to disable two-factor authentication.
+ * This class carries one verification code, used to confirm a newly enrolled authenticator and to disable two-factor authentication.
  */
 export interface TwoFactorCodeRequest { 
     /**

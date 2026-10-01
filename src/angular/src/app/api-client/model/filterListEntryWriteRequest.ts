@@ -11,15 +11,15 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries the fields used to create a new entry directly in a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list (`POST /api/filter-lists/{listId}/entries`). See Ninlil.Web.Controllers.FilterListEntriesController for why this, and every other write action on this nested resource, is rejected for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list.
+ * This class carries the fields used to create or replace an entry in a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list (`POST` and `PUT` under `/api/filter-lists/{listId}/entries`). Every write to the entries of a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is rejected with 409 (see Ninlil.Web.Controllers.FilterListEntriesController).
  */
 export interface FilterListEntryWriteRequest { 
     /**
-     * The entry\'s own value -- a domain name, wildcard glob, or regular expression (depending on Ninlil.Web.Models.FilterListEntryWriteRequest.Kind) for a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.Domain list, or an IP address/CIDR network for a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ResponseIp/ Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ClientSource list (where Ninlil.Web.Models.FilterListEntryWriteRequest.Kind must be Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain, the default).
+     * The entry\'s value: a domain name, wildcard or regular expression (by Ninlil.Web.Models.FilterListEntryWriteRequest.Kind) in a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.Domain list, or an IP address or CIDR network in a Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ResponseIp or Ninlil.Dns.Common.Enum.DnsFilterListKindEnum.ClientSource list, where Ninlil.Web.Models.FilterListEntryWriteRequest.Kind must be Ninlil.Dns.Common.Enum.DnsFilterEntryKindEnum.Domain (the default).
      */
     value?: string | null;
     /**
-     * Free-form operator notes about this entry.
+     * Free-form operator notes about the entry.
      */
     comment?: string | null;
     kind?: DnsFilterEntryKindEnum;

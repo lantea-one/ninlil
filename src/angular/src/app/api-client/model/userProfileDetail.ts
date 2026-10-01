@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries the current caller\'s own self-service profile -- display name, phone number, and e-mail address -- reachable via M:Ninlil.Web.Controllers.UsersController.GetMine and M:Ninlil.Web.Controllers.UsersController.PatchMine(System.Text.Json.JsonElement). Ninlil.Web.Models.UserProfileDetail.Email is included purely for display and so the Angular admin SPA\'s own Profile page can compute this account\'s Gravatar hash client-side; it is deliberately read-only through this pair of actions (an e-mail change needs its own re-verification flow this project does not yet build -- see `UpdateUserRequest`, the administrative equivalent, for the one path that can still change it today).
+ * This class carries the caller\'s self-service profile, read through M:Ninlil.Web.Controllers.UsersController.GetMine and changed through M:Ninlil.Web.Controllers.UsersController.PatchMine(System.Text.Json.JsonElement), which accepts only the display name and phone number. Ninlil.Web.Models.UserProfileDetail.Email is shown, and lets the Profile page compute the Gravatar hash, but cannot be changed here: changing an e-mail address would need a re-verification flow that does not exist. An administrator can change it through `UpdateUserRequest`.
  */
 export interface UserProfileDetail { 
     /**
-     * The account\'s own identifier.
+     * The account\'s identifier.
      */
     id?: string;
     /**

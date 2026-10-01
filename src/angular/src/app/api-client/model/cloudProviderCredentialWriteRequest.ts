@@ -11,7 +11,7 @@ import { CloudDnsProviderTypeEnum } from './cloudDnsProviderTypeEnum';
 
 
 /**
- * This class carries the fields used to fully replace an existing cloud DNS provider credential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike a TSIG key\'s own shared secret (see Ninlil.Web.Models.TsigKeyWriteRequest), a cloud provider credential\'s own secret material genuinely is something an operator supplied and may need to rotate -- Cloudflare/Route 53/DigitalOcean all expect a real operator to periodically rotate an API token or access key themselves, entirely outside this project\'s own control. A `PUT` therefore replaces Ninlil.Web.Models.CloudProviderCredentialWriteRequest.Credentials too, alongside every other field, matching ordinary full-replacement semantics -- there is no reveal-again concern here the way there would be for a server-generated secret, since the caller already knows the plaintext value they are supplying in this very request. To change only metadata (name, comments, disabled) without touching the stored credentials, use `PATCH` instead and omit `credentials` from the patch document.
+ * This class carries the fields used to fully replace an existing cloud DNS provider credential set (`PUT /api/cloud-provider-credentials/{id}`). Unlike the shared secret of a TSIG key (see Ninlil.Web.Models.TsigKeyWriteRequest), these secrets come from the operator, who rotates them at the provider, so a `PUT` replaces Ninlil.Web.Models.CloudProviderCredentialWriteRequest.Credentials along with every other field. Nothing new is revealed, since the caller supplies the values. To change only the name, comments or disabled flag, use `PATCH` and leave out `credentials`.
  */
 export interface CloudProviderCredentialWriteRequest { 
     /**
@@ -20,11 +20,11 @@ export interface CloudProviderCredentialWriteRequest {
     name?: string | null;
     providerType?: CloudDnsProviderTypeEnum;
     /**
-     * The credential set\'s own secret material, replacing it entirely.
+     * The secret material, replacing what is stored.
      */
     credentials?: { [key: string]: string | null; } | null;
     /**
-     * Whether the credential set is currently disabled.
+     * Whether the credential set is disabled.
      */
     isDisabled?: boolean;
     /**

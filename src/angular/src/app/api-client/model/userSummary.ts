@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries a user account\'s own summary, for administrative listing purposes.
+ * This class carries a user account, as returned by the administrative endpoints of `/api/users`.
  */
 export interface UserSummary { 
     /**
-     * The account\'s own identifier.
+     * The account\'s identifier.
      */
     id?: string;
     /**
@@ -30,7 +30,7 @@ export interface UserSummary {
      */
     displayName?: string | null;
     /**
-     * Whether the account is currently disabled.
+     * Whether the account is disabled.
      */
     isDisabled?: boolean;
     /**
@@ -38,23 +38,23 @@ export interface UserSummary {
      */
     twoFactorEnabled?: boolean;
     /**
-     * The names of every role this account currently holds.
+     * The names of every role the account holds.
      */
     roles?: Array<string> | null;
     /**
-     * Every permission granted to this account directly, independent of any role it holds -- distinct from whatever a role it holds might separately grant, mirroring Ninlil.Web.Models.RoleSummary.Permissions\'s own shape one level down.
+     * The permissions granted to the account directly, not through a role (the counterpart of Ninlil.Web.Models.RoleSummary.Permissions).
      */
     directPermissions?: Array<string> | null;
     /**
-     * The cluster node this account was most recently created or modified on, or null on a single-node deployment (or for an account that predates Phase 9-6d\'s own identity/RBAC cluster federation) -- mirrors `FilterListDetail`\'s own field of the same name and purpose, rendered the same way via the Angular admin SPA\'s shared `ClusterSyncInfoComponent`.
+     * The cluster node the account was last created or modified on, or null if it was never written with clustering enabled. The admin console shows it with Ninlil.Web.Models.UserSummary.LastModifiedUtc in `ClusterSyncInfoComponent`, as for other synced entities.
      */
     originatingNodeId?: string | null;
     /**
-     * A human-readable explanation of a genuine cluster username collision this account lost, surfaced so an administrator can see it was renamed/overwritten rather than silently dropped or merged -- see `UserEntity.ClusterConflictNote`\'s own doc comment. null for the overwhelming majority of accounts, which never collided with anything.
+     * An explanation of a cluster username collision this account lost, so an administrator can see it was renamed or overwritten rather than silently dropped or merged (see `UserEntity.ClusterConflictNote`). null when there was none (almost always).
      */
     clusterConflictNote?: string | null;
     /**
-     * The instant this account was last created or modified (<c>AuditableEntityBaseExtensions .GetLastModifiedUtc()</c>) -- paired with Ninlil.Web.Models.UserSummary.OriginatingNodeId by the Angular admin SPA\'s own shared `ClusterSyncInfoComponent`, mirroring every cluster-synced entity summary\'s own field of the same name and purpose.
+     * When the account was last created or modified (`AuditableEntityBaseExtensions.GetLastModifiedUtc()`).
      */
     lastModifiedUtc?: string | null;
 }

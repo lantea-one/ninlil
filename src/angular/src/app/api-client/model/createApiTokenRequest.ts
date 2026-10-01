@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the settings for a new API token.
+ * This class carries the settings for a new API token, sent to `POST /api/api-tokens`.
  */
 export interface CreateApiTokenRequest { 
     /**
@@ -18,11 +18,11 @@ export interface CreateApiTokenRequest {
      */
     name?: string | null;
     /**
-     * Whether the token should be consumed the first time it is used (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.OneTime) rather than kept working until revoked or expired (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.Static).
+     * Whether the token is consumed the first time it is used (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.OneTime) rather than working until it is revoked or expires (Ninlil.Dns.Common.Enum.ApiTokenTypeEnum.Static).
      */
     oneTime?: boolean;
     /**
-     * The UTC date and time the token stops being valid, or null for a token that does not expire on its own.
+     * The UTC date and time the token stops being valid, or null for a token that never expires.
      */
     expiresAtUtc?: string | null;
 }

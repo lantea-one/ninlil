@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single client list assignment\'s own fields, for list, single-item, and creation responses.
+ * This class carries one client list assignment, as returned by the list, get and create endpoints under `/api/clients/{clientId}/list-assignments`.
  */
 export interface ClientListAssignmentDetail { 
     id?: string;

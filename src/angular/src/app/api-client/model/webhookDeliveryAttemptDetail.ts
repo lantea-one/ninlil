@@ -11,60 +11,60 @@ import { WebhookDeliveryAttemptStatusEnum } from './webhookDeliveryAttemptStatus
 
 
 /**
- * This class carries a single persisted webhook delivery attempt\'s own current state, for `GET /api/webhooks/{id}/delivery-attempts` -- the real, on-disk delivery history `Server.Webhooks`\'s own `WebhookDeliveryAttemptEntity` tracks, surfaced entirely read-only. There is no corresponding write DTO: a delivery attempt is written exclusively by `WebhookDeliveryService`/`WebhookDeliveryRetrySweepService` as a real delivery is attempted, never authored or edited by an operator.
+ * This class carries one webhook delivery and its attempts so far, as returned by `GET /api/webhooks/{id}/delivery-attempts` from the stored `WebhookDeliveryAttemptEntity` history. It is read-only: only `WebhookDeliveryService` and `WebhookDeliveryRetrySweepService` write deliveries, as they make attempts.
  */
 export interface WebhookDeliveryAttemptDetail { 
     /**
-     * This delivery\'s own identifier.
+     * The delivery\'s identifier.
      */
     id?: string;
     /**
-     * The identifier of the subscription this delivery targets.
+     * The identifier of the subscription the delivery is for.
      */
     subscriptionId?: string;
     /**
-     * The subscription\'s own name, snapshotted at the moment this delivery was first created -- so a delivery record stays meaningful even if the subscription it targeted has since been renamed or deleted.
+     * The subscription\'s name when the delivery was created, so the record stays meaningful if the subscription is renamed or deleted.
      */
     subscriptionName?: string | null;
     /**
-     * The registered event type name this delivery carries (for example, `\"DnsZoneChanged\"`).
+     * The registered event type name the delivery carries (for example `\"DnsZoneChanged\"`).
      */
     eventTypeName?: string | null;
     /**
-     * The exact outbound JSON request body this delivery sends (or already sent) on every attempt -- captured once, at creation time, so a retry (by the same process or a freshly restarted one) always sends byte-identical content.
+     * The JSON request body sent on every attempt. It is captured once, when the delivery is created, so a retry, even after a restart, sends the same bytes.
      */
     payloadJson?: string | null;
     status?: WebhookDeliveryAttemptStatusEnum;
     /**
-     * How many delivery attempts have actually been made so far.
+     * How many attempts have been made so far.
      */
     attemptCount?: number;
     /**
-     * The maximum number of delivery attempts this delivery may ever make -- a snapshot of the target subscription\'s own Ninlil.Web.Models.WebhookSubscriptionDetail.MaxDeliveryAttempts at the moment this row was first created.
+     * The most attempts the delivery may make: the subscription\'s Ninlil.Web.Models.WebhookSubscriptionDetail.MaxDeliveryAttempts when the delivery was created.
      */
     maxAttempts?: number;
     /**
-     * When this delivery\'s own most recent attempt occurred, or null if never attempted yet.
+     * When the last attempt was made, or null if none has been.
      */
     lastAttemptedAtUtc?: string | null;
     /**
-     * When this delivery\'s own next retry attempt is due, or null once Ninlil.Web.Models.WebhookDeliveryAttemptDetail.Status has reached a terminal outcome.
+     * When the next retry is due, or null once Ninlil.Web.Models.WebhookDeliveryAttemptDetail.Status is final.
      */
     nextRetryDueUtc?: string | null;
     /**
-     * The HTTP status code the subscriber\'s own endpoint returned on this delivery\'s own most recent attempt, or null if that attempt failed before a response was ever received.
+     * The HTTP status code the receiver returned to the last attempt, or null if that attempt failed before a response arrived.
      */
     lastHttpStatusCode?: number | null;
     /**
-     * A short, human-readable description of this delivery\'s own most recent failure, or null if its most recent (or only) attempt succeeded.
+     * A short description of the last failure, or null if the last attempt succeeded.
      */
     lastErrorMessage?: string | null;
     /**
-     * When this delivery reached its own terminal outcome, or null while still pending.
+     * When the delivery reached a final status, or null while it is pending.
      */
     completedAtUtc?: string | null;
     /**
-     * When this delivery was first recorded (its own first attempt).
+     * When the delivery was first recorded.
      */
     createdAtUtc?: string;
 }

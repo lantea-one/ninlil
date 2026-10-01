@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `SelfUpdateOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the update check settings (`SelfUpdateOptions`) that `GET /api/self-update-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface SelfUpdateSettingsDetail { 
     /**
-     * Whether this host periodically checks Ninlil.Web.Models.SelfUpdateSettingsDetail.ReleaseFeedUrl at all.
+     * Whether the server checks Ninlil.Web.Models.SelfUpdateSettingsDetail.ReleaseFeedUrl periodically. Defaults to true.
      */
     enableAutomaticCheck?: boolean;
     /**
-     * The release feed URL checked, or an empty string if none is configured yet.
+     * The release feed URL to check, or an empty string (the default) if none is set.
      */
     releaseFeedUrl?: string | null;
     /**
-     * How often a real check is due.
+     * How often a check is due. Defaults to 24 hours.
      */
     checkInterval?: string;
 }

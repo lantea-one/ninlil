@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries the e-mail address a genuinely anonymous, self-service Forgot Password request submits to M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken).
+ * This class carries the e-mail address an anonymous, self-service Forgot Password request submits to M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken).
  */
 export interface ForgotPasswordRequest { 
     /**
-     * The e-mail address to look up. Never confirmed or denied to actually match an account by this request\'s own response -- see M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)\'s own doc comment.
+     * The e-mail address to look up. The response never says whether it matches an account (see M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)).
      */
     email?: string | null;
 }

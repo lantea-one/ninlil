@@ -10,10 +10,16 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `SecondaryZoneRefreshOptions` -- how often the background loop that checks whether a secondary zone is due for a refresh wakes up. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the secondary zone refresh settings (`SecondaryZoneRefreshOptions`) that `GET /api/secondary-zone-refresh-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface SecondaryZoneRefreshSettingsDetail { 
+    /**
+     * How often the background loop checks whether a secondary zone is due for a refresh. Defaults to 15 seconds.
+     */
     pollInterval?: string;
+    /**
+     * How long to wait before retrying a zone with no local SOA (so no Retry value), whose primaries were all unreachable, or that is a stub zone. Defaults to 30 seconds.
+     */
     defaultRetryInterval?: string;
 }
 

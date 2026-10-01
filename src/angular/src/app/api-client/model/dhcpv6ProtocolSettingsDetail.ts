@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ProtocolOptions` -- the DHCPv6 UDP transport\'s own bind/port settings, the DHCPv6 analogue of Ninlil.Web.Models.DhcpProtocolSettingsDetail.
+ * This record is the REST shape of `Ninlil.Dhcp.Protocol.Dhcpv6.Dhcpv6ProtocolOptions`, the DHCPv6 UDP listener\'s settings (`GET /api/dhcp-settings/dhcpv6-protocol`); the DHCPv6 counterpart of Ninlil.Web.Models.DhcpProtocolSettingsDetail.
  */
 export interface Dhcpv6ProtocolSettingsDetail { 
     /**
-     * Whether this listener binds its socket and answers DHCPv6 traffic at all.
+     * Whether the listener starts at boot and answers DHCPv6 traffic. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The port this listener binds to -- 547 is the IANA-assigned DHCPv6 server port.
+     * The port the listener binds to. Defaults to 547, the IANA DHCPv6 server port.
      */
     serverPort?: number;
     /**
-     * The port a reply is unicast back to -- 546 is the IANA-assigned DHCPv6 client port.
+     * The port a reply is unicast to. Defaults to 546, the IANA DHCPv6 client port.
      */
     clientPort?: number;
 }

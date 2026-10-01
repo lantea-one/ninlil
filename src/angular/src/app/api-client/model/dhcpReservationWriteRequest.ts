@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a static reservation belonging to a DHCP scope (`POST`/`PUT /api/dhcp-scopes/{scopeId}/reservations`).
+ * This class carries the fields used to create or fully replace a static reservation in a DHCP scope (`POST` and `PUT` under `/api/dhcp-scopes/{scopeId}/reservations`).
  */
 export interface DhcpReservationWriteRequest { 
     /**
@@ -18,19 +18,19 @@ export interface DhcpReservationWriteRequest {
      */
     clientIdentifier?: string | null;
     /**
-     * The fixed IP address reserved for this client.
+     * The fixed IP address reserved for the client.
      */
     ipAddress?: string | null;
     /**
-     * An operator-supplied host name for this reservation, if any.
+     * An operator-supplied host name for the reservation, or null for none.
      */
     hostName?: string | null;
     /**
-     * Whether the reservation starts out (or is currently) disabled.
+     * Whether the reservation is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this reservation.
+     * Free-form operator notes about the reservation.
      */
     comments?: string | null;
 }

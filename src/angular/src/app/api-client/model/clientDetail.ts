@@ -13,70 +13,70 @@ import { DnsClientDeviceIconEnum } from './dnsClientDeviceIconEnum';
 
 
 /**
- * This class carries a known client device\'s own full metadata, for list, single-item, and creation responses -- including every address (Ninlil.Web.Models.ClientDetail.Addresses) it currently answers to, since a real device may have more than one at once (a dual-stack device\'s own separate IPv4 MAC address and IPv6 DUID, for instance).
+ * This class carries a known client device, as returned by the list, get and create endpoints of `/api/clients`. Ninlil.Web.Models.ClientDetail.Addresses lists every identifier the device answers to, since one device can have several (a dual-stack device\'s IPv4 MAC address and IPv6 DUID, for instance).
  */
 export interface ClientDetail { 
     /**
-     * This device\'s own unique identifier.
+     * The device\'s unique identifier.
      */
     id?: string;
     /**
-     * Every persistent identifier this device currently answers to -- see Ninlil.Web.Models.ClientAddressDetail.
+     * Every persistent identifier the device answers to (see Ninlil.Web.Models.ClientAddressDetail).
      */
     addresses?: Array<ClientAddressDetail> | null;
     /**
-     * An operator-chosen, human-readable name for this client.
+     * An operator-chosen, human-readable name for the client.
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity this client is explicitly assigned to, or null for no explicit override.
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
-     * Whether the client is currently disabled.
+     * Whether the client is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Optional free-text operator notes about this client.
+     * Optional free-text operator notes about the client.
      */
     comments?: string | null;
     origin?: DnsClientOriginEnum;
     /**
-     * When this row was first created.
+     * When the client was registered.
      */
     createdAtUtc?: string;
     /**
-     * When this row was last updated, or null if never.
+     * When the client was last updated, or null if never.
      */
     updatedAtUtc?: string | null;
     /**
-     * The instant, in UTC, until which this client\'s own instant pause blocks all of its DNS resolution -- see Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc. null when this client is not currently paused.
+     * The UTC instant until which the client\'s pause blocks all of its DNS resolution (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity.PausedUntilUtc), or null when no pause has been set.
      */
     pausedUntilUtc?: string | null;
     /**
-     * Whether PausedUntilUtc is currently in effect -- computed at read time against the current instant, since an elapsed pause is never actively cleared (see that property\'s own doc comment for why no cleanup sweep is needed).
+     * Whether PausedUntilUtc is still in the future, computed when the response is built. An expired pause is never cleared from storage, so this flag, not the timestamp, says whether the client is paused.
      */
     isCurrentlyPaused?: boolean;
     /**
-     * The most recent passive sighting of this device across every one of its addresses (DHCP, DNS query, or confirmed-reachable neighbor-table activity), or null if it has never been seen.
+     * The most recent passive sighting of the device on any of its addresses (DHCP, a DNS query, or a reachable neighbor-table entry), or null if it has never been seen.
      */
     lastSeenUtc?: string | null;
     /**
-     * Whether LastSeenUtc falls within the configured online window -- computed at read time, never stored, so it turns false on its own once a device goes quiet.
+     * Whether LastSeenUtc falls within the configured online window. It is computed when the response is built, so it turns false once a device goes quiet.
      */
     isOnline?: boolean;
     deviceIconKey?: DnsClientDeviceIconEnum;
     suggestedDeviceIconKey?: DnsClientDeviceIconEnum;
     /**
-     * Whether an operator has starred this client as a favorite.
+     * Whether an operator has starred the client as a favorite.
      */
     isFavorite?: boolean;
     /**
-     * The hardware vendor behind this device, from the first of its addresses whose MAC address resolves in the IEEE registries -- computed at read time, never stored, so it cannot go stale. null when no address yields one.
+     * The hardware vendor of the device, from the first of its addresses whose MAC address resolves in the IEEE registries. It is computed when the response is built, so it does not go stale. null when no address yields one.
      */
     vendor?: string | null;
     /**
-     * Whether every MAC address this device\'s identifiers embed is a randomized (locally administered) one -- reported instead of a vendor, since such an address names no manufacturer. false when no identifier embeds a MAC at all.
+     * Whether every MAC address the device\'s identifiers embed is a randomized (locally administered) one. It is reported instead of a vendor, since such an address names no manufacturer. false when no identifier embeds a MAC at all.
      */
     isRandomizedMacAddress?: boolean;
 }

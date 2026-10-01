@@ -10,23 +10,23 @@
 
 
 /**
- * This class carries a single subsystem\'s own health-check result, part of an authenticated Ninlil.Web.Models.StatusResponse.Components response.
+ * This class carries one health check\'s result, as listed in Ninlil.Web.Models.StatusResponse.Components.
  */
 export interface StatusComponent { 
     /**
-     * The health check\'s own registered name (for example, `storage`, `transports`).
+     * The health check\'s registered name (for example `storage` or `transports`).
      */
     name?: string | null;
     /**
-     * This one component\'s own status: `Healthy`, `Degraded`, or `Unhealthy`.
+     * The component\'s status: `Healthy`, `Degraded` or `Unhealthy`.
      */
     status?: string | null;
     /**
-     * A human-readable description of this component\'s own current state.
+     * A human-readable description of the component\'s state.
      */
     description?: string | null;
     /**
-     * The message of an exception this check raised, if any, or null.
+     * The message of an exception the check raised, or null.
      */
     error?: string | null;
 }

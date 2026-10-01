@@ -10,9 +10,12 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `TsigServiceOptions` -- the clock-skew tolerance written into every message this server signs. Exposed as a plain System.Int32 even though the underlying options property is a System.UInt16, since JSON has no unsigned 16-bit numeric type; a `PATCH` to the same endpoint rejects anything outside 0-65535. This record\'s own field is the exact same one a `PATCH` to the same endpoint accepts.
+ * This record is the TSIG settings (`TsigServiceOptions`) that `GET /api/tsig-settings` returns: the clock skew tolerance (fudge) written into every message the server signs. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface TsigSettingsDetail { 
+    /**
+     * The fudge, in seconds. The options property is a System.UInt16, but it is shown as an System.Int32 because JSON has no unsigned 16-bit type; a `PATCH` rejects values outside 0 to 65535.
+     */
     defaultFudgeSeconds?: number;
 }
 

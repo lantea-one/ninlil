@@ -11,24 +11,24 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a custom, raw DHCPv4 option belonging to a scope (`POST`/`PUT /api/dhcp-scopes/{scopeId}/custom-options`).
+ * This class carries the fields used to create or fully replace a custom, raw DHCPv4 option in a scope (`POST` and `PUT` under `/api/dhcp-scopes/{scopeId}/custom-options`).
  */
 export interface DhcpScopeCustomOptionWriteRequest { 
     /**
-     * The option\'s own raw numeric tag (0-255).
+     * The option\'s numeric tag. Use 1 to 254: 0 (Pad) and 255 (End) are reserved markers.
      */
     optionTag?: number;
     /**
-     * The option\'s own raw value bytes, as an uppercase hexadecimal string -- ignored entirely at delivery time (and may be omitted/left blank) when ValueSource is Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress.
+     * The option\'s raw value bytes as a hexadecimal string with an even number of digits; it is stored in uppercase. It is not used, and may be blank, when ValueSource is Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress.
      */
     valueHex?: string | null;
     /**
-     * Whether the custom option starts out (or is currently) disabled.
+     * Whether the custom option is disabled.
      */
     isDisabled?: boolean;
     valueSource?: DhcpOptionValueSourceEnum;
     /**
-     * Free-form operator notes about this custom option.
+     * Free-form operator notes about the custom option.
      */
     comments?: string | null;
 }

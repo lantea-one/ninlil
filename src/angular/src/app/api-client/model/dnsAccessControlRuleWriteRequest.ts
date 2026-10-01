@@ -10,23 +10,23 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a per-client/network access-control rule (`POST`/`PUT /api/access-control-rules`).
+ * This class carries the fields used to create or fully replace an access-control rule for a network (`POST /api/access-control-rules`, `PUT /api/access-control-rules/{id}`).
  */
 export interface DnsAccessControlRuleWriteRequest { 
     /**
-     * An operator-chosen, human-readable name for this rule (for example, \"Trusted LAN\").
+     * An operator-chosen, human-readable name for the rule (for example, \"Trusted LAN\").
      */
     name?: string | null;
     /**
-     * The network this rule applies to, in CIDR notation (a bare address is a `/32`/`/128` network of one address) -- validated against M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@), the same parser Ninlil.Web.Controllers.ClientGroupNetworksController\'s own `TryValidateCidr` already uses and `DnsAccessControlRuleCache` itself matches against at query time.
+     * The network the rule applies to, in CIDR notation with a prefix length (a bare address is rejected; write `/32` or `/128` for one host). It must parse with M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@), the parser `DnsAccessControlRuleCache` matches with at query time.
      */
     cidr?: string | null;
     /**
-     * Every capability this rule grants a client whose source address falls within Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Cidr, as an explicit array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names (for example, `[\"RecursionAccess\", \"RateLimitBypass\"]`) -- the projection Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum\'s own doc comment calls for, decoupling this wire shape from the entity\'s own stored System.FlagsAttribute bitmask. An empty array is accepted (a rule that currently grants nothing); an unrecognized name is rejected with a validation error, never silently ignored.
+     * The capabilities the rule grants a client whose source address is in Ninlil.Web.Models.DnsAccessControlRuleWriteRequest.Cidr, as an array of Ninlil.Dns.Common.Enum.DnsAccessControlCapabilityEnum member names (for example `[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored System.FlagsAttribute bitmask. Names are case-sensitive. An empty array is accepted (a rule that grants nothing); an unknown name is rejected with a 400.
      */
     capabilities?: Array<string> | null;
     /**
-     * Whether the rule starts out (or is currently) disabled.
+     * Whether the rule is disabled.
      */
     isDisabled?: boolean;
 }

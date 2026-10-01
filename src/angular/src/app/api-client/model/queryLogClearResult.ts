@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the outcome of an explicit \"clear the log\" action.
+ * This class carries the outcome of clearing the query log (`DELETE /api/query-log`).
  */
 export interface QueryLogClearResult { 
     /**

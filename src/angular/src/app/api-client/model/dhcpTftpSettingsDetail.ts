@@ -10,27 +10,27 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Server.Tftp.TftpServerOptions` -- this server\'s own bundled, read-only RFC 1350 TFTP server.
+ * This record is the REST shape of `Ninlil.Dhcp.Server.Tftp.TftpServerOptions`, the bundled read-only RFC 1350 TFTP server (`GET /api/dhcp-settings/tftp`).
  */
 export interface DhcpTftpSettingsDetail { 
     /**
-     * Whether this server binds its socket and answers TFTP requests at all.
+     * Whether the TFTP server starts at boot. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The UDP port this server listens for incoming Read/Write Requests on.
+     * The UDP port the TFTP server listens on. Defaults to 69.
      */
     port?: number;
     /**
-     * The directory this server serves files from.
+     * The directory files are served from. Empty by default.
      */
     rootDirectory?: string | null;
     /**
-     * How long, in seconds, this server waits for an Acknowledgment before retransmitting a block.
+     * How long, in seconds, to wait for an acknowledgment before sending a block again. Defaults to 2.
      */
     retransmitTimeoutSeconds?: number;
     /**
-     * The greatest number of times this server retransmits one block before giving up on a transfer.
+     * How many times one block is sent again before the transfer is abandoned. Defaults to 5.
      */
     maxRetransmissions?: number;
 }

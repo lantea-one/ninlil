@@ -14,34 +14,34 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries a single persisted query log entry\'s own fields, for `QueryLogController`\'s own search response. No secret material is involved anywhere in this entity, so, unlike several other entity types in this project, there is no reveal-once policy to apply here at all -- every field is always fully visible to any caller holding `querylog:read`.
+ * This class carries one query log entry, as returned in the pages of `GET /api/query-log`. Nothing in it is secret, so every field is visible to any caller holding `querylog:read`. What an entry contains depends on the privacy level in force when it was written.
  */
 export interface DnsQueryLogEntryDetail { 
     /**
-     * This entry\'s own identifier.
+     * The entry\'s identifier.
      */
     id?: string;
     /**
-     * The UTC date and time the query finished being answered.
+     * The UTC date and time the query was answered.
      */
     occurredAtUtc?: string;
     /**
-     * The querying client\'s own source address, or null if none was known.
+     * The client\'s source address, or null if it was not known or not kept.
      */
     clientAddress?: string | null;
     protocol?: DnsTransportProtocolEnum;
     /**
-     * The queried name\'s own presentation form, or null if the query carried no question at all.
+     * The queried name in presentation form, or null if the query had no question.
      */
     queriedName?: string | null;
     queriedType?: DnsResourceRecordTypeEnum;
     responseCode?: DnsResponseCodeEnum;
     /**
-     * How many records the answer\'s own Answer section carried.
+     * How many records the answer section held.
      */
     answerCount?: number;
     /**
-     * The querying client\'s own persistent identifier (a MAC address or DUID), resolved once at write time, or null when it was never resolved or the configured query logging privacy level suppresses it -- see Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber\'s own doc comment for the full reasoning.
+     * The client\'s persistent identifier (a MAC address or DUID), resolved when the entry was written, or null when it was not resolved or the privacy level hides it (see Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber).
      */
     clientIdentifier?: string | null;
     clientProtocolVersion?: InternetProtocolVersionEnum;

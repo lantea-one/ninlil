@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the role a user should be granted or revoked.
+ * This class carries the role to grant a user (`POST /api/users/{id}/roles`).
  */
 export interface UserRoleAssignmentRequest { 
     /**

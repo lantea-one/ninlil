@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries a role\'s own summary, including every permission it currently grants.
+ * This class carries a role with every permission it grants, as returned by the endpoints of `/api/roles`. The cluster fields mean what they mean on `UserSummary`.
  */
 export interface RoleSummary { 
     /**
-     * The role\'s own identifier.
+     * The role\'s identifier.
      */
     id?: string;
     /**
@@ -22,23 +22,23 @@ export interface RoleSummary {
      */
     name?: string | null;
     /**
-     * The role\'s own description.
+     * The role\'s description.
      */
     description?: string | null;
     /**
-     * Every permission string currently granted by this role.
+     * Every permission string the role grants.
      */
     permissions?: Array<string> | null;
     /**
-     * The cluster node this role was most recently created or modified on, or null on a single-node deployment -- mirrors `UserSummary`\'s own field of the same name.
+     * The cluster node the role was last created or modified on, or null if it was never written with clustering enabled.
      */
     originatingNodeId?: string | null;
     /**
-     * A human-readable explanation of a genuine cluster role-name collision this role lost, or null for the overwhelming majority of roles -- mirrors `UserSummary.ClusterConflictNote`\'s own field.
+     * An explanation of a cluster role-name collision this role lost, or null when there was none (almost always).
      */
     clusterConflictNote?: string | null;
     /**
-     * The instant this role was last created or modified -- mirrors <c>UserSummary .LastModifiedUtc</c>\'s own field of the same name and purpose.
+     * When the role was last created or modified.
      */
     lastModifiedUtc?: string | null;
 }

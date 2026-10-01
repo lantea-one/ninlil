@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single client group list assignment\'s own fields, for list, single-item, and creation responses.
+ * This class carries one client group list assignment, as returned by the list, get and create endpoints under `/api/client-groups/{groupId}/list-assignments`.
  */
 export interface ClientGroupListAssignmentDetail { 
     id?: string;

@@ -11,20 +11,20 @@ import { RaRoutePreferenceEnum } from './raRoutePreferenceEnum';
 
 
 /**
- * This record is the REST representation of one `Ninlil.Dhcp.Server.Ra.RaAdvertisedRouteOptions` entry -- one specific route advertised via RFC 4191 Section 2.3\'s own Route Information option, nested inside Ninlil.Web.Models.DhcpRaSettingsDetail/the `PATCH ra` merge-patch body\'s own `routes` array.
+ * This record is the REST shape of one `Ninlil.Dhcp.Server.Ra.RaAdvertisedRouteOptions` entry: a route advertised in an RFC 4191 Section 2.3 Route Information option. It appears in Ninlil.Web.Models.DhcpRaSettingsDetail.Routes and in the `routes` array of `PATCH /api/dhcp-settings/ra`.
  */
 export interface DhcpRaRouteDetail { 
     /**
-     * The route\'s own prefix, or null/empty when PrefixLength is `0` (a default-route-preference-only entry).
+     * The route\'s prefix, or null or empty when PrefixLength is `0` (an entry that only sets the default route\'s preference).
      */
     prefix?: string | null;
     /**
-     * The number of leading significant bits of Prefix, `0` through `128`.
+     * The number of significant leading bits of Prefix, 0 to 128. Defaults to 64.
      */
     prefixLength?: number;
     preference?: RaRoutePreferenceEnum;
     /**
-     * How long this route remains valid, from the moment each advertisement carrying it is sent.
+     * How long the route stays valid, counted from each advertisement that carries it. Defaults to 1800 seconds.
      */
     routeLifetime?: string;
 }

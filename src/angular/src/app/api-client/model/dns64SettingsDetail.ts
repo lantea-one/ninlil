@@ -10,10 +10,16 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `Dns64Options`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the DNS64 settings (`Dns64Options`) that `GET /api/dns64-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface Dns64SettingsDetail { 
+    /**
+     * Whether AAAA records are synthesized for IPv4-only names. Defaults to false.
+     */
     enable?: boolean;
+    /**
+     * The IPv6 prefix synthesized addresses are built in. Defaults to the well-known `64:ff9b::/96`.
+     */
     synthesisPrefix?: string | null;
 }
 

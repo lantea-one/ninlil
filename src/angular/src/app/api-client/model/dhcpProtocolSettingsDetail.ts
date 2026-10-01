@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions` -- the DHCPv4 UDP transport\'s own bind/port settings.
+ * This record is the REST shape of `Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4ProtocolOptions`, the DHCPv4 UDP listener\'s settings (`GET /api/dhcp-settings/protocol`).
  */
 export interface DhcpProtocolSettingsDetail { 
     /**
-     * Whether this listener binds its socket and answers DHCPv4 traffic at all.
+     * Whether the listener starts at boot and answers DHCPv4 traffic. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The port this listener binds to.
+     * The port the listener binds to. Defaults to 67.
      */
     serverPort?: number;
     /**
-     * The port a reply sent directly to a client is sent to.
+     * The port a reply sent directly to a client goes to. Defaults to 68.
      */
     clientPort?: number;
 }

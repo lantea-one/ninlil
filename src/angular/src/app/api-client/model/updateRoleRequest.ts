@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the settings that can be changed on an existing role.
+ * This class carries the settings that can be changed on a role (`PUT /api/roles/{id}`). Only the description can change; the name is fixed.
  */
 export interface UpdateRoleRequest { 
     /**

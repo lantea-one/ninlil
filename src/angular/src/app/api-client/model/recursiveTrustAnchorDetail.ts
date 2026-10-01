@@ -11,7 +11,7 @@ import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
 /**
- * This record is the REST representation of one `TrustAnchorOption` entry within Ninlil.Web.Models.RecursiveSettingsDetail.TrustAnchorsOverride.
+ * This record is one `TrustAnchorOption` entry in Ninlil.Web.Models.RecursiveSettingsDetail.TrustAnchorsOverride: a root DS record given as key tag, algorithm, digest type and hex digest. An empty override list uses the IANA root anchors. The list only seeds the trust anchor store when its state file is missing.
  */
 export interface RecursiveTrustAnchorDetail { 
     keyTag?: number;

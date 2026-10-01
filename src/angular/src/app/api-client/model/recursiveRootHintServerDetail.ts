@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST representation of one `RootHintServerOption` entry within Ninlil.Web.Models.RecursiveSettingsDetail.RootHintServersOverride.
+ * This record is one `RootHintServerOption` entry in Ninlil.Web.Models.RecursiveSettingsDetail.RootHintServersOverride: a root server\'s name and addresses. An empty override list uses the built-in internet root hints.
  */
 export interface RecursiveRootHintServerDetail { 
     name?: string | null;

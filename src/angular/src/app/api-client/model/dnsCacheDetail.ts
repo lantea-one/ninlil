@@ -10,11 +10,11 @@
 
 
 /**
- * This record is the REST representation of one in-memory DNS answer cache on this node: the forwarded-response cache (`forwarded`) or the recursive resolver\'s cache (`recursive`). The counts are this node\'s only; caches are never shared across a cluster.
+ * This record describes one in-memory DNS answer cache on this node, as returned by `GET /api/dns-cache`: the forwarded-response cache (`forwarded`) or the recursive resolver\'s cache (`recursive`). The counts are this node\'s only; caches are not shared across a cluster.
  */
 export interface DnsCacheDetail { 
     /**
-     * The cache\'s short name, which the flush and remove actions accept to address it alone.
+     * The cache\'s short name, which the flush and remove actions take as `cache` to act on it alone.
      */
     name?: string | null;
     /**

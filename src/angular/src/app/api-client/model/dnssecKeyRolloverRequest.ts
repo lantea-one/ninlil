@@ -11,12 +11,12 @@ import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
 /**
- * This class carries the fields used to start an automated RFC 6781 key rollover for an existing, currently-active key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). Ninlil chooses the rollover scheme by the existing key\'s own `Role` -- Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK, Double-Signature (RFC 6781 §4.1.2) for a KSK -- there is no way to request the other scheme for a given role through this action.
+ * This class carries the fields used to start an automated RFC 6781 key rollover for an active key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). The scheme follows from the key\'s `Role`: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature (RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested.
  */
 export interface DnssecKeyRolloverRequest { 
     algorithm?: DnssecAlgorithmEnum;
     /**
-     * The new key\'s own key size, in bits -- meaningful only for the RSA algorithm family.
+     * The new key\'s size, in bits. Used only by the RSA algorithms, where 0 (the default) means 2048.
      */
     keySizeBits?: number;
 }

@@ -12,7 +12,7 @@ import { RecursiveTrustAnchorDetail } from './recursiveTrustAnchorDetail';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `RecursiveServerOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the recursive resolver settings (`RecursiveServerOptions`) that `GET /api/recursive-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The two override lists are read once at startup or first seed, so the GET shows the saved lists, which may not be the ones in use; every other field takes effect at once. `RecursiveServerOptions` documents each field and its default.
  */
 export interface RecursiveSettingsDetail { 
     enableRecursion?: boolean;

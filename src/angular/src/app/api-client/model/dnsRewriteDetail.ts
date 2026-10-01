@@ -11,48 +11,48 @@ import { DnsRewriteTargetKindEnum } from './dnsRewriteTargetKindEnum';
 
 
 /**
- * This class carries a single DNS rewrite\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity, so, unlike `TsigKeyDetail`/`DnssecKeyDetail`/`CloudProviderCredentialDetail`/ `WebhookSubscriptionDetail`, there is no reveal-once policy to apply here at all.
+ * This class carries a DNS rewrite, as returned by the list, get and write endpoints of `/api/dns-rewrites`. Nothing in it is secret, so there is no reveal-once handling as with `TsigKeyDetail` or `WebhookSubscriptionDetail`.
  */
 export interface DnsRewriteDetail { 
     /**
-     * This rewrite\'s own identifier.
+     * The rewrite\'s identifier.
      */
     id?: string;
     /**
-     * This rewrite\'s own domain pattern, exactly as stored.
+     * The rewrite\'s domain pattern, as stored.
      */
     domain?: string | null;
     /**
-     * This rewrite\'s own target, exactly as stored.
+     * The rewrite\'s target, as stored.
      */
     target?: string | null;
     targetKind?: DnsRewriteTargetKindEnum;
     /**
-     * Whether this rewrite is currently disabled.
+     * Whether the rewrite is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this rewrite.
+     * Free-form operator notes about the rewrite.
      */
     comments?: string | null;
     /**
-     * When this rewrite was created.
+     * When the rewrite was created.
      */
     createdAtUtc?: string;
     /**
-     * When this rewrite was last modified, or null if never.
+     * When the rewrite was last modified, or null if never.
      */
     updatedAtUtc?: string | null;
     /**
-     * The cluster node this rewrite was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     * The cluster node the rewrite was last created or modified on, used by cluster config sync, or null if it was never written with clustering enabled.
      */
     originatingNodeId?: string | null;
     /**
-     * The single known client (`Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity`) this rewrite is scoped to, or null if it is unscoped (global) or scoped to a client group instead -- read-only here: the ordinary create/replace/patch actions on this controller never set it, since the only real write path that ever scopes a rewrite is `SafeSearchController.Enable`\'s own optional target. Surfaced so an operator browsing the ordinary Rewrites page can tell a Safe-Search-scoped row apart from a global one, rather than seeing what would otherwise look like an unexplained, untargetable duplicate.
+     * The one known client (`Ninlil.Dns.Data.Abstractions.Entity.DnsClientEntity`) the rewrite applies to, or null if it is global or scoped to a client group. It is read-only here: this controller never sets it; only `SafeSearchController.Enable` with a target does. It is shown so the Rewrites page can tell a targeted Safe Search row from a global one that would otherwise look like a duplicate.
      */
     clientId?: string | null;
     /**
-     * The single client group this rewrite is scoped to, or null if it is unscoped or scoped to one specific client instead -- the same read-only, informational purpose Ninlil.Web.Models.DnsRewriteDetail.ClientId serves.
+     * The one client group the rewrite applies to, or null if it is global or scoped to a client. Read-only, like Ninlil.Web.Models.DnsRewriteDetail.ClientId.
      */
     clientGroupId?: string | null;
 }

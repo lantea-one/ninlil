@@ -10,7 +10,7 @@
 
 
 /**
- * This enumeration describes the two ways an administrator-driven password reset (see M:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken)) can deliver the new credential to a locked-out account. Confirmed via `AskUserQuestion` that both modes are needed, not just one: Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate works with no SMTP server configured at all, fitting this project\'s homelab-first deployment default, while Ninlil.Web.Models.AdminPasswordResetMode.EmailLink lets the account holder pick their own new password without an administrator ever seeing it, at the cost of requiring a working, already-configured SMTP server (see `EmailSenderOptions`/`SmtpSettingsController`).
+ * This enumeration names the two ways an administrator\'s password reset (see M:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken)) delivers a new credential to a locked-out account. Both are needed: Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate works without any SMTP server, which suits a homelab, while Ninlil.Web.Models.AdminPasswordResetMode.EmailLink lets the account holder pick a password the administrator never sees, but needs a configured SMTP server (see `EmailSenderOptions` and `SmtpSettingsController`).
  */
 export const AdminPasswordResetMode = {
     AutoGenerate: 'AutoGenerate',

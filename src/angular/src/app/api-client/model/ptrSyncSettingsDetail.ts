@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `PtrSyncOptions` -- the global default for whether a `ZoneTypeEnum.Primary`/`ZoneTypeEnum.CloudPrimary` zone\'s own A/AAAA record set is automatically mirrored into its enclosing reverse zone, used whenever a zone\'s own `ZoneEntity.AutoManagePtrRecords` is not explicitly set. No secret material is involved, so this record\'s own field is the exact same one a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the PTR sync defaults (`PtrSyncOptions`) that `GET /api/ptr-sync-settings` returns: whether the A and AAAA records of a `ZoneTypeEnum.Primary` or `ZoneTypeEnum.CloudPrimary` zone are mirrored as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies when the zone\'s own setting is unset. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface PtrSyncSettingsDetail { 
     /**
-     * The global default -- overridable per zone via `ZoneEntity.AutoManagePtrRecords`, which this setting supplies a value for only when that field is left unset.
+     * Whether PTR records are managed for a zone whose `ZoneEntity.AutoManagePtrRecords` is unset. Defaults to false.
      */
     defaultEnabled?: boolean;
     /**
-     * The global default IPv4 reverse-zone grouping granularity, in bits -- overridable per zone via `ZoneEntity.PtrIpv4PrefixLength`. `24` is the conventional octet boundary; `25`-`30` groups at an RFC 2317 classless boundary instead.
+     * The IPv4 reverse zone size, in prefix bits, for a zone whose `ZoneEntity.PtrIpv4PrefixLength` is unset. Defaults to 24, one zone per octet boundary; 25 to 30 use RFC 2317 classless zones. Only 24 to 30 are accepted.
      */
     defaultIpv4ReverseZonePrefixBits?: number;
     /**
-     * The global default IPv6 reverse-zone grouping granularity, in bits -- overridable per zone via `ZoneEntity.PtrIpv6PrefixLength`.
+     * The IPv6 reverse zone size, in prefix bits, for a zone whose `ZoneEntity.PtrIpv6PrefixLength` is unset. Defaults to 64; only multiples of 4 from 16 to 124 are accepted.
      */
     defaultIpv6ReverseZonePrefixBits?: number;
 }

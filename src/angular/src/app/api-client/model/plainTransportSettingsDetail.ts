@@ -10,23 +10,23 @@
 
 
 /**
- * This record is the REST representation of Plain DNS\'s own `PlainProtocolOptions`. Deliberately has no `Enable` field -- Plain DNS has none of its own either, since it is this project\'s baseline \"this is a DNS server at all\" transport rather than a capability-expanding toggle, and starts unconditionally.
+ * This record is the plain DNS transport settings (`PlainProtocolOptions`) that `GET /api/transport-settings/plain` returns. It has no `Enable` field because plain DNS has none: it is the baseline transport and always starts. Every field needs a listener restart.
  */
 export interface PlainTransportSettingsDetail { 
     /**
-     * The port both the UDP and TCP listeners bind to.
+     * The port the UDP and TCP listeners bind to.
      */
     port?: number;
     /**
-     * The local IP addresses both the UDP and TCP listeners binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     * The local IP addresses the UDP and TCP listeners bind to, one socket per address. An empty list (the default) means every address, through one dual-stack socket.
      */
     listenAddresses?: Array<string> | null;
     /**
-     * How long a TCP connection may sit completely idle before this server closes it.
+     * How long a TCP connection may stay idle before the server closes it.
      */
     tcpIdleTimeout?: string;
     /**
-     * How many TCP connections this server accepts at once.
+     * How many TCP connections the server accepts at once.
      */
     maxConcurrentTcpConnections?: number;
 }

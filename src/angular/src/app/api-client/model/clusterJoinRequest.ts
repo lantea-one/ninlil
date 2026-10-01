@@ -14,11 +14,11 @@
  */
 export interface ClusterJoinRequest { 
     /**
-     * The opaque code copied from the inviting node\'s own Angular \"Cluster\" page.
+     * The opaque code copied from the Cluster page of the inviting node.
      */
     inviteCode?: string | null;
     /**
-     * An optional display name for the inviter\'s own new row in this node\'s registry -- falls back to a name derived from the inviter\'s node identifier when omitted.
+     * An optional display name for the inviter\'s new row in this node\'s registry. When omitted, a name derived from the inviter\'s node identifier is used.
      */
     displayName?: string | null;
 }

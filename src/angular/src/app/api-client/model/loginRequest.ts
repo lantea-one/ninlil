@@ -23,7 +23,7 @@ export interface LoginRequest {
      */
     password?: string | null;
     /**
-     * With Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Cookie delivery, whether the session should outlive the browser: a persistent cookie and the long refresh lifetime when true, otherwise a browser-session cookie and the short browser-session lifetime. Ignored for Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Body delivery, whose sessions are always long-lived, exactly as before cookie delivery existed.
+     * With Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Cookie delivery, whether the session should outlive the browser: a persistent cookie and the long refresh lifetime when true, otherwise a browser-session cookie and the short browser-session lifetime. Ignored for Ninlil.Dns.Common.Enum.RefreshTokenDeliveryEnum.Body delivery, whose sessions are always long-lived.
      */
     rememberMe?: boolean;
     refreshTokenDelivery?: RefreshTokenDeliveryEnum;

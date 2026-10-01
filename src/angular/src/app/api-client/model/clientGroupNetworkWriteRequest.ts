@@ -10,15 +10,15 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a network belonging to a client group (`POST`/`PUT /api/client-groups/{groupId}/networks`). Exactly one of Cidr/ClientId must be set -- see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity\'s own doc comment.
+ * This class carries the fields used to create or fully replace a network belonging to a client group (`POST` and `PUT` under `/api/client-groups/{groupId}/networks`). Exactly one of Cidr and ClientId must be set (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity).
  */
 export interface ClientGroupNetworkWriteRequest { 
     /**
-     * The network, in CIDR notation (a bare IP address is treated as a `/32`/`/128` network of one address). null when ClientId is set instead.
+     * The network in CIDR notation, prefix length included (write a single address as `/32` or `/128`; a bare address is rejected). null when ClientId is set instead.
      */
     cidr?: string | null;
     /**
-     * A DNS-over-HTTPS ClientID label this row matches (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity.ClientId\'s own doc comment). null when Cidr is set instead.
+     * A DNS-over-HTTPS ClientID label this row matches (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity.ClientId). null when Cidr is set instead.
      */
     clientId?: string | null;
 }

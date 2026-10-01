@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)\'s own always- identical response -- the exact same Ninlil.Web.Models.ForgotPasswordResult.Message, every time, regardless of whether a reset link was actually sent, so a caller can never distinguish \"sent\" from \"not sent\" by response shape.
+ * This class carries the response of M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken). Ninlil.Web.Models.ForgotPasswordResult.Message is the same whether or not a reset link was sent, so a caller cannot tell the two apart.
  */
 export interface ForgotPasswordResult { 
     /**

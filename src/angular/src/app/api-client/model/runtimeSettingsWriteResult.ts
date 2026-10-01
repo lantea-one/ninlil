@@ -10,11 +10,11 @@
 
 
 /**
- * This record is returned after a runtime settings `PATCH` is written to the configuration file.
+ * This record is returned after a runtime settings `PATCH` is written to the configuration file. Its constants are the notes the settings controllers choose from, each saying when the written change takes effect.
  */
 export interface RuntimeSettingsWriteResult { 
     /**
-     * A reminder that this write does not necessarily take effect immediately -- see Ninlil.Web.Options.RuntimeConfigurationOptions\'s own doc comment.
+     * When the change takes effect: at once, after a listener or service restart, or after a process restart (see Ninlil.Web.Options.RuntimeConfigurationOptions).
      */
     note?: string | null;
 }

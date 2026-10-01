@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the settings that can be changed on an existing user account. Password changes are handled separately, not through this endpoint.
+ * This class carries the settings an administrator can change on a user account (`PUT /api/users/{id}`). Passwords are changed through separate endpoints.
  */
 export interface UpdateUserRequest { 
     /**

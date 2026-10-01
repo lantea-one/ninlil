@@ -11,53 +11,53 @@ import { Dhcpv4TagMatchModeEnum } from './dhcpv4TagMatchModeEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a tag-based conditional option delivery rule (`POST`/`PUT /api/dhcp-tag-rules`). See `Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity`\'s own doc comment for the full match/priority/conflict-resolution semantics every field here drives.
+ * This class carries the fields used to create or fully replace a tag-based conditional option delivery rule (`POST /api/dhcp-tag-rules`, `PUT /api/dhcp-tag-rules/{id}`). `Ninlil.Dhcp.Data.Abstractions.Entity.DhcpTagRuleEntity` documents how rules match, the order they apply in and how conflicts resolve. Every match field is optional; the set ones must all match.
  */
 export interface DhcpTagRuleWriteRequest { 
     /**
-     * An operator-chosen, descriptive name for this rule.
+     * An operator-chosen, descriptive name for the rule.
      */
     name?: string | null;
     /**
-     * Optionally restricts this rule to one specific scope; null makes it eligible against a client resolved into any scope.
+     * The one scope the rule applies to, or null for clients of any scope.
      */
     scopeId?: string | null;
     /**
-     * This rule\'s own evaluation order, ascending.
+     * The rule\'s evaluation order, ascending; a later rule\'s option overrides an earlier one\'s. Defaults to 0.
      */
     priority?: number;
     /**
-     * Whether the rule starts out (or is currently) disabled.
+     * Whether the rule is disabled.
      */
     isDisabled?: boolean;
     /**
-     * The Vendor Class Identifier value this rule matches against, if any.
+     * The Vendor Class Identifier value the rule matches, or null.
      */
     vendorClassIdentifierMatch?: string | null;
     vendorClassIdentifierMatchMode?: Dhcpv4TagMatchModeEnum;
     /**
-     * The User Class value this rule matches against, if any.
+     * The User Class value the rule matches, or null.
      */
     userClassMatch?: string | null;
     userClassMatchMode?: Dhcpv4TagMatchModeEnum;
     /**
-     * The Agent Circuit ID value this rule requires, as hex, if any (DHCPv4 only).
+     * The Agent Circuit ID the rule requires, as hex, or null (DHCPv4 only).
      */
     relayAgentCircuitIdHex?: string | null;
     /**
-     * The Agent/DHCPv6 Remote ID value this rule requires, as hex, if any.
+     * The relay agent (DHCPv4) or DHCPv6 Remote ID the rule requires, as hex, or null.
      */
     relayAgentRemoteIdHex?: string | null;
     /**
-     * The DHCPv6 Interface-ID value this rule requires, as hex, if any (DHCPv6 only).
+     * The DHCPv6 Interface-ID the rule requires, as hex, or null (DHCPv6 only).
      */
     relayInterfaceIdHex?: string | null;
     /**
-     * The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, if any (DHCPv6 only).
+     * The IANA Enterprise Number a DHCPv6 Vendor Class option must carry, or null (DHCPv6 only).
      */
     vendorClassEnterpriseNumber?: number | null;
     /**
-     * Free-form operator notes about this rule.
+     * Free-form operator notes about the rule.
      */
     comments?: string | null;
 }

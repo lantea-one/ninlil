@@ -10,10 +10,16 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnsRewriteOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Rewrite entries themselves (each individual domain/target override) are a separate resource, already fully CRUD-able via `DnsRewritesController` -- this record covers only the engine-level toggle and synthesized-answer TTL that applies across every configured rewrite.
+ * This record is the REST shape of the rewrite engine settings (`DnsRewriteOptions`) that `GET /api/rewrite-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The rewrites themselves are a separate resource (`DnsRewritesController`); this record holds the on/off switch and the TTL of synthesized answers, which apply to all of them.
  */
 export interface RewriteSettingsDetail { 
+    /**
+     * Whether rewrites are applied. Defaults to false.
+     */
     enable?: boolean;
+    /**
+     * The TTL, in seconds, of a synthesized rewrite answer. Defaults to 300.
+     */
     timeToLiveSeconds?: number;
 }
 

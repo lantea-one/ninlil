@@ -12,7 +12,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries a DHCP scope\'s own metadata, for list, single-item, and creation responses.
+ * This class carries a DHCP scope, as returned by the list, get and write endpoints of `/api/dhcp-scopes`. The fields mean what they mean in Ninlil.Web.Models.DhcpScopeWriteRequest.
  */
 export interface DhcpScopeDetail { 
     id?: string;

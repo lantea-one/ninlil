@@ -10,23 +10,68 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnsRateLimitOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the DNS rate limiting settings (`DnsRateLimitOptions`) that `GET /api/rate-limiting-settings` returns. It covers the per-client token bucket and the per-subnet response limits. A `PATCH` to the same endpoint accepts every field except the last two, which are read-only cluster sync bookkeeping.
  */
 export interface RateLimitingSettingsDetail { 
+    /**
+     * Whether rate limiting is applied. Defaults to false.
+     */
     enable?: boolean;
+    /**
+     * The steady query rate allowed per client. Defaults to 20.
+     */
     queriesPerSecond?: number;
+    /**
+     * How many queries a client may send at once above the steady rate. Defaults to 40.
+     */
     burstSize?: number;
+    /**
+     * How long an idle client\'s bucket, or a subnet\'s window, is kept. Defaults to 5 minutes.
+     */
     trackedClientExpiry?: string;
+    /**
+     * How often expired buckets are removed. Defaults to 1 minute.
+     */
     cleanupInterval?: string;
+    /**
+     * The most client addresses, and separately subnets, tracked at once; beyond it new ones go unthrottled. Defaults to 100,000.
+     */
     maxTrackedClients?: number;
+    /**
+     * The IPv4 prefix length clients are grouped by for subnet limits. Defaults to 24.
+     */
     subnetPrefixLengthIPv4?: number;
+    /**
+     * The IPv6 prefix length clients are grouped by for subnet limits. Defaults to 56.
+     */
     subnetPrefixLengthIPv6?: number;
+    /**
+     * The window subnet query counts are measured over. Defaults to 10 seconds.
+     */
     subnetSampleWindow?: string;
+    /**
+     * How many UDP queries a subnet may send per window. Defaults to 500.
+     */
     subnetUdpQueryLimit?: number;
+    /**
+     * How many TCP queries a subnet may send per window. Defaults to 100.
+     */
     subnetTcpQueryLimit?: number;
+    /**
+     * The percentage of over-limit UDP queries answered with a truncated response instead of dropped. Defaults to 50.
+     */
     subnetTruncatePercentage?: number;
+    /**
+     * CIDR networks the subnet limits never apply to (the per-client limit still does). Empty by default.
+     */
     subnetBypassCidrs?: Array<string> | null;
+    /**
+     * When the settings were last written, or null if never.
+     */
     lastModifiedUtc?: string | null;
+    /**
+     * The cluster node the last write came from, or null if never written.
+     */
     originatingNodeId?: string | null;
 }
 

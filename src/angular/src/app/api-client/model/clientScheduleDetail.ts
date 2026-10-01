@@ -11,7 +11,7 @@ import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 
 
 /**
- * This class carries a single client schedule\'s own fields, for list, single-item, and creation responses.
+ * This class carries a client schedule, as returned by the list, get and write endpoints under `/api/clients/{clientId}/schedules`.
  */
 export interface ClientScheduleDetail { 
     id?: string;

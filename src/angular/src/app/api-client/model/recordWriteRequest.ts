@@ -12,7 +12,7 @@ import { DnsClassEnum } from './dnsClassEnum';
 
 
 /**
- * This class carries every writable field of a `RecordEntity` -- used both to create a new record (`POST /api/zones/{zoneId}/records`) and to fully replace an existing one (`PUT /api/zones/{zoneId}/records/{id}`).
+ * This class carries every writable field of a `RecordEntity`, used to create a record (`POST /api/zones/{zoneId}/records`) and to fully replace one (`PUT /api/zones/{zoneId}/records/{id}`).
  */
 export interface RecordWriteRequest { 
     /**
@@ -25,12 +25,12 @@ export interface RecordWriteRequest {
      */
     timeToLiveSeconds?: number;
     /**
-     * The record\'s type-specific data, shaped exactly like the record type\'s own wire-format model -- an `A` record\'s `{ \"address\": \"203.0.113.5\" }`, an `MX` record\'s `{ \"preference\": 10, \"exchange\": \"mail.example.com\" }`, and so on.
+     * The record\'s type-specific data, shaped like the record type\'s data model: for example `{ \"address\": \"203.0.113.5\" }` for an `A` record or `{ \"preference\": 10, \"exchange\": \"mail.example.com\" }` for an `MX` record.
      */
     data?: any | null;
     'class'?: DnsClassEnum;
     /**
-     * Whether the record is currently disabled.
+     * Whether the record is disabled.
      */
     isDisabled?: boolean;
     /**
@@ -38,7 +38,7 @@ export interface RecordWriteRequest {
      */
     comments?: string | null;
     /**
-     * Whether the record is local-only, excluded from every sync path.
+     * Whether the record is local-only: never sent in a zone transfer or cloud push, and never overwritten or deleted by an incoming one.
      */
     excludeFromSync?: boolean;
 }

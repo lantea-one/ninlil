@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to register a new known client device (`POST /api/clients`) together with its first address -- Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier/ Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion become that address\'s own entire identity, immutable afterward exactly like every other address (see Ninlil.Web.Controllers.ClientsController\'s own doc comment); a second, or further, address is added later via M:Ninlil.Web.Controllers.ClientAddressesController.Create(System.Guid,Ninlil.Web.Models.ClientAddressWriteRequest,System.Threading.CancellationToken), never through this request. See Ninlil.Web.Models.ClientWriteRequest (used for `PUT`/`PATCH` instead) for the device\'s own fields that remain editable.
+ * This class carries the fields used to register a known client device (`POST /api/clients`) with its first address. Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier and Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion become that address\'s identity, which cannot change later (see Ninlil.Web.Controllers.ClientsController). Further addresses are added through M:Ninlil.Web.Controllers.ClientAddressesController.Create(System.Guid,Ninlil.Web.Models.ClientAddressWriteRequest,System.Threading.CancellationToken). The device fields that stay editable are in Ninlil.Web.Models.ClientWriteRequest, used by `PUT` and `PATCH`.
  */
 export interface ClientCreateRequest { 
     /**
@@ -20,11 +20,11 @@ export interface ClientCreateRequest {
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     /**
-     * An optional, operator-chosen, human-readable name for this client.
+     * An optional, operator-chosen, human-readable name for the client.
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity this client is explicitly assigned to, or null for no explicit override.
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
@@ -32,7 +32,7 @@ export interface ClientCreateRequest {
      */
     isDisabled?: boolean;
     /**
-     * Optional free-text operator notes about this client.
+     * Optional free-text operator notes about the client.
      */
     comments?: string | null;
     /**

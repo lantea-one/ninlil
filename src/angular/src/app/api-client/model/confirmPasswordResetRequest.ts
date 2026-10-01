@@ -10,15 +10,15 @@
 
 
 /**
- * This class carries the token-based password reset a caller submits from this project\'s shared \"set new password\" landing page, reachable via M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). Shared by both an administrator-driven reset e-mail (`UsersController.ResetPassword`\'s own `EmailLink` delivery mode) and the self-service Forgot Password request (M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)) alike -- neither the account holder nor an administrator is authenticated at this point, so this action is `[AllowAnonymous]`, and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token/Ninlil.Web.Models.ConfirmPasswordResetRequest.UserId together are the only proof of authorization it has.
+ * This class carries a token-based password reset, submitted from the \"set new password\" landing page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The page serves both the reset e-mail an administrator sends (`UsersController.ResetPassword` in `EmailLink` mode) and the self-service M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken) request. Nobody is signed in at this point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with Ninlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization.
  */
 export interface ConfirmPasswordResetRequest { 
     /**
-     * The account this reset applies to, carried in the landing page\'s own link.
+     * The account the reset applies to, carried in the landing page\'s link.
      */
     userId?: string;
     /**
-     * The password-reset token from `UserManager<TUser>.GeneratePasswordResetTokenAsync`, Base64Url-encoded for safe transport through a URL query string (a raw Identity token can contain `+`/`/`/`=`, unsafe to place directly in a query string) -- decoded back to the real token here before being checked.
+     * The password-reset token from `UserManager<TUser>.GeneratePasswordResetTokenAsync`, Base64Url-encoded because a raw Identity token can contain `+`, `/` and `=`, which are unsafe in a URL query string. The action decodes it before checking it.
      */
     token?: string | null;
     /**

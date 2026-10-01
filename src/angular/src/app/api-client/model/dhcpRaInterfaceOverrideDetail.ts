@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST representation of one `Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions` entry -- one network interface\'s own distinct Router Advertisement content, nested inside Ninlil.Web.Models.DhcpRaSettingsDetail/the `PATCH ra` merge-patch body\'s own `interfaceOverrides` array. Every scalar field below is nullable and, left null, inherits Ninlil.Web.Models.DhcpRaSettingsDetail\'s own matching global field verbatim for this one interface -- the same shape `Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions`\'s own doc comment describes in full, including Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail.RecursiveDnsServers/Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail.DnsSearchListDomains\'s own \"null inherits the global list, non-null (even empty) wholesale-replaces it\" list-level rule.  <b>Deliberately excludes an override\'s own would-be `Prefixes`/`Routes`     lists</b>, exactly mirroring Ninlil.Web.Models.DhcpRaSettingsDetail\'s own established     \"`Prefixes` stays config-file-only\" scope boundary -- extended here to     `Routes` as well, since nesting a repeatable route list inside this already-     repeatable interface-override list is a materially bigger REST/UI lift than everything     else this record carries. Both remain fully configurable directly in the JSON     configuration file (`RaInterfaceOverrideOptions.Prefixes`/`.Routes`), a     genuine, deliberate scope cut rather than an oversight.
+ * This record is the REST shape of one `Ninlil.Dhcp.Server.Ra.RaInterfaceOverrideOptions` entry: different Router Advertisement content for one network interface. It appears in Ninlil.Web.Models.DhcpRaSettingsDetail.InterfaceOverrides and in the `interfaceOverrides` array of `PATCH /api/dhcp-settings/ra`. A null scalar field inherits the matching global field. A nullNinlil.Web.Models.DhcpRaInterfaceOverrideDetail.RecursiveDnsServers or Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail.DnsSearchListDomains inherits the global list; any other value, even an empty list, replaces it. `RaInterfaceOverrideOptions` has the full rules.  <b>The override\'s `Prefixes` and `Routes` lists are not included.</b>     Prefixes are file-only globally too (see Ninlil.Web.Models.DhcpRaSettingsDetail), and a     route list nested inside this list would make the API and UI much more complex. Both     can be set in the JSON configuration file     (`RaInterfaceOverrideOptions.Prefixes` and `.Routes`).
  */
 export interface DhcpRaInterfaceOverrideDetail { 
     /**
@@ -18,7 +18,7 @@ export interface DhcpRaInterfaceOverrideDetail {
      */
     interfaceName?: string | null;
     /**
-     * When true, this interface is excluded from Router Advertisement entirely; every field below is then ignored.
+     * When true, no Router Advertisements are sent on this interface and every other field is ignored.
      */
     exclude?: boolean;
     /**

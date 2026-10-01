@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the settings for a newly-created user account.
+ * This class carries the settings for a new user account (`POST /api/users`).
  */
 export interface CreateUserRequest { 
     /**

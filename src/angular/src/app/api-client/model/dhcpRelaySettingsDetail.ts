@@ -10,31 +10,31 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Server.Relay.Dhcpv4RelayOptions` -- whether and how this server acts as a DHCPv4 relay agent instead of answering requests itself from local scope/lease state.
+ * This record is the REST shape of `Ninlil.Dhcp.Server.Relay.Dhcpv4RelayOptions` (`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream servers instead of answering them from its own scopes.
  */
 export interface DhcpRelaySettingsDetail { 
     /**
-     * Whether this server acts as a DHCPv4 relay agent at all.
+     * Whether the server acts as a DHCPv4 relay agent. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The IPv4 addresses of every upstream DHCPv4 server this relay forwards to.
+     * The IPv4 addresses of the upstream DHCPv4 servers requests are forwarded to.
      */
     upstreamServerAddresses?: Array<string> | null;
     /**
-     * The UDP port every configured upstream DHCPv4 server listens on.
+     * The UDP port the upstream servers listen on. Defaults to 67.
      */
     upstreamServerPort?: number;
     /**
-     * The IPv4 address this relay identifies itself as via `giaddr`, or null for auto-detection at startup.
+     * The IPv4 address the relay puts in `giaddr`, or null to detect it at startup.
      */
     relayAgentAddress?: string | null;
     /**
-     * The Agent Circuit ID text this relay adds to every forwarded request, if any.
+     * The Agent Circuit ID text added to every forwarded request, or null for none.
      */
     relayAgentCircuitId?: string | null;
     /**
-     * The Agent Remote ID text this relay adds to every forwarded request, if any.
+     * The Agent Remote ID text added to every forwarded request, or null for none.
      */
     relayAgentRemoteId?: string | null;
 }

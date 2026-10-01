@@ -12,15 +12,30 @@ import { DnsFilterBlockResponseModeEnum } from './dnsFilterBlockResponseModeEnum
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnsFilterOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the filtering engine settings (`DnsFilterOptions`) that `GET /api/filtering-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The lists themselves are managed through `/api/filter-lists`.
  */
 export interface FilteringSettingsDetail { 
+    /**
+     * Whether block and allow lists are applied at all. Defaults to false.
+     */
     enable?: boolean;
     blockResponseMode?: DnsFilterBlockResponseModeEnum;
+    /**
+     * The address a blocked A query gets in sinkhole mode. Defaults to `0.0.0.0`.
+     */
     sinkholeAddressV4?: string | null;
+    /**
+     * The address a blocked AAAA query gets in sinkhole mode. Defaults to `::`.
+     */
     sinkholeAddressV6?: string | null;
+    /**
+     * The TTL, in seconds, of a synthesized sinkhole record. Defaults to 60.
+     */
     sinkholeTimeToLiveSeconds?: number;
     precedence?: DnsFilterListPrecedenceEnum;
+    /**
+     * Whether an answer is also blocked when one of its CNAME targets is blocked. Defaults to true.
+     */
     blockCnameCloaking?: boolean;
 }
 export namespace FilteringSettingsDetail {

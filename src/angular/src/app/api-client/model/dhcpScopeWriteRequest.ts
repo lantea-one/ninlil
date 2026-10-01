@@ -12,65 +12,65 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a DHCP scope (`POST`/`PUT /api/dhcp-scopes`).
+ * This class carries the fields used to create or fully replace a DHCP scope (`POST /api/dhcp-scopes`, `PUT /api/dhcp-scopes/{id}`).
  */
 export interface DhcpScopeWriteRequest { 
     /**
-     * An operator-chosen, human-readable, unique name for this scope.
+     * An operator-chosen, human-readable, unique name for the scope.
      */
     name?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     /**
-     * The first address in the pool this scope hands leases out from, inclusive.
+     * The first address of the pool the scope leases from, inclusive.
      */
     rangeStartAddress?: string | null;
     /**
-     * The last address in the pool this scope hands leases out from, inclusive.
+     * The last address of the pool the scope leases from, inclusive.
      */
     rangeEndAddress?: string | null;
     /**
-     * The CIDR prefix length, in bits, of the network the range belongs to.
+     * The prefix length, in bits, of the network the range belongs to.
      */
     subnetPrefixLength?: number;
     /**
-     * The lease duration granted to a client that does not request a specific one.
+     * The lease duration granted to a client that does not ask for one.
      */
     defaultLeaseDuration?: string;
     /**
-     * The longest lease duration this scope ever grants.
+     * The longest lease duration the scope grants.
      */
     maxLeaseDuration?: string;
     /**
-     * Whether the scope starts out (or is currently) disabled.
+     * Whether the scope is disabled.
      */
     isDisabled?: boolean;
     /**
-     * The router (default gateway) addresses this scope hands out, in order of preference.
+     * The router (default gateway) addresses the scope hands out, in order of preference.
      */
     gatewayAddresses?: Array<string> | null;
     /**
-     * The DNS server addresses this scope hands out, in order of preference.
+     * The DNS server addresses the scope hands out, in order of preference.
      */
     dnsServerAddresses?: Array<string> | null;
     /**
-     * Free-form operator notes about this scope.
+     * Free-form operator notes about the scope.
      */
     comments?: string | null;
     /**
-     * The identifier of the DNS zone a lease drawn from this scope should auto-register an A/AAAA record for its own presented host name into, or null to leave DHCP->DNS integration disabled for this scope.
+     * The DNS zone in which a lease from this scope registers an A or AAAA record for the client\'s host name, or null to turn off DHCP-to-DNS registration for the scope.
      */
     dnsZoneId?: string | null;
     /**
-     * The name of the boot file a PXE client drawing a lease from this scope should request, or null to offer no boot file at all -- see `DhcpScopeEntity.BootFileName`\'s own doc comment.
+     * The boot file a PXE client leasing from this scope should request, or null to offer none (see `DhcpScopeEntity.BootFileName`).
      */
     bootFileName?: string | null;
     /**
-     * The address of the TFTP (or other boot) server a PXE client should contact for BootFileName, or null to fall back to this server\'s own Server Identifier address -- see `DhcpScopeEntity.NextServerAddress`\'s own doc comment.
+     * The TFTP (or other boot) server a PXE client should contact for BootFileName, or null to use this server\'s Server Identifier address (see `DhcpScopeEntity.NextServerAddress`).
      */
     nextServerAddress?: string | null;
     kind?: DhcpScopeKindEnum;
     /**
-     * The length, in bits, of each individual prefix this scope delegates to a client -- required when Kind is Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation, and rejected (must be null) otherwise -- see `DhcpScopeEntity.DelegatedPrefixLength`\'s own doc comment.
+     * The length, in bits, of each prefix the scope delegates. Required when Kind is Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation, and must be null otherwise (see `DhcpScopeEntity.DelegatedPrefixLength`).
      */
     delegatedPrefixLength?: number | null;
 }

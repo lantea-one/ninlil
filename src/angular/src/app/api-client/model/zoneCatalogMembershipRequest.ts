@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the catalog zone a caller wants a zone to join -- `POST /api/zones/{id}/catalog-membership`\'s own request body.
+ * This class carries the catalog zone a zone should join, the request body of `POST /api/zones/{id}/catalog-membership`.
  */
 export interface ZoneCatalogMembershipRequest { 
     /**

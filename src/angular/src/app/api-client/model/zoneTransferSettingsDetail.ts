@@ -10,9 +10,12 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ZoneTransferOptions` -- how this server chunks AXFR/IXFR responses it serves out to a secondary. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the zone transfer settings (`ZoneTransferOptions`) that `GET /api/zone-transfer-settings` returns: how the AXFR and IXFR responses the server sends to secondaries are split into messages. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface ZoneTransferSettingsDetail { 
+    /**
+     * The most records put in one transfer message. Defaults to 100.
+     */
     recordsPerMessage?: number;
 }
 

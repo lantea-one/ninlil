@@ -14,15 +14,15 @@
  */
 export interface TsigKeyCreateRequest { 
     /**
-     * The key\'s name, matched against a signed message\'s own key name.
+     * The key\'s name, matched against the key name in a signed message.
      */
     name?: string | null;
     /**
-     * The key\'s MAC algorithm. Ninlil implements only HMAC-SHA256; omitted or left blank, this defaults to that algorithm.
+     * The key\'s MAC algorithm. Only HMAC-SHA256 (`hmac-sha256`) is implemented, and it is used when this is omitted or blank.
      */
     algorithmName?: string | null;
     /**
-     * The key\'s own shared secret, base64-encoded. When omitted, a cryptographically random 32-byte secret is generated instead -- either way, the plaintext secret is only ever shown once, in this endpoint\'s own response; every later request for this key omits it.
+     * The shared secret, base64-encoded. When omitted, a random 32-byte secret is generated. Either way the plaintext secret is shown once, in this endpoint\'s response, and never again.
      */
     secret?: string | null;
     /**

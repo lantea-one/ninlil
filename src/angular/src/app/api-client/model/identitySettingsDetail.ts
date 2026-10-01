@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective password- complexity and account-lockout policy -- Microsoft.AspNetCore.Identity.IdentityOptions.Password and Microsoft.AspNetCore.Identity.IdentityOptions.Lockout, ASP.NET Core Identity\'s own built-in policy classes, which shipped inside this project\'s identity layer from the very start but, before this controller existed, had zero admin-facing configuration surface: changing either one required hand-editing the configuration file\'s own `Identity` section and restarting. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Deliberately excludes Microsoft.AspNetCore.Identity.IdentityOptions.User/Microsoft.AspNetCore.Identity.IdentityOptions.SignIn/ Microsoft.AspNetCore.Identity.IdentityOptions.Tokens/Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity/ Microsoft.AspNetCore.Identity.IdentityOptions.Stores -- structural choices this project\'s own identity wiring depends on (unique e-mail enforcement, for one, which rejects an account with no e-mail), not tunable policy in the sense this controller\'s own name promises.
+ * This record is the password complexity and account lockout policy that `GET /api/identity-settings` returns: ASP.NET Core Identity\'s Microsoft.AspNetCore.Identity.IdentityOptions.Password and Microsoft.AspNetCore.Identity.IdentityOptions.Lockout. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. Microsoft.AspNetCore.Identity.IdentityOptions.User, Microsoft.AspNetCore.Identity.IdentityOptions.SignIn, Microsoft.AspNetCore.Identity.IdentityOptions.Tokens, Microsoft.AspNetCore.Identity.IdentityOptions.ClaimsIdentity and Microsoft.AspNetCore.Identity.IdentityOptions.Stores are left out: they are structural choices the identity wiring depends on (unique e-mail enforcement, for example, which rejects an account with no e-mail), not policy to tune.
  */
 export interface IdentitySettingsDetail { 
     /**
@@ -46,7 +46,7 @@ export interface IdentitySettingsDetail {
      */
     maxFailedAccessAttempts?: number;
     /**
-     * Whether lockout applies to a brand-new account, not only an established one.
+     * Whether lockout applies to a newly created account too.
      */
     allowedForNewUsers?: boolean;
 }

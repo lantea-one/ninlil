@@ -10,27 +10,27 @@
 
 
 /**
- * This record is `POST /api/zones/{id}/reconcile-ptr`\'s own response body -- what one on-demand PTR/reverse-zone sync reconciliation pass actually did, or why it did nothing at all. A thin REST wrapper over `Server.Authoritative.Ptr.PtrReconciliationResult`, the same shape Ninlil.Web.Models.ZoneCaaReconciliationResponse uses for its own equivalent result.
+ * This record is the response of `POST /api/zones/{id}/reconcile-ptr`: what one on-demand PTR sync did, or why it did nothing. It copies `Server.Authoritative.Ptr.PtrReconciliationResult`, as Ninlil.Web.Models.ZoneCaaReconciliationResponse does for CAA.
  */
 export interface ZonePtrReconciliationResponse { 
     /**
-     * How many PTR/delegation-CNAME records this pass created, across every reverse zone and (for a classless IPv4 grouping) every RFC 2317 delegating parent zone touched.
+     * How many PTR and delegation CNAME records the pass created, across every reverse zone and, for a classless IPv4 grouping, every RFC 2317 delegating parent zone.
      */
     recordsAdded?: number;
     /**
-     * The same, for records removed as no longer desired.
+     * How many such records the pass removed as no longer wanted.
      */
     recordsRemoved?: number;
     /**
-     * How many distinct zones this pass created, wrote into, or visited for stale-record cleanup.
+     * How many distinct zones the pass created, wrote to or checked for stale records.
      */
     reverseZonesTouched?: number;
     /**
-     * Whether this pass did no work at all (see SkipReason) -- distinct from a pass that ran but found nothing to change (reported as false here with zero counts).
+     * Whether the pass did nothing (see SkipReason). A pass that ran but found nothing to change reports false with zero counts.
      */
     skipped?: boolean;
     /**
-     * Why this pass was skipped, populated only when Skipped is true.
+     * Why the pass was skipped, set only when Skipped is true.
      */
     skipReason?: string | null;
 }

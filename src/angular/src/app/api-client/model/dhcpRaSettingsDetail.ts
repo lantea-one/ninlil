@@ -12,59 +12,59 @@ import { DhcpRaRouteDetail } from './dhcpRaRouteDetail';
 
 
 /**
- * This record is the REST representation of the scalar/list fields of `Ninlil.Dhcp.Server.Ra.RaOptions` -- what a Router Advertisement this server sends actually contains, the content counterpart to Ninlil.Web.Models.DhcpRaProtocolSettingsDetail\'s own transport/timing settings.  <b>Deliberately excludes `RaOptions.Prefixes`</b>: each prefix carries several     independently-flagged/lifetimed fields (on-link/autonomous flags, two separate     lifetimes) that together give it a shape closer to a genuinely independent, addressable     resource -- configuring advertised prefixes remains config-file-only for now, a     genuine, deliberate scope boundary rather than an oversight, left for a future     dedicated sub-resource (the same shape `DhcpReservationsController` already gives     a scope\'s own reservations). <b>Ninlil.Web.Models.DhcpRaSettingsDetail.Routes is deliberately handled differently</b>, and does get real     REST/UI coverage here: an RFC 4191 route is a simpler, self-contained triple     (prefix/prefix length, preference, lifetime) with no independent flags of its own, so it     fits this controller\'s existing whole-array-replace shape -- the same one     Ninlil.Web.Models.DhcpRaSettingsDetail.RecursiveDnsServers/Ninlil.Web.Models.DhcpRaSettingsDetail.DnsSearchListDomains already use --     rather than needing a genuinely separate, identity-bearing sub-resource the way a     database-backed entity (a DHCP reservation, a scope\'s own custom option) does.     `RaOptions` itself has no database backing at all -- every field here, this one     included, lives in the JSON configuration file and is restart-required -- so a     sub-resource pattern built around a persisted entity\'s own stable identifier does not     actually fit the way this data is stored; a `PUT`-style whole-list replace on save     does.
+ * This record is the REST shape of `Ninlil.Dhcp.Server.Ra.RaOptions` (`GET /api/dhcp-settings/ra`): what the server\'s Router Advertisements contain. The transport and timing settings are in Ninlil.Web.Models.DhcpRaProtocolSettingsDetail.  <b>`RaOptions.Prefixes` is not included.</b> Each advertised prefix has its own     on-link and autonomous flags and two lifetimes, which suits a separate sub-resource     (as `DhcpReservationsController` gives reservations) better than a field here.     Prefixes are configured in the configuration file only. <b>Ninlil.Web.Models.DhcpRaSettingsDetail.Routes is included.</b> An RFC 4191 route is a simple triple (prefix     and length, preference, lifetime), so a `PATCH` replaces the whole list, as it     does Ninlil.Web.Models.DhcpRaSettingsDetail.RecursiveDnsServers and Ninlil.Web.Models.DhcpRaSettingsDetail.DnsSearchListDomains.     `RaOptions` lives in the JSON configuration file, not the database, so its list     entries have no stable identifiers to build a sub-resource on. Every change needs a     restart.
  */
 export interface DhcpRaSettingsDetail { 
     /**
-     * RFC 4861\'s own \"M\" flag -- hosts should obtain addresses via DHCPv6 stateful assignment.
+     * The RFC 4861 \"M\" flag: hosts should get addresses from stateful DHCPv6. Defaults to false.
      */
     managedAddressConfiguration?: boolean;
     /**
-     * RFC 4861\'s own \"O\" flag -- hosts should still use DHCPv6 for configuration other than the address itself.
+     * The RFC 4861 \"O\" flag: hosts should use DHCPv6 for configuration other than addresses. Defaults to false.
      */
     otherConfiguration?: boolean;
     /**
-     * How long a host may consider this server usable as its own default router; zero means never.
+     * How long a host may use this server as a default router; zero (the default) means not at all.
      */
     routerLifetime?: string;
     /**
-     * The hop limit value recommended for outgoing unicast packets; zero means no recommendation.
+     * The hop limit recommended for outgoing unicast packets; zero means no recommendation. Defaults to 64.
      */
     currentHopLimit?: number;
     /**
-     * How long an address is assumed reachable absent contrary evidence; zero means no recommendation.
+     * How long a neighbor is assumed reachable after confirmation; zero (the default) means no recommendation.
      */
     reachableTime?: string;
     /**
-     * How long a host should wait before retransmitting a Neighbor Solicitation; zero means no recommendation.
+     * How long a host waits before sending a Neighbor Solicitation again; zero (the default) means no recommendation.
      */
     retransTimer?: string;
     /**
-     * The link\'s own MTU, or null to advertise no MTU option at all.
+     * The link MTU to advertise, or null (the default) to send no MTU option.
      */
     linkMtu?: number | null;
     /**
-     * The Recursive DNS Server (RFC 8106 Section 5.1) addresses advertised to a SLAAC-configured host.
+     * The Recursive DNS Server addresses (RFC 8106 Section 5.1) advertised to SLAAC hosts.
      */
     recursiveDnsServers?: Array<string> | null;
     /**
-     * How long a host should trust RecursiveDnsServers.
+     * How long a host may use RecursiveDnsServers. Defaults to 1800 seconds.
      */
     recursiveDnsServerLifetime?: string;
     /**
-     * The DNS Search List (RFC 8106 Section 5.2) domain suffixes advertised to a SLAAC-configured host.
+     * The DNS Search List domains (RFC 8106 Section 5.2) advertised to SLAAC hosts.
      */
     dnsSearchListDomains?: Array<string> | null;
     /**
-     * How long a host should trust DnsSearchListDomains.
+     * How long a host may use DnsSearchListDomains. Defaults to 1800 seconds.
      */
     dnsSearchListLifetime?: string;
     /**
-     * Every specific route advertised via RFC 4191 Section 2.3\'s own Route Information option.
+     * The specific routes advertised in RFC 4191 Section 2.3 Route Information options.
      */
     routes?: Array<DhcpRaRouteDetail> | null;
     /**
-     * Every network interface\'s own explicit content override -- see Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail\'s own doc comment for the exact \"nullable field inherits the fields above\" shape and for why, unlike Ninlil.Web.Models.DhcpRaSettingsDetail.Routes, an override\'s own would-be nested prefix/route lists have no REST/UI surface here.
+     * Per-interface content overrides. Ninlil.Web.Models.DhcpRaInterfaceOverrideDetail explains how a null field inherits the value above, and why its prefix and route lists are not exposed here.
      */
     interfaceOverrides?: Array<DhcpRaInterfaceOverrideDetail> | null;
 }

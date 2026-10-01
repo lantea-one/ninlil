@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `EmailSenderOptions` -- the SMTP server this host sends e-mail through (most notably, e-mail-based two-factor authentication codes; a future self-service Forgot Password flow will reuse the same infrastructure).
+ * This record is the SMTP settings (`EmailSenderOptions`) that `GET /api/smtp-settings` returns: the server e-mail is sent through, for two-factor codes and password reset links. A `PATCH` accepts these fields with `password` in place of Ninlil.Web.Models.SmtpSettingsDetail.PasswordConfigured.
  */
 export interface SmtpSettingsDetail { 
     /**
@@ -18,19 +18,19 @@ export interface SmtpSettingsDetail {
      */
     smtpHost?: string | null;
     /**
-     * The SMTP server\'s port.
+     * The SMTP server\'s port. Defaults to 587.
      */
     smtpPort?: number;
     /**
-     * Whether the connection to the SMTP server is secured with TLS.
+     * Whether the connection to the SMTP server uses TLS. Defaults to true.
      */
     useTls?: boolean;
     /**
-     * The username authenticated to the SMTP server with, or empty if it accepts anonymous connections.
+     * The username to authenticate with, or empty if the server accepts anonymous connections.
      */
     username?: string | null;
     /**
-     * Whether `EmailSenderOptions.Password` currently has a value -- the password itself is never returned by a `GET`, the same reveal-once posture every other secret-bearing setting in this project already follows.
+     * Whether `EmailSenderOptions.Password` has a value. The password itself is never returned, as with every other secret.
      */
     passwordConfigured?: boolean;
     /**
@@ -38,7 +38,7 @@ export interface SmtpSettingsDetail {
      */
     fromAddress?: string | null;
     /**
-     * The display name messages are sent from.
+     * The display name messages are sent from. Defaults to \"Ninlil\".
      */
     fromDisplayName?: string | null;
 }

@@ -11,7 +11,7 @@ import { DhcpOptionValueSourceEnum } from './dhcpOptionValueSourceEnum';
 
 
 /**
- * This class carries a scope\'s own custom option fields, for list, single-item, and creation responses.
+ * This class carries a scope\'s custom option, as returned by the list, get and write endpoints under `/api/dhcp-scopes/{scopeId}/custom-options`.
  */
 export interface DhcpScopeCustomOptionDetail { 
     id?: string;

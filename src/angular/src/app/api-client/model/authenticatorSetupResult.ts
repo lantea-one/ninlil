@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a freshly-generated TOTP (RFC 6238) authenticator enrollment, before the caller has confirmed it by submitting a generated code back to `POST /api/auth/two-factor/authenticator/enable`.
+ * This class carries a new TOTP (RFC 6238) authenticator enrollment from `POST /api/auth/two-factor/authenticator/setup`, before the caller confirms it by sending a generated code to `POST /api/auth/two-factor/authenticator/enable`.
  */
 export interface AuthenticatorSetupResult { 
     /**
@@ -18,7 +18,7 @@ export interface AuthenticatorSetupResult {
      */
     sharedKey?: string | null;
     /**
-     * The `otpauth://` URI an authenticator app can scan as a QR code to enroll the same shared secret without it being typed by hand.
+     * The `otpauth://` URI an authenticator app can scan as a QR code, so the secret need not be typed.
      */
     authenticatorUri?: string | null;
 }

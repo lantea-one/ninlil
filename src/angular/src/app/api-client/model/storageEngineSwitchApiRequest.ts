@@ -13,7 +13,7 @@ import { SqliteStorageConnectionFields } from './sqliteStorageConnectionFields';
 
 
 /**
- * This record is the real request body for `POST /api/storage/switch` -- structured, per-engine connection fields rather than a single free-text connection string, mirroring `EventBrokerSettingsController`\'s own equivalent structured-field pattern. Only the one section matching Ninlil.Web.Models.StorageEngineSwitchApiRequest.TargetEngine needs to be populated; Ninlil.Web.Services.Storage.StorageConnectionStringAssembler reads only that section and ignores the other three entirely.
+ * This record is the request body of `POST /api/storage/switch`: structured connection fields per engine rather than a free-text connection string. Only the section matching Ninlil.Web.Models.StorageEngineSwitchApiRequest.TargetEngine needs to be filled in; Ninlil.Web.Services.Storage.StorageConnectionStringAssembler reads that section and ignores the others.
  */
 export interface StorageEngineSwitchApiRequest { 
     targetEngine?: StorageEngineEnum;

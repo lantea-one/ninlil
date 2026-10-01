@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the known-client registry\'s headline counts (`GET /api/clients/summary`), each computed fresh by a pushed-down count query against the same filters `GET /api/clients` accepts, so a count and the list it links to can never disagree about which devices it means.
+ * This class carries the headline counts of the known-client registry (`GET /api/clients/summary`). Each is counted in storage with the same filters `GET /api/clients` uses, so a count agrees with the list it links to.
  */
 export interface ClientSummaryDetail { 
     /**
@@ -22,7 +22,7 @@ export interface ClientSummaryDetail {
      */
     onlineCount?: number;
     /**
-     * Clients not seen within OnlineWindow, including clients never seen at all.
+     * Clients not seen within OnlineWindow, including clients never seen; computed as total minus online.
      */
     offlineCount?: number;
     /**
@@ -34,7 +34,7 @@ export interface ClientSummaryDetail {
      */
     favoriteCount?: number;
     /**
-     * The instant NewCount counts from.
+     * The instant NewCount counts from: the request\'s `newSinceUtc`, or 24 hours ago when it was omitted.
      */
     newSinceUtc?: string;
     /**

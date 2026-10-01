@@ -11,24 +11,24 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a manual static address-to-client-identity mapping (`POST`/`PUT /api/client-static-address-mappings`).
+ * This class carries the fields used to create or fully replace a manual mapping from a source address to a client identity (`POST /api/client-static-address-mappings`, `PUT /api/client-static-address-mappings/{id}`).
  */
 export interface DnsClientStaticAddressMappingWriteRequest { 
     /**
-     * The source address or network this mapping pins to ClientIdentifier -- a bare IP address (exact match only) or a `/`-qualified CIDR network (matches every address it contains). Validated against M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@)/ M:System.Net.IPAddress.TryParse(System.String,System.Net.IPAddress@) (whichever the value\'s own shape calls for), the same dual-format acceptance `Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver` itself matches a query\'s own source address against at resolution time.
+     * The source address or network mapped to ClientIdentifier: a bare IP address (exact match) or a CIDR network with a `/` (matches every address in it). A value with a `/` must parse with M:System.Net.IPNetwork.TryParse(System.String,System.Net.IPNetwork@) and one without with M:System.Net.IPAddress.TryParse(System.String,System.Net.IPAddress@), the same two forms `Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver` matches at query time.
      */
     cidr?: string | null;
     /**
-     * The persistent client identifier a query whose source address matches Cidr resolves to -- a colon-separated hardware (MAC) address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one.
+     * The persistent client identifier a query from Cidr resolves to: a colon-separated MAC address for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv4 mapping, or a DHCP Unique Identifier (DUID) for an Ninlil.Dns.Common.Enum.InternetProtocolVersionEnum.IPv6 one.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     /**
-     * Whether the mapping starts out (or is currently) disabled.
+     * Whether the mapping is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-text operator notes about this mapping.
+     * Free-text operator notes about the mapping.
      */
     comments?: string | null;
 }

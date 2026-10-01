@@ -12,13 +12,13 @@ import { DnssecKeyRoleEnum } from './dnssecKeyRoleEnum';
 
 
 /**
- * This class carries the fields used to generate a new DNSSEC key for a zone (`POST /api/zones/{zoneId}/dnssec-keys`). Ninlil only ever generates a brand-new keypair server-side -- there is no way to import an externally-generated private key.
+ * This class carries the fields used to generate a new DNSSEC key for a zone (`POST /api/zones/{zoneId}/dnssec-keys`). The key pair is always generated on the server; an externally generated private key cannot be imported.
  */
 export interface DnssecKeyCreateRequest { 
     role?: DnssecKeyRoleEnum;
     algorithm?: DnssecAlgorithmEnum;
     /**
-     * The key size to generate, in bits -- meaningful only for the RSA algorithm family; ignored for every other algorithm.
+     * The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default) means 2048; ignored by every other algorithm.
      */
     keySizeBits?: number;
     /**

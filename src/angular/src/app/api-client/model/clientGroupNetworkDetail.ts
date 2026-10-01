@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single client group network\'s own fields, for list, single-item, and creation responses.
+ * This class carries one client group network, as returned by the list, get, create and replace endpoints under `/api/client-groups/{groupId}/networks`.
  */
 export interface ClientGroupNetworkDetail { 
     id?: string;

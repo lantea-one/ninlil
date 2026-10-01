@@ -12,7 +12,7 @@ import { LeaseStateEnum } from './leaseStateEnum';
 
 
 /**
- * This class carries a single DHCP lease\'s own fields, for list and single-item responses. There is deliberately no corresponding write request -- a lease is a live artifact the allocation engine itself creates and updates as clients come and go, never an operator-created resource. Ninlil.Web.Models.DhcpLeaseDetail.PrefixLength is populated only for a DHCPv6 Prefix Delegation lease -- null for every ordinary address lease, per `LeaseEntity.PrefixLength`\'s own doc comment.
+ * This class carries one DHCP lease, as returned by the list and get endpoints of `/api/dhcp-leases`. There is no write request: the allocation engine creates and updates leases as clients come and go, and an operator can only release one (`POST /api/dhcp-leases/{id}/release`). Ninlil.Web.Models.DhcpLeaseDetail.PrefixLength is set only for a DHCPv6 Prefix Delegation lease and is null for an address lease (see `LeaseEntity.PrefixLength`).
  */
 export interface DhcpLeaseDetail { 
     id?: string;

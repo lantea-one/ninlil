@@ -11,36 +11,36 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries a single static address mapping\'s own fields, for list, single-item, and creation responses.
+ * This class carries a static address mapping, as returned by the list, get and write endpoints of `/api/client-static-address-mappings`.
  */
 export interface DnsClientStaticAddressMappingDetail { 
     /**
-     * This mapping\'s own identifier.
+     * The mapping\'s identifier.
      */
     id?: string;
     /**
-     * This mapping\'s own source address or network, exactly as stored.
+     * The mapping\'s source address or network, as stored.
      */
     cidr?: string | null;
     /**
-     * The persistent client identifier this mapping resolves to.
+     * The persistent client identifier the mapping resolves to.
      */
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     /**
-     * Whether this mapping is currently disabled -- a disabled mapping is never consulted by `StaticAddressMappingClientIdentityResolver`.
+     * Whether the mapping is disabled. `StaticAddressMappingClientIdentityResolver` ignores a disabled mapping.
      */
     isDisabled?: boolean;
     /**
-     * Free-text operator notes about this mapping.
+     * Free-text operator notes about the mapping.
      */
     comments?: string | null;
     /**
-     * When this mapping was created.
+     * When the mapping was created.
      */
     createdAtUtc?: string;
     /**
-     * When this mapping was last modified, or null if never.
+     * When the mapping was last modified, or null if never.
      */
     updatedAtUtc?: string | null;
 }

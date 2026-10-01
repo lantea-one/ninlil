@@ -11,11 +11,11 @@ import { StatusComponent } from './statusComponent';
 
 
 /**
- * This class carries a single response for `GET /status` -- an unauthenticated caller (or one without the `status:read` permission claim) only ever receives Ninlil.Web.Models.StatusResponse.Status populated, with Ninlil.Web.Models.StatusResponse.Components left null; an authenticated caller holding `status:read` receives both, additively -- the granular per-component breakdown is the single source of truth Ninlil.Web.Models.StatusResponse.Status itself is aggregated down from, not a separately maintained summary.
+ * This class carries the response of `GET /status`. A caller without the `status:read` permission, including an anonymous one, gets only Ninlil.Web.Models.StatusResponse.Status, with Ninlil.Web.Models.StatusResponse.Componentsnull. A caller with it gets both. Ninlil.Web.Models.StatusResponse.Status is aggregated from the same health checks the components report.
  */
 export interface StatusResponse { 
     /**
-     * The overall aggregate status: `Healthy`, `Degraded`, or `Unhealthy`.
+     * The overall status: `Healthy`, `Degraded` or `Unhealthy`.
      */
     status?: string | null;
     /**

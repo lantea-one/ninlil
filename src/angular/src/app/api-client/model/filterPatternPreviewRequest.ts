@@ -11,16 +11,16 @@ import { DnsFilterEntryKindEnum } from './dnsFilterEntryKindEnum';
 
 
 /**
- * This class carries a request to preview which of a sample set of domains a candidate filter-list-entry pattern would match (`POST /api/filter-pattern-preview`).
+ * This class carries a request to preview which sample domains a candidate filter list entry pattern would match (`POST /api/filter-pattern-preview`). The UI sends it while an operator types, before anything is saved.
  */
 export interface FilterPatternPreviewRequest { 
     kind?: DnsFilterEntryKindEnum;
     /**
-     * The candidate pattern text, exactly as an operator is currently typing it.
+     * The candidate pattern text.
      */
     value?: string | null;
     /**
-     * The domains to test Ninlil.Web.Models.FilterPatternPreviewRequest.Value against. When omitted or empty, this controller\'s own small, built-in default sample set is used instead (see `FilterPatternPreviewController.DefaultSampleDomains`).
+     * The domains to test Ninlil.Web.Models.FilterPatternPreviewRequest.Value against. When omitted or empty, the small built-in set `FilterPatternPreviewController.DefaultSampleDomains` is used.
      */
     sampleDomains?: Array<string> | null;
 }

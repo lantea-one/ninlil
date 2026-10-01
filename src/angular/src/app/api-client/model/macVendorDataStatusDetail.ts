@@ -12,7 +12,7 @@ import { MacVendorRefreshResultEnum } from './macVendorRefreshResultEnum';
 
 
 /**
- * This record reports the vendor data currently answering lookups and the refresh history behind it -- returned inside Ninlil.Web.Models.MacVendorSettingsDetail and by an on-demand refresh.
+ * This record reports the vendor data answering lookups and its refresh history. It is returned inside Ninlil.Web.Models.MacVendorSettingsDetail and by an on-demand refresh (`POST /api/mac-vendor-settings/refresh`).
  */
 export interface MacVendorDataStatusDetail { 
     dataSource?: MacVendorDataSourceEnum;

@@ -14,11 +14,11 @@ import { DnssecDenialOfExistenceModeEnum } from './dnssecDenialOfExistenceModeEn
 
 
 /**
- * This class carries a zone\'s full state, for both list and single-item responses.
+ * This class carries a zone, as returned by the list, get and write endpoints of `/api/zones`. The fields mean what they mean in Ninlil.Web.Models.ZoneWriteRequest.
  */
 export interface ZoneDetail { 
     /**
-     * The zone\'s own identifier.
+     * The zone\'s identifier.
      */
     id?: string;
     /**
@@ -41,27 +41,27 @@ export interface ZoneDetail {
      */
     nsec3SaltHex?: string | null;
     /**
-     * Whether the zone is currently disabled.
+     * Whether the zone is disabled.
      */
     isDisabled?: boolean;
     /**
-     * The upstream name servers this zone transfers from, for a secondary/stub zone.
+     * The name servers a secondary or stub zone transfers from.
      */
     primaryServerAddresses?: Array<string> | null;
     /**
-     * The addresses this zone forwards every query to.
+     * The addresses a forwarder zone sends every query to.
      */
     forwarderAddresses?: Array<string> | null;
     /**
-     * The secondaries this zone sends an outbound NOTIFY to.
+     * The secondaries the zone sends NOTIFY messages to.
      */
     notifyAddresses?: Array<string> | null;
     /**
-     * The TSIG key this zone signs its outbound transfer requests with.
+     * The TSIG key the zone signs its transfer requests with.
      */
     tsigKeyName?: string | null;
     /**
-     * Whether this zone accepts RFC 2136 dynamic updates.
+     * Whether the zone accepts RFC 2136 dynamic updates.
      */
     dynamicUpdateEnabled?: boolean;
     /**
@@ -69,35 +69,35 @@ export interface ZoneDetail {
      */
     comments?: string | null;
     /**
-     * The credential this zone syncs against, for a cloud zone.
+     * The credential a cloud zone syncs with.
      */
     cloudProviderCredentialId?: string | null;
     /**
-     * This zone\'s own identifier at its cloud provider.
+     * The zone\'s identifier at its cloud provider.
      */
     cloudProviderZoneId?: string | null;
     /**
-     * How often this zone\'s cloud sync runs.
+     * How often a cloud zone is synced.
      */
     cloudSyncInterval?: string;
     /**
-     * Whether the CAA auto-management feature reconciles this zone\'s CAA records. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
+     * Whether CAA auto-management keeps the zone\'s CAA records in step. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
      */
     autoManageCaaRecords?: boolean | null;
     /**
-     * This zone\'s own override of which CA issuer domain CAA auto-management writes into the CAA records it creates. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
+     * The CA issuer domain CAA auto-management writes. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
      */
     caaIssuerDomain?: string | null;
     /**
-     * Whether the PTR/reverse-zone sync feature mirrors this zone\'s own A/AAAA records into the enclosing reverse zone. null inherits `PtrSyncOptions.DefaultEnabled`.
+     * Whether PTR sync mirrors the zone\'s A and AAAA records into the matching reverse zone. null inherits `PtrSyncOptions.DefaultEnabled`.
      */
     autoManagePtrRecords?: boolean | null;
     /**
-     * This zone\'s own override of the IPv4 reverse-zone grouping granularity, in bits. null inherits `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`.
+     * The zone\'s IPv4 reverse zone size, in prefix bits. null inherits `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`.
      */
     ptrIpv4PrefixLength?: number | null;
     /**
-     * This zone\'s own override of the IPv6 reverse-zone grouping granularity, in bits. null inherits `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`.
+     * The zone\'s IPv6 reverse zone size, in prefix bits. null inherits `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`.
      */
     ptrIpv6PrefixLength?: number | null;
     /**
@@ -105,12 +105,12 @@ export interface ZoneDetail {
      */
     createdAtUtc?: string;
     /**
-     * When the zone was last updated, if it ever has been.
+     * When the zone was last updated, or null if never.
      */
     updatedAtUtc?: string | null;
     transferTransport?: ZoneTransferTransportEnum;
     /**
-     * The identifier of the RFC 9432 catalog zone this zone is a member of, or null if it participates in none. Read-only here -- set or cleared only through `POST`/`DELETE /api/zones/{id}/catalog-membership`, never through this record\'s own create/replace/patch counterparts.
+     * The RFC 9432 catalog zone this zone belongs to, or null if none. Read-only: it changes only through `POST` and `DELETE /api/zones/{id}/catalog-membership`.
      */
     memberOfCatalogZoneId?: string | null;
 }

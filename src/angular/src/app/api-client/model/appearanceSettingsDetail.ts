@@ -12,7 +12,7 @@ import { UiThemePaletteEnum } from './uiThemePaletteEnum';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `AppearanceOptions` -- the global default palette and light/dark mode every signed-in user\'s own preference inherits when they have not set an override of their own.
+ * This record is the REST shape of the server-wide default appearance (`AppearanceOptions`) that `GET /api/appearance-settings` returns: the palette and light/dark mode a signed-in user gets when they have not chosen their own.
  */
 export interface AppearanceSettingsDetail { 
     palette?: UiThemePaletteEnum;

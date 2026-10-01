@@ -11,27 +11,27 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the REST representation of DNS-over-TLS\'s own `DnsOverTlsOptions`. Deliberately excludes `ProxyProtocol` -- already exposed via Ninlil.Web.Controllers.ReverseProxySettingsController\'s own `dnsOverTls` nested field, alongside the HTTP-side reverse-proxy trust settings it is conceptually paired with; duplicating it here would give the same configuration section two different REST addresses.
+ * This record is the DNS-over-TLS settings (`DnsOverTlsOptions`) that `GET /api/transport-settings/dns-over-tls` returns. `ProxyProtocol` is left out: it is exposed once, as the `dnsOverTls` field of Ninlil.Web.Controllers.ReverseProxySettingsController, next to the HTTP reverse proxy trust settings it belongs with.
  */
 export interface DnsOverTlsSettingsDetail { 
     /**
-     * Whether this transport listens at all. <b>Genuinely live</b>: toggling this field, via M:Ninlil.Web.Controllers.TransportSettingsController.PatchDnsOverTls(System.Text.Json.JsonElement,System.Threading.CancellationToken), starts or stops the real, already-running `dns-over-tls` listener registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart.
+     * Whether the transport listens. A change applies at once: M:Ninlil.Web.Controllers.TransportSettingsController.PatchDnsOverTls(System.Text.Json.JsonElement,System.Threading.CancellationToken) starts or stops the `dns-over-tls` listener through Ninlil.Web.Services.IManagedServiceRegistry.
      */
     enable?: boolean;
     /**
-     * The port this transport binds to. Restart-required -- rebinding a socket to a new port needs this specific listener to restart.
+     * The port the transport binds to. A change needs a listener restart.
      */
     port?: number;
     /**
-     * The local IP addresses this transport binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     * The local IP addresses the transport binds to, one socket per address. An empty list (the default) means every address, through one dual-stack socket. A change needs a listener restart.
      */
     listenAddresses?: Array<string> | null;
     /**
-     * How long a TLS connection may sit completely idle before this server closes it. Restart-required -- read once when a connection is accepted, under this listener\'s own currently-bound socket.
+     * How long a TLS connection may stay idle before the server closes it. A change needs a listener restart.
      */
     idleTimeout?: string;
     /**
-     * How many TLS connections this server accepts at once. Restart-required, for the same reason as Ninlil.Web.Models.DnsOverTlsSettingsDetail.IdleTimeout.
+     * How many TLS connections the server accepts at once. A change needs a listener restart.
      */
     maxConcurrentConnections?: number;
     certificate?: TlsCertificateSettingsDetail;

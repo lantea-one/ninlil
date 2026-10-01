@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries a single curated \"blocked service\" catalog entry\'s own metadata, together with whether it is currently enabled on this server -- the response shape for `GET /api/blocked-services`.
+ * This class carries one entry of the curated \"blocked services\" catalog, with whether it is enabled. It is the response shape of `GET /api/blocked-services`.
  */
 export interface BlockedServiceDetail { 
     /**
-     * The catalog entry\'s own stable identifier (e.g. `tiktok`).
+     * The catalog entry\'s stable identifier (e.g. `tiktok`).
      */
     key?: string | null;
     /**
@@ -22,19 +22,19 @@ export interface BlockedServiceDetail {
      */
     displayName?: string | null;
     /**
-     * A short, honest description of what enabling this entry blocks.
+     * A short description of what enabling this entry blocks.
      */
     description?: string | null;
     /**
-     * The real, third-party-hosted domain list this entry subscribes to when enabled -- see `BlockedServiceCatalog`\'s own doc comment for its source and license.
+     * The third-party domain list this entry subscribes to when enabled. `BlockedServiceCatalog` documents its source and license.
      */
     subscriptionUrl?: string | null;
     /**
-     * Whether this server currently has a managed, subscribed filter list for this entry.
+     * Whether the entry\'s managed filter list exists and is enabled. When the request names a client or client group, it also requires that target to have an assignment of the list.
      */
     isEnabled?: boolean;
     /**
-     * The identifier of this entry\'s own managed `DnsFilterListEntity`, when Ninlil.Web.Models.BlockedServiceDetail.IsEnabled is true (so an operator can jump straight to it in the ordinary Filter Lists page, e.g. to inspect its currently-fetched entries); otherwise null.
+     * The identifier of the entry\'s managed `DnsFilterListEntity` when one exists, so the UI can link to it on the Filter Lists page; otherwise null.
      */
     filterListId?: string | null;
 }

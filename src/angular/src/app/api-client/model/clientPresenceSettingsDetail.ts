@@ -10,23 +10,23 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ClientPresenceOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the client presence settings (`ClientPresenceOptions`) that `GET /api/client-presence-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ClientPresenceSettingsDetail { 
     /**
-     * How recently a client must have been seen to be reported online.
+     * How recently a client must have been seen to be reported online. Defaults to 10 minutes.
      */
     onlineWindow?: string;
     /**
-     * How often buffered sightings are written to storage.
+     * How often buffered sightings are written to storage. Defaults to 30 seconds.
      */
     flushInterval?: string;
     /**
-     * Whether the kernel neighbor table is sampled as a presence signal.
+     * Whether the kernel neighbor table is sampled as a presence signal. Defaults to true.
      */
     enableNeighborTableSignal?: boolean;
     /**
-     * How often the kernel neighbor table is sampled.
+     * How often the kernel neighbor table is sampled. Defaults to 15 seconds.
      */
     neighborTablePollInterval?: string;
 }

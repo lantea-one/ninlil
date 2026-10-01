@@ -11,28 +11,28 @@ import { ForwarderFailoverStrategyEnum } from './forwarderFailoverStrategyEnum';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ForwardingOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts. Forwarder entries themselves (the actual upstream addresses) are a separate resource, already fully CRUD-able via `ForwardersController` -- this record covers only the engine-level toggle, failover/health-check tuning and forwarded-answer cache settings that apply across every configured forwarder.
+ * This record is the REST shape of the forwarding engine settings (`ForwardingOptions`) that `GET /api/forwarding-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields. The forwarders themselves are a separate resource (`ForwardersController`); this record holds the on/off switch, failover and health-check tuning, and the forwarded-answer cache settings that apply to all of them.
  */
 export interface ForwardingSettingsDetail { 
     /**
-     * Whether configured forwarders are consulted at all.
+     * Whether the configured forwarders are used at all. Defaults to false.
      */
     enable?: boolean;
     failoverStrategy?: ForwarderFailoverStrategyEnum;
     /**
-     * How often each forwarder\'s health is probed.
+     * How often each forwarder\'s health is probed under health-checked round robin. Defaults to 30 seconds.
      */
     healthCheckInterval?: string;
     /**
-     * How long one forwarder may take before the next is tried.
+     * How long one forwarder may take to answer before the attempt counts as failed. Defaults to 3 seconds.
      */
     perForwarderTimeout?: string;
     /**
-     * Whether forwarded answers are cached.
+     * Whether forwarded answers are cached. Defaults to true.
      */
     enableCache?: boolean;
     /**
-     * How many forwarded answers may be cached before the soonest-to-expire are evicted.
+     * How many forwarded answers may be cached before the soonest to expire are evicted. Defaults to 10000.
      */
     maxCacheEntries?: number;
 }

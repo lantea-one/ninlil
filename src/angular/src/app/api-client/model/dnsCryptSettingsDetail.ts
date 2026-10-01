@@ -10,47 +10,47 @@
 
 
 /**
- * This record is the REST representation of DNSCrypt\'s own `DnsCryptOptions`.
+ * This record is the DNSCrypt settings (`DnsCryptOptions`) that `GET /api/transport-settings/dnscrypt` returns.
  */
 export interface DnsCryptSettingsDetail { 
     /**
-     * Whether this transport listens at all. <b>Genuinely live</b>: toggling this field starts or stops the real, already-running `dnscrypt-udp`/`dnscrypt-tcp` listeners <em>and</em>`dnscrypt-certificate-rotation` (the background loop that actually issues this resolver\'s own DNSCrypt certificates -- with no certificate, a live-started listener could accept connections but never answer a real encrypted query), all three registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dnscrypt-udp` and `dnscrypt-tcp` listeners and the `dnscrypt-certificate-rotation` loop through Ninlil.Web.Services.IManagedServiceRegistry. The loop issues the resolver\'s certificates; without one, a listener could accept connections but not answer an encrypted query.
      */
     enable?: boolean;
     /**
-     * The port this transport binds to, for both UDP and TCP. Restart-required.
+     * The port the transport binds to, for UDP and TCP. A change needs a listener restart.
      */
     port?: number;
     /**
-     * The local IP addresses this transport, for both UDP and TCP, binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port.
+     * The local IP addresses the transport binds to, for UDP and TCP, one socket per address. An empty list (the default) means every address, through one dual-stack socket. A change needs a listener restart.
      */
     listenAddresses?: Array<string> | null;
     /**
-     * The zone this resolver advertises its DNSCrypt certificate discovery TXT record under. Restart-required -- read once, at this transport\'s own startup.
+     * The provider name certificates are published under (clients query the TXT record `2.dnscrypt-cert.<ProviderName>`). Empty by default, and the listeners refuse to start while it is empty. A change needs a listener restart.
      */
     providerName?: string | null;
     /**
-     * How long a TCP connection may sit completely idle before this server closes it. Restart-required.
+     * How long a TCP connection may stay idle before the server closes it. A change needs a listener restart.
      */
     tcpIdleTimeout?: string;
     /**
-     * How many TCP connections this server accepts at once. Restart-required.
+     * How many TCP connections the server accepts at once. A change needs a listener restart.
      */
     maxConcurrentTcpConnections?: number;
     /**
-     * Every DNSCrypt cipher this resolver keeps a continuously valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). Restart-required -- `DnsCryptCertificateRotationService` reads this once per rotation check, not per request, so a change here needs that background loop (or the whole transport, since this controller restarts it together with the listeners) to restart before it takes effect.
+     * The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). `DnsCryptCertificateRotationService` reads it when it starts, so a change applies once that loop restarts, for example by turning the transport off and on.
      */
     enabledEsVersions?: Array<string> | null;
     /**
-     * How often a fresh certificate is considered for every enabled cipher. Restart-required.
+     * How often a new certificate is considered for each enabled cipher. A change needs a restart of the rotation loop.
      */
     certificateRotationInterval?: string;
     /**
-     * How long a newly generated certificate stays valid for. Restart-required.
+     * How long a new certificate stays valid. A change needs a restart of the rotation loop.
      */
     certificateValidityDuration?: string;
     /**
-     * How far in the past a newly generated certificate\'s own validity start is backdated. Restart-required.
+     * How far a new certificate\'s validity start is backdated, to allow for client clock skew. A change needs a restart of the rotation loop.
      */
     certificateClockSkewTolerance?: string;
 }

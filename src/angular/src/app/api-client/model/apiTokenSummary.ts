@@ -11,11 +11,11 @@ import { ApiTokenTypeEnum } from './apiTokenTypeEnum';
 
 
 /**
- * This class carries an API token\'s own metadata, without ever exposing its secret value.
+ * This class carries an API token\'s metadata, without its secret value.
  */
 export interface ApiTokenSummary { 
     /**
-     * The token\'s own identifier.
+     * The token\'s identifier.
      */
     id?: string;
     /**
@@ -28,15 +28,15 @@ export interface ApiTokenSummary {
      */
     createdAtUtc?: string;
     /**
-     * The UTC date and time the token stops being valid, if any.
+     * The UTC date and time the token stops being valid, or null if it never expires.
      */
     expiresAtUtc?: string | null;
     /**
-     * The UTC date and time a one-time token was used, if any.
+     * The UTC date and time a one-time token was used, or null if it has not been.
      */
     consumedAtUtc?: string | null;
     /**
-     * The UTC date and time the token was revoked, if any.
+     * The UTC date and time the token was revoked, or null if it has not been.
      */
     revokedAtUtc?: string | null;
 }

@@ -10,13 +10,28 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnsQueryProcessingPipelineOptions` -- worker-pool/queue sizing plus UDP amplification-guard tuning. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the query pipeline settings (`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings` returns: worker pool and queue sizing, and the UDP amplification guard. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface DnsPipelineSettingsDetail { 
+    /**
+     * How many workers process queries in parallel. Defaults to the processor count.
+     */
     workerCount?: number;
+    /**
+     * How many received queries may wait in the queue for a worker. Defaults to 4096.
+     */
     channelCapacity?: number;
+    /**
+     * The largest UDP response sent, in octets. Defaults to 1232.
+     */
     maxUdpPayloadSizeOctets?: number;
+    /**
+     * The largest allowed ratio of UDP response size to query size. Defaults to 20.
+     */
     maxUdpAmplificationFactor?: number;
+    /**
+     * The lowest the amplification cap can drop to, in octets. Defaults to 512, the RFC 1035 UDP limit.
+     */
     minUdpAmplificationFloorSizeOctets?: number;
 }
 

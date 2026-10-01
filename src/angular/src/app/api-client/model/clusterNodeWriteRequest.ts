@@ -10,15 +10,15 @@
 
 
 /**
- * This class carries the fields an operator may edit on an existing peer row (`PATCH /api/cluster/nodes/{id}`) -- only its own display name and free-form notes. Every other field (address, TSIG key, pinned certificate) is fixed by the join handshake that created the row and cannot be edited afterward; changing any of those out from under an already-trusted peer relationship would silently break it.
+ * This class carries the fields an operator may edit on an existing peer row (`PATCH /api/cluster/nodes/{id}`): only the display name and notes. The address, TSIG key and pinned certificate are set by the join handshake and cannot be edited, because changing them would break the trust between the two nodes.
  */
 export interface ClusterNodeWriteRequest { 
     /**
-     * The peer\'s operator-chosen display name.
+     * The peer\'s operator-chosen display name, or null to keep it.
      */
     name?: string | null;
     /**
-     * Free-form operator notes about the peer.
+     * Free-form operator notes about the peer, or null to keep them.
      */
     comments?: string | null;
 }

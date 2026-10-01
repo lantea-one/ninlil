@@ -11,27 +11,27 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the REST representation of DNS-over-QUIC\'s own `DnsOverQuicOptions`.
+ * This record is the DNS-over-QUIC settings (`DnsOverQuicOptions`) that `GET /api/transport-settings/dns-over-quic` returns.
  */
 export interface DnsOverQuicSettingsDetail { 
     /**
-     * Whether this transport listens at all. <b>Genuinely live</b>: toggling this field starts or stops the real, already-running `dns-over-quic` listener registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dns-over-quic` listener through Ninlil.Web.Services.IManagedServiceRegistry.
      */
     enable?: boolean;
     /**
-     * The port this transport binds to. Restart-required.
+     * The port the transport binds to. A change needs a listener restart.
      */
     port?: number;
     /**
-     * The local IP addresses this transport binds to, one socket per address. An empty list means every address (one dual-stack socket), the default. Restart-required, like the port. QUIC answers only on these addresses, but its library still reserves the UDP port on every address, and `::` also answers IPv4 -- see `DnsOverQuicOptions.ListenAddresses`.
+     * The local IP addresses the transport binds to, one socket per address. An empty list (the default) means every address, through one dual-stack socket. A change needs a listener restart. QUIC answers only on these addresses, but its library still reserves the UDP port on every address, and `::` also answers IPv4 (see `DnsOverQuicOptions.ListenAddresses`).
      */
     listenAddresses?: Array<string> | null;
     /**
-     * How long a QUIC connection may sit completely idle before this server closes it. Restart-required.
+     * How long a QUIC connection may stay idle before the server closes it. A change needs a listener restart.
      */
     idleTimeout?: string;
     /**
-     * How many bidirectional streams a single QUIC connection may have open at once. Restart-required.
+     * How many bidirectional streams one QUIC connection may have open at once. A change needs a listener restart.
      */
     maxConcurrentBidirectionalStreams?: number;
     certificate?: TlsCertificateSettingsDetail;

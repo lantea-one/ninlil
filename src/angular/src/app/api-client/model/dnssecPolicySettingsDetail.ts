@@ -11,11 +11,11 @@ import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnssecAlgorithmPolicyOptions` -- which DNSSEC algorithms `IDnssecKeyManagementService.GenerateKeyAsync` is willing to generate a brand-new signing key for. No secret material is involved, so this record\'s own field is the exact same one a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the DNSSEC algorithm policy (`DnssecAlgorithmPolicyOptions`) that `GET /api/dnssec-policy-settings` returns: which algorithms `IDnssecKeyManagementService.GenerateKeyAsync` may generate a new key for. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface DnssecPolicySettingsDetail { 
     /**
-     * The only algorithms a new key may use. An empty list (the default) means no restriction at all -- every algorithm this server\'s own `DnssecAlgorithmRegistry` supports may be used. This restricts only the *generation* of new signing keys, never the validation of an already-signed, externally-hosted zone\'s own algorithm choice -- a known, deliberate scope cut.
+     * The only algorithms a new key may use. An empty list (the default) allows every algorithm `DnssecAlgorithmRegistry` supports. It limits only key generation, not which algorithms are accepted when validating zones signed elsewhere.
      */
     allowedAlgorithms?: Array<DnssecAlgorithmEnum> | null;
 }

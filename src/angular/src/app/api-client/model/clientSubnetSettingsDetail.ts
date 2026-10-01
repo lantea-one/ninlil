@@ -10,12 +10,24 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `EdnsClientSubnetOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the EDNS Client Subnet settings (`EdnsClientSubnetOptions`) that `GET /api/client-subnet-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ClientSubnetSettingsDetail { 
+    /**
+     * Whether outbound queries carry an ECS option. Defaults to false.
+     */
     enable?: boolean;
+    /**
+     * How many leading bits of an IPv4 address are sent upstream. Defaults to 24.
+     */
     sourcePrefixLengthIPv4?: number;
+    /**
+     * How many leading bits of an IPv6 address are sent upstream. Defaults to 56.
+     */
     sourcePrefixLengthIPv6?: number;
+    /**
+     * An address sent in every ECS option instead of the client\'s, or null (the default) to use the client\'s address.
+     */
     overrideAddress?: string | null;
 }
 

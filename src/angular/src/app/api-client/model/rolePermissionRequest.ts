@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single permission to grant or revoke on a role.
+ * This class carries one permission to grant or revoke on a role (`POST` or `DELETE /api/roles/{id}/permissions`).
  */
 export interface RolePermissionRequest { 
     /**

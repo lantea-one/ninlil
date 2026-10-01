@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Server.Core.DhcpServerOptions` -- the settings shared by every local DHCP protocol engine.
+ * This record is the REST shape of part of `Ninlil.Dhcp.Server.Core.DhcpServerOptions`, the settings shared by the local DHCP engines (`GET /api/dhcp-settings/core`).
  */
 export interface DhcpCoreSettingsDetail { 
     /**
-     * The IPv4 address this server identifies itself as, or null for auto-detection at startup.
+     * The IPv4 address the server identifies itself as, or null to detect it at startup.
      */
     serverIdentifierAddress?: string | null;
     /**
-     * How long a tentatively offered address is held aside before being reclaimed.
+     * How long an offered address is held for the client before it is reclaimed. Defaults to 30 seconds.
      */
     offerHoldDuration?: string;
     /**
-     * How long a client-declined address is kept out of circulation.
+     * How long an address a client declined is kept out of use. Defaults to 10 minutes.
      */
     declinedAddressQuarantineDuration?: string;
 }

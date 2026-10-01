@@ -11,11 +11,11 @@ import { DnssecKeyDetail } from './dnssecKeyDetail';
 
 
 /**
- * This class wraps a single page of a larger list -- the shape every list endpoint in this project\'s REST API returns, offset/limit paginated (a sane default/max page size is enough at this project\'s own homelab/small-org target scale; a cursor-based scheme\'s extra complexity is not needed).
+ * This class wraps one page of a larger list, the shape the paginated list endpoints return. Paging is by offset and limit: with a capped page size that is enough at homelab and small-office scale, so cursor-based paging is not needed.
  */
 export interface DnssecKeyDetailPagedResult { 
     /**
-     * The page\'s own items.
+     * The page\'s items.
      */
     items?: Array<DnssecKeyDetail> | null;
     /**

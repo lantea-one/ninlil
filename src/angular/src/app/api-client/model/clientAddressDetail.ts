@@ -11,15 +11,15 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries a single persistent identifier a known client device answers to, for inclusion in Ninlil.Web.Models.ClientDetail.Addresses and for Ninlil.Web.Controllers.ClientAddressesController\'s own list/single-item/creation responses.
+ * This class carries one persistent identifier a known client device answers to. It appears in Ninlil.Web.Models.ClientDetail.Addresses and in the responses of Ninlil.Web.Controllers.ClientAddressesController.
  */
 export interface ClientAddressDetail { 
     /**
-     * This address row\'s own unique identifier.
+     * The address\'s unique identifier.
      */
     id?: string;
     /**
-     * The owning device\'s own unique identifier.
+     * The owning device\'s unique identifier.
      */
     clientId?: string;
     /**
@@ -32,15 +32,15 @@ export interface ClientAddressDetail {
      */
     address?: string | null;
     /**
-     * When this identifier was first recorded against this device.
+     * When the identifier was first recorded against the device.
      */
     firstSeenUtc?: string;
     /**
-     * When this identifier was most recently observed, or null if no presence-tracking signal has updated it yet.
+     * When the identifier was last observed, or null if no presence signal has updated it yet.
      */
     lastSeenUtc?: string | null;
     /**
-     * When this address row was first created.
+     * When the address was created.
      */
     createdAtUtc?: string;
     /**
@@ -48,7 +48,7 @@ export interface ClientAddressDetail {
      */
     macAddress?: string | null;
     /**
-     * The organization IEEE assigned MacAddress\'s block to -- computed at read time. null when there is no MAC, it is randomized, or no registry lists it.
+     * The organization IEEE assigned MacAddress\'s block to, computed when the response is built. null when there is no MAC, it is randomized, or no registry lists it.
      */
     vendor?: string | null;
     /**

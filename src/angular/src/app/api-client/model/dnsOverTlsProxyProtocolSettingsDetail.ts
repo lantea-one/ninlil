@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions` -- whether `DnsOverTlsListener` accepts a HAProxy-style PROXY protocol header (v1 text or v2 binary) ahead of its own TLS handshake, and which addresses/networks are trusted to send one. Unlike the HTTP-side allowlist above, there is no shared-secret field here at all -- see `ProxyProtocolOptions`\'s own doc comment for why.
+ * This record is the REST shape of `Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions`: whether `DnsOverTlsListener` accepts an HAProxy PROXY protocol header (v1 text or v2 binary) before the TLS handshake, and which addresses and networks may send one. Unlike the HTTP settings above it has no shared secret; `ProxyProtocolOptions` explains why.
  */
 export interface DnsOverTlsProxyProtocolSettingsDetail { 
     /**
-     * Whether a connection from a recognized source is inspected for a PROXY protocol header at all.
+     * Whether a connection from a trusted source is checked for a PROXY protocol header.
      */
     enable?: boolean;
     /**
-     * Every individual IP address allowed to open a connection carrying a PROXY protocol header.
+     * The individual IP addresses allowed to send a PROXY protocol header.
      */
     knownProxies?: Array<string> | null;
     /**
-     * Every CIDR network allowed to open a connection carrying a PROXY protocol header.
+     * The CIDR networks allowed to send a PROXY protocol header.
      */
     knownNetworks?: Array<string> | null;
 }

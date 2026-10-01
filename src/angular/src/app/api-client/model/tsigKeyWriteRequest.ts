@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the fields used to fully replace an existing TSIG key\'s metadata (`PUT /api/tsig-keys/{id}`). The key\'s own shared secret cannot be rotated this way -- delete and recreate the key instead -- since the reveal-once-on-creation exposure policy has no later point at which a rotated secret could be shown again through a `PUT`\'s own no-body `204` response.
+ * This class carries the fields used to fully replace an existing TSIG key\'s metadata (`PUT /api/tsig-keys/{id}`). The shared secret cannot be changed this way: a secret is shown only when a key is created, and a `PUT` answers `204` with no body. To rotate the secret, delete the key and create it again.
  */
 export interface TsigKeyWriteRequest { 
     /**
@@ -18,11 +18,11 @@ export interface TsigKeyWriteRequest {
      */
     name?: string | null;
     /**
-     * The key\'s MAC algorithm.
+     * The key\'s MAC algorithm; required here, and only `hmac-sha256` is accepted.
      */
     algorithmName?: string | null;
     /**
-     * Whether the key is currently disabled.
+     * Whether the key is disabled.
      */
     isDisabled?: boolean;
     /**

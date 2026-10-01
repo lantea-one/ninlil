@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a single permission claim to grant or revoke directly on a user, independent of any role they hold.
+ * This class carries one permission to grant or revoke directly on a user, outside any role (`POST` or `DELETE /api/users/{id}/permissions`).
  */
 export interface UserPermissionRequest { 
     /**

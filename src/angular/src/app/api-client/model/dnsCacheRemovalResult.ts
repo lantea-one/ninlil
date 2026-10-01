@@ -10,7 +10,7 @@
 
 
 /**
- * This record reports what a flush or a single-name removal did.
+ * This record reports what a flush (`DELETE /api/dns-cache`) or a single-name removal (`DELETE /api/dns-cache/entries/{name}`) did.
  */
 export interface DnsCacheRemovalResult { 
     /**

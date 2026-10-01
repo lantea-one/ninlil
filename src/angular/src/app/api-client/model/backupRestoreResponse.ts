@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the success response body for M:Ninlil.Web.Controllers.BackupController.Restore(Ninlil.Web.Models.BackupRestoreRequest,System.Threading.CancellationToken). M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken)\'s own successful response, by contrast, streams the encrypted archive itself as the response body -- never this or any other JSON wrapper around it.
+ * This record is the success response body for M:Ninlil.Web.Controllers.BackupController.Restore(Ninlil.Web.Models.BackupRestoreRequest,System.Threading.CancellationToken). M:Ninlil.Web.Controllers.BackupController.Create(Ninlil.Web.Models.BackupCreateRequest,System.Threading.CancellationToken) has no JSON response: it returns the archive itself as a file download.
  */
 export interface BackupRestoreResponse { 
     /**
@@ -22,7 +22,7 @@ export interface BackupRestoreResponse {
      */
     entityCounts?: { [key: string]: number; } | null;
     /**
-     * A note explaining that a restart is required before the restored database connection, Data Protection key ring, and TLS certificate actually take effect -- this project\'s own established convention for every runtime-settings write, extended here to the single most consequential write this REST API can ever perform.
+     * Always Ninlil.Web.Models.BackupRestoreResponse.RestartRequiredNote: the restored database connection, Data Protection key ring and TLS certificate take effect only after a restart.
      */
     note?: string | null;
 }

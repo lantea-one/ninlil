@@ -10,11 +10,20 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `DnssecKeyRolloverOptions` -- the RFC 6781 §4.1.1.1/§4.1.2 key-rollover timing `DnssecKeyRolloverBackgroundService` walks every locally signed zone\'s own keys against. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the key rollover timing (`DnssecKeyRolloverOptions`) that `GET /api/dnssec-key-rollover-settings` returns. `DnssecKeyRolloverBackgroundService` uses it to step the keys of every locally signed zone through the RFC 6781 §4.1.1.1 and §4.1.2 rollovers. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface DnssecKeyRolloverSettingsDetail { 
+    /**
+     * The assumed time for a zone change to reach all of the zone\'s authoritative servers, added to each rollover wait. Defaults to 1 hour.
+     */
     propagationDelay?: string;
+    /**
+     * The assumed TTL of the DS record at a parent zone this server does not host, used in KSK rollovers. Defaults to 1 day.
+     */
     externalParentDsTtl?: string;
+    /**
+     * How often the background service checks for a rollover step that is due. Defaults to 15 minutes.
+     */
     pollInterval?: string;
 }
 

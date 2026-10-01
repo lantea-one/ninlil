@@ -10,11 +10,20 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `WebhookDeliveryOptions` -- the shared retry/backoff timing and outbound HTTP timeout every webhook subscription\'s own deliveries use. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the webhook delivery settings (`WebhookDeliveryOptions`) that `GET /api/webhook-delivery-settings` returns: the retry backoff and HTTP timeout every subscription\'s deliveries use. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface WebhookDeliverySettingsDetail { 
+    /**
+     * The wait before the first retry of a failed delivery, doubled for each later retry. Defaults to 1 second.
+     */
     initialRetryDelay?: string;
+    /**
+     * The longest wait between retries. Defaults to 30 seconds.
+     */
     maxRetryDelay?: string;
+    /**
+     * How long one delivery request may take. Defaults to 10 seconds; a change applies as pooled HTTP handlers are replaced.
+     */
     requestTimeout?: string;
 }
 

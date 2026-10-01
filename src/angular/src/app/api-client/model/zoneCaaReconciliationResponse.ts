@@ -10,23 +10,23 @@
 
 
 /**
- * This record is `POST /api/zones/{id}/reconcile-caa`\'s own response body -- what one on-demand CAA reconciliation pass actually did, or why it did nothing at all. A thin REST wrapper over `Server.Acme.Caa.CaaReconciliationResult`, following this project\'s own \"never expose an internal service-layer result type directly over REST\" convention (the same reasoning `ZoneCatalogMembersResponse` already establishes for `CatalogZoneMembershipService.ListMembersAsync`\'s own return value).
+ * This record is the response of `POST /api/zones/{id}/reconcile-caa`: what one on-demand CAA reconciliation did, or why it did nothing. It copies `Server.Acme.Caa.CaaReconciliationResult` so the internal service type is not exposed over REST, as Ninlil.Web.Models.ZoneCatalogMembersResponse does for the catalog service.
  */
 export interface ZoneCaaReconciliationResponse { 
     /**
-     * How many CAA records this pass created.
+     * How many CAA records the pass created.
      */
     recordsAdded?: number;
     /**
-     * How many CAA records this pass removed as no longer desired.
+     * How many CAA records the pass removed as no longer wanted.
      */
     recordsRemoved?: number;
     /**
-     * Whether this pass did no work at all (see SkipReason) -- distinct from a pass that ran but found nothing to change (reported as false here with zero counts).
+     * Whether the pass did nothing (see SkipReason). A pass that ran but found nothing to change reports false with zero counts.
      */
     skipped?: boolean;
     /**
-     * Why this pass was skipped, populated only when Skipped is true.
+     * Why the pass was skipped, set only when Skipped is true.
      */
     skipReason?: string | null;
 }

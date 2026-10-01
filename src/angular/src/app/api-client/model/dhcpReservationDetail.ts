@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a DHCP reservation\'s own fields, for list, single-item, and creation responses.
+ * This class carries a DHCP reservation, as returned by the list, get and write endpoints under `/api/dhcp-scopes/{scopeId}/reservations`.
  */
 export interface DhcpReservationDetail { 
     id?: string;

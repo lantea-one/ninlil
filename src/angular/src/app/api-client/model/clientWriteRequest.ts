@@ -10,23 +10,23 @@
 
 
 /**
- * This class carries the fields used to fully replace an existing known client\'s own editable metadata (`PUT /api/clients/{id}`) -- deliberately omitting Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier/Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion, since Ninlil.Web.Controllers.ClientsController never allows either to change once a row exists. To actually change a client\'s own identifier, delete this row and create a new one -- the same \"immutable field, delete and recreate\" precedent Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity\'s own shared secret already establishes.
+ * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no Ninlil.Web.Models.ClientCreateRequest.ClientIdentifier or Ninlil.Web.Models.ClientCreateRequest.ProtocolVersion, because Ninlil.Web.Controllers.ClientsController never lets an address\'s identity change. To change one, add a new address and delete the old one, as with the shared secret of a Ninlil.Dns.Data.Abstractions.Entity.TsigKeyEntity.
  */
 export interface ClientWriteRequest { 
     /**
-     * An operator-chosen, human-readable name for this client.
+     * An operator-chosen, human-readable name for the client.
      */
     displayName?: string | null;
     /**
-     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity this client is explicitly assigned to, or null for no explicit override.
+     * The Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**
-     * Whether the client is currently disabled.
+     * Whether the client is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Optional free-text operator notes about this client.
+     * Optional free-text operator notes about the client.
      */
     comments?: string | null;
     /**

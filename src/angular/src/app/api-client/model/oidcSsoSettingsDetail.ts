@@ -10,31 +10,31 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `OidcSsoOptions`. Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured stands in for the real client secret, never returned by a `GET` -- the same reveal-once posture every other secret-bearing setting in this project already follows.
+ * This record is the OpenID Connect single sign-on settings (`OidcSsoOptions`) that `GET /api/sso-settings` returns. The client secret is never returned, as with every other secret; Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured says whether one is set. A `PATCH` accepts these fields with `clientSecret` in place of Ninlil.Web.Models.OidcSsoSettingsDetail.ClientSecretConfigured.
  */
 export interface OidcSsoSettingsDetail { 
     /**
-     * Whether this host is configured to federate admin sign-in through OpenID Connect.
+     * Whether admin sign-in through OpenID Connect is offered. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The label the Angular admin SPA\'s own login page renders on its \"Sign in with SSO\" button.
+     * The label of the sign-in button on the admin console\'s login page. Defaults to \"Single Sign-On\".
      */
     displayName?: string | null;
     /**
-     * The identity provider\'s own issuer URL.
+     * The identity provider\'s issuer URL.
      */
     authority?: string | null;
     /**
-     * The OAuth 2.0 client identifier this host was registered under.
+     * The OAuth 2.0 client identifier this server is registered under.
      */
     clientId?: string | null;
     /**
-     * Whether `OidcSsoOptions.ClientSecretEncrypted` currently has a value -- the secret itself is never returned by a `GET`.
+     * Whether `OidcSsoOptions.ClientSecretEncrypted` has a value. The secret itself is never returned.
      */
     clientSecretConfigured?: boolean;
     /**
-     * The OpenID Connect scopes requested during the authorization code flow.
+     * The scopes requested in the authorization code flow. Defaults to `openid`, `profile` and `email`.
      */
     scopes?: Array<string> | null;
 }

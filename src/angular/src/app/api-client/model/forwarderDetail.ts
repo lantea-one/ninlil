@@ -11,44 +11,44 @@ import { UpstreamForwarderProtocolEnum } from './upstreamForwarderProtocolEnum';
 
 
 /**
- * This class carries a single global upstream forwarder\'s own fields, for list, single-item, and creation responses. No secret material is involved anywhere in this entity -- a forwarder definition string is not a credential -- so, unlike `TsigKeyDetail`/ `DnssecKeyDetail`/`CloudProviderCredentialDetail`, there is no reveal-once policy to apply here at all.
+ * This class carries a global upstream forwarder, as returned by the list, get and write endpoints of `/api/forwarders`. A definition string is not a credential, so there is no reveal-once handling as with `TsigKeyDetail` or `CloudProviderCredentialDetail`.
  */
 export interface ForwarderDetail { 
     /**
-     * This forwarder\'s own identifier.
+     * The forwarder\'s identifier.
      */
     id?: string;
     /**
-     * This forwarder\'s own human-readable name.
+     * The forwarder\'s human-readable name.
      */
     name?: string | null;
     /**
-     * This forwarder\'s own definition string, exactly as stored.
+     * The forwarder\'s definition string, as stored.
      */
     definitionString?: string | null;
     protocol?: UpstreamForwarderProtocolEnum;
     /**
-     * This forwarder\'s own position among every other configured global forwarder.
+     * The forwarder\'s position among the global forwarders; lower values are tried first.
      */
     sortOrder?: number;
     /**
-     * Whether this forwarder is currently disabled.
+     * Whether the forwarder is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this forwarder.
+     * Free-form operator notes about the forwarder.
      */
     comments?: string | null;
     /**
-     * When this forwarder was created.
+     * When the forwarder was created.
      */
     createdAtUtc?: string;
     /**
-     * When this forwarder was last modified, or null if never.
+     * When the forwarder was last modified, or null if never.
      */
     updatedAtUtc?: string | null;
     /**
-     * The cluster node this forwarder was last created or modified on (the cluster\'s own operational config sync), or null on a deployment that has never had clustering enabled.
+     * The cluster node the forwarder was last created or modified on, used by cluster config sync, or null if it was never written with clustering enabled.
      */
     originatingNodeId?: string | null;
 }

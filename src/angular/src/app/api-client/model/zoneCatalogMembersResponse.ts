@@ -10,11 +10,11 @@
 
 
 /**
- * This class carries a single catalog zone\'s own currently-enumerated member zone names -- `GET /api/zones/{id}/catalog-members`\'s own response body.
+ * This class carries the member zone names of one catalog zone, the response of `GET /api/zones/{id}/catalog-members`.
  */
 export interface ZoneCatalogMembersResponse { 
     /**
-     * Every member zone name the catalog currently lists, alphabetically.
+     * Every member zone name the catalog lists, in alphabetical order.
      */
     memberZoneNames?: Array<string> | null;
 }

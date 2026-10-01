@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `AdminLoginRateLimitOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the admin sign-in rate limiter settings (`AdminLoginRateLimitOptions`) that `GET /api/admin-login-rate-limit-settings` returns. Nothing in it is secret, so a `PATCH` to the same endpoint accepts the same fields.
  */
 export interface AdminLoginRateLimitSettingsDetail { 
     /**
-     * Whether this limiter is wired into the request pipeline at all.
+     * Whether the limiter rejects anything. Defaults to true.
      */
     enable?: boolean;
     /**
-     * How many sign-in attempts are allowed within a single Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.Window.
+     * How many sign-in attempts one client address may make within one Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.Window. Defaults to 5.
      */
     permitLimit?: number;
     /**
-     * The fixed window Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.PermitLimit is counted over, and this limiter\'s own effective lockout duration.
+     * The fixed window Ninlil.Web.Models.AdminLoginRateLimitSettingsDetail.PermitLimit is counted over, which is also the lockout length. Defaults to five minutes.
      */
     window?: string;
 }

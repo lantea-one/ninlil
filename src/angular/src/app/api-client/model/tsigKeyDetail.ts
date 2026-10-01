@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a TSIG key\'s own metadata, for list, single-item, and (nested inside Ninlil.Web.Models.TsigKeyCreateResponse) creation responses. The key\'s own shared secret is never included here -- see Ninlil.Web.Models.TsigKeyCreateResponse for the one place it ever appears.
+ * This class carries a TSIG key without its secret, as returned by the list and get endpoints and nested in Ninlil.Web.Models.TsigKeyCreateResponse, the one response that includes the secret.
  */
 export interface TsigKeyDetail { 
     id?: string;

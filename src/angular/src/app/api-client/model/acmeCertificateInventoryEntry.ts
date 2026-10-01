@@ -10,15 +10,15 @@
 
 
 /**
- * This record is one row of the real, per-domain certificate inventory `AcmeSettingsController.Certificates` returns -- every domain `AcmeOptions.Domains` currently names, alongside whatever `IAcmeAccountStore` actually knows about it. A domain that has never had a certificate successfully issued is always visibly distinguishable from one that simply is not due for renewal yet: Ninlil.Web.Models.AcmeCertificateInventoryEntry.HasCertificate is false for the former and true for the latter, regardless of what Ninlil.Web.Models.AcmeCertificateInventoryEntry.IsDueForRenewal itself reports for either one.
+ * This record is one row of the certificate inventory that `AcmeSettingsController.Certificates` returns: one per domain in `AcmeOptions.Domains`, with what `IAcmeAccountStore` knows about it. Ninlil.Web.Models.AcmeCertificateInventoryEntry.HasCertificate separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever Ninlil.Web.Models.AcmeCertificateInventoryEntry.IsDueForRenewal says.
  */
 export interface AcmeCertificateInventoryEntry { 
     /**
-     * The domain, exactly as configured in `AcmeOptions.Domains`.
+     * The domain as configured in `AcmeOptions.Domains`.
      */
     domain?: string | null;
     /**
-     * true once this domain has had at least one certificate successfully                 issued -- false means no certificate has ever been issued for it at                 all, a real, distinct state from \"issued, but not due for renewal yet.\"
+     * true once the domain has been issued at least one certificate;                 false means none has ever been issued.
      */
     hasCertificate?: boolean;
     /**
@@ -30,15 +30,15 @@ export interface AcmeCertificateInventoryEntry {
      */
     expiresAtUtc?: string | null;
     /**
-     * true when this domain has no certificate yet, or its current one is                 inside `AcmeOptions.RenewBeforeExpiration` of its own expiry -- the exact same                 condition `AcmeCertificateRenewalService`\'s own poll loop uses to decide whether to                 actually attempt an issuance/renewal on its next tick, computed by the same shared method                 so this can never drift from what the background loop itself will do.
+     * true when the domain has no certificate yet, or its certificate expires                 within `AcmeOptions.RenewBeforeExpiration`. It is computed by                 `AcmeCertificateRenewalService.IsDomainDue`, the check the renewal loop itself uses.
      */
     isDueForRenewal?: boolean;
     /**
-     * When this domain\'s own most recent issuance/renewal attempt failed, or null if its most recent attempt succeeded (or it has never been attempted at all).
+     * When the domain\'s most recent issuance or renewal attempt failed, or null if that attempt succeeded or none has been made.
      */
     lastFailureAtUtc?: string | null;
     /**
-     * A short, human-readable description of why the most recent attempt failed, or null alongside Ninlil.Web.Models.AcmeCertificateInventoryEntry.LastFailureAtUtc.
+     * A short description of why the most recent attempt failed, or null together with Ninlil.Web.Models.AcmeCertificateInventoryEntry.LastFailureAtUtc.
      */
     lastFailureMessage?: string | null;
 }

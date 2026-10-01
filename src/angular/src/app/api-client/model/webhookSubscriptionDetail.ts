@@ -11,15 +11,15 @@ import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
 /**
- * This class carries a webhook subscription\'s own metadata, for list, single-item, and (nested inside Ninlil.Web.Models.WebhookSubscriptionCreateResponse) creation responses. Neither the subscription\'s own auth credential(s) nor its HMAC signing secret are ever included here -- see Ninlil.Web.Models.WebhookSubscriptionCreateResponse for the one place Ninlil.Web.Models.WebhookSubscriptionCreateResponse.AuthCredentials/ Ninlil.Web.Models.WebhookSubscriptionCreateResponse.HmacSigningSecret ever appear.
+ * This class carries a webhook subscription without its secrets, as returned by the list and get endpoints and nested in Ninlil.Web.Models.WebhookSubscriptionCreateResponse, the one response that includes Ninlil.Web.Models.WebhookSubscriptionCreateResponse.AuthCredentials and Ninlil.Web.Models.WebhookSubscriptionCreateResponse.HmacSigningSecret.
  */
 export interface WebhookSubscriptionDetail { 
     /**
-     * The subscription\'s own identifier.
+     * The subscription\'s identifier.
      */
     id?: string;
     /**
-     * The subscription\'s own name.
+     * The subscription\'s name.
      */
     name?: string | null;
     /**
@@ -27,32 +27,32 @@ export interface WebhookSubscriptionDetail {
      */
     targetUrl?: string | null;
     /**
-     * Which event types this subscription is subscribed to.
+     * The event types the subscription receives.
      */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
     /**
-     * Whether this subscription has an HMAC signing secret configured -- a plain boolean flag, never the secret itself, so a caller can tell whether payload signing is active without this response ever exposing the secret it would need to verify one.
+     * Whether the subscription has an HMAC signing secret, so a caller can tell that signing is on without the secret being exposed.
      */
     hasHmacSigningSecret?: boolean;
     /**
-     * The maximum number of delivery attempts the delivery engine makes.
+     * How many times one event is attempted.
      */
     maxDeliveryAttempts?: number;
     /**
-     * Whether this subscription is currently disabled.
+     * Whether the subscription is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this subscription.
+     * Free-form operator notes about the subscription.
      */
     comments?: string | null;
     /**
-     * When this subscription was created.
+     * When the subscription was created.
      */
     createdAtUtc?: string;
     /**
-     * When this subscription was last modified, or null if never.
+     * When the subscription was last modified, or null if never.
      */
     updatedAtUtc?: string | null;
 }

@@ -11,16 +11,16 @@ import { DhcpServiceKindEnum } from './dhcpServiceKindEnum';
 
 
 /**
- * This record is the REST representation of one DHCP-family service\'s own current state -- both its configured Ninlil.Web.Models.DhcpServiceStatus.Enabled flag (whether it starts automatically at host boot) and its actual, live Ninlil.Web.Models.DhcpServiceStatus.IsRunning signal, which can legitimately differ from it in either direction: a service configured false can still be running right now (started live, after boot, through this same controller), and a service configured true can legitimately not be running (stopped live, or -- Ninlil.Web.Models.DhcpServiceKindEnum.Tftp only -- declined to bind at all for a real, non-throwing precondition failure such as a missing root directory; see `TftpServer`\'s own doc comment) -- see `Ninlil.Dhcp.Common.Control.IDhcpProtocolService`\'s own doc comment for why these two are deliberately distinct concepts throughout this whole feature.
+ * This record is one DHCP-family service\'s state, as returned by `/api/dhcp-services`: its configured Ninlil.Web.Models.DhcpServiceStatus.Enabled flag (whether it starts at boot) and whether it Ninlil.Web.Models.DhcpServiceStatus.IsRunning. The two can differ either way. A service configured off can be running because it was started through this controller, and one configured on can be stopped, either through this controller or, for Ninlil.Web.Models.DhcpServiceKindEnum.Tftp only, because it declined to bind (for example when its root directory is missing; see `TftpServer`). `Ninlil.Dhcp.Common.Control.IDhcpProtocolService` explains the distinction.
  */
 export interface DhcpServiceStatus { 
     kind?: DhcpServiceKindEnum;
     /**
-     * Whether this service is configured to start automatically at the next host boot -- this server\'s own `Enable` option for this protocol, read fresh on every call, never a stale snapshot.
+     * Whether the service\'s `Enable` option says it starts at boot. It is read from the settings loaded at startup, so a saved change shows only after a restart.
      */
     enabled?: boolean;
     /**
-     * Whether this service\'s own listener is genuinely bound and serving traffic right now.
+     * Whether the service\'s listener is bound and serving traffic now.
      */
     isRunning?: boolean;
 }

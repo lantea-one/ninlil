@@ -10,11 +10,20 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `OutboundQueryOptions`. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the outbound query settings (`OutboundQueryOptions`) that `GET /api/outbound-query-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface OutboundQuerySettingsDetail { 
+    /**
+     * Whether outbound UDP queries reuse a fixed pool of sockets rather than a new socket on a random port each time. Defaults to true.
+     */
     enableSourcePortPool?: boolean;
+    /**
+     * How many sockets, and so source ports, the pool keeps for each of IPv4 and IPv6. Defaults to 128.
+     */
     poolSizePerAddressFamily?: number;
+    /**
+     * Local source ports outbound sockets must not use, such as one another local service listens on. Empty by default.
+     */
     excludedSourcePorts?: Array<number> | null;
 }
 

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is returned after a preset is successfully applied.
+ * This record is returned after a preset is applied (`POST /api/presets/{name}/apply`).
  */
 export interface PresetApplyResult { 
     /**
@@ -22,7 +22,7 @@ export interface PresetApplyResult {
      */
     appliedAtUtc?: string;
     /**
-     * A reminder that some settings this preset touches are only read via Microsoft.Extensions.Options.IOptions`1, not Microsoft.Extensions.Options.IOptionsMonitor`1, and therefore need a restart before they take effect.
+     * A reminder that settings read through Microsoft.Extensions.Options.IOptionsMonitor`1 take effect at once, while the others the preset touched need a restart.
      */
     note?: string | null;
 }

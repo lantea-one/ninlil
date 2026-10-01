@@ -13,22 +13,22 @@ import { RabbitMqBrokerSettingsDetail } from './rabbitMqBrokerSettingsDetail';
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective message- broker event-transport configuration. Only the section matching Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is ever populated -- the other is null, since a value read from Microsoft.Extensions.Options.IOptions`1 for a broker that was never selected (and therefore never had its own `Configure<TOptions>` called) would otherwise just be that options class\'s own compiled-in defaults, which would misleadingly look like real, live configuration.
+ * This record is the event transport configuration that `GET /api/event-broker-settings` returns. Only the section matching Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is filled in; the other is null. A broker that was not selected never had its options configured, so reading them through Microsoft.Extensions.Options.IOptions`1 would return compiled-in defaults that look like live configuration.
  */
 export interface EventBrokerSettingsDetail { 
     transport?: EventTransportEnum;
     /**
-     * Whether the active broker transport currently reports itself connected -- null when Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is Ninlil.Dns.Common.Enum.EventTransportEnum.InMemory, since \"connected\" has no meaning there.
+     * Whether the active broker transport reports itself connected, or null when Ninlil.Web.Models.EventBrokerSettingsDetail.Transport is Ninlil.Dns.Common.Enum.EventTransportEnum.InMemory, where \"connected\" has no meaning.
      */
     isConnected?: boolean | null;
     rabbitMq?: RabbitMqBrokerSettingsDetail;
     activeMq?: ActiveMqBrokerSettingsDetail;
     /**
-     * When this settings section was last written (the cluster\'s own operational config sync), or null if it has never been written through this REST surface.
+     * When the settings were last written through the REST API, used by cluster config sync, or null if they never have been.
      */
     lastModifiedUtc?: string | null;
     /**
-     * The cluster node this settings section was last written on, or null alongside Ninlil.Web.Models.EventBrokerSettingsDetail.LastModifiedUtc.
+     * The cluster node the settings were last written on, or null together with Ninlil.Web.Models.EventBrokerSettingsDetail.LastModifiedUtc.
      */
     originatingNodeId?: string | null;
 }

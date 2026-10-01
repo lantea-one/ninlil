@@ -11,15 +11,15 @@ import { MacVendorDataStatusDetail } from './macVendorDataStatusDetail';
 
 
 /**
- * This record is the REST representation of MAC vendor lookup\'s currently-effective `MacVendorLookupOptions`, plus a read-only report of the vendor data currently loaded. Every settings field except DataFilePath is also accepted by a `PATCH` to the same endpoint; that one is an on-disk path, read once at startup and configuration-file-only like every other state path.
+ * This record is the MAC vendor lookup settings (`MacVendorLookupOptions`) that `GET /api/mac-vendor-settings` returns, with a read-only report of the vendor data loaded. A `PATCH` to the same endpoint accepts every settings field except DataFilePath, a path read once at startup that, like other state paths, is set only in the configuration file.
  */
 export interface MacVendorSettingsDetail { 
     /**
-     * Whether the IEEE registries are periodically re-downloaded.
+     * Whether the IEEE registries are downloaded again periodically. Defaults to true.
      */
     enableAutomaticRefresh?: boolean;
     /**
-     * How long to wait after a successful check before checking again.
+     * How long to wait after a successful check before checking again. Defaults to 14 days.
      */
     refreshInterval?: string;
     /**

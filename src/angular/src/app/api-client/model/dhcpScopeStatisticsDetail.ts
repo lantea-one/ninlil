@@ -12,37 +12,37 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Server.Core.Statistics.DhcpScopeStatistics` -- a single DHCP scope\'s own genuine, freshly-computed utilization, never a cached or approximate figure (see that class\'s own doc comment for exactly how each field is derived). Ninlil.Web.Models.DhcpScopeStatisticsDetail.TotalSlots/Ninlil.Web.Models.DhcpScopeStatisticsDetail.AvailableSlots are carried as a decimal string, not a JSON number: an IPv6 `AddressAssignment` scope\'s own configured range can legitimately hold far more addresses than fit in a JSON number\'s own safe-integer range (an ordinary `/64` alone holds 2^64 of them) without losing precision.
+ * This record is the REST shape of `Ninlil.Dhcp.Server.Core.Statistics.DhcpScopeStatistics`, one scope\'s utilization (`GET /api/dhcp-scopes/{id}/statistics`). The figures are computed on each request, not cached; that class documents how. Ninlil.Web.Models.DhcpScopeStatisticsDetail.TotalSlots and Ninlil.Web.Models.DhcpScopeStatisticsDetail.AvailableSlots are decimal strings rather than JSON numbers because an IPv6 range can hold far more addresses than a JSON number represents exactly (a `/64` holds 2^64).
  */
 export interface DhcpScopeStatisticsDetail { 
     /**
-     * The identifier of the scope these figures describe.
+     * The identifier of the scope the figures describe.
      */
     scopeId?: string;
     /**
-     * The name of the scope these figures describe.
+     * The name of the scope the figures describe.
      */
     scopeName?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     kind?: DhcpScopeKindEnum;
     /**
-     * The total number of slots the scope\'s own configured range holds, as a decimal string -- an ordinary address for an Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.AddressAssignment scope, or a block-aligned delegable prefix for a Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation one.
+     * How many slots the scope\'s range holds, as a decimal string. A slot is an address for an Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.AddressAssignment scope, or a block-aligned delegable prefix for a Ninlil.Dhcp.Data.Abstractions.Enum.DhcpScopeKindEnum.PrefixDelegation scope.
      */
     totalSlots?: string | null;
     /**
-     * The number of currently actively-leased slots.
+     * How many slots are actively leased.
      */
     leasedCount?: number;
     /**
-     * The number of slots currently tentatively offered, awaiting confirmation.
+     * How many slots are offered and awaiting the client\'s request.
      */
     offeredCount?: number;
     /**
-     * The number of this scope\'s own currently-enabled static reservations.
+     * How many enabled static reservations the scope has.
      */
     reservedCount?: number;
     /**
-     * TotalSlots minus every distinct slot currently occupied by a blocking                 lease or an enabled reservation, as a decimal string -- never negative.
+     * TotalSlots minus every distinct slot held by a blocking lease or an                 enabled reservation, as a decimal string; never negative.
      */
     availableSlots?: string | null;
 }

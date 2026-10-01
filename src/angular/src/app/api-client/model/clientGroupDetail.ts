@@ -10,19 +10,19 @@
 
 
 /**
- * This class carries a client group\'s own metadata, for list, single-item, and creation responses.
+ * This class carries a client group, as returned by the list, get and create endpoints of `/api/client-groups`.
  */
 export interface ClientGroupDetail { 
     /**
-     * This group\'s own unique identifier.
+     * The group\'s unique identifier.
      */
     id?: string;
     /**
-     * This group\'s own operator-chosen, human-readable, unique name.
+     * The group\'s operator-chosen, human-readable, unique name.
      */
     name?: string | null;
     /**
-     * Whether this is the fallback group a client matching no other group\'s own networks is treated as belonging to.
+     * Whether this is the fallback group for a client that matches no other group\'s networks.
      */
     isDefault?: boolean;
     /**
@@ -30,19 +30,19 @@ export interface ClientGroupDetail {
      */
     isDisabled?: boolean;
     /**
-     * When this row was first created.
+     * When the group was created.
      */
     createdAtUtc?: string;
     /**
-     * When this row was last updated, or null if never.
+     * When the group was last updated, or null if never.
      */
     updatedAtUtc?: string | null;
     /**
-     * The instant, in UTC, until which this group\'s instant pause blocks every member\'s own DNS resolution -- see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.PausedUntilUtc. null when this group is not currently pausing its members.
+     * The UTC instant until which the group\'s pause blocks DNS resolution for every member (see Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.PausedUntilUtc), or null when no pause has been set.
      */
     pausedUntilUtc?: string | null;
     /**
-     * Whether PausedUntilUtc is currently in effect -- computed at read time against the current instant, the same way Ninlil.Web.Models.ClientDetail.IsCurrentlyPaused is.
+     * Whether PausedUntilUtc is still in the future, computed when the response is built, as for Ninlil.Web.Models.ClientDetail.IsCurrentlyPaused.
      */
     isCurrentlyPaused?: boolean;
 }

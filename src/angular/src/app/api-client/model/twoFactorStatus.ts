@@ -10,23 +10,23 @@
 
 
 /**
- * This class carries the current caller\'s own two-factor enrollment state.
+ * This class carries the caller\'s two-factor enrollment state (`GET /api/auth/two-factor/status`).
  */
 export interface TwoFactorStatus { 
     /**
-     * Whether a second factor is currently required at sign-in.
+     * Whether a second factor is required at sign-in.
      */
     isEnabled?: boolean;
     /**
-     * Whether an authenticator app shared secret has already been generated for this account (regardless of whether two-factor sign-in is currently required) -- lets the UI offer \"re-enroll\" rather than \"enroll\" wording.
+     * Whether an authenticator shared secret has been generated for the account, whether or not two-factor sign-in is required. The UI uses it to say \"re-enroll\" rather than \"enroll\".
      */
     hasAuthenticator?: boolean;
     /**
-     * Whether this account has a confirmed e-mail address the e-mailed-code action (`POST .../two-factor/email/send`) could actually deliver a code to.
+     * Whether the account has a confirmed e-mail address that `POST /api/auth/two-factor/email/send` can deliver a code to.
      */
     canReceiveEmailCode?: boolean;
     /**
-     * How many of this account\'s own single-use recovery codes have not yet been redeemed. Zero both when two-factor authentication is not enabled at all and when it is enabled but no recovery code batch has ever been generated -- the UI is expected to prompt the caller to generate a batch (or a fresh one) whenever this is low, the same way it would after any other secret nears the end of its usefulness.
+     * How many of the account\'s single-use recovery codes are unused; zero when none have been generated. The UI should prompt for a new batch when this runs low.
      */
     recoveryCodesRemaining?: number;
 }

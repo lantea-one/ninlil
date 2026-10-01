@@ -10,12 +10,24 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ZoneTransferClientOptions` -- how this server pulls AXFR/IXFR transfers from a primary as a secondary. This record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the zone transfer client settings (`ZoneTransferClientOptions`) that `GET /api/zone-transfer-client-settings` returns: how the server, as a secondary, pulls AXFR and IXFR transfers from a primary. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ZoneTransferClientSettingsDetail { 
+    /**
+     * The port plain transfers and SOA checks connect to on a primary. Defaults to 53.
+     */
     primaryPort?: number;
+    /**
+     * How long connecting to a primary may take. Defaults to 5 seconds.
+     */
     connectTimeout?: string;
+    /**
+     * How long to wait for each part of a transfer response. Defaults to 10 seconds.
+     */
     readTimeout?: string;
+    /**
+     * How long the SOA serial check may take. Defaults to 3 seconds.
+     */
     soaQueryTimeout?: string;
 }
 

@@ -10,12 +10,24 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `NotifyOptions` -- how this server sends RFC 1996 NOTIFY messages to a zone\'s configured secondaries. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the REST shape of the NOTIFY settings (`NotifyOptions`) that `GET /api/notify-settings` returns: how the server sends RFC 1996 NOTIFY messages to a zone\'s secondaries. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface NotifySettingsDetail { 
+    /**
+     * How many times one NOTIFY is sent before giving up. Defaults to 5.
+     */
     maxAttempts?: number;
+    /**
+     * How long to wait for a secondary\'s reply to one attempt. Defaults to 3 seconds.
+     */
     responseTimeout?: string;
+    /**
+     * How long to wait between attempts. Defaults to 3 seconds.
+     */
     retryDelay?: string;
+    /**
+     * The port NOTIFY messages are sent to. Defaults to 53.
+     */
     secondaryPort?: number;
 }
 

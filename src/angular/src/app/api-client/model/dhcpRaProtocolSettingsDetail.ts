@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of `Ninlil.Dhcp.Protocol.Ra.RaProtocolOptions` -- how this server\'s own Router Advertisement listener binds and times its unsolicited advertisements. What a Router Advertisement actually contains is Ninlil.Web.Models.DhcpRaSettingsDetail\'s own concern instead, mirroring that same split in the underlying `Options` classes.
+ * This record is the REST shape of `Ninlil.Dhcp.Protocol.Ra.RaProtocolOptions` (`GET /api/dhcp-settings/ra-protocol`): whether the Router Advertisement listener runs and how often it sends unsolicited advertisements. What an advertisement contains is in Ninlil.Web.Models.DhcpRaSettingsDetail, following the same split in the options classes.
  */
 export interface DhcpRaProtocolSettingsDetail { 
     /**
-     * Whether this listener binds its raw ICMPv6 socket and sends/answers Router Advertisement traffic at all.
+     * Whether the listener starts at boot, sending and answering Router Advertisement traffic. Defaults to false.
      */
     enable?: boolean;
     /**
-     * The shortest interval between two unsolicited advertisements on the same interface.
+     * The shortest interval between two unsolicited advertisements on one interface. Defaults to 198 seconds.
      */
     minRouterAdvertisementInterval?: string;
     /**
-     * The longest interval between two unsolicited advertisements on the same interface.
+     * The longest interval between two unsolicited advertisements on one interface. Defaults to 600 seconds.
      */
     maxRouterAdvertisementInterval?: string;
 }

@@ -11,16 +11,16 @@ import { ManagedServiceCategoryEnum } from './managedServiceCategoryEnum';
 
 
 /**
- * This record is the REST representation of one Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration -- a DNS transport listener or background maintenance loop this server runs, and whether it is genuinely running right now.
+ * This record describes one Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration, as listed by `GET /api/services`: a DNS transport listener or background maintenance loop, and whether it is running.
  */
 export interface ManagedServiceSummary { 
     /**
-     * This service\'s own stable, operator-facing name -- the exact value a `POST /api/services/{name}/start`-shaped action\'s own route parameter addresses it by.
+     * The service\'s stable name, used as `{name}` in `POST /api/services/{name}/start` and the other control actions.
      */
     name?: string | null;
     category?: ManagedServiceCategoryEnum;
     /**
-     * Whether this service is genuinely running right now -- see Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration.IsRunning\'s own doc comment for exactly what that means for a given service (a real, independently-observed signal for every DNS transport listener; \"has start been called more recently than stop\" for a background maintenance loop with no richer signal of its own).
+     * Whether the service is running. For a DNS transport listener this is observed from the listener; for a maintenance loop with no such signal, it means start was called more recently than stop (see Ninlil.Dns.Server.Core.Services.IManagedServiceRegistration.IsRunning).
      */
     isRunning?: boolean;
 }

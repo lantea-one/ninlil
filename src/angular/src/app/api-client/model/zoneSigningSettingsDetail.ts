@@ -10,23 +10,23 @@
 
 
 /**
- * This record is the REST representation of this host\'s own currently-effective `ZoneSigningOptions` -- the timing parameters `ZoneSigningService` signs with and `DnssecResigningBackgroundService` re-signs against. No secret material is involved, so this record\'s own fields are the exact same ones a `PATCH` to the same endpoint accepts.
+ * This record is the zone signing timing (`ZoneSigningOptions`) that `GET /api/zone-signing-settings` returns: what `ZoneSigningService` signs with and `DnssecResigningBackgroundService` re-signs by. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ZoneSigningSettingsDetail { 
     /**
-     * How long a freshly computed signature remains valid.
+     * How long a new signature stays valid. Defaults to 30 days.
      */
     signatureValidityPeriod?: string;
     /**
-     * How far before the actual signing time a signature\'s own inception is deliberately backdated.
+     * How far before the signing time a signature\'s inception is backdated, to allow for clock skew. Defaults to 1 hour.
      */
     inceptionOffset?: string;
     /**
-     * How long before a zone\'s earliest-expiring signature actually expires that a proactive re-sign runs.
+     * How long before a zone\'s earliest signature expires the zone is re-signed. Defaults to 5 days.
      */
     refreshBeforeExpiration?: string;
     /**
-     * How often the proactive re-signing background loop wakes up to check whether any signed zone is due.
+     * How often the re-signing loop checks whether a signed zone is due. Defaults to 6 hours.
      */
     pollInterval?: string;
 }

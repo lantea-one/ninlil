@@ -13,26 +13,26 @@ import { DnsFilterListSourceEnum } from './dnsFilterListSourceEnum';
 
 
 /**
- * This class carries the fields used to create a new block/allow list (`POST /api/filter-lists`).
+ * This class carries the fields used to create or fully replace a block or allow list (`POST /api/filter-lists`, `PUT /api/filter-lists/{id}`).
  */
 export interface FilterListWriteRequest { 
     /**
-     * An operator-chosen, human-readable, unique name for this list.
+     * An operator-chosen, human-readable, unique name for the list.
      */
     name?: string | null;
     kind?: DnsFilterListKindEnum;
     action?: DnsFilterListActionEnum;
     source?: DnsFilterListSourceEnum;
     /**
-     * The URL a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are periodically fetched from. Required when Ninlil.Web.Models.FilterListWriteRequest.Source is Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed, otherwise ignored.
+     * The URL a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are fetched from. Required for a subscribed list, otherwise ignored.
      */
     subscriptionUrl?: string | null;
     /**
-     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list\'s entries are refetched. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
+     * How often a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Subscribed list is fetched again. Ignored for a Ninlil.Dns.Common.Enum.DnsFilterListSourceEnum.Local list.
      */
     refreshInterval?: string | null;
     /**
-     * Whether the list starts out disabled.
+     * Whether the list is disabled.
      */
     isDisabled?: boolean;
     /**

@@ -10,19 +10,19 @@
 
 
 /**
- * This class carries the fields used to create or fully replace a client group (`POST`/`PUT /api/client-groups`).
+ * This class carries the fields used to create or fully replace a client group (`POST /api/client-groups`, `PUT /api/client-groups/{id}`).
  */
 export interface ClientGroupWriteRequest { 
     /**
-     * An operator-chosen, human-readable, unique name for this group.
+     * An operator-chosen, human-readable, unique name for the group.
      */
     name?: string | null;
     /**
-     * Whether this is the fallback group a client matching no other group\'s own networks is treated as belonging to. Setting this true demotes whichever other group currently holds it -- see Ninlil.Web.Controllers.ClientGroupsController for why exactly one group may ever hold it at a time.
+     * Whether this is the fallback group for a client that matches no other group\'s networks. Setting it true takes the flag from whichever group holds it, since only one group may (see Ninlil.Web.Controllers.ClientGroupsController).
      */
     isDefault?: boolean;
     /**
-     * Whether the group starts out (or is currently) disabled.
+     * Whether the group is disabled.
      */
     isDisabled?: boolean;
 }

@@ -11,28 +11,28 @@ import { DnsScheduleDayOfWeekEnum } from './dnsScheduleDayOfWeekEnum';
 
 
 /**
- * This class carries the fields used to create or fully replace a time-of-day parental-control schedule assigned directly to a known client (`POST`/`PUT /api/clients/{clientId}/schedules`) -- mirrors Ninlil.Web.Models.ClientGroupScheduleWriteRequest exactly, keyed by client instead of client group. Unlike a pure filter-list join (Ninlil.Web.Models.ClientListAssignmentWriteRequest), a schedule has real, mutable fields of its own, so Ninlil.Web.Controllers.ClientSchedulesController supports `PUT` as well as `POST`/`DELETE`.
+ * This class carries the fields used to create or fully replace a time-of-day parental-control schedule for one known client (`POST` and `PUT` under `/api/clients/{clientId}/schedules`). It is the client counterpart of Ninlil.Web.Models.ClientGroupScheduleWriteRequest. Unlike a list assignment (Ninlil.Web.Models.ClientListAssignmentWriteRequest), a schedule has fields of its own, so Ninlil.Web.Controllers.ClientSchedulesController supports `PUT`.
  */
 export interface ClientScheduleWriteRequest { 
     daysOfWeek?: DnsScheduleDayOfWeekEnum;
     /**
-     * The local wall-clock time the blocking window begins, in TimeZoneId\'s own time.
+     * The local time the blocking window begins, in TimeZoneId.
      */
     startTime?: string;
     /**
-     * The local wall-clock time the blocking window ends. Earlier than StartTime is a real, supported midnight-wrapping window (e.g. a 21:00-07:00 bedtime) -- only a value exactly equal to StartTime is rejected.
+     * The local time the blocking window ends. A time earlier than StartTime makes a window that crosses midnight (e.g. a 21:00 to 07:00 bedtime); a time equal to it is rejected.
      */
     endTime?: string;
     /**
-     * A real IANA time zone database identifier (e.g. `\"America/New_York\"`), validated at write time.
+     * An IANA time zone identifier (e.g. `\"America/New_York\"`), checked when saved.
      */
     timeZoneId?: string | null;
     /**
-     * Whether the schedule starts out (or remains) disabled.
+     * Whether the schedule is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this schedule.
+     * Free-form operator notes about the schedule.
      */
     comments?: string | null;
 }

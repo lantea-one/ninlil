@@ -11,7 +11,7 @@ import { InternetProtocolVersionEnum } from './internetProtocolVersionEnum';
 
 
 /**
- * This class carries the fields used to add a further address to an existing known client device (`POST /api/clients/{clientId}/addresses`) -- the only way, alongside Ninlil.Web.Models.ClientCreateRequest\'s own initial address, that a device ever gains an identifier of its own. Rejected with `409 Conflict` when this exact identifier/protocol pair already belongs to any device (this one included), the same real, storage-level uniqueness Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity\'s own composite index enforces.
+ * This class carries the fields used to add another address to a known client device (`POST /api/clients/{clientId}/addresses`). Apart from the first address in Ninlil.Web.Models.ClientCreateRequest, this is the only way a device gains an identifier. The request is rejected with `409 Conflict` when the identifier and protocol pair already belongs to any device, this one included, matching the unique composite index on Ninlil.Dns.Data.Abstractions.Entity.DnsClientAddressEntity.
  */
 export interface ClientAddressWriteRequest { 
     /**

@@ -13,15 +13,15 @@ import { DnssecKeyRoleEnum } from './dnssecKeyRoleEnum';
 
 
 /**
- * This class carries a DNSSEC key\'s own metadata, for list and single-item responses. This deliberately never includes the key\'s own private key material -- unlike a TSIG shared secret or a cloud provider credential, a DNSSEC private key never needs to leave this server; it exists purely for `Server.Authoritative`\'s own internal signing, so it stays encrypted at rest and is never exposed over this REST API at all, at any point in a key\'s lifecycle.
+ * This class carries a DNSSEC key, as returned by the list, get and create endpoints under `/api/zones/{zoneId}/dnssec-keys`. It never includes the private key. Unlike a TSIG secret or a cloud provider credential, a DNSSEC private key never needs to leave the server: it is used only for signing inside `Server.Authoritative`, stays encrypted at rest and is never exposed over REST.
  */
 export interface DnssecKeyDetail { 
     /**
-     * The key\'s own identifier.
+     * The key\'s identifier.
      */
     id?: string;
     /**
-     * The identifier of the zone this key belongs to.
+     * The identifier of the zone the key belongs to.
      */
     zoneId?: string;
     role?: DnssecKeyRoleEnum;
@@ -35,7 +35,7 @@ export interface DnssecKeyDetail {
      */
     keyTag?: number;
     /**
-     * Whether the key has been fully withdrawn from the zone\'s own DNSKEY RRset -- equivalent to `LifecycleState == Removed`, kept as its own field for the REST/UI contract that predates Ninlil.Web.Models.DnssecKeyDetail.LifecycleState.
+     * Whether the key has been withdrawn from the zone\'s DNSKEY RRset: true when Ninlil.Web.Models.DnssecKeyDetail.LifecycleState is `Removed`. It is the field Ninlil.Web.Models.DnssecKeyWriteRequest.IsRetired writes.
      */
     isRetired?: boolean;
     /**
@@ -47,20 +47,20 @@ export interface DnssecKeyDetail {
      */
     createdAtUtc?: string;
     /**
-     * When the key\'s own metadata was last updated, if ever.
+     * When the key was last updated, or null if never.
      */
     updatedAtUtc?: string | null;
     lifecycleState?: DnssecKeyLifecycleStateEnum;
     /**
-     * When the key was first published in the zone\'s own DNSKEY RRset.
+     * When the key was first published in the zone\'s DNSKEY RRset.
      */
     publishedAtUtc?: string;
     /**
-     * When the key most recently stopped being its zone\'s own canonical, currently-signing key of its role, or null if it never has.
+     * When the key last stopped being the zone\'s signing key for its role, or null if it never has.
      */
     retiredAtUtc?: string | null;
     /**
-     * When an operator confirmed a KSK rollover\'s own new DS record has actually been published at a real, externally-hosted parent zone, or null if no such confirmation has been recorded (either because no rollover needs one, or because it is still awaited).
+     * When an operator confirmed that a KSK rollover\'s new DS record is published at an externally hosted parent zone, or null if no confirmation is recorded (no rollover needs one, or it is still awaited).
      */
     parentDsConfirmedAtUtc?: string | null;
     /**

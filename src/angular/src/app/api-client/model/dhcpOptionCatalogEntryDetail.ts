@@ -11,24 +11,24 @@ import { DhcpOptionValueTypeEnum } from './dhcpOptionValueTypeEnum';
 
 
 /**
- * This record is the REST representation of one Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry -- see Ninlil.Web.Controllers.DhcpOptionCatalogController\'s own doc comment for why this project\'s read-only option-metadata catalog is exposed through a dedicated model rather than serializing Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry itself.
+ * This record is the REST shape of one Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry, as returned by `GET /api/dhcp-option-catalog`. It copies the catalog record field by field so the API does not change when the record does (see Ninlil.Web.Controllers.DhcpOptionCatalogController).
  */
 export interface DhcpOptionCatalogEntryDetail { 
     /**
-     * The option\'s own raw numeric tag/code -- see Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry.Code\'s own doc comment.
+     * The option\'s numeric code (see Ninlil.Dhcp.Common.OptionCatalog.DhcpOptionCatalogEntry.Code).
      */
     code?: number;
     /**
-     * A short, human-readable name for this option.
+     * A short, human-readable name for the option.
      */
     name?: string | null;
     /**
-     * A longer, human-readable description of what this option carries and which RFC/section defines it.
+     * A longer description of what the option carries and which RFC section defines it.
      */
     description?: string | null;
     valueType?: DhcpOptionValueTypeEnum;
     /**
-     * Whether an operator picking this option\'s value should be offered \"use this server\'s own address\" as an alternative to typing one in.
+     * Whether the UI should offer \"use this server\'s address\" as an alternative to typing a value.
      */
     isServerAddressEligible?: boolean;
 }

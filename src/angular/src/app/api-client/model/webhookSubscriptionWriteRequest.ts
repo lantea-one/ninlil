@@ -11,7 +11,7 @@ import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
 /**
- * This class carries the fields used to fully replace an existing webhook subscription\'s metadata and auth credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key\'s own server-generated shared secret, Ninlil.Web.Models.WebhookSubscriptionWriteRequest.AuthCredentials is always operator-supplied -- the caller already knows the exact plaintext value being submitted in this very request -- so, exactly like Ninlil.Web.Models.CloudProviderCredentialWriteRequest, a `PUT` may replace it too, with no \"how do we reveal a rotated value again\" problem. This subscription\'s own HMAC signing secret (see Ninlil.Web.Models.WebhookSubscriptionCreateRequest.HmacSigningSecret) cannot be touched this way at all -- delete and recreate the subscription instead.
+ * This class carries the fields used to fully replace an existing webhook subscription\'s settings and credentials (`PUT /api/webhooks/{id}`). Unlike a TSIG key\'s generated secret, Ninlil.Web.Models.WebhookSubscriptionWriteRequest.AuthCredentials comes from the operator, who already knows the value, so a `PUT` replaces it too, as with Ninlil.Web.Models.CloudProviderCredentialWriteRequest. The HMAC signing secret (see Ninlil.Web.Models.WebhookSubscriptionCreateRequest.HmacSigningSecret) cannot be changed this way; delete and recreate the subscription instead.
  */
 export interface WebhookSubscriptionWriteRequest { 
     /**
@@ -23,24 +23,24 @@ export interface WebhookSubscriptionWriteRequest {
      */
     targetUrl?: string | null;
     /**
-     * Which event types this subscription wants delivered, replacing the entire set.
+     * The event types to deliver, replacing the whole set.
      */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
     /**
-     * This subscription\'s own outbound authentication credential(s), replacing them entirely.
+     * The delivery POST\'s credentials, replacing the stored ones.
      */
     authCredentials?: { [key: string]: string | null; } | null;
     /**
-     * The maximum number of delivery attempts the delivery engine makes.
+     * How many times one event is attempted. Must be positive; defaults to 5.
      */
     maxDeliveryAttempts?: number;
     /**
-     * Whether the subscription is currently disabled.
+     * Whether the subscription is disabled.
      */
     isDisabled?: boolean;
     /**
-     * Free-form operator notes about this subscription.
+     * Free-form operator notes about the subscription.
      */
     comments?: string | null;
 }

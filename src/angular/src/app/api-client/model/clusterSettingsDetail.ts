@@ -10,16 +10,40 @@
 
 
 /**
- * This class carries this node\'s own currently-effective cluster settings (`GET /api/cluster-settings`). Ninlil.Web.Models.ClusterSettingsDetail.NodeId is read-only, included for an operator\'s own diagnostic reference -- it is never writable through `ClusterSettingsController.Patch`, per `ClusterOptions.NodeId`\'s own doc comment. Ninlil.Web.Models.ClusterSettingsDetail.AddressReconcileInterval is a genuinely distinct, cluster-adjacent options class -- `CatalogSyncOptions`, not `ClusterOptions` itself -- folded into this same settings surface rather than given a controller/page of its own, since it exists purely to keep a catalog-managed zone\'s own NOTIFY/primary address lists reconciled against this node\'s own live cluster membership; see `CatalogClusterAddressSyncService`\'s own doc comment.
+ * This class carries this node\'s cluster settings (`GET /api/cluster-settings`), from `ClusterOptions`. Ninlil.Web.Models.ClusterSettingsDetail.NodeId is read-only and shown for diagnostics; `ClusterSettingsController.Patch` cannot change it. Ninlil.Web.Models.ClusterSettingsDetail.AddressReconcileInterval comes from `CatalogSyncOptions` instead. It shares this page because it only exists to keep the NOTIFY and primary address lists of catalog-managed zones in step with cluster membership (see `CatalogClusterAddressSyncService`).
  */
 export interface ClusterSettingsDetail { 
+    /**
+     * Whether clustering is on. Defaults to false.
+     */
     enable?: boolean;
+    /**
+     * This node\'s identifier, generated at first startup.
+     */
     nodeId?: string;
+    /**
+     * The host name or address peers use to reach this node. Empty by default, which makes invites fail until it is set.
+     */
     advertisedHost?: string | null;
+    /**
+     * The TCP port peers use to reach this node. Defaults to 0, which must be changed before invites work.
+     */
     advertisedPort?: number;
+    /**
+     * How often each peer is probed. Defaults to 30 seconds.
+     */
     heartbeatInterval?: string;
+    /**
+     * How long one probe may take. Defaults to 10 seconds.
+     */
     heartbeatTimeout?: string;
+    /**
+     * How many consecutive failed probes mark a peer unreachable. Defaults to 3.
+     */
     missedHeartbeatThreshold?: number;
+    /**
+     * How often catalog zone address lists are reconciled with cluster membership. Defaults to 1 minute.
+     */
     addressReconcileInterval?: string;
 }
 

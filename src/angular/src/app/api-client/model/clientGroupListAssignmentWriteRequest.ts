@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the fields used to create a new list assignment for a client group (`POST /api/client-groups/{groupId}/list-assignments`). There is deliberately no corresponding `PUT`/`PATCH` -- an assignment is just a join between a group and a list with no mutable fields of its own; changing which list is assigned means deleting one assignment and creating another.
+ * This class carries the fields used to create a new list assignment for a client group (`POST /api/client-groups/{groupId}/list-assignments`). There is no `PUT` or `PATCH`: an assignment only joins a group to a list and has no other fields, so assigning a different list means deleting one assignment and creating another.
  */
 export interface ClientGroupListAssignmentWriteRequest { 
     /**

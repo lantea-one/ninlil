@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the settings for a newly-created role.
+ * This class carries the settings for a new role (`POST /api/roles`).
  */
 export interface CreateRoleRequest { 
     /**

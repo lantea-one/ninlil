@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST representation of DNS-over-HTTPS\'s own `DnsOverHttpsOptions`, as actually consulted by this combined host: `Port` and `Certificate` are deliberately excluded, because M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder) maps RFC 8484\'s GET/POST forms directly onto this host\'s own already-running shared Kestrel instance -- both fields are specific to `DnsOverHttpsHostedService`\'s own separate, self-hosted Kestrel instance, which this composition root never starts, and would be silently ignored (misleadingly, if exposed here as if they mattered) if written through this controller. This host\'s own shared HTTP(S) port and certificate decide both instead -- and for the same reason there is no `ListenAddresses` here: DNS-over-HTTPS is answered on whatever addresses the web listener (`DnsServer:Web`) binds.
+ * This record is the DNS-over-HTTPS settings (`DnsOverHttpsOptions`) that `GET /api/transport-settings/dns-over-https` returns, limited to the fields the server uses. M:Ninlil.Dns.Protocol.DnsOverHttps.Extension.EndpointRouteBuilderDnsOverHttpsExtension.MapNinlilDnsOverHttps(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder) maps the RFC 8484 GET and POST forms onto the shared Kestrel listener, so the shared web listener\'s port, certificate and addresses (`DnsServer:Web`) apply. `Port` and `Certificate` belong to the self-hosted `DnsOverHttpsHostedService`, which this server never starts, so they are left out rather than shown as if they had an effect; for the same reason there is no `ListenAddresses`.
  */
 export interface DnsOverHttpsSettingsDetail { 
     /**
-     * Whether a DNS-over-HTTPS request reaching the already-mapped route is answered. <b>Genuinely live</b>: toggling this field starts or stops the real `dns-over-https` transport gate registered with Ninlil.Web.Services.IManagedServiceRegistry, with no restart -- the route itself is always mapped, regardless of this flag\'s own value at process startup, so there is no \"route was never mapped\" edge case left to work around (see that extension method\'s own doc comment).
+     * Whether a request on the DNS-over-HTTPS route is answered. A change applies at once: it opens or closes the `dns-over-https` transport gate through Ninlil.Web.Services.IManagedServiceRegistry. The route is mapped whatever this flag was at startup (see the extension method above).
      */
     enable?: boolean;
     /**
-     * The HTTP path both the GET and POST forms of a DoH query are answered at. Needs a full <b>process</b> restart, not merely a listener restart -- ASP.NET Core\'s Minimal API routing has no supported \"remap this route\" operation once the host has started.
+     * The HTTP path the GET and POST forms of a DoH query are answered at. A change needs a process restart, not just a listener restart: routes cannot be remapped once the host has started.
      */
     path?: string | null;
     /**
-     * How large a single DNS message this transport accepts may be. Needs a full process restart for the same reason as Ninlil.Web.Models.DnsOverHttpsSettingsDetail.Path -- both are captured once, into the closure the route itself was mapped with.
+     * The largest DNS message the transport accepts. Like Ninlil.Web.Models.DnsOverHttpsSettingsDetail.Path, it is captured when the route is mapped at startup, so a change needs a process restart.
      */
     maxMessageSizeBytes?: number;
 }
