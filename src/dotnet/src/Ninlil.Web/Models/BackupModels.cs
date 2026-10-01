@@ -7,19 +7,16 @@ namespace Ninlil.Web.Models;
 ///     This record is the request body for <see cref="Controllers.BackupController.Create" />.
 /// </summary>
 /// <param name="Passphrase">
-///     The passphrase to encrypt the resulting archive with, or null/blank to deliberately skip
-///     encryption and produce a clearly-marked unencrypted archive instead -- an honest, explicit
-///     choice, not a weak or default-derived key. When supplied, this server never stores it
-///     anywhere -- losing it means losing the ability to ever decrypt this specific archive
-///     again.
+///     The passphrase to encrypt the archive with, or null or blank for an unencrypted archive
+///     whose header marks it as such (no weak or derived default key is used). The server never
+///     stores the passphrase, so losing it means the archive can never be decrypted.
 /// </param>
 public sealed record BackupCreateRequest(string Passphrase);
 
 /// <summary>
-///     This class is the multipart form body for <see cref="Controllers.BackupController.Restore" />
-///     -- a plain class, not a record, since ASP.NET Core's own <c>[FromForm]</c> model binder
-///     needs a settable property for the uploaded file, which a record's own positional
-///     constructor parameter cannot represent for an <see cref="IFormFile" />.
+///     This class is the multipart form body for <see cref="Controllers.BackupController.Restore" />.
+///     It is a class rather than a positional record because the <c>[FromForm]</c> model binder
+///     needs a settable property for an uploaded <see cref="IFormFile" />.
 /// </summary>
 public sealed class BackupRestoreRequest
 {
@@ -29,10 +26,9 @@ public sealed class BackupRestoreRequest
     public IFormFile Archive { get; set; }
 
     /// <summary>
-    ///     This property contains the passphrase <see cref="Archive" /> was encrypted with, if it
-    ///     is an encrypted archive -- left null/blank when restoring an archive that was itself
-    ///     created without one. Which case applies is detected from the archive's own contents,
-    ///     not decided by whether this field is populated.
+    ///     This property contains the passphrase <see cref="Archive" /> was encrypted with, or null
+    ///     or blank for an unencrypted archive. Whether the archive is encrypted is read from its
+    ///     header, not inferred from this field.
     /// </summary>
     public string Passphrase { get; set; }
 }
@@ -40,17 +36,14 @@ public sealed class BackupRestoreRequest
 /// <summary>
 ///     This record is the success response body for
 ///     <see cref="Controllers.BackupController.Restore" />.
-///     <see cref="Controllers.BackupController.Create" />'s own successful response, by contrast,
-///     streams the encrypted archive itself as the response body -- never this or any other JSON
-///     wrapper around it.
+///     <see cref="Controllers.BackupController.Create" /> has no JSON response: it returns the
+///     archive itself as a file download.
 /// </summary>
 /// <param name="TotalEntitiesImported">The total number of rows imported across every entity type.</param>
 /// <param name="EntityCounts">How many rows of each entity type were imported, by name.</param>
 /// <param name="Note">
-///     A note explaining that a restart is required before the restored database connection,
-///     Data Protection key ring, and TLS certificate actually take effect -- this project's own
-///     established convention for every runtime-settings write, extended here to the single most
-///     consequential write this REST API can ever perform.
+///     Always <see cref="RestartRequiredNote" />: the restored database connection, Data
+///     Protection key ring and TLS certificate take effect only after a restart.
 /// </param>
 public sealed record BackupRestoreResponse(
     int TotalEntitiesImported,
@@ -59,9 +52,8 @@ public sealed record BackupRestoreResponse(
 )
 {
     /// <summary>
-    ///     This constant contains the exact wording every runtime-settings write action in this
-    ///     project already surfaces once a write takes effect only after a restart, reused here
-    ///     verbatim rather than inventing a second, slightly different note for the same fact.
+    ///     This constant contains the note every successful restore returns, telling the operator to
+    ///     restart the process.
     /// </summary>
     public const string RestartRequiredNote =
         "Restore succeeded. Restart this process now so the restored database connection, Data "

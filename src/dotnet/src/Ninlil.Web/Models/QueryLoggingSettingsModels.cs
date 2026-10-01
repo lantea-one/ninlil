@@ -4,17 +4,17 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>QueryLoggingOptions</c>. No secret material is involved, so this record's own fields
-///     are the exact same ones a <c>PATCH</c> to the same endpoint accepts.
+///     This record is the REST shape of the query logging settings (<c>QueryLoggingOptions</c>)
+///     that <c>GET /api/query-logging-settings</c> returns. A <c>PATCH</c> to the same endpoint
+///     accepts the same fields.
 /// </summary>
-/// <param name="Enable">Whether an already-answered query is persisted to the query log at all.</param>
-/// <param name="RetentionPeriod">How long a query log entry is kept before it ages out.</param>
-/// <param name="MaxRetainedEntries">The largest number of entries the query log is ever allowed to hold.</param>
-/// <param name="CleanupInterval">How often the retention sweep runs.</param>
+/// <param name="Enable">Whether answered queries are written to the query log. Defaults to <see langword="true" />.</param>
+/// <param name="RetentionPeriod">How long a query log entry is kept. Defaults to 30 days.</param>
+/// <param name="MaxRetainedEntries">The most entries the query log may hold. Defaults to 1,000,000.</param>
+/// <param name="CleanupInterval">How often the retention sweep runs. Defaults to 1 hour.</param>
 /// <param name="PrivacyLevel">
-///     How much detail a newly-answered query is actually allowed to carry into storage --
-///     applied at write time, live, with no restart required.
+///     How much detail a new entry keeps, applied as each entry is written. A change takes effect
+///     at once, without a restart. Defaults to full detail.
 /// </param>
 public record QueryLoggingSettingsDetail(
     bool Enable,

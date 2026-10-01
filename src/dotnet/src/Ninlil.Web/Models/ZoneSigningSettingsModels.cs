@@ -2,16 +2,15 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>ZoneSigningOptions</c> -- the timing parameters <c>ZoneSigningService</c> signs with and
-///     <c>DnssecResigningBackgroundService</c> re-signs against. No secret material is involved,
-///     so this record's own fields are the exact same ones a <c>PATCH</c> to the same endpoint
-///     accepts.
+///     This record is the zone signing timing (<c>ZoneSigningOptions</c>) that
+///     <c>GET /api/zone-signing-settings</c> returns: what <c>ZoneSigningService</c> signs with
+///     and <c>DnssecResigningBackgroundService</c> re-signs by. A <c>PATCH</c> to the same
+///     endpoint accepts the same fields.
 /// </summary>
-/// <param name="SignatureValidityPeriod">How long a freshly computed signature remains valid.</param>
-/// <param name="InceptionOffset">How far before the actual signing time a signature's own inception is deliberately backdated.</param>
-/// <param name="RefreshBeforeExpiration">How long before a zone's earliest-expiring signature actually expires that a proactive re-sign runs.</param>
-/// <param name="PollInterval">How often the proactive re-signing background loop wakes up to check whether any signed zone is due.</param>
+/// <param name="SignatureValidityPeriod">How long a new signature stays valid. Defaults to 30 days.</param>
+/// <param name="InceptionOffset">How far before the signing time a signature's inception is backdated, to allow for clock skew. Defaults to 1 hour.</param>
+/// <param name="RefreshBeforeExpiration">How long before a zone's earliest signature expires the zone is re-signed. Defaults to 5 days.</param>
+/// <param name="PollInterval">How often the re-signing loop checks whether a signed zone is due. Defaults to 6 hours.</param>
 public record ZoneSigningSettingsDetail(
     TimeSpan SignatureValidityPeriod,
     TimeSpan InceptionOffset,

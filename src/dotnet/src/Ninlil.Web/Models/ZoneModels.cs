@@ -4,12 +4,10 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries every writable field of a <c>ZoneEntity</c> -- used both to create a
-///     new zone (<c>POST /api/zones</c>) and to fully replace an existing one
-///     (<c>PUT /api/zones/{id}</c>), since the two share an identical field set. A zone's records
-///     (starting with its own SOA) are managed separately, through the nested
-///     <c>/api/zones/{zoneId}/records</c> endpoints -- creating a zone here only creates its
-///     metadata shell.
+///     This class carries every writable field of a <c>ZoneEntity</c>, used to create a zone
+///     (<c>POST /api/zones</c>) and to fully replace one (<c>PUT /api/zones/{id}</c>). Creating a
+///     zone adds no records, not even an SOA; records are managed through
+///     <c>/api/zones/{zoneId}/records</c>.
 /// </summary>
 /// <param name="Name">The zone's fully-qualified name, without a trailing dot.</param>
 /// <param name="Type">The role this server plays for the zone.</param>
@@ -18,59 +16,50 @@ namespace Ninlil.Web.Models;
 /// <param name="DenialOfExistenceMode">Which denial-of-existence mechanism a signed zone uses.</param>
 /// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes.</param>
 /// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text.</param>
-/// <param name="IsDisabled">Whether the zone is currently disabled.</param>
+/// <param name="IsDisabled">Whether the zone is disabled.</param>
 /// <param name="PrimaryServerAddresses">
-///     The upstream name servers this zone transfers from, for a secondary/stub zone.
+///     The name servers a secondary or stub zone transfers from.
 /// </param>
-/// <param name="ForwarderAddresses">The addresses this zone forwards every query to.</param>
-/// <param name="NotifyAddresses">The secondaries this zone sends an outbound NOTIFY to.</param>
-/// <param name="TsigKeyName">The TSIG key this zone signs its outbound transfer requests with.</param>
-/// <param name="DynamicUpdateEnabled">Whether this zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="ForwarderAddresses">The addresses a forwarder zone sends every query to.</param>
+/// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
+/// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
+/// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
 /// <param name="Comments">Free-form operator notes about the zone.</param>
-/// <param name="CloudProviderCredentialId">The credential this zone syncs against, for a cloud zone.</param>
-/// <param name="CloudProviderZoneId">This zone's own identifier at its cloud provider.</param>
-/// <param name="CloudSyncInterval">How often this zone's cloud sync runs.</param>
+/// <param name="CloudProviderCredentialId">The credential a cloud zone syncs with.</param>
+/// <param name="CloudProviderZoneId">The zone's identifier at its cloud provider.</param>
+/// <param name="CloudSyncInterval">How often a cloud zone is synced.</param>
 /// <param name="AutoManageCaaRecords">
-///     Whether the CAA auto-management feature reconciles this zone's CAA records.
+///     Whether CAA auto-management keeps the zone's CAA records in step.
 ///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultEnabled</c>.
 /// </param>
 /// <param name="CaaIssuerDomain">
-///     This zone's own override of which CA issuer domain CAA auto-management writes
-///     into the CAA records it creates. <see langword="null" /> inherits
-///     <c>CaaAutoManagementOptions.DefaultIssuerDomain</c>.
+///     The CA issuer domain CAA auto-management writes into the zone's CAA records.
+///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultIssuerDomain</c>.
 /// </param>
 /// <param name="AutoManagePtrRecords">
-///     Whether the PTR/reverse-zone sync feature mirrors this zone's own A/AAAA records
-///     into the enclosing reverse zone. <see langword="null" /> inherits
-///     <c>PtrSyncOptions.DefaultEnabled</c> (which itself defaults to <see langword="false" /> --
-///     unlike CAA auto-management, this feature is opt-in).
+///     Whether PTR sync mirrors the zone's A and AAAA records into the matching reverse zone.
+///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultEnabled</c>, which defaults to
+///     <see langword="false" />: unlike CAA auto-management, PTR sync is opt-in.
 /// </param>
 /// <param name="PtrIpv4PrefixLength">
-///     This zone's own override of the IPv4 reverse-zone grouping granularity, in bits, or
-///     <see langword="null" /> to inherit <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>.
-///     A value of <c>24</c> (the conventional octet boundary) behaves exactly as before RFC 2317
-///     support existed; <c>25</c>-<c>30</c> switches to RFC 2317's own classless delegation.
-///     Validated at the write boundary to be either <c>null</c> or within <c>24</c>-<c>30</c>
-///     inclusive.
+///     The zone's IPv4 reverse zone size, in prefix bits, or <see langword="null" /> to inherit
+///     <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>. 24 means one zone per octet
+///     boundary; 25 to 30 use RFC 2317 classless delegation. Only <c>null</c> or 24 to 30 is
+///     accepted.
 /// </param>
 /// <param name="PtrIpv6PrefixLength">
-///     This zone's own override of the IPv6 reverse-zone grouping granularity, in bits, or
-///     <see langword="null" /> to inherit <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>.
-///     Validated at the write boundary to be either <c>null</c> or a multiple of <c>4</c> between
-///     <c>16</c> and <c>124</c> inclusive.
+///     The zone's IPv6 reverse zone size, in prefix bits, or <see langword="null" /> to inherit
+///     <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>. Only <c>null</c> or a multiple of 4
+///     from 16 to 124 is accepted.
 /// </param>
 /// <param name="TransferTransport">
-///     Which wire transport carries this zone's own AXFR/IXFR traffic -- see
-///     <c>ZoneEntity.TransferTransport</c>'s own doc comment for the full reasoning. Defaults to
-///     <see cref="ZoneTransferTransportEnum.Plain" />.
+///     The transport that carries the zone's AXFR and IXFR traffic (see
+///     <c>ZoneEntity.TransferTransport</c>). Defaults to <see cref="ZoneTransferTransportEnum.Plain" />.
 /// </param>
 /// <remarks>
-///     Deliberately carries no <c>MemberOfCatalogZoneId</c> field: a zone's own RFC 9432 catalog
-///     membership is set and cleared only through <c>ZonesController</c>'s own dedicated
-///     <c>POST</c>/<c>DELETE /api/zones/{id}/catalog-membership</c> actions, never through this
-///     generic create/replace shape -- those actions keep the field and the catalog zone's own
-///     member PTR record in sync as one atomic operation, something a plain field write here
-///     could not do without duplicating that same logic a second time.
+///     There is no <c>MemberOfCatalogZoneId</c> field. RFC 9432 catalog membership is set and
+///     cleared only through <c>POST</c> and <c>DELETE /api/zones/{id}/catalog-membership</c>,
+///     which update the field and the catalog zone's member PTR record together.
 /// </remarks>
 public record ZoneWriteRequest(
     string Name,
@@ -99,9 +88,10 @@ public record ZoneWriteRequest(
 );
 
 /// <summary>
-///     This class carries a zone's full state, for both list and single-item responses.
+///     This class carries a zone, as returned by the list, get and write endpoints of
+///     <c>/api/zones</c>. The fields mean what they mean in <see cref="ZoneWriteRequest" />.
 /// </summary>
-/// <param name="Id">The zone's own identifier.</param>
+/// <param name="Id">The zone's identifier.</param>
 /// <param name="Name">The zone's fully-qualified name, without a trailing dot.</param>
 /// <param name="Type">The role this server plays for the zone.</param>
 /// <param name="IsDnssecSigned">Whether the zone is signed with DNSSEC.</param>
@@ -109,48 +99,43 @@ public record ZoneWriteRequest(
 /// <param name="DenialOfExistenceMode">Which denial-of-existence mechanism a signed zone uses.</param>
 /// <param name="Nsec3Iterations">How many additional times a signed zone's NSEC3 chain hashes.</param>
 /// <param name="Nsec3SaltHex">A signed zone's NSEC3 salt, as hexadecimal text.</param>
-/// <param name="IsDisabled">Whether the zone is currently disabled.</param>
-/// <param name="PrimaryServerAddresses">
-///     The upstream name servers this zone transfers from, for a secondary/stub zone.
-/// </param>
-/// <param name="ForwarderAddresses">The addresses this zone forwards every query to.</param>
-/// <param name="NotifyAddresses">The secondaries this zone sends an outbound NOTIFY to.</param>
-/// <param name="TsigKeyName">The TSIG key this zone signs its outbound transfer requests with.</param>
-/// <param name="DynamicUpdateEnabled">Whether this zone accepts RFC 2136 dynamic updates.</param>
+/// <param name="IsDisabled">Whether the zone is disabled.</param>
+/// <param name="PrimaryServerAddresses">The name servers a secondary or stub zone transfers from.</param>
+/// <param name="ForwarderAddresses">The addresses a forwarder zone sends every query to.</param>
+/// <param name="NotifyAddresses">The secondaries the zone sends NOTIFY messages to.</param>
+/// <param name="TsigKeyName">The TSIG key the zone signs its transfer requests with.</param>
+/// <param name="DynamicUpdateEnabled">Whether the zone accepts RFC 2136 dynamic updates.</param>
 /// <param name="Comments">Free-form operator notes about the zone.</param>
-/// <param name="CloudProviderCredentialId">The credential this zone syncs against, for a cloud zone.</param>
-/// <param name="CloudProviderZoneId">This zone's own identifier at its cloud provider.</param>
-/// <param name="CloudSyncInterval">How often this zone's cloud sync runs.</param>
+/// <param name="CloudProviderCredentialId">The credential a cloud zone syncs with.</param>
+/// <param name="CloudProviderZoneId">The zone's identifier at its cloud provider.</param>
+/// <param name="CloudSyncInterval">How often a cloud zone is synced.</param>
 /// <param name="AutoManageCaaRecords">
-///     Whether the CAA auto-management feature reconciles this zone's CAA records.
+///     Whether CAA auto-management keeps the zone's CAA records in step.
 ///     <see langword="null" /> inherits <c>CaaAutoManagementOptions.DefaultEnabled</c>.
 /// </param>
 /// <param name="CaaIssuerDomain">
-///     This zone's own override of which CA issuer domain CAA auto-management writes
-///     into the CAA records it creates. <see langword="null" /> inherits
+///     The CA issuer domain CAA auto-management writes. <see langword="null" /> inherits
 ///     <c>CaaAutoManagementOptions.DefaultIssuerDomain</c>.
 /// </param>
 /// <param name="AutoManagePtrRecords">
-///     Whether the PTR/reverse-zone sync feature mirrors this zone's own A/AAAA records
-///     into the enclosing reverse zone. <see langword="null" /> inherits
-///     <c>PtrSyncOptions.DefaultEnabled</c>.
+///     Whether PTR sync mirrors the zone's A and AAAA records into the matching reverse zone.
+///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultEnabled</c>.
 /// </param>
 /// <param name="PtrIpv4PrefixLength">
-///     This zone's own override of the IPv4 reverse-zone grouping granularity, in bits.
-///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>.
+///     The zone's IPv4 reverse zone size, in prefix bits. <see langword="null" /> inherits
+///     <c>PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits</c>.
 /// </param>
 /// <param name="PtrIpv6PrefixLength">
-///     This zone's own override of the IPv6 reverse-zone grouping granularity, in bits.
-///     <see langword="null" /> inherits <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>.
+///     The zone's IPv6 reverse zone size, in prefix bits. <see langword="null" /> inherits
+///     <c>PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits</c>.
 /// </param>
 /// <param name="CreatedAtUtc">When the zone was created.</param>
-/// <param name="UpdatedAtUtc">When the zone was last updated, if it ever has been.</param>
-/// <param name="TransferTransport">Which wire transport carries this zone's own AXFR/IXFR traffic.</param>
+/// <param name="UpdatedAtUtc">When the zone was last updated, or <see langword="null" /> if never.</param>
+/// <param name="TransferTransport">The transport that carries the zone's AXFR and IXFR traffic.</param>
 /// <param name="MemberOfCatalogZoneId">
-///     The identifier of the RFC 9432 catalog zone this zone is a member of, or
-///     <see langword="null" /> if it participates in none. Read-only here -- set or cleared only
-///     through <c>POST</c>/<c>DELETE /api/zones/{id}/catalog-membership</c>, never through this
-///     record's own create/replace/patch counterparts.
+///     The RFC 9432 catalog zone this zone belongs to, or <see langword="null" /> if none.
+///     Read-only: it changes only through <c>POST</c> and
+///     <c>DELETE /api/zones/{id}/catalog-membership</c>.
 /// </param>
 public record ZoneDetail(
     Guid Id,
@@ -183,21 +168,18 @@ public record ZoneDetail(
 );
 
 /// <summary>
-///     This record is <c>POST /api/zones/{id}/reconcile-caa</c>'s own response body -- what one
-///     on-demand CAA reconciliation pass actually did, or why it did nothing at all. A thin REST
-///     wrapper over <c>Server.Acme.Caa.CaaReconciliationResult</c>, following this project's own
-///     "never expose an internal service-layer result type directly over REST" convention (the
-///     same reasoning <c>ZoneCatalogMembersResponse</c> already establishes for
-///     <c>CatalogZoneMembershipService.ListMembersAsync</c>'s own return value).
+///     This record is the response of <c>POST /api/zones/{id}/reconcile-caa</c>: what one
+///     on-demand CAA reconciliation did, or why it did nothing. It copies
+///     <c>Server.Acme.Caa.CaaReconciliationResult</c> so the internal service type is not exposed
+///     over REST, as <see cref="ZoneCatalogMembersResponse" /> does for the catalog service.
 /// </summary>
-/// <param name="RecordsAdded">How many CAA records this pass created.</param>
-/// <param name="RecordsRemoved">How many CAA records this pass removed as no longer desired.</param>
+/// <param name="RecordsAdded">How many CAA records the pass created.</param>
+/// <param name="RecordsRemoved">How many CAA records the pass removed as no longer wanted.</param>
 /// <param name="Skipped">
-///     Whether this pass did no work at all (see <paramref name="SkipReason" />) -- distinct from
-///     a pass that ran but found nothing to change (reported as <see langword="false" /> here with
-///     zero counts).
+///     Whether the pass did nothing (see <paramref name="SkipReason" />). A pass that ran but
+///     found nothing to change reports <see langword="false" /> with zero counts.
 /// </param>
-/// <param name="SkipReason">Why this pass was skipped, populated only when <paramref name="Skipped" /> is <see langword="true" />.</param>
+/// <param name="SkipReason">Why the pass was skipped, set only when <paramref name="Skipped" /> is <see langword="true" />.</param>
 public record ZoneCaaReconciliationResponse(
     int RecordsAdded,
     int RecordsRemoved,
@@ -206,26 +188,24 @@ public record ZoneCaaReconciliationResponse(
 );
 
 /// <summary>
-///     This record is <c>POST /api/zones/{id}/reconcile-ptr</c>'s own response body -- what one
-///     on-demand PTR/reverse-zone sync reconciliation pass actually did, or why it did nothing at
-///     all. A thin REST wrapper over <c>Server.Authoritative.Ptr.PtrReconciliationResult</c>, the
-///     same shape <see cref="ZoneCaaReconciliationResponse" /> uses for its own equivalent result.
+///     This record is the response of <c>POST /api/zones/{id}/reconcile-ptr</c>: what one
+///     on-demand PTR sync did, or why it did nothing. It copies
+///     <c>Server.Authoritative.Ptr.PtrReconciliationResult</c>, as
+///     <see cref="ZoneCaaReconciliationResponse" /> does for CAA.
 /// </summary>
 /// <param name="RecordsAdded">
-///     How many PTR/delegation-CNAME records this pass created, across every reverse zone and
-///     (for a classless IPv4 grouping) every RFC 2317 delegating parent zone touched.
+///     How many PTR and delegation CNAME records the pass created, across every reverse zone and,
+///     for a classless IPv4 grouping, every RFC 2317 delegating parent zone.
 /// </param>
-/// <param name="RecordsRemoved">The same, for records removed as no longer desired.</param>
+/// <param name="RecordsRemoved">How many such records the pass removed as no longer wanted.</param>
 /// <param name="ReverseZonesTouched">
-///     How many distinct zones this pass created, wrote into, or visited for stale-record
-///     cleanup.
+///     How many distinct zones the pass created, wrote to or checked for stale records.
 /// </param>
 /// <param name="Skipped">
-///     Whether this pass did no work at all (see <paramref name="SkipReason" />) -- distinct from
-///     a pass that ran but found nothing to change (reported as <see langword="false" /> here with
-///     zero counts).
+///     Whether the pass did nothing (see <paramref name="SkipReason" />). A pass that ran but
+///     found nothing to change reports <see langword="false" /> with zero counts.
 /// </param>
-/// <param name="SkipReason">Why this pass was skipped, populated only when <paramref name="Skipped" /> is <see langword="true" />.</param>
+/// <param name="SkipReason">Why the pass was skipped, set only when <paramref name="Skipped" /> is <see langword="true" />.</param>
 public record ZonePtrReconciliationResponse(
     int RecordsAdded,
     int RecordsRemoved,
@@ -235,15 +215,15 @@ public record ZonePtrReconciliationResponse(
 );
 
 /// <summary>
-///     This class carries the catalog zone a caller wants a zone to join --
-///     <c>POST /api/zones/{id}/catalog-membership</c>'s own request body.
+///     This class carries the catalog zone a zone should join, the request body of
+///     <c>POST /api/zones/{id}/catalog-membership</c>.
 /// </summary>
 /// <param name="CatalogZoneId">The identifier of the <see cref="ZoneTypeEnum.Catalog" /> zone to join.</param>
 public record ZoneCatalogMembershipRequest(Guid CatalogZoneId);
 
 /// <summary>
-///     This class carries a single catalog zone's own currently-enumerated member zone names --
-///     <c>GET /api/zones/{id}/catalog-members</c>'s own response body.
+///     This class carries the member zone names of one catalog zone, the response of
+///     <c>GET /api/zones/{id}/catalog-members</c>.
 /// </summary>
-/// <param name="MemberZoneNames">Every member zone name the catalog currently lists, alphabetically.</param>
+/// <param name="MemberZoneNames">Every member zone name the catalog lists, in alphabetical order.</param>
 public record ZoneCatalogMembersResponse(IReadOnlyList<string> MemberZoneNames);

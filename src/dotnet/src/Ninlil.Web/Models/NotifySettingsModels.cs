@@ -2,11 +2,14 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>NotifyOptions</c> -- how this server sends RFC 1996 NOTIFY messages to a zone's
-///     configured secondaries. No secret material is involved, so this record's own fields are
-///     the exact same ones a <c>PATCH</c> to the same endpoint accepts.
+///     This record is the REST shape of the NOTIFY settings (<c>NotifyOptions</c>) that
+///     <c>GET /api/notify-settings</c> returns: how the server sends RFC 1996 NOTIFY messages to a
+///     zone's secondaries. A <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
+/// <param name="MaxAttempts">How many times one NOTIFY is sent before giving up. Defaults to 5.</param>
+/// <param name="ResponseTimeout">How long to wait for a secondary's reply to one attempt. Defaults to 3 seconds.</param>
+/// <param name="RetryDelay">How long to wait between attempts. Defaults to 3 seconds.</param>
+/// <param name="SecondaryPort">The port NOTIFY messages are sent to. Defaults to 53.</param>
 public record NotifySettingsDetail(
     int MaxAttempts,
     TimeSpan ResponseTimeout,

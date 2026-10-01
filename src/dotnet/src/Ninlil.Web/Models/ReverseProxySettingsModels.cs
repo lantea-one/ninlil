@@ -2,26 +2,26 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     reverse-proxy trust configuration. <see cref="SharedSecretConfigured" /> reports whether a
-///     shared secret is set without ever revealing its value -- the same "configured/not
-///     configured" indicator <c>TwoFactorStatus.HasAuthenticator</c> and a webhook subscription's
-///     own read-only HMAC-signing-secret indicator already use for a secret this endpoint's own
-///     <c>Get</c> action never returns.
+///     This record is the reverse proxy trust configuration that
+///     <c>GET /api/reverse-proxy-settings</c> returns. The shared secret is never returned;
+///     <see cref="SharedSecretConfigured" /> says whether one is set, as
+///     <c>TwoFactorStatus.HasAuthenticator</c> does for an authenticator. A <c>PATCH</c> accepts
+///     these fields with <c>sharedSecret</c> in place of <see cref="SharedSecretConfigured" />;
+///     the last two fields are read-only.
 /// </summary>
-/// <param name="Enable">Whether forwarded headers are currently honored at all.</param>
-/// <param name="KnownProxies">Every individual IP address allowed to claim a forwarded client address.</param>
-/// <param name="KnownNetworks">Every CIDR network allowed to claim a forwarded client address.</param>
-/// <param name="SharedSecretHeaderName">The request header a shared secret is read from, when one is configured.</param>
-/// <param name="SharedSecretConfigured">Whether a shared secret is currently configured.</param>
-/// <param name="DnsOverTls">This host's own currently-effective DNS-over-TLS PROXY protocol trust configuration.</param>
+/// <param name="Enable">Whether forwarded headers are honored at all.</param>
+/// <param name="KnownProxies">The individual IP addresses allowed to supply a forwarded client address.</param>
+/// <param name="KnownNetworks">The CIDR networks allowed to supply a forwarded client address.</param>
+/// <param name="SharedSecretHeaderName">The request header a shared secret is read from, when one is set.</param>
+/// <param name="SharedSecretConfigured">Whether a shared secret is set.</param>
+/// <param name="DnsOverTls">The PROXY protocol trust settings for the DNS-over-TLS listener.</param>
 /// <param name="LastModifiedUtc">
-///     When this settings section was last written (the cluster's own operational config sync), or
-///     <see langword="null" /> if it has never been written through this REST surface.
+///     When the settings were last written through the REST API, used by cluster config sync, or
+///     <see langword="null" /> if they never have been.
 /// </param>
 /// <param name="OriginatingNodeId">
-///     The cluster node this settings section was last written on, or <see langword="null" />
-///     alongside <see cref="LastModifiedUtc" />.
+///     The cluster node the settings were last written on, or <see langword="null" /> together
+///     with <see cref="LastModifiedUtc" />.
 /// </param>
 public record ReverseProxySettingsDetail(
     bool Enable,
@@ -35,15 +35,14 @@ public record ReverseProxySettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST representation of <c>Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions</c>
-///     -- whether <c>DnsOverTlsListener</c> accepts a HAProxy-style PROXY protocol header (v1
-///     text or v2 binary) ahead of its own TLS handshake, and which addresses/networks are
-///     trusted to send one. Unlike the HTTP-side allowlist above, there is no shared-secret field
-///     here at all -- see <c>ProxyProtocolOptions</c>'s own doc comment for why.
+///     This record is the REST shape of <c>Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol.ProxyProtocolOptions</c>:
+///     whether <c>DnsOverTlsListener</c> accepts an HAProxy PROXY protocol header (v1 text or v2
+///     binary) before the TLS handshake, and which addresses and networks may send one. Unlike the
+///     HTTP settings above it has no shared secret; <c>ProxyProtocolOptions</c> explains why.
 /// </summary>
-/// <param name="Enable">Whether a connection from a recognized source is inspected for a PROXY protocol header at all.</param>
-/// <param name="KnownProxies">Every individual IP address allowed to open a connection carrying a PROXY protocol header.</param>
-/// <param name="KnownNetworks">Every CIDR network allowed to open a connection carrying a PROXY protocol header.</param>
+/// <param name="Enable">Whether a connection from a trusted source is checked for a PROXY protocol header.</param>
+/// <param name="KnownProxies">The individual IP addresses allowed to send a PROXY protocol header.</param>
+/// <param name="KnownNetworks">The CIDR networks allowed to send a PROXY protocol header.</param>
 public record DnsOverTlsProxyProtocolSettingsDetail(
     bool Enable,
     IReadOnlyList<string> KnownProxies,

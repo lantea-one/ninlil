@@ -4,14 +4,14 @@ using Ninlil.Dns.Server.ClientIdentity.Vendor;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of MAC vendor lookup's currently-effective
-///     <c>MacVendorLookupOptions</c>, plus a read-only report of the vendor data currently loaded.
-///     Every settings field except <paramref name="DataFilePath" /> is also accepted by a
-///     <c>PATCH</c> to the same endpoint; that one is an on-disk path, read once at startup and
-///     configuration-file-only like every other state path.
+///     This record is the MAC vendor lookup settings (<c>MacVendorLookupOptions</c>) that
+///     <c>GET /api/mac-vendor-settings</c> returns, with a read-only report of the vendor data
+///     loaded. A <c>PATCH</c> to the same endpoint accepts every settings field except
+///     <paramref name="DataFilePath" />, a path read once at startup that, like other state paths,
+///     is set only in the configuration file.
 /// </summary>
-/// <param name="EnableAutomaticRefresh">Whether the IEEE registries are periodically re-downloaded.</param>
-/// <param name="RefreshInterval">How long to wait after a successful check before checking again.</param>
+/// <param name="EnableAutomaticRefresh">Whether the IEEE registries are downloaded again periodically. Defaults to <see langword="true" />.</param>
+/// <param name="RefreshInterval">How long to wait after a successful check before checking again. Defaults to 14 days.</param>
 /// <param name="MaLRegistryUrl">Where the MA-L (24-bit) registry CSV is downloaded from.</param>
 /// <param name="MaMRegistryUrl">Where the MA-M (28-bit) registry CSV is downloaded from.</param>
 /// <param name="MaSRegistryUrl">Where the MA-S (36-bit) registry CSV is downloaded from.</param>
@@ -28,9 +28,9 @@ public record MacVendorSettingsDetail(
 );
 
 /// <summary>
-///     This record reports the vendor data currently answering lookups and the refresh history
-///     behind it -- returned inside <see cref="MacVendorSettingsDetail" /> and by an on-demand
-///     refresh.
+///     This record reports the vendor data answering lookups and its refresh history. It is
+///     returned inside <see cref="MacVendorSettingsDetail" /> and by an on-demand refresh
+///     (<c>POST /api/mac-vendor-settings/refresh</c>).
 /// </summary>
 /// <param name="DataSource">Whether the loaded data is the snapshot compiled into this build or a downloaded copy.</param>
 /// <param name="GeneratedAtUtc">When the loaded data was downloaded from the IEEE.</param>

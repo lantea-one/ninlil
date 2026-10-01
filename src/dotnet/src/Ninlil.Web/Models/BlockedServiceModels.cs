@@ -2,25 +2,23 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries a single curated "blocked service" catalog entry's own metadata,
-///     together with whether it is currently enabled on this server -- the response shape for
-///     <c>GET /api/blocked-services</c>.
+///     This class carries one entry of the curated "blocked services" catalog, with whether it is
+///     enabled. It is the response shape of <c>GET /api/blocked-services</c>.
 /// </summary>
-/// <param name="Key">The catalog entry's own stable identifier (e.g. <c>tiktok</c>).</param>
+/// <param name="Key">The catalog entry's stable identifier (e.g. <c>tiktok</c>).</param>
 /// <param name="DisplayName">The human-readable service name.</param>
-/// <param name="Description">A short, honest description of what enabling this entry blocks.</param>
+/// <param name="Description">A short description of what enabling this entry blocks.</param>
 /// <param name="SubscriptionUrl">
-///     The real, third-party-hosted domain list this entry subscribes to when enabled -- see
-///     <c>BlockedServiceCatalog</c>'s own doc comment for its source and license.
+///     The third-party domain list this entry subscribes to when enabled.
+///     <c>BlockedServiceCatalog</c> documents its source and license.
 /// </param>
 /// <param name="IsEnabled">
-///     Whether this server currently has a managed, subscribed filter list for this entry.
+///     Whether the entry's managed filter list exists and is enabled. When the request names a
+///     client or client group, it also requires that target to have an assignment of the list.
 /// </param>
 /// <param name="FilterListId">
-///     The identifier of this entry's own managed <c>DnsFilterListEntity</c>, when
-///     <see cref="IsEnabled" /> is <see langword="true" /> (so an operator can jump straight to it
-///     in the ordinary Filter Lists page, e.g. to inspect its currently-fetched entries); otherwise
-///     <see langword="null" />.
+///     The identifier of the entry's managed <c>DnsFilterListEntity</c> when one exists, so the UI
+///     can link to it on the Filter Lists page; otherwise <see langword="null" />.
 /// </param>
 public record BlockedServiceDetail(
     string Key,

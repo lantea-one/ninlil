@@ -7,16 +7,15 @@ namespace Ninlil.Web.Models;
 ///     This class carries the fields used to create a new cloud DNS provider credential set
 ///     (<c>POST /api/cloud-provider-credentials</c>).
 /// </summary>
-/// <param name="Name">An operator-chosen, human-readable, unique name for this credential set.</param>
+/// <param name="Name">An operator-chosen, human-readable, unique name for the credential set.</param>
 /// <param name="ProviderType">
-///     Which cloud DNS provider these credentials authenticate against, and so which keys
-///     <see cref="Credentials" /> must supply -- <c>ApiToken</c> for Cloudflare/DigitalOcean, or
-///     <c>AccessKeyId</c>/<c>SecretAccessKey</c> for Route 53.
+///     Which cloud DNS provider the credentials authenticate against, and so which keys
+///     <see cref="Credentials" /> must supply: <c>ApiToken</c> for Cloudflare and DigitalOcean,
+///     or <c>AccessKeyId</c> and <c>SecretAccessKey</c> for Route 53.
 /// </param>
 /// <param name="Credentials">
-///     The credential set's own secret material, keyed by field name -- shape depends on
-///     <see cref="ProviderType" />. Encrypted at rest immediately; the exact values supplied here
-///     are returned exactly once, in this endpoint's own response, and never again afterward.
+///     The secret material, keyed by field name; the keys depend on <see cref="ProviderType" />.
+///     It is stored encrypted, and the values are returned once, in this endpoint's response.
 /// </param>
 /// <param name="IsDisabled">Whether the credential set starts out disabled.</param>
 /// <param name="Comments">Free-form operator notes about the credential set.</param>
@@ -30,22 +29,17 @@ public record CloudProviderCredentialCreateRequest(
 
 /// <summary>
 ///     This class carries the fields used to fully replace an existing cloud DNS provider
-///     credential set (<c>PUT /api/cloud-provider-credentials/{id}</c>). Unlike a TSIG key's own
-///     shared secret (see <see cref="TsigKeyWriteRequest" />), a cloud provider credential's own
-///     secret material genuinely is something an operator supplied and may need to rotate --
-///     Cloudflare/Route 53/DigitalOcean all expect a real operator to periodically rotate an API
-///     token or access key themselves, entirely outside this project's own control. A <c>PUT</c>
-///     therefore replaces <see cref="Credentials" /> too, alongside every other field, matching
-///     ordinary full-replacement semantics -- there is no reveal-again concern here the way there
-///     would be for a server-generated secret, since the caller already knows the plaintext value
-///     they are supplying in this very request. To change only metadata (name, comments,
-///     disabled) without touching the stored credentials, use <c>PATCH</c> instead and omit
-///     <c>credentials</c> from the patch document.
+///     credential set (<c>PUT /api/cloud-provider-credentials/{id}</c>). Unlike the shared secret
+///     of a TSIG key (see <see cref="TsigKeyWriteRequest" />), these secrets come from the
+///     operator, who rotates them at the provider, so a <c>PUT</c> replaces
+///     <see cref="Credentials" /> along with every other field. Nothing new is revealed, since the
+///     caller supplies the values. To change only the name, comments or disabled flag, use
+///     <c>PATCH</c> and leave out <c>credentials</c>.
 /// </summary>
 /// <param name="Name">The credential set's name.</param>
 /// <param name="ProviderType">Which cloud DNS provider these credentials authenticate against.</param>
-/// <param name="Credentials">The credential set's own secret material, replacing it entirely.</param>
-/// <param name="IsDisabled">Whether the credential set is currently disabled.</param>
+/// <param name="Credentials">The secret material, replacing what is stored.</param>
+/// <param name="IsDisabled">Whether the credential set is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the credential set.</param>
 public record CloudProviderCredentialWriteRequest(
     string Name,
@@ -56,10 +50,10 @@ public record CloudProviderCredentialWriteRequest(
 );
 
 /// <summary>
-///     This class carries a cloud DNS provider credential set's own metadata, for list,
-///     single-item, and (nested inside <see cref="CloudProviderCredentialCreateResponse" />)
-///     creation responses. The credential set's own secret material is never included here -- see
-///     <see cref="CloudProviderCredentialCreateResponse" /> for the one place it ever appears.
+///     This class carries a cloud DNS provider credential set without its secrets, as returned by
+///     the list and get endpoints and nested in
+///     <see cref="CloudProviderCredentialCreateResponse" />, the one response that includes the
+///     secrets.
 /// </summary>
 public record CloudProviderCredentialDetail(
     Guid Id,
@@ -72,13 +66,12 @@ public record CloudProviderCredentialDetail(
 );
 
 /// <summary>
-///     This class carries a newly created cloud DNS provider credential set's own metadata
-///     alongside its plaintext secret material -- the only response that will ever include
-///     <see cref="Secrets" />, per this project's reveal-once-then-omitted exposure policy for
-///     every secret-bearing entity type.
+///     This class carries a newly created cloud DNS provider credential set with its plaintext
+///     secrets. It is the only response that includes <see cref="Secrets" />: like every
+///     secret-bearing entity, a secret is revealed once at creation and omitted afterwards.
 /// </summary>
-/// <param name="Credential">The newly created credential set's own metadata.</param>
-/// <param name="Secrets">The credential set's own secret material, keyed by field name.</param>
+/// <param name="Credential">The new credential set, without secrets.</param>
+/// <param name="Secrets">The secret material as submitted, keyed by field name.</param>
 public record CloudProviderCredentialCreateResponse(
     CloudProviderCredentialDetail Credential,
     IReadOnlyDictionary<string, string> Secrets

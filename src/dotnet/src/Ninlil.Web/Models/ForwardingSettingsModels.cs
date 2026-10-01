@@ -4,20 +4,19 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>ForwardingOptions</c>. No secret material is involved, so this record's own fields are
-///     the exact same ones a <c>PATCH</c> to the same endpoint accepts. Forwarder entries
-///     themselves (the actual upstream addresses) are a separate resource, already fully
-///     CRUD-able via <c>ForwardersController</c> -- this record covers only the engine-level
-///     toggle, failover/health-check tuning and forwarded-answer cache settings that apply across
-///     every configured forwarder.
+///     This record is the REST shape of the forwarding engine settings (<c>ForwardingOptions</c>)
+///     that <c>GET /api/forwarding-settings</c> returns. Nothing in it is secret, so a
+///     <c>PATCH</c> to the same endpoint accepts the same fields. The forwarders themselves are a
+///     separate resource (<c>ForwardersController</c>); this record holds the on/off switch,
+///     failover and health-check tuning, and the forwarded-answer cache settings that apply to
+///     all of them.
 /// </summary>
-/// <param name="Enable">Whether configured forwarders are consulted at all.</param>
-/// <param name="FailoverStrategy">How one forwarder is picked among several.</param>
-/// <param name="HealthCheckInterval">How often each forwarder's health is probed.</param>
-/// <param name="PerForwarderTimeout">How long one forwarder may take before the next is tried.</param>
-/// <param name="EnableCache">Whether forwarded answers are cached.</param>
-/// <param name="MaxCacheEntries">How many forwarded answers may be cached before the soonest-to-expire are evicted.</param>
+/// <param name="Enable">Whether the configured forwarders are used at all. Defaults to <see langword="false" />.</param>
+/// <param name="FailoverStrategy">How one forwarder is picked among several. Defaults to health-checked round robin.</param>
+/// <param name="HealthCheckInterval">How often each forwarder's health is probed under health-checked round robin. Defaults to 30 seconds.</param>
+/// <param name="PerForwarderTimeout">How long one forwarder may take to answer before the attempt counts as failed. Defaults to 3 seconds.</param>
+/// <param name="EnableCache">Whether forwarded answers are cached. Defaults to <see langword="true" />.</param>
+/// <param name="MaxCacheEntries">How many forwarded answers may be cached before the soonest to expire are evicted. Defaults to 10000.</param>
 public record ForwardingSettingsDetail(
     bool Enable,
     ForwarderFailoverStrategyEnum FailoverStrategy,

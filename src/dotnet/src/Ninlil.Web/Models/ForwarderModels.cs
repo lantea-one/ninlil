@@ -6,21 +6,19 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This class carries the fields used to create or fully replace a global upstream forwarder
-///     (<c>POST</c>/<c>PUT /api/forwarders</c>).
+///     (<c>POST /api/forwarders</c>, <c>PUT /api/forwarders/{id}</c>).
 /// </summary>
-/// <param name="Name">An operator-chosen, human-readable, unique name for this forwarder.</param>
+/// <param name="Name">An operator-chosen, human-readable, unique name for the forwarder.</param>
 /// <param name="DefinitionString">
-///     The forwarder's own Technitium/AdGuard Home-style definition string -- a bare address, a
-///     <c>udp://</c>/<c>tcp://</c>/<c>tls://</c>/<c>https://</c>/<c>quic://</c> URL, or an
-///     <c>sdns://</c> DNSCrypt stamp -- validated against the real
-///     <c>IUpstreamForwarderDefinitionParser</c> (and, for an <c>sdns://</c> stamp,
-///     <c>DnsCryptStampParser</c>) before this forwarder is ever persisted, rather than accepting
-///     an arbitrary string, the same "validate against the real codec/parser" discipline
-///     <see cref="RecordsController" /> already applies to a record's own <c>data</c> field.
+///     The forwarder definition, in the style Technitium and AdGuard Home use: a bare address; a
+///     <c>udp://</c>, <c>tcp://</c>, <c>tls://</c>, <c>https://</c> or <c>quic://</c> URL; or an
+///     <c>sdns://</c> DNSCrypt stamp. It is checked with <c>IUpstreamForwarderDefinitionParser</c>
+///     (and <c>DnsCryptStampParser</c> for a stamp) before it is saved, much as
+///     <see cref="RecordsController" /> checks a record's <c>data</c>.
 /// </param>
-/// <param name="SortOrder">This forwarder's own position among every other configured global forwarder -- lower values are preferred first.</param>
-/// <param name="IsDisabled">Whether the forwarder starts out (or is currently) disabled.</param>
-/// <param name="Comments">Free-form operator notes about this forwarder.</param>
+/// <param name="SortOrder">The forwarder's position among the global forwarders; lower values are tried first. Defaults to 0.</param>
+/// <param name="IsDisabled">Whether the forwarder is disabled.</param>
+/// <param name="Comments">Free-form operator notes about the forwarder.</param>
 public record ForwarderWriteRequest(
     string Name,
     string DefinitionString,
@@ -30,29 +28,27 @@ public record ForwarderWriteRequest(
 );
 
 /// <summary>
-///     This class carries a single global upstream forwarder's own fields, for list, single-item,
-///     and creation responses. No secret material is involved anywhere in this entity -- a
-///     forwarder definition string is not a credential -- so, unlike <c>TsigKeyDetail</c>/
-///     <c>DnssecKeyDetail</c>/<c>CloudProviderCredentialDetail</c>, there is no reveal-once policy
-///     to apply here at all.
+///     This class carries a global upstream forwarder, as returned by the list, get and write
+///     endpoints of <c>/api/forwarders</c>. A definition string is not a credential, so there is
+///     no reveal-once handling as with <c>TsigKeyDetail</c> or
+///     <c>CloudProviderCredentialDetail</c>.
 /// </summary>
-/// <param name="Id">This forwarder's own identifier.</param>
-/// <param name="Name">This forwarder's own human-readable name.</param>
-/// <param name="DefinitionString">This forwarder's own definition string, exactly as stored.</param>
+/// <param name="Id">The forwarder's identifier.</param>
+/// <param name="Name">The forwarder's human-readable name.</param>
+/// <param name="DefinitionString">The forwarder's definition string, as stored.</param>
 /// <param name="Protocol">
-///     The transport protocol <see cref="DefinitionString" /> parses to -- computed fresh at read
-///     time via the same parser used to validate it at write time, purely as a read-only
-///     convenience for a caller that would otherwise have to parse the string itself to know.
+///     The transport protocol <see cref="DefinitionString" /> parses to, computed when the
+///     response is built with the parser that validated it, so a caller need not parse the string;
+///     <see langword="null" /> if it no longer parses.
 /// </param>
-/// <param name="SortOrder">This forwarder's own position among every other configured global forwarder.</param>
-/// <param name="IsDisabled">Whether this forwarder is currently disabled.</param>
-/// <param name="Comments">Free-form operator notes about this forwarder.</param>
-/// <param name="CreatedAtUtc">When this forwarder was created.</param>
-/// <param name="UpdatedAtUtc">When this forwarder was last modified, or <see langword="null" /> if never.</param>
+/// <param name="SortOrder">The forwarder's position among the global forwarders; lower values are tried first.</param>
+/// <param name="IsDisabled">Whether the forwarder is disabled.</param>
+/// <param name="Comments">Free-form operator notes about the forwarder.</param>
+/// <param name="CreatedAtUtc">When the forwarder was created.</param>
+/// <param name="UpdatedAtUtc">When the forwarder was last modified, or <see langword="null" /> if never.</param>
 /// <param name="OriginatingNodeId">
-///     The cluster node this forwarder was last created or modified on (the cluster's own
-///     operational config sync), or <see langword="null" /> on a deployment that has never had clustering
-///     enabled.
+///     The cluster node the forwarder was last created or modified on, used by cluster config
+///     sync, or <see langword="null" /> if it was never written with clustering enabled.
 /// </param>
 public record ForwarderDetail(
     Guid Id,

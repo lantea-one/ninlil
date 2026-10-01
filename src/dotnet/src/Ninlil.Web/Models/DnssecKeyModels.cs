@@ -5,14 +5,14 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This class carries the fields used to generate a new DNSSEC key for a zone
-///     (<c>POST /api/zones/{zoneId}/dnssec-keys</c>). Ninlil only ever generates a brand-new
-///     keypair server-side -- there is no way to import an externally-generated private key.
+///     (<c>POST /api/zones/{zoneId}/dnssec-keys</c>). The key pair is always generated on the
+///     server; an externally generated private key cannot be imported.
 /// </summary>
 /// <param name="Role">Which role the key plays (ZSK or KSK).</param>
 /// <param name="Algorithm">The key's signing algorithm.</param>
 /// <param name="KeySizeBits">
-///     The key size to generate, in bits -- meaningful only for the RSA algorithm family; ignored
-///     for every other algorithm.
+///     The key size to generate, in bits. Used only by the RSA algorithms, where 0 (the default)
+///     means 2048; ignored by every other algorithm.
 /// </param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
 public record DnssecKeyCreateRequest(
@@ -23,51 +23,51 @@ public record DnssecKeyCreateRequest(
 );
 
 /// <summary>
-///     This class carries the fields used to fully replace an existing DNSSEC key's own mutable
-///     state (<c>PUT /api/zones/{zoneId}/dnssec-keys/{id}</c>). A key's role, algorithm, and key
-///     material are permanent once generated -- rolling to a different algorithm or role means
-///     generating a brand-new key and retiring the old one, not editing this one in place -- so
-///     retirement status and operator notes are the only fields this resource ever exposes as
-///     writable.
+///     This class carries the editable state of a DNSSEC key, replaced in full by
+///     <c>PUT /api/zones/{zoneId}/dnssec-keys/{id}</c>. A key's role, algorithm and key material
+///     are fixed once generated; changing them means generating a new key and retiring the old
+///     one. So the retirement flag and notes are the only writable fields.
 /// </summary>
-/// <param name="IsRetired">Whether the key is retired (taken out of active signing use).</param>
+/// <param name="IsRetired">
+///     <see langword="true" /> moves the key to the <c>Removed</c> lifecycle state, out of the
+///     zone; <see langword="false" /> (the default) moves it to <c>Active</c>, whatever state it
+///     was in, which also cancels a rollover in progress.
+/// </param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
 public record DnssecKeyWriteRequest(bool IsRetired = false, string Comments = null);
 
 /// <summary>
-///     This class carries a DNSSEC key's own metadata, for list and single-item responses. This
-///     deliberately never includes the key's own private key material -- unlike a TSIG shared
-///     secret or a cloud provider credential, a DNSSEC private key never needs to leave this
-///     server; it exists purely for <c>Server.Authoritative</c>'s own internal signing, so it
-///     stays encrypted at rest and is never exposed over this REST API at all, at any point in a
-///     key's lifecycle.
+///     This class carries a DNSSEC key, as returned by the list, get and create endpoints under
+///     <c>/api/zones/{zoneId}/dnssec-keys</c>. It never includes the private key. Unlike a TSIG
+///     secret or a cloud provider credential, a DNSSEC private key never needs to leave the
+///     server: it is used only for signing inside <c>Server.Authoritative</c>, stays encrypted at
+///     rest and is never exposed over REST.
 /// </summary>
-/// <param name="Id">The key's own identifier.</param>
-/// <param name="ZoneId">The identifier of the zone this key belongs to.</param>
+/// <param name="Id">The key's identifier.</param>
+/// <param name="ZoneId">The identifier of the zone the key belongs to.</param>
 /// <param name="Role">Which role the key plays (ZSK or KSK).</param>
 /// <param name="Algorithm">The key's signing algorithm.</param>
 /// <param name="PublicKeyWireFormat">The key's public key material, base64-encoded.</param>
 /// <param name="KeyTag">The key's precomputed key tag (RFC 4034 Appendix B).</param>
 /// <param name="IsRetired">
-///     Whether the key has been fully withdrawn from the zone's own DNSKEY RRset -- equivalent to
-///     <c>LifecycleState == Removed</c>, kept as its own field for the REST/UI contract that
-///     predates <see cref="LifecycleState" />.
+///     Whether the key has been withdrawn from the zone's DNSKEY RRset: <see langword="true" />
+///     when <see cref="LifecycleState" /> is <c>Removed</c>. It is the field
+///     <see cref="DnssecKeyWriteRequest.IsRetired" /> writes.
 /// </param>
-/// <param name="LifecycleState">The key's own current RFC 6781 lifecycle state.</param>
-/// <param name="PublishedAtUtc">When the key was first published in the zone's own DNSKEY RRset.</param>
+/// <param name="LifecycleState">The key's RFC 6781 lifecycle state.</param>
+/// <param name="PublishedAtUtc">When the key was first published in the zone's DNSKEY RRset.</param>
 /// <param name="RetiredAtUtc">
-///     When the key most recently stopped being its zone's own canonical, currently-signing key
-///     of its role, or <see langword="null" /> if it never has.
+///     When the key last stopped being the zone's signing key for its role, or
+///     <see langword="null" /> if it never has.
 /// </param>
 /// <param name="ParentDsConfirmedAtUtc">
-///     When an operator confirmed a KSK rollover's own new DS record has actually been published
-///     at a real, externally-hosted parent zone, or <see langword="null" /> if no such
-///     confirmation has been recorded (either because no rollover needs one, or because it is
-///     still awaited).
+///     When an operator confirmed that a KSK rollover's new DS record is published at an
+///     externally hosted parent zone, or <see langword="null" /> if no confirmation is recorded
+///     (no rollover needs one, or it is still awaited).
 /// </param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
 /// <param name="CreatedAtUtc">When the key was created.</param>
-/// <param name="UpdatedAtUtc">When the key's own metadata was last updated, if ever.</param>
+/// <param name="UpdatedAtUtc">When the key was last updated, or <see langword="null" /> if never.</param>
 /// <param name="DnsKeyRecord">The key's DNSKEY record in presentation format, as published in the zone.</param>
 /// <param name="DsRecord">
 ///     The SHA-256 DS record a parent zone publishes for this key, in presentation format, or
@@ -99,17 +99,16 @@ public record DnssecKeyDetail(
 
 /// <summary>
 ///     This class carries the fields used to start an automated RFC 6781 key rollover for an
-///     existing, currently-active key (<c>POST /api/zones/{zoneId}/dnssec-keys/{id}/roll</c>).
-///     Ninlil chooses the rollover scheme by the existing key's own <c>Role</c> -- Pre-Publish
-///     (RFC 6781 §4.1.1.1) for a ZSK, Double-Signature (RFC 6781 §4.1.2) for a KSK -- there is no
-///     way to request the other scheme for a given role through this action.
+///     active key (<c>POST /api/zones/{zoneId}/dnssec-keys/{id}/roll</c>). The scheme follows from
+///     the key's <c>Role</c>: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature
+///     (RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested.
 /// </summary>
 /// <param name="Algorithm">
-///     The new, incoming key's own signing algorithm -- <see langword="null" /> (the default)
-///     reuses the existing key's own algorithm, the ordinary case; a different value here also
-///     performs an algorithm rollover in the same pass.
+///     The new key's signing algorithm. <see langword="null" /> (the default) keeps the current
+///     key's algorithm; a different value also changes the algorithm in the same rollover.
 /// </param>
 /// <param name="KeySizeBits">
-///     The new key's own key size, in bits -- meaningful only for the RSA algorithm family.
+///     The new key's size, in bits. Used only by the RSA algorithms, where 0 (the default) means
+///     2048.
 /// </param>
 public record DnssecKeyRolloverRequest(DnssecAlgorithmEnum? Algorithm = null, int KeySizeBits = 0);

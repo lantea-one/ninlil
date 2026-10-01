@@ -2,13 +2,13 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>SelfUpdateOptions</c>. No secret material is involved, so this record's own fields are
-///     the exact same ones a <c>PATCH</c> to the same endpoint accepts.
+///     This record is the REST shape of the update check settings (<c>SelfUpdateOptions</c>) that
+///     <c>GET /api/self-update-settings</c> returns. A <c>PATCH</c> to the same endpoint accepts
+///     the same fields.
 /// </summary>
-/// <param name="EnableAutomaticCheck">Whether this host periodically checks <see cref="ReleaseFeedUrl" /> at all.</param>
-/// <param name="ReleaseFeedUrl">The release feed URL checked, or an empty string if none is configured yet.</param>
-/// <param name="CheckInterval">How often a real check is due.</param>
+/// <param name="EnableAutomaticCheck">Whether the server checks <see cref="ReleaseFeedUrl" /> periodically. Defaults to <see langword="true" />.</param>
+/// <param name="ReleaseFeedUrl">The release feed URL to check, or an empty string (the default) if none is set.</param>
+/// <param name="CheckInterval">How often a check is due. Defaults to 24 hours.</param>
 public record SelfUpdateSettingsDetail(
     bool EnableAutomaticCheck,
     string ReleaseFeedUrl,
@@ -16,27 +16,25 @@ public record SelfUpdateSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST representation of the self-update checker's own currently-known
-///     status -- the one field this whole feature exists to surface, plus enough context for an
-///     operator to act on it. See <c>Controllers.SelfUpdateController</c>'s own doc comment for
-///     what "acting on it" means today.
+///     This record is what the update checker knows, as returned by <c>GET /api/self-update</c>
+///     and <c>POST /api/self-update/check</c>: whether an update is available, with enough context
+///     to act on it. <c>Controllers.SelfUpdateController</c> explains how an update is applied.
 /// </summary>
-/// <param name="Configured">Whether a real release feed URL has ever been set.</param>
-/// <param name="CurrentVersion">This running process's own current version, as a plain dotted string.</param>
+/// <param name="Configured">Whether a release feed URL is set.</param>
+/// <param name="CurrentVersion">The running version, as a plain dotted string.</param>
 /// <param name="LatestKnownVersion">
-///     The newest version the release feed has ever reported, as a plain dotted string, or
-///     <see langword="null" /> if no check has ever completed successfully.
+///     The newest version the release feed has reported, as a plain dotted string, or
+///     <see langword="null" /> if no check has succeeded.
 /// </param>
-/// <param name="UpdateAvailable">Whether a genuinely newer release is currently known.</param>
+/// <param name="UpdateAvailable">Whether a release newer than <paramref name="CurrentVersion" /> is known.</param>
 /// <param name="ReleaseUrl">A human-facing URL for the latest known release.</param>
 /// <param name="ReleaseNotes">Free-text release notes for the latest known release.</param>
-/// <param name="LastCheckedAtUtc">When a check was last attempted, or <see langword="null" /> if none has ever run.</param>
-/// <param name="LastCheckError">A short description of the most recent check's own failure, or <see langword="null" /> if it succeeded.</param>
+/// <param name="LastCheckedAtUtc">When a check was last attempted, or <see langword="null" /> if none has run.</param>
+/// <param name="LastCheckError">A short description of why the last check failed, or <see langword="null" /> if it succeeded.</param>
 /// <param name="UpdateInstructions">
-///     A plain-language description of what an operator should actually do about
-///     <see cref="UpdateAvailable" /> -- see <c>Controllers.SelfUpdateController</c>'s own doc
-///     comment for why this is honest, written guidance rather than a button that silently does
-///     nothing.
+///     Plain-language guidance on how to update. The server does not update itself, so the UI
+///     shows these instructions rather than an update button (see
+///     <c>Controllers.SelfUpdateController</c>).
 /// </param>
 public record SelfUpdateStatusDetail(
     bool Configured,

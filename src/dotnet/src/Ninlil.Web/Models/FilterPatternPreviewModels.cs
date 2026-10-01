@@ -4,18 +4,18 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries a request to preview which of a sample set of domains a candidate
-///     filter-list-entry pattern would match (<c>POST /api/filter-pattern-preview</c>).
+///     This class carries a request to preview which sample domains a candidate filter list entry
+///     pattern would match (<c>POST /api/filter-pattern-preview</c>). The UI sends it while an
+///     operator types, before anything is saved.
 /// </summary>
 /// <param name="Kind">
-///     What kind of pattern <see cref="Value" /> is -- the exact same
-///     <see cref="DnsFilterEntryKindEnum" /> a real <c>DnsFilterListEntryEntity</c> row carries.
+///     What kind of pattern <see cref="Value" /> is, as a <c>DnsFilterListEntryEntity</c> would
+///     store it.
 /// </param>
-/// <param name="Value">The candidate pattern text, exactly as an operator is currently typing it.</param>
+/// <param name="Value">The candidate pattern text.</param>
 /// <param name="SampleDomains">
-///     The domains to test <see cref="Value" /> against. When omitted or empty, this controller's
-///     own small, built-in default sample set is used instead (see
-///     <c>FilterPatternPreviewController.DefaultSampleDomains</c>).
+///     The domains to test <see cref="Value" /> against. When omitted or empty, the small built-in
+///     set <c>FilterPatternPreviewController.DefaultSampleDomains</c> is used.
 /// </param>
 public record FilterPatternPreviewRequest(
     DnsFilterEntryKindEnum Kind,
@@ -29,21 +29,21 @@ public record FilterPatternPreviewRequest(
 public record FilterPatternPreviewMatch(string Domain, bool IsMatch);
 
 /// <summary>
-///     This class carries the result of previewing a candidate filter-list-entry pattern --
-///     the response shape for <c>POST /api/filter-pattern-preview</c>.
+///     This class carries the result of previewing a candidate filter list entry pattern, the
+///     response of <c>POST /api/filter-pattern-preview</c>.
 /// </summary>
 /// <param name="IsValid">
-///     Whether <see cref="FilterPatternPreviewRequest.Value" /> actually compiles as the
-///     requested <see cref="FilterPatternPreviewRequest.Kind" /> -- the exact same compilation
-///     <c>FilterListEntriesController</c> itself requires before persisting a
-///     <see cref="DnsFilterEntryKindEnum.Wildcard" />/<see cref="DnsFilterEntryKindEnum.Regex" />
-///     entry, run here read-only, before the operator has even saved anything.
+///     Whether <see cref="FilterPatternPreviewRequest.Value" /> compiles as the requested
+///     <see cref="FilterPatternPreviewRequest.Kind" />, using the same check
+///     <c>FilterListEntriesController</c> applies before saving a
+///     <see cref="DnsFilterEntryKindEnum.Wildcard" /> or <see cref="DnsFilterEntryKindEnum.Regex" />
+///     entry.
 /// </param>
 /// <param name="Error">A human-readable reason <see cref="IsValid" /> is <see langword="false" />, or <see langword="null" /> when it is <see langword="true" />.</param>
 /// <param name="Matches">
-///     Every sample domain actually tested, and whether the pattern matched it -- empty when
-///     <see cref="IsValid" /> is <see langword="false" />, since an uncompilable pattern is never
-///     tested against anything.
+///     Each sample domain tested and whether the pattern matched it. Empty when
+///     <see cref="IsValid" /> is <see langword="false" />, since a pattern that does not compile is
+///     not tested.
 /// </param>
 public record FilterPatternPreviewResult(
     bool IsValid,

@@ -2,20 +2,21 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>OidcSsoOptions</c>. <see cref="ClientSecretConfigured" /> stands in for the real client
-///     secret, never returned by a <c>GET</c> -- the same reveal-once posture every other
-///     secret-bearing setting in this project already follows.
+///     This record is the OpenID Connect single sign-on settings (<c>OidcSsoOptions</c>) that
+///     <c>GET /api/sso-settings</c> returns. The client secret is never returned, as with every
+///     other secret; <see cref="ClientSecretConfigured" /> says whether one is set. A
+///     <c>PATCH</c> accepts these fields with <c>clientSecret</c> in place of
+///     <see cref="ClientSecretConfigured" />.
 /// </summary>
-/// <param name="Enable">Whether this host is configured to federate admin sign-in through OpenID Connect.</param>
-/// <param name="DisplayName">The label the Angular admin SPA's own login page renders on its "Sign in with SSO" button.</param>
-/// <param name="Authority">The identity provider's own issuer URL.</param>
-/// <param name="ClientId">The OAuth 2.0 client identifier this host was registered under.</param>
+/// <param name="Enable">Whether admin sign-in through OpenID Connect is offered. Defaults to <see langword="false" />.</param>
+/// <param name="DisplayName">The label of the sign-in button on the admin console's login page. Defaults to "Single Sign-On".</param>
+/// <param name="Authority">The identity provider's issuer URL.</param>
+/// <param name="ClientId">The OAuth 2.0 client identifier this server is registered under.</param>
 /// <param name="ClientSecretConfigured">
-///     Whether <c>OidcSsoOptions.ClientSecretEncrypted</c> currently has a value -- the secret
-///     itself is never returned by a <c>GET</c>.
+///     Whether <c>OidcSsoOptions.ClientSecretEncrypted</c> has a value. The secret itself is never
+///     returned.
 /// </param>
-/// <param name="Scopes">The OpenID Connect scopes requested during the authorization code flow.</param>
+/// <param name="Scopes">The scopes requested in the authorization code flow. Defaults to <c>openid</c>, <c>profile</c> and <c>email</c>.</param>
 public record OidcSsoSettingsDetail(
     bool Enable,
     string DisplayName,

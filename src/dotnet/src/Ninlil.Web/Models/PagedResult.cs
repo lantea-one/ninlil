@@ -2,12 +2,11 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class wraps a single page of a larger list -- the shape every list endpoint in this
-///     project's REST API returns, offset/limit paginated (a sane default/max page size is enough
-///     at this project's own homelab/small-org target scale; a cursor-based scheme's extra
-///     complexity is not needed).
+///     This class wraps one page of a larger list, the shape the paginated list endpoints return.
+///     Paging is by offset and limit: with a capped page size that is enough at homelab and
+///     small-office scale, so cursor-based paging is not needed.
 /// </summary>
-/// <param name="Items">The page's own items.</param>
+/// <param name="Items">The page's items.</param>
 /// <param name="Skip">How many items were skipped before this page began.</param>
 /// <param name="Take">The maximum number of items this page could contain.</param>
 /// <param name="TotalCount">The total number of items across every page.</param>
@@ -15,18 +14,18 @@ namespace Ninlil.Web.Models;
 public record PagedResult<TItem>(IReadOnlyList<TItem> Items, int Skip, int Take, int TotalCount);
 
 /// <summary>
-///     This class carries the offset/limit pagination parameters every list endpoint accepts as
-///     query-string parameters.
+///     This class carries the offset and limit query-string parameters the paginated list
+///     endpoints accept.
 /// </summary>
 public class PaginationQuery
 {
     /// <summary>
-    ///     This property contains the default page size used when a caller does not specify one.
+    ///     This constant contains the page size used when a caller does not give one.
     /// </summary>
     public const int DefaultTake = 50;
 
     /// <summary>
-    ///     This property contains the largest page size a caller may request.
+    ///     This constant contains the largest page size a caller may request.
     /// </summary>
     public const int MaxTake = 500;
 
@@ -41,10 +40,10 @@ public class PaginationQuery
     public int Take { get; set; } = DefaultTake;
 
     /// <summary>
-    ///     This method clamps this query's own values to a safe range -- a negative
-    ///     <see cref="Skip" /> or a <see cref="Take" /> of zero, negative, or larger than
-    ///     <see cref="MaxTake" /> is silently corrected rather than rejected outright, matching
-    ///     how most admin-UI table paging controls behave when driven by a hand-edited URL.
+    ///     This method clamps the values to a safe range instead of rejecting them, as most table
+    ///     paging controls do with a hand-edited URL. A negative <see cref="Skip" /> becomes 0, a
+    ///     <see cref="Take" /> of zero or less becomes <see cref="DefaultTake" />, and one above
+    ///     <see cref="MaxTake" /> becomes <see cref="MaxTake" />.
     /// </summary>
     public (int Skip, int Take) Normalize() =>
         (Math.Max(0, Skip), Math.Clamp(Take <= 0 ? DefaultTake : Take, 1, MaxTake));

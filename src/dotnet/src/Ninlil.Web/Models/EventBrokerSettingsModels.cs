@@ -4,29 +4,27 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective message-
-///     broker event-transport configuration. Only the section matching <see cref="Transport" /> is
-///     ever populated -- the other is <see langword="null" />, since a value read from
-///     <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> for a broker that was never
-///     selected (and therefore never had its own <c>Configure&lt;TOptions&gt;</c> called) would
-///     otherwise just be that options class's own compiled-in defaults, which would misleadingly
-///     look like real, live configuration.
+///     This record is the event transport configuration that <c>GET /api/event-broker-settings</c>
+///     returns. Only the section matching <see cref="Transport" /> is filled in; the other is
+///     <see langword="null" />. A broker that was not selected never had its options configured,
+///     so reading them through <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> would
+///     return compiled-in defaults that look like live configuration.
 /// </summary>
-/// <param name="Transport">Which transport actually delivers a published event right now.</param>
+/// <param name="Transport">Which transport delivers published events in the running process.</param>
 /// <param name="IsConnected">
-///     Whether the active broker transport currently reports itself connected --
-///     <see langword="null" /> when <see cref="Transport" /> is
-///     <see cref="EventTransportEnum.InMemory" />, since "connected" has no meaning there.
+///     Whether the active broker transport reports itself connected, or <see langword="null" />
+///     when <see cref="Transport" /> is <see cref="EventTransportEnum.InMemory" />, where
+///     "connected" has no meaning.
 /// </param>
 /// <param name="RabbitMq">Populated only when <see cref="Transport" /> is <see cref="EventTransportEnum.RabbitMq" />.</param>
 /// <param name="ActiveMq">Populated only when <see cref="Transport" /> is <see cref="EventTransportEnum.ActiveMq" />.</param>
 /// <param name="LastModifiedUtc">
-///     When this settings section was last written (the cluster's own operational config sync), or
-///     <see langword="null" /> if it has never been written through this REST surface.
+///     When the settings were last written through the REST API, used by cluster config sync, or
+///     <see langword="null" /> if they never have been.
 /// </param>
 /// <param name="OriginatingNodeId">
-///     The cluster node this settings section was last written on, or <see langword="null" />
-///     alongside <see cref="LastModifiedUtc" />.
+///     The cluster node the settings were last written on, or <see langword="null" /> together
+///     with <see cref="LastModifiedUtc" />.
 /// </param>
 public record EventBrokerSettingsDetail(
     EventTransportEnum Transport,
@@ -38,11 +36,10 @@ public record EventBrokerSettingsDetail(
 );
 
 /// <summary>
-///     This record carries <c>RabbitMqEventBrokerOptions</c>'s own settings, minus
-///     <c>Password</c> -- deliberately never returned by a <c>GET</c>, the same reveal-once
-///     posture this project's every other secret-bearing entity already follows, even though this
-///     particular secret lives in a plaintext config file rather than an <c>IDataProtector</c>-
-///     encrypted column.
+///     This record carries the <c>RabbitMqEventBrokerOptions</c> settings without
+///     <c>Password</c>. A <c>GET</c> never returns the password, as with every other secret, even
+///     though this one is stored in the plaintext configuration file rather than encrypted with an
+///     <c>IDataProtector</c>.
 /// </summary>
 public record RabbitMqBrokerSettingsDetail(
     string HostName,
@@ -55,8 +52,8 @@ public record RabbitMqBrokerSettingsDetail(
 );
 
 /// <summary>
-///     This record carries <c>ActiveMqEventBrokerOptions</c>'s own settings, minus
-///     <c>Password</c> -- see <see cref="RabbitMqBrokerSettingsDetail" />'s own doc comment.
+///     This record carries the <c>ActiveMqEventBrokerOptions</c> settings without <c>Password</c>,
+///     for the reason given on <see cref="RabbitMqBrokerSettingsDetail" />.
 /// </summary>
 public record ActiveMqBrokerSettingsDetail(
     string HostName,
@@ -70,42 +67,39 @@ public record ActiveMqBrokerSettingsDetail(
 
 /// <summary>
 ///     This record is returned after a runtime settings <c>PATCH</c> is written to the
-///     configuration file.
+///     configuration file. Its constants are the notes the settings controllers choose from,
+///     each saying when the written change takes effect.
 /// </summary>
 /// <param name="Note">
-///     A reminder that this write does not necessarily take effect immediately -- see
-///     <see cref="Options.RuntimeConfigurationOptions" />'s own doc comment.
+///     When the change takes effect: at once, after a listener or service restart, or after a
+///     process restart (see <see cref="Options.RuntimeConfigurationOptions" />).
 /// </param>
 public record RuntimeSettingsWriteResult(string Note)
 {
     /// <summary>
-    ///     This constant contains the standard restart-required note every runtime settings
-    ///     <c>PATCH</c> response shares.
+    ///     This constant contains the note for a write to settings read through
+    ///     <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, which take effect only
+    ///     after a process restart.
     /// </summary>
     public const string RestartRequiredNote =
         "Written to the configuration file. This setting is bound via IOptions, not "
         + "IOptionsMonitor, so a restart is required before this change takes effect.";
 
     /// <summary>
-    ///     This constant contains the note <see cref="Controllers.AppearanceSettingsController.Patch" />
-    ///     returns instead of <see cref="RestartRequiredNote" /> -- <c>AppearanceOptions</c> is
-    ///     this codebase's first runtime settings class actually bound via
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so a write this
-    ///     endpoint merges into the configuration file is visible on this same controller's very
-    ///     next read, with no restart required.
+    ///     This constant contains the note for a write to settings read through
+    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, which take effect
+    ///     on the next read with no restart. Most settings controllers return it, for example
+    ///     <see cref="Controllers.AppearanceSettingsController.Patch" />.
     /// </summary>
     public const string HotReloadedNote =
         "Written to the configuration file. This setting is bound via IOptionsMonitor, so it "
         + "takes effect immediately -- no restart required.";
 
     /// <summary>
-    ///     This constant contains the note a runtime settings <c>PATCH</c> response returns when a
-    ///     write touched a mix of <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />-bound
-    ///     fields (effective immediately) and <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />-bound
-    ///     fields (restart required) on the same options class -- used by
-    ///     <see cref="Controllers.RecursiveSettingsController.Patch" />, whose own root-hints/
-    ///     trust-anchor override lists are read once, at startup or first seed, by design, while
-    ///     every other field on the same options class hot-reloads.
+    ///     This constant contains the note <see cref="Controllers.RecursiveSettingsController.Patch" />
+    ///     returns when a write changes the root hint or trust anchor override lists, which are
+    ///     read once at startup or first seed, together with fields that take effect at once. Its
+    ///     wording names those two fields.
     /// </summary>
     public const string MixedReloadNote =
         "Written to the configuration file. Most of these settings take effect immediately; "
@@ -115,13 +109,10 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.QueryLoggingSettingsController.Patch" />
-    ///     returns when a single write touches both <c>privacyLevel</c> (live, no restart -- see
-    ///     <see cref="HotReloadedNote" />) and at least one of this same options class's other,
-    ///     still-restart-required fields (<c>enable</c>/<c>retentionPeriod</c>/
-    ///     <c>maxRetainedEntries</c>/<c>cleanupInterval</c>) at once -- the inverse mix from
-    ///     <see cref="MixedReloadNote" />'s own <c>RecursiveServerOptions</c> case, where most
-    ///     fields hot-reload and only two are the exception; here, <c>privacyLevel</c> is the one
-    ///     exception and every other field is still restart-required.
+    ///     returns when one write changes <c>privacyLevel</c>, which takes effect at once, together
+    ///     with any of <c>enable</c>, <c>retentionPeriod</c>, <c>maxRetainedEntries</c> or
+    ///     <c>cleanupInterval</c>, which need a restart. It is the reverse of
+    ///     <see cref="MixedReloadNote" />: here one field is live and the rest are not.
     /// </summary>
     public const string QueryLoggingMixedReloadNote =
         "Written to the configuration file. 'privacyLevel' took effect immediately, no restart "
@@ -131,14 +122,11 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.TransportSettingsController" />
-    ///     returns when a write's only field was a transport's own <c>enable</c> toggle -- unlike
-    ///     every other runtime settings class in this project, this field takes effect immediately
-    ///     with no restart at all, not by being read via <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />
-    ///     the way <see cref="HotReloadedNote" /> describes, but because the controller itself
-    ///     starts or stops the real, already-running transport listener through
-    ///     <see cref="Web.Services.IManagedServiceRegistry" /> right after writing the configuration
-    ///     file -- see that controller's own doc comment for the full reasoning, including why
-    ///     DNSCrypt's own toggle additionally starts/stops its certificate-rotation background loop.
+    ///     returns when a write changed only a transport's <c>enable</c> flag. That takes effect at
+    ///     once because, after writing the file, the controller starts or stops the transport's
+    ///     listener through <see cref="Web.Services.IManagedServiceRegistry" />. The controller's
+    ///     summary explains this, including why the DNSCrypt toggle also starts or stops its
+    ///     certificate rotation loop.
     /// </summary>
     public const string TransportEnableToggledNote =
         "Written to the configuration file, and the underlying transport listener was started or "
@@ -147,10 +135,9 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.TransportSettingsController" />
-    ///     returns when a single write touched both a transport's own <c>enable</c> toggle (live,
-    ///     see <see cref="TransportEnableToggledNote" />) and at least one other, restart-required
-    ///     field (port, certificate, and similar tuning read once when that specific listener
-    ///     starts) on the same transport.
+    ///     returns when one write changed a transport's <c>enable</c> flag (applied at once, see
+    ///     <see cref="TransportEnableToggledNote" />) together with another field, such as a port
+    ///     or certificate, that the listener reads only when it starts.
     /// </summary>
     public const string TransportMixedReloadNote =
         "Written to the configuration file. This transport's enabled/disabled state took effect "
@@ -161,20 +148,13 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.TransportSettingsController" />
-    ///     returns when a write touched only restart-required fields (a port, certificate, or
-    ///     protocol-tuning value), no <c>enable</c> toggle at all -- deliberately distinct from
-    ///     <see cref="RestartRequiredNote" />'s own wording, which would be actively misleading
-    ///     here: every options class this controller reads (<c>PlainProtocolOptions</c> included,
-    ///     despite it having no live <c>enable</c> toggle of its own to demonstrate it) is already
-    ///     bound via <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, not
-    ///     the older, non-hot-reloading <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />
-    ///     <see cref="RestartRequiredNote" /> blames -- the real reason a restart is still needed
-    ///     for these specific fields is that the transport's own already-running listener (a bound
-    ///     socket, most commonly) only reads a port/certificate/tuning value once, at its own
-    ///     <c>StartAsync</c>, not on every request the way this controller's own <c>enable</c>
-    ///     toggle re-checks are -- restarting that one listener (POST
-    ///     <c>/api/services/{name}/restart</c>) or the whole process is what actually re-reads it,
-    ///     the options binding itself having already reflected the write instantly either way.
+    ///     returns when a write changed only fields such as a port, certificate or protocol tuning
+    ///     value, and no <c>enable</c> flag. <see cref="RestartRequiredNote" /> would be wrong here:
+    ///     the transport options are read through
+    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> and see the write
+    ///     at once. The listener, though, reads these values only in its <c>StartAsync</c>, so
+    ///     restarting that listener (<c>POST /api/services/{name}/restart</c>) or the process
+    ///     applies them.
     /// </summary>
     public const string TransportRestartRequiredNote =
         "Written to the configuration file. This value is read once, when this transport's own "
@@ -183,18 +163,13 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.WebListenSettingsController" />
-    ///     always returns, regardless of which fields a write touched -- deliberately distinct
-    ///     from <see cref="TransportRestartRequiredNote" />'s own "restart just this one listener"
-    ///     wording, which does not apply here: unlike a DoT/DoQ/DNSCrypt listener,
-    ///     <c>WebListenOptions</c> is read once at the very top of <c>Program.cs</c>, before
-    ///     <c>Build()</c> even runs, to bind Kestrel's own HTTP/HTTPS sockets -- the socket this
-    ///     write's own REST call is itself answered through -- so there is no
-    ///     <see cref="Web.Services.IManagedServiceRegistry" /> entry that could restart only this
-    ///     listener in isolation; a full process restart is the only way this change ever takes
-    ///     effect, confirmed via <c>AskUserQuestion</c> 2026-09-01 as the deliberately chosen,
-    ///     safer alternative to an in-process Kestrel rebind attempt (which could strand the very
-    ///     session making the change, with no automatic recovery, if the new port/certificate
-    ///     value turned out to be bad).
+    ///     returns for every write. Unlike a DoT, DoQ or DNSCrypt listener, the web listener cannot
+    ///     be restarted alone: <c>WebListenOptions</c> is read in <c>Program.cs</c> before
+    ///     <c>Build()</c> to bind Kestrel's HTTP and HTTPS sockets, the ones this request arrives
+    ///     on, and <see cref="Web.Services.IManagedServiceRegistry" /> has no entry for them. Only a
+    ///     process restart applies the change. Rebinding Kestrel in process is avoided on purpose:
+    ///     a bad port or certificate could cut off the session making the change with no way to
+    ///     recover.
     /// </summary>
     public const string WebListenRestartRequiredNote =
         "Written to the configuration file. This host's own HTTP/HTTPS listener is bound once, "
@@ -204,17 +179,11 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.DnsPipelineSettingsController" />
-    ///     returns when a write touched only <c>workerCount</c>/<c>channelCapacity</c>, no UDP
-    ///     safety field at all -- these two fields size a fixed worker-task pool and construct a
-    ///     brand-new <see cref="System.Threading.Channels.Channel{T}" />, both of which only
-    ///     happen inside <c>DnsQueryProcessingPipeline.StartAsync</c>, unlike every other field
-    ///     that options class exposes. Deliberately distinct from <see cref="RestartRequiredNote" />'s
-    ///     own wording: this options class is already bound via
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, and this
-    ///     specific pipeline is individually restartable (it is registered in
-    ///     <c>Ninlil.Web.Services.ManagedServiceRegistry</c> under the name
-    ///     <c>"query-processing-pipeline"</c>), so a full process restart is never the only option
-    ///     the way it is for <see cref="WebListenRestartRequiredNote" />.
+    ///     returns when a write changed only <c>workerCount</c> or <c>channelCapacity</c>. Those
+    ///     size the worker pool and the <see cref="System.Threading.Channels.Channel{T}" /> that
+    ///     <c>DnsQueryProcessingPipeline.StartAsync</c> builds, so they apply when the pipeline
+    ///     restarts. The pipeline can be restarted alone: <c>Ninlil.Web.Services.ManagedServiceRegistry</c>
+    ///     registers it as <c>"query-processing-pipeline"</c>.
     /// </summary>
     public const string PipelineWorkerRestartRequiredNote =
         "Written to the configuration file. 'workerCount'/'channelCapacity' size a fixed worker "
@@ -224,10 +193,9 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.DnsPipelineSettingsController" />
-    ///     returns when a single write touched both a UDP safety field (live, no restart of any
-    ///     kind -- see <see cref="HotReloadedNote" />) and at least one of
-    ///     <c>workerCount</c>/<c>channelCapacity</c> (see <see cref="PipelineWorkerRestartRequiredNote" />)
-    ///     at once.
+    ///     returns when one write changed a UDP safety field (applied at once) together with
+    ///     <c>workerCount</c> or <c>channelCapacity</c> (see
+    ///     <see cref="PipelineWorkerRestartRequiredNote" />).
     /// </summary>
     public const string PipelineMixedReloadNote =
         "Written to the configuration file. 'maxUdpPayloadSizeOctets'/'maxUdpAmplificationFactor'/"
@@ -239,15 +207,13 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.WebhookDeliverySettingsController" />
-    ///     returns when a write touched only <c>requestTimeout</c> -- unlike every other field
-    ///     this controller exposes (bound via <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />
-    ///     and re-read on every single delivery attempt, no restart or delay of any kind), this
-    ///     field is only ever applied to a new <see cref="System.Net.Http.HttpClient" /> handler
-    ///     <see cref="System.Net.Http.IHttpClientFactory" /> builds for the named webhook client --
-    ///     an already-pooled handler keeps using whatever timeout was in effect when it was built,
-    ///     for the rest of that handler's own lifetime (roughly two minutes by that factory's own
-    ///     default). Neither a restart nor a hot-reload in the usual sense: no operator action is
-    ///     needed, but the change is not instant either.
+    ///     returns when a write changed only <c>requestTimeout</c>. The other webhook fields are
+    ///     read through <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> on
+    ///     every delivery attempt, but the timeout is applied only to a new
+    ///     <see cref="System.Net.Http.HttpClient" /> handler that
+    ///     <see cref="System.Net.Http.IHttpClientFactory" /> builds for the webhook client. A pooled
+    ///     handler keeps its timeout for the rest of its lifetime (two minutes by default), so the
+    ///     change needs no action but is not instant.
     /// </summary>
     public const string WebhookRequestTimeoutEventualNote =
         "Written to the configuration file. 'requestTimeout' only applies to a new outbound HTTP "
@@ -257,10 +223,9 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.WebhookDeliverySettingsController" />
-    ///     returns when a single write touched both <c>requestTimeout</c> (see
-    ///     <see cref="WebhookRequestTimeoutEventualNote" />) and at least one of
-    ///     <c>initialRetryDelay</c>/<c>maxRetryDelay</c> (live, see <see cref="HotReloadedNote" />)
-    ///     at once.
+    ///     returns when one write changed <c>requestTimeout</c> (see
+    ///     <see cref="WebhookRequestTimeoutEventualNote" />) together with <c>initialRetryDelay</c>
+    ///     or <c>maxRetryDelay</c>, which apply at once.
     /// </summary>
     public const string WebhookMixedReloadNote =
         "Written to the configuration file. 'initialRetryDelay'/'maxRetryDelay' took effect "
@@ -271,18 +236,11 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.OidcSsoSettingsController.Patch" />
-    ///     always returns -- deliberately distinct wording from <see cref="RestartRequiredNote" />,
-    ///     which would be misleading here: <c>OidcSsoOptions</c> itself is bound via
-    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, not the older,
-    ///     non-hot-reloading <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />
-    ///     <see cref="RestartRequiredNote" /> blames, so this write is visible on this same
-    ///     controller's very next <c>GET</c> immediately. The real reason a restart is still
-    ///     needed is structural, not a stale-options-snapshot problem: the OpenID Connect
-    ///     authentication scheme itself is registered exactly once, while the dependency
-    ///     injection container is still being built, before any <c>IOptionsMonitor</c> read is
-    ///     even possible -- the identical "selecting the active transport is decided before DI is
-    ///     built, so switching it always needs a restart" reasoning already governs which message
-    ///     broker (<c>Server.Events.RabbitMq</c>/<c>.ActiveMq</c>) is active.
+    ///     returns for every write. <c>OidcSsoOptions</c> is read through
+    ///     <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />, so the next
+    ///     <c>GET</c> shows the write, but the OpenID Connect authentication scheme is registered
+    ///     once while the dependency injection container is built. A restart is needed before the
+    ///     scheme reflects the change, as with choosing the event broker transport.
     /// </summary>
     public const string SsoRestartRequiredNote =
         "Written to the configuration file. This setting takes effect on the very next read of "

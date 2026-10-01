@@ -4,18 +4,18 @@ using Ninlil.Dhcp.Common.OptionCatalog;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of one <see cref="DhcpOptionCatalogEntry" /> --
-///     see <see cref="Controllers.DhcpOptionCatalogController" />'s own doc comment for why this
-///     project's read-only option-metadata catalog is exposed through a dedicated model rather
-///     than serializing <see cref="DhcpOptionCatalogEntry" /> itself.
+///     This record is the REST shape of one <see cref="DhcpOptionCatalogEntry" />, as returned by
+///     <c>GET /api/dhcp-option-catalog</c>. It copies the catalog record field by field so the API
+///     does not change when the record does (see
+///     <see cref="Controllers.DhcpOptionCatalogController" />).
 /// </summary>
-/// <param name="Code">The option's own raw numeric tag/code -- see <see cref="DhcpOptionCatalogEntry.Code" />'s own doc comment.</param>
-/// <param name="Name">A short, human-readable name for this option.</param>
-/// <param name="Description">A longer, human-readable description of what this option carries and which RFC/section defines it.</param>
-/// <param name="ValueType">The shape of value this option's own defining RFC gives it.</param>
+/// <param name="Code">The option's numeric code (see <see cref="DhcpOptionCatalogEntry.Code" />).</param>
+/// <param name="Name">A short, human-readable name for the option.</param>
+/// <param name="Description">A longer description of what the option carries and which RFC section defines it.</param>
+/// <param name="ValueType">The kind of value the defining RFC gives the option, which picks the UI's value editor.</param>
 /// <param name="IsServerAddressEligible">
-///     Whether an operator picking this option's value should be offered "use this server's own
-///     address" as an alternative to typing one in.
+///     Whether the UI should offer "use this server's address" as an alternative to typing a
+///     value.
 /// </param>
 public record DhcpOptionCatalogEntryDetail(
     int Code,

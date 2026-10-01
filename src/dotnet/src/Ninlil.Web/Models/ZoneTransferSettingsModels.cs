@@ -2,9 +2,10 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>ZoneTransferOptions</c> -- how this server chunks AXFR/IXFR responses it serves out to a
-///     secondary. This record's own fields are the exact same ones a <c>PATCH</c> to the same
-///     endpoint accepts.
+///     This record is the zone transfer settings (<c>ZoneTransferOptions</c>) that
+///     <c>GET /api/zone-transfer-settings</c> returns: how the AXFR and IXFR responses the server
+///     sends to secondaries are split into messages. A <c>PATCH</c> to the same endpoint accepts
+///     the same field.
 /// </summary>
+/// <param name="RecordsPerMessage">The most records put in one transfer message. Defaults to 100.</param>
 public record ZoneTransferSettingsDetail(int RecordsPerMessage);

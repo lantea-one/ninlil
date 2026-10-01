@@ -5,49 +5,41 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This class carries the fields used to create a new outbound webhook subscription
-///     (<c>POST /api/webhooks</c>). See <see cref="WebhookSubscriptionCreateResponse" /> for the
-///     one place <see cref="AuthCredentials" />/the resulting HMAC signing secret are ever shown.
+///     (<c>POST /api/webhooks</c>). <see cref="WebhookSubscriptionCreateResponse" /> is the only
+///     place <see cref="AuthCredentials" /> and the HMAC signing secret are ever returned.
 /// </summary>
-/// <param name="Name">An operator-chosen, human-readable, unique name for this subscription.</param>
-/// <param name="TargetUrl">The absolute URL every matching event is POSTed to.</param>
+/// <param name="Name">An operator-chosen, human-readable, unique name for the subscription.</param>
+/// <param name="TargetUrl">The absolute http or https URL every matching event is POSTed to.</param>
 /// <param name="EventTypeNames">
-///     Which event types this subscription wants delivered, by their own registered
-///     <c>DnsServerEventTypeRegistry</c> name (for example, <c>"DnsZoneChanged"</c>) -- validated
-///     against that real registry before this subscription is ever persisted, rather than
-///     accepting an arbitrary string, the same "validate against the real registry/parser"
-///     discipline <see cref="ForwarderWriteRequest" />'s own <c>DefinitionString</c> already
-///     applies.
+///     The event types to deliver, by their <c>DnsServerEventTypeRegistry</c> name (for example
+///     <c>"DnsZoneChanged"</c>). Each is checked against the registry before saving.
 /// </param>
-/// <param name="AuthMode">Which authentication mode, if any, this subscription's own outbound delivery POST uses.</param>
+/// <param name="AuthMode">The authentication the delivery POST uses, if any. Defaults to none.</param>
 /// <param name="AuthCredentials">
-///     This subscription's own outbound authentication credential(s), required when
-///     <see cref="AuthMode" /> is not <c>None</c> -- <c>{"BearerToken":"..."}</c> for
-///     <c>Bearer</c>, or <c>{"Username":"...","Password":"..."}</c> for <c>Basic</c>. These are
-///     always operator-supplied (this server never generates a bearer token or password on an
-///     operator's behalf, unlike a TSIG key's own shared secret) and are returned exactly once,
-///     in this endpoint's own response, and never again afterward.
+///     The delivery POST's credentials, required when <see cref="AuthMode" /> is not <c>None</c>:
+///     <c>{"BearerToken":"..."}</c> for <c>Bearer</c>, or
+///     <c>{"Username":"...","Password":"..."}</c> for <c>Basic</c>. They always come from the
+///     operator (the server never generates them) and are returned once, in this endpoint's
+///     response.
 /// </param>
 /// <param name="EnableHmacSigning">
-///     Whether this subscription signs its own outbound payloads with an HMAC secret, delivered
-///     via a header the delivery engine adds (for example, <c>X-Ninlil-Signature</c>)
-///     so the receiver can verify authenticity.
+///     Whether deliveries are signed with an HMAC secret in the <c>X-Ninlil-Signature</c> header,
+///     so the receiver can verify them.
 /// </param>
 /// <param name="HmacSigningSecret">
-///     This subscription's own HMAC payload-signing secret, used only when
-///     <see cref="EnableHmacSigning" /> is <see langword="true" />. When omitted, a
-///     cryptographically random secret is generated instead -- either way, the plaintext secret
-///     is only ever shown once, in this endpoint's own response; every later request for this
-///     subscription omits it. Once set, this secret can only be rotated or disabled by deleting
-///     and recreating the subscription -- neither <c>PUT</c> nor <c>PATCH</c> can touch it, the
-///     same reveal-once limitation <see cref="TsigKeyWriteRequest" /> already documents for a
-///     TSIG key's own server-generated secret.
+///     The HMAC signing secret, used only when <see cref="EnableHmacSigning" /> is
+///     <see langword="true" />. When omitted, a random 32-byte secret is generated. Either way the
+///     plaintext secret is shown once, in this endpoint's response. Neither <c>PUT</c> nor
+///     <c>PATCH</c> can change it, as with a TSIG key's secret (see
+///     <see cref="TsigKeyWriteRequest" />); to rotate or remove it, delete and recreate the
+///     subscription.
 /// </param>
 /// <param name="MaxDeliveryAttempts">
-///     The maximum number of delivery attempts the delivery engine makes for a single
-///     event before giving up and logging the failure.
+///     How many times one event is attempted before the delivery is given up. Must be positive;
+///     defaults to 5.
 /// </param>
-/// <param name="IsDisabled">Whether the subscription starts out disabled.</param>
-/// <param name="Comments">Free-form operator notes about this subscription.</param>
+/// <param name="IsDisabled">Whether the subscription is disabled.</param>
+/// <param name="Comments">Free-form operator notes about the subscription.</param>
 public record WebhookSubscriptionCreateRequest(
     string Name,
     string TargetUrl,
@@ -63,22 +55,20 @@ public record WebhookSubscriptionCreateRequest(
 
 /// <summary>
 ///     This class carries the fields used to fully replace an existing webhook subscription's
-///     metadata and auth credentials (<c>PUT /api/webhooks/{id}</c>). Unlike a TSIG key's own
-///     server-generated shared secret, <see cref="AuthCredentials" /> is always operator-supplied
-///     -- the caller already knows the exact plaintext value being submitted in this very request
-///     -- so, exactly like <see cref="CloudProviderCredentialWriteRequest" />, a <c>PUT</c> may
-///     replace it too, with no "how do we reveal a rotated value again" problem. This subscription's
-///     own HMAC signing secret (see <see cref="WebhookSubscriptionCreateRequest.HmacSigningSecret" />)
-///     cannot be touched this way at all -- delete and recreate the subscription instead.
+///     settings and credentials (<c>PUT /api/webhooks/{id}</c>). Unlike a TSIG key's generated
+///     secret, <see cref="AuthCredentials" /> comes from the operator, who already knows the value,
+///     so a <c>PUT</c> replaces it too, as with <see cref="CloudProviderCredentialWriteRequest" />.
+///     The HMAC signing secret (see <see cref="WebhookSubscriptionCreateRequest.HmacSigningSecret" />)
+///     cannot be changed this way; delete and recreate the subscription instead.
 /// </summary>
 /// <param name="Name">The subscription's name.</param>
 /// <param name="TargetUrl">The absolute URL every matching event is POSTed to.</param>
-/// <param name="EventTypeNames">Which event types this subscription wants delivered, replacing the entire set.</param>
-/// <param name="AuthMode">Which authentication mode, if any, this subscription's own outbound delivery POST uses.</param>
-/// <param name="AuthCredentials">This subscription's own outbound authentication credential(s), replacing them entirely.</param>
-/// <param name="MaxDeliveryAttempts">The maximum number of delivery attempts the delivery engine makes.</param>
-/// <param name="IsDisabled">Whether the subscription is currently disabled.</param>
-/// <param name="Comments">Free-form operator notes about this subscription.</param>
+/// <param name="EventTypeNames">The event types to deliver, replacing the whole set.</param>
+/// <param name="AuthMode">The authentication the delivery POST uses, if any.</param>
+/// <param name="AuthCredentials">The delivery POST's credentials, replacing the stored ones.</param>
+/// <param name="MaxDeliveryAttempts">How many times one event is attempted. Must be positive; defaults to 5.</param>
+/// <param name="IsDisabled">Whether the subscription is disabled.</param>
+/// <param name="Comments">Free-form operator notes about the subscription.</param>
 public record WebhookSubscriptionWriteRequest(
     string Name,
     string TargetUrl,
@@ -91,28 +81,25 @@ public record WebhookSubscriptionWriteRequest(
 );
 
 /// <summary>
-///     This class carries a webhook subscription's own metadata, for list, single-item, and
-///     (nested inside <see cref="WebhookSubscriptionCreateResponse" />) creation responses.
-///     Neither the subscription's own auth credential(s) nor its HMAC signing secret are ever
-///     included here -- see <see cref="WebhookSubscriptionCreateResponse" /> for the one place
-///     <see cref="WebhookSubscriptionCreateResponse.AuthCredentials" />/
-///     <see cref="WebhookSubscriptionCreateResponse.HmacSigningSecret" /> ever appear.
+///     This class carries a webhook subscription without its secrets, as returned by the list and
+///     get endpoints and nested in <see cref="WebhookSubscriptionCreateResponse" />, the one
+///     response that includes <see cref="WebhookSubscriptionCreateResponse.AuthCredentials" /> and
+///     <see cref="WebhookSubscriptionCreateResponse.HmacSigningSecret" />.
 /// </summary>
-/// <param name="Id">The subscription's own identifier.</param>
-/// <param name="Name">The subscription's own name.</param>
+/// <param name="Id">The subscription's identifier.</param>
+/// <param name="Name">The subscription's name.</param>
 /// <param name="TargetUrl">The absolute URL every matching event is POSTed to.</param>
-/// <param name="EventTypeNames">Which event types this subscription is subscribed to.</param>
-/// <param name="AuthMode">Which authentication mode, if any, this subscription's own outbound delivery POST uses.</param>
+/// <param name="EventTypeNames">The event types the subscription receives.</param>
+/// <param name="AuthMode">The authentication the delivery POST uses, if any.</param>
 /// <param name="HasHmacSigningSecret">
-///     Whether this subscription has an HMAC signing secret configured -- a plain boolean flag,
-///     never the secret itself, so a caller can tell whether payload signing is active without
-///     this response ever exposing the secret it would need to verify one.
+///     Whether the subscription has an HMAC signing secret, so a caller can tell that signing is
+///     on without the secret being exposed.
 /// </param>
-/// <param name="MaxDeliveryAttempts">The maximum number of delivery attempts the delivery engine makes.</param>
-/// <param name="IsDisabled">Whether this subscription is currently disabled.</param>
-/// <param name="Comments">Free-form operator notes about this subscription.</param>
-/// <param name="CreatedAtUtc">When this subscription was created.</param>
-/// <param name="UpdatedAtUtc">When this subscription was last modified, or <see langword="null" /> if never.</param>
+/// <param name="MaxDeliveryAttempts">How many times one event is attempted.</param>
+/// <param name="IsDisabled">Whether the subscription is disabled.</param>
+/// <param name="Comments">Free-form operator notes about the subscription.</param>
+/// <param name="CreatedAtUtc">When the subscription was created.</param>
+/// <param name="UpdatedAtUtc">When the subscription was last modified, or <see langword="null" /> if never.</param>
 public record WebhookSubscriptionDetail(
     Guid Id,
     string Name,
@@ -128,19 +115,18 @@ public record WebhookSubscriptionDetail(
 );
 
 /// <summary>
-///     This class carries a newly created webhook subscription's own metadata alongside its
-///     plaintext auth credential(s) and, if enabled, its plaintext HMAC signing secret -- the
-///     only response that will ever include either, per this project's reveal-once-then-omitted
-///     exposure policy for every secret-bearing entity type.
+///     This class carries a newly created webhook subscription with its plaintext credentials
+///     and, if signing is on, its plaintext HMAC signing secret. It is the only response that
+///     includes either: like every secret-bearing entity, a secret is revealed once at creation.
 /// </summary>
-/// <param name="Subscription">The newly created subscription's own metadata.</param>
+/// <param name="Subscription">The new subscription, without secrets.</param>
 /// <param name="AuthCredentials">
-///     The subscription's own outbound authentication credential(s), or <see langword="null" />
-///     when <see cref="WebhookSubscriptionDetail.AuthMode" /> is <c>None</c>.
+///     The delivery POST's credentials, or <see langword="null" /> when
+///     <see cref="WebhookSubscriptionDetail.AuthMode" /> is <c>None</c>.
 /// </param>
 /// <param name="HmacSigningSecret">
-///     The subscription's own HMAC signing secret (caller-supplied or freshly generated), or
-///     <see langword="null" /> when signing was not enabled.
+///     The HMAC signing secret, as supplied or generated, or <see langword="null" /> when signing
+///     is off.
 /// </param>
 public record WebhookSubscriptionCreateResponse(
     WebhookSubscriptionDetail Subscription,
@@ -149,46 +135,40 @@ public record WebhookSubscriptionCreateResponse(
 );
 
 /// <summary>
-///     This class carries a single persisted webhook delivery attempt's own current state, for
-///     <c>GET /api/webhooks/{id}/delivery-attempts</c> -- the real, on-disk delivery history
-///     <c>Server.Webhooks</c>'s own <c>WebhookDeliveryAttemptEntity</c> tracks, surfaced entirely
-///     read-only. There is no corresponding write DTO: a delivery attempt is written exclusively
-///     by <c>WebhookDeliveryService</c>/<c>WebhookDeliveryRetrySweepService</c> as a real delivery
-///     is attempted, never authored or edited by an operator.
+///     This class carries one webhook delivery and its attempts so far, as returned by
+///     <c>GET /api/webhooks/{id}/delivery-attempts</c> from the stored
+///     <c>WebhookDeliveryAttemptEntity</c> history. It is read-only: only
+///     <c>WebhookDeliveryService</c> and <c>WebhookDeliveryRetrySweepService</c> write deliveries,
+///     as they make attempts.
 /// </summary>
-/// <param name="Id">This delivery's own identifier.</param>
-/// <param name="SubscriptionId">The identifier of the subscription this delivery targets.</param>
+/// <param name="Id">The delivery's identifier.</param>
+/// <param name="SubscriptionId">The identifier of the subscription the delivery is for.</param>
 /// <param name="SubscriptionName">
-///     The subscription's own name, snapshotted at the moment this delivery was first created --
-///     so a delivery record stays meaningful even if the subscription it targeted has since been
-///     renamed or deleted.
+///     The subscription's name when the delivery was created, so the record stays meaningful if
+///     the subscription is renamed or deleted.
 /// </param>
-/// <param name="EventTypeName">The registered event type name this delivery carries (for example, <c>"DnsZoneChanged"</c>).</param>
+/// <param name="EventTypeName">The registered event type name the delivery carries (for example <c>"DnsZoneChanged"</c>).</param>
 /// <param name="PayloadJson">
-///     The exact outbound JSON request body this delivery sends (or already sent) on every
-///     attempt -- captured once, at creation time, so a retry (by the same process or a freshly
-///     restarted one) always sends byte-identical content.
+///     The JSON request body sent on every attempt. It is captured once, when the delivery is
+///     created, so a retry, even after a restart, sends the same bytes.
 /// </param>
-/// <param name="Status">Where this delivery currently stands in its own lifecycle.</param>
-/// <param name="AttemptCount">How many delivery attempts have actually been made so far.</param>
+/// <param name="Status">Where the delivery stands in its lifecycle.</param>
+/// <param name="AttemptCount">How many attempts have been made so far.</param>
 /// <param name="MaxAttempts">
-///     The maximum number of delivery attempts this delivery may ever make -- a snapshot of the
-///     target subscription's own <see cref="WebhookSubscriptionDetail.MaxDeliveryAttempts" /> at
-///     the moment this row was first created.
+///     The most attempts the delivery may make: the subscription's
+///     <see cref="WebhookSubscriptionDetail.MaxDeliveryAttempts" /> when the delivery was created.
 /// </param>
-/// <param name="LastAttemptedAtUtc">When this delivery's own most recent attempt occurred, or <see langword="null" /> if never attempted yet.</param>
+/// <param name="LastAttemptedAtUtc">When the last attempt was made, or <see langword="null" /> if none has been.</param>
 /// <param name="NextRetryDueUtc">
-///     When this delivery's own next retry attempt is due, or <see langword="null" /> once
-///     <see cref="Status" /> has reached a terminal outcome.
+///     When the next retry is due, or <see langword="null" /> once <see cref="Status" /> is final.
 /// </param>
 /// <param name="LastHttpStatusCode">
-///     The HTTP status code the subscriber's own endpoint returned on this delivery's own most
-///     recent attempt, or <see langword="null" /> if that attempt failed before a response was
-///     ever received.
+///     The HTTP status code the receiver returned to the last attempt, or <see langword="null" />
+///     if that attempt failed before a response arrived.
 /// </param>
-/// <param name="LastErrorMessage">A short, human-readable description of this delivery's own most recent failure, or <see langword="null" /> if its most recent (or only) attempt succeeded.</param>
-/// <param name="CompletedAtUtc">When this delivery reached its own terminal outcome, or <see langword="null" /> while still pending.</param>
-/// <param name="CreatedAtUtc">When this delivery was first recorded (its own first attempt).</param>
+/// <param name="LastErrorMessage">A short description of the last failure, or <see langword="null" /> if the last attempt succeeded.</param>
+/// <param name="CompletedAtUtc">When the delivery reached a final status, or <see langword="null" /> while it is pending.</param>
+/// <param name="CreatedAtUtc">When the delivery was first recorded.</param>
 public record WebhookDeliveryAttemptDetail(
     Guid Id,
     Guid SubscriptionId,

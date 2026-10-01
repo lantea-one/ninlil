@@ -4,31 +4,32 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries the fields used to create or fully replace a manual static
-///     address-to-client-identity mapping (<c>POST</c>/<c>PUT /api/client-static-address-mappings</c>).
+///     This class carries the fields used to create or fully replace a manual mapping from a
+///     source address to a client identity (<c>POST /api/client-static-address-mappings</c>,
+///     <c>PUT /api/client-static-address-mappings/{id}</c>).
 /// </summary>
 /// <param name="Cidr">
-///     The source address or network this mapping pins to <paramref name="ClientIdentifier" /> --
-///     a bare IP address (exact match only) or a <c>/</c>-qualified CIDR network (matches every
-///     address it contains). Validated against
-///     <see cref="System.Net.IPNetwork.TryParse(string, out System.Net.IPNetwork)" />/
-///     <see cref="System.Net.IPAddress.TryParse(string, out System.Net.IPAddress)" /> (whichever
-///     the value's own shape calls for), the same dual-format acceptance
-///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> itself
-///     matches a query's own source address against at resolution time.
+///     The source address or network mapped to <paramref name="ClientIdentifier" />: a bare IP
+///     address (exact match) or a CIDR network with a <c>/</c> (matches every address in it). A
+///     value with a <c>/</c> must parse with
+///     <see cref="System.Net.IPNetwork.TryParse(string, out System.Net.IPNetwork)" /> and one
+///     without with <see cref="System.Net.IPAddress.TryParse(string, out System.Net.IPAddress)" />,
+///     the same two forms
+///     <c>Ninlil.Dns.Server.ClientIdentity.StaticAddressMappingClientIdentityResolver</c> matches
+///     at query time.
 /// </param>
 /// <param name="ClientIdentifier">
-///     The persistent client identifier a query whose source address matches
-///     <paramref name="Cidr" /> resolves to -- a colon-separated hardware (MAC) address for an
-///     <see cref="InternetProtocolVersionEnum.IPv4" /> mapping, or a DHCP Unique Identifier (DUID)
-///     for an <see cref="InternetProtocolVersionEnum.IPv6" /> one.
+///     The persistent client identifier a query from <paramref name="Cidr" /> resolves to: a
+///     colon-separated MAC address for an <see cref="InternetProtocolVersionEnum.IPv4" /> mapping,
+///     or a DHCP Unique Identifier (DUID) for an <see cref="InternetProtocolVersionEnum.IPv6" />
+///     one.
 /// </param>
 /// <param name="ProtocolVersion">
-///     Which of the two disjoint identifier spaces <paramref name="ClientIdentifier" /> belongs
-///     to -- validated to actually agree with <paramref name="Cidr" />'s own real address family.
+///     Which identifier space <paramref name="ClientIdentifier" /> belongs to. It must match the
+///     address family of <paramref name="Cidr" />.
 /// </param>
-/// <param name="IsDisabled">Whether the mapping starts out (or is currently) disabled.</param>
-/// <param name="Comments">Free-text operator notes about this mapping.</param>
+/// <param name="IsDisabled">Whether the mapping is disabled.</param>
+/// <param name="Comments">Free-text operator notes about the mapping.</param>
 public record DnsClientStaticAddressMappingWriteRequest(
     string Cidr,
     string ClientIdentifier,
@@ -38,20 +39,20 @@ public record DnsClientStaticAddressMappingWriteRequest(
 );
 
 /// <summary>
-///     This class carries a single static address mapping's own fields, for list, single-item,
-///     and creation responses.
+///     This class carries a static address mapping, as returned by the list, get and write
+///     endpoints of <c>/api/client-static-address-mappings</c>.
 /// </summary>
-/// <param name="Id">This mapping's own identifier.</param>
-/// <param name="Cidr">This mapping's own source address or network, exactly as stored.</param>
-/// <param name="ClientIdentifier">The persistent client identifier this mapping resolves to.</param>
-/// <param name="ProtocolVersion">Which of the two disjoint identifier spaces <see cref="ClientIdentifier" /> belongs to.</param>
+/// <param name="Id">The mapping's identifier.</param>
+/// <param name="Cidr">The mapping's source address or network, as stored.</param>
+/// <param name="ClientIdentifier">The persistent client identifier the mapping resolves to.</param>
+/// <param name="ProtocolVersion">Which identifier space <see cref="ClientIdentifier" /> belongs to.</param>
 /// <param name="IsDisabled">
-///     Whether this mapping is currently disabled -- a disabled mapping is never consulted by
-///     <c>StaticAddressMappingClientIdentityResolver</c>.
+///     Whether the mapping is disabled. <c>StaticAddressMappingClientIdentityResolver</c> ignores
+///     a disabled mapping.
 /// </param>
-/// <param name="Comments">Free-text operator notes about this mapping.</param>
-/// <param name="CreatedAtUtc">When this mapping was created.</param>
-/// <param name="UpdatedAtUtc">When this mapping was last modified, or <see langword="null" /> if never.</param>
+/// <param name="Comments">Free-text operator notes about the mapping.</param>
+/// <param name="CreatedAtUtc">When the mapping was created.</param>
+/// <param name="UpdatedAtUtc">When the mapping was last modified, or <see langword="null" /> if never.</param>
 public record DnsClientStaticAddressMappingDetail(
     Guid Id,
     string Cidr,

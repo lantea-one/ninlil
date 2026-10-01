@@ -4,10 +4,10 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This class carries a peer node's own metadata, for list and single-item responses
-///     (<c>GET /api/cluster/nodes</c>). Its own TSIG key's shared secret is never included --
-///     <see cref="TsigKeyName" /> is a soft reference only, the same convention
-///     <c>TsigKeyDetail</c> itself follows for every other secret-bearing entity type.
+///     This class carries a peer node in this node's cluster registry, as returned by
+///     <c>GET /api/cluster/nodes</c> and <c>GET /api/cluster/nodes/{id}</c>. The shared secret of
+///     the peer's TSIG key is never included; <see cref="TsigKeyName" /> only names the key, as
+///     <c>TsigKeyDetail</c> omits its secret.
 /// </summary>
 public record ClusterNodeDetail(
     Guid Id,
@@ -27,51 +27,50 @@ public record ClusterNodeDetail(
 
 /// <summary>
 ///     This class carries the fields an operator may edit on an existing peer row
-///     (<c>PATCH /api/cluster/nodes/{id}</c>) -- only its own display name and free-form notes.
-///     Every other field (address, TSIG key, pinned certificate) is fixed by the join handshake
-///     that created the row and cannot be edited afterward; changing any of those out from under
-///     an already-trusted peer relationship would silently break it.
+///     (<c>PATCH /api/cluster/nodes/{id}</c>): only the display name and notes. The address, TSIG
+///     key and pinned certificate are set by the join handshake and cannot be edited, because
+///     changing them would break the trust between the two nodes.
 /// </summary>
-/// <param name="Name">The peer's operator-chosen display name.</param>
-/// <param name="Comments">Free-form operator notes about the peer.</param>
+/// <param name="Name">The peer's operator-chosen display name, or <see langword="null" /> to keep it.</param>
+/// <param name="Comments">Free-form operator notes about the peer, or <see langword="null" /> to keep them.</param>
 public record ClusterNodeWriteRequest(string Name = null, string Comments = null);
 
 /// <summary>
-///     This class carries a freshly created invite's own opaque code and expiry
-///     (<c>POST /api/cluster/nodes/invite</c>). The code itself is this project's one deliberate
-///     exception to its usual "never return a secret except at creation time, and never as plain
-///     text" posture beyond that single reveal -- see <c>ClusterInviteCode</c>'s own doc comment.
+///     This class carries a new invite's opaque code and expiry
+///     (<c>POST /api/cluster/nodes/invite</c>). The code contains the cluster's shared TSIG secret
+///     in plaintext; this response is the one place that secret is revealed (see
+///     <c>ClusterInviteCode</c>).
 /// </summary>
-/// <param name="InviteCode">The opaque code to hand to the joining node's own operator.</param>
-/// <param name="ExpiresAtUtc">The UTC moment after which this code can no longer be consumed.</param>
+/// <param name="InviteCode">The opaque code to hand to the operator of the joining node.</param>
+/// <param name="ExpiresAtUtc">The UTC moment after which the code can no longer be used.</param>
 public record ClusterInviteCreateResponse(string InviteCode, DateTimeOffset ExpiresAtUtc);
 
 /// <summary>
 ///     This class carries the fields used to consume an invite code and join a cluster
 ///     (<c>POST /api/cluster/nodes/join</c>).
 /// </summary>
-/// <param name="InviteCode">The opaque code copied from the inviting node's own Angular "Cluster" page.</param>
+/// <param name="InviteCode">The opaque code copied from the Cluster page of the inviting node.</param>
 /// <param name="DisplayName">
-///     An optional display name for the inviter's own new row in this node's registry --
-///     falls back to a name derived from the inviter's node identifier when omitted.
+///     An optional display name for the inviter's new row in this node's registry. When omitted,
+///     a name derived from the inviter's node identifier is used.
 /// </param>
 public record ClusterJoinRequest(string InviteCode, string DisplayName = null);
 
 /// <summary>
-///     This class carries one node's own aggregate query-stats row for the cluster dashboard
-///     (<c>GET /api/cluster/nodes/stats</c>) -- either this node itself
-///     (<see cref="IsSelf" /> <see langword="true" />, always <see cref="Reachable" />) or one
-///     known peer, reported unreachable rather than omitted when its own live snapshot could not
-///     be collected. See <see cref="Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator" />'s
-///     own doc comment for why an unreachable peer is never simply left out of the list.
+///     This class carries one node's query statistics for the cluster dashboard
+///     (<c>GET /api/cluster/nodes/stats</c>). A row is either the answering node
+///     (<see cref="IsSelf" /> is <see langword="true" /> and it is always <see cref="Reachable" />)
+///     or a known peer. A peer whose snapshot could not be collected is reported unreachable
+///     rather than left out (see
+///     <see cref="Ninlil.Dns.Server.Core.ClusterSync.IClusterQueryStatsAggregator" />).
 /// </summary>
 /// <param name="ClusterNodeRegistryId">
-///     This node's own local registry row id for the peer, or <see langword="null" /> for
-///     <see cref="IsSelf" />'s own row (this node has no registry entry for itself).
+///     The id of the peer's row in this node's registry, or <see langword="null" /> for the
+///     answering node, which has no row for itself.
 /// </param>
-/// <param name="NodeName">The node's own display name.</param>
-/// <param name="IsSelf">Whether this row describes the node answering the request itself.</param>
-/// <param name="Reachable">Whether a live snapshot was actually collected for this row.</param>
+/// <param name="NodeName">The node's display name.</param>
+/// <param name="IsSelf">Whether this row describes the node answering the request.</param>
+/// <param name="Reachable">Whether a live snapshot was collected for this row.</param>
 /// <param name="QueriesLastHour">How many queries this node logged in the last hour, or <see langword="null" /> when unreachable.</param>
 /// <param name="QueriesLast24Hours">How many queries this node logged in the last 24 hours, or <see langword="null" /> when unreachable.</param>
 /// <param name="TotalRetainedQueries">How many query-log rows this node currently retains, or <see langword="null" /> when unreachable.</param>

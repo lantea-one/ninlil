@@ -4,37 +4,34 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>AppearanceOptions</c> -- the global default palette and light/dark mode every signed-in
-///     user's own preference inherits when they have not set an override of their own.
+///     This record is the REST shape of the server-wide default appearance
+///     (<c>AppearanceOptions</c>) that <c>GET /api/appearance-settings</c> returns: the palette and
+///     light/dark mode a signed-in user gets when they have not chosen their own.
 /// </summary>
-/// <param name="Palette">This host's own global default color palette.</param>
-/// <param name="Mode">This host's own global default light/dark mode.</param>
+/// <param name="Palette">The default color palette.</param>
+/// <param name="Mode">The default light/dark mode.</param>
 public record AppearanceSettingsDetail(UiThemePaletteEnum Palette, UiThemeModeEnum Mode);
 
 /// <summary>
-///     This record is the REST representation of the current caller's own appearance preference:
-///     their own override, if any, alongside the effective value the Angular admin SPA's own
-///     theming engine should actually render, after falling back to this host's own global default
-///     for whichever field (if either) is not overridden.
+///     This record is the caller's appearance preference, returned by
+///     <c>GET /api/appearance-settings/me</c>: their override for each field, if any, and the
+///     value the admin console should render after falling back to the server-wide default.
 /// </summary>
 /// <param name="Palette">
-///     The caller's own palette override, or <see langword="null" /> if they have never set one
-///     (in which case <paramref name="EffectivePalette" /> is this host's own global default).
+///     The caller's palette override, or <see langword="null" /> if they have not set one (then
+///     <paramref name="EffectivePalette" /> is the server-wide default).
 /// </param>
 /// <param name="Mode">
-///     The caller's own mode override, or <see langword="null" /> if they have never set one (in
-///     which case <paramref name="EffectiveMode" /> is this host's own global default).
+///     The caller's mode override, or <see langword="null" /> if they have not set one (then
+///     <paramref name="EffectiveMode" /> is the server-wide default).
 /// </param>
 /// <param name="EffectivePalette">
-///     The palette the Angular admin SPA's own theming engine should actually render for this
-///     caller right now -- <paramref name="Palette" /> if set, otherwise this host's own current
-///     global default.
+///     The palette the admin console should render for the caller: <paramref name="Palette" /> if
+///     set, otherwise the server-wide default.
 /// </param>
 /// <param name="EffectiveMode">
-///     The mode the Angular admin SPA's own theming engine should actually render for this caller
-///     right now -- <paramref name="Mode" /> if set, otherwise this host's own current global
-///     default.
+///     The mode the admin console should render for the caller: <paramref name="Mode" /> if set,
+///     otherwise the server-wide default.
 /// </param>
 public record UserAppearancePreferenceDetail(
     UiThemePaletteEnum? Palette,

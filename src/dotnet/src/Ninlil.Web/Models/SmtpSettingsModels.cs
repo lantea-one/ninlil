@@ -2,22 +2,21 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>EmailSenderOptions</c> -- the SMTP server this host sends e-mail through (most notably,
-///     e-mail-based two-factor authentication codes; a future self-service Forgot Password flow
-///     will reuse the same infrastructure).
+///     This record is the SMTP settings (<c>EmailSenderOptions</c>) that
+///     <c>GET /api/smtp-settings</c> returns: the server e-mail is sent through, for two-factor
+///     codes and password reset links. A <c>PATCH</c> accepts these fields with <c>password</c>
+///     in place of <see cref="PasswordConfigured" />.
 /// </summary>
 /// <param name="SmtpHost">The SMTP server's host name.</param>
-/// <param name="SmtpPort">The SMTP server's port.</param>
-/// <param name="UseTls">Whether the connection to the SMTP server is secured with TLS.</param>
-/// <param name="Username">The username authenticated to the SMTP server with, or empty if it accepts anonymous connections.</param>
+/// <param name="SmtpPort">The SMTP server's port. Defaults to 587.</param>
+/// <param name="UseTls">Whether the connection to the SMTP server uses TLS. Defaults to <see langword="true" />.</param>
+/// <param name="Username">The username to authenticate with, or empty if the server accepts anonymous connections.</param>
 /// <param name="PasswordConfigured">
-///     Whether <c>EmailSenderOptions.Password</c> currently has a value -- the password itself is
-///     never returned by a <c>GET</c>, the same reveal-once posture every other secret-bearing
-///     setting in this project already follows.
+///     Whether <c>EmailSenderOptions.Password</c> has a value. The password itself is never
+///     returned, as with every other secret.
 /// </param>
 /// <param name="FromAddress">The e-mail address messages are sent from.</param>
-/// <param name="FromDisplayName">The display name messages are sent from.</param>
+/// <param name="FromDisplayName">The display name messages are sent from. Defaults to "Ninlil".</param>
 public record SmtpSettingsDetail(
     string SmtpHost,
     int SmtpPort,

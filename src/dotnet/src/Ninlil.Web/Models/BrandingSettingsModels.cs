@@ -2,30 +2,29 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective branding
-///     configuration -- <c>BrandingOptions</c>'s own site title/logo, alongside the already-
-///     existing <c>AuthoritativeServerOptions</c> fields that drive the real CHAOS-class
-///     <c>version.bind</c>/<c>hostname.bind</c> TXT query answers, exposed here on the same
-///     settings surface rather than a separate one.
+///     This record is the branding that <c>GET /api/branding-settings</c> returns: the site title
+///     and logo from <c>BrandingOptions</c>, plus the <c>AuthoritativeServerOptions</c> fields that
+///     answer the CHAOS-class <c>version.bind</c> and <c>hostname.bind</c> TXT queries. Both live
+///     on one settings page because both decide how the server presents itself.
 /// </summary>
 /// <param name="SiteTitle">
-///     This host's own custom browser-tab/page title, or <see langword="null" /> when unset (in
-///     which case the Angular admin SPA keeps its own compiled-in default title).
+///     The custom browser-tab and page title, or <see langword="null" /> when unset (the admin
+///     console then keeps its built-in title).
 /// </param>
 /// <param name="LogoDataUri">
-///     This host's own custom logo, as a complete data URI, or <see langword="null" /> when no
-///     custom logo has been uploaded.
+///     The custom logo as a complete data URI, or <see langword="null" /> when none has been
+///     uploaded.
 /// </param>
 /// <param name="HostnameString">
-///     The value this server answers a <c>hostname.bind</c>/<c>id.server</c> CHAOS query with,
+///     The value the server answers a <c>hostname.bind</c> or <c>id.server</c> CHAOS query with,
 ///     when <paramref name="EnableChaosVersionQueries" /> is enabled.
 /// </param>
 /// <param name="VersionString">
-///     The value this server answers a <c>version.bind</c>/<c>version.server</c> CHAOS query
+///     The value the server answers a <c>version.bind</c> or <c>version.server</c> CHAOS query
 ///     with, when <paramref name="EnableChaosVersionQueries" /> is enabled.
 /// </param>
 /// <param name="EnableChaosVersionQueries">
-///     Whether this server answers the traditional CHAOS-class fingerprinting queries at all.
+///     Whether the server answers these CHAOS-class identification queries at all.
 /// </param>
 public record BrandingSettingsDetail(
     string SiteTitle,
@@ -36,14 +35,12 @@ public record BrandingSettingsDetail(
 );
 
 /// <summary>
-///     This record is the REST representation of the small, non-sensitive slice of this host's
-///     own branding an authenticated caller may read with no specific permission at all --
-///     mirroring <c>AppearanceSettingsController.GetMine</c>'s own "self-service, no permission
-///     needed" bar. Knowing the site's own configured title/logo carries no confidentiality
-///     concern the way editing it (or reading the CHAOS-query fingerprinting fields, which stay
-///     behind <c>branding:read</c>) would -- every signed-in session, regardless of role, needs
-///     this to render the SPA's own page title/branding correctly.
+///     This record is the part of the branding any signed-in caller may read, with no specific
+///     permission, from <c>GET /api/branding-settings/effective</c> (the same bar as
+///     <c>AppearanceSettingsController.GetMine</c>). Every session needs the title and logo to
+///     render the admin console, and they are not sensitive. The CHAOS-query fields stay behind
+///     <c>branding:read</c>.
 /// </summary>
-/// <param name="SiteTitle">This host's own custom browser-tab/page title, or <see langword="null" />.</param>
-/// <param name="LogoDataUri">This host's own custom logo, as a complete data URI, or <see langword="null" />.</param>
+/// <param name="SiteTitle">The custom browser-tab and page title, or <see langword="null" /> when unset.</param>
+/// <param name="LogoDataUri">The custom logo as a complete data URI, or <see langword="null" /> when unset.</param>
 public record BrandingEffectiveDetail(string SiteTitle, string LogoDataUri);

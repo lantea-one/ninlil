@@ -4,21 +4,19 @@ using Ninlil.Dns.Server.Core.Services;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of one <see cref="IManagedServiceRegistration" /> --
-///     a DNS transport listener or background maintenance loop this server runs, and whether it
-///     is genuinely running right now.
+///     This record describes one <see cref="IManagedServiceRegistration" />, as listed by
+///     <c>GET /api/services</c>: a DNS transport listener or background maintenance loop, and
+///     whether it is running.
 /// </summary>
 /// <param name="Name">
-///     This service's own stable, operator-facing name -- the exact value a
-///     <c>POST /api/services/{name}/start</c>-shaped action's own route parameter addresses it by.
+///     The service's stable name, used as <c>{name}</c> in <c>POST /api/services/{name}/start</c>
+///     and the other control actions.
 /// </param>
-/// <param name="Category">Which of the two groups this service belongs to.</param>
+/// <param name="Category">Which of the two groups (transport listener or background service) the service belongs to.</param>
 /// <param name="IsRunning">
-///     Whether this service is genuinely running right now -- see
-///     <see cref="IManagedServiceRegistration.IsRunning" />'s own doc comment for exactly what
-///     that means for a given service (a real, independently-observed signal for every DNS
-///     transport listener; "has start been called more recently than stop" for a background
-///     maintenance loop with no richer signal of its own).
+///     Whether the service is running. For a DNS transport listener this is observed from the
+///     listener; for a maintenance loop with no such signal, it means start was called more
+///     recently than stop (see <see cref="IManagedServiceRegistration.IsRunning" />).
 /// </param>
 public record ManagedServiceSummary(
     string Name,

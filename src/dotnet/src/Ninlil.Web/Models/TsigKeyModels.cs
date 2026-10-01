@@ -5,15 +5,15 @@ namespace Ninlil.Web.Models;
 ///     This class carries the fields used to create a new TSIG key
 ///     (<c>POST /api/tsig-keys</c>).
 /// </summary>
-/// <param name="Name">The key's name, matched against a signed message's own key name.</param>
+/// <param name="Name">The key's name, matched against the key name in a signed message.</param>
 /// <param name="AlgorithmName">
-///     The key's MAC algorithm. Ninlil implements only HMAC-SHA256; omitted or left blank,
-///     this defaults to that algorithm.
+///     The key's MAC algorithm. Only HMAC-SHA256 (<c>hmac-sha256</c>) is implemented, and it is
+///     used when this is omitted or blank.
 /// </param>
 /// <param name="Secret">
-///     The key's own shared secret, base64-encoded. When omitted, a cryptographically random
-///     32-byte secret is generated instead -- either way, the plaintext secret is only ever
-///     shown once, in this endpoint's own response; every later request for this key omits it.
+///     The shared secret, base64-encoded. When omitted, a random 32-byte secret is generated.
+///     Either way the plaintext secret is shown once, in this endpoint's response, and never
+///     again.
 /// </param>
 /// <param name="IsDisabled">Whether the key starts out disabled.</param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
@@ -27,14 +27,13 @@ public record TsigKeyCreateRequest(
 
 /// <summary>
 ///     This class carries the fields used to fully replace an existing TSIG key's metadata
-///     (<c>PUT /api/tsig-keys/{id}</c>). The key's own shared secret cannot be rotated this way --
-///     delete and recreate the key instead -- since the reveal-once-on-creation exposure policy
-///     has no later point at which a rotated secret could be shown again through a <c>PUT</c>'s
-///     own no-body <c>204</c> response.
+///     (<c>PUT /api/tsig-keys/{id}</c>). The shared secret cannot be changed this way: a secret is
+///     shown only when a key is created, and a <c>PUT</c> answers <c>204</c> with no body. To
+///     rotate the secret, delete the key and create it again.
 /// </summary>
 /// <param name="Name">The key's name.</param>
-/// <param name="AlgorithmName">The key's MAC algorithm.</param>
-/// <param name="IsDisabled">Whether the key is currently disabled.</param>
+/// <param name="AlgorithmName">The key's MAC algorithm; required here, and only <c>hmac-sha256</c> is accepted.</param>
+/// <param name="IsDisabled">Whether the key is disabled.</param>
 /// <param name="Comments">Free-form operator notes about the key.</param>
 public record TsigKeyWriteRequest(
     string Name,
@@ -44,10 +43,9 @@ public record TsigKeyWriteRequest(
 );
 
 /// <summary>
-///     This class carries a TSIG key's own metadata, for list, single-item, and (nested inside
-///     <see cref="TsigKeyCreateResponse" />) creation responses. The key's own shared secret is
-///     never included here -- see <see cref="TsigKeyCreateResponse" /> for the one place it ever
-///     appears.
+///     This class carries a TSIG key without its secret, as returned by the list and get
+///     endpoints and nested in <see cref="TsigKeyCreateResponse" />, the one response that
+///     includes the secret.
 /// </summary>
 public record TsigKeyDetail(
     Guid Id,
@@ -60,10 +58,10 @@ public record TsigKeyDetail(
 );
 
 /// <summary>
-///     This class carries a newly created TSIG key's own metadata alongside its plaintext shared
-///     secret -- the only response that will ever include <see cref="Secret" />, per this
-///     project's reveal-once-then-omitted exposure policy for every secret-bearing entity type.
+///     This class carries a newly created TSIG key with its plaintext shared secret. It is the
+///     only response that includes <see cref="Secret" />: like every secret-bearing entity, a
+///     secret is revealed once at creation and omitted afterwards.
 /// </summary>
-/// <param name="Key">The newly created key's own metadata.</param>
+/// <param name="Key">The new key, without its secret.</param>
 /// <param name="Secret">The key's shared secret, base64-encoded.</param>
 public record TsigKeyCreateResponse(TsigKeyDetail Key, string Secret);

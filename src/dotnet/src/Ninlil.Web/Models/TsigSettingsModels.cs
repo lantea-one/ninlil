@@ -2,11 +2,13 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST representation of this host's own currently-effective
-///     <c>TsigServiceOptions</c> -- the clock-skew tolerance written into every message this
-///     server signs. Exposed as a plain <see cref="int" /> even though the underlying options
-///     property is a <see cref="ushort" />, since JSON has no unsigned 16-bit numeric type; a
-///     <c>PATCH</c> to the same endpoint rejects anything outside 0-65535. This record's own field
-///     is the exact same one a <c>PATCH</c> to the same endpoint accepts.
+///     This record is the TSIG settings (<c>TsigServiceOptions</c>) that
+///     <c>GET /api/tsig-settings</c> returns: the clock skew tolerance (fudge) written into every
+///     message the server signs. A <c>PATCH</c> to the same endpoint accepts the same field.
 /// </summary>
+/// <param name="DefaultFudgeSeconds">
+///     The fudge, in seconds. The options property is a <see cref="ushort" />, but it is shown as
+///     an <see cref="int" /> because JSON has no unsigned 16-bit type; a <c>PATCH</c> rejects
+///     values outside 0 to 65535.
+/// </param>
 public record TsigSettingsDetail(int DefaultFudgeSeconds);

@@ -2,14 +2,14 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record tells an anonymous caller (the Angular admin SPA's own login page, before any
-///     sign-in has happened) whether this host currently has a working OpenID Connect federation
-///     scheme to challenge against, and what to label the button that starts it.
+///     This record tells an anonymous caller, the admin console's login page before anyone signs
+///     in, whether single sign-on through OpenID Connect is available and how to label its button
+///     (<c>GET /api/auth/sso</c>).
 /// </summary>
 /// <param name="Enabled">
-///     Whether the OpenID Connect authentication scheme is actually registered on this running
-///     process right now -- see <see cref="Controllers.SsoController.Get" />'s own doc comment for
-///     why this is not simply <c>OidcSsoOptions.Enable</c>'s own raw value.
+///     Whether the OpenID Connect authentication scheme is registered in the running process.
+///     This can differ from <c>OidcSsoOptions.Enable</c> until a restart (see
+///     <see cref="Controllers.SsoController.Get" />).
 /// </param>
-/// <param name="DisplayName">The label to render on the "Sign in with SSO" button.</param>
+/// <param name="DisplayName">The label for the single sign-on button.</param>
 public record SsoStatusResult(bool Enabled, string DisplayName);
