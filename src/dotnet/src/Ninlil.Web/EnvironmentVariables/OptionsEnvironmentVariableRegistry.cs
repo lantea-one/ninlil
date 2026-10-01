@@ -52,44 +52,31 @@ using Ninlil.Web.Startup;
 namespace Ninlil.Web.EnvironmentVariables;
 
 /// <summary>
-///     This static class is the single, explicit, hand-maintained list of every real,
-///     top-level bound configuration class this whole application registers -- the "which types
-///     exist" half of this project's own NINLIL_ environment-variable mapping generator (the "how
-///     to name each one's own properties" half is reflected automatically, once, by
-///     <see cref="OptionsEnvironmentVariableMap" />).
+///     This static class is the hand-maintained list of the top-level bound configuration
+///     classes, the "which types exist" half of the <c>NINLIL_</c> environment variable mapping.
+///     <see cref="OptionsEnvironmentVariableMap" /> reflects over each type for the other half,
+///     the variable name of every property.
 ///     <para>
-///         <b>Deliberately an explicit registry, not assembly-scanning</b>: this project's own
-///         single combined host (<c>Ninlil.Web</c>) already references every project a bound
-///         configuration class could possibly live in, so scanning every loaded assembly for a
-///         <c>*Options</c>-named type with a public <c>SectionName</c> constant was a real
-///         alternative -- but which assemblies are actually *loaded* (as opposed to merely
-///         referenced) at any given point in <c>Program.cs</c>'s own top-level statements depends
-///         on exactly which types earlier code has already touched, an order-of-execution detail
-///         that would make "did assembly-scanning actually find everything" a fragile question to
-///         answer with confidence. An explicit list is exactly as reliable as this project's own
-///         already-established convention of one hand-written <c>Configure&lt;TOptions&gt;</c> call
-///         per bound class in each project's own <c>ServiceCollectionXyzExtension</c> -- adding a
-///         new bound configuration class already means adding one line there; this registry asks
-///         for exactly one more line in the same spirit, not a new maintenance burden shape.
+///         <b>Why a list rather than assembly scanning.</b> <c>Ninlil.Web</c> references every
+///         project an options class can live in, but which assemblies are loaded at a given point
+///         in <c>Program.cs</c> depends on which types earlier code has touched, so a scan could
+///         silently miss one. An explicit list is as reliable as the one
+///         <c>Configure&lt;TOptions&gt;</c> call each options class already has in its project's
+///         <c>ServiceCollection...Extension</c>.
 ///     </para>
 ///     <para>
-///         Keep this list in sync with reality the same way every other cross-cutting registry in
-///         this project already is kept in sync: when a new <c>Options</c>-bound class is added
-///         anywhere in this solution (and wired into DI via its own project's
-///         <c>ServiceCollectionXyzExtension</c>), add its own <see cref="Type" /> here too, in the
-///         same pull request.
+///         When an options class is added, add its <see cref="Type" /> here in the same change.
+///         <c>Dhcpv6RelayOptions</c> is missing at present.
 ///     </para>
 /// </summary>
 public static class OptionsEnvironmentVariableRegistry
 {
     /// <summary>
-    ///     This property lists every real, top-level bound configuration class in the application,
-    ///     as of this writing, each one's own configuration section path read directly from its
-    ///     own public <c>SectionName</c> constant via reflection -- except
-    ///     <see cref="IdentityOptions" /> (ASP.NET Core Identity's own built-in type), which has no
-    ///     <c>SectionName</c> constant of its own and is bound instead at
+    ///     This property lists the top-level bound configuration classes. Each section path is
+    ///     read by reflection from the class's public <c>SectionName</c> constant, except for
+    ///     ASP.NET Core Identity's <see cref="IdentityOptions" />, which has none and is bound at
     ///     <see cref="ServiceCollectionIdentityExtension.IdentityOptionsSectionName" />, passed
-    ///     here as an explicit override.
+    ///     here explicitly.
     /// </summary>
     public static IReadOnlyList<OptionsEnvironmentVariableRoot> Roots { get; } =
     [
@@ -150,21 +137,20 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(BackupOptions)),
         new(typeof(SelfUpdateOptions)),
         new(typeof(ClusterOptions)),
-        // DHCP server engine + DHCPv4/DHCPv6 transports (Ninlil.Dhcp.Server.Core /
-        // .Protocol.Dhcpv4 / .Protocol.Dhcpv6), plus the mutually exclusive DHCPv4 relay-agent
-        // engine (Ninlil.Dhcp.Server.Relay) -- DHCPv6 has no relay-agent counterpart yet.
+        // DHCP engine and DHCPv4/DHCPv6 transports (Ninlil.Dhcp.Server.Core, .Protocol.Dhcpv4,
+        // .Protocol.Dhcpv6), the DHCPv4 relay agent (Ninlil.Dhcp.Server.Relay) and the TFTP
+        // server. Dhcpv6RelayOptions, in the same relay project, is not listed.
         new(typeof(DhcpServerOptions)),
         new(typeof(Dhcpv4ProtocolOptions)),
         new(typeof(Dhcpv6ProtocolOptions)),
         new(typeof(Dhcpv4RelayOptions)),
         new(typeof(TftpServerOptions)),
-        // Router Advertisement content (Ninlil.Dhcp.Server.Ra) + its own raw ICMPv6 transport
-        // timing (Ninlil.Dhcp.Protocol.Ra) -- no per-client lease state and no relay-agent
-        // counterpart at all, unlike DHCPv4/DHCPv6.
+        // Router Advertisement content (Ninlil.Dhcp.Server.Ra) and its ICMPv6 transport timing
+        // (Ninlil.Dhcp.Protocol.Ra).
         new(typeof(RaOptions)),
         new(typeof(RaProtocolOptions)),
-        // The web host itself (Ninlil.Web) -- Kestrel listen options, reverse proxy trust,
-        // appearance/branding, and the runtime-settings-file path.
+        // The web host (Ninlil.Web): Kestrel listening, reverse proxy trust, appearance,
+        // branding and the runtime settings file path.
         new(typeof(WebListenOptions)),
         new(typeof(ReverseProxyOptions)),
         new(typeof(AppearanceOptions)),
@@ -173,12 +159,12 @@ public static class OptionsEnvironmentVariableRegistry
     ];
 
     /// <summary>
-    ///     This property lists every real configuration path read directly by string key (via
-    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" />'s own indexer) rather
-    ///     than through a bound <c>Options</c> class -- see
-    ///     <see cref="OptionsEnvironmentVariableMap.BuildMappings" />'s own
-    ///     <c>standaloneConfigurationPaths</c> parameter doc comment for why these two exist as a
-    ///     deliberate exception to "every real setting is a bound Options class."
+    ///     This property lists the configuration paths read by key through the
+    ///     <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> indexer rather than an
+    ///     options class: the two bootstrap administrator settings. The
+    ///     <c>standaloneConfigurationPaths</c> parameter of
+    ///     <see cref="OptionsEnvironmentVariableMap.BuildMappings" /> explains why they are an
+    ///     exception.
     /// </summary>
     public static IReadOnlyList<string> StandaloneConfigurationPaths { get; } =
     [

@@ -4,25 +4,24 @@ using System.Security.Cryptography;
 namespace Ninlil.Web.Services;
 
 /// <summary>
-///     This class generates a strong, random password guaranteed to satisfy this project's own
-///     configured password-complexity policy. Originally written inline inside
-///     <c>AdministratorBootstrapper</c> for the bootstrap-administrator account's own initial
-///     password; extracted here so the admin-driven "auto-generate and reveal once" password-reset
-///     delivery mode (see <c>UsersController.ResetPassword</c>) can reuse the exact same, already-
-///     proven generation logic instead of duplicating it.
+///     This class generates a strong random password for the bootstrap administrator
+///     (<c>AdministratorBootstrapper</c>) and for the <c>AutoGenerate</c> mode of an
+///     administrator's password reset (<c>UsersController.ResetPassword</c>). The password meets
+///     the default password policy; a policy raised past 24 characters through the identity
+///     settings would reject it.
 /// </summary>
 public static class PasswordGenerator
 {
     /// <summary>
-    ///     This method generates a new, random, 24-character password.
+    ///     This method generates a random 24-character password with at least one uppercase
+    ///     letter, lowercase letter, digit and symbol. Look-alike characters (I, l, O, 0, 1) are
+    ///     left out.
     /// </summary>
     public static string GenerateStrongRandomPassword()
     {
-        // Built explicitly from four character classes, one guaranteed character from each, so
-        // this deterministically satisfies this project's own configured password policy
-        // (12+ characters, upper/lower/digit/non-alphanumeric) -- a plain random byte sequence
-        // (base64 or otherwise) has a real, non-negligible chance of never producing a
-        // non-alphanumeric character at all, which would fail that policy silently.
+        // One character from each of the four classes is placed first so the default policy (12+
+        // characters, upper, lower, digit, symbol) is always met; plain random bytes, base64 or
+        // otherwise, can miss a class.
         const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
         const string lower = "abcdefghijkmnopqrstuvwxyz";
         const string digits = "23456789";

@@ -11,15 +11,18 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.ClusterSync;
 
 /// <summary>
-///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for a settings
-///     section -- deliberately <b>not</b> placed in <c>Ninlil.Dns.Server.ClusterSync</c> alongside
-///     the entity-row appliers built on <c>ClusterConfigSyncApplierBase&lt;TEntity&gt;</c>, since
-///     applying a settings write needs <see cref="RuntimeConfigurationOptions" />, which only this
-///     project (<c>Ninlil.Web</c>) declares. Registered directly in <c>Program.cs</c>, not
-///     through that project's own <c>AddNinlilDnsServerClusterSync</c> extension.
+///     This class is the receiving side of cluster sync for settings sections, the
+///     <see cref="IClusterConfigSyncApplier" /> that applies what
+///     <see cref="ClusterConfigSyncSettingsRecorder" /> sends. When the incoming write is newer
+///     than the local one, it merges the values into the runtime configuration file and records
+///     the new last-write-wins state. It lives here rather than in
+///     <c>Ninlil.Dns.Server.ClusterSync</c> with the entity-row appliers built on
+///     <c>ClusterConfigSyncApplierBase&lt;TEntity&gt;</c> because it needs
+///     <see cref="RuntimeConfigurationOptions" />, which only <c>Ninlil.Web</c> declares, so it is
+///     registered in <c>Program.cs</c> rather than by <c>AddNinlilDnsServerClusterSync</c>.
 /// </summary>
-/// <param name="stateRepository">The repository this class reads and writes a section's own sync state through.</param>
-/// <param name="unitOfWork">The unit of work the state write is committed through.</param>
+/// <param name="stateRepository">Reads and writes the sync state of a section.</param>
+/// <param name="unitOfWork">Commits the state write.</param>
 /// <param name="runtimeConfigurationOptions">The JSON configuration file an incoming write is merged into.</param>
 /// <param name="logger">The logger a malformed envelope is recorded to.</param>
 public class SettingsClusterConfigSyncApplier(
@@ -38,10 +41,8 @@ public class SettingsClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // A settings envelope's own EntityKey carries the section's stable name (for example
-        // "EventBroker"), not a GUID -- unlike the entity-row appliers built on
-        // ClusterConfigSyncApplierBase<TEntity>, so this section's own local sync-state row is
-        // looked up by that name directly.
+        // A settings envelope's EntityKey is the section name (for example "DnsServer:Cookies"),
+        // not a GUID as for entity rows, so the local state row is looked up by name.
         string sectionName = envelope.EntityKey;
 
         ClusterSyncedSettingsStateEntity state = await stateRepository.FindBySectionNameAsync(
@@ -49,17 +50,15 @@ public class SettingsClusterConfigSyncApplier(
             stoppingToken
         );
 
-        // A section never synced to this node before has no local state row at all -- treat it as
-        // "as old as possible" so any real incoming write always wins the comparison below, the
-        // same first-write bootstrap ClusterConfigSyncApplierBase<TEntity>'s own local-is-null
-        // case handles for an entity row.
+        // A section with no local state row has never been written here, so it counts as as old
+        // as possible and any incoming write wins, as for a missing entity row in
+        // ClusterConfigSyncApplierBase<TEntity>.
         DateTimeOffset localLastModifiedUtc =
             state?.GetLastModifiedUtc() ?? DateTimeOffset.MinValue;
 
-        // Only overwrite this node's own runtime configuration file if the incoming change is
-        // genuinely newer (or wins the deterministic tie-break) -- a stale or duplicate envelope
-        // (arrived out of order, or re-delivered) is silently discarded, mirroring
-        // ClusterConfigSyncApplierBase<TEntity>.ApplyAsync's own already-tracked-entity branch.
+        // Only a newer write (or the winner of the deterministic tie-break) overwrites the file.
+        // A stale or duplicate envelope, delivered out of order or twice, is dropped, as in
+        // ClusterConfigSyncApplierBase<TEntity>.ApplyAsync.
         bool incomingWins = ClusterSyncConflictResolver.IncomingWins(
             localLastModifiedUtc,
             state?.OriginatingNodeId,
@@ -70,10 +69,9 @@ public class SettingsClusterConfigSyncApplier(
         if (!incomingWins)
             return;
 
-        // The envelope's own PayloadJson is peer-supplied data, not something this node produced
-        // itself -- a malformed body (a mismatched schema version, a peer running older code) is
-        // logged and dropped rather than allowed to throw out of this applier and break the
-        // config-sync subscriber's own processing of every other pending envelope.
+        // PayloadJson comes from a peer. A malformed body (a different schema, a peer on older
+        // code) is logged and dropped rather than thrown, which would stop the config-sync
+        // subscriber from processing the envelopes after it.
         List<SettingsSyncEntry> entries;
         try
         {
@@ -91,9 +89,9 @@ public class SettingsClusterConfigSyncApplier(
             return;
         }
 
-        // Convert each wire-safe SettingsSyncEntry back into the PresetConfigurationSetting shape
-        // PresetConfigurationFileApplier actually understands (see SettingsSyncEntry's own doc
-        // comment for why the wire shape itself is not that type directly).
+        // Turn each SettingsSyncEntry back into the PresetConfigurationSetting that
+        // PresetConfigurationFileApplier takes (see SettingsSyncEntry for why the wire shape
+        // differs).
         List<PresetConfigurationSetting> settings =
         [
             .. entries.Select(entry => new PresetConfigurationSetting(
@@ -103,18 +101,17 @@ public class SettingsClusterConfigSyncApplier(
             )),
         ];
 
-        // Merge the incoming values into this node's own runtime configuration file -- the same
-        // atomic read-then-merge-then-write path every settings controller already uses locally,
-        // so a cluster-propagated write and an operator's own direct write go through identical
-        // file-safety guarantees.
+        // Merge the values into the runtime configuration file through the same atomic
+        // read-merge-write path the settings controllers use, so a synced write and a local one
+        // get the same file safety.
         await PresetConfigurationFileApplier.ApplyAsync(
             settings,
             runtimeConfigurationOptions.ConfigurationFilePath
         );
 
-        // Record this section's own new last-write-wins bookkeeping, stamped with the envelope's
-        // own originating node id (never this node's own id) so a later write from a third node
-        // compares against who actually authored the value currently on disk.
+        // Record the new last-write-wins state with the envelope's origin node, not this node, so
+        // a later write from a third node is compared against the node that wrote the value now
+        // on disk.
         if (state is null)
         {
             state = new ClusterSyncedSettingsStateEntity

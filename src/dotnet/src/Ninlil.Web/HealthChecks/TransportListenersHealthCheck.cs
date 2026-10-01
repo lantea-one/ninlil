@@ -12,32 +12,30 @@ using Ninlil.Dns.Server.DnsCrypt;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "each enabled transport is actually listening"
-///     health check -- Plain/DoT/DoQ/DnsCrypt sockets are genuinely bound and accepting, not
-///     merely configured with <c>Enable: true</c> in <c>appsettings.json</c>. A transport that is
-///     disabled entirely is simply omitted from this check's own description, not reported as
-///     unhealthy.
+///     This class implements the <c>transports</c> health check of <c>GET /status</c>: whether
+///     each enabled DNS transport has its sockets bound, not just <c>Enable: true</c> in the
+///     configuration. A transport that is not enabled is left out rather than reported as
+///     unhealthy. The <c>Enable</c> flags come from the settings loaded at startup, so a
+///     transport turned on or off since then through <c>TransportSettingsController</c> is judged
+///     by its startup setting.
 ///     <para>
-///         Every real socket-based listener (<see cref="UdpDnsListener" />, <see cref="TcpDnsListener" />,
+///         Each socket listener (<see cref="UdpDnsListener" />, <see cref="TcpDnsListener" />,
 ///         <see cref="DnsOverTlsListener" />, <see cref="DnsOverQuicListener" />,
-///         <see cref="DnsCryptUdpListener" />, <see cref="DnsCryptTcpListener" />) exposes a real
-///         <c>IsListening</c> property specifically for this check to consult -- the one place
-///         each listener's own "am I bound and running" signal is surfaced. DNS-over-HTTPS is
-///         deliberately different -- it is mapped directly onto this same host's own shared
-///         Kestrel instance (see <c>MapNinlilDnsOverHttps</c>), so its own liveness signal is
-///         simply <see cref="DnsOverHttpsOptions.Enable" /> itself: as long as this very endpoint
-///         answered the request that reached this check, Kestrel is already listening.
+///         <see cref="DnsCryptUdpListener" />, <see cref="DnsCryptTcpListener" />) reports
+///         <c>IsListening</c>, which this check reads. DNS-over-HTTPS has no socket of its own; it
+///         is mapped onto the shared Kestrel listener (see <c>MapNinlilDnsOverHttps</c>), which is
+///         listening if this request arrived, so the check uses
+///         <see cref="DnsOverHttpsOptions.Enable" /> alone and does not see its transport gate.
 ///     </para>
 ///     <para>
 ///         A listener with configured listen addresses can be partly bound: some addresses
 ///         serving, one failing (not assigned to this host, taken by another program). Each
 ///         listener lists those in <c>FailedListenAddresses</c>; this check reports them as
-///         <see cref="HealthStatus.Degraded" /> -- the transport still answers, so it isn't
-///         unhealthy, but an operator needs to see that part of what they configured isn't being
-///         served. A transport that bound nothing at all is still unhealthy.
+///         <see cref="HealthStatus.Degraded" />: the transport still answers, but part of what was
+///         configured is not served. A transport that bound nothing is unhealthy.
 ///     </para>
 /// </summary>
-/// <param name="hostedServices">Every registered <see cref="IHostedService" /> -- each real listener is resolved from here by type.</param>
+/// <param name="hostedServices">Every registered <see cref="IHostedService" />; each listener is found by type.</param>
 /// <param name="dnsOverTlsOptions">Whether DNS-over-TLS is enabled.</param>
 /// <param name="dnsOverQuicOptions">Whether DNS-over-QUIC is enabled.</param>
 /// <param name="dnsOverHttpsOptions">Whether DNS-over-HTTPS is enabled.</param>
@@ -85,7 +83,7 @@ public sealed class TransportListenersHealthCheck(
                 );
         }
 
-        // Plain DNS has no Enable flag of its own -- it always starts, per invariant #6.
+        // Plain DNS has no Enable flag; it always starts.
         UdpDnsListener udpListener = services.OfType<UdpDnsListener>().FirstOrDefault();
         TcpDnsListener tcpListener = services.OfType<TcpDnsListener>().FirstOrDefault();
         Evaluate(
@@ -140,9 +138,8 @@ public sealed class TransportListenersHealthCheck(
             dnsCryptTcpListener?.FailedListenAddresses
         );
 
-        // DNS-over-HTTPS is mapped onto this same host's own shared Kestrel instance rather than
-        // owning a socket of its own -- if this request reached this check at all, Kestrel is
-        // already listening, so Enable is the only meaningful signal here.
+        // DNS-over-HTTPS shares Kestrel, which is listening if this request arrived, so Enable is
+        // the only signal used.
         if (dnsOverHttpsOptions.Value.Enable)
             listening.Add("DNS-over-HTTPS (shared Kestrel)");
 
@@ -162,8 +159,8 @@ public sealed class TransportListenersHealthCheck(
                 )
             );
 
-        // Plain DNS has no Enable flag of its own and is always evaluated above, so `listening`
-        // is never actually empty here -- at minimum it always contains Plain/UDP and Plain/TCP.
+        // Plain DNS is always evaluated and, having got here, is listening, so `listening` holds
+        // at least Plain/UDP and Plain/TCP.
         return Task.FromResult(
             HealthCheckResult.Healthy(
                 $"Every enabled transport is listening: {string.Join(", ", listening)}."

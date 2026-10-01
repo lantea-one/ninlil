@@ -2,66 +2,51 @@
 namespace Ninlil.Web.EnvironmentVariables;
 
 /// <summary>
-///     This static class redirects this project's own <c>NINLIL_</c>-prefixed equivalent of every
-///     real, framework-level (not this project's own <c>Options</c>-bound) environment variable
-///     that .NET's own generic host / ASP.NET Core WebHost building code reads -- most notably
-///     <c>ASPNETCORE_ENVIRONMENT</c>/<c>ASPNETCORE_URLS</c> -- onto that variable's own real name,
-///     via <see cref="Environment.SetEnvironmentVariable(string, string)" />, before any of that
-///     host-building code ever runs.
+///     This static class copies the <c>NINLIL_</c>-prefixed form of each framework-level
+///     environment variable (one read by the .NET generic host or ASP.NET Core host builder, not
+///     by an options class), such as <c>NINLIL_ASPNETCORE_ENVIRONMENT</c>, onto the real variable
+///     with <see cref="Environment.SetEnvironmentVariable(string, string)" />.
 ///     <para>
-///         <b>This must run as the literal first statement of <c>Program.cs</c>, strictly before
-///         <c>WebApplication.CreateBuilder(args)</c></b> -- that single call is what actually reads
-///         every one of these variables (to pick the hosting environment, the Kestrel listen URLs,
-///         and the content root), and it does so before any other code in this project's own
-///         composition root gets a chance to run. There is no way to intercept or override what it
-///         reads except by making sure the *real* variable already holds the right value before it
-///         is called.
+///         <b>It must run before <c>WebApplication.CreateBuilder(args)</c></b>, which reads these
+///         variables to choose the hosting environment, listen URLs and content root. The only
+///         way to change what it reads is to set the real variables first, so <c>Program.cs</c>
+///         calls this right after <see cref="NativeRuntimeSettingsRelaunch" />.
 ///     </para>
 ///     <para>
-///         <b>A real, deliberate scope limit, not an oversight</b>: this bootstrap step can only
-///         ever reach a variable that .NET's own *managed* host-building code reads -- it cannot
-///         reach a variable the native hosting layer itself consults before any managed code,
-///         including this very method, ever executes. The clearest real example is Server GC
-///         selection (<c>DOTNET_gcServer</c> and friends): the CLR's garbage collector is already
-///         fully initialized, using whatever the process's real environment held at process
-///         startup, before the very first line of any C# method -- this one included -- ever runs.
-///         No amount of "earlier" managed code can change that, so those settings are handled
-///         separately, by <see cref="NativeRuntimeSettingsRelaunch" />, which relaunches the
-///         process with them already in its environment. This class therefore covers only the
-///         framework variables reachable managed code actually reads -- see
-///         <see cref="Mappings" /> for the exact list.
+///         <b>Only managed code is reached.</b> Settings the native runtime reads before any C#
+///         runs, such as server garbage collection (<c>DOTNET_gcServer</c>), are already fixed
+///         by the time this method runs. <see cref="NativeRuntimeSettingsRelaunch" /> handles
+///         those by relaunching the process. <see cref="Mappings" /> lists the variables this
+///         class covers.
 ///     </para>
 /// </summary>
 public static class FrameworkEnvironmentVariableBootstrap
 {
     /// <summary>
-    ///     This field lists every framework-level environment variable this bootstrap step
-    ///     redirects, each paired with its own <c>NINLIL_</c>-prefixed equivalent. Every one of
-    ///     these is read by genuinely reachable *managed* host-building code (never by the native
-    ///     hosting layer before managed code starts) -- confirmed for real against a running
-    ///     instance as part of this phase's own verification, not assumed from documentation alone.
+    ///     This field lists each framework-level variable this class sets, with its
+    ///     <c>NINLIL_</c>-prefixed source. All of them are read by managed host-building code, not
+    ///     by the native host before managed code starts.
     ///     <list type="bullet">
     ///         <item>
-    ///             <c>ASPNETCORE_ENVIRONMENT</c>/<c>DOTNET_ENVIRONMENT</c> -- the hosting
-    ///             environment name (<c>Development</c>/<c>Production</c>/...); ASP.NET Core's own
-    ///             WebHost-specific variable takes precedence over the generic host's own when both
-    ///             are set, exactly the same precedence this project preserves.
+    ///             <c>ASPNETCORE_ENVIRONMENT</c> and <c>DOTNET_ENVIRONMENT</c>: the hosting
+    ///             environment name (<c>Development</c>, <c>Production</c> and so on). When both
+    ///             are set, ASP.NET Core's variable wins over the generic host's, and copying both
+    ///             keeps that order.
     ///         </item>
     ///         <item>
-    ///             <c>ASPNETCORE_URLS</c> -- the semicolon-separated list of URLs Kestrel binds to
-    ///             by default (this project's own <c>WebListenOptions</c> configures Kestrel
-    ///             directly and does not itself rely on this variable, but an operator is still
-    ///             free to set it, and this project's own default port fallback logic still
-    ///             consults it).
+    ///             <c>ASPNETCORE_URLS</c>: the semicolon-separated URLs Kestrel binds by default.
+    ///             <c>WebListenOptions</c> configures Kestrel's endpoints explicitly, and explicit
+    ///             endpoints take precedence, so this rarely has an effect; it is copied so an
+    ///             operator setting it gets the framework's normal behavior.
     ///         </item>
     ///         <item>
-    ///             <c>ASPNETCORE_HTTP_PORTS</c>/<c>ASPNETCORE_HTTPS_PORTS</c> -- the newer,
-    ///             simpler "just the port numbers" alternative to <c>ASPNETCORE_URLS</c>.
+    ///             <c>ASPNETCORE_HTTP_PORTS</c> and <c>ASPNETCORE_HTTPS_PORTS</c>: port-only
+    ///             alternatives to <c>ASPNETCORE_URLS</c>, with the same precedence.
     ///         </item>
     ///         <item>
-    ///             <c>ASPNETCORE_CONTENTROOT</c>/<c>DOTNET_CONTENTROOT</c> -- where the host looks
-    ///             for <c>appsettings.json</c>/<c>wwwroot</c>; the WebHost-specific variable again
-    ///             takes precedence over the generic host's own.
+    ///             <c>ASPNETCORE_CONTENTROOT</c> and <c>DOTNET_CONTENTROOT</c>: where the host
+    ///             looks for <c>appsettings.json</c> and <c>wwwroot</c>; again the ASP.NET Core
+    ///             variable wins.
     ///         </item>
     ///     </list>
     /// </summary>
@@ -77,22 +62,19 @@ public static class FrameworkEnvironmentVariableBootstrap
     ];
 
     /// <summary>
-    ///     This property lists every <c>NINLIL_</c> name this bootstrap step itself recognizes --
-    ///     used only so <c>Program.cs</c> can exclude these names from
-    ///     <see cref="Ninlil.Common.Configuration.NinlilEnvironmentVariablesConfigurationProvider.UnrecognizedVariableNames" />'s
-    ///     own startup warning; a framework variable is handled entirely by this class, not by that
-    ///     provider's own Options-class mapping table, so it would otherwise be misreported as an
-    ///     unrecognized/mistyped name despite being spelled and used correctly.
+    ///     This property lists the <c>NINLIL_</c> names this class handles. <c>Program.cs</c>
+    ///     leaves them out of the startup warning built from
+    ///     <see cref="Ninlil.Common.Configuration.NinlilEnvironmentVariablesConfigurationProvider.UnrecognizedVariableNames" />:
+    ///     that provider maps only options-class variables, so it would otherwise report these as
+    ///     unrecognized.
     /// </summary>
     public static IReadOnlyCollection<string> RecognizedVariableNames { get; } =
         Mappings.Select(mapping => mapping.NinlilName).ToArray();
 
     /// <summary>
-    ///     This method performs the actual redirection described above. Safe to call more than
-    ///     once (each call simply re-reads the same <c>NINLIL_</c>-prefixed variables and
-    ///     re-applies them); a <c>NINLIL_</c>-prefixed variable that is not currently set is
-    ///     skipped outright, leaving whatever real variable it would have mapped to completely
-    ///     untouched.
+    ///     This method copies each set <c>NINLIL_</c> variable onto its real name. A
+    ///     <c>NINLIL_</c> variable that is not set leaves the real one unchanged. Calling it again
+    ///     repeats the same copy, so it is safe to call more than once.
     /// </summary>
     public static void Apply()
     {

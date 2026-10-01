@@ -5,19 +5,18 @@ using System.Security.Claims;
 namespace Ninlil.Web.Extension;
 
 /// <summary>
-///     This class provides our <see cref="ClaimsPrincipal" /> extension for reading the current
-///     caller's own user identifier. Read directly from the <c>sub</c> claim
-///     <see cref="Ninlil.Dns.Identity.Claims.UserClaimsBuilder" /> places on every issued access token,
-///     rather than through <c>UserManager&lt;TUser&gt;.GetUserAsync</c>'s own default lookup
-///     (which expects <see cref="ClaimTypes.NameIdentifier" />, a claim type this project's own
-///     tokens never carry) -- explicit, rather than depending on whichever inbound claim-type
-///     mapping a given JWT handler version happens to apply.
+///     This class provides our <see cref="ClaimsPrincipal" /> extension for reading the caller's
+///     user identifier. It reads the <c>sub</c> claim that
+///     <see cref="Ninlil.Dns.Identity.Claims.UserClaimsBuilder" /> puts on every access token,
+///     rather than using <c>UserManager&lt;TUser&gt;.GetUserAsync</c>, which looks for
+///     <see cref="ClaimTypes.NameIdentifier" />, a claim these tokens do not carry. Reading the
+///     claim by name also avoids depending on the inbound claim-type mapping a JWT handler
+///     version applies.
 /// </summary>
 public static class ClaimsPrincipalExtension
 {
     /// <summary>
-    ///     This method reads the current caller's own user identifier from their <c>sub</c>
-    ///     claim.
+    ///     This method reads the caller's user identifier from the <c>sub</c> claim.
     /// </summary>
     /// <param name="instance">The current <see cref="ClaimsPrincipal" /> instance.</param>
     /// <returns>The caller's user identifier, or <see langword="null" /> if it is missing or malformed.</returns>

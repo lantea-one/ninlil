@@ -10,66 +10,47 @@ using Npgsql;
 namespace Ninlil.Web.Services.Storage;
 
 /// <summary>
-///     This class assembles the real ADO.NET connection string
-///     <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> needs from this REST boundary's
-///     own structured, per-engine fields (<see cref="StorageEngineSwitchApiRequest" />), always
-///     through each provider's own official <c>*ConnectionStringBuilder</c> type -- never by
-///     hand-formatting a string with interpolation -- the same "never roll your own where an
-///     official, tested builder exists" posture this codebase already applies to wire formats and
-///     protocol parsing elsewhere. This assembly happens only at this REST boundary
-///     (<see cref="Controllers.StorageController.Switch" /> calls <see cref="Assemble" /> before
-///     ever calling <see cref="IStorageEngineSwitchService" />); the service itself keeps operating
-///     on a single, already-assembled <see cref="StorageEngineSwitchRequest.TargetConnectionString" />,
-///     entirely unaware structured fields exist -- mirroring exactly where
-///     <see cref="Controllers.EventBrokerSettingsController" /> does its own equivalent
-///     structured-to-primitive assembly today.
+///     This class builds the ADO.NET connection string for
+///     <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> from the structured fields of
+///     <see cref="StorageEngineSwitchApiRequest" />, always through the provider's
+///     <c>*ConnectionStringBuilder</c> rather than string interpolation, so values are escaped
+///     correctly. <see cref="Controllers.StorageController.Switch" /> calls <see cref="Assemble" />;
+///     the service itself only sees the finished
+///     <see cref="StorageEngineSwitchRequest.TargetConnectionString" />.
 ///     <para>
-///         <b>The four builder types used, and where each one actually lives.</b> All four are
-///         already transitively available in this project through
-///         <c>Ninlil.Dns.Data.EntityFrameworkCore</c>'s own package references -- no new
-///         <c>PackageReference</c> was added for this class. <see cref="SqliteConnectionStringBuilder" />
-///         (<c>Microsoft.Data.Sqlite</c>, via <c>Microsoft.EntityFrameworkCore.Sqlite</c>) and
-///         <see cref="NpgsqlConnectionStringBuilder" /> (<c>Npgsql</c>, via
-///         <c>Npgsql.EntityFrameworkCore.PostgreSQL</c>) match this project's own prior assumption
-///         exactly. <see cref="SqlConnectionStringBuilder" /> (<c>Microsoft.Data.SqlClient</c>, via
-///         <c>Microsoft.EntityFrameworkCore.SqlServer</c>) likewise matches. The MySQL/MariaDB
-///         builder, however, was confirmed directly against this solution's own restored NuGet
-///         packages rather than assumed: it is <c>MySqlConnector.MySqlConnectionStringBuilder</c>
-///         (the <c>MySqlConnector</c> package, pulled in transitively by
-///         <c>Pomelo.EntityFrameworkCore.MySql</c>), not a type living directly in the Pomelo
-///         package itself.
+///         <b>The builders.</b> All four come through the package references of
+///         <c>Ninlil.Dns.Data.EntityFrameworkCore</c>: <see cref="SqliteConnectionStringBuilder" />
+///         (<c>Microsoft.Data.Sqlite</c>), <see cref="NpgsqlConnectionStringBuilder" />
+///         (<c>Npgsql</c>), <see cref="SqlConnectionStringBuilder" />
+///         (<c>Microsoft.Data.SqlClient</c>) and <c>MySqlConnector.MySqlConnectionStringBuilder</c>,
+///         which comes from the <c>MySqlConnector</c> package that
+///         <c>Pomelo.EntityFrameworkCore.MySql</c> depends on, not from Pomelo itself.
 ///     </para>
 ///     <para>
-///         <b>Each engine's own <c>EncryptionMode</c> values.</b> PostgreSQL accepts any of
-///         <see cref="Npgsql.SslMode" />'s own real values (<c>Disable</c>, <c>Allow</c>,
-///         <c>Prefer</c>, <c>Require</c>, <c>VerifyCA</c>, <c>VerifyFull</c>). MySQL accepts any of
-///         <see cref="MySqlConnector.MySqlSslMode" />'s own real values (<c>None</c>,
-///         <c>Disabled</c>, <c>Preferred</c>, <c>Required</c>, <c>VerifyCA</c>, <c>VerifyFull</c>).
-///         SQL Server accepts <c>Optional</c>, <c>Mandatory</c>, or <c>Strict</c> --
-///         <see cref="SqlConnectionEncryptOption" /> is not a plain C# <see langword="enum" /> (a
-///         value-type wrapper with implicit <see langword="bool" /> conversions instead, confirmed
-///         directly by reflecting over its real members), so this class validates it via that
-///         type's own <see cref="SqlConnectionEncryptOption.TryParse" /> rather than
-///         <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)" />, which does not apply to it.
+///         <b>Accepted <c>EncryptionMode</c> values.</b> PostgreSQL: a
+///         <see cref="Npgsql.SslMode" /> name, case ignored (<c>Disable</c>, <c>Allow</c>,
+///         <c>Prefer</c>, <c>Require</c>, <c>VerifyCA</c>, <c>VerifyFull</c>). MySQL: a
+///         <see cref="MySqlConnector.MySqlSslMode" /> name, case ignored
+///         (<c>None</c>, <c>Disabled</c>, <c>Preferred</c>, <c>Required</c>, <c>VerifyCA</c>,
+///         <c>VerifyFull</c>). SQL Server: <c>Optional</c>, <c>Mandatory</c> or <c>Strict</c>, checked with
+///         <see cref="SqlConnectionEncryptOption.TryParse" /> because
+///         <see cref="SqlConnectionEncryptOption" /> is a class, not an enum, so
+///         <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)" /> does not apply.
 ///     </para>
 /// </summary>
 public static class StorageConnectionStringAssembler
 {
     /// <summary>
-    ///     This method builds the real connection string
-    ///     <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> needs, reading only the
-    ///     structured-field section of <paramref name="request" /> that matches its own
-    ///     <see cref="StorageEngineSwitchApiRequest.TargetEngine" />. A
-    ///     <see cref="StorageEngineEnum.MongoDb" /> target has no structured-field section here at
-    ///     all -- this method returns an empty string for it unvalidated, since
-    ///     <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> itself already rejects that
-    ///     target with its own clear, dedicated message before this connection string would ever be
-    ///     used.
+    ///     This method builds the connection string from the section of <paramref name="request" />
+    ///     that matches <see cref="StorageEngineSwitchApiRequest.TargetEngine" />. For
+    ///     <see cref="StorageEngineEnum.MongoDb" />, which has no section, it returns an empty
+    ///     string; <see cref="IStorageEngineSwitchService.SwitchEngineAsync" /> then rejects the
+    ///     target with its own message.
     /// </summary>
     /// <exception cref="ValidationException">
     ///     Thrown when the section matching <see cref="StorageEngineSwitchApiRequest.TargetEngine" />
-    ///     is missing entirely, or one of its own required fields is missing, out of range, or --
-    ///     for <c>encryptionMode</c> -- not one of that specific engine's own recognized values.
+    ///     is missing, or a required field is missing or out of range, or <c>encryptionMode</c> is
+    ///     not a value that engine recognizes.
     /// </exception>
     public static string Assemble(StorageEngineSwitchApiRequest request)
     {
@@ -98,9 +79,9 @@ public static class StorageConnectionStringAssembler
     }
 
     /// <summary>
-    ///     This method builds a PostgreSQL connection string via
-    ///     <see cref="NpgsqlConnectionStringBuilder" />, validating <c>EncryptionMode</c> against
-    ///     Npgsql's own real <see cref="Npgsql.SslMode" /> values.
+    ///     This method builds a PostgreSQL connection string with
+    ///     <see cref="NpgsqlConnectionStringBuilder" />, checking <c>EncryptionMode</c> against
+    ///     <see cref="Npgsql.SslMode" />.
     /// </summary>
     private static string AssemblePostgreSql(RelationalStorageConnectionFields fields)
     {
@@ -124,10 +105,9 @@ public static class StorageConnectionStringAssembler
     }
 
     /// <summary>
-    ///     This method builds a MySQL/MariaDB connection string via
-    ///     <see cref="MySqlConnector.MySqlConnectionStringBuilder" />, validating
-    ///     <c>EncryptionMode</c> against that driver's own real
-    ///     <see cref="MySqlConnector.MySqlSslMode" /> values.
+    ///     This method builds a MySQL or MariaDB connection string with
+    ///     <see cref="MySqlConnector.MySqlConnectionStringBuilder" />, checking
+    ///     <c>EncryptionMode</c> against <see cref="MySqlConnector.MySqlSslMode" />.
     /// </summary>
     private static string AssembleMySql(RelationalStorageConnectionFields fields)
     {
@@ -151,12 +131,10 @@ public static class StorageConnectionStringAssembler
     }
 
     /// <summary>
-    ///     This method builds a SQL Server connection string via
-    ///     <see cref="SqlConnectionStringBuilder" />, validating <c>EncryptionMode</c> against
-    ///     <see cref="SqlConnectionEncryptOption" />'s own <c>TryParse</c> (<c>Optional</c>,
-    ///     <c>Mandatory</c>, or <c>Strict</c>), since that type is not a plain
-    ///     <see langword="enum" /> <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)" />
-    ///     could validate against directly.
+    ///     This method builds a SQL Server connection string with
+    ///     <see cref="SqlConnectionStringBuilder" />, checking <c>EncryptionMode</c> with
+    ///     <see cref="SqlConnectionEncryptOption.TryParse" /> (<c>Optional</c>, <c>Mandatory</c> or
+    ///     <c>Strict</c>), since that type is not an enum.
     /// </summary>
     private static string AssembleSqlServer(RelationalStorageConnectionFields fields)
     {
@@ -179,14 +157,11 @@ public static class StorageConnectionStringAssembler
     }
 
     /// <summary>
-    ///     This method validates every field <see cref="RelationalStorageConnectionFields" />
-    ///     shares across all three server-based engines (everything except
-    ///     <c>EncryptionMode</c>, which each engine's own caller validates against its own
-    ///     distinct real values), throwing a specific, actionable <see cref="ValidationException" />
-    ///     for the first problem found -- <paramref name="fields" /> being missing entirely
-    ///     included, since a caller naming, say, <see cref="StorageEngineEnum.PostgreSql" /> as its
-    ///     target while leaving <see cref="StorageEngineSwitchApiRequest.PostgreSql" /> unset is
-    ///     just as much a malformed request as one with a blank field inside it.
+    ///     This method checks the fields the three server engines share (all but
+    ///     <c>EncryptionMode</c>, which each engine checks itself) and throws a
+    ///     <see cref="ValidationException" /> for the first problem. A missing section counts too:
+    ///     naming <see cref="StorageEngineEnum.PostgreSql" /> without filling in
+    ///     <see cref="StorageEngineSwitchApiRequest.PostgreSql" /> is as malformed as a blank field.
     /// </summary>
     private static RelationalFields ValidateCommonFields(
         RelationalStorageConnectionFields fields,
@@ -221,11 +196,10 @@ public static class StorageConnectionStringAssembler
     }
 
     /// <summary>
-    ///     This record carries <see cref="RelationalStorageConnectionFields" />'s own fields once
-    ///     <see cref="ValidateCommonFields" /> has already confirmed every one of them except
-    ///     <see cref="EncryptionMode" /> is present and well-formed, with <see cref="Password" />
-    ///     normalized from a possible <see langword="null" /> to an empty string -- sparing every
-    ///     per-engine assembly method from repeating that same null-guard.
+    ///     This record carries the fields of a <see cref="RelationalStorageConnectionFields" />
+    ///     after <see cref="ValidateCommonFields" /> has checked all but
+    ///     <see cref="EncryptionMode" />, with a <see langword="null" /> <see cref="Password" />
+    ///     turned into an empty string so each builder method need not check it.
     /// </summary>
     private sealed record RelationalFields(
         string Host,

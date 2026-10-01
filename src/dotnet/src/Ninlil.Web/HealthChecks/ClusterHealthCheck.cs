@@ -10,19 +10,16 @@ using Ninlil.Dns.Server.Cluster.Options;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "cluster membership" health check, an addition to
-///     <c>GET /status</c>'s existing checklist -- the aggregate, single-endpoint answer to "is
-///     this node's own view of its cluster healthy right now," reusing the cluster's own peer registry
-///     rather than probing anything itself (a fresh network probe here would duplicate
-///     <c>ClusterHeartbeatBackgroundService</c>'s own already-running heartbeat engine, exactly
-///     the same "reuse, don't re-check independently" reasoning
-///     <see cref="UpstreamForwarderHealthCheck" /> already establishes for forwarder health).
-///     When <see cref="ClusterOptions.Enable" /> is <see langword="false" />, this reports
-///     <see cref="HealthStatus.Healthy" /> trivially -- clustering is a capability-expanding
-///     toggle (invariant #6), not something whose absence is itself a problem.
+///     This class implements the <c>cluster</c> health check of <c>GET /status</c>: whether this
+///     node sees its peers as reachable. It reads the peer statuses
+///     <c>ClusterHeartbeatBackgroundService</c> records in the registry rather than probing peers
+///     itself, which would duplicate the heartbeat (as <see cref="UpstreamForwarderHealthCheck" />
+///     reuses forwarder health). With <see cref="ClusterOptions.Enable" /> off it reports
+///     <see cref="HealthStatus.Healthy" />: clustering is optional, so its absence is not a
+///     problem.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a scoped <see cref="IClusterNodeRepository" />.</param>
-/// <param name="clusterOptions">This host's own cluster configuration, read live.</param>
+/// <param name="scopeFactory">Opens a scope to reach the scoped <see cref="IClusterNodeRepository" />.</param>
+/// <param name="clusterOptions">The cluster settings, read live.</param>
 public sealed class ClusterHealthCheck(
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<ClusterOptions> clusterOptions
@@ -62,10 +59,9 @@ public sealed class ClusterHealthCheck(
                 $"All {peers.Count} known peer(s) are reachable (healthy or still joining)."
             );
 
-        // Degraded, not unhealthy -- an unreachable peer never stops this node from answering
-        // queries or serving its own locally-hosted zones; it only means cluster-wide sync to
-        // that one peer is currently stalled (see ClusterConfigSyncBroadcaster's own doc comment
-        // for the accepted "no retry/backfill" limitation this reflects).
+        // Degraded, not Unhealthy: an unreachable peer does not stop this node answering queries
+        // or serving its zones; it only means sync to that peer is stalled, and changes made
+        // meanwhile are not resent (ClusterConfigSyncBroadcaster has no retry or catch-up).
         return HealthCheckResult.Degraded(
             $"{unreachablePeers.Count} of {peers.Count} known peer(s) are currently unreachable: "
                 + $"{string.Join(", ", unreachablePeers)}."

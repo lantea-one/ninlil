@@ -7,21 +7,20 @@ using Ninlil.Dns.Data.Abstractions.Options;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "available disk space" health check -- flagging a
-///     homelab box running low on space before it starts failing writes. Checks the volume behind this host's own <c>data</c> directory (which, by
-///     default, already holds the SQLite database, the Data Protection key ring, the JWT signing
-///     key, the self-signed TLS certificate, and the DNSCrypt certificate store -- every one of
-///     those paths defaults to somewhere under <c>AppContext.BaseDirectory/data</c>), plus the
-///     volume behind a SQLite database file an operator has explicitly pointed somewhere else via
-///     <see cref="StorageOptions.ConnectionString" />, if that differs.
+///     This class implements the <c>diskSpace</c> health check of <c>GET /status</c>, which
+///     warns before a full disk starts failing writes. It checks the volume holding the
+///     <c>data</c> directory under <c>AppContext.BaseDirectory</c>, where the SQLite database,
+///     Data Protection key ring, JWT signing key, self-signed TLS certificate, DNSCrypt
+///     certificates and other state files live by default, and the volume of a SQLite database
+///     file placed elsewhere through <see cref="StorageOptions.ConnectionString" /> (but see
+///     <see cref="StorageReachabilityHealthCheck" />: the injected options hold defaults, so that
+///     second volume is never found). Below 10% free it reports Degraded, below 5% Unhealthy.
 ///     <para>
-///         <b>A known, deliberate scope limit</b>: this does not individually re-derive every
-///         possible configurable path (an operator-overridden Data Protection key path, a
-///         non-default DNSCrypt certificate store path, and so on) -- just the ones this
-///         project's own defaults and <see cref="StorageOptions" /> together already establish.
+///         Other paths an operator may have moved (the key ring, the DNSCrypt certificate store
+///         and so on) are not checked individually.
 ///     </para>
 /// </summary>
-/// <param name="storageOptions">This host's own configured storage engine and connection string.</param>
+/// <param name="storageOptions">The storage engine and connection string.</param>
 public sealed class DiskSpaceHealthCheck(IOptions<StorageOptions> storageOptions) : IHealthCheck
 {
     /// <summary>
@@ -104,9 +103,9 @@ public sealed class DiskSpaceHealthCheck(IOptions<StorageOptions> storageOptions
     }
 
     /// <summary>
-    ///     This method extracts a SQLite connection string's own <c>Data Source</c> value, the
-    ///     minimal parsing this check needs without pulling in a full ADO.NET connection-string
-    ///     builder dependency just for this.
+    ///     This method extracts the <c>Data Source</c> value of a SQLite connection string with
+    ///     simple splitting; it does not handle quoted values. Other key spellings, such as
+    ///     <c>Filename</c>, are not recognized.
     /// </summary>
     private static bool TryExtractSqliteDataSource(string connectionString, out string dataSource)
     {

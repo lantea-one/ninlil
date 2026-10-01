@@ -4,28 +4,25 @@ using Ninlil.Dns.Server.Core.Services;
 namespace Ninlil.Web.Services;
 
 /// <summary>
-///     This interface describes the full set of <see cref="IManagedServiceRegistration" />
-///     instances this host actually runs -- every DNS transport listener and every background
-///     maintenance loop, each wrapped with the stable name/category a future
-///     <c>ServicesController</c> exposes them under. Kept separate from
-///     <see cref="IManagedServiceRegistration" /> itself (which lives in <c>Server.Core</c> and
-///     knows nothing about which concrete services exist) since only this composition root
-///     (<c>Ninlil.Web</c>) references every project a real service lives in.
+///     This interface describes the set of <see cref="IManagedServiceRegistration" /> instances
+///     the host runs: every DNS transport listener and background maintenance loop, each with the
+///     stable name and category <c>ServicesController</c> exposes at <c>/api/services</c>.
+///     <see cref="IManagedServiceRegistration" /> lives in <c>Server.Core</c> and knows nothing
+///     about the concrete services; this registry lives in <c>Ninlil.Web</c>, the only project
+///     that references all of them.
 /// </summary>
 public interface IManagedServiceRegistry
 {
     /// <summary>
-    ///     This property contains every registered service, in no particular guaranteed order --
-    ///     a caller wanting a stable presentation order (a <c>GET /api/services</c> listing, for
-    ///     example) should sort this itself.
+    ///     This property contains every registered service. The order is not guaranteed, so a
+    ///     caller that needs a stable order, such as <c>GET /api/services</c>, sorts it.
     /// </summary>
     IReadOnlyList<IManagedServiceRegistration> Services { get; }
 
     /// <summary>
-    ///     This method looks up a single registered service by its own stable
-    ///     <see cref="IManagedServiceRegistration.Name" />, case-sensitively (names are this
-    ///     project's own kebab-case constants, never operator-supplied, so there is no
-    ///     normalization question to resolve here the way there is for, say, a DNS domain name).
+    ///     This method looks up one registered service by its
+    ///     <see cref="IManagedServiceRegistration.Name" />, case-sensitively: names are fixed
+    ///     kebab-case constants, so there is nothing to normalize.
     /// </summary>
     /// <param name="name">The name to look up.</param>
     /// <returns>The matching registration, or <see langword="null" /> if none matches.</returns>

@@ -5,25 +5,24 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Ninlil.Web.Services;
 
 /// <summary>
-///     This class tracks a sign-in that is still waiting on a second authentication factor. This
-///     project's REST API is stateless (no cookie-based session), so the standard ASP.NET Core
-///     Identity two-factor flow -- which stores the "pending user" in an external sign-in cookie
-///     -- does not apply; instead, a short-lived, random, opaque token stands in for that pending
-///     state, held only in this process's own memory. This is deliberately not a durable store: a
-///     restart mid-way through a sign-in simply requires the caller to sign in again from
-///     scratch, which is an acceptable cost for a window measured in minutes.
+///     This class tracks sign-ins waiting for a second factor. The REST API has no cookie session,
+///     so the standard ASP.NET Core Identity two-factor flow, which keeps the pending user in a
+///     sign-in cookie, does not apply. Instead <c>AuthController.Login</c> hands out a short-lived
+///     random token (<c>LoginResponse.MfaToken</c>), kept only in this process's memory, which
+///     <c>AuthController.TwoFactorLogin</c> redeems. A restart in the middle of a sign-in means
+///     signing in again, an acceptable cost for a five-minute window. Tokens are not shared
+///     across cluster nodes.
 /// </summary>
 public sealed class PendingTwoFactorSignInCache(IMemoryCache cache)
 {
     /// <summary>
-    ///     This field contains how long a pending sign-in's own token stays redeemable before it
-    ///     silently expires from the cache.
+    ///     This field contains how long a pending sign-in's token can be redeemed: five minutes.
     /// </summary>
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    ///     This method records a pending sign-in for a user and returns the opaque token the
-    ///     caller must present, alongside their second-factor code, to finish signing in.
+    ///     This method records a pending sign-in for a user and returns the random 32-byte token,
+    ///     base64-encoded, that the caller presents with the second-factor code.
     /// </summary>
     /// <param name="userId">The identifier of the user whose sign-in is pending.</param>
     /// <returns>The opaque token identifying this pending sign-in.</returns>
@@ -36,11 +35,12 @@ public sealed class PendingTwoFactorSignInCache(IMemoryCache cache)
     }
 
     /// <summary>
-    ///     This method looks up and immediately invalidates a pending sign-in's token, so it can
-    ///     never be redeemed twice.
+    ///     This method looks up a pending sign-in's token and removes it, so it is redeemed once
+    ///     whether or not the code that comes with it is correct. The lookup and removal are two
+    ///     steps, so two requests at the same moment could both redeem it.
     /// </summary>
-    /// <param name="token">The opaque token to redeem.</param>
-    /// <returns>The pending sign-in's own user identifier, or <see langword="null" /> if the token is missing, expired, or already used.</returns>
+    /// <param name="token">The token to redeem.</param>
+    /// <returns>The pending sign-in's user identifier, or <see langword="null" /> if the token is missing, expired or already used.</returns>
     public Guid? Consume(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -57,7 +57,7 @@ public sealed class PendingTwoFactorSignInCache(IMemoryCache cache)
     }
 
     /// <summary>
-    ///     This method builds the actual <see cref="IMemoryCache" /> key a token is stored under.
+    ///     This method builds the <see cref="IMemoryCache" /> key a token is stored under.
     /// </summary>
     private static string CacheKey(string token) => $"PendingTwoFactorSignIn:{token}";
 }

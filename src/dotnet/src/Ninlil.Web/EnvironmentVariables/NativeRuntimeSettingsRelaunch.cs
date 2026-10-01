@@ -6,10 +6,10 @@ namespace Ninlil.Web.EnvironmentVariables;
 
 /// <summary>
 ///     This static class applies the <c>NINLIL_DOTNET_*</c> spelling of the .NET runtime settings
-///     that the native runtime reads before any managed code runs -- server garbage collection,
-///     heap limits, tiered compilation, diagnostics, globalization mode -- by replacing the current
+///     that the native runtime reads before any managed code runs (server garbage collection, heap
+///     limits, tiered compilation, diagnostics, globalization mode). It does so by replacing the
 ///     process image with a fresh copy of itself whose environment carries each setting under the
-///     runtime's own exact <c>DOTNET_*</c> name.
+///     runtime's exact <c>DOTNET_*</c> name.
 ///     <para>
 ///         <see cref="FrameworkEnvironmentVariableBootstrap" /> can only reach variables that
 ///         managed host-building code reads; by the time the first line of <c>Program.cs</c>
@@ -22,7 +22,7 @@ namespace Ninlil.Web.EnvironmentVariables;
 ///         started this process keeps supervising (and signalling) the same PID.
 ///     </para>
 ///     <para>
-///         Matching ignores case and underscores, because the runtime's own names are
+///         Matching ignores case and underscores, because the runtime's names are
 ///         case-sensitive and mixed-case (<c>DOTNET_gcServer</c> works, <c>DOTNET_GCSERVER</c> is
 ///         silently ignored) while <c>NINLIL_</c> names are upper-case with word breaks:
 ///         <c>NINLIL_DOTNET_GC_SERVER</c> and <c>NINLIL_DOTNET_GCSERVER</c> both become
@@ -162,7 +162,7 @@ public static class NativeRuntimeSettingsRelaunch
     ///     runtime setting.
     /// </summary>
     /// <param name="name">The environment variable name to resolve.</param>
-    /// <returns>The runtime's own variable name, or <see langword="null" />.</returns>
+    /// <returns>The runtime's variable name, or <see langword="null" />.</returns>
     public static string ResolveRuntimeName(string name)
     {
         if (!name.StartsWith(VariablePrefix, StringComparison.Ordinal))

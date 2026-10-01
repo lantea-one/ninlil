@@ -10,37 +10,28 @@ using Ninlil.Dhcp.Server.Tftp;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "each enabled DHCP-family service is actually running" health
-///     check, a tenth addition to <c>GET /status</c>'s own checklist -- the DHCP analogue of
-///     <see cref="TransportListenersHealthCheck" />, adapted from that check's own DNS transports
-///     to this project's four DHCP-family <see cref="IDhcpProtocolService" /> implementations
-///     (DHCPv4, DHCPv6, Router Advertisement, TFTP). A service that is disabled entirely (its own
-///     configured <c>Enable</c> flag is <see langword="false" />, and it was never started live
-///     through <see cref="Controllers.DhcpServiceControlController" /> either) is simply omitted
-///     from this check's own description, not reported as unhealthy -- an operator who has
-///     deliberately left DHCP off entirely must never see a red health check for it.
+///     This class implements the <c>dhcpServices</c> health check of <c>GET /status</c>: whether
+///     each DHCP-family service that is enabled in the configuration is running. It is the DHCP
+///     counterpart of <see cref="TransportListenersHealthCheck" />, covering the four
+///     <see cref="IDhcpProtocolService" /> implementations (DHCPv4, DHCPv6, Router Advertisement,
+///     TFTP). A service whose <c>Enable</c> flag is off is left out, even if it was started
+///     through <see cref="Controllers.DhcpServiceControlController" />, so a server without DHCP
+///     never shows a failing check for it.
 ///     <para>
-///         <b>Unhealthy, mirroring <see cref="TransportListenersHealthCheck" />'s own precedent for
-///         the identical shape of problem, never Degraded</b>: a service whose own configured
-///         <c>Enable</c> flag is <see langword="true" /> but whose live
-///         <see cref="IDhcpProtocolService.IsRunning" /> signal reports
-///         <see langword="false" /> is a genuine, actionable operational fault this server's own
-///         operator needs to notice -- a socket that failed to bind at boot (a port conflict, most
-///         plausibly, or -- Router Advertisement only -- a missing <c>CAP_NET_RAW</c> grant), or a
-///         service an operator (or an automated caller) stopped live through
-///         <see cref="Controllers.DhcpServiceControlController" /> and then forgot was still
-///         configured <c>Enable: true</c>. This check cannot distinguish a deliberate live stop
-///         from a genuine crash -- neither can <see cref="TransportListenersHealthCheck" /> for the
-///         DNS side's own transports -- but "configured on, not actually serving" is unhealthy
-///         either way: real clients on the network are not getting real DHCP/Router
-///         Advertisement/PXE-boot service right now, exactly as configured to expect it.
+///         <b>Unhealthy, not Degraded</b>, as in <see cref="TransportListenersHealthCheck" />: a
+///         service enabled in the configuration but not running means clients are not getting
+///         DHCP, Router Advertisement or PXE boot service. The cause may be a socket that failed
+///         to bind at startup (usually a port conflict, or for Router Advertisement a missing
+///         <c>CAP_NET_RAW</c>), a TFTP server with no usable root directory, or a service stopped
+///         through <see cref="Controllers.DhcpServiceControlController" />; the check cannot tell
+///         these apart. The <c>Enable</c> flags come from the settings loaded at startup.
 ///     </para>
 /// </summary>
 /// <param name="services">Every registered <see cref="IDhcpProtocolService" />, matched by concrete type.</param>
-/// <param name="dhcpv4Options">DHCPv4's own configured <c>Enable</c> flag.</param>
-/// <param name="dhcpv6Options">DHCPv6's own configured <c>Enable</c> flag.</param>
-/// <param name="raOptions">Router Advertisement's own configured <c>Enable</c> flag.</param>
-/// <param name="tftpOptions">The TFTP server's own configured <c>Enable</c> flag.</param>
+/// <param name="dhcpv4Options">The DHCPv4 settings, for the <c>Enable</c> flag.</param>
+/// <param name="dhcpv6Options">The DHCPv6 settings, for the <c>Enable</c> flag.</param>
+/// <param name="raOptions">The Router Advertisement settings, for the <c>Enable</c> flag.</param>
+/// <param name="tftpOptions">The TFTP settings, for the <c>Enable</c> flag.</param>
 public sealed class DhcpServiceHealthCheck(
     IEnumerable<IDhcpProtocolService> services,
     IOptions<Dhcpv4ProtocolOptions> dhcpv4Options,

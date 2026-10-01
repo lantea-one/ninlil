@@ -12,16 +12,19 @@ using Ninlil.Dns.Data.MongoDb;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "storage reachability" health check -- a cheap
-///     on-demand ping against whichever storage engine <see cref="StorageOptions.Engine" />
-///     actually selects, opening a fresh scope for the single check itself rather than assuming
-///     one of <see cref="NinlilDnsContext" />/<see cref="NinlilDnsMongoContext" /> is always
-///     the one registered -- exactly one of the two is, depending on
-///     <see cref="StorageOptions.Engine" />, so this check resolves whichever one is actually
-///     present rather than requiring both.
+///     This class implements the <c>storage</c> health check of <c>GET /status</c>: a cheap ping
+///     of the storage engine named by <see cref="StorageOptions.Engine" />, through a scope
+///     opened for the check. Only one of <see cref="NinlilDnsContext" /> and
+///     <see cref="NinlilDnsMongoContext" /> is registered, depending on the engine, so it
+///     resolves the one the engine calls for and reports Unhealthy if that is missing.
+///     <para>
+///         The engine comes from <see cref="IOptions{TOptions}" />, which nothing configures for
+///         <see cref="StorageOptions" />, so it is always the default (SQLite) rather than the
+///         engine actually in use.
+///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to open a scope this check's own resolution lives in.</param>
-/// <param name="storageOptions">This host's own configured storage engine.</param>
+/// <param name="scopeFactory">Opens the scope the check resolves the database context in.</param>
+/// <param name="storageOptions">The storage settings; see the summary for why they hold defaults.</param>
 public sealed class StorageReachabilityHealthCheck(
     IServiceScopeFactory scopeFactory,
     IOptions<StorageOptions> storageOptions

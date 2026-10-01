@@ -9,42 +9,37 @@ using Ninlil.Dns.Identity.Email;
 namespace Ninlil.Web.Services;
 
 /// <summary>
-///     This class builds and sends the "reset your password" e-mail every emailed password-reset
-///     flow in this project shares. Originally written inline inside
-///     <c>UsersController.ResetPassword</c>'s own <c>EmailLink</c> delivery mode; extracted here so
-///     the self-service Forgot Password flow (<c>AuthController.ForgotPassword</c>) can send the
-///     exact same message through the exact same real
-///     <see cref="UserManager{TUser}.GeneratePasswordResetTokenAsync" />/Base64Url-encode/link-build/
-///     <see cref="IEmailSender" /> round trip, rather than duplicating it a second time.
+///     This class builds and sends the "reset your password" e-mail for both e-mailed reset
+///     flows: the <c>EmailLink</c> mode of an administrator's reset
+///     (<c>UsersController.ResetPassword</c>) and the self-service Forgot Password request
+///     (<c>AuthController.ForgotPassword</c>). It generates a token with
+///     <see cref="UserManager{TUser}.GeneratePasswordResetTokenAsync" />, encodes it into a link
+///     and sends it through <see cref="IEmailSender" />.
 ///     <para>
-///         Both callers still make their own decision about <b>whether</b> to call this method at
-///         all -- that decision is deliberately not shared, since the two callers' own correct
-///         answers differ: an administrator-driven reset (<c>UsersController.ResetPassword</c>)
-///         legitimately reports a missing e-mail address or an unconfigured SMTP server back to the
-///         caller as a real, clear error, since an authenticated administrator is acting on a known
-///         account. A self-service Forgot Password request (<c>AuthController.ForgotPassword</c>)
-///         never reports either condition observably, to avoid leaking whether a given e-mail
-///         address has an account at all -- it simply never calls this method when either condition
-///         holds. This class only knows how to send the link once a caller has already decided to;
-///         it does not itself decide when that's appropriate.
+///         Each caller decides for itself <b>whether</b> to send, because the right answers
+///         differ. An administrator's reset reports a missing e-mail address or an unconfigured
+///         SMTP server as an error, since an authenticated administrator is acting on a known
+///         account. Forgot Password never reveals either condition, so as not to leak whether an
+///         address has an account; it simply does not call this method.
 ///     </para>
 /// </summary>
-/// <param name="userManager">Generates the real Identity password-reset token.</param>
+/// <param name="userManager">Generates the Identity password reset token.</param>
 /// <param name="emailSender">Delivers the resulting message.</param>
 public class PasswordResetLinkSender(UserManager<UserEntity> userManager, IEmailSender emailSender)
 {
     /// <summary>
-    ///     This method generates a fresh password-reset token for <paramref name="user" /> and
-    ///     e-mails it as a link to this project's shared "set new password" landing page
-    ///     (<c>AuthController.ResetPassword</c> is what that page's own form submits to).
+    ///     This method generates a password reset token for <paramref name="user" /> and e-mails it
+    ///     as a link to the admin console's <c>/reset-password</c> page, whose form submits to
+    ///     <c>AuthController.ResetPassword</c>.
     /// </summary>
     /// <param name="user">The account to send a reset link for. Must carry a non-empty e-mail address.</param>
     /// <param name="requestScheme">
-    ///     The current request's own scheme (<c>Request.Scheme</c>) -- this project's REST API and
-    ///     Angular SPA share one combined host/process, so the link is always built from the
-    ///     request that asked for it rather than a separate "public URL" setting.
+    ///     The current request's scheme (<c>Request.Scheme</c>). The REST API and the admin console
+    ///     are served by one host, so the link is built from the request that asked for it; there
+    ///     is no separate public URL setting. The request's Host header is not checked against an
+    ///     allowlist here.
     /// </param>
-    /// <param name="requestHost">The current request's own host (<c>Request.Host</c>).</param>
+    /// <param name="requestHost">The current request's host (<c>Request.Host</c>).</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task SendAsync(
         UserEntity user,
@@ -55,10 +50,8 @@ public class PasswordResetLinkSender(UserManager<UserEntity> userManager, IEmail
     {
         string rawToken = await userManager.GeneratePasswordResetTokenAsync(user);
 
-        // A raw Identity reset token can contain '+'/'/'/'=', unsafe to place directly in a URL
-        // query string -- Base64Url-encode it first (safe alphabet, no further escaping needed)
-        // rather than relying on plain query-string escaping alone, which only protects the query
-        // string's own syntax, not the token bytes themselves.
+        // A raw Identity token can contain '+', '/' and '=', which do not survive a query string
+        // reliably, so it is Base64Url-encoded; AuthController.ResetPassword decodes it.
         string encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
 
         string resetUrl =

@@ -15,78 +15,50 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Services.Storage;
 
 /// <summary>
-///     This class implements <see cref="IStorageEngineSwitchService" />, the mechanism proving
-///     this host's storage-dependent layer can genuinely be reconfigured onto a different
-///     database engine within the same running process -- no Docker, no systemd, no process
-///     exit/respawn.
+///     This class implements <see cref="IStorageEngineSwitchService" />: it moves the database
+///     onto another relational engine inside the running process, with no restart.
 ///     <para>
-///         <b>The mechanism itself.</b> <c>Ninlil.Dns.Data.EntityFrameworkCore</c>'s own
-///         <c>AddNinlilDnsEntityFrameworkCore</c> registers exactly one
-///         <see cref="StorageOptions" /> instance as a singleton, and closes over that <em>same</em>
-///         instance inside the delegate passed to <c>AddDbContext&lt;NinlilDnsContext&gt;</c>.
-///         Entity Framework Core's own <c>AddDbContext</c> registers <c>DbContextOptions</c>
-///         with a <em>scoped</em> lifetime by default, which means that delegate is re-invoked
-///         fresh every time a new dependency-injection scope resolves <see cref="NinlilDnsContext" />
-///         for the first time -- in practice, once per incoming HTTP request, since ASP.NET Core
-///         opens one scope per request automatically. Mutating the singleton's own
-///         <see cref="StorageOptions.Engine" />/<see cref="StorageOptions.ConnectionString" />
-///         properties in place therefore changes what the <em>next</em> scope's own
-///         <see cref="NinlilDnsContext" /> connects to, with no dependency-injection
-///         re-registration, no new <see cref="IServiceProvider" />, and no restart of any kind --
-///         confirmed empirically against this exact application's own composition (a fresh
-///         <see cref="NinlilDnsContext" /> resolved in a new scope, opened after the mutation,
-///         genuinely reads and writes the new engine, repeatably, all within one unchanged
-///         operating-system process) before this class was written around it. Every repository
-///         this project defines is itself resolved fresh, per scope, from
-///         <see cref="NinlilDnsContext" /> the same way -- so the same mutation reaches every
-///         one of them with no separate handling per repository interface.
+///         <b>How it works.</b> <c>AddNinlilDnsEntityFrameworkCore</c> registers one
+///         <see cref="StorageOptions" /> singleton and closes over that instance in the
+///         <c>AddDbContext&lt;NinlilDnsContext&gt;</c> configuration delegate. <c>AddDbContext</c>
+///         registers <c>DbContextOptions</c> as scoped, so the delegate runs again for every new
+///         scope, which in practice means every HTTP request. Changing
+///         <see cref="StorageOptions.Engine" /> and <see cref="StorageOptions.ConnectionString" />
+///         in place therefore changes what the next scope's <see cref="NinlilDnsContext" />, and
+///         every repository built on it, connects to, with no container rebuild.
 ///     </para>
 ///     <para>
-///         <b>Why this covers only the four relational engines.</b> The mechanism above only
-///         changes which relational connection <see cref="NinlilDnsContext" /> resolves
-///         against -- every one of the four relational engines is served by the exact same
-///         Entity Framework Core model and the exact same concrete repository classes, with only
-///         the underlying ADO.NET provider (<c>UseSqlite</c>/<c>UseNpgsql</c>/<c>UseMySql</c>/
-///         <c>UseSqlServer</c>) differing, itself selected fresh, per scope, by
-///         <c>DbContextOptionsBuilderExtension.UseNinlilDnsStorage</c> reading the very same
-///         <see cref="StorageOptions.Engine" /> this class mutates.
-///         <see cref="StorageEngineEnum.MongoDb" /> is served by an entirely separate concrete
-///         repository implementation (<c>Ninlil.Dns.Data.MongoDb</c>), chosen once, by
-///         <c>Program.cs</c>, before the dependency-injection container is even built --
-///         switching to or from it would require every repository interface to be resolved
-///         through a further indirection layer capable of pointing at a different concrete
-///         implementation type at runtime, not merely a different connection through the same
-///         type. That is real, additional engineering this class deliberately does not attempt, so
-///         this class
-///         rejects a request naming <see cref="StorageEngineEnum.MongoDb" /> on either side with a
-///         clear, actionable message rather than attempting something unproven.
+///         <b>Relational engines only.</b> The four relational engines share one EF Core model and
+///         one set of repository classes; only the provider chosen by
+///         <c>DbContextOptionsBuilderExtension.UseNinlilDnsStorage</c> differs.
+///         <see cref="StorageEngineEnum.MongoDb" /> uses separate repository classes
+///         (<c>Ninlil.Dns.Data.MongoDb</c>) chosen in <c>Program.cs</c> before the container is
+///         built, so a switch to or from it is rejected.
 ///     </para>
 ///     <para>
-///         <b>The switch sequence itself</b>, run by <see cref="SwitchEngineAsync" />: (1) build a
-///         <see cref="NinlilDnsContext" /> against the target engine/connection string and
-///         apply every pending migration to it, proving the target is reachable and ready while
-///         the current engine still serves every live request completely untouched; (2) take a
-///         real, full-system backup of the still-active current engine via
-///         <see cref="IBackupService" />; (3) flip the shared <see cref="StorageOptions" />
-///         singleton onto the target, the one moment this process's own live storage genuinely
-///         changes; (4) restore the backup captured in step 2 into the target, whose own
-///         dependency-injection scope -- opened only after step 3 -- already resolves against it.
-///         A failure at any point after step 3 reverts the singleton back to the engine that was
-///         active before this call began, so the previously active engine -- whose own data this
-///         class never touches -- remains authoritative; a failure before step 3 never touches
-///         the shared singleton at all.
+///         <b>The sequence</b> in <see cref="SwitchEngineAsync" />: (1) migrate the target
+///         database while the current engine keeps serving; (2) take a full backup of the current
+///         engine with <see cref="IBackupService" />; (3) point the <see cref="StorageOptions" />
+///         singleton at the target; (4) restore the backup into the target. A failure after step
+///         3 points the singleton back at the previous engine, whose data is never changed; a
+///         failure before it changes nothing. While a switch runs,
+///         <see cref="StorageEngineSwitchState" /> makes the API answer 503.
+///     </para>
+///     <para>
+///         <b>The change is not saved.</b> Only the in-memory singleton changes; the configuration
+///         file is not updated (the restore in step 4 even writes back the archived copy), so after
+///         a restart the process uses the previous engine again.
 ///     </para>
 /// </summary>
 /// <param name="currentOptions">
-///     The exact <see cref="StorageOptions" /> singleton instance
-///     <c>AddNinlilDnsEntityFrameworkCore</c> registered and closed its own
-///     <c>AddDbContext</c> configuration delegate over -- mutating this instance in place is the
-///     entire mechanism this class exists to drive.
+///     The <see cref="StorageOptions" /> singleton that <c>AddNinlilDnsEntityFrameworkCore</c>
+///     registered and its <c>AddDbContext</c> delegate reads; changing it in place is how the
+///     switch works.
 /// </param>
-/// <param name="backupService">Used to capture and restore the data actually carried across the switch.</param>
-/// <param name="backupOptions">Read only for its own configured minimum passphrase length.</param>
-/// <param name="state">The shared in-progress gate this class claims for the duration of a switch.</param>
-/// <param name="logger">The logger this class records a switch's progress and outcome to.</param>
+/// <param name="backupService">Captures the data and restores it into the target.</param>
+/// <param name="backupOptions">Read for the minimum passphrase length.</param>
+/// <param name="state">The shared in-progress flag, claimed for the length of a switch.</param>
+/// <param name="logger">Records a switch's progress and outcome.</param>
 public sealed class StorageEngineSwitchService(
     StorageOptions currentOptions,
     IBackupService backupService,
@@ -96,9 +68,9 @@ public sealed class StorageEngineSwitchService(
 ) : IStorageEngineSwitchService
 {
     /// <summary>
-    ///     This constant lists every engine <see cref="SwitchEngineAsync" /> can genuinely switch
-    ///     to or from without a restart -- see this class's own doc comment for why
-    ///     <see cref="StorageEngineEnum.MongoDb" /> is not among them.
+    ///     This field lists the engines <see cref="SwitchEngineAsync" /> can switch to or from
+    ///     without a restart; the class summary explains why
+    ///     <see cref="StorageEngineEnum.MongoDb" /> is not one of them.
     /// </summary>
     private static readonly IReadOnlyList<StorageEngineEnum> LiveSwitchSupportedEngines =
     [
@@ -164,9 +136,8 @@ public sealed class StorageEngineSwitchService(
                 request.TargetEngine
             );
 
-            // Step 1: provision and migrate the target while the current engine still serves
-            // every live request, completely untouched -- proves the target is reachable and
-            // ready before anything about this process's own live traffic changes.
+            // Step 1: migrate the target while the current engine keeps serving, which proves the
+            // target is reachable and ready before anything changes.
             StorageOptions targetProbe = new()
             {
                 Engine = request.TargetEngine,
@@ -182,27 +153,23 @@ public sealed class StorageEngineSwitchService(
                 await targetContext.Database.MigrateAsync(stoppingToken);
             }
 
-            // Step 2: back up the still-active, still-untouched current engine. The passphrase is
-            // generated fresh, held only in memory for the lifetime of this call, and never
-            // returned or logged -- this archive exists purely to carry data across this one
-            // switch, not as a durable backup an operator is expected to keep.
+            // Step 2: back up the current engine. The passphrase is generated for this call, kept
+            // only in memory and never returned or logged; the archive only carries data across
+            // the switch.
             string transientPassphrase = GenerateTransientPassphrase();
             byte[] archive = await backupService.CreateBackupAsync(
                 transientPassphrase,
                 stoppingToken
             );
 
-            // Step 3: flip. Every dependency-injection scope opened from this instant forward --
-            // the very next incoming request included -- resolves NinlilDnsContext against the
-            // target. See this class's own doc comment for exactly why mutating this singleton in
-            // place is sufficient.
+            // Step 3: flip. Every scope opened from now on, including the next request, gets a
+            // NinlilDnsContext for the target (see the class summary).
             currentOptions.Engine = request.TargetEngine;
             currentOptions.ConnectionString = request.TargetConnectionString;
             flipped = true;
 
-            // Step 4: restore the backup captured in step 2 into the target -- this call's own
-            // scope is opened only now, after the flip, so every repository/unit-of-work it
-            // resolves is already bound to the target engine.
+            // Step 4: restore the step 2 backup. The restore opens its scope after the flip, so its
+            // repositories and unit of work use the target.
             BackupRestoreSummary summary = await backupService.RestoreBackupAsync(
                 new MemoryStream(archive),
                 transientPassphrase,
@@ -233,10 +200,9 @@ public sealed class StorageEngineSwitchService(
         catch (Exception exception)
             when (exception is not ValidationException and not ConflictException)
         {
-            // Revert the flip, if it already happened, so the engine that was active before this
-            // call began -- whose own data was never touched by any step above -- remains
-            // authoritative. A failure before step 3 never touched the singleton at all, so this
-            // is always safe to run unconditionally.
+            // Undo the flip, if it happened, so the previous engine, whose data no step changed,
+            // stays in use. A ValidationException or ConflictException is not caught here and so
+            // does not undo a flip.
             if (flipped)
             {
                 currentOptions.Engine = previousEngine;
@@ -261,11 +227,9 @@ public sealed class StorageEngineSwitchService(
     }
 
     /// <summary>
-    ///     This method generates a random passphrase strong enough to satisfy
-    ///     <see cref="BackupOptions.MinimumPassphraseLength" /> with headroom, used only to
-    ///     encrypt the transient, in-memory-lifetime archive <see cref="SwitchEngineAsync" />
-    ///     carries data across a switch with -- never surfaced to a caller, logged, or persisted
-    ///     anywhere.
+    ///     This method generates a random passphrase comfortably longer than
+    ///     <see cref="BackupOptions.MinimumPassphraseLength" /> for the in-memory archive
+    ///     <see cref="SwitchEngineAsync" /> uses. It is never returned, logged or stored.
     /// </summary>
     private string GenerateTransientPassphrase()
     {

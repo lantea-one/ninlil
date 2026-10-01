@@ -9,27 +9,21 @@ using Ninlil.Dns.Server.Forwarding;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "forwarder health" check, reusing --rather than
-///     re-checking independently -- <see cref="ForwarderHealthTracker" />'s own already-tracked
-///     per-forwarder health for every currently enabled <see cref="DnsForwarderEntity" />. When
-///     <see cref="ForwardingOptions.Enable" /> is <see langword="false" />, or no forwarder is
-///     configured at all, this reports <see cref="HealthStatus.Healthy" /> trivially -- forwarding
-///     is a capability-expanding toggle (invariant #6), not something whose absence is itself a
+///     This class implements the <c>forwarders</c> health check of <c>GET /status</c>. It reads
+///     the health <see cref="ForwarderHealthTracker" /> already tracks for each enabled global
+///     <see cref="DnsForwarderEntity" /> rather than probing them again. With
+///     <see cref="ForwardingOptions.Enable" /> off, or no forwarder configured, it reports
+///     <see cref="HealthStatus.Healthy" />: forwarding is optional, so its absence is not a
 ///     problem.
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach a scoped <see cref="IDnsForwarderRepository" />.</param>
+/// <param name="scopeFactory">Opens a scope to reach the scoped <see cref="IDnsForwarderRepository" />.</param>
 /// <param name="forwarderHealthTracker">
-///     The tracker this check reads every configured forwarder's own already-tracked health
-///     from -- registered unconditionally regardless of <see cref="ForwardingOptions.Enable" />,
-///     the same "always registered, gated internally" shape every other health-checked
-///     subsystem here follows.
+///     Supplies each forwarder's health. It is registered whether or not forwarding is enabled.
 /// </param>
 /// <param name="forwardingOptions">
-///     This host's own forwarding configuration, read live via
-///     <see cref="IOptionsMonitor{TOptions}" /> -- <see cref="ForwardingOptions.Enable" /> is now
-///     always live (see <c>ServiceCollectionForwardingExtension</c>'s own doc comment), so this
-///     check's own "disabled" report must reflect the same, currently effective value, not
-///     whatever it happened to be at process startup.
+///     The forwarding settings, read through <see cref="IOptionsMonitor{TOptions}" /> because
+///     <see cref="ForwardingOptions.Enable" /> takes effect at once (see
+///     <c>ServiceCollectionForwardingExtension</c>), so the check follows the current value.
 /// </param>
 public sealed class UpstreamForwarderHealthCheck(
     IServiceScopeFactory scopeFactory,
@@ -70,9 +64,8 @@ public sealed class UpstreamForwarderHealthCheck(
                 $"All {enabledForwarders.Count} configured forwarder(s) are healthy."
             );
 
-        // A degraded, not unhealthy, overall result -- ForwarderQueryResolver already fails over
-        // to the next healthy forwarder, and ultimately to this server's own recursive
-        // resolution, so one bad forwarder does not mean this server cannot resolve names at all.
+        // Degraded, not Unhealthy: ForwarderQueryResolver moves on to the next forwarder, and the
+        // dispatcher falls back to recursion when all fail, so names still resolve.
         return HealthCheckResult.Degraded(
             $"{unhealthyForwarders.Count} of {enabledForwarders.Count} configured forwarder(s) are currently unhealthy: {string.Join(", ", unhealthyForwarders)}."
         );

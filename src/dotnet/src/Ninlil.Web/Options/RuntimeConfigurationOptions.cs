@@ -2,20 +2,18 @@
 namespace Ninlil.Web.Options;
 
 /// <summary>
-///     This class binds to the <c>DnsServer:RuntimeSettings</c> section of the application's
-///     configuration and controls which JSON file <see cref="Ninlil.Dns.Server.Presets.PresetApplier" /> and
-///     this project's own runtime settings controllers (<c>PresetsController</c>,
-///     <c>EventBrokerSettingsController</c>, <c>RateLimitingSettingsController</c>,
-///     <c>DnsCookieSettingsController</c>) merge a write into. Defaults to this host's own
-///     <c>appsettings.json</c>, but is itself overridable -- primarily so an integration test can
-///     point every one of those controllers at an isolated, throwaway file instead of mutating the
-///     real one a shared test-factory instance would otherwise leave dirty across runs.
+///     This class binds to the <c>DnsServer:RuntimeSettings</c> configuration section: the JSON
+///     file that preset application and every runtime settings controller (and the settings
+///     cluster sync applier) merge writes into. It defaults to <c>appsettings.json</c> in the
+///     content root, set in <c>Program.cs</c>, and can be pointed elsewhere, mainly so integration
+///     tests write to a throwaway file instead of leaving the shared one changed between runs.
 ///     <para>
-///         Writing a setting here does not make it take effect immediately for every consumer --
-///         only a component reading via <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />
-///         picks up a change without a restart; most of this project's option
-///         classes are still read via the non-hot-reloading <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />,
-///         so a restart is the honest, general answer for "when does this take effect."
+///         A write takes effect at once only for code that reads the setting through
+///         <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" /> each time. Settings
+///         read through <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" />, or read
+///         once when a listener or service starts, need a restart. Each settings
+///         <c>PATCH</c> says which applies through its <see cref="Models.RuntimeSettingsWriteResult" />
+///         note.
 ///     </para>
 /// </summary>
 public sealed class RuntimeConfigurationOptions
@@ -27,8 +25,8 @@ public sealed class RuntimeConfigurationOptions
 
     /// <summary>
     ///     This property contains the JSON configuration file a runtime settings write is merged
-    ///     into. <see langword="null" />/empty resolves to this host's own <c>appsettings.json</c>,
-    ///     next to the running application, at the point <c>Program.cs</c> reads this section.
+    ///     into. When <see langword="null" /> or empty, <c>Program.cs</c> sets it to
+    ///     <c>appsettings.json</c> in the content root.
     /// </summary>
     public string ConfigurationFilePath { get; set; }
 }

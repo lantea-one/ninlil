@@ -9,27 +9,20 @@ using Ninlil.Dns.Server.Core.Events.Broker;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "broker connection state" health check. Only
-///     meaningful when <see cref="DnsServerEventPublisherOptions.Transport" /> actually names a
-///     real broker -- <see cref="EventTransportEnum.InMemory" /> (the default) reports
-///     <see cref="HealthStatus.Healthy" /> trivially, since delivery never leaves this process at
-///     all in that mode.
+///     This class implements the <c>eventBroker</c> health check of <c>GET /status</c>: whether
+///     the configured message broker is connected. With
+///     <see cref="EventTransportEnum.InMemory" />, the default, events never leave the process,
+///     so it reports <see cref="HealthStatus.Healthy" />.
 ///     <para>
-///         <c>Ninlil.Web</c>'s own <c>Program.cs</c> references
-///         <c>Ninlil.Dns.Server.Events.RabbitMq</c> and
-///         <c>Ninlil.Dns.Server.Events.ActiveMq</c> directly, conditionally calling
-///         whichever one's own extension matches
-///         <see cref="DnsServerEventPublisherOptions.Transport" />, so a configured broker
-///         actually takes effect in this host.
-///         <see cref="IDnsServerEventBrokerTransport" /> can still be missing here only if
-///         <see cref="DnsServerEventPublisherOptions.Transport" /> somehow names a value
-///         outside this enum's own declared members (not reachable through ordinary
-///         configuration binding); kept as a defensive fallback, reported as
-///         <see cref="HealthStatus.Degraded" /> rather than assumed unreachable.
+///         <c>Program.cs</c> registers the RabbitMQ or ActiveMQ transport that
+///         <see cref="DnsServerEventPublisherOptions.Transport" /> names, so an
+///         <see cref="IDnsServerEventBrokerTransport" /> is missing only if the setting holds a
+///         value outside the enum, which configuration binding does not produce. That case is
+///         still handled and reported as <see cref="HealthStatus.Degraded" />.
 ///     </para>
 /// </summary>
-/// <param name="serviceProvider">The provider this check resolves an optionally-registered <see cref="IDnsServerEventBrokerTransport" /> from.</param>
-/// <param name="publisherOptions">This host's own configured event transport.</param>
+/// <param name="serviceProvider">Resolves the optional <see cref="IDnsServerEventBrokerTransport" />.</param>
+/// <param name="publisherOptions">The configured event transport, from the settings loaded at startup.</param>
 public sealed class EventBrokerConnectionHealthCheck(
     IServiceProvider serviceProvider,
     IOptions<DnsServerEventPublisherOptions> publisherOptions

@@ -6,23 +6,22 @@ using Ninlil.Dns.Server.Core.Certificates;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "TLS certificate freshness" health check, reusing --
-///     rather than re-checking independently -- this host's own shared Kestrel
-///     <see cref="ReloadableTlsCertificateProvider" /> (the same certificate DoT/DoQ also present,
-///     per this project's own shared-certificate design), since a certificate an operator or
-///     <c>Ninlil.Dns.Server.Acme</c> replaces on disk is picked up by that provider's own
-///     background poll independently of this check.
+///     This class implements the <c>tlsCertificate</c> health check of <c>GET /status</c>: how
+///     close the HTTPS certificate is to expiry. It reads the Kestrel
+///     <see cref="ReloadableTlsCertificateProvider" /> that <c>Program.cs</c> registers rather
+///     than loading the file itself; that provider already polls for a certificate replaced on
+///     disk by an operator or by <c>Ninlil.Dns.Server.Acme</c>. DNS-over-TLS and DNS-over-QUIC
+///     present the same certificate when they share its <c>PfxPath</c> (by default, the same
+///     self-signed one); a separately configured certificate for them is not checked.
 /// </summary>
-/// <param name="certificateProvider">This host's own shared Kestrel/DoT/DoQ certificate provider.</param>
+/// <param name="certificateProvider">The Kestrel certificate provider.</param>
 public sealed class TlsCertificateFreshnessHealthCheck(
     ReloadableTlsCertificateProvider certificateProvider
 ) : IHealthCheck
 {
     /// <summary>
-    ///     This constant contains how close to expiry a certificate must be before this check
-    ///     reports <see cref="HealthStatus.Degraded" /> rather than <see cref="HealthStatus.Healthy" />
-    ///     -- a full week's own warning window before an expired certificate would actually start
-    ///     failing TLS handshakes.
+    ///     This field contains how close to expiry the certificate must be for the check to report
+    ///     <see cref="HealthStatus.Degraded" />: a week's warning before handshakes start failing.
     /// </summary>
     private static readonly TimeSpan DegradedWarningWindow = TimeSpan.FromDays(7);
 

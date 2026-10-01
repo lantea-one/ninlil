@@ -6,19 +6,18 @@ using Ninlil.Dns.Server.Authoritative.Dnssec;
 namespace Ninlil.Web.HealthChecks;
 
 /// <summary>
-///     This class implements the "DNSSEC key expiry / upcoming re-sign due dates"
-///     health check, reusing -- rather than duplicating -- <see cref="SignedZoneCache" />'s own
-///     already-tracked <see cref="SignedZoneData.SignatureExpiresAtUtc" /> for every currently
-///     signed zone, the exact same value <see cref="DnssecResigningBackgroundService" /> itself
-///     already checks on its own poll loop. This check exists to surface a zone whose signature
-///     is close to lapsing (or, in a genuine failure, has already lapsed) to an operator before a
-///     validating client ever notices, not to duplicate that background service's own
-///     re-signing logic.
+///     This class implements the <c>dnssec</c> health check of <c>GET /status</c>. It reads
+///     <see cref="SignedZoneData.SignatureExpiresAtUtc" /> for every zone in
+///     <see cref="SignedZoneCache" />, the value <see cref="DnssecResigningBackgroundService" />
+///     checks, so an operator sees a zone whose signatures are about to lapse, or have lapsed
+///     because re-signing failed, before validating resolvers do. It does not re-sign anything.
+///     An expired zone makes it Unhealthy and one inside the re-sign window Degraded; zones are
+///     listed by id.
 /// </summary>
-/// <param name="signedZoneCache">The cache this check reads every signed zone's own signature expiry from.</param>
+/// <param name="signedZoneCache">Supplies each signed zone's signature expiry.</param>
 /// <param name="zoneSigningOptions">
-///     This host's own configured re-sign threshold -- reused as this check's own "approaching
-///     expiry" warning window, so an operator only ever tunes one setting for both.
+///     The re-sign threshold (<c>RefreshBeforeExpiration</c>), also used as the warning window
+///     so one setting controls both. Read from the settings loaded at startup.
 /// </param>
 public sealed class DnssecSignatureExpiryHealthCheck(
     SignedZoneCache signedZoneCache,

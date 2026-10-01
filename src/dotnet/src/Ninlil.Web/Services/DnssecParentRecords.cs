@@ -21,9 +21,9 @@ public static class DnssecParentRecords
     private const byte Sha256DigestType = 2;
 
     /// <summary>
-    ///     This method describes a key's parent-facing records. The DNSKEY RDATA is encoded exactly
-    ///     the way <c>ZoneSigningService</c> publishes it, so the DS digest matches what resolvers
-    ///     see in the zone.
+    ///     This method describes a key's parent-facing records. The DNSKEY RDATA is encoded the way
+    ///     <c>ZoneSigningService</c> publishes it, so the DS digest matches what resolvers see in
+    ///     the zone.
     /// </summary>
     /// <param name="zoneName">The zone the key belongs to.</param>
     /// <param name="role">The key's role; only a KSK gets a DS record, since only a KSK is referenced from the parent.</param>
