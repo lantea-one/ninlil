@@ -6,28 +6,24 @@ using System.Net.Sockets;
 namespace Ninlil.Dhcp.Server.Core.Network;
 
 /// <summary>
-///     This static class provides the small set of IPv4 address-arithmetic primitives the
-///     DHCPv4 engine needs: converting between an <see cref="IPAddress" /> and its 32-bit
-///     unsigned integer form (to enumerate and compare addresses numerically), and checking
-///     whether two addresses fall within the same subnet.
+///     This static class provides the IPv4 address arithmetic of the DHCPv4 engine: converting
+///     between an <see cref="IPAddress" /> and its 32-bit integer form to enumerate and compare
+///     addresses, range checks, and same-subnet checks. The scope resolver, the allocation
+///     service and the statistics service use it.
 ///     <para>
-///         This project deliberately does not reach for the .NET <see cref="IPNetwork" />
-///         built-in type here: its documented behavior does not guarantee that constructing one
-///         from an arbitrary base address masks off the host bits first, and this engine's own
-///         scope ranges are operator-entered start/end addresses that are not guaranteed to fall
-///         on a network boundary -- a small, explicit, easily-verified helper avoids depending on
-///         that ambiguity.
+///         It does not use <see cref="IPNetwork" />, whose documentation does not promise that
+///         host bits of an arbitrary base address are masked off, while scope ranges are
+///         operator-entered addresses that need not sit on a network boundary.
 ///     </para>
 /// </summary>
 internal static class Dhcpv4NetworkHelper
 {
     /// <summary>
-    ///     This method converts an IPv4 <see cref="IPAddress" /> into its big-endian 32-bit
-    ///     unsigned integer form, letting a range of addresses be enumerated and compared
-    ///     numerically.
+    ///     This method converts an IPv4 address into its 32-bit unsigned integer form (network
+    ///     byte order read as big-endian). It throws for a null or non-IPv4 address.
     /// </summary>
     /// <param name="address">The IPv4 address to convert.</param>
-    /// <returns>The address's own 32-bit unsigned integer form.</returns>
+    /// <returns>The address as a 32-bit unsigned integer.</returns>
     public static uint ToUInt32(IPAddress address)
     {
         if (address is null || address.AddressFamily != AddressFamily.InterNetwork)
@@ -40,7 +36,7 @@ internal static class Dhcpv4NetworkHelper
     ///     This method converts a 32-bit unsigned integer back into an IPv4
     ///     <see cref="IPAddress" />, the inverse of <see cref="ToUInt32" />.
     /// </summary>
-    /// <param name="value">The address's own 32-bit unsigned integer form.</param>
+    /// <param name="value">The address as a 32-bit unsigned integer.</param>
     /// <returns>The equivalent <see cref="IPAddress" />.</returns>
     public static IPAddress FromUInt32(uint value)
     {
@@ -50,9 +46,9 @@ internal static class Dhcpv4NetworkHelper
     }
 
     /// <summary>
-    ///     This method reports whether two IPv4 addresses fall within the same subnet, per a
-    ///     given CIDR prefix length -- both addresses' leading <paramref name="prefixLength" />
-    ///     bits must be identical.
+    ///     This method reports whether two IPv4 addresses share their leading
+    ///     <paramref name="prefixLength" /> bits, that is, are in the same subnet. It throws for a
+    ///     prefix length outside 0-32.
     /// </summary>
     /// <param name="first">The first address to compare.</param>
     /// <param name="second">The second address to compare.</param>
@@ -111,9 +107,8 @@ internal static class Dhcpv4NetworkHelper
         {
             yield return FromUInt32(value);
 
-            // Guard against wraparound if end is ever uint.MaxValue (255.255.255.255), which
-            // would otherwise make "value <= end" true forever once value itself overflows back
-            // to 0.
+            // Stop at 255.255.255.255; otherwise value would wrap to 0 and "value <= end" would
+            // stay true forever.
             if (value == uint.MaxValue)
                 yield break;
         }

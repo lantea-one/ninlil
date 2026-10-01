@@ -8,29 +8,25 @@ using Ninlil.Dhcp.Server.Core.Identity;
 namespace Ninlil.Dhcp.Server.Core.Options;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv4OptionOverlayService" /> against the real
-///     repositories: every one of a scope's own enabled custom options, applied first (and
-///     already winning over any standard option the same tag per
-///     <see cref="DhcpScopeCustomOptionEntity" />'s own doc comment, simply by being applied after
-///     <see cref="Dhcpv4OptionDeliveryService" /> already ran), then every enabled tag rule
-///     eligible for the scope whose own match criteria the request satisfies, evaluated and
-///     applied in <see cref="DhcpTagRuleEntity" />'s own documented priority order -- the last
-///     matching rule to set a given tag is the one a client actually receives.
+///     This class implements <see cref="IDhcpv4OptionOverlayService" /> on the custom option and
+///     tag rule repositories. It applies the scope's enabled custom options first (they replace
+///     standard options with the same tag, since <see cref="Dhcpv4OptionDeliveryService" /> has
+///     already run), then the options of every enabled, eligible tag rule whose criteria the
+///     request meets, in the order described on <see cref="DhcpTagRuleEntity" />, so the last rule
+///     to set a tag wins. Only the DHCPv4 criteria are checked (vendor class, user class, Agent
+///     Circuit ID, Agent Remote ID).
 ///     <para>
-///         An option whose own <see cref="DhcpOptionValueSourceEnum" /> is
-///         <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> ignores its stored
-///         <c>ValueHex</c> entirely and instead delivers <paramref name="serverIdentifierProvider" />'s
-///         own resolved IPv4 address -- the exact same address this server already presents as its
-///         own Server Identifier option (RFC 2132 Section 9.7) in every reply, so "this server's
-///         own address" always means the one address a DHCPv4 client already trusts this server to
-///         identify itself by.
+///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
+///         ignores <c>ValueHex</c> and carries the 4 bytes of the address from
+///         <paramref name="serverIdentifierProvider" />, the same address the reply's Server
+///         Identifier option (RFC 2132 Section 9.7) carries.
 ///     </para>
 /// </summary>
-/// <param name="customOptionRepository">Used to read a scope's own configured custom options.</param>
+/// <param name="customOptionRepository">Used to read a scope's custom options.</param>
 /// <param name="tagRuleRepository">Used to read the tag rules eligible for a scope.</param>
 /// <param name="tagRuleOptionRepository">Used to read the options a matching rule contributes.</param>
 /// <param name="serverIdentifierProvider">
-///     Resolves this server's own IPv4 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
+///     Supplies the server's IPv4 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///     option.
 /// </param>
 public sealed class Dhcpv4OptionOverlayService(
@@ -62,10 +58,8 @@ public sealed class Dhcpv4OptionOverlayService(
         IReadOnlyList<DhcpTagRuleEntity> candidateRules =
             await tagRuleRepository.ListEnabledForScopeAsync(scope.Id, cancellationToken);
 
-        // Evaluate every eligible rule's own match criteria, then apply the matching ones' own
-        // options in DhcpTagRuleEntity's own documented "last-applied-wins" evaluation order --
-        // ascending Priority, ties broken by creation time then identifier, for a fully
-        // deterministic total order.
+        // Apply matching rules by ascending Priority, then creation time, then identifier, so
+        // the order is always the same and the last rule to set a tag wins.
         IEnumerable<DhcpTagRuleEntity> matchingRulesInOrder = candidateRules
             .Where(rule => Matches(rule, request))
             .OrderBy(rule => rule.Priority)
@@ -88,10 +82,10 @@ public sealed class Dhcpv4OptionOverlayService(
     }
 
     /// <summary>
-    ///     This method reports whether a rule's own match criteria are all satisfied by a request,
-    ///     per <see cref="DhcpTagRuleEntity" />'s own "combined with AND" doc comment -- a
-    ///     criterion the rule leaves unset (null/empty) is simply not checked at all, including,
-    ///     correctly, a rule with no criteria set that matches every request.
+    ///     This method reports whether a request meets all of a rule's DHCPv4 criteria (combined
+    ///     with AND). Unset criteria are not checked, so a rule with none matches every request.
+    ///     The DHCPv6-only <see cref="DhcpTagRuleEntity.RelayInterfaceIdHex" /> and
+    ///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" /> are ignored here.
     /// </summary>
     private static bool Matches(DhcpTagRuleEntity rule, Dhcpv4Message request)
     {
@@ -149,11 +143,9 @@ public sealed class Dhcpv4OptionOverlayService(
     }
 
     /// <summary>
-    ///     This method compares an opaque, client-supplied text value against a rule's own
-    ///     configured value, per <see cref="Dhcpv4TagMatchModeEnum" />'s own doc comment -- always
-    ///     an ordinal, case-sensitive comparison, since both the Vendor Class Identifier and User
-    ///     Class options are opaque byte strings a client chooses for itself, not
-    ///     culture-sensitive human text.
+    ///     This method compares a client-supplied value with a configured one per
+    ///     <see cref="Dhcpv4TagMatchModeEnum" />, ordinally and case-sensitively, since vendor and
+    ///     user class values are opaque strings, not human text.
     /// </summary>
     private static bool MatchesText(
         string configured,
@@ -170,16 +162,13 @@ public sealed class Dhcpv4OptionOverlayService(
         };
 
     /// <summary>
-    ///     This method resolves an option's own value bytes and applies them to the reply. A
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option ignores
-    ///     <paramref name="valueHex" /> entirely and instead encodes this server's own resolved
-    ///     IPv4 address (four raw bytes, the same wire shape any single-address DHCPv4 option
-    ///     already uses -- see <see cref="System.Net.IPAddress.GetAddressBytes" />); a
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> option decodes its stored hexadecimal
-    ///     value as before, silently skipping a value that fails to decode, since write-time
-    ///     validation (a REST layer concern) is what should prevent a malformed value from ever
-    ///     being persisted in the first place; this engine's own job is delivering already-valid
-    ///     configuration, not re-validating it on every single request.
+    ///     This method puts one option on the reply, replacing any option with the same tag. A
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option carries the server's IPv4
+    ///     address as 4 raw bytes (<see cref="System.Net.IPAddress.GetAddressBytes" />); a
+    ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> option carries its decoded
+    ///     <paramref name="valueHex" />, and is skipped if that is not valid hex, since validation
+    ///     belongs to the REST layer when the value is written. Tag and length are not checked
+    ///     here.
     /// </summary>
     private void ApplyRawOption(
         Dhcpv4Message reply,

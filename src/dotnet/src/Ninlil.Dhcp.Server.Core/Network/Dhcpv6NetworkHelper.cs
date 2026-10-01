@@ -6,53 +6,41 @@ using System.Numerics;
 namespace Ninlil.Dhcp.Server.Core.Network;
 
 /// <summary>
-///     This static class provides the IPv6 address-arithmetic primitives the DHCPv6 engine
-///     needs -- the IPv6 analogue of <see cref="Dhcpv4NetworkHelper" />, using
-///     <see cref="BigInteger" /> rather than a built-in integer type since a 128-bit address does
-///     not fit in any of them.
+///     This static class provides the IPv6 address arithmetic of the DHCPv6 engine, the
+///     counterpart of <see cref="Dhcpv4NetworkHelper" />, using <see cref="BigInteger" /> because
+///     a 128-bit address fits no built-in integer type.
 ///     <para>
-///         <b>Why a bounded pool scan, unlike <see cref="Dhcpv4NetworkHelper.Enumerate" /></b>:
-///         a DHCPv4 pool is, in practice, at most a handful of thousand addresses (a <c>/16</c> at
-///         the very largest a real deployment would configure), cheap to scan address by address.
-///         A DHCPv6 pool is routinely astronomically larger -- even a single, ordinary <c>/64</c>
-///         holds 2^64 addresses -- so a literal sequential scan across the full configured range
-///         is not a viable allocation strategy at all; the engine that calls
-///         <see cref="EnumerateAddresses" />/<see cref="EnumeratePrefixes" /> therefore only ever
-///         asks for a first <see cref="MaximumPoolScanCandidates" />-sized slice starting from the
-///         range's own start, which is checked against this project's own actually-recorded lease
-///         rows (a real homelab deployment holds, realistically, a few dozen to a few thousand
-///         leases at once) rather than the pool's own theoretical size. A pool whose first
-///         <see cref="MaximumPoolScanCandidates" /> candidates are all somehow already occupied
-///         reports no address available rather than continuing to scan deeper into an
-///         effectively-infinite space -- a deliberate, honest scope limit for this engine's own
-///         sequential-scan allocation strategy, not a claim that a sparse, huge pool always finds
-///         a free address if a later one genuinely exists.
+///         <b>The pool scan is bounded</b>, unlike <see cref="Dhcpv4NetworkHelper.Enumerate" />.
+///         A DHCPv4 pool has at most tens of thousands of addresses (a <c>/16</c> has 65,536),
+///         but a single IPv6 <c>/64</c> has 2^64, so scanning the whole range is impossible.
+///         <see cref="EnumerateAddresses" /> and <see cref="EnumeratePrefixes" /> return at most
+///         the first <see cref="MaximumPoolScanCandidates" /> candidates from the start of the
+///         range, which the allocation service checks against the recorded leases. If all of
+///         them are taken, no address is offered even though later ones may be free.
 ///     </para>
 /// </summary>
 internal static class Dhcpv6NetworkHelper
 {
     /// <summary>
-    ///     This constant bounds how many candidates <see cref="EnumerateAddresses" />/
-    ///     <see cref="EnumeratePrefixes" /> ever yield -- see this class's own doc comment for why.
+    ///     This constant bounds how many candidates <see cref="EnumerateAddresses" /> and
+    ///     <see cref="EnumeratePrefixes" /> return (see the class summary).
     /// </summary>
     public const int MaximumPoolScanCandidates = 65536;
 
     /// <summary>
-    ///     This method converts an IPv6 <see cref="IPAddress" /> into its unsigned, 128-bit
-    ///     integer form, letting a range of addresses/prefixes be enumerated and compared
-    ///     numerically.
+    ///     This method converts an IPv6 address into its unsigned 128-bit integer form. It throws
+    ///     for a null or non-IPv6 address.
     /// </summary>
     /// <param name="address">The IPv6 address to convert.</param>
-    /// <returns>The address's own unsigned 128-bit integer form.</returns>
+    /// <returns>The address as an unsigned 128-bit integer.</returns>
     public static BigInteger ToBigInteger(IPAddress address)
     {
         if (address is null || address.AddressFamily != AddressFamily.InterNetworkV6)
             throw new ArgumentException("Must be an IPv6 address.", nameof(address));
 
-        // BigInteger's own byte-array constructor reads little-endian, with the final byte's own
-        // top bit as the sign -- an ordinary IPv6 address is big-endian on the wire and, with its
-        // own top bit potentially set, would otherwise be misread as negative, so the 16 address
-        // bytes are reversed and a trailing zero byte is appended to force an unsigned read.
+        // The BigInteger byte-array constructor reads little-endian and takes the sign from the
+        // top bit of the last byte. Reverse the big-endian address bytes and append a zero byte
+        // so an address with its top bit set is not read as negative.
         byte[] bytes = address.GetAddressBytes();
         Array.Reverse(bytes);
         return new BigInteger([.. bytes, 0]);
@@ -62,13 +50,12 @@ internal static class Dhcpv6NetworkHelper
     ///     This method converts an unsigned 128-bit integer back into an IPv6
     ///     <see cref="IPAddress" />, the inverse of <see cref="ToBigInteger" />.
     /// </summary>
-    /// <param name="value">The address's own unsigned 128-bit integer form.</param>
+    /// <param name="value">The address as an unsigned 128-bit integer.</param>
     /// <returns>The equivalent <see cref="IPAddress" />.</returns>
     public static IPAddress FromBigInteger(BigInteger value)
     {
-        // BigInteger.ToByteArray() returns the fewest bytes needed, little-endian, and may omit
-        // leading (high-order, once reversed) zero bytes entirely -- pad up to the full 16 bytes
-        // before reversing back to network byte order.
+        // ToByteArray returns the fewest little-endian bytes, omitting high-order zero bytes, so
+        // pad to 16 bytes before reversing to network byte order. Bits above 128 are dropped.
         byte[] bytes = value.ToByteArray(isUnsigned: true);
         byte[] result = new byte[16];
         bytes.AsSpan(0, Math.Min(bytes.Length, 16)).CopyTo(result);
@@ -77,9 +64,9 @@ internal static class Dhcpv6NetworkHelper
     }
 
     /// <summary>
-    ///     This method reports whether two IPv6 addresses fall within the same network, per a
-    ///     given CIDR prefix length -- both addresses' leading <paramref name="prefixLength" />
-    ///     bits must be identical. The IPv6 analogue of <see cref="Dhcpv4NetworkHelper.AreInSameNetwork" />.
+    ///     This method reports whether two IPv6 addresses share their leading
+    ///     <paramref name="prefixLength" /> bits, like <see cref="Dhcpv4NetworkHelper.AreInSameNetwork" />.
+    ///     It throws for a prefix length outside 0-128.
     /// </summary>
     /// <param name="first">The first address to compare.</param>
     /// <param name="second">The second address to compare.</param>
@@ -122,10 +109,10 @@ internal static class Dhcpv6NetworkHelper
     }
 
     /// <summary>
-    ///     This method enumerates individual addresses in an inclusive
-    ///     [<paramref name="rangeStart" />, <paramref name="rangeEnd" />] range, in ascending
-    ///     order, up to <see cref="MaximumPoolScanCandidates" /> of them -- used by a
-    ///     <c>DhcpScopeKindEnum.AddressAssignment</c> scope's own pool scan.
+    ///     This method enumerates addresses in the inclusive range [<paramref name="rangeStart" />,
+    ///     <paramref name="rangeEnd" />] in ascending order, at most
+    ///     <see cref="MaximumPoolScanCandidates" />, for the pool scan of an
+    ///     <c>DhcpScopeKindEnum.AddressAssignment</c> scope.
     /// </summary>
     /// <param name="rangeStart">The first address in the range, inclusive.</param>
     /// <param name="rangeEnd">The last address in the range, inclusive.</param>
@@ -147,15 +134,12 @@ internal static class Dhcpv6NetworkHelper
     }
 
     /// <summary>
-    ///     This method enumerates block-aligned prefix candidates, each exactly
-    ///     <paramref name="delegatedPrefixLength" /> bits long, within an inclusive
-    ///     [<paramref name="rangeStart" />, <paramref name="rangeEnd" />] range, in ascending
-    ///     order, up to <see cref="MaximumPoolScanCandidates" /> of them -- used by a
-    ///     <c>DhcpScopeKindEnum.PrefixDelegation</c> scope's own pool scan. The first candidate is
-    ///     <paramref name="rangeStart" /> itself, block-aligned downward to a multiple of the
-    ///     block size, so a pool range that does not itself start on a block boundary still yields
-    ///     a sensible, deterministic first candidate rather than skipping straight to the next
-    ///     boundary.
+    ///     This method enumerates prefixes of <paramref name="delegatedPrefixLength" /> bits in
+    ///     ascending order, at most <see cref="MaximumPoolScanCandidates" />, for the pool scan of
+    ///     a <c>DhcpScopeKindEnum.PrefixDelegation</c> scope. The first candidate is
+    ///     <paramref name="rangeStart" /> rounded down to a prefix boundary, so a range that does
+    ///     not start on a boundary begins with the prefix containing its start (which may extend
+    ///     below the start). It throws for a prefix length outside 1-128.
     /// </summary>
     /// <param name="rangeStart">The first address of the delegable pool, inclusive.</param>
     /// <param name="rangeEnd">The last address of the delegable pool, inclusive.</param>
@@ -191,11 +175,9 @@ internal static class Dhcpv6NetworkHelper
     }
 
     /// <summary>
-    ///     This method computes the 128-bit network mask for a CIDR prefix length -- for example,
-    ///     <c>64</c> yields the top 64 bits set, the rest clear. Kept <see langword="internal" />
-    ///     (rather than <see langword="private" />) so <see cref="Statistics.DhcpScopeStatisticsService" />
-    ///     can reuse the exact same block-alignment arithmetic <see cref="EnumeratePrefixes" />
-    ///     already establishes, rather than a second, duplicated copy of this formula.
+    ///     This method computes the 128-bit mask for a prefix length (for <c>64</c>, the top 64
+    ///     bits set). <see cref="Statistics.DhcpScopeStatisticsService" /> also uses it, so its
+    ///     prefix count rounds the same way as <see cref="EnumeratePrefixes" />.
     /// </summary>
     internal static BigInteger ComputeMask(int prefixLength)
     {

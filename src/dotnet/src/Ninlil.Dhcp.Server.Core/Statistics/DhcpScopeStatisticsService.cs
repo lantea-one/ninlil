@@ -10,16 +10,14 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dhcp.Server.Core.Statistics;
 
 /// <summary>
-///     This class implements <see cref="IDhcpScopeStatisticsService" /> against the real
-///     <see cref="ILeaseRepository" />/<see cref="IDhcpReservationRepository" /> repositories --
-///     see that interface's own doc comment for the exact computation. Deliberately registered
-///     unconditionally, alongside <see cref="Administration.DhcpLeaseAdministrationService" />,
-///     rather than folded into either protocol's own local-engine registration -- a scope's own
-///     utilization is meaningful to report regardless of which specific DHCPv4/DHCPv6 engine
-///     variant (local or relay) is currently active.
+///     This class implements <see cref="IDhcpScopeStatisticsService" /> on
+///     <see cref="ILeaseRepository" /> and <see cref="IDhcpReservationRepository" /> (see the
+///     interface for the computation). <c>Program.cs</c> registers it for every configuration,
+///     like <see cref="Administration.DhcpLeaseAdministrationService" />, since scope utilization
+///     can be reported whichever engine (local or relay) is active.
 /// </summary>
-/// <param name="leaseRepository">The repository this service reads a scope's own leases through.</param>
-/// <param name="reservationRepository">The repository this service reads a scope's own reservations through.</param>
+/// <param name="leaseRepository">The repository a scope's leases are read through.</param>
+/// <param name="reservationRepository">The repository a scope's reservations are read through.</param>
 public sealed class DhcpScopeStatisticsService(
     ILeaseRepository leaseRepository,
     IDhcpReservationRepository reservationRepository
@@ -46,12 +44,9 @@ public sealed class DhcpScopeStatisticsService(
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        // Both counts also re-check IsBlocking's own "not yet past LeaseExpiresAtUtc" half,
-        // rather than trusting State alone -- a lease's own State only flips to Expired when
-        // Dhcpv4LeaseExpirySweepService's own periodic sweep next runs, so a lease that expired
-        // moments ago can still legitimately read back as Active/Offered until that sweep catches
-        // up; this keeps both counts genuinely current rather than merely current-as-of-the-last-
-        // sweep.
+        // Check the expiry time as well as the state: State only becomes Expired when
+        // Dhcpv4LeaseExpirySweepService next runs, so a just-expired lease can still read
+        // Active or Offered.
         int leasedCount = leases.Count(lease =>
             lease.State == LeaseStateEnum.Active && IsBlocking(lease, now)
         );
@@ -64,9 +59,8 @@ public sealed class DhcpScopeStatisticsService(
         ];
         int reservedCount = enabledReservations.Count;
 
-        // De-duplicated, within-range occupied-slot set -- see IDhcpScopeStatisticsService's own
-        // doc comment for why Available is computed this way rather than a naive subtraction that
-        // would double-count a reservation that is also a currently active lease.
+        // A set of in-range occupied addresses, so a reserved address that is also leased counts
+        // once (see IDhcpScopeStatisticsService). Addresses are compared as stored strings.
         HashSet<string> occupiedWithinRange = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (LeaseEntity lease in leases)
@@ -99,21 +93,19 @@ public sealed class DhcpScopeStatisticsService(
     }
 
     /// <summary>
-    ///     This method reports whether a lease is currently occupying its own address at all --
-    ///     the same rule <c>Allocation.Dhcpv4LeaseAllocationService.IsLeaseBlocking</c> already
-    ///     applies: not <see cref="LeaseStateEnum.Released" />, and not yet past its own
-    ///     <c>LeaseExpiresAtUtc</c> (a lease with no expiry at all, e.g. a brand-new row mid-DORA,
-    ///     is treated as still held).
+    ///     This method reports whether a lease holds its address, by the rule of
+    ///     <c>Allocation.Dhcpv4LeaseAllocationService.IsLeaseBlocking</c>: not
+    ///     <see cref="LeaseStateEnum.Released" /> and not past <c>LeaseExpiresAtUtc</c>. A lease
+    ///     with no expiry counts as held.
     /// </summary>
     private static bool IsBlocking(LeaseEntity lease, DateTimeOffset now) =>
         lease.State != LeaseStateEnum.Released
         && (!lease.LeaseExpiresAtUtc.HasValue || lease.LeaseExpiresAtUtc.Value > now);
 
     /// <summary>
-    ///     This method reports whether an address string falls within a scope's own configured
-    ///     range, dispatching to the correct protocol-specific arithmetic. An address that fails to
-    ///     parse (should never happen for a row this project's own engine wrote, but is possible
-    ///     for hand-seeded/imported data) is treated as out of range rather than throwing.
+    ///     This method reports whether an address is within the scope's range, using the IPv4 or
+    ///     IPv6 helper. An address or range that does not parse (possible for imported data) is
+    ///     treated as out of range.
     /// </summary>
     private static bool IsWithinScopeRange(DhcpScopeEntity scope, string address)
     {
@@ -131,11 +123,10 @@ public sealed class DhcpScopeStatisticsService(
     }
 
     /// <summary>
-    ///     This method computes the total number of slots a scope's own configured range holds --
-    ///     see <see cref="IDhcpScopeStatisticsService.ComputeAsync" />'s own doc comment for the
-    ///     exact rule per <see cref="DhcpScopeKindEnum" />. Returns zero for a range that fails to
-    ///     parse, or is inverted (the end address numerically precedes the start address) --
-    ///     genuinely broken/unset configuration reports no capacity rather than throwing.
+    ///     This method computes the number of slots in the scope's range (see
+    ///     <see cref="IDhcpScopeStatisticsService.ComputeAsync" /> for the rule per
+    ///     <see cref="DhcpScopeKindEnum" />). A range that does not parse or ends before it starts
+    ///     gives zero.
     /// </summary>
     private static BigInteger ComputeTotalSlots(DhcpScopeEntity scope)
     {
@@ -160,9 +151,8 @@ public sealed class DhcpScopeStatisticsService(
             && scope.DelegatedPrefixLength is { } delegatedPrefixLength
         )
         {
-            // Block-aligned prefix count, mirroring Dhcpv6NetworkHelper.EnumeratePrefixes's own
-            // "align the first candidate down to a block boundary" rule exactly, minus that
-            // method's own bounded-scan cap -- see this class's own doc comment.
+            // Count prefixes with the start rounded down to a prefix boundary, as
+            // Dhcpv6NetworkHelper.EnumeratePrefixes does, without its scan cap.
             BigInteger blockSize = BigInteger.One << (128 - delegatedPrefixLength);
             BigInteger mask = Dhcpv6NetworkHelper.ComputeMask(delegatedPrefixLength);
             BigInteger alignedStart = startValue & mask;

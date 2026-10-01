@@ -17,63 +17,44 @@ using Ninlil.Dhcp.Server.Core.Scope;
 namespace Ninlil.Dhcp.Server.Core;
 
 /// <summary>
-///     This class is the real DHCPv6 server engine: the single <see cref="IDhcpv6RequestHandler" />
-///     implementation <see cref="Dhcpv6UdpListener" /> dispatches every decoded request to --
-///     the DHCPv6 analogue of <see cref="Dhcpv4RequestHandler" />, following the exact same
-///     "fresh dependency injection scope per request" shape that class's own doc comment
-///     documents (unchanged reasoning, not repeated here).
+///     This class is the DHCPv6 server engine, the <see cref="IDhcpv6RequestHandler" /> that
+///     <see cref="Dhcpv6UdpListener" /> passes every decoded client message to, and the
+///     counterpart of <see cref="Dhcpv4RequestHandler" />. Like that class it is a singleton that
+///     creates a dependency injection scope per message for its scoped services.
 ///     <para>
-///         <b>Message-type coverage</b>: SOLICIT (with optional Rapid Commit), REQUEST, RENEW,
-///         REBIND, RELEASE, DECLINE, CONFIRM, and INFORMATION-REQUEST are all implemented.
-///         REQUEST/RENEW/REBIND share one private handler (<see cref="HandleConfirmingExchangeAsync" />),
-///         since all three are, mechanically, "commit a specific already-known address/prefix,"
-///         differing only in whether a Server Identifier match is required (REQUEST/RENEW target
-///         one specific server; REBIND deliberately does not, per RFC 8415 Section 18.2.5).
-///         RECONFIGURE is never received (this engine never sends one); ADVERTISE/REPLY are
-///         server-originated and never legitimately arrive here; RELAY-FORW/RELAY-REPL are
-///         rejected before ever reaching this class (see
-///         <see cref="Dhcpv6MessageTypeEnum.RelayForward" />'s own doc comment).
+///         <b>Messages.</b> SOLICIT (with optional Rapid Commit), REQUEST, RENEW, REBIND, RELEASE,
+///         DECLINE, CONFIRM and INFORMATION-REQUEST are handled. REQUEST, RENEW and REBIND share
+///         <see cref="HandleConfirmingExchangeAsync" />, since each commits an address or prefix
+///         the client names; REQUEST and RENEW must name this server, REBIND need not (RFC 8415
+///         Section 18.2.5). Server message types get no answer. RELAY-FORW arrives through
+///         <see cref="HandleRelayMessageAsync" />.
 ///     </para>
 ///     <para>
-///         <b>What is deliberately deferred</b>: IA_TA (temporary addresses) is not processed at
-///         all -- a real, but rarely implemented even by production DHCPv6 servers, RFC 8415
-///         feature, left for a future refinement rather than this already-large sub-phase. DHCPv4's
-///         own scope-level custom-option overlay (<see cref="DhcpScopeCustomOptionEntity" />) has
-///         no DHCPv6 analogue either -- <see cref="Dhcpv6OptionDeliveryService" /> only ever
-///         applies a scope's own standard options. Tag-based <em>conditional</em> option delivery,
-///         however, does now have a real DHCPv6 analogue: <see cref="IDhcpv6OptionOverlayService" />
-///         applies every matching <see cref="DhcpTagRuleEntity" /> right after
-///         <see cref="Dhcpv6OptionDeliveryService" /> runs, for a SOLICIT/ADVERTISE,
-///         REQUEST-RENEW-REBIND/REPLY, or INFORMATION-REQUEST/REPLY exchange specifically --
-///         mirroring exactly which three DHCPv4 exchanges <c>Dhcpv4OptionOverlayService</c> itself
-///         applies to (DHCPv4's own DECLINE/RELEASE send no reply at all; this engine's DHCPv6
-///         DECLINE/RELEASE/CONFIRM replies do, but carry only a status/binding outcome, never
-///         general configuration data, so this engine does not apply tag-rule overlays to them
-///         either). A REQUEST/RENEW/REBIND/Rapid-Commit-SOLICIT that names an address/prefix this server
-///         cannot confirm always reports <c>NoBinding</c>, rather than distinguishing that from
-///         <c>NoAddrsAvail</c>/<c>NoPrefixAvail</c> the way RFC 8415's own prose sometimes suggests
-///         for a REQUEST specifically -- a deliberate simplification: every "cannot confirm" case
-///         this class produces already means the same thing to a well-behaved client (fall back
-///         to a fresh SOLICIT), so the two codes are not worth the extra branching to distinguish.
+///         <b>Not handled.</b> IA_TA (temporary addresses) is ignored, and so is every IA after
+///         the first IA_NA and IA_PD (see <see cref="IDhcpv6LeaseAllocationService" />). Scope
+///         custom options (<see cref="DhcpScopeCustomOptionEntity" />) are not delivered over
+///         DHCPv6; <see cref="Dhcpv6OptionDeliveryService" /> adds only the standard options.
+///         Tag rules are applied (<see cref="IDhcpv6OptionOverlayService" />) to the replies that
+///         carry configuration: SOLICIT, REQUEST/RENEW/REBIND and INFORMATION-REQUEST, as in
+///         DHCPv4. RELEASE, DECLINE and CONFIRM replies carry only status. A REQUEST, RENEW or
+///         REBIND for an address or prefix that cannot be confirmed always gets
+///         <c>NoBinding</c>, never <c>NoAddrsAvail</c> or <c>NoPrefixAvail</c>; either way the
+///         client starts again with a SOLICIT.
 ///     </para>
 ///     <para>
-///         <b>Relay support</b>: this class also implements <see cref="IDhcpv6RelayMessageHandler" />,
-///         the receiving side of this project's own single-relay-hop RFC 8415 Section 7/16 support
-///         -- <see cref="HandleRelayMessageAsync" /> unwraps a RELAY-FORW an external relay agent
-///         forwarded to this server, runs the nested client message through the exact same
-///         <see cref="ProcessMessageAsync" /> logic <see cref="HandleRequestAsync" /> itself calls
-///         for an unrelayed message, and wraps whatever reply comes back as a RELAY-REPL, per
-///         Section 16's own rule to copy <c>hop-count</c>/<c>link-address</c>/<c>peer-address</c>
-///         and echo any Interface-ID option back unchanged.
+///         <b>Relays.</b> As the <see cref="IDhcpv6RelayMessageHandler" />,
+///         <see cref="HandleRelayMessageAsync" /> unwraps a RELAY-FORW from an external relay
+///         agent, handles the client message with the same <see cref="ProcessMessageAsync" /> as
+///         an unrelayed one, and wraps the reply in a RELAY-REPL that copies the hop count, link
+///         address and peer address and echoes the Interface-ID.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     Used to create a fresh dependency injection scope for every request -- see this class's own
-///     doc comment.
+///     Used to create a scope for every message (see the class summary).
 /// </param>
-/// <param name="serverIdentifierProvider">This server's own DUID.</param>
-/// <param name="options">This server's own core configuration (Rapid Commit eligibility).</param>
-/// <param name="logger">The logger this handler's own dispatch decisions are recorded to.</param>
+/// <param name="serverIdentifierProvider">The server's DUID.</param>
+/// <param name="options">The server engine configuration, read for Rapid Commit.</param>
+/// <param name="logger">The logger ignored messages are recorded to.</param>
 public sealed class Dhcpv6RequestHandler(
     IServiceScopeFactory scopeFactory,
     IDhcpv6ServerIdentifierProvider serverIdentifierProvider,
@@ -82,46 +63,36 @@ public sealed class Dhcpv6RequestHandler(
 ) : IDhcpv6RequestHandler, IDhcpv6RelayMessageHandler
 {
     /// <summary>
-    ///     This type carries everything this handler learns from decoding an incoming RFC 4704
-    ///     Client FQDN option (code 39), computed once up front so the same values can both feed
-    ///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.IDhcpv6LeaseAllocationService.ConfirmAddressAsync" />'s
-    ///     own <c>hostName</c> parameter and build this handler's own reply option afterward,
-    ///     without decoding the request twice.
+    ///     This type holds what is decoded from a request's RFC 4704 Client FQDN option (code 39),
+    ///     once, so it can supply the <c>hostName</c> of
+    ///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.IDhcpv6LeaseAllocationService.ConfirmAddressAsync" />
+    ///     and then build the reply option.
     /// </summary>
     /// <param name="HadOption">
-    ///     Whether the request carried a Client FQDN option at all -- when
-    ///     <see langword="false" />, this handler never adds one to its own reply either (RFC 4704
-    ///     is a purely opt-in exchange; a server has nothing to say back to a client that never
-    ///     asked).
+    ///     Whether the request carried a Client FQDN option. When it did not, the reply carries
+    ///     none either, since RFC 4704 is opt-in for the client.
     /// </param>
     /// <param name="ClientRequestedServerAaaaUpdate">
-    ///     The client's own "S" bit, as sent -- used only to compute the reply's own "O"
-    ///     (override) bit per RFC 4704 Section 4.1's "A server MUST set this bit to 1 if the 'S'
-    ///     bit in its reply to the client does not match the 'S' bit received from the client."
+    ///     The client's "S" bit, used only to set the reply's "O" (override) bit: RFC 4704 Section
+    ///     4.1 says "A server MUST set this bit to 1 if the 'S' bit in its reply to the client
+    ///     does not match the 'S' bit received from the client."
     /// </param>
     /// <param name="DomainName">
-    ///     The client's own decoded domain name, echoed back verbatim in this handler's own reply
-    ///     -- RFC 4704 Section 6 explicitly allows this: "The server MAY simply copy the Domain
-    ///     Name field from the Client FQDN option that the client sent to the server." This
-    ///     project deliberately takes that option rather than re-deriving the zone-qualified name
-    ///     it will actually register, which happens later, decoupled, and asynchronously, inside
-    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c> -- duplicating that
-    ///     zone-name-composition logic here, just to report it a few milliseconds earlier in the
-    ///     same exchange, would risk the two disagreeing without giving a real client any benefit
-    ///     it depends on.
+    ///     The client's domain name, copied unchanged into the reply, which RFC 4704 Section 6
+    ///     allows ("The server MAY simply copy the Domain Name field from the Client FQDN option
+    ///     that the client sent to the server."). The name that is registered is built later,
+    ///     asynchronously, by <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c>;
+    ///     building it here too could make the two disagree.
     /// </param>
-    /// <param name="IsFullyQualified">The client's own decoded "fully qualified" flag, echoed back alongside <see cref="DomainName" />.</param>
+    /// <param name="IsFullyQualified">Whether the client's name was fully qualified; copied into the reply with <see cref="DomainName" />.</param>
     /// <param name="HostNameCandidate">
-    ///     The single DNS label this handler will offer to
+    ///     The label passed to
     ///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.IDhcpv6LeaseAllocationService.ConfirmAddressAsync" />
-    ///     as the lease's own host name -- the first label of <see cref="DomainName" />, or
-    ///     <see langword="null" /> when the client left the Domain Name field empty (RFC 4704
-    ///     Section 4.2's "a client MAY ... leave the Domain Name field empty if it desires the
-    ///     server to provide a name" -- this project never auto-generates one, the same honest
-    ///     "no usable host name, no registration" behavior DHCPv4's own Host Name option handling
-    ///     already establishes) or explicitly declined any server-performed update via the "N" bit
-    ///     (RFC 4704 defines no server override for "N" the way it does for "S" -- see this
-    ///     record's own construction site for the full reasoning).
+    ///     as the lease's host name: the first label of <see cref="DomainName" />. It is
+    ///     <see langword="null" /> when the Domain Name field was empty (RFC 4704 Section 4.2 lets
+    ///     a client ask the server to provide a name; this server never makes one up, as with
+    ///     DHCPv4 without a Host Name option) or when the client set the "N" bit, which the
+    ///     server does not override (see <see cref="DecodeClientFqdn" />).
     /// </param>
     private readonly record struct ClientFqdnRequest(
         bool HadOption,
@@ -132,14 +103,10 @@ public sealed class Dhcpv6RequestHandler(
     );
 
     /// <summary>
-    ///     This constant bounds how many times a RELAY-FORW may already have been relayed (RFC
-    ///     8415 Section 7.1's own "hop-count" field) before this method refuses to process it at
-    ///     all -- the same defensive, RFC-independent loop-prevention reasoning
-    ///     <c>Ninlil.Dhcp.Server.Relay.Dhcpv4RelayAgent.MaxHops</c>'s own doc comment already
-    ///     documents, applied here against a hostile or malformed inbound hop count rather than
-    ///     this project's own outbound forwarding (this project's own relay support only ever
-    ///     forwards a single hop -- see <see cref="Dhcpv6RelayMessage" />'s own doc comment -- so
-    ///     this class never itself produces an already-incremented value to check against).
+    ///     This constant is the highest RELAY-FORW hop count (RFC 8415 Section 7.1 "hop-count")
+    ///     that is still processed, a guard against relay loops and malformed input like
+    ///     <c>Ninlil.Dhcp.Server.Relay.Dhcpv4RelayAgent.MaxHops</c>. A single-hop chain (see
+    ///     <see cref="Dhcpv6RelayMessage" />) arrives with hop count 0.
     /// </summary>
     private const byte MaxRelayHopCount = 16;
 
@@ -157,8 +124,7 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        // A RELAY-REPL reaching a server engine would mean some other relay's or server's own
-        // reply was misdirected here -- never a message this engine itself should act on.
+        // A RELAY-REPL here is another server's reply sent to the wrong place; ignore it.
         if (message.MessageType != Dhcpv6MessageTypeEnum.RelayForward)
         {
             logger.LogDebug(
@@ -205,16 +171,12 @@ public sealed class Dhcpv6RequestHandler(
             return null;
         }
 
-        // RFC 8415 Section 18.2's link-selection guidance: a relayed request's own link-address
-        // identifies which of this server's own scopes the client actually belongs to, since a
-        // relayed request's own UDP source address is the relay agent's, not the client's --
-        // Dhcpv6ScopeResolver's own new relay-address resolution step reads exactly this.
+        // The link-address names the client's link (the UDP source is the relay agent), and
+        // Dhcpv6ScopeResolver uses it to pick the scope.
         innerRequest.RelayLinkAddress = message.LinkAddress;
 
-        // Threaded onto the unwrapped inner message the same way RelayLinkAddress is, purely for
-        // a tag-based conditional option delivery rule (Dhcpv6OptionOverlayService) to match
-        // against later -- neither option is itself part of RFC 8415 Section 8's own client/server
-        // wire format.
+        // Copied onto the inner message, like RelayLinkAddress, for tag rules
+        // (Dhcpv6OptionOverlayService) to match; neither is part of the client message itself.
         if (message.TryGetInterfaceId(out byte[] requestInterfaceId))
             innerRequest.RelayInterfaceId = requestInterfaceId;
 
@@ -233,16 +195,15 @@ public sealed class Dhcpv6RequestHandler(
         Dhcpv6RelayMessage relayReply = new()
         {
             MessageType = Dhcpv6MessageTypeEnum.RelayReply,
-            // RFC 8415 Section 16 has a server copy hop-count/link-address/peer-address from the
-            // RELAY-FORW it answers, unchanged, into its own RELAY-REPL.
+            // A RELAY-REPL copies hop-count, link-address and peer-address from the RELAY-FORW
+            // it answers (RFC 8415).
             HopCount = message.HopCount,
             LinkAddress = message.LinkAddress,
             PeerAddress = message.PeerAddress,
         };
         relayReply.SetRelayMessagePayload(Dhcpv6MessageWriter.Write(innerReply));
 
-        // RFC 8415 Section 21.18 requires echoing an Interface-ID option back unchanged, if the
-        // relay agent included one.
+        // RFC 8415 Section 21.18: echo the relay agent's Interface-ID unchanged.
         if (message.TryGetInterfaceId(out byte[] interfaceId))
             relayReply.SetInterfaceId(interfaceId);
 
@@ -250,11 +211,10 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method holds the actual per-message processing logic <see cref="HandleRequestAsync" />
-    ///     and <see cref="HandleRelayMessageAsync" /> both call -- an unrelayed client message and
-    ///     a RELAY-FORW's own unwrapped inner message are handled identically from this point on,
-    ///     the only difference being whether <see cref="Dhcpv6Message.RelayLinkAddress" /> was
-    ///     already set by the caller before this method ever sees it.
+    ///     This method handles one client message for both <see cref="HandleRequestAsync" /> and
+    ///     <see cref="HandleRelayMessageAsync" />; the only difference is whether the relay fields
+    ///     (<see cref="Dhcpv6Message.RelayLinkAddress" /> and others) are set. A message without a
+    ///     Client Identifier is ignored.
     /// </summary>
     private async Task<Dhcpv6Message> ProcessMessageAsync(
         Dhcpv6Message request,
@@ -262,9 +222,8 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        // RFC 8415 requires a Client Identifier on essentially every client message type this
-        // engine handles; a message without one carries no way to look up, or even name, a lease
-        // at all.
+        // RFC 8415 requires a Client Identifier on the client messages handled here, and without
+        // one no lease can be found or named.
         string clientKey = Dhcpv6ClientIdentifier.Format(request);
 
         if (clientKey is null)
@@ -346,19 +305,18 @@ public sealed class Dhcpv6RequestHandler(
                 cancellationToken
             ),
 
-            // ADVERTISE/REPLY/RECONFIGURE are server-originated; a client (or something
-            // malformed/malicious) sending one this server ever receives has nothing sensible to
+            // ADVERTISE, REPLY and RECONFIGURE come from servers; one received here gets no
             // answer.
             _ => null,
         };
     }
 
     /// <summary>
-    ///     This method handles a SOLICIT, per RFC 8415 Section 18.3.9: resolve a scope for each
-    ///     present IA_NA/IA_PD, tentatively allocate a value for it, and advertise it back -- or,
-    ///     if the client asked for Rapid Commit and this server allows it
-    ///     (<see cref="DhcpServerOptions.EnableDhcpv6RapidCommit" />), commit directly and reply
-    ///     immediately instead of merely tentatively offering.
+    ///     This method handles a SOLICIT: it resolves a scope for the first IA_NA and IA_PD, offers
+    ///     an address or prefix for each, and returns an ADVERTISE (RFC 8415 Section 18.3.9). When
+    ///     the client asks for Rapid Commit and
+    ///     <see cref="DhcpServerOptions.EnableDhcpv6RapidCommit" /> is on, it commits them at once
+    ///     and returns a REPLY. If nothing at all can be offered there is no reply.
     /// </summary>
     private async Task<Dhcpv6Message> HandleSolicitAsync(
         Dhcpv6Message request,
@@ -385,9 +343,8 @@ public sealed class Dhcpv6RequestHandler(
         bool offeredAnything = false;
         DhcpScopeEntity optionScope = null;
 
-        // Only a Rapid-Commit exchange actually commits an address in this same message -- see
-        // ClientFqdnRequest's own doc comment for why an ordinary tentative ADVERTISE never
-        // processes a Client FQDN option at all (there is nothing yet to honestly report back).
+        // Only Rapid Commit commits an address in this exchange, so only then is the Client FQDN
+        // option processed; an ADVERTISE has nothing to report yet.
         ClientFqdnRequest clientFqdn = default;
 
         if (requestedNa is not null)
@@ -420,10 +377,9 @@ public sealed class Dhcpv6RequestHandler(
                 reply.AddIdentityAssociationForNonTemporaryAddresses(replyNa);
                 optionScope ??= scope;
 
-                // A reply association is added whenever a scope was resolved at all, even when
-                // nothing could actually be allocated (it then carries a Status Code option
-                // instead) -- only an association that actually carries an address counts as
-                // "something was genuinely offered" for this method's own overall silence rule.
+                // An association is added whenever a scope was found, carrying a Status Code when
+                // nothing could be allocated; only one with an address counts as an offer for the
+                // "no reply" rule below.
                 if (replyNa.Addresses.Count > 0)
                     offeredAnything = true;
 
@@ -458,15 +414,13 @@ public sealed class Dhcpv6RequestHandler(
                 reply.AddIdentityAssociationForPrefixDelegation(replyPd);
                 optionScope ??= scope;
 
-                // See the matching IA_NA comment above for why this checks Prefixes.Count rather
-                // than merely "was a reply association object produced at all."
+                // Only an association with a prefix counts as an offer, as for IA_NA above.
                 if (replyPd.Prefixes.Count > 0)
                     offeredAnything = true;
             }
         }
 
-        // RFC 8415 Section 18.3.9: if this server has nothing to offer for any IA in the SOLICIT
-        // at all, it should not send an ADVERTISE.
+        // Nothing to offer for any IA: send no ADVERTISE.
         if (!offeredAnything)
             return null;
 
@@ -489,8 +443,10 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles REQUEST/RENEW/REBIND, per RFC 8415 Sections 18.3.2/18.3.4/18.3.5 --
-    ///     see this class's own doc comment for why these three message types share one handler.
+    ///     This method handles REQUEST, RENEW and REBIND (RFC 8415 Sections 18.3.2, 18.3.4 and
+    ///     18.3.5; see the class summary). It commits the address and prefix the client names in
+    ///     its first IA_NA and IA_PD and always replies, with a Status Code in any IA that could
+    ///     not be confirmed.
     /// </summary>
     private async Task<Dhcpv6Message> HandleConfirmingExchangeAsync(
         Dhcpv6Message request,
@@ -509,8 +465,7 @@ public sealed class Dhcpv6RequestHandler(
                 || !requestedServerDuid.AsSpan().SequenceEqual(serverIdentifierProvider.Value)
             )
         )
-            // Either no Server Identifier at all, or one naming a different server -- not
-            // addressed to us; RFC 8415 calls for silence, not an error reply.
+            // No Server Identifier, or another server's: not for us, so stay silent (RFC 8415).
             return null;
 
         Dhcpv6IdentityAssociationForNonTemporaryAddresses requestedNa = FirstOrDefaultNa(request);
@@ -572,8 +527,9 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a RELEASE, per RFC 8415 Section 18.3.6 -- unlike DHCPv4's own
-    ///     RELEASE, a DHCPv6 server always replies.
+    ///     This method handles a RELEASE (RFC 8415). Unlike DHCPv4, a DHCPv6 server replies, with
+    ///     <c>Success</c> or <c>NoBinding</c> per IA. Only the first address or prefix of each IA is
+    ///     released, and the Server Identifier is not checked.
     /// </summary>
     private async Task<Dhcpv6Message> HandleReleaseAsync(
         Dhcpv6Message request,
@@ -649,10 +605,10 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DECLINE, per RFC 8415 Section 18.3.7: the client reports that one
-    ///     or more addresses in its first IA_NA are already in use by something else on the
-    ///     network (found via duplicate address detection). Unlike DHCPv4's own DECLINE, a DHCPv6
-    ///     server always replies. Prefix Delegation has no DECLINE analogue at all.
+    ///     This method handles a DECLINE (RFC 8415): the client found addresses in its first IA_NA
+    ///     already in use by duplicate address detection, and each is quarantined. Unlike DHCPv4,
+    ///     the server replies, always with <c>Success</c>. Prefixes cannot be declined. The Server
+    ///     Identifier and the owner of each address are not checked.
     /// </summary>
     private async Task<Dhcpv6Message> HandleDeclineAsync(
         Dhcpv6Message request,
@@ -689,13 +645,11 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a CONFIRM, per RFC 8415 Section 18.3.3: no allocation happens at
-    ///     all -- this purely checks whether every address across every IA_NA the client presents
-    ///     is still appropriate for whichever link this server believes the client to be on
-    ///     (approximated, absent real relay-agent link information, as "falls within some enabled
-    ///     address-assignment scope's own configured range"). If this server has no
-    ///     address-assignment scope configured at all, it has no configuration information to
-    ///     judge with, and RFC 8415 calls for silence rather than a guess.
+    ///     This method handles a CONFIRM (RFC 8415 Section 18.3.3). Nothing is allocated: it checks
+    ///     whether every address in every IA_NA is on the link of the resolved address-assignment
+    ///     scope, judged by the scope's subnet (<c>SubnetPrefixLength</c> around
+    ///     <c>RangeStartAddress</c>), and replies <c>NotOnLink</c> if any is not. With no scope it
+    ///     has nothing to judge by and stays silent, as RFC 8415 asks.
     /// </summary>
     private async Task<Dhcpv6Message> HandleConfirmAsync(
         Dhcpv6Message request,
@@ -748,10 +702,9 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles an INFORMATION-REQUEST, per RFC 8415 Section 18.3.5: the client
-    ///     already has an address through some other means and is purely asking for additional
-    ///     local configuration parameters (this engine's own DNS server addresses, today). No IA
-    ///     processing at all -- RFC 8415 says a client MUST NOT include one.
+    ///     This method handles an INFORMATION-REQUEST (RFC 8415): the client has an address and asks
+    ///     only for configuration (DNS servers and tag-rule options). IAs are not processed, since
+    ///     a client must not include one. It always replies, even without a scope.
     /// </summary>
     private async Task<Dhcpv6Message> HandleInformationRequestAsync(
         Dhcpv6Message request,
@@ -760,9 +713,8 @@ public sealed class Dhcpv6RequestHandler(
         CancellationToken cancellationToken
     )
     {
-        // Reuses the ordinary address-assignment scope resolver purely for its own "single
-        // enabled scope" fallback -- an Information-Request client has no lease/reservation of
-        // its own to match against, so steps 1/2 simply find nothing and fall through to it.
+        // The address-assignment resolver is used for its relay and single-scope steps; a client
+        // with no lease or reservation simply skips the first two.
         DhcpScopeEntity scope = await scopeResolver.ResolveAsync(
             request,
             DhcpScopeKindEnum.AddressAssignment,
@@ -776,8 +728,9 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves an address-assignment scope for one IA_NA and tentatively offers
-    ///     it an address, for a SOLICIT without Rapid Commit.
+    ///     This method resolves an address-assignment scope for one IA_NA and offers it an address,
+    ///     for a SOLICIT without Rapid Commit. It returns no association when there is no scope,
+    ///     and one with <c>NoAddrsAvail</c> when there is no free address.
     /// </summary>
     private static async Task<(
         DhcpScopeEntity Scope,
@@ -834,20 +787,19 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves an address-assignment scope for one IA_NA and commits its own
-    ///     hinted address to it -- REQUEST/RENEW/REBIND only; a client always names the exact
-    ///     address it already holds (or was offered) in these three exchanges, unlike a
-    ///     Rapid-Commit SOLICIT, which supplies no hint at all and is instead handled by
-    ///     <see cref="RapidCommitAddressAssociationAsync" />.
+    ///     This method resolves an address-assignment scope for one IA_NA and commits the address
+    ///     the client names in it, for REQUEST, RENEW and REBIND, where the client names the
+    ///     address it holds or was offered. With no scope, no address named, or an address that
+    ///     cannot be confirmed, the IA carries <c>NoBinding</c>.
     /// </summary>
-    /// <param name="scopeResolver">The resolver used to find the address-assignment scope to commit against.</param>
-    /// <param name="leaseAllocationService">The service the actual commit is delegated to.</param>
+    /// <param name="scopeResolver">The resolver that finds the address-assignment scope.</param>
+    /// <param name="leaseAllocationService">The service that commits the address.</param>
     /// <param name="request">The request being answered.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="requested">The specific IA_NA being committed.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="requested">The IA_NA being committed.</param>
     /// <param name="hostName">
-    ///     The host name to record for this lease, if the request carried a usable RFC 4704 Client
-    ///     FQDN option -- see <see cref="ClientFqdnRequest.HostNameCandidate" />'s own doc comment.
+    ///     The host name to record for the lease, from the Client FQDN option if usable (see
+    ///     <see cref="ClientFqdnRequest.HostNameCandidate" />).
     /// </param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     private static async Task<(
@@ -913,23 +865,20 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves an address-assignment scope for one IA_NA, allocates a fresh
-    ///     address for it exactly as an ordinary (non-Rapid-Commit) SOLICIT would (see
-    ///     <see cref="OfferAddressAssociationAsync" />), and immediately commits that same address
-    ///     -- the Rapid Commit analogue of a full SOLICIT-then-REQUEST exchange compressed into
-    ///     one message. Unlike <see cref="CommitAddressAssociationAsync" />, this never reads a
-    ///     hint out of <paramref name="requested" />: a client's first-ever SOLICIT for a given
-    ///     IAID carries no address at all to hint with, since it does not yet know what this
-    ///     server would assign.
+    ///     This method resolves an address-assignment scope for one IA_NA, picks an address as an
+    ///     ordinary SOLICIT would (an IAADDR in <paramref name="requested" /> is only a hint) and
+    ///     commits it at once: SOLICIT and REQUEST in one exchange. Unlike
+    ///     <see cref="CommitAddressAssociationAsync" />, the client need not name an address. When
+    ///     none can be offered or committed, the IA carries <c>NoAddrsAvail</c>.
     /// </summary>
-    /// <param name="scopeResolver">The resolver used to find the address-assignment scope to allocate from.</param>
-    /// <param name="leaseAllocationService">The service the actual offer-then-commit sequence is delegated to.</param>
+    /// <param name="scopeResolver">The resolver that finds the address-assignment scope.</param>
+    /// <param name="leaseAllocationService">The service that offers and then commits the address.</param>
     /// <param name="request">The request being answered.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="requested">The specific IA_NA being committed.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="requested">The IA_NA being answered.</param>
     /// <param name="hostName">
-    ///     The host name to record for this lease, if the request carried a usable RFC 4704 Client
-    ///     FQDN option -- see <see cref="ClientFqdnRequest.HostNameCandidate" />'s own doc comment.
+    ///     The host name to record for the lease, from the Client FQDN option if usable (see
+    ///     <see cref="ClientFqdnRequest.HostNameCandidate" />).
     /// </param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     private static async Task<(
@@ -1007,9 +956,9 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves a Prefix Delegation scope for one IA_PD and tentatively offers it
-    ///     a prefix, for a SOLICIT without Rapid Commit -- the Prefix Delegation analogue of
-    ///     <see cref="OfferAddressAssociationAsync" />.
+    ///     This method resolves a prefix delegation scope for one IA_PD and offers it a prefix, for
+    ///     a SOLICIT without Rapid Commit, like <see cref="OfferAddressAssociationAsync" />
+    ///     (<c>NoPrefixAvail</c> when none is free).
     /// </summary>
     private static async Task<(
         DhcpScopeEntity Scope,
@@ -1067,11 +1016,9 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves a Prefix Delegation scope for one IA_PD and commits its own
-    ///     hinted prefix to it -- REQUEST/RENEW/REBIND only, the Prefix Delegation analogue of
-    ///     <see cref="CommitAddressAssociationAsync" />; see that method's own doc comment for why
-    ///     a Rapid-Commit SOLICIT needs its own separate handling instead
-    ///     (<see cref="RapidCommitPrefixAssociationAsync" />).
+    ///     This method resolves a prefix delegation scope for one IA_PD and commits the prefix the
+    ///     client names, for REQUEST, RENEW and REBIND, like
+    ///     <see cref="CommitAddressAssociationAsync" />.
     /// </summary>
     private static async Task<(
         DhcpScopeEntity Scope,
@@ -1136,10 +1083,8 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves a Prefix Delegation scope for one IA_PD, allocates a fresh prefix
-    ///     for it exactly as an ordinary (non-Rapid-Commit) SOLICIT would (see
-    ///     <see cref="OfferPrefixAssociationAsync" />), and immediately commits that same prefix --
-    ///     the Prefix Delegation analogue of <see cref="RapidCommitAddressAssociationAsync" />.
+    ///     This method picks a prefix for one IA_PD as an ordinary SOLICIT would and commits it at
+    ///     once, like <see cref="RapidCommitAddressAssociationAsync" />.
     /// </summary>
     private static async Task<(
         DhcpScopeEntity Scope,
@@ -1216,8 +1161,8 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method resolves a scope of a given kind and, if one is found, releases whatever
-    ///     matching lease this client holds in it.
+    ///     This method resolves a scope of the given kind and releases the client's matching lease
+    ///     in it, if there is one.
     /// </summary>
     private static async Task<bool> ReleaseWithinResolvedScopeAsync(
         IDhcpv6ScopeResolver scopeResolver,
@@ -1243,8 +1188,8 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method finds the first IA_NA a request carries, per this class's own doc comment
-    ///     on only ever processing the first of each kind.
+    ///     This method returns the first IA_NA of a request (only the first is handled), or
+    ///     <see langword="null" />.
     /// </summary>
     private static Dhcpv6IdentityAssociationForNonTemporaryAddresses FirstOrDefaultNa(
         Dhcpv6Message request
@@ -1256,8 +1201,8 @@ public sealed class Dhcpv6RequestHandler(
             : null;
 
     /// <summary>
-    ///     This method finds the first IA_PD a request carries, per this class's own doc comment
-    ///     on only ever processing the first of each kind.
+    ///     This method returns the first IA_PD of a request (only the first is handled), or
+    ///     <see langword="null" />.
     /// </summary>
     private static Dhcpv6IdentityAssociationForPrefixDelegation FirstOrDefaultPd(
         Dhcpv6Message request
@@ -1269,8 +1214,8 @@ public sealed class Dhcpv6RequestHandler(
             : null;
 
     /// <summary>
-    ///     This method builds an IA_NA carrying nothing but an echoed IAID and a Status Code
-    ///     option -- used for a RELEASE/DECLINE reply, where no address is ever handed back.
+    ///     This method builds an IA_NA holding only the IAID and a Status Code, for RELEASE and
+    ///     DECLINE replies.
     /// </summary>
     private static Dhcpv6IdentityAssociationForNonTemporaryAddresses BuildNaStatus(
         uint identityAssociationId,
@@ -1286,8 +1231,8 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method builds an IA_PD carrying nothing but an echoed IAID and a Status Code
-    ///     option -- the Prefix Delegation analogue of <see cref="BuildNaStatus" />.
+    ///     This method builds an IA_PD holding only the IAID and a Status Code, like
+    ///     <see cref="BuildNaStatus" />.
     /// </summary>
     private static Dhcpv6IdentityAssociationForPrefixDelegation BuildPdStatus(
         uint identityAssociationId,
@@ -1312,8 +1257,8 @@ public sealed class Dhcpv6RequestHandler(
         );
 
     /// <summary>
-    ///     This method builds the common shape every reply this handler ever sends shares: the
-    ///     transaction identifier and the reply's own message type.
+    ///     This method starts a reply with the given message type and the request's transaction
+    ///     identifier.
     /// </summary>
     private static Dhcpv6Message NewReply(
         Dhcpv6Message request,
@@ -1321,10 +1266,9 @@ public sealed class Dhcpv6RequestHandler(
     ) => new() { MessageType = messageType, TransactionId = request.TransactionId };
 
     /// <summary>
-    ///     This method decodes an incoming RFC 4704 Client FQDN option, if the request carries
-    ///     one, into a <see cref="ClientFqdnRequest" /> -- called once per exchange, before the
-    ///     matching address commit, so <see cref="ClientFqdnRequest.HostNameCandidate" /> is ready
-    ///     to hand to
+    ///     This method decodes the request's RFC 4704 Client FQDN option, if any, into a
+    ///     <see cref="ClientFqdnRequest" />, before the address is committed, so
+    ///     <see cref="ClientFqdnRequest.HostNameCandidate" /> can be passed to
     ///     <see cref="Ninlil.Dhcp.Server.Core.Allocation.IDhcpv6LeaseAllocationService.ConfirmAddressAsync" />.
     /// </summary>
     private static ClientFqdnRequest DecodeClientFqdn(Dhcpv6Message request)
@@ -1346,11 +1290,8 @@ public sealed class Dhcpv6RequestHandler(
                 HostNameCandidate: null
             );
 
-        // RFC 4704 Section 4.1 defines no server override for the "N" bit the way it does for
-        // "S" (see ClientFqdnRequest's own doc comment) -- a client explicitly asking for no DNS
-        // updates at all is honored outright, by simply never offering a host name to register,
-        // rather than this server unilaterally deciding it knows better. A client that left the
-        // Domain Name field empty altogether offers no name to extract in the first place.
+        // A client that sets "N" (no updates) is honored by offering no host name; this server
+        // does not override "N" as it may "S". An empty Domain Name field gives no name either.
         string hostNameCandidate = null;
 
         if (!serverShouldNotPerformAnyDnsUpdates && domainName is not null)
@@ -1369,16 +1310,12 @@ public sealed class Dhcpv6RequestHandler(
     }
 
     /// <summary>
-    ///     This method attaches this handler's own Client FQDN reply option to
-    ///     <paramref name="reply" />, once the outcome of the matching address commit is known --
-    ///     a no-op when the request never carried one (see <see cref="ClientFqdnRequest.HadOption" />'s
-    ///     own doc comment). This server's own fixed policy is to always take responsibility for a
-    ///     lease's AAAA (and, as a free side effect of the same write, PTR) record whenever it
-    ///     actually has a host name to register -- <paramref name="addressWasGranted" /> together
-    ///     with <see cref="ClientFqdnRequest.HostNameCandidate" /> is exactly the condition
-    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c> itself checks before
-    ///     ever writing a record, so this reply's own "S"/"N" bits report that same real outcome
-    ///     rather than a separately-tracked guess.
+    ///     This method adds the Client FQDN reply option once the address commit is known, and
+    ///     does nothing if the request had none (see <see cref="ClientFqdnRequest.HadOption" />).
+    ///     The reply says the server performs the AAAA update (S=1, N=0) whenever an address was
+    ///     granted and there is a host name, and otherwise that it performs none (S=0, N=1).
+    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpDnsRegistrationService</c> additionally needs
+    ///     the scope to have a DNS zone, which is not checked here.
     /// </summary>
     private static void ApplyClientFqdnReply(
         Dhcpv6Message reply,

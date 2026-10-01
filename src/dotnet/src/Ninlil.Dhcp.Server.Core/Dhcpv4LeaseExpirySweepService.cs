@@ -12,43 +12,35 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core;
 
 /// <summary>
-///     This class is the one mechanism that ever detects a DHCP lease's own natural expiry --
-///     neither DHCPv4 nor DHCPv6 has a wire message a client sends to announce it, unlike a
-///     RELEASE, so this project cannot simply react to an incoming request the way
-///     <see cref="Allocation.Dhcpv4LeaseAllocationService.ReleaseAsync" /> does. Despite its own
-///     DHCPv4-era name, this class is, and always has been, fully protocol-agnostic -- it queries
-///     <see cref="LeaseEntity" /> generically, with no filter on
-///     <see cref="LeaseEntity.ProtocolVersion" /> at all -- and now genuinely does sweep both
-///     DHCPv4 and DHCPv6 leases; it is registered directly by the composition root
-///     (<c>Program.cs</c>), independently of, and unconditionally alongside, whichever specific
-///     DHCPv4/DHCPv6 engine variant is actually active (including a DHCPv4 relay agent, which
-///     grants no leases of its own but still benefits from existing leases eventually aging out).
-///     On a fixed interval (<see cref="DhcpServerOptions.LeaseExpirySweepInterval" />), it lists
-///     every currently-<see cref="LeaseStateEnum.Active" /> lease, marks any whose own
-///     <c>LeaseExpiresAtUtc</c> has already passed as <see cref="LeaseStateEnum.Expired" />, and
-///     publishes <see cref="DhcpLeaseChangedEvent" /> for each one -- most notably consumed by the
-///     DHCP-&gt;DNS integration feature to remove that client's own now-stale A/AAAA record.
+///     This background service notices when DHCP leases expire. No client message announces an
+///     expiry, unlike a RELEASE (see <see cref="Allocation.Dhcpv4LeaseAllocationService.ReleaseAsync" />),
+///     so every <see cref="DhcpServerOptions.LeaseExpirySweepInterval" /> it lists the
+///     <see cref="LeaseStateEnum.Active" /> leases, marks those whose <c>LeaseExpiresAtUtc</c> has
+///     passed as <see cref="LeaseStateEnum.Expired" />, and publishes a
+///     <see cref="DhcpLeaseChangedEvent" /> for each; the DHCP-to-DNS integration uses that to
+///     remove the client's A/AAAA record.
 ///     <para>
-///         Mirrors <c>Ninlil.Dns.Server.Webhooks.WebhookDeliveryRetrySweepService</c>'s own shape
-///         exactly: the first sweep runs immediately rather than after waiting out one full
-///         interval, and a single failed pass (a transient storage error) is logged and never
-///         takes the whole loop down -- there is always another sweep, at worst one interval
-///         later.
+///         Despite the name it handles DHCPv4 and DHCPv6 leases alike (it does not filter on
+///         <see cref="LeaseEntity.ProtocolVersion" />). <c>Program.cs</c> registers it for every
+///         configuration, whichever engine is active, including a relay agent that grants no
+///         leases itself, so recorded leases still age out.
 ///     </para>
 ///     <para>
-///         Deliberately filters to <see cref="LeaseStateEnum.Active" /> leases only, then checks
-///         <c>LeaseExpiresAtUtc</c> against the current time in memory rather than pushing that
-///         comparison down into the repository's own query -- the same reasoning
-///         <see cref="Allocation.Dhcpv4LeaseAllocationService.IsLeaseBlocking" /> already applies:
-///         this project's own SQLite provider does not reliably translate every comparison over a
-///         raw <c>DateTimeOffset</c> column (it cannot order by one at all), and this
-///         project's real-world lease counts are small enough that an equality filter plus an
-///         in-memory scan costs nothing worth avoiding.
+///         Like <c>Ninlil.Dns.Server.Webhooks.WebhookDeliveryRetrySweepService</c>, the first
+///         sweep runs at startup and a failed sweep is logged without stopping the service. The
+///         delay sits inside the same <c>try</c>, so after a failure the next sweep starts at once
+///         rather than one interval later.
+///     </para>
+///     <para>
+///         The query filters by state only and compares <c>LeaseExpiresAtUtc</c> in memory, as
+///         <see cref="Allocation.Dhcpv4LeaseAllocationService.IsLeaseBlocking" /> does: the SQLite
+///         provider does not translate every <c>DateTimeOffset</c> comparison (it cannot order by
+///         one at all), and lease counts are small.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to reach fresh, scoped services per sweep.</param>
-/// <param name="options">This server's own configured sweep interval.</param>
-/// <param name="logger">The logger this service records the outcome of each sweep to.</param>
+/// <param name="scopeFactory">The factory that creates a scope for each sweep.</param>
+/// <param name="options">The server options, read for the sweep interval on every pass.</param>
+/// <param name="logger">The logger each sweep's outcome is recorded to.</param>
 public sealed class Dhcpv4LeaseExpirySweepService(
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<DhcpServerOptions> options,
@@ -67,22 +59,21 @@ public sealed class Dhcpv4LeaseExpirySweepService(
             }
             catch (OperationCanceledException)
             {
-                // Expected during a graceful shutdown.
+                // Expected on shutdown.
             }
             catch (Exception exception)
             {
-                // One bad sweep must never take this whole background service down -- the same
-                // reasoning WebhookDeliveryRetrySweepService's own sweep loop already establishes.
-                // A lease genuinely due to expire simply gets noticed one interval later.
+                // A failed sweep must not stop the service; the next pass picks the leases up.
                 logger.LogWarning(exception, "A DHCP lease expiry sweep failed unexpectedly.");
             }
         }
     }
 
     /// <summary>
-    ///     This method performs a single sweep pass against fresh, scoped services -- exposed
-    ///     publicly so a test can drive and observe one pass directly rather than waiting out a
-    ///     real <see cref="DhcpServerOptions.LeaseExpirySweepInterval" />.
+    ///     This method runs one sweep in a new service scope. It is public so tests can run a pass
+    ///     without waiting for <see cref="DhcpServerOptions.LeaseExpirySweepInterval" />. Offered
+    ///     leases and declined-address quarantines are not touched; their expiry time alone makes
+    ///     them free.
     /// </summary>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>How many leases this pass expired.</returns>

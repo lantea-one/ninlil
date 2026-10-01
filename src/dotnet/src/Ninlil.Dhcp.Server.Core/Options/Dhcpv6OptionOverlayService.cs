@@ -8,35 +8,30 @@ using Ninlil.Dhcp.Server.Core.Identity;
 namespace Ninlil.Dhcp.Server.Core.Options;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv6OptionOverlayService" /> against the real
-///     repositories -- the DHCPv6 analogue of <see cref="Dhcpv4OptionOverlayService" />. Every
-///     enabled tag rule eligible for the scope whose own DHCPv6-relevant match criteria the
-///     request satisfies is evaluated and applied in <see cref="DhcpTagRuleEntity" />'s own
-///     documented priority order -- the last matching rule to set a given tag is the one a client
-///     actually receives. A rule's own DHCPv4-only criteria
-///     (<see cref="DhcpTagRuleEntity.RelayAgentCircuitIdHex" />) are never consulted here; only a
-///     rule's <see cref="DhcpTagRuleEntity.VendorClassIdentifierMatch" />/
-///     <see cref="DhcpTagRuleEntity.UserClassMatch" /> (both reused, unchanged in shape, from
-///     their DHCPv4 meaning) and its DHCPv6-specific
-///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" />/
-///     <see cref="DhcpTagRuleEntity.RelayInterfaceIdHex" />/
-///     <see cref="DhcpTagRuleEntity.RelayAgentRemoteIdHex" /> (the latter doing double duty as this
-///     protocol's own RFC 4649 Remote-ID criterion too) are ever considered.
+///     This class implements <see cref="IDhcpv6OptionOverlayService" /> on the tag rule
+///     repositories, the counterpart of <see cref="Dhcpv4OptionOverlayService" /> without custom
+///     options. It applies the options of every enabled, eligible tag rule whose criteria the
+///     request meets, in the order described on <see cref="DhcpTagRuleEntity" />, so the last rule
+///     to set a tag wins. Only these criteria are checked:
+///     <see cref="DhcpTagRuleEntity.VendorClassIdentifierMatch" /> and
+///     <see cref="DhcpTagRuleEntity.UserClassMatch" /> (against the DHCPv6 options),
+///     <see cref="DhcpTagRuleEntity.VendorClassEnterpriseNumber" />,
+///     <see cref="DhcpTagRuleEntity.RelayInterfaceIdHex" /> and
+///     <see cref="DhcpTagRuleEntity.RelayAgentRemoteIdHex" /> (against the RFC 4649 Remote-ID);
+///     <see cref="DhcpTagRuleEntity.RelayAgentCircuitIdHex" /> is ignored. A rule's tag is used
+///     as the DHCPv6 option code.
 ///     <para>
-///         An option whose own <see cref="DhcpOptionValueSourceEnum" /> is
-///         <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> ignores its stored
-///         <c>ValueHex</c> entirely and instead delivers <paramref name="serverAddressProvider" />'s
-///         own resolved IPv6 address -- deliberately <b>not</b> this server's own DHCPv6 DUID
-///         (<see cref="IDhcpv6ServerIdentifierProvider" />), which is an opaque protocol
-///         identifier with no usable-address meaning at all; see
-///         <see cref="Identity.Dhcpv6ServerAddressProvider" />'s own doc comment for exactly how
-///         this server's own real IPv6 address is resolved.
+///         An option with value source <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
+///         ignores <c>ValueHex</c> and carries the 16 bytes of the IPv6 address from
+///         <paramref name="serverAddressProvider" /> (see
+///         <see cref="Identity.Dhcpv6ServerAddressProvider" />), not the DUID from
+///         <see cref="IDhcpv6ServerIdentifierProvider" />, which is not an address.
 ///     </para>
 /// </summary>
 /// <param name="tagRuleRepository">Used to read the tag rules eligible for a scope.</param>
 /// <param name="tagRuleOptionRepository">Used to read the options a matching rule contributes.</param>
 /// <param name="serverAddressProvider">
-///     Resolves this server's own IPv6 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
+///     Supplies the server's IPv6 address for a <see cref="DhcpOptionValueSourceEnum.ServerAddress" />
 ///     option.
 /// </param>
 public sealed class Dhcpv6OptionOverlayService(
@@ -53,8 +48,8 @@ public sealed class Dhcpv6OptionOverlayService(
         CancellationToken cancellationToken = default
     )
     {
-        // No scope resolved for this exchange at all -- nothing scope-eligible to look up, the
-        // same tolerance Dhcpv6OptionDeliveryService's own scope-dependent options apply.
+        // No scope for this exchange: no rule is eligible, as Dhcpv6OptionDeliveryService also
+        // skips scope options.
         if (scope is null)
             return;
 
@@ -83,13 +78,10 @@ public sealed class Dhcpv6OptionOverlayService(
     }
 
     /// <summary>
-    ///     This method reports whether a rule's own DHCPv6-relevant match criteria are all
-    ///     satisfied by a request -- combined with AND, per <see cref="DhcpTagRuleEntity" />'s own
-    ///     doc comment, exactly mirroring <see cref="Dhcpv4OptionOverlayService" />'s own
-    ///     <c>Matches</c> method in shape. A criterion the rule leaves unset (null/empty) is simply
-    ///     not checked at all -- including, correctly, a rule with no DHCPv6-relevant criteria set
-    ///     (whether because it configures only DHCPv4-only criteria, or none at all), which matches
-    ///     every DHCPv6 request eligible for the rule's own scope.
+    ///     This method reports whether a request meets all of a rule's DHCPv6 criteria (combined
+    ///     with AND), like the <c>Matches</c> method of <see cref="Dhcpv4OptionOverlayService" />.
+    ///     Unset criteria are not checked, so a rule with no DHCPv6 criteria, including one with
+    ///     only a Circuit ID, matches every eligible DHCPv6 request.
     /// </summary>
     private static bool Matches(DhcpTagRuleEntity rule, Dhcpv6Message request)
     {
@@ -116,9 +108,8 @@ public sealed class Dhcpv6OptionOverlayService(
         }
         else if (rule.VendorClassEnterpriseNumber is { } enterpriseNumberOnly)
         {
-            // An operator naming only an enterprise number, with no vendor-class-data text to
-            // match, is still a real, meaningful criterion -- "any vendor class from this
-            // enterprise" -- so this is checked independently of VendorClassIdentifierMatch above.
+            // An enterprise number alone means "any vendor class from this enterprise", so it is
+            // checked even without VendorClassIdentifierMatch.
             if (
                 !request.TryGetVendorClass(out uint actualEnterpriseNumber, out _)
                 || actualEnterpriseNumber != enterpriseNumberOnly
@@ -167,11 +158,9 @@ public sealed class Dhcpv6OptionOverlayService(
     }
 
     /// <summary>
-    ///     This method compares an opaque, client-supplied text value against a rule's own
-    ///     configured value -- byte-for-byte identical logic to
-    ///     <see cref="Dhcpv4OptionOverlayService" />'s own private <c>MatchesText</c> method,
-    ///     duplicated here rather than shared since both are small, stable, and each is more
-    ///     naturally read alongside its own protocol-specific <c>Matches</c> method.
+    ///     This method compares a client-supplied value with a configured one, the same logic as
+    ///     <c>MatchesText</c> in <see cref="Dhcpv4OptionOverlayService" />, kept here so it reads
+    ///     next to this class's <c>Matches</c>.
     /// </summary>
     private static bool MatchesText(
         string configured,
@@ -188,13 +177,9 @@ public sealed class Dhcpv6OptionOverlayService(
         };
 
     /// <summary>
-    ///     This method resolves an option's own value bytes and applies them to the reply -- the
-    ///     DHCPv6 analogue of <see cref="Dhcpv4OptionOverlayService" />'s own identical helper,
-    ///     substituting this server's own resolved IPv6 address (sixteen raw bytes) for a
-    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option instead of a
-    ///     <see cref="DhcpOptionValueSourceEnum.Custom" /> option's own decoded hexadecimal value,
-    ///     silently skipping a value that fails to decode, the same reasoning that helper
-    ///     documents.
+    ///     This method puts one option on the reply, like the helper of the same name in
+    ///     <see cref="Dhcpv4OptionOverlayService" />, with the 16-byte IPv6 address for a
+    ///     <see cref="DhcpOptionValueSourceEnum.ServerAddress" /> option and invalid hex skipped.
     /// </summary>
     private void ApplyRawOption(
         Dhcpv6Message reply,

@@ -8,29 +8,25 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Server.Core.Identity;
 
 /// <summary>
-///     This class resolves this server's own real IPv6 address exactly once, at construction time
-///     (this class is registered as a singleton -- see
-///     <see cref="Extension.ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore" />),
-///     either from <see cref="DhcpServerOptions.ServerIPv6Address" /> when the operator set one
-///     explicitly, or by picking the first non-loopback, non-link-local, operational IPv6 unicast
-///     address bound to any network interface on this host.
+///     This class resolves the server's IPv6 address once, when it is constructed (it is a
+///     singleton; see
+///     <see cref="Extension.ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore" />).
+///     It uses <see cref="DhcpServerOptions.ServerIPv6Address" /> when that is a valid
+///     non-link-local IPv6 address, and otherwise the first IPv6 address that is neither loopback
+///     nor link-local on an interface that is up and not loopback. With none it falls back to
+///     <c>::1</c> and logs a warning. The address is what
+///     <see cref="Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress" /> options
+///     carry (see <see cref="Options.Dhcpv6OptionOverlayService" />), unlike the DUID from
+///     <see cref="IDhcpv6ServerIdentifierProvider" />.
 ///     <para>
-///         This deliberately duplicates
-///         <c>Ninlil.Dhcp.Server.Relay.Identity.Dhcpv6RelayAgentAddressProvider</c>'s own
-///         auto-detection logic byte-for-byte rather than depending on that project -- the exact
-///         same "two mutually exclusive, alternative engines, never both active at once" tradeoff
-///         that class's own doc comment already documents, applied here across the local-engine/
-///         relay-engine boundary rather than the DHCPv4/DHCPv6 one. Unlike
-///         <see cref="IDhcpv6ServerIdentifierProvider" /> (this server's own DUID, an opaque
-///         protocol identifier with no dialable-address meaning at all), this provider exists
-///         specifically to answer "what is this server's own real IPv6 address," the value a
-///         configured DHCPv6 option's <see cref="Ninlil.Dhcp.Common.Enum.DhcpOptionValueSourceEnum.ServerAddress" />
-///         value source substitutes at delivery time (see
-///         <see cref="Options.Dhcpv6OptionOverlayService" />).
+///         The detection repeats the logic of
+///         <c>Ninlil.Dhcp.Server.Relay.Identity.Dhcpv6RelayAgentAddressProvider</c> instead of
+///         referencing that project, since the local engine and the relay are alternatives that
+///         are never registered together.
 ///     </para>
 /// </summary>
-/// <param name="options">This server's own core configuration.</param>
-/// <param name="logger">The logger this resolution's own outcome is recorded to.</param>
+/// <param name="options">The server engine configuration.</param>
+/// <param name="logger">The logger the result is recorded to.</param>
 public sealed class Dhcpv6ServerAddressProvider(
     IOptions<DhcpServerOptions> options,
     ILogger<Dhcpv6ServerAddressProvider> logger
@@ -40,8 +36,7 @@ public sealed class Dhcpv6ServerAddressProvider(
     public IPAddress Value { get; } = Resolve(options.Value, logger);
 
     /// <summary>
-    ///     This method performs the actual one-time resolution described in this class's own doc
-    ///     comment.
+    ///     This method performs the one-time resolution described in the class summary.
     /// </summary>
     private static IPAddress Resolve(
         DhcpServerOptions options,
@@ -66,9 +61,8 @@ public sealed class Dhcpv6ServerAddressProvider(
 
         foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
         {
-            // Only a currently-up interface can plausibly be the one a DHCPv6 client is actually
-            // reachable through, and the loopback/tunnel interfaces this loop otherwise walks
-            // right past never represent a real, client-facing LAN link.
+            // Clients can only be reached through an interface that is up, and loopback is
+            // never a client-facing link.
             if (
                 networkInterface.OperationalStatus != OperationalStatus.Up
                 || networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback
@@ -83,13 +77,9 @@ public sealed class Dhcpv6ServerAddressProvider(
             {
                 IPAddress candidate = unicastAddress.Address;
 
-                // A link-local address (fe80::/10) is only ever valid scoped to one specific
-                // interface, and is almost never the address an operator actually wants handed to
-                // a client as "this server's own address" for a general-purpose option such as a
-                // DNS server -- a real, globally-routable (or at least ULA/site-local) address is
-                // what this provider looks for, the same requirement
-                // Dhcpv6RelayAgentAddressProvider's own doc comment documents for RFC 8415 Section
-                // 7.1's "link-address" field.
+                // A link-local address (fe80::/10) only works on one interface, so it is a poor
+                // value for an option such as a DNS server. Look for a global or ULA address, as
+                // Dhcpv6RelayAgentAddressProvider does for the RFC 8415 "link-address".
                 if (
                     candidate.AddressFamily == AddressFamily.InterNetworkV6
                     && !candidate.IsIPv6LinkLocal
@@ -106,12 +96,9 @@ public sealed class Dhcpv6ServerAddressProvider(
             }
         }
 
-        // No usable interface was found at all -- fall back to loopback rather than throwing, the
-        // same "a listener that never binds never actually needs this value" reasoning
-        // DhcpServerIdentifierProvider's own IPv4 fallback already documents. A ServerAddress
-        // value source resolving to this fallback still delivers a genuinely wrong address to a
-        // real client, but that is a real deployment problem (no usable IPv6 interface at all)
-        // this value alone cannot fix either way.
+        // No usable interface. Fall back to loopback rather than throw, as
+        // DhcpServerIdentifierProvider does; a ServerAddress option then carries a useless
+        // address, but the missing interface is the real problem.
         logger.LogWarning(
             "No non-loopback, non-link-local IPv6 network interface was found; this server's own DHCPv6 server address defaults to loopback, which is almost certainly wrong for a real deployment. Set {OptionName} explicitly.",
             $"{DhcpServerOptions.SectionName}:{nameof(DhcpServerOptions.ServerIPv6Address)}"

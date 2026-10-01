@@ -13,37 +13,35 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Allocation;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv6LeaseAllocationService" /> against the real
-///     <see cref="ILeaseRepository" />/<see cref="IDhcpReservationRepository" /> repositories --
-///     the DHCPv6 analogue of <see cref="Dhcpv4LeaseAllocationService" />, following the exact
-///     same "one lease row per (scope, client), reused across its whole lifecycle" and
-///     "represent a quarantine via the shared <c>Expired</c> state" design notes that class's own
-///     doc comment documents -- see that class's own doc comment for the reasoning, not repeated
-///     here.
+///     This class implements <see cref="IDhcpv6LeaseAllocationService" /> on the lease and
+///     reservation repositories, the counterpart of <see cref="Dhcpv4LeaseAllocationService" />. It
+///     keeps one lease row per client and scope and stores a DECLINE quarantine as an
+///     <c>Expired</c> row with a future expiry, as described there.
 ///     <para>
-///         Address (IA_NA) and delegated-prefix (IA_PD) allocation share the exact same shape --
-///         sticky reuse of an already-held value, then a hint, then a pool scan -- but are kept as
-///         separate method pairs rather than one generic implementation: an address's own
-///         candidate space is a flat range of individual <see cref="IPAddress" />s, while a
-///         prefix's own candidate space is a range of block-aligned prefix bases each carrying an
-///         extra <c>PrefixLength</c>, and a prefix additionally has no reservation lookup at all
-///         (see <see cref="IDhcpv6LeaseAllocationService" />'s own doc comment) -- forcing a single
-///         shared abstraction across both would cost more real clarity than the modest code
-///         duplication it would save, the same reasoning this project's own DHCPv4/DHCPv6 split
-///         itself is built on.
+///         <b>Order.</b> An address offer uses the client's existing row when it is not
+///         <c>Expired</c> and still in range; otherwise the client's enabled reservation (none,
+///         if another client blocks it); otherwise the IAADDR hint from the client's IA_NA when it
+///         is free, in range and not reserved; otherwise the first free pool address (see
+///         <see cref="Dhcpv6NetworkHelper" /> for the bounded scan). A prefix offer is the same
+///         without the reservation step, and the hint is checked only for being inside the
+///         pool range.
+///     </para>
+///     <para>
+///         Address and prefix allocation are separate methods rather than one generic version:
+///         addresses are single <see cref="IPAddress" /> values, prefixes are aligned blocks with a
+///         <c>PrefixLength</c>, and prefixes have no reservations.
 ///     </para>
 /// </summary>
-/// <param name="leaseRepository">The repository this service reads and writes leases through.</param>
-/// <param name="reservationRepository">The repository this service reads static reservations through.</param>
-/// <param name="unitOfWork">The unit of work this service commits every change through.</param>
-/// <param name="options">This server's own core configuration.</param>
+/// <param name="leaseRepository">The repository leases are read and written through.</param>
+/// <param name="reservationRepository">The repository reservations are read through.</param>
+/// <param name="unitOfWork">The unit of work every change is saved through.</param>
+/// <param name="options">The server engine configuration (offer hold and quarantine times).</param>
 /// <param name="eventPublisher">
-///     The publisher a real grant (<see cref="ConfirmAddressAsync" />/<see cref="ConfirmPrefixAsync" />)
-///     or release (<see cref="ReleaseAsync" />) reports through, via
-///     <see cref="DhcpLeaseChangedEvent" /> -- mirrors <c>Dhcpv4LeaseAllocationService</c>'s own
-///     publish points exactly.
+///     The publisher a grant (<see cref="ConfirmAddressAsync" />, <see cref="ConfirmPrefixAsync" />)
+///     or release (<see cref="ReleaseAsync" />) is reported to as a
+///     <see cref="DhcpLeaseChangedEvent" />, as in <c>Dhcpv4LeaseAllocationService</c>.
 /// </param>
-/// <param name="logger">The logger this service's own allocation decisions are recorded to.</param>
+/// <param name="logger">The logger allocation problems are recorded to.</param>
 public sealed class Dhcpv6LeaseAllocationService(
     ILeaseRepository leaseRepository,
     IDhcpReservationRepository reservationRepository,
@@ -73,8 +71,8 @@ public sealed class Dhcpv6LeaseAllocationService(
 
         IPAddress candidate;
 
-        // Sticky reuse -- see Dhcpv4LeaseAllocationService.OfferAsync's own doc comment for why
-        // an Expired row (this engine's own decline-quarantine sentinel) is deliberately excluded.
+        // Sticky reuse, excluding an Expired row (a decline quarantine), as in
+        // Dhcpv4LeaseAllocationService.OfferAsync.
         if (
             existing is { State: not LeaseStateEnum.Expired }
             && IPAddress.TryParse(existing.IpAddress, out IPAddress existingAddress)
@@ -392,9 +390,9 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method resolves the address to offer a client with no already-held, still-in-range
-    ///     address of its own -- the DHCPv6 analogue of
-    ///     <c>Dhcpv4LeaseAllocationService.ResolveCandidateAddressAsync</c>.
+    ///     This method chooses an address for a client that cannot keep its current one, like
+    ///     <c>Dhcpv4LeaseAllocationService.ResolveCandidateAddressAsync</c> but with the IAADDR
+    ///     hint in place of the Requested IP Address option.
     /// </summary>
     private async Task<IPAddress> ResolveCandidateAddressAsync(
         DhcpScopeEntity scope,
@@ -437,8 +435,7 @@ public sealed class Dhcpv6LeaseAllocationService(
             return null;
         }
 
-        // The client's own hinted address (an IAADDR it already included in its own IA_NA),
-        // honored if it is free, in range, and not reserved to someone else.
+        // The IAADDR hint from the client's IA_NA, if free, in range and not reserved.
         if (hint is not null && IsWithinScopeRange(scope, hint))
         {
             DhcpReservationEntity hintReservation =
@@ -515,9 +512,9 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method resolves the prefix to offer a client with no already-held, still-in-pool
-    ///     prefix of its own -- the Prefix Delegation analogue of
-    ///     <see cref="ResolveCandidateAddressAsync" />, minus any reservation lookup.
+    ///     This method chooses a prefix for a client that cannot keep its current one: the
+    ///     IAPREFIX hint when its address is in the pool range and no blocking lease holds it
+    ///     (alignment is not checked), otherwise the first free prefix in the pool scan.
     /// </summary>
     private Task<IPAddress> ResolveCandidatePrefixAsync(
         DhcpScopeEntity scope,
@@ -586,11 +583,9 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method removes a stale, non-blocking row for a *different* client already
-    ///     occupying a value about to be claimed by a brand-new row, in its own <c>SaveChanges</c>
-    ///     -- see <c>Dhcpv4LeaseAllocationService.OfferAsync</c>'s own doc comment for why this
-    ///     must happen before the new row is saved, to never race the same
-    ///     <c>(ScopeName, IpAddress)</c> unique index within one transaction.
+    ///     This method deletes, in its own <c>SaveChanges</c>, another client's non-blocking row
+    ///     that holds a value a new row is about to claim, so the insert does not hit the
+    ///     <c>(ScopeName, IpAddress)</c> unique index (see <c>Dhcpv4LeaseAllocationService</c>).
     /// </summary>
     private async Task RemoveOccupyingLeaseIfAnyAsync(
         IReadOnlyList<LeaseEntity> leases,
@@ -612,17 +607,15 @@ public sealed class Dhcpv6LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method reports whether an address's own existing lease row currently blocks it
-    ///     from being (re)allocated -- see <c>Dhcpv4LeaseAllocationService.IsLeaseBlocking</c>'s
-    ///     own doc comment.
+    ///     This method reports whether a lease row makes its value unavailable, by the rule of
+    ///     <c>Dhcpv4LeaseAllocationService.IsLeaseBlocking</c>.
     /// </summary>
     private static bool IsLeaseBlocking(LeaseEntity lease, DateTimeOffset now) =>
         lease.State != LeaseStateEnum.Released
         && (!lease.LeaseExpiresAtUtc.HasValue || lease.LeaseExpiresAtUtc.Value > now);
 
     /// <summary>
-    ///     This method reports whether an address falls within an address-assignment scope's own
-    ///     configured range.
+    ///     This method reports whether an address is within the scope's range.
     /// </summary>
     private static bool IsWithinScopeRange(DhcpScopeEntity scope, IPAddress address) =>
         IPAddress.TryParse(scope.RangeStartAddress, out IPAddress rangeStart)
@@ -630,16 +623,15 @@ public sealed class Dhcpv6LeaseAllocationService(
         && Dhcpv6NetworkHelper.IsWithinRange(address, rangeStart, rangeEnd);
 
     /// <summary>
-    ///     This method reports whether a prefix falls within a Prefix Delegation scope's own
-    ///     configured pool range.
+    ///     This method reports whether a prefix base address is within the pool range. It does
+    ///     not check alignment.
     /// </summary>
     private static bool IsWithinPrefixPool(DhcpScopeEntity scope, IPAddress prefix) =>
         IsWithinScopeRange(scope, prefix);
 
     /// <summary>
-    ///     This method constructs a brand-new lease entity with its own identifier and creation
-    ///     timestamp already assigned -- see <c>Dhcpv4LeaseAllocationService.NewLease</c>'s own
-    ///     doc comment for the underlying "caller assigns the identifier" convention.
+    ///     This method creates a new IPv6 lease entity with its identifier and creation time set,
+    ///     as <c>Dhcpv4LeaseAllocationService.NewLease</c> does.
     /// </summary>
     private static LeaseEntity NewLease(
         DhcpScopeEntity scope,
@@ -657,8 +649,8 @@ public sealed class Dhcpv6LeaseAllocationService(
         };
 
     /// <summary>
-    ///     This method stages and commits a lease's own insert or update -- see
-    ///     <c>Dhcpv4LeaseAllocationService.SaveAsync</c>'s own doc comment.
+    ///     This method adds or updates a lease and saves, as
+    ///     <c>Dhcpv4LeaseAllocationService.SaveAsync</c> does.
     /// </summary>
     private async Task SaveAsync(
         LeaseEntity lease,

@@ -6,40 +6,31 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Options;
 
 /// <summary>
-///     This static class applies a scope's own standard DHCPv6 configuration options onto an
-///     outgoing reply message -- the DHCPv6 analogue of <see cref="Dhcpv4OptionDeliveryService" />,
-///     narrower in scope: RFC 8415 Section 18.3 requires every reply to carry a Server Identifier
-///     (this server's own DUID) and a Client Identifier (echoing the client's own DUID back), and
-///     this project additionally hands out RFC 3646 Section 3's DNS Recursive Name Server option
-///     from <see cref="DhcpScopeEntity.DnsServerAddresses" /> -- the same list a DHCPv4 scope's own
-///     Domain Name Server option already draws from, genuinely shared between both protocols since
-///     it is nothing more than "which DNS servers to hand a client," independent of which IP
-///     version carried the request.
+///     This static class puts the standard DHCPv6 options on a reply, the narrower counterpart of
+///     <see cref="Dhcpv4OptionDeliveryService" />: the Server Identifier (the server's DUID) and
+///     the echoed Client Identifier that RFC 8415 Section 18.3 requires, and the RFC 3646 Section 3
+///     DNS Recursive Name Server option from <see cref="DhcpScopeEntity.DnsServerAddresses" />
+///     (the list the DHCPv4 Domain Name Server option also uses), sent only if the Option Request
+///     Option lists it when the client sent one.
 ///     <para>
-///         RFC 3646's own Domain Search List option, and RFC 8415's Preference option, are
-///         deliberately not delivered yet -- a documented, deferred refinement, not an oversight:
-///         neither has a configured source on <see cref="DhcpScopeEntity" /> today (a Domain
-///         Search List would need its own new scope field, the same way <c>DnsServerAddresses</c>
-///         already has one; Preference only matters once more than one DHCPv6 server can plausibly
-///         answer the same client, which this project's own single-server homelab deployment
-///         target does not need).
+///         The Domain Search List and Preference options are not sent: <see cref="DhcpScopeEntity" />
+///         has no field for a search list, and Preference only matters with several DHCPv6
+///         servers. A search list can be sent through a tag rule.
 ///     </para>
 /// </summary>
 internal static class Dhcpv6OptionDeliveryService
 {
     /// <summary>
-    ///     This method applies a scope's own standard option values, plus the two identifier
-    ///     options RFC 8415 requires unconditionally, onto a reply message.
+    ///     This method applies the two identifier options and the scope's DNS servers to a reply.
     /// </summary>
-    /// <param name="reply">The reply message to apply options onto.</param>
+    /// <param name="reply">The reply to add options to.</param>
     /// <param name="scope">
-    ///     The scope whose own configured option values should be applied, or
-    ///     <see langword="null" /> when no scope could be resolved for this exchange at all (an
-    ///     Information-Request with no matching scope, for example) -- the two identifier options
-    ///     are still applied in that case, simply with no DNS servers to add alongside them.
+    ///     The scope whose values are used, or <see langword="null" /> when none was resolved
+    ///     (an Information-Request with no matching scope, for example); the identifiers are then
+    ///     still added, without DNS servers.
     /// </param>
-    /// <param name="request">The original request, consulted for its own Client Identifier.</param>
-    /// <param name="serverDuid">This server's own DUID.</param>
+    /// <param name="request">The request, read for its Client Identifier and Option Request Option.</param>
+    /// <param name="serverDuid">The server's DUID.</param>
     public static void Apply(
         Dhcpv6Message reply,
         DhcpScopeEntity scope,
@@ -69,10 +60,8 @@ internal static class Dhcpv6OptionDeliveryService
     }
 
     /// <summary>
-    ///     This method reports whether a given option code should be included: always, when the
-    ///     client sent no Option Request Option at all, or only when the client's own list names
-    ///     it -- the DHCPv6 analogue of <see cref="Dhcpv4OptionDeliveryService" />'s own
-    ///     equivalent helper.
+    ///     This method reports whether an option code should be included: always when the client
+    ///     sent no Option Request Option, otherwise only when it lists the code.
     /// </summary>
     private static bool IncludesOrNoPreference(
         bool requestedCodesPresent,
@@ -81,9 +70,9 @@ internal static class Dhcpv6OptionDeliveryService
     ) => !requestedCodesPresent || requestedCodes.Contains((ushort)code);
 
     /// <summary>
-    ///     This method attempts to parse every address in a list, failing the whole conversion if
-    ///     any single one is invalid -- mirrors <see cref="Dhcpv4OptionDeliveryService" />'s own
-    ///     equivalent helper exactly.
+    ///     This method parses every address in a list, failing if any one is invalid, as in
+    ///     <see cref="Dhcpv4OptionDeliveryService" />. IPv4 entries in the shared list parse but
+    ///     make <c>SetDnsServers</c> throw.
     /// </summary>
     private static bool TryParseAll(
         IReadOnlyList<string> addresses,

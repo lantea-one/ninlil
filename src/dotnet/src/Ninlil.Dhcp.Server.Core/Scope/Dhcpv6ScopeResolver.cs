@@ -11,35 +11,36 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dhcp.Server.Core.Scope;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv6ScopeResolver" /> against the real
-///     <see cref="IDhcpScopeRepository" />/<see cref="IDhcpReservationRepository" />/
-///     <see cref="ILeaseRepository" /> repositories.
+///     This class implements <see cref="IDhcpv6ScopeResolver" /> on the scope, reservation and
+///     lease repositories. Only enabled IPv6 scopes of the requested kind are considered, and a
+///     request without a Client Identifier gets no scope.
 ///     <para>
-///         <b>Resolution order</b>, closely mirroring <see cref="Dhcpv4ScopeResolver" />'s own:
-///         this method tries, in order: (1) a static reservation for this client (
-///         <see cref="DhcpScopeKindEnum.AddressAssignment" /> only -- see
-///         <see cref="Data.Abstractions.Entity.DhcpReservationEntity" />'s own lack of a
-///         delegated-prefix shape, a deliberate, documented scope cut); (2) an existing lease for
-///         this client, in a scope of the requested kind; (3) for a request that arrived wrapped in
-///         a relay agent's own RELAY-FORW envelope, the scope whose own subnet contains that
-///         envelope's own <c>link-address</c> (threaded onto the unwrapped inner message as
-///         <see cref="Dhcpv6Message.RelayLinkAddress" /> by
-///         <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c>) -- the DHCPv6 analogue of
-///         <see cref="Dhcpv4ScopeResolver" />'s own relayed-request <c>giaddr</c> step; (4) as a
-///         last resort, the single enabled scope of the requested protocol version and kind, if
-///         there is exactly one -- the same "single-scope homelab deployment target" fallback
-///         <see cref="Dhcpv4ScopeResolver" /> itself ends with. A non-relayed request has no
-///         equivalent to step (3) at all: a DHCPv6 client's own UDP source address is always its
-///         link-local address regardless of which real, globally-routed subnet a stateful scope
-///         actually serves, so it carries no usable containment signal on its own (unlike DHCPv4's
-///         own <c>ciaddr</c>, which is a real address drawn from the served subnet itself) --
-///         <see cref="Dhcpv6Message.RelayLinkAddress" /> being unset is exactly how this method
-///         tells a non-relayed request apart from one it can usefully key off.
+///         <b>Order of checks</b>, like <see cref="Dhcpv4ScopeResolver" />:
+///         <list type="number">
+///             <item>
+///                 an enabled reservation for this client, for address-assignment scopes only
+///                 (reservations hold an address, not a delegated prefix);
+///             </item>
+///             <item>any lease row for this client in a scope of the requested kind;</item>
+///             <item>
+///                 for a relayed request, the scope whose subnet contains the RELAY-FORW
+///                 <c>link-address</c>, which <c>Dhcpv6RequestHandler.HandleRelayMessageAsync</c>
+///                 copies to <see cref="Dhcpv6Message.RelayLinkAddress" /> (the counterpart of
+///                 <c>giaddr</c>);
+///             </item>
+///             <item>
+///                 otherwise, the only enabled scope of that kind if there is exactly one, also
+///                 when the link address matched no scope.
+///             </item>
+///         </list>
+///         An unrelayed request has no subnet hint: a DHCPv6 client sends from its link-local
+///         address, which says nothing about the global subnet a scope serves (unlike DHCPv4's
+///         <c>ciaddr</c>).
 ///     </para>
 /// </summary>
-/// <param name="scopeRepository">The repository this resolver reads scopes through.</param>
-/// <param name="reservationRepository">The repository this resolver reads reservations through.</param>
-/// <param name="leaseRepository">The repository this resolver reads leases through.</param>
+/// <param name="scopeRepository">The repository scopes are read through.</param>
+/// <param name="reservationRepository">The repository reservations are read through.</param>
+/// <param name="leaseRepository">The repository leases are read through.</param>
 public sealed class Dhcpv6ScopeResolver(
     IDhcpScopeRepository scopeRepository,
     IDhcpReservationRepository reservationRepository,
@@ -67,8 +68,7 @@ public sealed class Dhcpv6ScopeResolver(
         if (clientKey is null)
             return null;
 
-        // 1. A static reservation for this client, wherever it is -- address-assignment scopes
-        // only, per this class's own doc comment.
+        // 1. A reservation for this client in any scope (address-assignment scopes only).
         if (kind == DhcpScopeKindEnum.AddressAssignment)
         {
             foreach (DhcpScopeEntity scope in scopes)
@@ -98,7 +98,7 @@ public sealed class Dhcpv6ScopeResolver(
                 return scope;
         }
 
-        // 3. A relayed request: the scope whose subnet contains the relay's own link address.
+        // 3. A relayed request: the scope whose subnet contains the relay's link address.
         if (request.RelayLinkAddress is not null)
         {
             DhcpScopeEntity relayScope = FindScopeContaining(scopes, request.RelayLinkAddress);
@@ -106,17 +106,14 @@ public sealed class Dhcpv6ScopeResolver(
                 return relayScope;
         }
 
-        // 4. Last resort: the single enabled scope of this kind, if there is exactly one -- reached
-        // both when no relay link address was present at all, and when one was present but matched
-        // no known scope's own subnet (see Dhcpv4ScopeResolver's own matching fallback comment for
-        // why a genuinely mismatched address is treated the same as no address information at all).
+        // 4. Last resort: the only enabled scope of this kind, if there is exactly one. A link
+        // address that matched no scope is treated like none, as in Dhcpv4ScopeResolver.
         return scopes.Count == 1 ? scopes[0] : null;
     }
 
     /// <summary>
-    ///     This method finds the scope, among a candidate list, whose own subnet contains a given
-    ///     address -- the DHCPv6 analogue of <see cref="Dhcpv4ScopeResolver" />'s own private
-    ///     helper of the same name.
+    ///     This method returns the first scope whose subnet contains an address, like the helper
+    ///     of the same name in <see cref="Dhcpv4ScopeResolver" />.
     /// </summary>
     private static DhcpScopeEntity FindScopeContaining(
         IReadOnlyList<DhcpScopeEntity> scopes,

@@ -6,19 +6,19 @@ using Ninlil.Dhcp.Data.Abstractions.Enum;
 namespace Ninlil.Dhcp.Server.Core.Scope;
 
 /// <summary>
-///     This interface decides which <see cref="DhcpScopeEntity" /> a DHCPv6 request belongs to,
-///     for one particular kind of identity association within it -- the DHCPv6 analogue of
-///     <see cref="IDhcpv4ScopeResolver" />.
+///     This interface decides which <see cref="DhcpScopeEntity" /> serves one kind of identity
+///     association in a DHCPv6 request, the counterpart of <see cref="IDhcpv4ScopeResolver" />.
+///     See <see cref="Dhcpv6ScopeResolver" />.
 /// </summary>
 public interface IDhcpv6ScopeResolver
 {
     /// <summary>
-    ///     This method resolves the scope a request's own identity association of a given kind
-    ///     should be served from.
+    ///     This method resolves the scope that serves the request's identity associations of the
+    ///     given kind.
     /// </summary>
-    /// <param name="request">The client's own message.</param>
+    /// <param name="request">The client's message.</param>
     /// <param name="kind">
-    ///     Which kind of scope to resolve -- <see cref="DhcpScopeKindEnum.AddressAssignment" /> for
+    ///     Which kind of scope to resolve: <see cref="DhcpScopeKindEnum.AddressAssignment" /> for
     ///     an IA_NA, <see cref="DhcpScopeKindEnum.PrefixDelegation" /> for an IA_PD.
     /// </param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>

@@ -10,37 +10,42 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Dhcp.Server.Core.Scope;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv4ScopeResolver" /> against the real
-///     <see cref="IDhcpScopeRepository" />/<see cref="IDhcpReservationRepository" />/
-///     <see cref="ILeaseRepository" /> repositories.
+///     This class implements <see cref="IDhcpv4ScopeResolver" /> on the scope, reservation and
+///     lease repositories. Only enabled IPv4 scopes are considered.
 ///     <para>
-///         <b>Resolution order, and why</b>: this project's own
-///         <see cref="Protocol.Dhcpv4.Dhcpv4UdpListener" /> binds one wildcard
-///         (<c>INADDR_ANY</c>) socket and does not capture which network interface actually
-///         received a given datagram (see <see cref="DhcpServerOptions.ServerIdentifierAddress" />'s
-///         own doc comment for the same underlying limitation), so a non-relayed request carries
-///         no direct signal at all about which of this server's own scopes it belongs to unless
-///         the request itself already names a client this server recognizes. This method therefore
-///         tries, in order: (1) a static reservation for this client, in any scope; (2) an
-///         existing lease for this client, in any scope (covers a renewing/rebinding/init-reboot
-///         client this server has already served before); (3) for a relayed request, the scope
-///         whose own subnet contains the relay agent's address (RFC 2131 Section 4.1's
-///         <c>giaddr</c> -- a relay agent, by definition, sits on the client's own subnet);
-///         (4) for a request that already has a usable client address (<c>ciaddr</c> --
-///         renewing/rebinding/INFORM), the scope whose own subnet contains it; (5) as a last
-///         resort, the single enabled DHCPv4 scope, if there is exactly one -- reached both when
-///         neither (3) nor (4) had any address to go on, and when one was present but matched no
-///         known scope's own subnet, since a genuinely mismatched address is no less ambiguous,
-///         for this project's own single-scope homelab deployment target, than no address
-///         information being present in the first place. This is a deliberate, honest scope
-///         decision for this project's own primary deployment target (a homelab or home router
-///         typically serving one LAN), not a claim that a genuinely ambiguous, multi-scope request
-///         can always be resolved correctly.
+///         <b>Order of checks.</b> <see cref="Protocol.Dhcpv4.Dhcpv4UdpListener" /> binds one
+///         wildcard socket and does not know which interface a datagram arrived on (see
+///         <see cref="DhcpServerOptions.ServerIdentifierAddress" />), so an unrelayed request gives
+///         no direct hint of its subnet. The resolver tries, in order:
+///         <list type="number">
+///             <item>an enabled reservation for this client, in any scope;</item>
+///             <item>
+///                 any lease row for this client (in any state), in any scope, which covers
+///                 renewing, rebinding and rebooting clients;
+///             </item>
+///             <item>
+///                 for a relayed request, the scope whose subnet contains the relay agent address
+///                 (<c>giaddr</c>, RFC 2131 Section 4.1), since the relay sits on the client's
+///                 subnet;
+///             </item>
+///             <item>
+///                 for a request with a client address (<c>ciaddr</c>: renewing, rebinding or
+///                 INFORM), the scope whose subnet contains it;
+///             </item>
+///             <item>
+///                 otherwise, the only enabled scope if there is exactly one, also when steps 3
+///                 or 4 had an address that matched no scope.
+///             </item>
+///         </list>
+///         The first two steps come before <c>giaddr</c>, so a client with an old lease or a
+///         reservation in one scope is served from that scope even when it is relayed from
+///         another subnet. The single-scope fallback suits the usual home deployment with one LAN;
+///         with several scopes, an unrelayed new client that has no <c>ciaddr</c> gets no scope.
 ///     </para>
 /// </summary>
-/// <param name="scopeRepository">The repository this resolver reads scopes through.</param>
-/// <param name="reservationRepository">The repository this resolver reads reservations through.</param>
-/// <param name="leaseRepository">The repository this resolver reads leases through.</param>
+/// <param name="scopeRepository">The repository scopes are read through.</param>
+/// <param name="reservationRepository">The repository reservations are read through.</param>
+/// <param name="leaseRepository">The repository leases are read through.</param>
 public sealed class Dhcpv4ScopeResolver(
     IDhcpScopeRepository scopeRepository,
     IDhcpReservationRepository reservationRepository,
@@ -90,7 +95,7 @@ public sealed class Dhcpv4ScopeResolver(
                 return scope;
         }
 
-        // 3. A relayed request: the scope whose subnet contains the relay agent's own address.
+        // 3. A relayed request: the scope whose subnet contains the relay agent's address.
         if (!request.RelayAgentIpAddress.Equals(IPAddress.Any))
         {
             DhcpScopeEntity relayScope = FindScopeContaining(scopes, request.RelayAgentIpAddress);
@@ -106,19 +111,15 @@ public sealed class Dhcpv4ScopeResolver(
                 return clientScope;
         }
 
-        // 5. Last resort: the single enabled scope, if there is exactly one -- reached both when
-        // neither a relay agent address nor a usable client address was present at all, and when
-        // one was present but matched no known scope's own subnet (a genuinely mismatched address
-        // is no less ambiguous, for this project's own single-scope homelab deployment target,
-        // than no address information being present in the first place).
+        // 5. Last resort: the only enabled scope, if there is exactly one. An address that
+        // matched no scope is treated like no address.
         return scopes.Count == 1 ? scopes[0] : null;
     }
 
     /// <summary>
-    ///     This method finds the scope, among a candidate list, whose own subnet contains a given
-    ///     address -- using each scope's <see cref="DhcpScopeEntity.RangeStartAddress" /> as an
-    ///     arbitrary member of that subnet, since <see cref="Dhcpv4NetworkHelper.AreInSameNetwork" />
-    ///     only needs a masked comparison, not the true network address itself.
+    ///     This method returns the first scope whose subnet contains an address. The scope's
+    ///     <see cref="DhcpScopeEntity.RangeStartAddress" /> stands in for the network, since
+    ///     <see cref="Dhcpv4NetworkHelper.AreInSameNetwork" /> only compares masked addresses.
     /// </summary>
     private static DhcpScopeEntity FindScopeContaining(
         IReadOnlyList<DhcpScopeEntity> scopes,

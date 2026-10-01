@@ -14,53 +14,44 @@ using Ninlil.Dns.Server.Core.Events;
 namespace Ninlil.Dhcp.Server.Core.Allocation;
 
 /// <summary>
-///     This class implements <see cref="IDhcpv4LeaseAllocationService" /> against the real
-///     <see cref="ILeaseRepository" />/<see cref="IDhcpReservationRepository" /> repositories.
+///     This class implements <see cref="IDhcpv4LeaseAllocationService" /> on the lease and
+///     reservation repositories. It is scoped; <see cref="Dhcpv4RequestHandler" /> resolves it in
+///     a new scope per request.
 ///     <para>
-///         <b>Design note -- one lease row per (scope, client), reused across its whole
-///         lifecycle</b>: <c>LeaseConfiguration</c> enforces a unique index on both
-///         <c>(ScopeName, ClientIdentifier)</c> and <c>(ScopeName, IpAddress)</c>, so a client can
-///         hold at most one lease per scope, and an address can be held by at most one lease per
-///         scope, at any moment. This class leans on that directly: rather than writing a new
-///         historical row every time a client's own state changes (offered -&gt; active -&gt;
-///         released, for example), it finds and updates that one row in place, only ever removing
-///         it (via <c>OfferAsync</c>'s own sticky-reuse path, or explicitly when a different
-///         client's stale row already occupies a target address) when a real address change
-///         genuinely requires it.
+///         <b>One lease row per client and scope.</b> <c>LeaseConfiguration</c> has unique indexes
+///         on <c>(ScopeName, ClientIdentifier)</c> and <c>(ScopeName, IpAddress)</c>, so a client
+///         has at most one row per scope and an address at most one row. The row is updated in
+///         place as its state changes (offered, active, released) rather than adding history
+///         rows. Another client's stale row is deleted, in its own <c>SaveChanges</c>, before an
+///         address it occupies is claimed: always in <see cref="ConfirmAsync" />, and in
+///         <see cref="OfferAsync" /> only when the client has no row yet.
 ///     </para>
 ///     <para>
-///         <b>Design note -- representing a DECLINE without a new enum member</b>:
-///         <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum" /> is shared across both DHCPv4 and a
-///         future DHCPv6 engine and has no dedicated "declined" member. Every pool-availability
-///         check in this class (<see cref="IsLeaseBlocking" />) already keys off two things
-///         together -- the lease's own <c>State</c> not being <c>Released</c>, and its
-///         <c>LeaseExpiresAtUtc</c> still being in the future -- so <see cref="DeclineAsync" />
-///         faithfully represents a quarantine by setting <c>State</c> to <c>Expired</c> with
-///         <c>LeaseExpiresAtUtc</c> pushed <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />
-///         into the future: every allocation path that would otherwise treat an <c>Expired</c>
-///         lease as free correctly keeps treating it as unavailable for as long as that quarantine
-///         window has not yet elapsed, for every client, not only the one that declined it --
-///         without adding a new member to a shared, cross-protocol enum for this one call site's
-///         benefit.
+///         <b>DECLINE without a "declined" state.</b> <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum" />,
+///         shared with DHCPv6, has no declined member. Availability checks
+///         (<see cref="IsLeaseBlocking" />) treat a row as blocking while it is not <c>Released</c>
+///         and its <c>LeaseExpiresAtUtc</c> is in the future, so <see cref="DeclineAsync" /> marks
+///         the row for the address <c>Expired</c> with an expiry
+///         <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" /> ahead, which keeps
+///         the address from every client until then. The quarantine is stored on whatever row
+///         references the address, usually the declining client's own row.
 ///     </para>
 /// </summary>
-/// <param name="leaseRepository">The repository this service reads and writes leases through.</param>
-/// <param name="reservationRepository">The repository this service reads static reservations through.</param>
-/// <param name="unitOfWork">The unit of work this service commits every change through.</param>
+/// <param name="leaseRepository">The repository leases are read and written through.</param>
+/// <param name="reservationRepository">The repository reservations are read through.</param>
+/// <param name="unitOfWork">The unit of work every change is saved through.</param>
 /// <param name="serverIdentifierProvider">
-///     This server's own identifier address, excluded from pool allocation so it is never handed
-///     out to a client.
+///     The server identifier address, which the pool scan and the requested-address path never
+///     hand out.
 /// </param>
-/// <param name="options">This server's own core configuration.</param>
+/// <param name="options">The server engine configuration (offer hold and quarantine times).</param>
 /// <param name="eventPublisher">
-///     The publisher a real grant (<see cref="ConfirmAsync" />) or release
-///     (<see cref="ReleaseAsync" />) reports through, via
-///     <see cref="DhcpLeaseChangedEvent" /> -- most notably consumed by the DHCP-&gt;DNS
-///     integration feature, <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseDnsRegistrationEventSubscriber</c>.
-///     Never published for <see cref="OfferAsync" />/<see cref="DeclineAsync" />: an OFFER is
-///     only ever tentative, and a DECLINE quarantines an address rather than granting one.
+///     The publisher a grant (<see cref="ConfirmAsync" />) or release (<see cref="ReleaseAsync" />)
+///     is reported to as a <see cref="DhcpLeaseChangedEvent" />, used for example by
+///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseDnsRegistrationEventSubscriber</c>. Offers
+///     and declines publish nothing: an offer is tentative and a decline grants nothing.
 /// </param>
-/// <param name="logger">The logger this service's own allocation decisions are recorded to.</param>
+/// <param name="logger">The logger allocation problems are recorded to.</param>
 public sealed class Dhcpv4LeaseAllocationService(
     ILeaseRepository leaseRepository,
     IDhcpReservationRepository reservationRepository,
@@ -91,15 +82,10 @@ public sealed class Dhcpv4LeaseAllocationService(
 
         IPAddress candidate = null;
 
-        // Sticky reuse: a client that already has an Offered/Active/Released row in this scope
-        // keeps the same address, as long as it still falls within the scope's own current range
-        // -- friendlier to the client, and free of the unique-index concerns a genuine address
-        // *change* would raise, since this is the exact same row. Deliberately excludes a row in
-        // the Expired state: that is this class's own quarantine sentinel for a DECLINEd address
-        // (see this class's own doc comment), and reusing it here would silently hand the very
-        // same client its own just-declined, still-quarantined address straight back on its next
-        // DISCOVER -- exactly the outcome the quarantine exists to prevent for every client,
-        // including the one that declined it.
+        // Sticky reuse: a client with an Offered, Active or Released row keeps that address
+        // while it is in range, with no unique-index concern since the row is the same. An
+        // Expired row is excluded because that is how a DECLINE quarantine is stored (see the
+        // class summary), so a client whose lease simply expired also gets a fresh choice.
         if (
             existing is { State: not LeaseStateEnum.Expired }
             && IPAddress.TryParse(existing.IpAddress, out IPAddress existingAddress)
@@ -129,14 +115,10 @@ public sealed class Dhcpv4LeaseAllocationService(
 
         if (isNewLease)
         {
-            // A brand-new row for this client is about to claim candidate -- if a stale,
-            // non-blocking row for a *different* client (typically one that RELEASEd, or whose
-            // lease has since naturally expired) already occupies that exact address, it must be
-            // removed first, in its own SaveChanges, so claiming the address never races the same
-            // (ScopeName, IpAddress) unique index within one transaction. A blocking row can never
-            // reach this point at all -- every path that produced candidate (sticky reuse,
-            // reservation, requested-address, and the pool scan) already excludes any address a
-            // blocking lease currently occupies.
+            // A new row is about to claim candidate. If another client's non-blocking row (one
+            // that was released or expired) holds that address, delete it first, in its own
+            // SaveChanges, so the insert does not hit the (ScopeName, IpAddress) unique index.
+            // Every path that chose candidate already skipped addresses held by blocking rows.
             LeaseEntity occupying = leases.FirstOrDefault(lease =>
                 string.Equals(
                     lease.IpAddress,
@@ -190,19 +172,15 @@ public sealed class Dhcpv4LeaseAllocationService(
                 StringComparison.OrdinalIgnoreCase
             );
 
-        // A client holding a reservation must use its reserved address, not any other -- it may
-        // still confirm that exact address here, but never a different one.
+        // A client with a reservation may confirm only its reserved address.
         if (reservation is { IsDisabled: false } && !addressMatchesOwnReservation)
             return null;
 
         if (!addressMatchesOwnReservation)
         {
-            // Ordinary pool rules apply only when the address being confirmed is not this
-            // client's own reserved one: a reservation is a deliberate, operator-configured
-            // address that need not fall within the scope's own dynamic pool range at all (a
-            // fixed address for one specific device is a common, legitimate reason to reserve one
-            // outside the range everything else draws from), so the range check below is
-            // deliberately skipped in that case.
+            // Pool rules apply only to addresses that are not the client's reservation. A
+            // reserved address may lie outside the dynamic range (a fixed address for one device
+            // often does), so the range check is skipped for it.
             if (!IsWithinScopeRange(scope, address))
                 return null;
 
@@ -213,9 +191,8 @@ public sealed class Dhcpv4LeaseAllocationService(
                     cancellationToken
                 );
 
-            // Any reservation found this way must belong to a different client -- if it were this
-            // client's own, the check above would already have matched it, since a scope can
-            // never hold two reservations for the same client or the same address.
+            // A reservation found here belongs to another client; the client's own would have
+            // matched above.
             if (addressReservation is { IsDisabled: false })
                 return null;
         }
@@ -234,12 +211,11 @@ public sealed class Dhcpv4LeaseAllocationService(
         if (existingByAddress is not null && !ReferenceEquals(existingByAddress, existingByClient))
         {
             if (IsLeaseBlocking(existingByAddress, now))
-                // A different client currently holds (or has quarantined) this exact address.
+                // Another client holds this address, or it is quarantined.
                 return null;
 
-            // A stale, non-blocking row for a different client already occupies this address --
-            // remove it first, in its own SaveChanges, so freeing this address and claiming it
-            // never race the same (ScopeName, IpAddress) unique index within one transaction.
+            // Another client's non-blocking row holds this address; delete it first, in its own
+            // SaveChanges, so claiming the address does not hit the unique index.
             leaseRepository.Remove(existingByAddress);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
@@ -275,8 +251,8 @@ public sealed class Dhcpv4LeaseAllocationService(
         string clientKey = Dhcpv4ClientIdentifier.Format(request);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        // Looked up by address, not by client: the point of a decline is to quarantine the
-        // address itself, regardless of which row (if any) currently references it.
+        // Look up by address, not client: the address is quarantined whichever row refers to
+        // it. With no row, a new one is created for the declining client.
         LeaseEntity lease = await leaseRepository.FindByIpAddressAsync(
             scope.Name,
             declinedAddress.ToString(),
@@ -323,8 +299,7 @@ public sealed class Dhcpv4LeaseAllocationService(
             )
         )
         {
-            // A client releasing an address this server has no matching record of is not an
-            // error worth acting on -- it simply has nothing to free.
+            // Nothing on record to free, which is not an error.
             logger.LogInformation(
                 "Ignoring a RELEASE of {Address} from {ClientIdentifier} in scope '{ScopeName}': no matching lease is on record.",
                 releasedAddress,
@@ -348,10 +323,11 @@ public sealed class Dhcpv4LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method resolves the address to offer a client with no already-held, still-in-range
-    ///     address of its own: a static reservation, if one exists for this client; otherwise the
-    ///     client's own requested address, if free and in range; otherwise the first free address
-    ///     found scanning the scope's pool in order.
+    ///     This method chooses an address for a client that cannot keep its current one: its
+    ///     enabled reservation (or none at all, if another client blocks the reserved address);
+    ///     otherwise the requested address when it is in range, not the server identifier, not
+    ///     reserved and not blocked; otherwise the first address in the pool that is not the
+    ///     server identifier, not reserved and not blocked.
     /// </summary>
     private async Task<IPAddress> ResolveCandidateAddressAsync(
         DhcpScopeEntity scope,
@@ -396,8 +372,7 @@ public sealed class Dhcpv4LeaseAllocationService(
 
         IPAddress serverIdentifier = serverIdentifierProvider.Value;
 
-        // The client's own requested address (RFC 2132 Section 9.1), honored if it is free, in
-        // range, and not reserved to someone else.
+        // The requested address (RFC 2132 Section 9.1), if free, in range and not reserved.
         if (
             request.TryGetRequestedIpAddress(out IPAddress requestedAddress)
             && IsWithinScopeRange(scope, requestedAddress)
@@ -426,8 +401,8 @@ public sealed class Dhcpv4LeaseAllocationService(
             }
         }
 
-        // Fall back to scanning the pool itself, in ascending order, for the first address that
-        // is neither reserved to a different client nor currently occupied by a blocking lease.
+        // Scan the pool in ascending order for the first address that is not reserved and not
+        // held by a blocking lease.
         if (
             !IPAddress.TryParse(scope.RangeStartAddress, out IPAddress rangeStart)
             || !IPAddress.TryParse(scope.RangeEndAddress, out IPAddress rangeEnd)
@@ -481,18 +456,17 @@ public sealed class Dhcpv4LeaseAllocationService(
     }
 
     /// <summary>
-    ///     This method reports whether an address is currently unavailable per an existing lease
-    ///     row for it: a released lease is always immediately available again, and any other
-    ///     lease (offered, active, or quarantined via <see cref="DeclineAsync" />'s own use of
-    ///     <c>Expired</c>) blocks the address for as long as its own <c>LeaseExpiresAtUtc</c>
-    ///     has not yet passed.
+    ///     This method reports whether a lease row makes its address unavailable. A released row
+    ///     never does; any other (offered, active, or <c>Expired</c> as a
+    ///     <see cref="DeclineAsync" /> quarantine) does until its <c>LeaseExpiresAtUtc</c> passes,
+    ///     or forever if it has none.
     /// </summary>
     private static bool IsLeaseBlocking(LeaseEntity lease, DateTimeOffset now) =>
         lease.State != LeaseStateEnum.Released
         && (!lease.LeaseExpiresAtUtc.HasValue || lease.LeaseExpiresAtUtc.Value > now);
 
     /// <summary>
-    ///     This method reports whether an address falls within a scope's own configured range.
+    ///     This method reports whether an address is within the scope's range.
     /// </summary>
     private static bool IsWithinScopeRange(DhcpScopeEntity scope, IPAddress address) =>
         IPAddress.TryParse(scope.RangeStartAddress, out IPAddress rangeStart)
@@ -500,10 +474,9 @@ public sealed class Dhcpv4LeaseAllocationService(
         && Dhcpv4NetworkHelper.IsWithinRange(address, rangeStart, rangeEnd);
 
     /// <summary>
-    ///     This method constructs a brand-new lease entity with its own identifier and creation
-    ///     timestamp already assigned, per this project's own "the caller that creates an entity
-    ///     assigns its identifier" convention (see <see cref="Ninlil.Dns.Data.Abstractions.Entity.EntityBase" />'s
-    ///     own doc comment).
+    ///     This method creates a new IPv4 lease entity with its identifier and creation time set,
+    ///     since the code that creates an entity assigns its identifier (see
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.EntityBase" />).
     /// </summary>
     private static LeaseEntity NewLease(
         DhcpScopeEntity scope,
@@ -521,9 +494,9 @@ public sealed class Dhcpv4LeaseAllocationService(
         };
 
     /// <summary>
-    ///     This method stages and commits a lease's own insert or update, stamping
-    ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.AuditableEntityBase.UpdatedAtUtc" /> for
-    ///     an existing row.
+    ///     This method adds or updates a lease and saves, setting
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.AuditableEntityBase.UpdatedAtUtc" /> on an
+    ///     existing row.
     /// </summary>
     private async Task SaveAsync(
         LeaseEntity lease,

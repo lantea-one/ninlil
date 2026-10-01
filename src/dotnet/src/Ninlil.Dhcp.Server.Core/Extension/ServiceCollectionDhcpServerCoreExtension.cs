@@ -14,29 +14,29 @@ namespace Ninlil.Dhcp.Server.Core.Extension;
 
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up Ninlil's
-///     real DHCPv4 and DHCPv6 server engines -- <see cref="AddNinlilDhcpServerCore" /> and
-///     <see cref="AddNinlilDhcpv6ServerCore" /> respectively -- plus, via
-///     <see cref="AddNinlilDhcpLeaseAdministration" />, the two protocol-agnostic operator-facing
-///     services (lease force-release, scope statistics) neither of those two methods owns.
+///     DHCPv4 server engine (<see cref="AddNinlilDhcpServerCore" />), its DHCPv6 server engine
+///     (<see cref="AddNinlilDhcpv6ServerCore" />) and the two engine-independent services for
+///     operators, lease force-release and scope statistics
+///     (<see cref="AddNinlilDhcpLeaseAdministration" />). <c>Program.cs</c> calls each engine
+///     method only when that protocol's relay agent is not enabled.
 /// </summary>
 public static class ServiceCollectionDhcpServerCoreExtension
 {
     /// <summary>
-    ///     This method registers <see cref="DhcpServerOptions" /> and every real DHCPv4 engine
-    ///     service (<see cref="IDhcpv4ScopeResolver" />, <see cref="IDhcpv4LeaseAllocationService" />,
-    ///     <see cref="IDhcpv4OptionOverlayService" />, <see cref="IDhcpServerIdentifierProvider" />),
-    ///     and the real
-    ///     <see cref="IDhcpv4RequestHandler" /> implementation (<see cref="Dhcpv4RequestHandler" />)
-    ///     <see cref="Dhcpv4UdpListener" /> depends on.
+    ///     This method binds <see cref="DhcpServerOptions" /> and registers the DHCPv4 engine:
+    ///     <see cref="IDhcpServerIdentifierProvider" /> (singleton), the scoped
+    ///     <see cref="IDhcpv4ScopeResolver" />, <see cref="IDhcpv4LeaseAllocationService" /> and
+    ///     <see cref="IDhcpv4OptionOverlayService" />, and <see cref="Dhcpv4RequestHandler" /> as the
+    ///     singleton <see cref="IDhcpv4RequestHandler" /> that <see cref="Dhcpv4UdpListener" />
+    ///     calls.
     ///     <para>
-    ///         Callers must invoke a DHCP repository registration method
-    ///         (<c>AddNinlilDhcpEntityFrameworkCore</c> or <c>AddNinlilDhcpMongoDb</c>) before this
-    ///         one, since every service registered here depends directly on
-    ///         <c>Ninlil.Dhcp.Data.Abstractions</c>'s repository interfaces.
+    ///         The DHCP repositories (<c>AddNinlilDhcpEntityFrameworkCore</c> or
+    ///         <c>AddNinlilDhcpMongoDb</c>) must also be registered, since these services depend on
+    ///         them.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
-    /// <param name="configuration">The application configuration to read this server's own core settings from.</param>
+    /// <param name="configuration">The application configuration to bind <see cref="DhcpServerOptions" /> from.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
     public static IServiceCollection AddNinlilDhcpServerCore(
         this IServiceCollection instance,
@@ -52,11 +52,8 @@ public static class ServiceCollectionDhcpServerCoreExtension
         instance.AddScoped<IDhcpv4LeaseAllocationService, Dhcpv4LeaseAllocationService>();
         instance.AddScoped<IDhcpv4OptionOverlayService, Dhcpv4OptionOverlayService>();
 
-        // Singleton, not scoped: Dhcpv4UdpListener (a process-lifetime BackgroundService)
-        // resolves this exactly once, at startup -- see Dhcpv4RequestHandler's own doc comment
-        // for why it instead creates its own fresh dependency injection scope on every single
-        // HandleRequestAsync call to reach the two scoped services just registered above, rather
-        // than this registration needing to be scoped itself.
+        // Singleton, because the singleton Dhcpv4UdpListener holds it. Dhcpv4RequestHandler
+        // creates a scope per request to reach the scoped services above.
         instance.AddSingleton<IDhcpv4RequestHandler, Dhcpv4RequestHandler>();
 
         // We're done, return the IServiceCollection instance.
@@ -64,29 +61,23 @@ public static class ServiceCollectionDhcpServerCoreExtension
     }
 
     /// <summary>
-    ///     This method registers every real DHCPv6 engine service (<see cref="IDhcpv6ScopeResolver" />,
-    ///     <see cref="IDhcpv6LeaseAllocationService" />, <see cref="IDhcpv6ServerIdentifierProvider" />,
-    ///     <see cref="IDhcpv6ServerAddressProvider" />, <see cref="IDhcpv6OptionOverlayService" />)
-    ///     and the real <see cref="IDhcpv6RequestHandler" />/<see cref="IDhcpv6RelayMessageHandler" />
-    ///     implementation (<see cref="Dhcpv6RequestHandler" />, which implements both interfaces
-    ///     against the exact same instance) <see cref="Dhcpv6UdpListener" /> depends on -- the
-    ///     DHCPv6 analogue of <see cref="AddNinlilDhcpServerCore" />, kept as its own separate
-    ///     method (rather than folded into that one) because the two engines are independent,
-    ///     orthogonal choices: the composition root always calls exactly one of this method or
-    ///     <c>Ninlil.Dhcp.Server.Relay.AddNinlilDhcpv6Relay</c> -- see <c>Dhcpv6RelayOptions</c>'s
-    ///     own doc comment for why -- regardless of which of the two mutually exclusive DHCPv4
-    ///     engines is active alongside it.
+    ///     This method binds <see cref="DhcpServerOptions" /> and registers the DHCPv6 engine: the
+    ///     singleton <see cref="IDhcpv6ServerIdentifierProvider" /> and
+    ///     <see cref="IDhcpv6ServerAddressProvider" />, the scoped
+    ///     <see cref="IDhcpv6ScopeResolver" />, <see cref="IDhcpv6LeaseAllocationService" /> and
+    ///     <see cref="IDhcpv6OptionOverlayService" />, and one singleton
+    ///     <see cref="Dhcpv6RequestHandler" /> serving as both <see cref="IDhcpv6RequestHandler" />
+    ///     and <see cref="IDhcpv6RelayMessageHandler" /> for <see cref="Dhcpv6UdpListener" />.
     ///     <para>
-    ///         <see cref="DhcpServerOptions" /> itself is not configured again here -- both engines
-    ///         share the exact same <c>DhcpServer:Core</c> section, and
-    ///         <see cref="AddNinlilDhcpServerCore" /> already binds it; calling both methods (the
-    ///         composition root's own real, current order) configures it twice harmlessly, but a
-    ///         caller invoking only this method on its own must still configure
-    ///         <see cref="DhcpServerOptions" /> itself first.
+    ///         It is separate from <see cref="AddNinlilDhcpServerCore" /> because the two choices
+    ///         are independent: <c>Program.cs</c> calls either this method or
+    ///         <c>Ninlil.Dhcp.Server.Relay.AddNinlilDhcpv6Relay</c>, whichever DHCPv4 engine is
+    ///         active. Both engine methods bind the shared <c>DhcpServer:Core</c> section; binding
+    ///         it twice is harmless.
     ///     </para>
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
-    /// <param name="configuration">The application configuration to read this server's own core settings from.</param>
+    /// <param name="configuration">The application configuration to bind <see cref="DhcpServerOptions" /> from.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>
     public static IServiceCollection AddNinlilDhcpv6ServerCore(
         this IServiceCollection instance,
@@ -103,12 +94,9 @@ public static class ServiceCollectionDhcpServerCoreExtension
         instance.AddScoped<IDhcpv6LeaseAllocationService, Dhcpv6LeaseAllocationService>();
         instance.AddScoped<IDhcpv6OptionOverlayService, Dhcpv6OptionOverlayService>();
 
-        // Registered once as its own concrete type, then wired to both interfaces it implements
-        // against that exact same singleton instance -- Dhcpv6UdpListener resolves
-        // IDhcpv6RequestHandler for an ordinary client message, and (optionally, see that class's
-        // own doc comment) IDhcpv6RelayMessageHandler for a RELAY-FORW an external relay agent
-        // forwarded here, and both must reach the same instance rather than two independently
-        // constructed ones.
+        // One instance behind both interfaces: Dhcpv6UdpListener uses IDhcpv6RequestHandler for
+        // client messages and the optional IDhcpv6RelayMessageHandler for RELAY-FORW, and both
+        // must reach the same handler.
         instance.AddSingleton<Dhcpv6RequestHandler>();
         instance.AddSingleton<IDhcpv6RequestHandler>(sp =>
             sp.GetRequiredService<Dhcpv6RequestHandler>()
@@ -122,15 +110,11 @@ public static class ServiceCollectionDhcpServerCoreExtension
     }
 
     /// <summary>
-    ///     This method registers <see cref="IDhcpLeaseAdministrationService" /> and
-    ///     <see cref="IDhcpScopeStatisticsService" /> -- the two operator-facing, protocol-agnostic
-    ///     DHCP services that operate purely against <c>Ninlil.Dhcp.Data.Abstractions</c>'s own
-    ///     repositories (never against a specific DHCPv4/DHCPv6 engine instance), so this method is
-    ///     deliberately kept separate from <see cref="AddNinlilDhcpServerCore" />/
-    ///     <see cref="AddNinlilDhcpv6ServerCore" /> and is meant to be called unconditionally by the
-    ///     composition root -- see each service's own doc comment for why. Requires the same DHCP
-    ///     repository registration precondition (<c>AddNinlilDhcpEntityFrameworkCore</c> or
-    ///     <c>AddNinlilDhcpMongoDb</c>) those two methods already document.
+    ///     This method registers the scoped <see cref="IDhcpLeaseAdministrationService" /> and
+    ///     <see cref="IDhcpScopeStatisticsService" />. They use only the DHCP repositories, not an
+    ///     engine, so <c>Program.cs</c> calls this method in every configuration, separately from
+    ///     <see cref="AddNinlilDhcpServerCore" /> and <see cref="AddNinlilDhcpv6ServerCore" />. The
+    ///     DHCP repositories must also be registered.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <returns>The modified <paramref name="instance" /> of <see cref="IServiceCollection" />.</returns>

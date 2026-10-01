@@ -14,42 +14,31 @@ using Ninlil.Dhcp.Server.Core.Scope;
 namespace Ninlil.Dhcp.Server.Core;
 
 /// <summary>
-///     This class is the real DHCPv4 server engine: the single <see cref="IDhcpv4RequestHandler" />
-///     implementation <see cref="Dhcpv4UdpListener" /> dispatches every decoded request to. It
-///     implements RFC 2131 Section 4.3's full message-type state machine --
-///     DISCOVER-Offer-Request-Ack ("DORA"), plus DECLINE/RELEASE/INFORM -- entirely by delegating
-///     to <see cref="IDhcpv4ScopeResolver" /> (which scope a request belongs to),
-///     <see cref="IDhcpv4LeaseAllocationService" /> (lease allocation/confirmation/decline/
-///     release), <see cref="Dhcpv4OptionDeliveryService" /> (standard option delivery), and
-///     <see cref="IDhcpv4OptionOverlayService" /> (a scope's own custom options and any matching
-///     tag rules, applied strictly after the standard options); this class itself owns only the
-///     message-type dispatch and reply-construction logic RFC 2131 Section 4.3 describes.
+///     This class is the DHCPv4 server engine, the <see cref="IDhcpv4RequestHandler" /> that
+///     <see cref="Dhcpv4UdpListener" /> passes every decoded request to. It handles the RFC 2131
+///     Section 4.3 message types (DISCOVER, REQUEST, DECLINE, RELEASE, INFORM) and builds the
+///     replies, leaving the decisions to <see cref="IDhcpv4ScopeResolver" /> (which scope),
+///     <see cref="IDhcpv4LeaseAllocationService" /> (which address),
+///     <see cref="Dhcpv4OptionDeliveryService" /> (standard options) and
+///     <see cref="IDhcpv4OptionOverlayService" /> (custom options and tag rules, applied after
+///     the standard ones).
 ///     <para>
-///         <b>Why this class creates its own dependency injection scope per request</b>:
-///         <see cref="Dhcpv4UdpListener" /> is a <see cref="Microsoft.Extensions.Hosting.BackgroundService" />
-///         -- a singleton for the whole lifetime of the process -- and resolves this class's own
-///         registered singleton instance exactly once, at startup. <see cref="IDhcpv4ScopeResolver" />
-///         and <see cref="IDhcpv4LeaseAllocationService" />, on the other hand, are registered
-///         scoped (they ultimately depend on Entity Framework Core's own
-///         <c>DbContext</c>-backed repositories through <c>IUnitOfWork</c>, which is never safe to
-///         share as a single, process-lifetime instance across concurrent requests). Resolving a
-///         scoped service directly from a singleton's own constructor would either fail outright
-///         (with scope validation enabled) or silently create a real captive-dependency bug --
-///         reusing the same <c>DbContext</c> for the life of the process across every concurrent
-///         DHCP request, whose tracked entities would then go stale and conflict across requests.
-///         This class instead takes only an
-///         <see cref="IServiceScopeFactory" /> and creates a fresh, short-lived scope for every
-///         single <see cref="HandleRequestAsync" /> call, mirroring
-///         <c>Ninlil.Dns.Server.Authoritative.Cache.AuthoritativeZoneCache</c>'s own
-///         established "singleton service, scoped work" shape exactly.
+///         <b>A scope per request.</b> The listener is a singleton and holds this singleton
+///         handler, but the scope resolver, allocation service and overlay service are scoped,
+///         because they use the <c>DbContext</c>-backed repositories through <c>IUnitOfWork</c>,
+///         which must not be shared across concurrent requests. Injecting them into a singleton
+///         would make one <c>DbContext</c> live for the whole process. The handler therefore
+///         takes an <see cref="IServiceScopeFactory" /> and creates a scope for each
+///         <see cref="HandleRequestAsync" /> call, as
+///         <c>Ninlil.Dns.Server.Authoritative.Cache.AuthoritativeZoneCache</c> does.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">
-///     Used to create a fresh dependency injection scope for every request, so this handler's own
-///     scoped dependencies are never captured by its own singleton lifetime.
+///     Used to create a scope for every request, so scoped services are not captured by this
+///     singleton.
 /// </param>
-/// <param name="serverIdentifierProvider">This server's own Server Identifier address.</param>
-/// <param name="logger">The logger this handler's own dispatch decisions are recorded to.</param>
+/// <param name="serverIdentifierProvider">The server's Server Identifier address.</param>
+/// <param name="logger">The logger ignored requests are recorded to.</param>
 public sealed class Dhcpv4RequestHandler(
     IServiceScopeFactory scopeFactory,
     IDhcpServerIdentifierProvider serverIdentifierProvider,
@@ -72,9 +61,7 @@ public sealed class Dhcpv4RequestHandler(
             return null;
         }
 
-        // A fresh scope per request, per this class's own doc comment -- everything below this
-        // point resolves its own scoped dependencies from it rather than from any field captured
-        // at this singleton's own construction time.
+        // One scope per request (see the class summary).
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDhcpv4ScopeResolver scopeResolver =
             scope.ServiceProvider.GetRequiredService<IDhcpv4ScopeResolver>();
@@ -118,16 +105,16 @@ public sealed class Dhcpv4RequestHandler(
                 cancellationToken
             ),
 
-            // OFFER/ACK/NAK are server-originated message types; a client (or relay agent)
-            // sending one this server ever receives is either malformed or malicious, and either
-            // way there is nothing sensible to answer.
+            // OFFER, ACK and NAK come from servers; one received here is malformed or hostile and
+            // gets no answer.
             _ => null,
         };
     }
 
     /// <summary>
-    ///     This method handles a DHCPDISCOVER, per RFC 2131 Section 4.3.1: resolve the client's
-    ///     scope, tentatively allocate an address for it, and offer it back.
+    ///     This method handles a DHCPDISCOVER (RFC 2131 Section 4.3.1): resolve the scope, hold an
+    ///     address for the client and return an OFFER with the negotiated lease time and options.
+    ///     No scope or no free address means no reply.
     /// </summary>
     private async Task<Dhcpv4Message> HandleDiscoverAsync(
         Dhcpv4Message request,
@@ -168,10 +155,10 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DHCPREQUEST, classifying it into one of RFC 2131 Section 4.3.2's
-    ///     three scenarios (selecting, init-reboot, or renewing/rebinding) based on which of the
-    ///     Server Identifier and Requested IP Address options it carries, and whether it already
-    ///     has a usable client address (<c>ciaddr</c>).
+    ///     This method handles a DHCPREQUEST. It classifies it as one of the RFC 2131 Section 4.3.2
+    ///     cases (selecting, renewing or rebinding, init-reboot) from the Server Identifier option,
+    ///     <c>ciaddr</c> and the Requested IP Address option, confirms the address and returns an
+    ///     ACK, or a NAK when the address is not available to the client.
     /// </summary>
     private async Task<Dhcpv4Message> HandleRequestMessageAsync(
         Dhcpv4Message request,
@@ -189,9 +176,8 @@ public sealed class Dhcpv4RequestHandler(
 
         if (hasServerIdentifier)
         {
-            // SELECTING: the client is accepting a specific server's OFFER. If it selected a
-            // different server, this request is not addressed to us at all -- remain completely
-            // silent, per RFC 2131 Section 4.3.2.
+            // SELECTING: the client accepts one server's OFFER. If it chose another server,
+            // stay silent (RFC 2131 Section 4.3.2).
             if (!requestedServer.Equals(serverIdentifierProvider.Value))
                 return null;
 
@@ -202,19 +188,18 @@ public sealed class Dhcpv4RequestHandler(
         }
         else if (hasClientAddress)
         {
-            // RENEWING or REBINDING: the client already believes it holds ciaddr and is asking to
-            // extend that lease.
+            // RENEWING or REBINDING: the client holds ciaddr and asks to extend the lease.
             addressToConfirm = request.ClientIpAddress;
         }
         else if (hasRequestedAddress)
         {
-            // INIT-REBOOT: the client remembers a previous lease and is verifying it is still
-            // valid after rebooting, with neither ciaddr nor a server identifier set.
+            // INIT-REBOOT: after a reboot the client checks that a remembered address is still
+            // valid, with neither ciaddr nor a server identifier.
             addressToConfirm = requestedAddress;
         }
         else
         {
-            // None of the three recognizable shapes RFC 2131 describes -- nothing sensible to do.
+            // None of the RFC 2131 cases applies.
             logger.LogDebug(
                 "Ignoring a malformed DHCPREQUEST that carries neither a Server Identifier, a client address, nor a Requested IP Address option."
             );
@@ -224,9 +209,8 @@ public sealed class Dhcpv4RequestHandler(
         DhcpScopeEntity scope = await scopeResolver.ResolveAsync(request, cancellationToken);
 
         if (scope is null)
-            // This server has no record of this client and no scope whose subnet could plausibly
-            // contain it -- RFC 2131 Section 4.3.2 calls for silence, not a NAK, when a server has
-            // no authority over the client's own network at all.
+            // No scope for this client: RFC 2131 Section 4.3.2 calls for silence, not a NAK,
+            // from a server with no knowledge of the client's network.
             return null;
 
         TimeSpan leaseDuration = Dhcpv4LeaseTimeNegotiator.Negotiate(scope, request);
@@ -256,10 +240,10 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DHCPDECLINE, per RFC 2131 Section 4.3.3: the client reports that
-    ///     the address it was offered is already in use by something else on the network (found
-    ///     via its own ARP probe). The address's own Requested IP Address option (tag 50) names
-    ///     which one; there is no reply to a DECLINE.
+    ///     This method handles a DHCPDECLINE (RFC 2131 Section 4.3.3): the client found the
+    ///     address in use, for example by ARP, and names it in the Requested IP Address option
+    ///     (tag 50). The address is quarantined; there is no reply. The Server Identifier option
+    ///     is not checked, so a DECLINE meant for another server is acted on too.
     /// </summary>
     private async Task<Dhcpv4Message> HandleDeclineAsync(
         Dhcpv4Message request,
@@ -285,9 +269,8 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DHCPRELEASE, per RFC 2131 Section 4.3.6: the client is
-    ///     voluntarily giving up its lease before it expires. The address's own <c>ciaddr</c> names
-    ///     which one; there is no reply to a RELEASE.
+    ///     This method handles a DHCPRELEASE (RFC 2131 Section 4.3.6): the client gives up its
+    ///     lease, named by <c>ciaddr</c>, before it expires. There is no reply.
     /// </summary>
     private async Task<Dhcpv4Message> HandleReleaseAsync(
         Dhcpv4Message request,
@@ -313,9 +296,9 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
-    ///     This method handles a DHCPINFORM, per RFC 2131 Section 4.3.5: the client already has an
-    ///     address through some other means and is purely asking for additional local
-    ///     configuration parameters. No address is allocated and the reply carries no lease time.
+    ///     This method handles a DHCPINFORM (RFC 2131 Section 4.3.5): the client already has an
+    ///     address (<c>ciaddr</c>) and asks only for configuration. The ACK carries options but no
+    ///     address and no lease time.
     /// </summary>
     private async Task<Dhcpv4Message> HandleInformAsync(
         Dhcpv4Message request,
@@ -348,9 +331,9 @@ public sealed class Dhcpv4RequestHandler(
     }
 
     /// <summary>
-    ///     This method builds the common shape every reply this handler ever sends shares: the
-    ///     transaction identifier, hardware-address fields, and relay/broadcast echoes RFC 2131
-    ///     Section 4.3 expects a server to carry through unchanged from the original request.
+    ///     This method builds the fields every reply copies from the request, as RFC 2131
+    ///     Section 4.3 expects: the transaction identifier, hardware address fields, <c>giaddr</c>
+    ///     and the broadcast flag.
     /// </summary>
     private static Dhcpv4Message NewReply(Dhcpv4Message request, IPAddress yourIpAddress) =>
         new()
@@ -366,8 +349,8 @@ public sealed class Dhcpv4RequestHandler(
         };
 
     /// <summary>
-    ///     This method builds a DHCPNAK, per RFC 2131 Section 4.3.2: carrying nothing beyond the
-    ///     message type and this server's own Server Identifier.
+    ///     This method builds a DHCPNAK (RFC 2131 Section 4.3.2), which carries only the message
+    ///     type and the Server Identifier.
     /// </summary>
     private Dhcpv4Message BuildNak(Dhcpv4Message request)
     {

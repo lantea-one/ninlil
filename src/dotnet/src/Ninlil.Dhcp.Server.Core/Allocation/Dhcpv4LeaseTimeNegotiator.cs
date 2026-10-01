@@ -5,26 +5,21 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Allocation;
 
 /// <summary>
-///     This static class negotiates the lease duration to actually grant a client, per RFC 2131
-///     Section 4.3.1's own description: a client may request a specific duration via RFC 2132
-///     Section 9.2's IP Address Lease Time option (tag 51); a server "MUST NOT extend the lease
-///     ... beyond the requested time" but "MAY choose to give the client a shorter lease" -- this
-///     project's own configurable ceiling, <see cref="DhcpScopeEntity.MaxLeaseDuration" />, is
-///     exactly that server-side choice.
+///     This static class chooses the lease duration to grant a DHCPv4 client. A client may ask for
+///     a duration with the IP Address Lease Time option (RFC 2132 Section 9.2, tag 51), and RFC
+///     2131 Section 4.3.1 leaves the final choice to the server. This one grants the requested
+///     time, capped at <see cref="DhcpScopeEntity.MaxLeaseDuration" />.
 /// </summary>
 internal static class Dhcpv4LeaseTimeNegotiator
 {
     /// <summary>
-    ///     This method computes the lease duration to actually grant for a given request against
-    ///     a given scope.
+    ///     This method computes the lease duration to grant for a request in a scope.
     /// </summary>
     /// <param name="scope">The scope the lease is being drawn from.</param>
-    /// <param name="request">The client's own DISCOVER or REQUEST message.</param>
+    /// <param name="request">The client's DISCOVER or REQUEST message.</param>
     /// <returns>
-    ///     The client's own requested duration (RFC 2132 Section 9.2), clamped to
-    ///     <see cref="DhcpScopeEntity.MaxLeaseDuration" />, or
-    ///     <see cref="DhcpScopeEntity.DefaultLeaseDuration" /> if the client requested none, or an
-    ///     invalid (zero or negative) one.
+    ///     The requested duration, or <see cref="DhcpScopeEntity.DefaultLeaseDuration" /> when the
+    ///     client asked for none or for zero, capped at <see cref="DhcpScopeEntity.MaxLeaseDuration" />.
     /// </returns>
     public static TimeSpan Negotiate(DhcpScopeEntity scope, Dhcpv4Message request)
     {

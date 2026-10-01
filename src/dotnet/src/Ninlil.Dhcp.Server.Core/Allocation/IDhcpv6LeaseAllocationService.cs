@@ -6,45 +6,33 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Allocation;
 
 /// <summary>
-///     This interface owns every real lease-allocation decision the DHCPv6 engine makes, for
-///     both RFC 8415 stateful address assignment (IA_NA) and Prefix Delegation (IA_PD) -- the
-///     DHCPv6 analogue of <see cref="IDhcpv4LeaseAllocationService" />. A DECLINE has no Prefix
-///     Delegation analogue at all (RFC 8415 defines it only for addresses, since duplicate address
-///     detection is what a client's own DECLINE reports), so there is no
-///     <c>DeclinePrefixAsync</c>; <see cref="ReleaseAsync" /> is shared, since giving back a lease
-///     row -- whether it holds an address or a delegated prefix -- is the same operation either
-///     way.
+///     This interface makes the DHCPv6 lease decisions for RFC 8415 address assignment (IA_NA)
+///     and prefix delegation (IA_PD), the counterpart of <see cref="IDhcpv4LeaseAllocationService" />.
+///     There is no prefix DECLINE, since a DECLINE reports duplicate address detection, which only
+///     applies to addresses. <see cref="ReleaseAsync" /> serves both kinds, since giving back an
+///     address row and a prefix row is the same operation.
 ///     <para>
-///         <b>Design note -- only the first IA_NA/IA_PD in a message is ever processed</b>: RFC
-///         8415 allows a client to carry more than one IA_NA/IA_PD in a single message, but
-///         <c>LeaseConfiguration</c>'s own unique index (inherited unchanged from DHCPv4) still
-///         only permits one lease row per <c>(ScopeName, ClientIdentifier)</c> -- widening that key
-///         to also include an IAID would be a real, if plausible, future schema change, not
-///         attempted in this sub-phase. <see cref="Dhcpv6RequestHandler" /> therefore only ever
-///         looks at the first IA_NA and the first IA_PD a message carries, a deliberate, honest
-///         scope cut rather than a silent limitation -- entirely sufficient for the overwhelming
-///         majority of real clients (a home router or end-host client requesting exactly one
-///         address and, if any, one delegated prefix per exchange).
+///         <b>One IA_NA and one IA_PD per message.</b> A client may send several, but the
+///         <c>LeaseConfiguration</c> unique index allows one lease row per
+///         <c>(ScopeName, ClientIdentifier)</c>; including the IAID in that key would need a
+///         schema change. <see cref="Dhcpv6RequestHandler" /> therefore handles only the first
+///         IA_NA and the first IA_PD of a message, which covers the usual client asking for one
+///         address and at most one prefix.
 ///     </para>
 /// </summary>
 public interface IDhcpv6LeaseAllocationService
 {
     /// <summary>
-    ///     This method resolves and tentatively reserves an address to offer a client that just
-    ///     sent a SOLICIT (without Rapid Commit), per RFC 8415 Section 18.3.9: a static
-    ///     reservation, if the client has one; otherwise the client's own already-held address (of
-    ///     any lifecycle state), if it still falls within the scope's current range; otherwise the
-    ///     client's own hinted address (an <c>IAADDR</c> already present in the client's own
-    ///     IA_NA), if free and in range; otherwise the first free address found scanning the
-    ///     scope's pool.
+    ///     This method picks an address for a SOLICIT without Rapid Commit (an ADVERTISE, RFC 8415
+    ///     Section 18.3.9) and holds it for the client as an offer. The order is described on
+    ///     <see cref="Dhcpv6LeaseAllocationService" />.
     /// </summary>
     /// <param name="scope">The scope to allocate from.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="association">The specific IA_NA being offered an address.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="association">The IA_NA being offered an address; its IAADDR is a hint.</param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The lease record now tentatively offered, or <see langword="null" /> if no address is
-    ///     currently available in this scope at all.
+    ///     The lease row, now offered, or <see langword="null" /> if no address is available.
     /// </returns>
     Task<LeaseEntity> OfferAddressAsync(
         DhcpScopeEntity scope,
@@ -54,20 +42,20 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method commits a specific address to a client, per RFC 8415 Section 18.3.2's
-    ///     (REQUEST) or 18.3.4's (RENEW/REBIND) own processing, moving the corresponding lease to
+    ///     This method commits an address to a client for a REQUEST, RENEW or REBIND (RFC 8415
+    ///     Sections 18.3.2 and 18.3.4) or a Rapid Commit SOLICIT, making its lease
     ///     <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Active" /> with the given lifetimes.
     /// </summary>
     /// <param name="scope">The scope <paramref name="address" /> belongs to.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
     /// <param name="address">The address to confirm.</param>
-    /// <param name="leaseTimes">The already-negotiated lifetimes to grant.</param>
+    /// <param name="leaseTimes">The lifetimes to grant, already negotiated.</param>
     /// <param name="hostName">The host name to record for this lease, if the client presented one.</param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The now-active lease record, or <see langword="null" /> if <paramref name="address" />
-    ///     is not available to this client -- the caller answers with a Status Code option in that
-    ///     case, DHCPv6 having no DHCPv4-style NAK message type of its own.
+    ///     The active lease, or <see langword="null" /> if <paramref name="address" /> is not
+    ///     available to this client; the caller then answers with a Status Code option, since
+    ///     DHCPv6 has no NAK message.
     /// </returns>
     Task<LeaseEntity> ConfirmAddressAsync(
         DhcpScopeEntity scope,
@@ -79,11 +67,9 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method quarantines an address a client reported as already in use by something
-    ///     else on the network (RFC 8415 Section 18.2.7/18.3.7's DECLINE) for
-    ///     <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />, for every client --
-    ///     the same shared quarantine window and representation (see
-    ///     <c>Dhcpv4LeaseAllocationService</c>'s own doc comment) DHCPv4 already uses.
+    ///     This method withholds an address a client reported in a DECLINE as already in use, for
+    ///     <see cref="DhcpServerOptions.DeclinedAddressQuarantineDuration" />, stored as in DHCPv4
+    ///     (see <c>Dhcpv4LeaseAllocationService</c>).
     /// </summary>
     /// <param name="scope">The scope <paramref name="declinedAddress" /> belongs to.</param>
     /// <param name="declinedAddress">The address the client reported as already in use.</param>
@@ -95,21 +81,17 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method resolves and tentatively reserves a prefix to offer a client that just sent
-    ///     a SOLICIT (without Rapid Commit), the Prefix Delegation analogue of
-    ///     <see cref="OfferAddressAsync" />: the client's own already-held prefix, if it still
-    ///     falls within the scope's current pool; otherwise the client's own hinted prefix, if
-    ///     free; otherwise the first free block-aligned prefix found scanning the scope's pool. No
-    ///     static-reservation lookup -- see this interface's own doc comment for why Prefix
-    ///     Delegation reservations are a deliberate, deferred scope cut.
+    ///     This method picks a prefix for a SOLICIT without Rapid Commit and holds it as an offer,
+    ///     the prefix counterpart of <see cref="OfferAddressAsync" />. Reservations are not
+    ///     consulted, since a reservation holds an address, not a prefix (see
+    ///     <see cref="Dhcpv6LeaseAllocationService" /> for the order).
     /// </summary>
     /// <param name="scope">The scope to allocate from.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="association">The specific IA_PD being offered a prefix.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="association">The IA_PD being offered a prefix; its IAPREFIX is a hint.</param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The lease record now tentatively offered, or <see langword="null" /> if no prefix is
-    ///     currently available in this scope at all.
+    ///     The lease row, now offered, or <see langword="null" /> if no prefix is available.
     /// </returns>
     Task<LeaseEntity> OfferPrefixAsync(
         DhcpScopeEntity scope,
@@ -119,18 +101,18 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method commits a specific delegated prefix to a client, the Prefix Delegation
-    ///     analogue of <see cref="ConfirmAddressAsync" />.
+    ///     This method commits a delegated prefix to a client, the prefix counterpart of
+    ///     <see cref="ConfirmAddressAsync" />.
     /// </summary>
     /// <param name="scope">The scope <paramref name="prefix" /> belongs to.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="prefix">The prefix's own base address to confirm.</param>
-    /// <param name="prefixLength">The prefix's own length, in bits.</param>
-    /// <param name="leaseTimes">The already-negotiated lifetimes to grant.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="prefix">The base address of the prefix to confirm.</param>
+    /// <param name="prefixLength">The prefix length, in bits.</param>
+    /// <param name="leaseTimes">The lifetimes to grant, already negotiated.</param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
-    ///     The now-active lease record, or <see langword="null" /> if the prefix is not available
-    ///     to this client.
+    ///     The active lease, or <see langword="null" /> if the prefix is not available to this
+    ///     client.
     /// </returns>
     Task<LeaseEntity> ConfirmPrefixAsync(
         DhcpScopeEntity scope,
@@ -142,23 +124,20 @@ public interface IDhcpv6LeaseAllocationService
     );
 
     /// <summary>
-    ///     This method frees a lease a client voluntarily gave back before it expired (RFC 8415
-    ///     Section 18.2.8/18.3.6's RELEASE), immediately returning it to the scope's own free
-    ///     pool -- shared between an address and a delegated-prefix lease, per this interface's own
-    ///     doc comment.
+    ///     This method frees an address or prefix lease the client gave back in a RELEASE, so it
+    ///     can be handed out again at once.
     /// </summary>
     /// <param name="scope">The scope the released lease belongs to.</param>
-    /// <param name="clientKey">The client's own formatted DUID.</param>
-    /// <param name="value">The address, or delegated prefix's own base address, being released.</param>
+    /// <param name="clientKey">The client's formatted DUID.</param>
+    /// <param name="value">The address, or the base address of the prefix, being released.</param>
     /// <param name="prefixLength">
-    ///     The prefix length being released, for a Prefix Delegation lease, or
-    ///     <see langword="null" /> for an ordinary address lease.
+    ///     The prefix length for a prefix lease, or <see langword="null" /> for an address lease.
     /// </param>
     /// <param name="cancellationToken">The token used to observe cancellation of the operation.</param>
     /// <returns>
     ///     <see langword="true" /> if a matching lease was found and released;
-    ///     <see langword="false" /> if this client holds no matching lease in this scope at all
-    ///     (the caller reports <c>NoBinding</c> in that case, per RFC 8415 Section 18.3.6).
+    ///     <see langword="false" /> if the client holds no matching lease in this scope (the
+    ///     caller then reports <c>NoBinding</c>).
     /// </returns>
     Task<bool> ReleaseAsync(
         DhcpScopeEntity scope,

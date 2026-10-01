@@ -7,30 +7,30 @@ using Microsoft.Extensions.Options;
 namespace Ninlil.Dhcp.Server.Core.Identity;
 
 /// <summary>
-///     This class resolves this server's own DHCPv6 DUID exactly once, at construction time
-///     (registered as a singleton -- see
-///     <see cref="Extension.ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore" />),
-///     either from <see cref="DhcpServerOptions.ServerDuid" /> when the operator set one
-///     explicitly, or by deriving a DUID-LL (RFC 8415 Section 11.2) from the link-layer address of
-///     the first non-loopback, operational network interface found -- see
-///     <see cref="DhcpServerOptions.ServerDuid" />'s own doc comment for why that needs no
-///     persistence to stay stable, unlike a randomly-generated DUID would.
+///     This class resolves the server's DHCPv6 DUID once, when it is constructed (it is a
+///     singleton; see
+///     <see cref="Extension.ServiceCollectionDhcpServerCoreExtension.AddNinlilDhcpv6ServerCore" />).
+///     It uses <see cref="DhcpServerOptions.ServerDuid" /> when that is valid hex, and otherwise
+///     builds a DUID-LL (RFC 8415 Section 11.4) from the link-layer address of the first
+///     interface that is up, not loopback and has one. A DUID-LL needs no storage to stay stable
+///     (see <see cref="DhcpServerOptions.ServerDuid" />). With no such interface it falls back to
+///     a fixed placeholder DUID and logs a warning.
 /// </summary>
-/// <param name="options">This server's own core configuration.</param>
-/// <param name="logger">The logger this resolution's own outcome is recorded to.</param>
+/// <param name="options">The server engine configuration.</param>
+/// <param name="logger">The logger the result is recorded to.</param>
 public sealed class Dhcpv6ServerIdentifierProvider(
     IOptions<DhcpServerOptions> options,
     ILogger<Dhcpv6ServerIdentifierProvider> logger
 ) : IDhcpv6ServerIdentifierProvider
 {
     /// <summary>
-    ///     RFC 8415 Section 11.2's DUID-LL type code.
+    ///     The DUID-LL type code (RFC 8415 Section 11.4).
     /// </summary>
     private const ushort DuidTypeLinkLayer = 3;
 
     /// <summary>
-    ///     The IANA "ARP Hardware Types" registry value for Ethernet, the overwhelmingly common
-    ///     case for any real network interface this method would ever pick.
+    ///     The IANA "ARP Hardware Types" value for Ethernet. It is used for whatever interface is
+    ///     picked, which is almost always Ethernet or Wi-Fi.
     /// </summary>
     private const ushort HardwareTypeEthernet = 1;
 
@@ -38,8 +38,7 @@ public sealed class Dhcpv6ServerIdentifierProvider(
     public byte[] Value { get; } = Resolve(options.Value, logger);
 
     /// <summary>
-    ///     This method performs the actual one-time resolution described in this class's own doc
-    ///     comment.
+    ///     This method performs the one-time resolution described in the class summary.
     /// </summary>
     private static byte[] Resolve(
         DhcpServerOptions options,
@@ -85,10 +84,8 @@ public sealed class Dhcpv6ServerIdentifierProvider(
             return duid;
         }
 
-        // No usable interface was found at all -- fall back to a fixed, obviously-placeholder
-        // DUID rather than throwing, the same "a listener that never binds never actually needs
-        // this value" reasoning DhcpServerIdentifierProvider's own IPv4 fallback already
-        // documents.
+        // No usable interface. Fall back to a fixed placeholder DUID rather than throw, for the
+        // reason given in DhcpServerIdentifierProvider.
         logger.LogWarning(
             "No non-loopback network interface with a link-layer address was found; the DHCPv6 Server Identifier defaults to a fixed placeholder DUID, which is almost certainly wrong for a real deployment. Set {OptionName} explicitly.",
             $"{DhcpServerOptions.SectionName}:{nameof(DhcpServerOptions.ServerDuid)}"
@@ -101,9 +98,8 @@ public sealed class Dhcpv6ServerIdentifierProvider(
     }
 
     /// <summary>
-    ///     This method attempts to decode an operator-supplied DUID string, tolerating an
-    ///     optional colon separator between byte pairs the same way
-    ///     <c>Dhcpv4ClientIdentifier</c>'s own string handling does.
+    ///     This method decodes a configured DUID string, ignoring every non-hex character (so any
+    ///     separator works), or returns <see langword="null" /> for no digits or an odd number.
     /// </summary>
     private static byte[] TryParseHex(string value)
     {

@@ -7,39 +7,33 @@ using Ninlil.Dhcp.Data.Abstractions.Entity;
 namespace Ninlil.Dhcp.Server.Core.Options;
 
 /// <summary>
-///     This static class applies a scope's own standard DHCPv4 configuration options onto an
-///     outgoing reply message -- the Subnet Mask, Router, and Domain Name Server options RFC 2131
-///     Section 4.3 expects a server to supply alongside an address, plus the Server Identifier
-///     and (for OFFER/ACK, not INFORM) IP Address Lease Time options every reply carries.
+///     This static class puts a scope's standard DHCPv4 options on a reply: the Server Identifier,
+///     the IP Address Lease Time (for OFFER and ACK, not INFORM), Subnet Mask, Router and Domain
+///     Name Server (RFC 2131 Section 4.3), and the PXE boot fields. <see cref="Dhcpv4RequestHandler" />
+///     calls it before <see cref="IDhcpv4OptionOverlayService" />.
 ///     <para>
-///         RFC 2131 Section 3.5 describes a client's own Parameter Request List option (tag 55,
-///         RFC 2132 Section 9.8) as naming "a list of the parameters that the client is
-///         requesting"; per that same section, a server's own reply "SHOULD include" whichever of
-///         those it has values for, but is not limited to only those. This method honors that
-///         guidance by filtering its own optional (Subnet Mask/Router/Domain Name Server) options
-///         against the client's own requested list when one was actually sent, and otherwise
-///         includes every option this scope has a configured value for -- a client that sends no
-///         Parameter Request List at all still receives every standard option this scope can
-///         offer, rather than none.
+///         RFC 2131 Section 3.5 says the reply "SHOULD include" the parameters a client lists in
+///         its Parameter Request List (tag 55, RFC 2132 Section 9.8) that the server has values
+///         for. Subnet Mask, Router, Domain Name Server and the Bootfile Name and TFTP Server Name
+///         options are therefore sent only if listed, when the client sent a list; a client with
+///         no list gets all of them.
 ///     </para>
 /// </summary>
 internal static class Dhcpv4OptionDeliveryService
 {
     /// <summary>
-    ///     This method applies a scope's own standard option values onto a reply message.
+    ///     This method applies the scope's standard options to a reply.
     /// </summary>
-    /// <param name="reply">The reply message to apply options onto.</param>
-    /// <param name="scope">The scope whose own configured option values should be applied.</param>
+    /// <param name="reply">The reply to add options to.</param>
+    /// <param name="scope">The scope whose values are used.</param>
     /// <param name="request">
-    ///     The original request, consulted for its own Parameter Request List (if any) and for
-    ///     whether this reply includes a lease time at all.
+    ///     The request, read for its Parameter Request List.
     /// </param>
-    /// <param name="serverIdentifier">This server's own Server Identifier address.</param>
+    /// <param name="serverIdentifier">The server's Server Identifier address.</param>
     /// <param name="leaseDuration">
-    ///     The lease duration to advertise via the IP Address Lease Time option, or
-    ///     <see langword="null" /> to omit that option entirely -- RFC 2131 Section 4.3.5's own
-    ///     DHCPINFORM reply carries no lease at all, since an INFORM client already has its own
-    ///     address through some other means.
+    ///     The lease duration for the IP Address Lease Time option, or <see langword="null" /> to
+    ///     leave it out, as for a DHCPINFORM reply (RFC 2131 Section 4.3.5), where the client
+    ///     already has an address.
     /// </param>
     public static void Apply(
         Dhcpv4Message reply,
@@ -94,13 +88,11 @@ internal static class Dhcpv4OptionDeliveryService
     }
 
     /// <summary>
-    ///     This method applies a scope's own PXE boot configuration, if any, onto a reply --
-    ///     RFC 2131 §2's own fixed "file"/"siaddr" header fields unconditionally (a BOOTP header
-    ///     field is always present on every reply, never subject to a client's own Parameter
-    ///     Request List the way an RFC 2132 option is), plus the RFC 2132 §9.4/§9.5 Bootfile
-    ///     Name/TFTP Server Name options when the client's own Parameter Request List asks for
-    ///     them -- see <see cref="DhcpScopeEntity.BootFileName" />'s own doc comment for why both
-    ///     mechanisms are offered together.
+    ///     This method applies the scope's PXE boot settings, if <see cref="DhcpScopeEntity.BootFileName" />
+    ///     is set: always the RFC 2131 §2 "file" and "siaddr" header fields (header fields are not
+    ///     subject to the Parameter Request List), and the RFC 2132 §9.5 Bootfile Name and §9.4
+    ///     TFTP Server Name options under the Parameter Request List rule. The TFTP Server Name
+    ///     option carries the address as text.
     /// </summary>
     private static void ApplyPxeBootOptions(
         Dhcpv4Message reply,
@@ -143,9 +135,8 @@ internal static class Dhcpv4OptionDeliveryService
     }
 
     /// <summary>
-    ///     This method reports whether a given option tag should be included: always, when the
-    ///     client sent no Parameter Request List at all, or only when the client's own list names
-    ///     it.
+    ///     This method reports whether an option tag should be included: always when the client
+    ///     sent no Parameter Request List, otherwise only when the list names it.
     /// </summary>
     private static bool IncludesOrNoPreference(
         bool requestedTagsPresent,
@@ -154,8 +145,8 @@ internal static class Dhcpv4OptionDeliveryService
     ) => !requestedTagsPresent || requestedTags.Contains((byte)tag);
 
     /// <summary>
-    ///     This method computes the dotted-quad subnet mask for a CIDR prefix length -- for
-    ///     example, <c>24</c> becomes <c>255.255.255.0</c>.
+    ///     This method computes the subnet mask for a prefix length (<c>24</c> gives
+    ///     <c>255.255.255.0</c>).
     /// </summary>
     private static IPAddress ComputeSubnetMask(int prefixLength)
     {
@@ -166,11 +157,10 @@ internal static class Dhcpv4OptionDeliveryService
     }
 
     /// <summary>
-    ///     This method attempts to parse every address in a list, failing the whole conversion if
-    ///     any single one is invalid -- a scope's own <see cref="DhcpScopeEntity.GatewayAddresses" />/
-    ///     <see cref="DhcpScopeEntity.DnsServerAddresses" /> are expected to already be validated
-    ///     at write time, so a parse failure here indicates stored data this engine should not
-    ///     silently send a truncated version of.
+    ///     This method parses every address in a list, failing if any one is invalid, in which
+    ///     case the option is left out. <see cref="DhcpScopeEntity.GatewayAddresses" /> and
+    ///     <see cref="DhcpScopeEntity.DnsServerAddresses" /> are validated when written, so a bad
+    ///     entry means bad stored data, which is not sent in part.
     /// </summary>
     private static bool TryParseAll(
         IReadOnlyList<string> addresses,
