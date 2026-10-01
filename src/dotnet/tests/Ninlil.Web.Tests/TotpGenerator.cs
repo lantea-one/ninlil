@@ -4,16 +4,16 @@ using System.Security.Cryptography;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class generates a TOTP (RFC 6238) code from a Base32-encoded shared secret, standing
-///     in for a real authenticator app so these tests can exercise the actual two-factor
-///     enrollment/verification flow end-to-end, not just mock past it.
+///     This class generates a TOTP (RFC 6238) code from a Base32-encoded shared secret. It plays
+///     the authenticator app, so the two-factor tests can enroll and sign in through the API
+///     end to end instead of mocking the check.
 /// </summary>
 internal static class TotpGenerator
 {
     /// <summary>
     ///     This method generates the current 6-digit TOTP code for a Base32-encoded shared
-    ///     secret, using the same 30-second step and SHA-1 algorithm RFC 6238 (and every real
-    ///     authenticator app) uses by default.
+    ///     secret, with the 30-second step and HMAC-SHA-1 that RFC 6238 and authenticator apps
+    ///     use by default.
     /// </summary>
     public static string GenerateCode(string base32Secret)
     {

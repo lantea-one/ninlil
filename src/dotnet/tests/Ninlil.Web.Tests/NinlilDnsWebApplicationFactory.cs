@@ -6,49 +6,36 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class hosts a real, in-process instance of <c>Ninlil.Web</c> for these
-///     integration tests, against an isolated, throwaway SQLite database file rather than the
-///     application's own default (which would otherwise collide with a real installation's data
-///     directory, or with another test run's).
+///     This class hosts <c>Ninlil.Web</c> in process for the integration tests in this project.
+///     HTTP requests go through <c>TestServer</c>'s in-memory transport, while the DNS listeners
+///     open real sockets on free ports. Storage is SQLite in a temporary file, so a test run never
+///     touches an installation's data directory or another run's database. The host runs in the
+///     Development environment and seeds a bootstrap administrator (<see cref="AdminUserName" />,
+///     <see cref="AdminPassword" />) that holds every permission; most test classes sign in as it.
 ///     <para>
-///         Every override below is applied via environment variables, set in the constructor,
-///         before the host is ever built. Tried <see cref="WebApplicationFactory{TEntryPoint}" />'s
-///         own <c>ConfigureAppConfiguration</c> hook first, since that is the more usual pattern
-///         -- but confirmed, by an actual failing test ("the signature key was not found" on
-///         every authenticated request, despite a genuinely valid token), that overrides
-///         registered that way are not visible to <c>Program.cs</c>'s own top-level statements,
-///         which read several of these same configuration keys directly, before
-///         <c>WebApplicationBuilder.Build()</c> is ever called -- by the time <c>Build()</c>
-///         folds a <c>ConfigureAppConfiguration</c> override into the final <c>IConfiguration</c>,
-///         that earlier code has already read (and, for the JWT signing key, generated and
-///         persisted) its own different value. Environment variables have no such ordering
-///         hazard, since <c>WebApplicationBuilder.CreateBuilder(args)</c> itself already reads
-///         them synchronously as one of its default configuration sources.
+///         Every override is set as a <c>NINLIL_</c> environment variable in the constructor, before
+///         the host is built. <c>ConfigureAppConfiguration</c> does not work here: the top-level
+///         statements in <c>Program.cs</c> read several keys (the JWT signing key among them,
+///         which is generated and saved when missing) before <c>WebApplicationBuilder.Build()</c>
+///         merges such overrides, so authenticated requests then fail with "the signature key was
+///         not found". <c>WebApplicationBuilder.CreateBuilder(args)</c> reads environment variables
+///         up front, so they have no ordering problem.
 ///     </para>
 ///     <para>
-///         Every variable below uses this project's own real, single supported
-///         <c>NINLIL_</c>-prefixed naming scheme -- the old double-underscore form this class used
-///         before that scheme shipped is now genuinely inert, exactly like any other real
-///         deployment's environment.
-///     </para>
-///     <para>
-///         This only stays correct because every test class in this project shares exactly one
-///         instance of this factory (see <see cref="WebTestCollection" />) -- these environment
-///         variables are process-wide, and a second, concurrently-building factory instance
-///         would race this one to set them, which is exactly the failure mode that made this
-///         project switch to a shared collection fixture in the first place.
+///         Environment variables are process-wide, so this only works because every test class
+///         shares one instance of this factory through <see cref="WebTestCollection" />.
 ///     </para>
 /// </summary>
 public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Program>
 {
     /// <summary>
-    ///     This constant contains the bootstrap administrator account's own user name, fixed for
-    ///     every test run.
+    ///     This constant contains the bootstrap administrator's user name, fixed for every test
+    ///     run.
     /// </summary>
     public const string AdminUserName = "testadmin";
 
     /// <summary>
-    ///     This constant contains the bootstrap administrator account's own initial password,
+    ///     This constant contains the bootstrap administrator's initial password,
     ///     fixed for every test run via <see cref="Startup.AdministratorBootstrapper.PasswordConfigurationKey" />.
     /// </summary>
     public const string AdminPassword = "Test-Password-1234!";
@@ -59,13 +46,10 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     );
 
     /// <summary>
-    ///     This field contains an isolated, throwaway JSON file every runtime settings controller
-    ///     (<c>PresetsController</c>, <c>EventBrokerSettingsController</c>,
-    ///     <c>RateLimitingSettingsController</c>, <c>DnsCookieSettingsController</c>) merges a
-    ///     write into for this test run -- without this, a test applying a preset or patching a
-    ///     setting would mutate this project's own real, shared <c>appsettings.json</c> build
-    ///     output, which every test class in this collection reuses via one factory instance (see
-    ///     this class's own doc comment for why exactly one instance ever exists).
+    ///     This field contains a temporary JSON file that the runtime settings controllers and
+    ///     <c>PresetsController</c> merge their writes into for this test run. Without it, a test
+    ///     that patches a setting or applies a preset would change the shared configuration file
+    ///     in the build output.
     /// </summary>
     private readonly string _runtimeConfigurationFilePath = Path.Combine(
         Path.GetTempPath(),
@@ -73,8 +57,8 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     );
 
     /// <summary>
-    ///     This field contains an isolated, throwaway path for persisted MAC vendor data, so a
-    ///     test exercising an on-demand refresh never writes into the shared build output.
+    ///     This field contains a temporary path for saved MAC vendor data, so a test that triggers
+    ///     an on-demand refresh never writes into the build output.
     /// </summary>
     private readonly string _macVendorDataFilePath = Path.Combine(
         Path.GetTempPath(),
@@ -82,8 +66,8 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     );
 
     /// <summary>
-    ///     This constructor sets every environment variable this test host's own configuration
-    ///     needs before the host is ever built.
+    ///     This constructor sets every environment variable the test host needs before the host
+    ///     is built.
     /// </summary>
     public NinlilDnsWebApplicationFactory()
     {
@@ -105,15 +89,10 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
             AdminPassword
         );
 
-        // Plain DNS starts automatically by default (it has no Enable flag of its own), and this
-        // host's own Kestrel binds real HTTP/HTTPS ports too -- both would otherwise try to bind
-        // privileged ports (53, 80, 443) real Kestrel/socket listeners under WebApplicationFactory
-        // actually attempt to open (unlike the ones that only exist through TestServer's
-        // in-memory abstraction), which would fail without root and isn't what any of these tests
-        // are actually exercising. Ports the operating system reports as free keep every real
-        // listener this host starts out of the way -- of the DNS, DHCP, and web services the
-        // machine running the tests may host, and of another copy of this suite running
-        // alongside -- without disabling anything.
+        // Plain DNS always starts (it has no Enable flag), and its default port 53, like the
+        // default web ports 80 and 443, needs root. Ports the operating system reports as free
+        // keep these listeners clear of services on the test machine and of another copy of
+        // this suite running alongside, without disabling anything.
         PlainDnsPort = GetFreePort();
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
@@ -132,28 +111,21 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
             _runtimeConfigurationFilePath
         );
 
-        // The admin-login brute-force limiter is disabled for this shared fixture, deliberately
-        // -- confirmed necessary, not merely convenient, by first checking TestServer's own
-        // actual behavior directly (the same check ReverseProxyTrustGatingMiddlewareTests's own
-        // doc comment already made for an unrelated middleware): its in-memory transport leaves
-        // HttpContext.Connection.RemoteIpAddress null for every request, so this limiter's own
-        // per-client-IP partitioning would collapse onto a single "unknown" partition shared by
-        // every one of the dozens of test classes in this collection that call POST
-        // /api/auth/login -- tripping the default five-attempts-per-five-minutes threshold almost
-        // immediately and then 429-ing every unrelated test's own login for the rest of that
-        // window. AdminLoginRateLimitingTests (Ninlil.Dns.Identity.Tests) is where this limiter's
-        // own real lockout behavior is actually proven, against a minimal, dedicated host built
-        // specifically for that -- not through this shared, general-purpose one.
+        // The admin-login limiter must stay off in this shared host. TestServer leaves
+        // HttpContext.Connection.RemoteIpAddress null (see ReverseProxyTrustGatingMiddlewareTests),
+        // so the limiter's per-IP partitioning puts every login from every test class into one
+        // partition, and the default five attempts per five minutes would soon answer 429 to
+        // unrelated tests. AdminLoginRateLimitingTests in Ninlil.Dns.Identity.Tests covers the
+        // lockout on a dedicated host.
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_ENABLE",
             "false"
         );
 
-        // Automatic MAC vendor refresh is on by default and downloads from the IEEE; no test in
-        // this shared host may depend on (or load) live external infrastructure, and the
-        // embedded snapshot already answers every lookup a test needs. Every registry URL is
-        // also pointed at a local port nothing listens on, so even an on-demand refresh a test
-        // triggers fails fast and locally instead of reaching the real IEEE server.
+        // Automatic MAC vendor refresh is on by default and downloads from the IEEE. No test may
+        // depend on external services, and the embedded snapshot answers every lookup the tests
+        // need. Every registry URL also points at a local port nothing listens on, so an
+        // on-demand refresh fails fast instead of reaching the IEEE server.
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_MAC_VENDOR_LOOKUP_ENABLE_AUTOMATIC_REFRESH",
             "false"
@@ -176,26 +148,23 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     public const string UnreachableMacVendorRegistryUrl = "http://127.0.0.1:9/registry.csv";
 
     /// <summary>
-    ///     This property contains the isolated, throwaway JSON file this test run's own runtime
-    ///     settings controllers merge a write into -- exposed so a test can read back exactly what
-    ///     was written.
+    ///     This property contains the temporary JSON file the runtime settings controllers write
+    ///     into, so a test can read back what was written.
     /// </summary>
     public string RuntimeConfigurationFilePath => _runtimeConfigurationFilePath;
 
     /// <summary>
-    ///     This property contains this test run's own original SQLite database file path -- exposed
-    ///     so a test exercising <c>StorageController.Switch</c> (which mutates this same shared
-    ///     factory's own live storage engine for the remainder of this test collection's run) can
-    ///     switch back onto it once finished, the same "restore what you changed before returning"
-    ///     convention <c>ServicesControllerCrudTests</c> already applies to a stopped service.
+    ///     This property contains the SQLite database file the host starts on. A test of
+    ///     <c>StorageController.Switch</c> changes the live storage engine for every later test in
+    ///     the collection, so it uses this path to switch back when it finishes, as
+    ///     <c>ServicesControllerCrudTests</c> restarts a service it stopped.
     /// </summary>
     public string SqlitePath => _sqlitePath;
 
     /// <summary>
-    ///     This property contains the real, ephemeral UDP/TCP port this test run's own Plain DNS
-    ///     listener actually binds to -- Plain DNS runs a genuine <see cref="System.Net.Sockets.Socket" />-based
-    ///     listener, not something that only exists through <c>TestServer</c>'s in-memory HTTP
-    ///     abstraction, so a test exercising it needs the real port to send a real query to.
+    ///     This property contains the UDP and TCP port the Plain DNS listener binds to. Plain DNS
+    ///     listens on a <see cref="System.Net.Sockets.Socket" />, not through <c>TestServer</c>,
+    ///     so a test that sends a DNS query needs this port.
     /// </summary>
     public int PlainDnsPort { get; }
 
@@ -214,7 +183,7 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         }
         catch (IOException)
         {
-            // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+            // Best-effort cleanup; a leftover temporary file is harmless.
         }
 
         try
@@ -225,7 +194,7 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         }
         catch (IOException)
         {
-            // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+            // Best-effort cleanup; a leftover temporary file is harmless.
         }
     }
 
