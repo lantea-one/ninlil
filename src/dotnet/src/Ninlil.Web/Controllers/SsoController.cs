@@ -12,25 +12,21 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller hosts the two genuinely anonymous halves of this host's own OpenID Connect
-///     admin-login federation: a status check the Angular login page uses to decide whether to
-///     render its own "Sign in with SSO" button at all (<see cref="Get" />), and the real browser
-///     redirect that starts the identity-provider handshake (<see cref="StartChallenge" />). Neither
-///     caller is signed in at either step, so both are <see cref="AllowAnonymousAttribute" /> --
-///     the same reasoning <see cref="AuthController" />'s own <c>Login</c>/<c>Refresh</c> already
-///     establish.
+///     This controller hosts the anonymous parts of OpenID Connect sign-in to the admin console:
+///     <see cref="Get" />, which the login page uses to decide whether to show its "Sign in with
+///     SSO" button, and <see cref="StartChallenge" />, the browser redirect that starts the
+///     handshake with the identity provider. The caller is not signed in at either step, so both
+///     allow anonymous callers.
 ///     <para>
-///         Everything past the initial redirect -- the identity provider's own callback, minting
-///         this application's real access/refresh token pair, and the final redirect back into
-///         the Angular SPA -- happens inside the OpenID Connect middleware's own
-///         <c>OnTokenValidated</c>/<c>OnRemoteFailure</c> events, registered once in
-///         <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" /> --
-///         see that method's own doc comment for the full round trip. This controller never
-///         itself sees a completed sign-in; it only ever starts one.
+///         Everything after the first redirect (the identity provider's callback, issuing
+///         Ninlil's access and refresh tokens, and the redirect back into the admin console)
+///         happens in the <c>OnTokenValidated</c> and <c>OnRemoteFailure</c> events registered in
+///         <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />.
+///         This controller only starts a sign-in; it never sees one complete.
 ///     </para>
 /// </summary>
-/// <param name="ssoOptions">This host's own currently-effective SSO settings, live -- read only for its own <c>displayName</c>.</param>
-/// <param name="schemeProvider">Used to check whether the OpenID Connect scheme is actually registered right now.</param>
+/// <param name="ssoOptions">The current SSO settings, read only for the button label.</param>
+/// <param name="schemeProvider">Tells whether the OpenID Connect scheme is registered.</param>
 [ApiController]
 [Route("api/auth/sso")]
 [AllowAnonymous]
@@ -40,18 +36,15 @@ public class SsoController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reports whether this host can currently answer an OIDC challenge at all,
-    ///     and if so, what to label the button that starts one.
+    ///     This action reports whether this server can start an SSO sign-in and, if so, the label
+    ///     for the button that starts one. Allows anonymous callers.
     ///     <para>
-    ///         <b>Deliberately checks the real, currently-registered authentication scheme, not
-    ///         merely <see cref="OidcSsoOptions.Enable" />'s own raw configuration value.</b> A
-    ///         write through <c>OidcSsoSettingsController.Patch</c> can flip that value without a
-    ///         restart, but the OpenID Connect scheme itself is only ever registered once, at
-    ///         process startup (see <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />'s
-    ///         own doc comment) -- so a raw-value check here could tell the Angular login page to
-    ///         render a button that would 404 the moment it was clicked. Checking the scheme
-    ///         provider directly is the honest signal of what this specific running process can
-    ///         actually do right now.
+    ///         <b>It checks whether the OpenID Connect scheme is registered, not
+    ///         <see cref="OidcSsoOptions.Enable" />.</b> <c>OidcSsoSettingsController.Patch</c> can
+    ///         change that setting without a restart, but the scheme is registered once at startup
+    ///         (see
+    ///         <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />),
+    ///         so checking the setting could show a button that returns 404 when clicked.
     ///     </para>
     /// </summary>
     [HttpGet]
@@ -68,24 +61,21 @@ public class SsoController(
     }
 
     /// <summary>
-    ///     This action is a real browser navigation target, not a call a single-page application
-    ///     would ever <c>fetch()</c> -- it either 404s (the scheme is not registered, matching
-    ///     <see cref="Get" />'s own <c>enabled: false</c>) or issues a <c>302</c> redirect straight
-    ///     to the identity provider's own authorization endpoint. There is no JSON response on
-    ///     success; the eventual response the browser lands on, several redirects later, is
-    ///     whatever <c>OnTokenValidated</c>/<c>OnRemoteFailure</c> sends it to (see this
-    ///     controller's own doc comment).
+    ///     This action is a browser navigation target, not an API call for <c>fetch()</c>. It
+    ///     returns 404 when the OpenID Connect scheme is not registered (as <see cref="Get" />
+    ///     reports with <c>enabled: false</c>), and otherwise redirects (302) to the identity
+    ///     provider's authorization endpoint. The browser ends up, several redirects later,
+    ///     wherever <c>OnTokenValidated</c> or <c>OnRemoteFailure</c> sends it. Allows anonymous
+    ///     callers.
     ///     <para>
-    ///         Named <see cref="StartChallenge" />, not <c>Challenge</c>, purely to avoid hiding
-    ///         <see cref="ControllerBase" />'s own protected <c>Challenge(...)</c> helper method
-    ///         this action's own body calls -- no functional difference, just a naming collision
-    ///         to sidestep.
+    ///         It is named <see cref="StartChallenge" /> rather than <c>Challenge</c> so it does
+    ///         not hide the protected <c>ControllerBase.Challenge(...)</c> helper it calls.
     ///     </para>
     /// </summary>
     /// <param name="rememberMe">
-    ///     Whether the session this sign-in ends in should outlive the browser -- the same choice
-    ///     a local sign-in's "Remember me" makes. Carried through the identity provider round trip
-    ///     in the challenge's own authentication properties and read back by the sign-in handler.
+    ///     Whether the resulting session should outlive the browser, like "Remember me" on a local
+    ///     sign-in. It travels through the identity-provider round trip in the challenge's
+    ///     authentication properties and is read back when the tokens are issued.
     /// </param>
     [HttpGet("challenge")]
     public async Task<IActionResult> StartChallenge([FromQuery] bool rememberMe = false)
@@ -95,10 +85,9 @@ public class SsoController(
         if (await schemeProvider.GetSchemeAsync(schemeName) is null)
             return NotFound();
 
-        // RedirectUri names where the OIDC middleware would return to by default -- unused here
-        // in practice, since OnTokenValidated always issues its own explicit redirect and calls
-        // HandleResponse() before the middleware would ever consult this value, but every
-        // AuthenticationProperties passed to Challenge() must still name a same-origin path.
+        // OnTokenValidated always redirects itself and calls HandleResponse(), so the middleware
+        // never uses this RedirectUri, but every AuthenticationProperties passed to Challenge()
+        // must name a same-origin path.
         AuthenticationProperties properties = new() { RedirectUri = "/api/auth/sso/challenge" };
         properties.Items[ServiceCollectionAuthenticationExtension.SsoRememberMeItemKey] = rememberMe
             ? "true"

@@ -14,12 +14,13 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller manages the current caller's own API tokens: the credential a
-///     machine-to-machine caller authenticates with instead of signing in interactively. A
-///     token's raw value is only ever returned once, at the moment it is created.
+///     This controller manages the caller's API tokens, the credential a script or other machine
+///     client uses instead of an interactive sign-in. Each endpoint needs only a signed-in caller
+///     and acts on that caller's tokens alone. A token's raw value is returned once, when it is
+///     created.
 /// </summary>
 /// <param name="apiTokenService">Issues and revokes API tokens.</param>
-/// <param name="apiTokenRepository">Lists the current caller's own tokens.</param>
+/// <param name="apiTokenRepository">Lists the caller's tokens.</param>
 [ApiController]
 [Route("api/api-tokens")]
 [Authorize]
@@ -29,8 +30,7 @@ public class ApiTokensController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every API token belonging to the current caller, without exposing
-    ///     any token's own secret value.
+    ///     This action lists the caller's API tokens, without their secret values.
     /// </summary>
     [HttpGet]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(ApiTokenSummaryListExample))]
@@ -51,8 +51,8 @@ public class ApiTokensController(
     }
 
     /// <summary>
-    ///     This action issues a new API token for the current caller, returning its raw, secret
-    ///     value -- shown this one time only.
+    ///     This action issues a new static or one-time API token for the caller and returns its raw
+    ///     value. The value is shown only in this response.
     /// </summary>
     [HttpPost]
     [SwaggerRequestExample(typeof(CreateApiTokenRequest), typeof(CreateApiTokenRequestExample))]
@@ -84,8 +84,8 @@ public class ApiTokensController(
     }
 
     /// <summary>
-    ///     This action revokes one of the current caller's own API tokens, so it can no longer be
-    ///     used to authenticate.
+    ///     This action revokes one of the caller's API tokens so it can no longer authenticate.
+    ///     Returns 404 when the token does not exist or belongs to another user.
     /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Revoke(Guid id, CancellationToken stoppingToken)
@@ -104,9 +104,8 @@ public class ApiTokensController(
     }
 
     /// <summary>
-    ///     This method converts an API token entity into its REST representation, deliberately
-    ///     omitting the token's own secret value -- only <see cref="Create" /> ever returns that,
-    ///     and only once.
+    ///     This method converts a token entity to its API summary, without the secret value; only
+    ///     <see cref="Create" /> returns that.
     /// </summary>
     private static ApiTokenSummary ToSummary(ApiTokenEntity token) =>
         new(

@@ -9,28 +9,16 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller enumerates every permission-claim string this server actually enforces
-///     anywhere, computed by reflecting over every <see cref="RequirePermissionAttribute" />
-///     usage across this project's own controller assembly -- never a hand-maintained list, so a
-///     future controller's own new permission is picked up automatically with zero changes here.
-///     Built for the role- and user-management pages, both of which need to render a
-///     checkbox list of every known permission string rather than asking an operator to type one
-///     from memory.
+///     This controller lists every permission string the API enforces. It finds them by
+///     reflecting over each <see cref="RequirePermissionAttribute" /> in this assembly, so a new
+///     controller's permissions appear without any change here. The role and user pages use it
+///     to show a checklist of permissions instead of asking the operator to type them.
 ///     <para>
-///         <b>Gated by <see cref="AuthorizeAttribute" /> alone, not a specific permission.</b>
-///         This was a real, considered choice, not an oversight: the endpoint exposes no secret
-///         or configuration data at all -- only the same permission-string identifiers already
-///         baked into this assembly's own attribute usages -- and possessing it grants no
-///         capability by itself. Both <c>RolesController</c>'s own permission-picker (naturally
-///         gated by <c>roles:read</c>) and <c>UsersController</c>'s own direct-permission-picker
-///         (naturally gated by <c>users:read</c>) need to call this same endpoint; picking either
-///         one of those two permissions to gate this endpoint on would arbitrarily block the
-///         other page's own legitimate use of it, and there is no clean way to express "either
-///         of these two permissions" with <see cref="RequirePermissionAttribute" />'s own
-///         AND-composing, stacked-<c>[Authorize]</c> semantics. Requiring only a valid,
-///         authenticated session -- the same bar <c>ApiTokensController</c>/
-///         <c>TwoFactorController</c> already set for other harmless, self-service-shaped reads
-///         -- was judged the correct, minimal gate.
+///         <b>It needs only a signed-in caller, not a specific permission.</b> It returns only
+///         the permission names compiled into this assembly, which grant nothing by themselves.
+///         The roles page (<c>roles:read</c>) and the users page (<c>users:read</c>) both call
+///         it, and <see cref="RequirePermissionAttribute" /> can only require all of several
+///         permissions, not any one of them, so gating on either would block the other page.
 ///     </para>
 /// </summary>
 [ApiController]
@@ -39,9 +27,9 @@ namespace Ninlil.Web.Controllers;
 public class PermissionsController : ControllerBase
 {
     /// <summary>
-    ///     This action returns the distinct, sorted set of every permission string named by any
-    ///     <see cref="RequirePermissionAttribute" /> applied anywhere in this project's own
-    ///     controller assembly -- on a controller class itself or on any individual action.
+    ///     This action returns the sorted, distinct permission strings named by every
+    ///     <see cref="RequirePermissionAttribute" /> on a controller class or action. Requires only
+    ///     a signed-in caller.
     /// </summary>
     [HttpGet]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(PermissionListExample))]
@@ -80,10 +68,9 @@ public class PermissionsController : ControllerBase
     }
 
     /// <summary>
-    ///     This method recovers the raw permission string an attribute was constructed with,
-    ///     stripping <see cref="PermissionPolicyProvider.PolicyPrefix" /> back off the
-    ///     <see cref="AuthorizeAttribute.Policy" /> value <see cref="RequirePermissionAttribute" />
-    ///     baked it into.
+    ///     This method adds the permission string an attribute was built with, removing the
+    ///     <see cref="PermissionPolicyProvider.PolicyPrefix" /> that
+    ///     <see cref="RequirePermissionAttribute" /> put in front of it.
     /// </summary>
     private static void AddPermissionFromAttribute(
         SortedSet<string> permissions,

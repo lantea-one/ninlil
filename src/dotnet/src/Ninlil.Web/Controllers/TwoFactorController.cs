@@ -14,19 +14,18 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller manages the currently signed-in caller's own two-factor authentication
-///     enrollment: enrolling and confirming a TOTP (RFC 6238) authenticator, disabling two-factor
-///     authentication, and requesting an e-mailed verification code. Verifying a code as part of
-///     signing in itself is <see cref="AuthController.TwoFactorLogin" />'s own job, not this
-///     controller's -- these actions all act on an already-authenticated caller.
+///     This controller manages the signed-in caller's two-factor authentication: setting up and
+///     confirming a TOTP (RFC 6238) authenticator, turning two-factor sign-in off, generating
+///     recovery codes and requesting an e-mailed code. Every action needs only a signed-in caller
+///     and acts on that caller's account. Checking a code during sign-in is the job of
+///     <see cref="AuthController.TwoFactorLogin" />.
 /// </summary>
-/// <param name="userManager">Reads and updates the current caller's own two-factor settings.</param>
+/// <param name="userManager">Reads and updates the caller's two-factor settings.</param>
 /// <param name="emailSender">Delivers an e-mailed verification code.</param>
 /// <param name="eventPublisher">
-///     The event bus every mutating action here publishes a <see cref="UserAccountChangedEvent" />
-///     through, so the cluster's own identity/RBAC federation re-syncs this account's own
-///     TOTP secret/recovery codes (re-encrypted under each peer's own key ring) the moment either
-///     one changes -- see <see cref="UsersController" />'s own doc comment for the same pattern.
+///     Publishes a <see cref="UserAccountChangedEvent" /> after every change, so cluster sync
+///     copies the account's TOTP secret and recovery codes to the other nodes (re-encrypted under
+///     each node's key ring), as <see cref="UsersController" /> does for other account changes.
 /// </param>
 [ApiController]
 [Route("api/auth/two-factor")]
@@ -38,15 +37,12 @@ public class TwoFactorController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reports the current caller's own two-factor enrollment state -- whether
-    ///     two-factor sign-in is currently required, and whether an authenticator app has already
-    ///     been confirmed. Built for the self-service account-security page, which has
-    ///     no other way to learn this: <c>UserClaimsBuilder</c> never places a two-factor claim on
-    ///     an issued access token (a stale, cached "enabled" claim on an already-issued token
-    ///     would be actively misleading the moment it changed), and the only other place this
-    ///     state is exposed at all, <c>UsersController</c>'s own <c>UserSummary</c>, requires the
-    ///     <c>users:read</c> permission an ordinary, non-administrative account has no reason to
-    ///     hold.
+    ///     This action reports the caller's two-factor state: whether two-factor sign-in is
+    ///     required, whether an authenticator key exists, whether the account has a confirmed
+    ///     e-mail address, and how many recovery codes remain. The account-security page needs this
+    ///     endpoint because access tokens carry no two-factor claim (it would go stale as soon as
+    ///     the setting changed), and <c>UsersController</c> exposes the state only to holders of
+    ///     <c>users:read</c>.
     /// </summary>
     [HttpGet("status")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(TwoFactorStatusExample))]
@@ -70,9 +66,11 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action generates a fresh TOTP shared secret for the current caller, replacing any
-    ///     previously-generated (and not yet confirmed) one. Two-factor authentication is not yet
-    ///     required at this point -- <see cref="EnableAuthenticator" /> must still confirm it.
+    ///     This action generates a new TOTP shared secret for the caller, replacing the existing
+    ///     one, and returns it with an <c>otpauth://</c> URI for an authenticator app.
+    ///     <see cref="EnableAuthenticator" /> must confirm it before two-factor sign-in becomes
+    ///     required. If two-factor sign-in is already on, the new secret replaces the old one at
+    ///     once.
     /// </summary>
     [HttpPost("authenticator/setup")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(AuthenticatorSetupResultExample))]
@@ -95,8 +93,8 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action confirms a TOTP enrollment by checking a freshly-generated code, and only
-    ///     then turns on the requirement to supply a second factor at sign-in.
+    ///     This action confirms authenticator setup by checking a code from the app, and only then
+    ///     makes a second factor required at sign-in. Returns 400 for a wrong code.
     /// </summary>
     [HttpPost("authenticator/enable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
@@ -123,9 +121,8 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action turns off the requirement to supply a second factor at sign-in, after
-    ///     confirming the caller can still produce a valid code -- so a stolen access token alone
-    ///     is not enough to disable this protection.
+    ///     This action stops requiring a second factor at sign-in. It needs a valid authenticator
+    ///     code as well as the access token. Returns 400 for a wrong code.
     /// </summary>
     [HttpPost("disable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
@@ -152,9 +149,10 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action e-mails the current caller a one-time verification code, for use as a
-    ///     second factor at sign-in when an authenticator app is not available. The caller's
-    ///     e-mail address must already be confirmed.
+    ///     This action e-mails the caller a short-lived verification code from the e-mail token
+    ///     provider and returns 202. The account must have a confirmed e-mail address, otherwise
+    ///     this returns 400. Because it needs a signed-in caller, it cannot be called during the
+    ///     two-factor step of a sign-in.
     /// </summary>
     [HttpPost("email/send")]
     public async Task<IActionResult> SendEmailCode()
@@ -183,12 +181,9 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action generates a fresh batch of 10 single-use two-factor recovery codes for the
-    ///     current caller, replacing (invalidating) any previously-generated batch entirely. Two-
-    ///     factor authentication must already be enabled -- a recovery code exists purely as a
-    ///     fallback for a second factor this account does not otherwise require, so generating one
-    ///     first would have nothing to be a fallback *for*, mirroring the guard
-    ///     <see cref="EnableAuthenticator" /> itself already establishes for a similar reason.
+    ///     This action generates a new batch of single-use recovery codes for the caller and
+    ///     invalidates any earlier batch. A recovery code is a fallback for the second factor, so
+    ///     two-factor sign-in must already be enabled; otherwise this returns 400.
     /// </summary>
     [HttpPost("recovery-codes/generate")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(RecoveryCodesResultExample))]
@@ -214,15 +209,14 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This constant is how many recovery codes <see cref="GenerateRecoveryCodes" /> generates
-    ///     per batch -- ASP.NET Core Identity's own conventional default for this feature.
+    ///     This constant contains how many recovery codes <see cref="GenerateRecoveryCodes" />
+    ///     generates per batch, the usual ASP.NET Core Identity default.
     /// </summary>
     private const int RecoveryCodeCount = 10;
 
     /// <summary>
-    ///     This method resolves the currently authenticated caller's own <see cref="UserEntity" />
-    ///     from the "sub" claim on their access token, or <see langword="null" /> if no such user
-    ///     exists (or none is authenticated at all).
+    ///     This method loads the signed-in caller's <see cref="UserEntity" /> from the user id
+    ///     claim on the access token, or returns <see langword="null" /> when there is none.
     /// </summary>
     private async Task<UserEntity> GetCurrentUserAsync()
     {

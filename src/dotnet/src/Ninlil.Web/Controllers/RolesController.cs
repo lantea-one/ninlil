@@ -18,28 +18,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller administers every role on this server: creating, updating, and deleting
-///     roles, and granting or revoking the permission claims a role grants to every user who
-///     holds it. Every action requires the <c>roles:read</c> or <c>roles:write</c> permission --
-///     see <see cref="RequirePermissionAttribute" />.
+///     This controller manages roles: creating, updating and deleting them, and granting or
+///     revoking the permissions a role gives every user who holds it. Reads need
+///     <c>roles:read</c> and changes need <c>roles:write</c>. A permission change reaches a
+///     signed-in user when their next access token is issued (at sign-in or refresh), since
+///     permissions are carried as claims in the token.
 /// </summary>
-/// <param name="roleManager">Creates, updates, and deletes roles, and manages their claims.</param>
+/// <param name="roleManager">Creates, updates and deletes roles, and manages their claims.</param>
 /// <param name="roleRepository">
-///     Lists every role -- <see cref="RoleManager{TRole}" /> has no equivalent of
-///     <c>UserManager&lt;TUser&gt;.Users</c> at all.
+///     Lists roles; <see cref="RoleManager{TRole}" /> has no equivalent of
+///     <c>UserManager&lt;TUser&gt;.Users</c>.
 /// </param>
 /// <param name="eventPublisher">
-///     The event bus this controller publishes a <see cref="RoleChangedEvent" /> through on every
-///     mutation -- the cluster's own identity/RBAC federation
-///     (<c>Ninlil.Dns.Server.ClusterSync</c>'s <c>RoleClusterSyncEventSubscriber</c>) is its only
-///     real subscriber.
+///     Publishes a <see cref="RoleChangedEvent" /> on every change, which
+///     <c>RoleClusterSyncEventSubscriber</c> in <c>Ninlil.Dns.Server.ClusterSync</c> replicates
+///     to the other cluster nodes.
 /// </param>
 /// <param name="clusterOptions">
-///     Read for this node's own stable cluster node id, stamped onto <see cref="AuditableEntityBase.OriginatingNodeId" />
-///     on every local mutation -- mirrors <c>FilterListsController</c>'s own identical convention,
-///     so a role's own "last modified by node" indicator (and the last-write-wins tie-break a
-///     genuine cluster collision needs) reflects this node's real identity rather than staying
-///     <see langword="null" /> forever for a role that only was ever changed locally.
+///     Supplies this node's cluster node id, stamped onto
+///     <see cref="AuditableEntityBase.OriginatingNodeId" /> on every local change so the role
+///     shows which node changed it last and cluster sync can break a last-write-wins tie.
 /// </param>
 [ApiController]
 [Route("api/roles")]
@@ -51,7 +49,8 @@ public class RolesController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action lists every role on this server.
+    ///     This action lists roles, one page at a time, with their permissions. Requires
+    ///     <c>roles:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("roles:read")]
@@ -78,7 +77,8 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action looks up a single role by its identifier.
+    ///     This action returns one role and its permissions. Returns 404 for an unknown id.
+    ///     Requires <c>roles:read</c>.
     /// </summary>
     [HttpGet("{id:guid}")]
     [RequirePermission("roles:read")]
@@ -93,7 +93,8 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action creates a new role.
+    ///     This action creates a role with no permissions. Returns 400 when the name is invalid or
+    ///     already taken. Requires <c>roles:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("roles:write")]
@@ -118,7 +119,8 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action updates an existing role's description.
+    ///     This action updates a role's description; the name cannot be changed. Requires
+    ///     <c>roles:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("roles:write")]
@@ -141,8 +143,8 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action permanently deletes a role. Any user currently holding it simply stops
-    ///     holding it; their account itself is not affected.
+    ///     This action deletes a role. Users who held it lose it and its permissions; their
+    ///     accounts are otherwise unchanged. Requires <c>roles:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}")]
     [RequirePermission("roles:write")]
@@ -160,8 +162,9 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action grants a role a permission claim, extending that permission to every user
-    ///     who holds the role.
+    ///     This action grants a role a permission, giving it to every user who holds the role. The
+    ///     permission string is not checked against <c>GET /api/permissions</c>. Requires
+    ///     <c>roles:write</c>.
     /// </summary>
     [HttpPost("{id:guid}/permissions")]
     [RequirePermission("roles:write")]
@@ -186,7 +189,7 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This action revokes a permission claim from a role.
+    ///     This action revokes a permission from a role. Requires <c>roles:write</c>.
     /// </summary>
     [HttpDelete("{id:guid}/permissions")]
     [RequirePermission("roles:write")]
@@ -211,9 +214,8 @@ public class RolesController(
     }
 
     /// <summary>
-    ///     This method converts a role entity into its REST representation, resolving its
-    ///     currently-granted permission claims (via <see cref="RoleManager{TRole}.GetClaimsAsync" />)
-    ///     into a plain list of permission strings.
+    ///     This method converts a role entity to its API summary, including its permission claims
+    ///     as a list of strings.
     /// </summary>
     private async Task<RoleSummary> ToSummaryAsync(RoleEntity role)
     {

@@ -18,29 +18,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="OidcSsoOptions" /> -- the REST
-///     management surface for this server's own generic OpenID Connect admin-login federation.
-///     Every action requires the <c>ssosettings:read</c> or <c>ssosettings:write</c> permission.
+///     This controller reads and writes <see cref="OidcSsoOptions" />, the settings for signing in
+///     to the admin console through a generic OpenID Connect identity provider. Reading needs
+///     <c>ssosettings:read</c> and writing needs <c>ssosettings:write</c>.
 ///     <para>
-///         <b>Every field is written to the configuration file immediately, but
-///         <c>enable</c>/<c>authority</c>/<c>clientId</c> still need a process restart to actually
-///         change whether federated sign-in is available</b> -- see
-///         <see cref="RuntimeSettingsWriteResult.SsoRestartRequiredNote" />'s own doc comment for
-///         the full structural reason (the OpenID Connect scheme is registered exactly once,
-///         before this container even exists to serve a live options read).
+///         <b>Writes reach the configuration file at once, but only <c>displayName</c> takes
+///         effect without a restart.</b> The OpenID Connect scheme is registered once at startup
+///         from the settings as they were then, so <c>enable</c>, <c>authority</c>,
+///         <c>clientId</c>, <c>clientSecret</c> and <c>scopes</c> apply after a restart (see
+///         <see cref="RuntimeSettingsWriteResult.SsoRestartRequiredNote" />).
 ///     </para>
 ///     <para>
-///         <see cref="OidcSsoOptions.ClientSecretEncrypted" /> is handled the same "accept
-///         plaintext in, encrypt before it's written to disk, never return it on a read" way this
-///         controller's own <see cref="Patch" /> action documents in detail -- see
-///         <see cref="OidcClientSecretProtector" />'s own doc comment for why this is the first
-///         configuration-file secret field this project encrypts at rest, unlike
-///         <c>EmailSenderOptions.Password</c>'s existing plaintext precedent.
+///         The client secret is accepted in plain text, encrypted with
+///         <see cref="OidcClientSecretProtector" /> before it is written to disk, and never
+///         returned. The SMTP password in <c>EmailSenderOptions.Password</c>, by contrast, is
+///         stored in plain text.
 ///     </para>
 /// </summary>
-/// <param name="ssoOptions">This host's own currently-effective SSO settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
-/// <param name="dataProtectionProvider">The provider the client secret is encrypted through before it is written.</param>
+/// <param name="ssoOptions">The current SSO settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
+/// <param name="dataProtectionProvider">Encrypts the client secret before it is written.</param>
 [ApiController]
 [Route("api/sso-settings")]
 public class OidcSsoSettingsController(
@@ -50,9 +47,9 @@ public class OidcSsoSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live) OIDC SSO settings.
-    ///     <see cref="OidcSsoOptions.ClientSecretEncrypted" /> is never returned -- see
-    ///     <see cref="OidcSsoSettingsDetail.ClientSecretConfigured" />'s own doc comment.
+    ///     This action returns the current SSO settings. The client secret is never returned, only
+    ///     whether one is set (see <see cref="OidcSsoSettingsDetail.ClientSecretConfigured" />).
+    ///     Requires <c>ssosettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("ssosettings:read")]
@@ -60,12 +57,13 @@ public class OidcSsoSettingsController(
     public ActionResult<OidcSsoSettingsDetail> Get() => Ok(ToDetail(ssoOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>Identity:Sso</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file -- including <c>clientSecret</c>, letting an operator change, say,
-    ///     only <c>displayName</c> without ever having to resupply a credential this endpoint's own
-    ///     <see cref="Get" /> action never reveals back to them.
+    ///     This action merges a partial update into <c>Identity:Sso</c> as an RFC 7396 merge patch,
+    ///     through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value, including <c>clientSecret</c>, so an operator
+    ///     can change only <c>displayName</c> without resupplying a secret <see cref="Get" /> never
+    ///     shows. A blank <c>clientSecret</c> clears it. Returns 400 for a blank display name or
+    ///     client id, an authority that is not an absolute http(s) URL, or scopes without
+    ///     <c>openid</c>. Requires <c>ssosettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("ssosettings:write")]
@@ -142,9 +140,8 @@ public class OidcSsoSettingsController(
             );
         }
 
-        // A blank string is accepted here (unlike 'clientId') -- it clears a previously-configured
-        // secret, the same "blank clears, absent leaves untouched" distinction
-        // SmtpSettingsController's own 'password' field already establishes.
+        // A blank string clears the stored secret (unlike 'clientId', which must not be blank); an
+        // absent field leaves it alone, as with the SMTP 'password'.
         if (patch.TryGetMergePatchField("clientSecret", out JsonElement clientSecretElement))
         {
             string clientSecret = clientSecretElement.GetString() ?? string.Empty;
@@ -184,11 +181,9 @@ public class OidcSsoSettingsController(
     }
 
     /// <summary>
-    ///     This method parses a <c>scopes</c> merge-patch field (a JSON array of scope names) into
-    ///     the validated list <see cref="OidcSsoOptions.Scopes" /> binds from, rejecting anything
-    ///     that isn't a non-blank string array -- and, specifically, an array that omits the
-    ///     mandatory <c>openid</c> scope, since a request that never asks for it is not an OpenID
-    ///     Connect request at all, merely bare OAuth 2.0.
+    ///     This method parses the <c>scopes</c> field, a JSON array of scope names, and rejects
+    ///     anything but non-blank strings. The list must include <c>openid</c>; without it the
+    ///     request is plain OAuth 2.0, not OpenID Connect.
     /// </summary>
     private static List<string> ParseScopes(JsonElement element)
     {
@@ -223,8 +218,8 @@ public class OidcSsoSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="OidcSsoSettingsDetail" /> from a live
-    ///     <see cref="OidcSsoOptions" /> snapshot.
+    ///     This method builds <see cref="OidcSsoSettingsDetail" /> from the current
+    ///     <see cref="OidcSsoOptions" />.
     /// </summary>
     private static OidcSsoSettingsDetail ToDetail(OidcSsoOptions options) =>
         new(

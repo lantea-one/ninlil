@@ -17,34 +17,25 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own password-complexity and account-lockout
-///     policy -- <see cref="IdentityOptions.Password" />/<see cref="IdentityOptions.Lockout" />,
-///     ASP.NET Core Identity's own built-in policy classes -- `appsettings.json`-only until this
-///     pass, despite already being real, enforced restrictions <c>UserManager{TUser}</c> consults
-///     on every registration/password-change/sign-in attempt. Every action requires the
-///     <c>identitysettings:read</c> or <c>identitysettings:write</c> permission.
+///     This controller reads and writes the password-complexity and account-lockout policy:
+///     ASP.NET Core Identity's <see cref="IdentityOptions.Password" /> and
+///     <see cref="IdentityOptions.Lockout" />, which <c>UserManager{TUser}</c> enforces when an
+///     account is created, a password changes and someone signs in. Reading needs
+///     <c>identitysettings:read</c> and writing needs <c>identitysettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect on the very next request, with no restart.</b> This is a
-///         subtler finding than the identically-shaped live-reload gap already found and fixed
-///         elsewhere in this project for other options classes:
-///         <c>UserManager{TUser}</c>'s own constructor (a fixed framework signature this project
-///         cannot change) reads <see cref="IOptions{TOptions}" /> of <see cref="IdentityOptions" />
-///         exactly once, and the plain <see cref="IOptions{TOptions}" /> the framework would
-///         otherwise inject is itself a singleton whose <c>.Value</c> is computed once and cached
-///         for the life of the process -- so a write here would never have been observed by any
-///         <c>UserManager{TUser}</c> constructed after the very first one, restart or not, despite
-///         <c>UserManager{TUser}</c> itself being registered scoped (a fresh instance per
-///         request). <see cref="ServiceCollectionIdentityExtension.AddNinlilDnsIdentity" /> now
-///         registers a live, <see cref="IOptionsMonitor{TOptions}" />-backed proxy
-///         (<c>IdentityOptionsMonitorProxy</c>) as the process's own <see cref="IOptions{TOptions}" />
-///         of <see cref="IdentityOptions" />, so every *newly constructed*
-///         <c>UserManager{TUser}</c> -- meaning the very next request -- captures the live value
-///         instead; see that proxy's own doc comment for the full reasoning, including why this is
-///         "next request" hot reload rather than true mid-instance hot reload.
+///         <b>Every field takes effect on the next request, with no restart.</b>
+///         <c>UserManager{TUser}</c> reads <see cref="IOptions{TOptions}" /> of
+///         <see cref="IdentityOptions" /> once, in its constructor, and the framework's plain
+///         <see cref="IOptions{TOptions}" /> computes its value once per process. So
+///         <see cref="ServiceCollectionIdentityExtension.AddNinlilDnsIdentity" /> registers
+///         <c>IdentityOptionsMonitorProxy</c>, which is backed by
+///         <see cref="IOptionsMonitor{TOptions}" />, in its place. <c>UserManager{TUser}</c> is
+///         scoped, so the instance built for the next request sees the new value (see the proxy
+///         for details).
 ///     </para>
 /// </summary>
-/// <param name="identityOptions">This host's own currently-effective identity policy, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="identityOptions">The current identity policy.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/identity-settings")]
 public class IdentitySettingsController(
@@ -67,8 +58,8 @@ public class IdentitySettingsController(
         $"{ServiceCollectionIdentityExtension.IdentityOptionsSectionName}:Lockout";
 
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     password-complexity and account-lockout policy.
+    ///     This action returns the current password-complexity and account-lockout policy. Requires
+    ///     <c>identitysettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("identitysettings:read")]
@@ -93,10 +84,11 @@ public class IdentitySettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into <c>Identity:Password</c>/<c>Identity:Lockout</c>
-    ///     via <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload,
-    ///     RFC 7396 merge-patch style. Every field takes effect on the very next request -- see
-    ///     this class's own doc comment.
+    ///     This action merges a partial update into <c>Identity:Password</c> and
+    ///     <c>Identity:Lockout</c> as an RFC 7396 merge patch, through
+    ///     <see cref="PresetConfigurationFileApplier" />. Every field takes effect on the next
+    ///     request. Returns 400 when a length or attempt count is below 1 or the lockout duration
+    ///     is not a valid TimeSpan. Requires <c>identitysettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("identitysettings:write")]

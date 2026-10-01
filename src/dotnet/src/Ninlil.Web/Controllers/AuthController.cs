@@ -24,66 +24,54 @@ using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller issues, refreshes, and revokes the sign-in credentials every other
-///     authenticated endpoint in this project depends on: a short-lived JSON Web Token access
-///     token, a longer-lived opaque refresh token, and (for an account with two-factor
-///     authentication enabled) the intermediate challenge between them. It also hosts the two
-///     genuinely anonymous, self-service password-recovery actions (<see cref="ForgotPassword" />/
-///     <see cref="ResetPassword" />) -- neither caller is signed in at either step, so both live
-///     here rather than on <c>UsersController</c>, which gates every action behind either
-///     <see cref="AuthorizeAttribute" /> or a specific administrative permission.
+///     This controller issues, refreshes and revokes sign-in credentials: a short-lived JSON Web
+///     Token access token, a longer-lived opaque refresh token and, for an account with two-factor
+///     authentication, the challenge token between the two steps. It also hosts the anonymous
+///     password-recovery actions (<see cref="ForgotPassword" /> and <see cref="ResetPassword" />),
+///     since their callers are not signed in and every <c>UsersController</c> action needs a
+///     sign-in. Every action here allows anonymous callers.
 ///     <para>
-///         <see cref="Login" /> and <see cref="TwoFactorLogin" /> -- the two actions an attacker
-///         could otherwise hammer to guess a credential or second-factor code -- each carry
-///         <see cref="EnableRateLimitingAttribute" />, scoped to
-///         <see cref="ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName" />.
-///         See <c>Identity.Options.AdminLoginRateLimitOptions</c>'s own doc comment for why this
-///         limiter is a genuinely separate mechanism from, and deliberately has the opposite
-///         failure posture to, <c>Server.RateLimiting</c>'s own DNS-query rate limiter.
+///         <see cref="Login" /> and <see cref="TwoFactorLogin" />, the actions an attacker would
+///         use to guess a password or code, are rate limited by the
+///         <see cref="ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName" />
+///         policy. <c>AdminLoginRateLimitOptions</c> explains how that limiter differs from the DNS
+///         query rate limiter.
 ///     </para>
 ///     <para>
-///         <b>Two ways to hold a refresh token.</b> A script or API client asks for nothing special
-///         and gets the refresh token in the response body, exactly as always. The browser admin
-///         console asks for <see cref="RefreshTokenDeliveryEnum.Cookie" /> delivery instead: the
-///         refresh token then travels only in <see cref="RefreshTokenCookie" />'s HttpOnly cookie,
-///         never in a body page script could read, and <see cref="Refresh" />/<see cref="Logout" />
-///         act on that cookie whenever the request body names no token. This is what lets a page
-///         reload renew the session without the refresh token ever being exposed to JavaScript.
-///         "Remember me" (<see cref="LoginRequest.RememberMe" />) chooses between a persistent
-///         session and a browser-session one; see <see cref="SessionEntity.IsPersistent" />.
+///         <b>Two ways to hold a refresh token.</b> A script or API client gets the refresh token
+///         in the response body. The browser admin console asks for
+///         <see cref="RefreshTokenDeliveryEnum.Cookie" /> delivery instead: the refresh token then
+///         travels only in the HttpOnly cookie of <see cref="RefreshTokenCookie" />, which page
+///         scripts cannot read, and <see cref="Refresh" /> and <see cref="Logout" /> use that
+///         cookie when the request body names no token. A page reload can then renew the session
+///         without exposing the refresh token to JavaScript. "Remember me"
+///         (<see cref="LoginRequest.RememberMe" />) chooses between a persistent session and a
+///         browser-session one; see <see cref="SessionEntity.IsPersistent" />.
 ///     </para>
 /// </summary>
 /// <param name="userManager">Looks up and validates the account signing in.</param>
-/// <param name="signInManager">Checks a submitted password against lockout/2FA policy.</param>
-/// <param name="jwtTokenService">Issues, validates, and revokes access/refresh tokens.</param>
-/// <param name="pendingTwoFactor">Tracks a sign-in still waiting on its second factor.</param>
+/// <param name="signInManager">Checks a submitted password against the lockout policy.</param>
+/// <param name="jwtTokenService">Issues, validates and revokes access and refresh tokens.</param>
+/// <param name="pendingTwoFactor">Tracks a sign-in that is waiting for its second factor.</param>
 /// <param name="passwordResetLinkSender">
-///     Builds and sends the actual reset e-mail <see cref="ForgotPassword" /> triggers, once it has
-///     already decided a link should go out -- shared with the administrator-driven
-///     <c>UsersController.ResetPassword</c>'s own <c>EmailLink</c> delivery mode.
+///     Builds and sends the reset e-mail for <see cref="ForgotPassword" />. The <c>EmailLink</c>
+///     mode of <c>UsersController.ResetPassword</c> uses it too.
 /// </param>
 /// <param name="emailOptions">
-///     The live, currently-effective SMTP server settings -- read fresh on every
-///     <see cref="ForgotPassword" /> request so its own pre-flight "can a link even be sent"
-///     check always reflects the most recently saved <c>SmtpSettingsController.Patch</c>, matching
-///     <c>UsersController.ResetPassword</c>'s own identical reasoning.
+///     The current SMTP settings, read on every <see cref="ForgotPassword" /> request so the
+///     "can a link be sent" check reflects the latest <c>SmtpSettingsController.Patch</c>.
 /// </param>
 /// <param name="eventPublisher">
-///     The event bus <see cref="ResetPassword" /> publishes a <see cref="UserAccountChangedEvent" />
-///     through after a successful anonymous, link-based password reset -- the cluster's own
-///     identity/RBAC federation is its only real subscriber, mirroring
-///     <c>UsersController</c>'s own identical publish-on-every-mutation convention so this genuinely
-///     anonymous reset path is not a silent gap in what actually syncs cluster-wide.
+///     Publishes a <see cref="UserAccountChangedEvent" /> after <see cref="ResetPassword" />
+///     succeeds, as <c>UsersController</c> does for every account change, so cluster sync
+///     replicates the new password.
 /// </param>
 /// <param name="clusterOptions">
-///     Read for this node's own stable cluster node id, stamped onto
-///     <see cref="AuditableEntityBase.OriginatingNodeId" /> by <see cref="ResetPassword" /> -- mirrors
-///     <c>UsersController</c>'s own identical convention.
+///     Supplies this node's cluster node id, which <see cref="ResetPassword" /> stamps onto
+///     <see cref="AuditableEntityBase.OriginatingNodeId" />.
 /// </param>
 /// <param name="logger">
-///     Logs a real send failure inside <see cref="ForgotPassword" /> without ever surfacing it to
-///     the caller -- see that action's own doc comment for why a delivery failure must stay
-///     server-side only.
+///     Logs a failed send in <see cref="ForgotPassword" />, which is never reported to the caller.
 /// </param>
 [ApiController]
 [Route("api/auth")]
@@ -100,36 +88,26 @@ public class AuthController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This constant contains the one, identical message <see cref="ForgotPassword" /> returns
-    ///     regardless of whether the submitted address actually has an account, is disabled, has no
-    ///     e-mail address on file, or SMTP is not configured at all -- see that action's own doc
-    ///     comment for why this must never vary.
+    ///     This constant contains the message <see cref="ForgotPassword" /> always returns,
+    ///     whatever happened (see that action for why).
     /// </summary>
     private const string ForgotPasswordGenericMessage =
         "If an account exists for that e-mail address, a password reset link has been sent to it.";
 
     /// <summary>
-    ///     This action starts a genuinely self-service password reset: given only an e-mail
-    ///     address, with no sign-in of any kind, it looks up the matching account and -- if one
-    ///     exists, is not disabled, has an e-mail address on file, and this server has SMTP
-    ///     configured -- sends it a real reset-link e-mail via the exact same
-    ///     <see cref="PasswordResetLinkSender" /> round trip <c>UsersController.ResetPassword</c>'s
-    ///     own <c>EmailLink</c> delivery mode uses.
+    ///     This action starts a self-service password reset. Given an e-mail address and no
+    ///     sign-in, it sends a reset-link e-mail through <see cref="PasswordResetLinkSender" />
+    ///     when a matching account exists, is not disabled, has an e-mail address, and SMTP is
+    ///     configured. Allows anonymous callers.
     ///     <para>
-    ///         <b>Security-critical, deliberate departure from that admin-driven counterpart</b>:
-    ///         this action's response is always the exact same <see cref="ForgotPasswordResult" />,
-    ///         with the exact same <c>200</c> status, no matter which of those conditions failed --
-    ///         including the "no account with this address exists at all" case. An authenticated
-    ///         administrator resetting a known account's password may legitimately learn whether
-    ///         that specific account has an e-mail address or whether SMTP is configured; a
-    ///         completely anonymous caller submitting an arbitrary address must never be able to
-    ///         use response shape, status code, or timing to enumerate which e-mail addresses have
-    ///         accounts on this server -- a classic account-enumeration risk for exactly this kind
-    ///         of endpoint. A real delivery-time failure (e.g. the SMTP server rejects the message)
-    ///         is caught and logged here rather than allowed to surface as a <c>500</c>, for the
-    ///         same reason -- an attacker distinguishing "delivery attempted and failed" from
-    ///         "delivery never attempted" is exactly as much of a leak as distinguishing "sent" from
-    ///         "not sent" would be.
+    ///         <b>The response never varies.</b> It is always 200 with the same
+    ///         <see cref="ForgotPasswordResult" />, whichever condition failed, including "no
+    ///         account has this address". An administrator using
+    ///         <c>UsersController.ResetPassword</c> may learn whether an account has an e-mail
+    ///         address or whether SMTP is configured, but an anonymous caller must not be able to
+    ///         tell from the response which addresses have accounts. A delivery failure (the SMTP
+    ///         server rejects the message, say) is logged rather than returned as a 500 for the
+    ///         same reason.
     ///     </para>
     /// </summary>
     [HttpPost("forgot-password")]
@@ -164,11 +142,8 @@ public class AuthController(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // A real delivery-time failure (SMTP host unreachable, rejected message, etc.)
-                // must never surface to the caller -- see this action's own doc comment on why
-                // the response is identical no matter what happened server-side. Logged so an
-                // administrator can still discover a genuinely broken SMTP configuration through
-                // this server's own logs, just never through this endpoint's response.
+                // The response is the same whatever happened (see the summary). The failure is
+                // logged so an administrator can still find a broken SMTP configuration.
                 logger.LogWarning(
                     exception,
                     "Failed to send a Forgot Password reset link to account {UserId}.",
@@ -181,9 +156,11 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This action checks a username and password, returning either a completed sign-in's
-    ///     tokens or, for an account with two-factor authentication enabled, a pending challenge
-    ///     token to submit to <see cref="TwoFactorLogin" />.
+    ///     This action checks a username and password. It returns the tokens of a completed sign-in
+    ///     or, for an account with two-factor authentication, a challenge token to submit to
+    ///     <see cref="TwoFactorLogin" />. Returns 401 for a wrong password or a disabled or unknown
+    ///     account and 423 while the account is locked out. Allows anonymous callers and is rate
+    ///     limited.
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
@@ -213,14 +190,10 @@ public class AuthController(
         if (!result.Succeeded)
             return Unauthorized();
 
-        // SignInResult.RequiresTwoFactor is deliberately never set by CheckPasswordSignInAsync
-        // itself -- found only by a real end-to-end smoke test, not by inspection -- that field
-        // only ever gets populated by the higher-level PasswordSignInAsync/SignInOrTwoFactorAsync
-        // flow, which this project cannot use here since it also writes an authentication
-        // cookie via a scheme ("Identity.Application") this stateless, JWT-only API never
-        // registers. Checking the same underlying condition SignInManager's own (protected,
-        // inaccessible) IsTwoFactorEnabledAsync uses gets the same answer without that side
-        // effect.
+        // CheckPasswordSignInAsync never sets SignInResult.RequiresTwoFactor; only
+        // PasswordSignInAsync does, and that also writes an "Identity.Application" cookie for a
+        // scheme this JWT-only API does not register. This checks the same condition
+        // SignInManager's protected IsTwoFactorEnabledAsync uses, without that side effect.
         bool requiresTwoFactor =
             await userManager.GetTwoFactorEnabledAsync(user)
             && (await userManager.GetValidTwoFactorProvidersAsync(user)).Count > 0;
@@ -242,8 +215,11 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This action completes a sign-in <see cref="Login" /> flagged as requiring a second
-    ///     factor, by checking the submitted code against the pending sign-in's own account.
+    ///     This action completes a sign-in that <see cref="Login" /> marked as needing a second
+    ///     factor, checking an authenticator code, an e-mailed code or a recovery code against the
+    ///     pending sign-in's account. Each challenge token can be used once. Returns 401 for an
+    ///     unknown or used challenge token or a wrong code. Allows anonymous callers and is rate
+    ///     limited.
     /// </summary>
     [HttpPost("login/two-factor")]
     [AllowAnonymous]
@@ -265,10 +241,8 @@ public class AuthController(
         if (user is null || user.IsDisabled)
             return Unauthorized();
 
-        // A recovery code is redeemed (checked and, on success, invalidated in the same call),
-        // not merely verified the way an authenticator/e-mailed code is -- a real second-factor
-        // provider check would have nothing to check a recovery code's own value against, since
-        // it is not a TOTP/e-mail token generated by either registered provider at all.
+        // A recovery code is redeemed (checked and, on success, invalidated in one call). Neither
+        // token provider could verify it, because it is not a TOTP or e-mail token.
         if (string.Equals(request.Provider, "RecoveryCode", StringComparison.OrdinalIgnoreCase))
         {
             IdentityResult redeemResult = await userManager.RedeemTwoFactorRecoveryCodeAsync(
@@ -315,20 +289,19 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This action exchanges a still-valid refresh token for a new access/refresh token pair,
-    ///     revoking the refresh token it was exchanged for (rotation) so it cannot be reused. The
-    ///     token comes from the request body when one is named there, otherwise from the browser's
-    ///     refresh cookie -- in which case the rotated token goes back as a new cookie, not in the
-    ///     body. The new session keeps the old one's <see cref="SessionEntity.IsPersistent" />
-    ///     choice.
+    ///     This action exchanges a valid refresh token for a new access and refresh token pair and
+    ///     revokes the old refresh token (rotation), so it cannot be reused. The token comes from
+    ///     the request body when one is given there, otherwise from the browser's refresh cookie,
+    ///     in which case the new refresh token goes back as a cookie rather than in the body. The
+    ///     new session keeps the old one's <see cref="SessionEntity.IsPersistent" /> choice.
+    ///     Returns 401 for an invalid, expired or revoked token or a disabled account. Allows
+    ///     anonymous callers.
     ///     <para>
-    ///         A failed cookie exchange deliberately leaves the cookie alone rather than clearing
-    ///         it. Two tabs reloading together both present the same cookie; the first rotates it,
-    ///         and the second's now-stale request fails. Had that failure cleared the cookie, its
-    ///         response would erase the fresh cookie the first tab just received and sign both
-    ///         out. Left alone, the second tab simply retries and the browser sends the rotated
-    ///         cookie. A genuinely dead cookie costs nothing but a 401; <see cref="Logout" />
-    ///         clears it.
+    ///         A failed cookie exchange leaves the cookie alone. Two tabs reloading together both
+    ///         send the same cookie; the first rotates it and the second fails. If that failure
+    ///         cleared the cookie, its response would erase the new cookie the first tab just got
+    ///         and sign both out. Left alone, the second tab retries with the rotated cookie. A
+    ///         dead cookie costs only a 401, and <see cref="Logout" /> clears it.
     ///     </para>
     /// </summary>
     [HttpPost("refresh")]
@@ -375,11 +348,10 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This action revokes a refresh token, so it can no longer be exchanged for a new access
-    ///     token -- the one named in the body, otherwise the browser's refresh cookie, which is
-    ///     cleared either way. Possessing the raw refresh token is itself sufficient authorization
-    ///     to revoke it -- the same reasoning <see cref="Refresh" /> already applies -- so this
-    ///     endpoint does not require a currently-valid access token.
+    ///     This action revokes a refresh token, the one named in the body or otherwise the
+    ///     browser's refresh cookie, which is then cleared. Holding the raw refresh token is enough
+    ///     to revoke it, so no access token is needed. Always returns 204, even for an unknown
+    ///     token. Allows anonymous callers.
     /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
@@ -406,18 +378,14 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This action completes a token-based password reset from this project's shared "set new
-    ///     password" landing page -- the confirming half of both
-    ///     <c>UsersController.ResetPassword</c>'s own <c>EmailLink</c> delivery mode and this
-    ///     controller's own <see cref="ForgotPassword" /> above, which share this exact same
-    ///     confirmation action unchanged. Neither caller is authenticated at this point, so this action is
-    ///     <see cref="AllowAnonymousAttribute" />, exactly like <see cref="Login" />/
-    ///     <see cref="Refresh" />/<see cref="Logout" /> above -- <see cref="ConfirmPasswordResetRequest.Token" />
-    ///     is the only proof of authorization this action has, checked for real by
-    ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> itself (a wrong/expired/already-
-    ///     consumed token fails there, not here). A missing account or an unparseable token both
-    ///     report the exact same generic message, deliberately, so this action never confirms or
-    ///     denies whether a given account exists.
+    ///     This action sets a new password from a password-reset token. It is the second step of
+    ///     both <see cref="ForgotPassword" /> and the <c>EmailLink</c> mode of
+    ///     <c>UsersController.ResetPassword</c>, called from the admin console's "set new password"
+    ///     page. The caller is not signed in, so it allows anonymous callers;
+    ///     <see cref="ConfirmPasswordResetRequest.Token" /> is the only proof of authorization, and
+    ///     <see cref="UserManager{TUser}.ResetPasswordAsync" /> rejects a wrong, expired or used
+    ///     token. An unknown account and an undecodable token return the same 400 message, so the
+    ///     response does not reveal whether an account exists.
     /// </summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
@@ -458,10 +426,9 @@ public class AuthController(
     }
 
     /// <summary>
-    ///     This method issues a fresh access/refresh token pair for a newly signed-in account
-    ///     (<see cref="Login" />/<see cref="TwoFactorLogin" />). With cookie delivery the session is
-    ///     persistent only when "Remember me" was checked; with body delivery it is always
-    ///     persistent, exactly as every body-delivered session was before cookie delivery existed.
+    ///     This method issues tokens for a newly signed-in account (<see cref="Login" /> or
+    ///     <see cref="TwoFactorLogin" />). With cookie delivery the session is persistent only when
+    ///     "Remember me" was checked; with body delivery it is always persistent.
     /// </summary>
     private Task<LoginResponse> IssueLoginResponseAsync(
         UserEntity user,
@@ -477,10 +444,10 @@ public class AuthController(
         );
 
     /// <summary>
-    ///     This method issues a fresh access/refresh token pair and wraps it in the shape every
-    ///     completed sign-in action returns, delivering the refresh token as requested: in the
-    ///     body, or only as <see cref="RefreshTokenCookie" />'s cookie with the body's own
-    ///     refresh-token field left <see langword="null" />.
+    ///     This method issues an access and refresh token pair and builds the response every
+    ///     completed sign-in returns. With cookie delivery the refresh token is written only to the
+    ///     <see cref="RefreshTokenCookie" /> cookie and the body's refresh-token field is
+    ///     <see langword="null" />.
     /// </summary>
     private async Task<LoginResponse> IssueTokensAsync(
         UserEntity user,

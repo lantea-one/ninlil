@@ -16,30 +16,19 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="EmailSenderOptions" /> -- the
-///     SMTP server that already, genuinely delivers e-mail-based two-factor authentication codes
-///     (via <c>SmtpEmailSender</c>) but, before this controller existed, had zero admin-facing
-///     configuration surface: setting it up required hand-editing the configuration file's own
-///     <c>Email</c> section and restarting. This is the prerequisite a future self-service Forgot
-///     Password flow needs, since sending a real reset-token e-mail needs a real, admin-configured
-///     SMTP server to send it through. Every action requires the <c>smtpsettings:read</c> or
-///     <c>smtpsettings:write</c> permission.
+///     This controller reads and writes <see cref="EmailSenderOptions" />, the SMTP server that
+///     <c>SmtpEmailSender</c> uses for e-mailed two-factor codes and password-reset links
+///     (<c>AuthController.ForgotPassword</c> and the <c>EmailLink</c> mode of
+///     <c>UsersController.ResetPassword</c>). Reading needs <c>smtpsettings:read</c> and writing
+///     needs <c>smtpsettings:write</c>.
 ///     <para>
-///         <b>Every field takes effect immediately, with no restart.</b> <c>SmtpEmailSender</c>
-///         used to read <see cref="EmailSenderOptions" /> via the snapshotted
-///         <see cref="IOptions{TOptions}" />, cached for the life of the process the first time it
-///         was read -- a real functional gap beyond REST/UI exposure, the same shape already
-///         found and fixed elsewhere in this project for other options classes, converted here the
-///         same way: <c>SmtpEmailSender</c> now reads <see cref="IOptionsMonitor{TOptions}" />'s
-///         own <c>CurrentValue</c> fresh on every <c>SendAsync</c> call. Unlike a transport
-///         listener's own bound socket, an SMTP send opens (and closes) a brand new connection
-///         every single time, so there is no "read once at StartAsync" concern here at all -- a
-///         write this controller's own <see cref="Patch" /> action merges into the configuration
-///         file is honored by the very next e-mail sent.
+///         <b>Every field takes effect at once, with no restart.</b> <c>SmtpEmailSender</c> reads
+///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every send and opens a
+///         new connection each time, so the next e-mail uses the new settings.
 ///     </para>
 /// </summary>
-/// <param name="emailOptions">This host's own currently-effective SMTP settings, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="emailOptions">The current SMTP settings.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/smtp-settings")]
 public class SmtpSettingsController(
@@ -48,9 +37,9 @@ public class SmtpSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live, even without a restart)
-    ///     SMTP settings. <see cref="EmailSenderOptions.Password" /> is never returned -- see
-    ///     <see cref="SmtpSettingsDetail.PasswordConfigured" />'s own doc comment.
+    ///     This action returns the current SMTP settings. The password is never returned, only
+    ///     whether one is set (see <see cref="SmtpSettingsDetail.PasswordConfigured" />). Requires
+    ///     <c>smtpsettings:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("smtpsettings:read")]
@@ -58,13 +47,13 @@ public class SmtpSettingsController(
     public ActionResult<SmtpSettingsDetail> Get() => Ok(ToDetail(emailOptions.CurrentValue));
 
     /// <summary>
-    ///     This action merges a partial update into <c>Email</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file -- including <c>password</c>, letting an operator change, say, only
-    ///     <c>smtpHost</c> without ever having to resupply a credential this endpoint's own
-    ///     <see cref="Get" /> action never reveals back to them. Every field hot-reloads
-    ///     immediately -- see this class's own doc comment.
+    ///     This action merges a partial update into the <c>Email</c> section as an RFC 7396 merge
+    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
+    ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
+    ///     shows. The password is stored in plain text in the configuration file. Every field takes
+    ///     effect at once. Returns 400 for a blank host or display name, a port outside 1-65535 or
+    ///     a malformed from-address. Requires <c>smtpsettings:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("smtpsettings:write")]
@@ -124,9 +113,8 @@ public class SmtpSettingsController(
                 )
             );
 
-        // A blank string is accepted here (unlike 'smtpHost') -- it clears a previously-configured
-        // password, moving the server back to anonymous-connection mode alongside a blank
-        // 'username'.
+        // A blank string is accepted here (unlike 'smtpHost'): it clears the password, which with a
+        // blank 'username' means connecting without authentication.
         if (patch.TryGetMergePatchField("password", out JsonElement passwordElement))
             settings.Add(
                 new PresetConfigurationSetting(
@@ -178,10 +166,9 @@ public class SmtpSettingsController(
     }
 
     /// <summary>
-    ///     This method applies the same lightweight e-mail-address sanity check
-    ///     <see cref="Controllers.AcmeSettingsController" />'s own <c>contactEmails</c> validation
-    ///     already establishes for this project -- real RFC 5322 validation happens only when the
-    ///     address is actually used to send a message.
+    ///     This method applies the same light e-mail-address check as the <c>contactEmails</c>
+    ///     validation in <see cref="Controllers.AcmeSettingsController" />. Full RFC 5322
+    ///     validation happens only when the address is used to send a message.
     /// </summary>
     private static void ValidateEmailAddress(string email, string fieldName)
     {
@@ -197,8 +184,8 @@ public class SmtpSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="SmtpSettingsDetail" /> from a live
-    ///     <see cref="EmailSenderOptions" /> snapshot.
+    ///     This method builds <see cref="SmtpSettingsDetail" /> from the current
+    ///     <see cref="EmailSenderOptions" />.
     /// </summary>
     private static SmtpSettingsDetail ToDetail(EmailSenderOptions options) =>
         new(

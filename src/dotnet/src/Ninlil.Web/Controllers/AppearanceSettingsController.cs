@@ -18,35 +18,26 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own global default appearance
-///     (<see cref="AppearanceOptions" />, the palette and light/dark mode the Angular admin SPA's
-///     own theming engine renders for every signed-in user who has not set an override of their
-///     own), and lets any signed-in caller manage their own personal override on top of it.
+///     This controller reads and writes the default appearance of the admin console
+///     (<see cref="AppearanceOptions" />: the palette and the light/dark mode for every user who
+///     has not chosen their own), and lets each signed-in user manage a personal override.
 ///     <para>
-///         <b>The two admin actions (<see cref="Get" />/<see cref="Patch" />) require the
-///         <c>appearance:read</c>/<c>appearance:write</c> permission</b>, this project's usual
-///         <c>resource:read</c>/<c>resource:write</c> shape for every other settings controller.
-///         <b>The two self-service actions (<see cref="GetMine" />/<see cref="PatchMine" />) are
-///         gated by <see cref="AuthorizeAttribute" /> alone</b>, deliberately: any authenticated
-///         account may freely choose its own appearance, exactly the same "self-service, no
-///         specific permission needed" bar <see cref="TwoFactorController" />'s own account-
-///         security actions already set.
+///         <see cref="Get" /> and <see cref="Patch" /> manage the server-wide default and need
+///         <c>appearance:read</c> and <c>appearance:write</c>. <see cref="GetMine" /> and
+///         <see cref="PatchMine" /> manage the caller's own choice and need only a signed-in
+///         caller, like the account-security actions in <see cref="TwoFactorController" />.
 ///     </para>
 ///     <para>
-///         <b><see cref="Patch" />'s own write takes effect immediately, with no restart.</b>
-///         <see cref="AppearanceOptions" /> is this codebase's first runtime settings class read
-///         via <see cref="IOptionsMonitor{TOptions}" /> instead of the usual, restart-requiring
-///         <see cref="IOptions{TOptions}" /> -- see that class's own doc comment for why this is
-///         safe specifically for appearance. The write mechanism itself is unchanged: the exact
-///         same <see cref="PresetConfigurationFileApplier" /> atomic merge every other runtime
-///         settings controller (<c>EventBrokerSettingsController</c>,
-///         <c>RateLimitingSettingsController</c>, <c>DnsCookieSettingsController</c>,
-///         <c>ReverseProxySettingsController</c>) already reuses.
+///         <b>A <see cref="Patch" /> takes effect at once, with no restart.</b>
+///         <see cref="AppearanceOptions" /> is read through
+///         <see cref="IOptionsMonitor{TOptions}" /> (see that class for why this is safe), and the
+///         write goes through the same atomic <see cref="PresetConfigurationFileApplier" /> merge
+///         the other settings controllers use.
 ///     </para>
 /// </summary>
-/// <param name="appearanceOptions">This host's own currently-effective global default appearance, live.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a global-default write is merged into.</param>
-/// <param name="userManager">Reads and updates the current caller's own appearance-preference override.</param>
+/// <param name="appearanceOptions">The current server-wide default appearance.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a default-appearance write is merged into.</param>
+/// <param name="userManager">Reads and updates the caller's appearance override.</param>
 [ApiController]
 [Route("api/appearance-settings")]
 public class AppearanceSettingsController(
@@ -56,8 +47,8 @@ public class AppearanceSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live -- reflecting any write
-    ///     <see cref="Patch" /> has made, even without a restart) global default appearance.
+    ///     This action returns the server-wide default appearance, including any change
+    ///     <see cref="Patch" /> has made. Requires <c>appearance:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("appearance:read")]
@@ -71,11 +62,10 @@ public class AppearanceSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:Appearance</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file. Unlike every other runtime settings <c>PATCH</c> action in this
-    ///     project, this one's own write is visible immediately -- see this class's own doc comment.
+    ///     This action merges a partial update into <c>DnsServer:Appearance</c> as an RFC 7396
+    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     <paramref name="patch" /> keeps its value. The change takes effect at once. Returns 400
+    ///     for an unknown palette or mode name. Requires <c>appearance:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("appearance:write")]
@@ -137,10 +127,9 @@ public class AppearanceSettingsController(
     }
 
     /// <summary>
-    ///     This action reports the current caller's own appearance preference: their own override
-    ///     (if any) alongside the effective value the Angular admin SPA's own theming engine
-    ///     should actually render, falling back to this host's own current global default for
-    ///     whichever field (if either) the caller has not overridden.
+    ///     This action returns the caller's appearance: their override for each field, if any, and
+    ///     the effective value the admin console should render, which falls back to the server-wide
+    ///     default for a field without an override. Requires only a signed-in caller.
     /// </summary>
     [HttpGet("me")]
     [Authorize]
@@ -155,14 +144,12 @@ public class AppearanceSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into the current caller's own
-    ///     <see cref="UserEntity.PreferredPalette" />/<see cref="UserEntity.PreferredMode" />, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was; a field present with a JSON <c>null</c> clears that field's own override,
-    ///     reverting the caller back to this host's own global default for it; a field present with
-    ///     a palette/mode name sets that override. This write lands directly on the caller's own
-    ///     account row, so -- unlike <see cref="Patch" /> -- it needs no configuration-file
-    ///     round trip and is visible on this same controller's very next read regardless.
+    ///     This action merges a partial update into the caller's
+    ///     <see cref="UserEntity.PreferredPalette" /> and <see cref="UserEntity.PreferredMode" />
+    ///     as an RFC 7396 merge patch: an absent field is unchanged, a JSON <c>null</c> removes the
+    ///     override (falling back to the server-wide default), and a palette or mode name sets it.
+    ///     The value is stored on the caller's account, not in the configuration file. Returns 400
+    ///     for an unknown name. Requires only a signed-in caller.
     /// </summary>
     [HttpPatch("me")]
     [Authorize]
@@ -224,8 +211,9 @@ public class AppearanceSettingsController(
     }
 
     /// <summary>
-    ///     This method builds <see cref="UserAppearancePreferenceDetail" /> for <paramref name="user" />,
-    ///     resolving each effective field against this host's own current global default.
+    ///     This method builds <see cref="UserAppearancePreferenceDetail" /> for
+    ///     <paramref name="user" />, filling each effective field from the server-wide default when
+    ///     the user has no override.
     /// </summary>
     private UserAppearancePreferenceDetail ToDetail(UserEntity user) =>
         new(
@@ -236,9 +224,8 @@ public class AppearanceSettingsController(
         );
 
     /// <summary>
-    ///     This method resolves the currently signed-in caller's own <see cref="UserEntity" />,
-    ///     the same pattern <see cref="TwoFactorController.GetCurrentUserAsync" /> already
-    ///     establishes for a self-service action.
+    ///     This method loads the signed-in caller's <see cref="UserEntity" />, or returns
+    ///     <see langword="null" /> when there is none.
     /// </summary>
     private async Task<UserEntity> GetCurrentUserAsync()
     {

@@ -16,27 +16,22 @@ using Swashbuckle.AspNetCore.Filters;
 namespace Ninlil.Web.Controllers;
 
 /// <summary>
-///     This controller reads and writes this host's own <see cref="AdminLoginRateLimitOptions" />
-///     -- the attempt threshold and lockout/window duration this host's own admin-login
-///     brute-force limiter enforces, entirely independent of
-///     <see cref="RateLimitingSettingsController" />'s own, completely separate DNS-query rate
-///     limiter (see
-///     <see cref="AdminLoginRateLimitOptions" />'s own doc comment for why these two are
-///     deliberately not the same mechanism). No secret material is involved, so every field is a
-///     plain read/write, the same shape <see cref="RateLimitingSettingsController" /> already
-///     establishes.
+///     This controller reads and writes <see cref="AdminLoginRateLimitOptions" />: whether the
+///     admin sign-in limiter is on, and how many attempts per client IP address it allows in each
+///     fixed window. This limiter guards <c>AuthController.Login</c> and
+///     <c>AuthController.TwoFactorLogin</c>; it is separate from the DNS query limiter that
+///     <see cref="RateLimitingSettingsController" /> manages (see
+///     <see cref="AdminLoginRateLimitOptions" /> for why). Reading needs
+///     <c>adminloginratelimit:read</c> and writing needs <c>adminloginratelimit:write</c>.
 ///     <para>
-///         <b>Every write here still needs a restart to take effect.</b>
-///         <c>Identity.Extension.ServiceCollectionAdminLoginRateLimitingExtension</c> reads
-///         <see cref="AdminLoginRateLimitOptions" /> exactly once, at process startup, to build
-///         <see cref="Microsoft.AspNetCore.RateLimiting" />'s own fixed-window policy -- the same
-///         "a security-relevant middleware configured once, before dependency injection is even
-///         built" posture <see cref="ReverseProxySettingsController" /> already has for an
-///         identical reason.
+///         <b>Every write needs a restart to take effect.</b>
+///         <c>ServiceCollectionAdminLoginRateLimitingExtension</c> reads the settings once at
+///         startup to build the fixed-window policy, as with
+///         <see cref="ReverseProxySettingsController" />.
 ///     </para>
 /// </summary>
-/// <param name="adminLoginRateLimitOptions">This host's own currently-effective admin-login rate limit settings.</param>
-/// <param name="runtimeConfigurationOptions">The JSON configuration file a write is merged into.</param>
+/// <param name="adminLoginRateLimitOptions">The admin sign-in limiter settings loaded at startup.</param>
+/// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
 [ApiController]
 [Route("api/admin-login-rate-limit-settings")]
 public class AdminLoginRateLimitSettingsController(
@@ -45,8 +40,9 @@ public class AdminLoginRateLimitSettingsController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action reads this host's own currently-effective (live and running) admin-login
-    ///     rate limit settings.
+    ///     This action returns the admin sign-in limiter settings in effect, as loaded at startup;
+    ///     a saved change shows here only after a restart. Requires
+    ///     <c>adminloginratelimit:read</c>.
     /// </summary>
     [HttpGet]
     [RequirePermission("adminloginratelimit:read")]
@@ -64,10 +60,11 @@ public class AdminLoginRateLimitSettingsController(
         );
 
     /// <summary>
-    ///     This action merges a partial update into <c>DnsServer:AdminLoginRateLimit</c> via
-    ///     <see cref="PresetConfigurationFileApplier" />'s own generic settings-list overload, RFC
-    ///     7396 merge-patch style: a field absent from <paramref name="patch" /> is left exactly as
-    ///     it was in the file.
+    ///     This action merges a partial update into <c>DnsServer:AdminLoginRateLimit</c> as an RFC
+    ///     7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent
+    ///     from <paramref name="patch" /> keeps its value. Returns 400 when <c>permitLimit</c> is
+    ///     below 1 or <c>window</c> is not a positive TimeSpan. The change needs a restart.
+    ///     Requires <c>adminloginratelimit:write</c>.
     /// </summary>
     [HttpPatch]
     [RequirePermission("adminloginratelimit:write")]
