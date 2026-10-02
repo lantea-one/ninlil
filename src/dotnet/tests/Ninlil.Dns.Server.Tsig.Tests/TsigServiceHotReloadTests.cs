@@ -54,6 +54,10 @@ public sealed class TsigServiceHotReloadTests
 
         public Task<int> CountAsync(CancellationToken stoppingToken = default) =>
             throw new NotSupportedException();
+
+        public Task<IReadOnlyList<TsigKeyEntity>> ListUnusedClusterInviteKeysAsync(
+            CancellationToken stoppingToken = default
+        ) => throw new NotSupportedException();
     }
 
     [Fact]

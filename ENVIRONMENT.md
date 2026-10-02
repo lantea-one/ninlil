@@ -411,7 +411,7 @@ self-update service, and multi-node clustering.
 | `NINLIL_CLUSTER_ENABLE` | Whether multi-node clustering is enabled. | `false` |
 | `NINLIL_CLUSTER_NODE_ID` | This node's own unique cluster identifier. | `00000000-0000-0000-0000-000000000000` |
 | `NINLIL_CLUSTER_ADVERTISED_HOST` | The hostname/address this node advertises to its cluster peers. | *(empty)* |
-| `NINLIL_CLUSTER_ADVERTISED_PORT` | The port this node advertises for cluster membership traffic. | `0` |
+| `NINLIL_CLUSTER_ADVERTISED_PORT` | The port this node advertises for cluster membership traffic; `0` means the web HTTPS port. | `0` |
 | `NINLIL_CLUSTER_HEARTBEAT_INTERVAL` | How often this node sends a heartbeat to its peers. | `00:00:30` |
 | `NINLIL_CLUSTER_HEARTBEAT_TIMEOUT` | How long to wait for a peer's heartbeat response. | `00:00:10` |
 | `NINLIL_CLUSTER_MISSED_HEARTBEAT_THRESHOLD` | Consecutive missed heartbeats before a peer is considered down. | `3` |

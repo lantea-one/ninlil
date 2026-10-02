@@ -47,8 +47,9 @@ public class ClusterNodeEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property contains the name of the <see cref="TsigKeyEntity" /> that signs requests to
-    ///     this peer and verifies requests from it. Like <see cref="ZoneEntity.TsigKeyName" />, it is
-    ///     a reference by name rather than a foreign key, since a key is not tied to one consumer.
+    ///     this peer and verifies requests from it. The key points back at this row through
+    ///     <see cref="TsigKeyEntity.ClusterNodeId" />, and the cluster channel accepts a request
+    ///     only when both links agree, so renaming or re-creating the key cuts the peer off.
     /// </summary>
     public string TsigKeyName { get; set; }
 

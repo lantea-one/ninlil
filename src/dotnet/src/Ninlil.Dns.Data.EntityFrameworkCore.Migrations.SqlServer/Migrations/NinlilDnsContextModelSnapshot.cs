@@ -1522,6 +1522,12 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.SqlServer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<DateTimeOffset?>("ClusterInviteExpiresAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ClusterNodeId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Comments")
                         .HasMaxLength(4096)
                         .HasColumnType("nvarchar(max)");

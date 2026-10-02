@@ -10,8 +10,9 @@ namespace Ninlil.Dns.Server.Cluster.Http;
 ///     (<c>TlsCertificateOptions</c>). Instead the SHA-256 thumbprint of the peer's leaf
 ///     certificate is compared with the one learned in the join handshake (carried in the invite
 ///     or the join callback) and stored in <c>ClusterNodeEntity.TlsCertificateThumbprint</c>,
-///     much like a known SSH host key. A peer whose certificate changes, for example after
-///     renewal, fails the check until the stored thumbprint is updated.
+///     much like a known SSH host key. When a peer's certificate is renewed, the peer announces
+///     the new thumbprint in its next signed heartbeat and the stored pin is updated
+///     (<c>ClusterHeartbeatReceiver</c>); until then, probes of that peer fail the check.
 /// </summary>
 public static class ClusterPeerCertificateValidator
 {

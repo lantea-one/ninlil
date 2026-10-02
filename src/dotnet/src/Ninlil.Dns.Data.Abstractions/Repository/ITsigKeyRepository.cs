@@ -5,8 +5,9 @@ namespace Ninlil.Dns.Data.Abstractions.Repository;
 
 /// <summary>
 ///     This interface extends <see cref="IRepository{TEntity}" /> with the lookup TSIG
-///     verification makes for every signed message (the key a message names), and the paged
-///     listing behind <c>TsigKeysController.List</c>, which has no filters.
+///     verification makes for every signed message (the key a message names), the paged
+///     listing behind <c>TsigKeysController.List</c>, which has no filters, and the unused
+///     cluster invite keys the heartbeat service sweeps.
 /// </summary>
 public interface ITsigKeyRepository : IRepository<TsigKeyEntity>
 {
@@ -38,4 +39,15 @@ public interface ITsigKeyRepository : IRepository<TsigKeyEntity>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The total number of TSIG keys.</returns>
     Task<int> CountAsync(CancellationToken stoppingToken = default);
+
+    /// <summary>
+    ///     This method lists every key still waiting to be used by a cluster invite (those with a
+    ///     <see cref="TsigKeyEntity.ClusterInviteExpiresAtUtc" />), so the caller can remove the
+    ///     expired ones. There are only ever a handful.
+    /// </summary>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The unused invite keys, expired or not.</returns>
+    Task<IReadOnlyList<TsigKeyEntity>> ListUnusedClusterInviteKeysAsync(
+        CancellationToken stoppingToken = default
+    );
 }

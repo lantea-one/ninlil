@@ -14,6 +14,7 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 using Ninlil.Dns.Server.Cluster.Heartbeat;
 using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Options;
+using Ninlil.Dns.Server.Core.Certificates;
 using Ninlil.Dns.Server.Tsig;
 
 // Define our namespace.
@@ -23,8 +24,8 @@ namespace Ninlil.Dns.Server.Cluster.Tests;
 ///     This class tests <see cref="ClusterHeartbeatBackgroundService" /> against EF Core
 ///     repositories on a temporary SQLite database, with a peer that is a loopback TCP listener
 ///     which accepts connections and never answers, so every probe runs into the HTTP timeout.
-///     The service runs with a short interval and timeout, and the test waits for the peer's
-///     stored status to change.
+///     The service runs with a short interval and timeout, and each test waits for the stored
+///     state to change: the peer's status, or the expired invite keys a round removes.
 /// </summary>
 public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
 {
@@ -33,7 +34,13 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
         $"ninlil-dns-cluster-heartbeat-tests-{Guid.NewGuid():N}.sqlite3"
     );
 
+    private readonly string _certificateStatePath = Path.Combine(
+        Path.GetTempPath(),
+        $"ninlil-dns-cluster-heartbeat-tests-{Guid.NewGuid():N}.pfx"
+    );
+
     private readonly ServiceProvider _services;
+    private readonly ReloadableTlsCertificateProvider _certificateProvider;
 
     public ClusterHeartbeatBackgroundServiceTests()
     {
@@ -50,15 +57,23 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
 
         using IServiceScope scope = _services.CreateScope();
         scope.ServiceProvider.GetRequiredService<NinlilDnsContext>().Database.EnsureCreated();
+
+        _certificateProvider = new ReloadableTlsCertificateProvider(
+            new TlsCertificateOptions { SelfSignedCertificateStatePath = _certificateStatePath },
+            NullLogger.Instance
+        );
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
         _services.Dispose();
+        _certificateProvider.Dispose();
 
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
+        if (File.Exists(_certificateStatePath))
+            File.Delete(_certificateStatePath);
     }
 
     /// <summary>
@@ -84,15 +99,7 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
             MissedHeartbeatThreshold = 1,
         };
 
-        ClusterHeartbeatBackgroundService service = new(
-            _services.GetRequiredService<IServiceScopeFactory>(),
-            new ClusterPeerHttpClientFactory(
-                _services.GetRequiredService<IServiceScopeFactory>(),
-                _services.GetRequiredService<TsigSecretProtector>()
-            ),
-            new FixedOptionsMonitor<ClusterOptions>(options),
-            NullLogger<ClusterHeartbeatBackgroundService>.Instance
-        );
+        ClusterHeartbeatBackgroundService service = CreateService(options);
 
         await service.StartAsync(CancellationToken.None);
         try
@@ -117,6 +124,86 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
         {
             await service.StopAsync(CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    ///     This test checks that a heartbeat round removes the key of an invite that expired
+    ///     unused, and keeps the key of one that is still valid.
+    /// </summary>
+    [Fact]
+    public async Task ARoundRemovesExpiredInviteKeysOnly()
+    {
+        string expiredKeyName = await SeedInviteKeyAsync(DateTimeOffset.UtcNow.AddMinutes(-1));
+        string validKeyName = await SeedInviteKeyAsync(DateTimeOffset.UtcNow.AddMinutes(10));
+
+        ClusterHeartbeatBackgroundService service = CreateService(
+            new ClusterOptions
+            {
+                Enable = true,
+                NodeId = Guid.NewGuid(),
+                HeartbeatInterval = TimeSpan.FromMilliseconds(100),
+            }
+        );
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            bool expiredKeyGone = false;
+            DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!expiredKeyGone && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+                expiredKeyGone = await FindKeyAsync(expiredKeyName) is null;
+            }
+
+            Assert.True(expiredKeyGone);
+            Assert.NotNull(await FindKeyAsync(validKeyName));
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private ClusterHeartbeatBackgroundService CreateService(ClusterOptions options) =>
+        new(
+            _services.GetRequiredService<IServiceScopeFactory>(),
+            new ClusterPeerHttpClientFactory(
+                _services.GetRequiredService<IServiceScopeFactory>(),
+                _services.GetRequiredService<TsigSecretProtector>()
+            ),
+            new FixedOptionsMonitor<ClusterOptions>(options),
+            _certificateProvider,
+            NullLogger<ClusterHeartbeatBackgroundService>.Instance
+        );
+
+    private async Task<TsigKeyEntity> FindKeyAsync(string name)
+    {
+        using IServiceScope scope = _services.CreateScope();
+        return await scope
+            .ServiceProvider.GetRequiredService<ITsigKeyRepository>()
+            .FindByNameAsync(name);
+    }
+
+    private async Task<string> SeedInviteKeyAsync(DateTimeOffset expiresAtUtc)
+    {
+        using IServiceScope scope = _services.CreateScope();
+        string keyName = $"cluster-{Guid.NewGuid():N}";
+        await scope
+            .ServiceProvider.GetRequiredService<ITsigKeyRepository>()
+            .AddAsync(
+                new TsigKeyEntity
+                {
+                    Id = Guid.NewGuid(),
+                    Name = keyName,
+                    AlgorithmName = "hmac-sha256",
+                    SecretEncrypted = "unused",
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                    ClusterInviteExpiresAtUtc = expiresAtUtc,
+                }
+            );
+        await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        return keyName;
     }
 
     /// <summary>

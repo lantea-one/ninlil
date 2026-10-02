@@ -6,6 +6,7 @@ using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Authentication;
 using Ninlil.Dns.Server.Cluster.Channel;
+using Ninlil.Dns.Server.Cluster.Heartbeat;
 using Ninlil.Dns.Server.Cluster.Join;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Web.Models;
@@ -18,12 +19,15 @@ namespace Ninlil.Web.Controllers;
 ///     authenticates a peer node by a TSIG-key HMAC signature
 ///     (<see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />, checked by
 ///     <see cref="ClusterTsigAuthenticationHandler" />), never an operator's JWT or API token;
-///     no permission is checked. The handler accepts any enabled TSIG key, not only keys tied to
-///     a known peer. The operator-facing side of the same peer registry is
+///     no permission is checked. The handler accepts only a known peer's own key, except that an
+///     unused invite key may sign <see cref="JoinComplete" />, so every other action, config sync
+///     included, only ever hears from an established peer. The operator-facing side of the same
+///     peer registry is
 ///     <see cref="ClusterController" />; keeping the two apart means the controller alone tells a
 ///     reader which authentication applies.
 /// </summary>
 /// <param name="joinService">Handles the joining node's callback.</param>
+/// <param name="heartbeatReceiver">Checks a peer's heartbeat and re-pins its certificate.</param>
 /// <param name="configSyncAppliers">
 ///     Every registered <see cref="IClusterConfigSyncApplier" /> (see <see cref="ConfigSync" />).
 /// </param>
@@ -38,6 +42,7 @@ namespace Ninlil.Web.Controllers;
 [Authorize(AuthenticationSchemes = ClusterTsigAuthenticationDefaults.AuthenticationScheme)]
 public class ClusterChannelController(
     ClusterJoinService joinService,
+    ClusterHeartbeatReceiver heartbeatReceiver,
     IEnumerable<IClusterConfigSyncApplier> configSyncAppliers,
     IUserRepository userRepository,
     IDnsQueryLogRepository queryLogRepository,
@@ -45,20 +50,38 @@ public class ClusterChannelController(
 ) : ControllerBase
 {
     /// <summary>
-    ///     This action answers a peer's heartbeat with 200. Passing authentication is all it
-    ///     checks. Each node's <c>ClusterHeartbeatBackgroundService</c> sets a peer's
-    ///     <see cref="ClusterNodeEntity.Status" /> from whether its own probe of that peer
-    ///     succeeded, so each node trusts its own view of a peer's health rather than anything the
-    ///     peer reports.
+    ///     This action answers a peer's heartbeat with 200, after checking that the body names the
+    ///     peer the key belongs to and storing a newly announced certificate thumbprint (see
+    ///     <see cref="ClusterHeartbeatReceiver" />). Each node's <c>ClusterHeartbeatBackgroundService</c>
+    ///     sets a peer's <see cref="ClusterNodeEntity.Status" /> from whether its own probe of that
+    ///     peer succeeded, so each node trusts its own view of a peer's health rather than
+    ///     anything the peer reports. An invite key cannot reach this action.
     /// </summary>
     [HttpPost("heartbeat")]
-    public IActionResult Heartbeat([FromBody] ClusterHeartbeatRequest request) => Ok();
+    public async Task<IActionResult> Heartbeat(
+        [FromBody] ClusterHeartbeatRequest request,
+        CancellationToken stoppingToken
+    )
+    {
+        Guid authenticatedRemoteNodeId = Guid.Parse(
+            User.FindFirstValue(ClusterTsigAuthenticationDefaults.RemoteNodeIdClaimType)
+        );
+
+        await heartbeatReceiver.HandleHeartbeatAsync(
+            authenticatedRemoteNodeId,
+            request,
+            stoppingToken
+        );
+
+        return Ok();
+    }
 
     /// <summary>
     ///     This action receives the joining node's callback, the second half of the join handshake
     ///     (see <see cref="ClusterJoinService.HandleJoinCompleteAsync" />). The TSIG key name comes
     ///     from the identity <see cref="ClusterTsigAuthenticationHandler" /> authenticated, never
-    ///     from the request body.
+    ///     from the request body. It is the one action an unused, unexpired invite key may sign;
+    ///     the route must stay <see cref="ClusterTsigAuthenticationDefaults.JoinCompletePath" />.
     /// </summary>
     [HttpPost("join-complete")]
     public async Task<IActionResult> JoinComplete(

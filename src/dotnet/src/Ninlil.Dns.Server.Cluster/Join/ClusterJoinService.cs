@@ -5,6 +5,7 @@ using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Cluster.Authentication;
 using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Invite;
@@ -145,7 +146,7 @@ public class ClusterJoinService(
             response = await httpClientFactory.SendSignedWithSecretAsync(
                 client,
                 $"https://{invite.InviterHost}:{invite.InviterPort}",
-                "/api/cluster/channel/join-complete",
+                ClusterTsigAuthenticationDefaults.JoinCompletePath,
                 invite.TsigKeyName,
                 secretBytes,
                 callbackBody,
@@ -165,7 +166,9 @@ public class ClusterJoinService(
                 $"The inviting node rejected the join (HTTP {(int)response.StatusCode})."
             );
 
-        // The callback succeeded; now store the shared key and the peer row.
+        // The callback succeeded; now store the shared key and the peer row, linked to each
+        // other so the key authenticates this peer's requests (see TsigKeyEntity.ClusterNodeId).
+        Guid nodeRowId = Guid.NewGuid();
         TsigKeyEntity key = new()
         {
             Id = Guid.NewGuid(),
@@ -175,12 +178,13 @@ public class ClusterJoinService(
             IsDisabled = false,
             Comments = $"Cluster channel key shared with peer node {invite.InviterNodeId}.",
             CreatedAtUtc = DateTimeOffset.UtcNow,
+            ClusterNodeId = nodeRowId,
         };
         await tsigKeyRepository.AddAsync(key, stoppingToken);
 
         ClusterNodeEntity node = new()
         {
-            Id = Guid.NewGuid(),
+            Id = nodeRowId,
             Name = string.IsNullOrWhiteSpace(displayName)
                 ? $"node-{invite.InviterNodeId.ToString("N")[..8]}"
                 : displayName,
@@ -201,13 +205,12 @@ public class ClusterJoinService(
 
     /// <summary>
     ///     This method handles a join callback on the inviting node, after
-    ///     <c>ClusterChannelController.JoinComplete</c> has authenticated it. The valid signature
-    ///     is the only check: the signing key is not checked to be one an invite created, so any
-    ///     enabled TSIG key (see <see cref="Authentication.ClusterTsigAuthenticationHandler" />)
-    ///     can register a peer, and the invite's expiry is not checked. The new peer is recorded
-    ///     as <see cref="ClusterNodeStatusEnum.Healthy" />. A repeated callback for a node id
-    ///     already registered under the same key (for example after the joiner timed out)
-    ///     updates the row's address, port, certificate and name instead of failing.
+    ///     <c>ClusterChannelController.JoinComplete</c> has authenticated it. A new peer can only
+    ///     be registered with an unused, unexpired invite key; the key is then linked to the new
+    ///     row and stops being an invite key, so one invite admits one node. The new peer is
+    ///     recorded as <see cref="ClusterNodeStatusEnum.Healthy" />. A repeated callback for a
+    ///     node id already registered under the same key (for example after the joiner timed
+    ///     out) updates the row's address, port, certificate and name instead of failing.
     /// </summary>
     /// <param name="authenticatedTsigKeyName">
     ///     The name of the TSIG key <see cref="Authentication.ClusterTsigAuthenticationHandler" />
@@ -216,8 +219,11 @@ public class ClusterJoinService(
     /// <param name="request">The joiner's callback body.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The peer registry row now on record for the joiner.</returns>
-    /// <exception cref="ValidationException">Thrown when clustering is disabled, or the joiner claims this node's identifier.</exception>
-    /// <exception cref="ConflictException">Thrown when the claimed node id is already on record under a different key.</exception>
+    /// <exception cref="ValidationException">Thrown when clustering is disabled, the joiner claims this node's identifier, or the invite has expired.</exception>
+    /// <exception cref="ConflictException">
+    ///     Thrown when the claimed node id is already on record under a different key, or the key
+    ///     already belongs to another peer.
+    /// </exception>
     public async Task<ClusterNodeEntity> HandleJoinCompleteAsync(
         string authenticatedTsigKeyName,
         ClusterJoinCompleteRequest request,
@@ -232,6 +238,10 @@ public class ClusterJoinService(
         if (request.JoinerNodeId == options.NodeId)
             throw new ValidationException("A node cannot join itself.");
 
+        TsigKeyEntity key = await tsigKeyRepository.FindByNameAsync(
+            authenticatedTsigKeyName,
+            stoppingToken
+        );
         ClusterNodeEntity existing = await clusterNodeRepository.FindByRemoteNodeIdAsync(
             request.JoinerNodeId,
             stoppingToken
@@ -239,13 +249,7 @@ public class ClusterJoinService(
 
         if (existing is not null)
         {
-            if (
-                !string.Equals(
-                    existing.TsigKeyName,
-                    authenticatedTsigKeyName,
-                    StringComparison.Ordinal
-                )
-            )
+            if (key?.ClusterNodeId != existing.Id)
                 throw new ConflictException(
                     "This node id is already registered locally under a different key."
                 );
@@ -263,6 +267,15 @@ public class ClusterJoinService(
             await unitOfWork.SaveChangesAsync(stoppingToken);
             return existing;
         }
+
+        // A new peer needs an invite key that has not been used yet. The authentication handler
+        // checked the expiry too; it is checked again in case the invite expired since.
+        if (key is null || key.ClusterNodeId is not null)
+            throw new ConflictException("This key already belongs to another peer.");
+        if (key.ClusterInviteExpiresAtUtc is not DateTimeOffset inviteExpiresAtUtc)
+            throw new ConflictException("This key was not issued by an invite.");
+        if (inviteExpiresAtUtc < DateTimeOffset.UtcNow)
+            throw new ValidationException("This invite code has expired -- ask for a new one.");
 
         ClusterNodeEntity node = new()
         {
@@ -284,6 +297,14 @@ public class ClusterJoinService(
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         await clusterNodeRepository.AddAsync(node, stoppingToken);
+
+        // The invite is used up: the key now belongs to this peer alone.
+        key.ClusterNodeId = node.Id;
+        key.ClusterInviteExpiresAtUtc = null;
+        key.Comments = $"Cluster channel key shared with peer node {request.JoinerNodeId}.";
+        key.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        tsigKeyRepository.Update(key);
+
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
         return node;

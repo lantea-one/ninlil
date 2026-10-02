@@ -1517,6 +1517,12 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("ClusterInviteExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ClusterNodeId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Comments")
                         .HasMaxLength(4096)
                         .HasColumnType("TEXT");

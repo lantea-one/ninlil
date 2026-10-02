@@ -15,7 +15,7 @@ namespace Ninlil.Dns.Server.Cluster.Extension;
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
 ///     Ninlil's clustering: <see cref="ClusterOptions" />, the invite and join services, the peer
-///     HTTP client factory, the heartbeat service, and the config-sync broadcaster, username
+///     HTTP client factory, the heartbeat service and receiver, and the config-sync broadcaster, username
 ///     checker and statistics aggregator. The <see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />
 ///     scheme is registered separately by <see cref="AddNinlilDnsServerClusterAuthentication" />,
 ///     which <c>Program.cs</c> calls after setting up the other authentication schemes.
@@ -42,6 +42,7 @@ public static class ServiceCollectionClusterExtension
         instance.AddSingleton<ClusterPeerHttpClientFactory>();
         instance.AddScoped<ClusterInviteService>();
         instance.AddScoped<ClusterJoinService>();
+        instance.AddScoped<ClusterHeartbeatReceiver>();
 
         instance.AddHostedService<ClusterHeartbeatBackgroundService>();
 

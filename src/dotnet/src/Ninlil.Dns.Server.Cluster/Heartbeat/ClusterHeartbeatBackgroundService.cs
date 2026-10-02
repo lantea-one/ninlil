@@ -9,6 +9,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.Cluster.Http;
 using Ninlil.Dns.Server.Cluster.Options;
+using Ninlil.Dns.Server.Core.Certificates;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Cluster.Heartbeat;
@@ -23,6 +24,11 @@ namespace Ninlil.Dns.Server.Cluster.Heartbeat;
 ///         checked, but the two registries can disagree for a while (see
 ///         <c>ClusterNodeStatusEnum</c>). That is acceptable for a small cluster.
 ///     </para>
+///     <para>
+///         Each probe also carries this node's current certificate thumbprint, so a peer re-pins
+///         it after a renewal (see <see cref="ClusterHeartbeatReceiver" />), and each round
+///         removes invite keys whose invite expired unused (see <see cref="Invite.ClusterInviteService" />).
+///     </para>
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to create a scope for each round, for the scoped repository and unit of
@@ -30,11 +36,13 @@ namespace Ninlil.Dns.Server.Cluster.Heartbeat;
 /// </param>
 /// <param name="httpClientFactory">The factory used to build and sign each outbound probe.</param>
 /// <param name="clusterOptions">The cluster settings, read on every round (except the interval).</param>
+/// <param name="certificateProvider">The provider of this node's TLS certificate, whose thumbprint each probe announces.</param>
 /// <param name="logger">The logger this service records a status transition, or a probe failure, to.</param>
 public class ClusterHeartbeatBackgroundService(
     IServiceScopeFactory scopeFactory,
     ClusterPeerHttpClientFactory httpClientFactory,
     IOptionsMonitor<ClusterOptions> clusterOptions,
+    ReloadableTlsCertificateProvider certificateProvider,
     ILogger<ClusterHeartbeatBackgroundService> logger
 ) : BackgroundService
 {
@@ -85,14 +93,31 @@ public class ClusterHeartbeatBackgroundService(
     }
 
     /// <summary>
-    ///     This method probes every known peer once, in parallel, and saves the results together.
+    ///     This method removes expired invite keys, then probes every known peer once, in
+    ///     parallel, and saves the results together.
     /// </summary>
     private async Task RunOneRoundAsync(ClusterOptions options, CancellationToken stoppingToken)
     {
         using IServiceScope scope = scopeFactory.CreateScope();
         IClusterNodeRepository clusterNodeRepository =
             scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
+        ITsigKeyRepository tsigKeyRepository =
+            scope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        // An expired invite key is already refused by the authentication handler; removing it
+        // keeps the key list from filling up with invites nobody used.
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        IReadOnlyList<TsigKeyEntity> expiredInviteKeys =
+        [
+            .. (await tsigKeyRepository.ListUnusedClusterInviteKeysAsync(stoppingToken)).Where(
+                key => key.ClusterInviteExpiresAtUtc < now
+            ),
+        ];
+        foreach (TsigKeyEntity expiredInviteKey in expiredInviteKeys)
+            tsigKeyRepository.Remove(expiredInviteKey);
+        if (expiredInviteKeys.Count > 0)
+            await unitOfWork.SaveChangesAsync(stoppingToken);
 
         IReadOnlyList<ClusterNodeEntity> peers = await clusterNodeRepository.ListAsync(
             stoppingToken: stoppingToken
@@ -123,7 +148,11 @@ public class ClusterHeartbeatBackgroundService(
     )
     {
         string requestBody = JsonSerializer.Serialize(
-            new ClusterHeartbeatRequest(options.NodeId, DateTimeOffset.UtcNow)
+            new ClusterHeartbeatRequest(
+                options.NodeId,
+                DateTimeOffset.UtcNow,
+                ClusterPeerCertificateValidator.ComputeThumbprint(certificateProvider.Current)
+            )
         );
 
         try

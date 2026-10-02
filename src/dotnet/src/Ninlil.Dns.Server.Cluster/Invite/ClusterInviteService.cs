@@ -17,10 +17,12 @@ namespace Ninlil.Dns.Server.Cluster.Invite;
 ///     <see cref="ClusterInviteCode" />, and <see cref="Join.ClusterJoinService" /> for the joining
 ///     half). It generates and stores a new TSIG key before handing out the code, because the
 ///     join callback (<c>ClusterChannelController.JoinComplete</c>) is authenticated with that
-///     key. No "pending invite" record is kept: holding the code, and so the key's secret, is the
-///     authorization to join. An invite that is never used leaves its key stored and enabled;
-///     nothing removes it, and since the inviter does not check the invite's expiry, the key
-///     still lets its holder join after the invite has expired.
+///     key. The key itself is the pending invite: holding the code, and so the key's secret, is
+///     the authorization to join, and the key's <see cref="TsigKeyEntity.ClusterInviteExpiresAtUtc" />
+///     limits it to the join callback until the invite expires. A successful join turns it into
+///     the new peer's key (<see cref="Join.ClusterJoinService.HandleJoinCompleteAsync" />); an
+///     invite that expires unused stops working at once and its key is removed by
+///     <see cref="Heartbeat.ClusterHeartbeatBackgroundService" />.
 /// </summary>
 /// <param name="tsigKeyRepository">The repository the invite's new key is stored through.</param>
 /// <param name="unitOfWork">The unit of work the new key is committed through.</param>
@@ -38,7 +40,7 @@ public class ClusterInviteService(
     /// <summary>
     ///     This field contains how long a new invite is valid: long enough to copy it from this
     ///     node's Cluster page to the joining node's, even across browser sessions, and short
-    ///     enough that a forgotten invite stops being accepted by a joining node soon after.
+    ///     enough that a forgotten invite stops being accepted soon after.
     /// </summary>
     public static readonly TimeSpan DefaultValidity = TimeSpan.FromMinutes(15);
 
@@ -83,6 +85,7 @@ public class ClusterInviteService(
         // can be disabled or traced on its own.
         byte[] secretBytes = RandomNumberGenerator.GetBytes(GeneratedSecretLengthBytes);
         string keyName = $"cluster-{Guid.NewGuid():N}";
+        DateTimeOffset expiresAtUtc = DateTimeOffset.UtcNow + DefaultValidity;
 
         TsigKeyEntity key = new()
         {
@@ -94,6 +97,7 @@ public class ClusterInviteService(
             Comments =
                 $"Cluster channel key generated for an invite issued {DateTimeOffset.UtcNow:O}.",
             CreatedAtUtc = DateTimeOffset.UtcNow,
+            ClusterInviteExpiresAtUtc = expiresAtUtc,
         };
 
         await tsigKeyRepository.AddAsync(key, stoppingToken);
@@ -112,7 +116,7 @@ public class ClusterInviteService(
             InviterCertificateThumbprint = ClusterPeerCertificateValidator.ComputeThumbprint(
                 certificateProvider.Current
             ),
-            ExpiresAtUtc = DateTimeOffset.UtcNow + DefaultValidity,
+            ExpiresAtUtc = expiresAtUtc,
         };
 
         return ClusterInviteCodec.Encode(invite);

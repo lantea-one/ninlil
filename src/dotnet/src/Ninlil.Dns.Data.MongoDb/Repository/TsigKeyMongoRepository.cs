@@ -40,4 +40,12 @@ public class TsigKeyMongoRepository(NinlilDnsMongoContext context, MongoChangeTr
                 FilterDefinition<TsigKeyEntity>.Empty,
                 cancellationToken: stoppingToken
             );
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TsigKeyEntity>> ListUnusedClusterInviteKeysAsync(
+        CancellationToken stoppingToken = default
+    ) =>
+        await Collection
+            .Find(key => key.ClusterInviteExpiresAtUtc != null)
+            .ToListAsync(stoppingToken);
 }

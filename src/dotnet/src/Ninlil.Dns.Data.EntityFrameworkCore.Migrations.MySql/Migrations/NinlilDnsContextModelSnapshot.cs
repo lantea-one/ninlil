@@ -1522,6 +1522,12 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<DateTimeOffset?>("ClusterInviteExpiresAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ClusterNodeId")
+                        .HasColumnType("char(36)");
+
                     b.Property<string>("Comments")
                         .HasMaxLength(4096)
                         .HasColumnType("varchar(4096)");

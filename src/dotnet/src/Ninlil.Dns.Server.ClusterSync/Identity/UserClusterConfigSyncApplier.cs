@@ -15,8 +15,10 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///     This class is the receiving-side <see cref="IClusterConfigSyncApplier" /> for user
 ///     accounts, including password hash, two-factor state, roles and direct permissions. It
 ///     is not built on <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" /> because of
-///     the unique username and the secret fields. It applies whatever an authenticated
-///     envelope contains, with no check of which peer sent it.
+///     the unique username and the secret fields. It trusts an envelope fully, password hash and
+///     permissions included, because only an established peer can deliver one:
+///     <c>ClusterTsigAuthenticationHandler</c> accepts config sync only when it is signed with
+///     the key of a known <c>ClusterNodeEntity</c>, never an invite key or an operator's TSIG key.
 ///     <para>
 ///         <b>Secrets.</b> The two plaintext secret fields of <see cref="UserSyncPayload" /> are
 ///         encrypted with protectors from this node's <see cref="IDataProtectionProvider" />,

@@ -16,22 +16,31 @@ namespace Ninlil.Dns.Server.Cluster.Authentication;
 /// <summary>
 ///     This class authenticates a cluster-channel HTTP request against a pre-shared TSIG key,
 ///     the peer counterpart of <c>ApiTokenAuthenticationHandler</c>. It checks the header
-///     format, the timestamp window, that the named key exists and is enabled, and the HMAC
-///     (see <see cref="ClusterTsigRequestSigner" />). The resulting identity is only the key
-///     name, never an operator. Any enabled TSIG key is accepted, including keys created for
-///     zone transfers or dynamic updates; the handler does not check that the key belongs to a
-///     <c>ClusterNodeEntity</c>, and matching a key to a peer is left to the actions.
+///     format, the timestamp window, that the named key exists, is enabled and is a cluster key,
+///     and the HMAC (see <see cref="ClusterTsigRequestSigner" />). The resulting identity is the
+///     key name, never an operator.
+///     <para>
+///         Only two kinds of key are accepted, so a zone-transfer or dynamic-update key can never
+///         register a peer or push config-sync envelopes (users and their permissions among
+///         them). A peer's key (<see cref="TsigKeyEntity.ClusterNodeId" />) must point at a known
+///         <see cref="ClusterNodeEntity" /> that names it back; its identity carries the peer's
+///         node id (<see cref="ClusterTsigAuthenticationDefaults.RemoteNodeIdClaimType" />). An
+///         unused invite key (<see cref="TsigKeyEntity.ClusterInviteExpiresAtUtc" />) is accepted
+///         only for the join callback, and only until the invite expires.
+///     </para>
 /// </summary>
 /// <param name="options">The scheme options.</param>
 /// <param name="logger">The logger factory used to create this handler's diagnostic logger.</param>
 /// <param name="encoder">The URL encoder ASP.NET Core's base handler class requires.</param>
 /// <param name="tsigKeyRepository">The repository used to look up the claimed signing key.</param>
+/// <param name="clusterNodeRepository">The repository used to look up the peer a key belongs to.</param>
 /// <param name="secretProtector">The protector used to decrypt the claimed key's secret.</param>
 public class ClusterTsigAuthenticationHandler(
     IOptionsMonitor<ClusterTsigAuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
     ITsigKeyRepository tsigKeyRepository,
+    IClusterNodeRepository clusterNodeRepository,
     TsigSecretProtector secretProtector
 ) : AuthenticationHandler<ClusterTsigAuthenticationSchemeOptions>(options, logger, encoder)
 {
@@ -76,6 +85,41 @@ public class ClusterTsigAuthenticationHandler(
                 "The cluster channel signing key is unknown or disabled."
             );
 
+        // The key must be a peer's key or, for the join callback only, an unused invite key
+        // (see the class summary).
+        List<Claim> claims = [new Claim(ClaimTypes.Name, key.Name)];
+        if (key.ClusterNodeId is Guid clusterNodeId)
+        {
+            ClusterNodeEntity node = await clusterNodeRepository.GetByIdAsync(clusterNodeId);
+            if (
+                node is null
+                || !string.Equals(node.TsigKeyName, key.Name, StringComparison.Ordinal)
+            )
+                return AuthenticateResult.Fail(
+                    "The cluster channel signing key belongs to no known peer."
+                );
+
+            claims.Add(
+                new Claim(
+                    ClusterTsigAuthenticationDefaults.RemoteNodeIdClaimType,
+                    node.RemoteNodeId.ToString()
+                )
+            );
+        }
+        else if (
+            key.ClusterInviteExpiresAtUtc is DateTimeOffset inviteExpiresAtUtc
+            && Request.Path.Equals(
+                ClusterTsigAuthenticationDefaults.JoinCompletePath,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            if (inviteExpiresAtUtc < DateTimeOffset.UtcNow)
+                return AuthenticateResult.Fail("The cluster invite has expired.");
+        }
+        else
+            return AuthenticateResult.Fail("The signing key is not a cluster channel key.");
+
         // Buffer the body so it can be read here for the MAC and again by model binding; the
         // position is reset to 0 afterwards.
         Request.EnableBuffering();
@@ -104,13 +148,8 @@ public class ClusterTsigAuthenticationHandler(
                 "The cluster channel request's own signature does not match."
             );
 
-        // The identity is the key name only (see the class summary).
-        ClaimsIdentity identity = new(
-            [new Claim(ClaimTypes.Name, key.Name)],
-            Scheme.Name,
-            ClaimTypes.Name,
-            null
-        );
+        // The identity is the key name, plus the peer's node id for a peer's key.
+        ClaimsIdentity identity = new(claims, Scheme.Name, ClaimTypes.Name, null);
         ClaimsPrincipal principal = new(identity);
         AuthenticationTicket ticket = new(principal, Scheme.Name);
 

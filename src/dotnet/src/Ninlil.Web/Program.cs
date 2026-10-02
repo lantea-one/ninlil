@@ -848,6 +848,17 @@ else
             "Moved {Count} legacy known-client identifiers into their own address documents.",
             backfilledClients
         );
+
+    // The same for the link from each cluster peer's key to its peer (see
+    // ClusterKeyLinkLegacyBackfill), without which upgraded peers could not authenticate.
+    int linkedClusterKeys = await ClusterKeyLinkLegacyBackfill.RunAsync(
+        backfillScope.ServiceProvider.GetRequiredService<NinlilDnsMongoContext>()
+    );
+    if (linkedClusterKeys > 0)
+        app.Logger.LogInformation(
+            "Linked {Count} existing cluster peer keys to their peers.",
+            linkedClusterKeys
+        );
 }
 
 await AdministratorBootstrapper.EnsureBootstrapAdministratorAsync(app.Services, app.Configuration);

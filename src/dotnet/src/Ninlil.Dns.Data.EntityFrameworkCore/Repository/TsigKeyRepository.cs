@@ -30,4 +30,9 @@ public class TsigKeyRepository(NinlilDnsContext context)
     /// <inheritdoc />
     public async Task<int> CountAsync(CancellationToken stoppingToken = default) =>
         await Set.CountAsync(stoppingToken);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TsigKeyEntity>> ListUnusedClusterInviteKeysAsync(
+        CancellationToken stoppingToken = default
+    ) => await Set.Where(key => key.ClusterInviteExpiresAtUtc != null).ToListAsync(stoppingToken);
 }

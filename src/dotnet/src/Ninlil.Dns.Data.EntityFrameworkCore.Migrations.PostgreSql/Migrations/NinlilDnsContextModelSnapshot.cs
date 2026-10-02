@@ -1522,6 +1522,12 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<DateTimeOffset?>("ClusterInviteExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ClusterNodeId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Comments")
                         .HasMaxLength(4096)
                         .HasColumnType("character varying(4096)");

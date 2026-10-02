@@ -19,8 +19,8 @@ namespace Ninlil.Web.Controllers;
 ///     This controller manages TSIG keys (RFC 8945), the shared secrets that zone transfers and
 ///     dynamic updates authenticate with. A key belongs to no single zone; a zone refers to one by
 ///     name through its <c>TsigKeyName</c> (see <see cref="ZonesController" />), with no foreign
-///     key. Any enabled key also authenticates the cluster channel (see
-///     <c>ClusterTsigAuthenticationHandler</c>). Secrets are encrypted at rest and returned only
+///     key. The cluster channel's keys are listed here too, but a key created here never
+///     authenticates a peer (see <c>TsigKeyEntity.ClusterNodeId</c>). Secrets are encrypted at rest and returned only
 ///     when created. Reads need <c>tsigkeys:read</c> and changes need <c>tsigkeys:write</c>.
 /// </summary>
 /// <param name="tsigKeyRepository">Reads and writes keys.</param>
