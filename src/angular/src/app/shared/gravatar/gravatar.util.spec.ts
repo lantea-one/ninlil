@@ -1,6 +1,7 @@
 import { buildGravatarInitials, buildGravatarUrl } from './gravatar.util';
 import { md5 } from './md5.util';
 
+/** These tests cover the Gravatar URL: the hash of the normalized address, `s` and `d=404`. */
 describe('buildGravatarUrl', () => {
   it('builds a gravatar.com avatar URL keyed by the MD5 hash of the lowercased, trimmed e-mail address', () => {
     const url = buildGravatarUrl('  JSmith@Example.com  ', 128);
@@ -22,6 +23,7 @@ describe('buildGravatarUrl', () => {
   });
 });
 
+/** These tests cover the initials for the fallback avatar, from a display name or a user name. */
 describe('buildGravatarInitials', () => {
   it('takes the first letter of up to the first two words of a display name', () => {
     expect(buildGravatarInitials('Jamie Smith', 'jsmith')).toBe('JS');

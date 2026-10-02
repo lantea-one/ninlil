@@ -6,7 +6,7 @@ import {
   PaginationComponent,
 } from '@coreui/angular';
 
-/** The page/page-size pair one {@link CoreuiPaginationComponent} emits on every navigation. */
+/** The page and page size {@link CoreuiPaginationComponent} emits on every change. */
 export interface PageChangeEvent {
   /** The zero-based index of the newly selected page. */
   pageIndex: number;
@@ -16,16 +16,13 @@ export interface PageChangeEvent {
 }
 
 /**
- * This component is a small, reusable server-side pagination control, filling a real gap in
- * CoreUI for Angular's own component set: its free tier ships `PaginationComponent`/
- * `PageItemComponent` as purely presentational page-number chrome (`align`/`size`/`role` inputs,
- * content projected via `<ng-content>`), with no built-in `length`/`pageIndex`/`pageSize`/
- * `(page)`-style data-binding of its own -- so that binding is hand-rolled once, here, for every
- * list in this app that pushes pagination to the server (`skip`/`take` REST params) rather than
- * slicing an already-fully-fetched in-memory array. Kept in `shared/` rather than any one feature
- * folder since nothing about it is feature-specific -- every server-paginated list across this
- * app (`ZoneListComponent`/`RecordListComponent`/`DnssecKeyListComponent` among them) shares this
- * one implementation rather than each hand-rolling its own.
+ * This component is the shared pagination bar for lists paged on the server (`skip`/`take`
+ * query parameters), such as the zone, record and DNSSEC key lists. It shows the row range, a
+ * rows-per-page selector and first/previous/next/last buttons, and emits {@link pageChange}; the
+ * list then fetches that page.
+ *
+ * <p>CoreUI's `PaginationComponent` only draws page links and has no page-index or page-size
+ * binding, so this component adds it.
  */
 @Component({
   selector: 'app-coreui-pagination',
@@ -40,7 +37,7 @@ export class CoreuiPaginationComponent {
   /** How many rows one page holds. */
   readonly pageSize = input.required<number>();
 
-  /** The total row count across every page, as reported by the backend's own paged response. */
+  /** The total row count across every page, from the backend's paged response. */
   readonly totalCount = input.required<number>();
 
   /** The page-size choices offered in the size selector. */

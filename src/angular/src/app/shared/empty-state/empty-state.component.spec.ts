@@ -4,8 +4,7 @@ import { IconSetService } from '@coreui/icons-angular';
 import { cilStorage } from '@coreui/icons';
 import { EmptyStateComponent } from './empty-state.component';
 
-// A trivial host lets these tests exercise real content projection (the `<ng-content>` action
-// slot) the same way every real caller uses this component, rather than only its own inputs.
+// A host component, so a test can check content projection into the action slot.
 @Component({
   selector: 'app-empty-state-test-host',
   imports: [EmptyStateComponent],
@@ -17,15 +16,18 @@ import { EmptyStateComponent } from './empty-state.component';
 })
 class EmptyStateTestHostComponent {}
 
+/**
+ * These tests cover the empty state: icon, heading and optional description, and projected
+ * content. TestBed, directly and through a small host component.
+ */
 describe('EmptyStateComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [EmptyStateComponent, EmptyStateTestHostComponent],
     }).compileComponents();
 
-    // IconSetService starts empty outside a full app bootstrap (app.config.ts's app initializer is
-    // what normally registers the icons), so seed the one icon this component renders; otherwise
-    // cIcon warns about an unregistered name on every render.
+    // The app initializer in app.config.ts normally registers icons; seed the one this renders so
+    // cIcon does not warn.
     TestBed.inject(IconSetService).icons = { cilStorage };
   });
 

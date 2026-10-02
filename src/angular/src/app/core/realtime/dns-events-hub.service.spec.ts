@@ -3,12 +3,10 @@ import { AuthService } from '../auth/auth.service';
 import { DNS_EVENTS_HUB_CONNECTION_FACTORY, DnsEventsHubService } from './dns-events-hub.service';
 
 /**
- * This type describes this spec's own hand-rolled fake `HubConnection` -- only the handful of
- * members {@link DnsEventsHubService} actually calls (`on`/`start`/`stop`/`onreconnecting`/
- * `onreconnected`/`onclose`), provided directly through {@link DNS_EVENTS_HUB_CONNECTION_FACTORY}
- * (a plain `useValue` provider, which accepts anything, needing no cast to the real, much larger
- * `HubConnection` type) rather than fully implementing its real surface, since this spec never
- * needs anything beyond these callbacks.
+ * This type describes the fake `HubConnection`. It has only the members
+ * {@link DnsEventsHubService} calls (`on`, `start`, `stop`, `onreconnecting`, `onreconnected`,
+ * `onclose`). It is supplied through {@link DNS_EVENTS_HUB_CONNECTION_FACTORY} with `useValue`,
+ * which needs no cast to the full `HubConnection` type.
  */
 interface FakeHubConnection {
   on: jasmine.Spy;
@@ -38,6 +36,11 @@ function createFakeConnection(): FakeHubConnection {
   };
 }
 
+/**
+ * These tests cover `DnsEventsHubService`: connecting, failure and reconnect states, the feed
+ * summary for each event type, the 50-entry cap, stopping, and the token factory. TestBed with a
+ * fake connection factory; tests raise events by calling the captured handlers.
+ */
 describe('DnsEventsHubService', () => {
   let service: DnsEventsHubService;
   let fakeConnection: FakeHubConnection;

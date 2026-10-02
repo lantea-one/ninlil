@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.component';
 
+/**
+ * These tests cover the confirm dialog: the title, message and button label, and which `resolved`
+ * value each way of closing emits. TestBed, setting inputs and subscribing to the output.
+ */
 describe('ConfirmDialogComponent', () => {
   let fixture: ComponentFixture<ConfirmDialogComponent>;
 

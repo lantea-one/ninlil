@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NotificationHostComponent } from './notification-host.component';
 import { NotificationService } from './notification.service';
 
+/**
+ * These tests cover the toast host: rendering success and error toasts, stacking, and dismissing
+ * a toast when CoreUI hides it. TestBed with the real `NotificationService`.
+ */
 describe('NotificationHostComponent', () => {
   let fixture: ComponentFixture<NotificationHostComponent>;
   let notification: NotificationService;

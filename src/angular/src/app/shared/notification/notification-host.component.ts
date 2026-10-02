@@ -8,21 +8,15 @@ import {
 import { NotificationService } from './notification.service';
 
 /**
- * This component is the one, app-wide host that actually renders every toast
- * {@link NotificationService} queues -- mounted once, directly in `App`'s own root template
- * alongside `<router-outlet>`, so it sits above every route (including the login page, before
- * `AppShellComponent` mounts) rather than needing to be re-added inside each page. It wraps
- * CoreUI's own `c-toaster`/`c-toast` components declaratively: each queued
- * {@link NotificationService.toasts} entry becomes one `c-toast`, positioned top-end, colored by
- * its own `success`/`danger` outcome, and either auto-hiding after its own delay or staying until
- * the operator dismisses it via the toast's own close button -- {@link NotificationService.error}
- * passes no delay for exactly this reason. Replaces this project's earlier `MatSnackBar`-based
- * mechanism (which queued and displayed one toast at a time); this CoreUI-native toaster instead
- * shows every currently-queued toast stacked at once, matching `c-toaster`'s own real behavior.
- * Each toast's own `role` is `"alert"` (assertive, interrupts a screen reader immediately) for an
- * error and `"status"` (polite, announced once the reader is idle) for a success confirmation --
- * `c-toast`'s own `[attr.role]` host binding turns that into the real `aria-live` region behavior
- * a toast that can appear without any corresponding user action needs to be announced at all.
+ * This component renders the toasts {@link NotificationService} queues. It is mounted once in the
+ * root `App` template, beside `<router-outlet>`, so toasts show on every route, including the
+ * login page.
+ *
+ * <p>Each {@link NotificationService.toasts} entry becomes a CoreUI `c-toast` in the top-end
+ * corner, all stacked at once. Success toasts hide themselves after a delay; error toasts have no
+ * delay and stay until closed. Errors get `role="alert"`, which a screen reader announces at once;
+ * successes get `role="status"`, announced when the reader is idle. A toast appears without the
+ * user focusing it, so without these roles it would not be announced at all.
  */
 @Component({
   selector: 'app-notification-host',
@@ -52,7 +46,7 @@ export class NotificationHostComponent {
   /** Exposed so the template can read {@link NotificationService.toasts} directly. */
   readonly notification = inject(NotificationService);
 
-  /** This method dismisses a toast once CoreUI reports it no longer visible -- either its own auto-hide timer elapsed, or the operator clicked its close button. */
+  /** This method removes a toast once CoreUI hides it, after its timer or a click on its close button. */
   onToastVisibleChange(visible: boolean, id: number): void {
     if (!visible) this.notification.dismiss(id);
   }

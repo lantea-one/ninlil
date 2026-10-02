@@ -4,14 +4,18 @@ import { BrandingSettingsService as BrandingApiService } from '../../api-client'
 import { BrandingService } from './branding.service';
 
 /**
- * This spec's own hand-rolled fake for the generated `BrandingApiService`, mirroring
- * `ThemeService`'s own spec -- see that spec's doc comment for why a plain object is used instead
- * of `jasmine.SpyObj`.
+ * A hand-written fake for the generated `BrandingApiService`. The `AuthService` spec explains why
+ * it is a plain object rather than a `jasmine.SpyObj`.
  */
 interface FakeBrandingApiService {
   apiBrandingSettingsEffectiveGet: jasmine.Spy;
 }
 
+/**
+ * These tests cover `BrandingService.initialize`: the configured title on success and the
+ * default title when the read fails or no title is set. TestBed with a fake `BrandingApiService`;
+ * the tests check `document.title`.
+ */
 describe('BrandingService', () => {
   let service: BrandingService;
   let brandingApiSpy: FakeBrandingApiService;

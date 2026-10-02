@@ -20,19 +20,16 @@ import { extractErrorMessage } from '../http-error/http-error.util';
 import { NotificationService } from '../notification/notification.service';
 
 /**
- * This component is a one-click, time-boxed "instant pause" kill switch, embedded as a shared
- * panel on both the client (`ClientFormComponent`) and client group (`ClientGroupFormComponent`)
- * edit pages -- mirroring `BlockedServicesComponent`/`SafeSearchComponent`'s own reusable-panel
- * shape, except each of those two calls one shared, scope-parameterized REST endpoint while a
- * pause is two genuinely separate endpoints (`ClientsController.Pause`/`.Resume` versus
- * `ClientGroupsController.Pause`/`.Resume`), so this component picks which API service to call
- * based on which of {@link clientId}/{@link clientGroupId} is actually set rather than forwarding
- * both as optional query parameters the way those two components do.
+ * This component is the "instant pause" panel on the client and client group edit pages
+ * (`ClientFormComponent`, `ClientGroupFormComponent`). It blocks every DNS query from the client,
+ * or from every member of the group, for a set time. The pause overrides schedules, filter lists
+ * and rewrites; `DnsClientScheduleEngine` enforces it.
  *
- * <p>While paused, every one of that client's (or every member of that group's) own DNS queries
- * is blocked outright, taking priority over every schedule, filter list, and rewrite this project
- * otherwise applies -- see `DnsClientScheduleEngine`'s own doc comment for the real enforcement.
- * This panel only starts/ends that pause; it never shows or edits anything else.
+ * <p>Clients and groups have separate endpoints, so the panel calls
+ * `POST /api/clients/{id}/pause` and `/resume`, or the same under `/api/client-groups/{id}`,
+ * depending on which of {@link clientId} and {@link clientGroupId} is set. Both need
+ * `clients:write` or `clientgroups:write`, which the edit route already requires. The current
+ * state comes from the client or group `GET`.
  */
 @Component({
   selector: 'app-instant-pause',
@@ -55,23 +52,23 @@ export class InstantPauseComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** The single client this panel targets. Exactly one of this and {@link clientGroupId} must be set. */
+  /** The client to pause. Set this or {@link clientGroupId}, not both. */
   @Input() clientId?: string;
 
-  /** The single client group this panel targets. Exactly one of this and {@link clientId} must be set. */
+  /** The client group to pause. Set this or {@link clientId}, not both. */
   @Input() clientGroupId?: string;
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The instant, in UTC, the target is currently paused until -- `null` when not currently paused. */
+  /** When the current pause ends (UTC), or `null` when none is set. */
   readonly pausedUntilUtc = signal<string | null>(null);
 
-  /** Whether {@link pausedUntilUtc} is currently in effect, as this panel's own last load/action reported it. */
+  /** Whether the pause is in effect, as of the last load or action. */
   readonly isCurrentlyPaused = signal(false);
 
-  /** The custom-duration form control the "Pause" button next to it submits. */
+  /** The custom duration in minutes, submitted by the "Pause" button beside it. */
   readonly customMinutesControl = this.formBuilder.control(30, [
     Validators.required,
     Validators.min(1),
@@ -81,7 +78,7 @@ export class InstantPauseComponent implements OnInit {
     void this.load();
   }
 
-  /** This method starts (or replaces) a pause for exactly {@link durationMinutes} minutes from now. */
+  /** This method starts or replaces a pause lasting `durationMinutes` from now. */
   async pauseFor(durationMinutes: number): Promise<void> {
     if (this.submitting() || !Number.isFinite(durationMinutes) || durationMinutes <= 0) return;
 
@@ -113,10 +110,8 @@ export class InstantPauseComponent implements OnInit {
   }
 
   /**
-   * This method pauses until the next 07:00 local time -- computing the resulting whole-minute
-   * duration and submitting it through {@link pauseFor} exactly like any other quick-duration
-   * button, since the server's own contract is always a duration, never an explicit timestamp
-   * (see `InstantPauseRequest`'s own doc comment for why).
+   * This method pauses until 07:00 tomorrow, browser local time. The API takes a duration, not
+   * an end time, so it converts the gap to whole minutes and calls {@link pauseFor}.
    */
   async pauseUntilTomorrowMorning(): Promise<void> {
     const now = new Date();
@@ -137,13 +132,13 @@ export class InstantPauseComponent implements OnInit {
     await this.pauseFor(durationMinutes);
   }
 
-  /** This method submits {@link customMinutesControl}'s own current value. */
+  /** This method pauses for the minutes in {@link customMinutesControl}. */
   async pauseCustomDuration(): Promise<void> {
     if (this.customMinutesControl.invalid) return;
     await this.pauseFor(this.customMinutesControl.value);
   }
 
-  /** This method ends the pause immediately, regardless of how much time was left on it. */
+  /** This method ends the pause now. */
   async resume(): Promise<void> {
     if (this.submitting()) return;
 

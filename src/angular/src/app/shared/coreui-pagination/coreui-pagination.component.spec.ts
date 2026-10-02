@@ -1,12 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { CoreuiPaginationComponent } from './coreui-pagination.component';
 
+/**
+ * These tests cover the pagination bar: the selected page size, page count and row range, the
+ * first/last-page limits and the events each button emits. TestBed with inputs set on fresh
+ * fixtures.
+ */
 describe('CoreuiPaginationComponent', () => {
   async function createComponent(pageIndex: number, pageSize: number, totalCount: number) {
-    // Reset first -- unlike every other spec file in this app, this one test suite creates more
-    // than one fixture within a single `it` (see "reports hasPrevious/hasNext correctly at each
-    // end" below), which would otherwise hit TestBed's own "module already instantiated" guard on
-    // the second call.
+    // Reset first: one test ("reports hasPrevious/hasNext correctly at each end") creates several
+    // fixtures, and configuring TestBed again would otherwise fail with "module already
+    // instantiated".
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [CoreuiPaginationComponent],

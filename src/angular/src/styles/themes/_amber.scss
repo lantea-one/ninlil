@@ -1,15 +1,8 @@
-// Amber palette -- WCAG-AA-checked (4.5:1 minimum for normal text) CoreUI custom-property
-// overrides. Contrast pairs verified via the standard relative-luminance/contrast-ratio formula
-// (WCAG 2 formula, not assumed): the light-mode accent (#92400e) against a white
-// (--cui-body-bg) background for link-text use, the dark-mode accent (#f59e0b) against
-// CoreUI's own dark --cui-body-bg (#212631), and each accent's own paired --cui-*-contrast
-// (the text color placed on a solid accent background, e.g. a primary button) against that
-// accent -- every one of those pairs clears 4.5:1. Only the accent/link/focus-ring tokens are
-// overridden here; --cui-body-bg/--cui-body-color/--cui-border-color and the rest of CoreUI's
-// own neutral/greyscale and semantic (success/warning/danger/info) tokens are left at their
-// own light/dark defaults (already contrast-checked by CoreUI itself), since a "palette" in
-// this app's own theming model is an accent-color identity layered on CoreUI's existing
-// light/dark neutrals, not a wholesale re-theme of every token.
+// Amber palette: CoreUI custom-property overrides for the accent color only. The light accent
+// (#92400e) on white, the dark accent (#f59e0b) on CoreUI's dark background (#212631), and each
+// accent's `--cui-primary-contrast` text on the accent all meet WCAG AA (4.5:1). Backgrounds,
+// text, borders and the success/warning/danger/info colors stay at CoreUI's light and dark
+// defaults: a palette is an accent on top of CoreUI's neutrals, not a full re-theme.
 [data-coreui-theme='light'][data-ninlil-palette='Amber'] {
   --cui-primary: #92400e;
   --cui-primary-rgb: 146, 64, 14;
@@ -38,9 +31,8 @@
   --cui-focus-ring-color: rgba(245, 158, 11, 0.25);
 }
 
-// Sidebar chrome -- see `_teal.scss`'s own comment for why this block targets `.sidebar`/
-// `.sidebar-nav` directly (not just `[data-ninlil-palette]`) and is scoped independent of
-// `[data-coreui-theme]`.
+// Sidebar: see `_teal.scss` for why this targets `.sidebar` and `.sidebar-nav` directly and
+// ignores `[data-coreui-theme]`.
 [data-ninlil-palette='Amber'] .sidebar,
 [data-ninlil-palette='Amber'] .sidebar-nav {
   --cui-sidebar-bg: #451a03;

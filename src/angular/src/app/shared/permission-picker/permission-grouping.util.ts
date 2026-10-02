@@ -1,4 +1,4 @@
-/** This interface describes one resource's own group of permission strings. */
+/** This interface describes the permissions of one resource. */
 export interface PermissionGroup {
   /** The resource prefix, e.g. `"zones"` for `"zones:read"`/`"zones:write"`. */
   resource: string;
@@ -8,16 +8,10 @@ export interface PermissionGroup {
 }
 
 /**
- * This function groups a flat, sorted list of `resource:action` permission strings (exactly the
- * shape `GET /api/permissions` returns -- see `Controllers.PermissionsController`) by their own
- * resource prefix, so a checkbox list can render `zones:read`/`zones:write` next to each other
- * under one `"zones"` heading rather than as 26+ ungrouped rows. A permission string with no
- * `:` in it at all (not expected from this backend today, but not assumed impossible either) is
- * grouped under its own full name as a one-item group, rather than dropped or thrown on.
- *
- * Shared by both {@link PermissionPickerComponent}'s own users-management and roles-management
- * consumers -- built once here rather than duplicating the same grouping logic in both features'
- * own model files.
+ * This function groups `resource:action` permission strings, as `GET /api/permissions` returns
+ * them, by resource, so {@link PermissionPickerComponent} can list `zones:read` and `zones:write`
+ * under one `"zones"` heading. Groups are sorted by resource; within a group the input order is
+ * kept. A string without a `:` forms a one-item group.
  */
 export function groupPermissionsByResource(permissions: readonly string[]): PermissionGroup[] {
   const groups = new Map<string, string[]>();

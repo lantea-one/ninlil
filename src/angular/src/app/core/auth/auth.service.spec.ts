@@ -5,8 +5,8 @@ import { AuthService as AuthApiService } from '../../api-client';
 import { AuthService } from './auth.service';
 
 /**
- * This function builds a syntactically-valid (unsigned) access token carrying a given
- * permission set, matching {@link decodeAuthClaims}'s own expected shape.
+ * This function builds an unsigned access token carrying the given permissions, in the shape
+ * {@link decodeAuthClaims} reads.
  */
 function buildAccessToken(permissions: string[]): string {
   const base64UrlEncode = (value: string) =>
@@ -21,12 +21,10 @@ function buildAccessToken(permissions: string[]): string {
 }
 
 /**
- * This type describes this spec's own hand-rolled fake for the generated `AuthApiService` --
- * plain, untyped Jasmine spies rather than a `jasmine.SpyObj<AuthApiService>`, since that
- * generated service's own methods are overloaded per `observe` parameter
- * (`'body' | 'response' | 'events'`) and `jasmine.SpyObj`'s type inference picks up the widest
- * overload for `.and.returnValue(...)`, which rejects a plain `of({ ... })` body value with a
- * confusing `HttpEvent<T>` type error that has nothing to do with this spec's own intent.
+ * This type describes the hand-written fake for the generated `AuthApiService`. It uses plain
+ * spies instead of `jasmine.SpyObj<AuthApiService>` because the generated methods are overloaded
+ * per `observe` value, and `SpyObj` picks the widest overload, which rejects a plain `of({ ... })`
+ * body with an `HttpEvent<T>` type error.
  */
 interface FakeAuthApiService {
   apiAuthLoginPost: jasmine.Spy;
@@ -35,6 +33,11 @@ interface FakeAuthApiService {
   apiAuthLogoutPost: jasmine.Spy;
 }
 
+/**
+ * These tests cover `AuthService`: sign-in with and without a second factor, the "Remember me"
+ * choice, permission checks including the wildcard, cookie refresh (retry, dedupe, failure),
+ * session restore, logout and SSO sign-in. TestBed with a spy-backed generated `AuthApiService`.
+ */
 describe('AuthService', () => {
   let service: AuthService;
   let authApiSpy: FakeAuthApiService;

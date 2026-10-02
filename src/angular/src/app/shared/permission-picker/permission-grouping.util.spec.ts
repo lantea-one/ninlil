@@ -1,5 +1,6 @@
 import { groupPermissionsByResource } from './permission-grouping.util';
 
+/** These tests cover grouping permissions by resource: sorting, order within a group, no colon. */
 describe('groupPermissionsByResource', () => {
   it('groups permissions by their resource prefix', () => {
     const groups = groupPermissionsByResource([

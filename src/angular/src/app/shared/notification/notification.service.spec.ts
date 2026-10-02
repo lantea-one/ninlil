@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { NotificationService } from './notification.service';
 
+/** These tests cover the toast queue: success and error delays, ordering and dismissal. */
 describe('NotificationService', () => {
   let service: NotificationService;
 

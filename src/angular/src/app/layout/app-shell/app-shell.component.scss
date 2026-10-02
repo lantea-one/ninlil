@@ -1,15 +1,11 @@
-// This shell's root renders `<c-sidebar>` and its own content wrapper as siblings (required by
-// CoreUI's own CSS -- see `--cui-sidebar-occupy-start` below), so the host itself must not
-// introduce another layout box around them.
+// `<c-sidebar>` and `.shell-wrapper` must be siblings for CoreUI's CSS (see
+// `--cui-sidebar-occupy-start` below), so the host element must not add a layout box.
 :host {
   display: contents;
 }
 
-// The sidebar's own dark, palette-colored background/nav-highlight tokens come from CoreUI's
-// `colorScheme="dark"` input plus this app's own `--cui-sidebar-*` overrides in
-// `styles/themes/_<palette>.scss` (deliberately independent of light/dark *content* mode, so the
-// sidebar's own colored-dark identity stays constant either way) -- nothing further is needed
-// here beyond the host element CoreUI's own component already renders as `.sidebar`.
+// The sidebar's colors come from `colorScheme="dark"` and the `--cui-sidebar-*` overrides in
+// `styles/themes/_<palette>.scss`.
 .shell-sidebar {
   border-inline-end: 1px solid var(--cui-sidebar-border-color, transparent);
 }
@@ -53,14 +49,10 @@
   }
 }
 
-// The content wrapper is a sibling of `<c-sidebar>`, not a descendant -- CoreUI's own compiled
-// CSS uses a general sibling combinator (`.sidebar ... ~ *`) to publish the sidebar's current
-// occupied width as `--cui-sidebar-occupy-start` onto every sibling once the viewport is wide
-// enough for a fixed, non-overlaid sidebar (>=992px); this app is the one applying that variable
-// as an actual margin, since CoreUI's own stylesheet only ever sets the variable, never consumes
-// it (each consuming app's layout differs too much for the library to assume one). The transition
-// keeps the desktop icon-rail collapse/expand toggle (see `SidebarTogglerDirective` in the
-// template) smooth rather than an abrupt jump.
+// CoreUI publishes the sidebar's width as `--cui-sidebar-occupy-start` on the sidebar's
+// siblings (`.sidebar ... ~ *`) at 992px and wider, but does not use it. This wrapper turns it
+// into a margin so content starts beside the sidebar. The transition smooths the desktop
+// collapse and expand.
 .shell-wrapper {
   display: flex;
   flex-direction: column;

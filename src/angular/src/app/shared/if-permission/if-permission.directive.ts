@@ -9,8 +9,8 @@ import { AuthService } from '../../core/auth/auth.service';
  * <c-card-footer *appIfPermission="'smtpsettings:write'; else readOnly">...</c-card-footer>
  * ```
  * Pages use it to hide create, edit, delete, toggle and save controls from a user who may read a
- * page but not change what it shows -- the API would refuse the change with a 403 anyway, so
- * offering the control only leads to an error. It re-evaluates whenever the session's claims
+ * page but not change what it shows: the API would refuse the change with a 403, so showing the
+ * control only leads to an error. It re-evaluates whenever the session's claims
  * change (a token refresh, signing out), because {@link AuthService.hasPermission} reads a signal.
  * Code that needs the same answer outside a template calls {@link AuthService.hasPermission}.
  */

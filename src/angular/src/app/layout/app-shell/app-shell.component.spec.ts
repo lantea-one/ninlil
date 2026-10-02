@@ -9,10 +9,15 @@ import { AppShellComponent } from './app-shell.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { AppearanceSettingsService as AppearanceApiService } from '../../api-client';
 
-/** A trivial stand-in for the real `LoginComponent`, so `logout()`'s own navigation resolves. */
+/** A stand-in for `LoginComponent`, so the navigation in `logout()` resolves. */
 @Component({ selector: 'app-test-login-stub', template: '' })
 class LoginStubComponent {}
 
+/**
+ * These tests cover the app shell: which nav items each permission set shows (including the
+ * any-of rule for Settings), logout, the CoreUI layout and the theme switcher in the header.
+ * TestBed with a fake `AuthService`, a test router and a rejecting appearance API.
+ */
 describe('AppShellComponent', () => {
   let authServiceFake: {
     hasPermission: jasmine.Spy;
@@ -24,8 +29,8 @@ describe('AppShellComponent', () => {
   beforeEach(async () => {
     authServiceFake = {
       hasPermission: jasmine.createSpy('hasPermission'),
-      // Answered through hasPermission, as the real AuthService does, so each test's own
-      // hasPermission fake decides both.
+      // Answered through hasPermission, as AuthService does, so each test's hasPermission fake
+      // decides both.
       hasAnyPermission: (permissions) =>
         permissions.some((permission) => authServiceFake.hasPermission(permission)),
       userName: signal<string | null>('someone'),
@@ -37,9 +42,8 @@ describe('AppShellComponent', () => {
       providers: [
         provideRouter([{ path: 'login', component: LoginStubComponent }]),
         { provide: AuthService, useValue: authServiceFake },
-        // The shell now mounts `ThemeSwitcherComponent` (its own real, permanent home) in the
-        // header -- it depends on `ThemeService`, which depends on this API service. A
-        // rejecting fake is enough here: nothing in this spec exercises the switcher itself.
+        // The header's ThemeSwitcherComponent needs ThemeService, which needs this API service.
+        // A rejecting fake is enough: these tests do not use the switcher.
         {
           provide: AppearanceApiService,
           useValue: {
@@ -52,10 +56,8 @@ describe('AppShellComponent', () => {
       ],
     }).compileComponents();
 
-    // The "Services" nav item (`nav-item.model.ts`) renders a real `cIcon` (`cilCog`). Outside a
-    // full app bootstrap, `IconSetService.icons` starts empty -- `app.config.ts`'s own
-    // `provideAppInitializer` is what normally populates it -- so this fixture seeds the one icon
-    // it actually renders directly, rather than leaving `cIcon` to warn on every render.
+    // The app initializer in app.config.ts normally fills IconSetService; outside it the set is
+    // empty, so seed the Services item's icon (`cilCog`).
     TestBed.inject(IconSetService).icons = { cilCog };
   });
 
@@ -67,9 +69,8 @@ describe('AppShellComponent', () => {
 
     const labels = fixture.componentInstance.visibleNavItems().map((item) => item.label);
 
-    // Dashboard and API Tokens require no specific permission, so they are always visible;
-    // Zones requires "zones:read", which this fake grants; every other permission-gated item
-    // (TSIG Keys, Cloud Credentials, ...) must be absent.
+    // Dashboard and API Tokens need no permission; Zones needs "zones:read", which this fake
+    // grants. Every other item (TSIG Keys, Cloud Credentials, ...) must be absent.
     expect(labels).toContain('Dashboard');
     expect(labels).toContain('API Tokens');
     expect(labels).toContain('Zones');

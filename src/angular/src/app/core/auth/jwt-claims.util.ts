@@ -1,32 +1,26 @@
 import { AuthClaims } from './auth.model';
 
 /**
- * This module decodes a JSON Web Token access token's own payload, purely client-side, so the
- * app can read the identity/role/permission claims `Ninlil.Dns.Identity`'s own
- * `UserClaimsBuilder` (see `src/dotnet/src/Ninlil.Dns.Identity/Claims/UserClaimsBuilder.cs`)
- * baked into it -- without verifying the token's own signature.
+ * This module decodes the payload of an access token in the browser, so the app can read the
+ * identity, role and permission claims that the backend's `UserClaimsBuilder`
+ * (`Ninlil.Dns.Identity/Claims/UserClaimsBuilder.cs`) puts in it. It does not verify the
+ * signature.
  *
- * This is deliberately *not* a trust boundary: the real backend re-validates the token's
- * signature and expiry on every authenticated request regardless of what this app reads out of
- * it. Decoding it here only drives client-side navigation/UI decisions (which nav items to show,
- * which routes to block) -- a nav item stays hidden AND its route stays blocked by a guard, never
- * hiding alone -- applied entirely on the client's own, inherently-untrusted side of that
- * boundary.
+ * This is not a trust boundary. The backend validates the token's signature and expiry on every
+ * request. The decoded claims only decide what the UI shows: which nav items appear and which
+ * routes the guards let through. A permission-gated page is both hidden from the nav and blocked
+ * by a guard, never only hidden.
  */
 
 /**
- * This constant contains the exact claim type literal
- * `Ninlil.Dns.Identity.NinlilDnsClaimTypes.Permission` issues -- verified directly against
- * a real, decoded access token from a real login round-trip (not assumed), since a permission
- * check that silently looked at the wrong claim key would fail open or closed without ever
- * throwing.
+ * This constant is the claim type of `NinlilDnsClaimTypes.Permission` on the backend. It must
+ * match: reading the wrong key fails silently, and every permission check would then deny.
  */
 const PERMISSION_CLAIM_TYPE = 'https://ninlil.one/claims/permission';
 
 /**
- * This constant contains the exact claim type literal `System.Security.Claims.ClaimTypes.Role`
- * resolves to at runtime -- also verified against a real, decoded token rather than assumed from
- * the constant's own familiar short name.
+ * This constant is the value of .NET's `ClaimTypes.Role`, which is the long URI below, not the
+ * short name `role`.
  */
 const ROLE_CLAIM_TYPE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
 
@@ -37,26 +31,22 @@ function toStringArray(value: unknown): string[] {
 }
 
 /**
- * This function decodes a JSON Web Token's own payload segment into an {@link AuthClaims},
- * returning `null` if the token is not well-formed enough to decode at all (never throws --
- * a malformed token should simply be treated as "no usable claims," not crash navigation).
+ * This function decodes a JSON Web Token's payload segment into an {@link AuthClaims}. It
+ * returns `null` for a malformed token instead of throwing, so a bad token means "no claims"
+ * rather than a crash during navigation.
  */
 export function decodeAuthClaims(accessToken: string): AuthClaims | null {
   const segments = accessToken.split('.');
   if (segments.length < 2) return null;
 
   try {
-    // A JWT payload segment is base64url, not standard base64 (`-`/`_` instead of `+`/`/`, and
-    // its own trailing `=` padding stripped) -- swap the two substituted characters back and
-    // re-pad to a multiple of 4 before handing it to the standard `atob`, which only understands
-    // ordinary base64.
+    // A JWT segment is base64url (`-` and `_` instead of `+` and `/`, padding stripped). `atob`
+    // only reads standard base64, so swap the characters back and re-pad to a multiple of 4.
     const base64Url = segments[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64Url + '='.repeat((4 - (base64Url.length % 4)) % 4);
-    // `atob` decodes into a "binary string" (one UTF-16 code unit per decoded byte, not real
-    // text), but the payload itself is UTF-8 JSON -- mapping each byte to a `%XX` escape and
-    // running it through `decodeURIComponent` re-assembles the original UTF-8 text correctly,
-    // rather than mis-decoding any non-ASCII claim value (a non-Latin display name, for example)
-    // as if each byte were already its own Latin-1 character.
+    // `atob` returns one character per byte, but the payload is UTF-8 JSON. Turning each byte
+    // into a `%XX` escape and passing it through `decodeURIComponent` decodes the UTF-8, so a
+    // non-ASCII claim value (a non-Latin user name, say) is not misread as Latin-1.
     const json = decodeURIComponent(
       atob(padded)
         .split('')

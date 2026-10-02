@@ -1,9 +1,8 @@
 import { md5 } from './md5.util';
 
+/** These tests check the MD5 function against the RFC 1321 test vectors and a padding edge case. */
 describe('md5', () => {
-  // The full RFC 1321 §A.5 test suite -- every one of the standard's own published test vectors,
-  // confirming this implementation against the RFC it was written from rather than only against
-  // one or two ad hoc strings.
+  // Every test vector published in RFC 1321 §A.5.
   const rfc1321TestSuite: [string, string][] = [
     ['', 'd41d8cd98f00b204e9800998ecf8427e'],
     ['a', '0cc175b9c0f1b6a831c399e269772661'],
@@ -27,9 +26,8 @@ describe('md5', () => {
   }
 
   it('handles a message whose padded length lands exactly on a 64-byte block boundary', () => {
-    // 55 bytes of content + the mandatory 0x80 padding byte lands at 56 -- the exact boundary
-    // RFC 1321's own padding rule (append 0x80, then zeros, until length % 64 === 56) has to
-    // handle by rolling over into a second block instead of fitting the length into the first.
+    // 55 bytes plus the 0x80 padding byte reach 56, so the 8-byte length still fits in the first
+    // block. One more byte would push it into a second block.
     const fiftyFiveBytes = 'x'.repeat(55);
     expect(md5(fiftyFiveBytes).length).toBe(32);
     expect(md5(fiftyFiveBytes)).toMatch(/^[0-9a-f]{32}$/);

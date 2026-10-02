@@ -1,6 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { PermissionPickerComponent } from './permission-picker.component';
 
+/**
+ * These tests cover the permission picker: grouping, checked state, the toggle event and
+ * checkbox ids. TestBed with inputs set on the fixture.
+ */
 describe('PermissionPickerComponent', () => {
   async function createComponent(
     allPermissions: string[],

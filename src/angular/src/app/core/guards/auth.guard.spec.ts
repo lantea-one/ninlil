@@ -3,6 +3,11 @@ import { Router, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { authGuard } from './auth.guard';
 
+/**
+ * These tests cover `authGuard`: a signed-in session passes and a visitor without one is sent to
+ * `/login` with a `returnUrl`. The guard runs in a TestBed injection context with a fake
+ * `AuthService`.
+ */
 describe('authGuard', () => {
   let authServiceFake: { isAuthenticated: jasmine.Spy };
   let router: Router;

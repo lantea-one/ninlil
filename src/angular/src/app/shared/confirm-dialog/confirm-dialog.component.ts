@@ -10,32 +10,24 @@ import {
 
 /** This interface describes the text {@link ConfirmDialogComponent} renders for one prompt. */
 export interface ConfirmDialogData {
-  /** The dialog's own title, e.g. `"Delete zone?"`. */
+  /** The dialog title, e.g. `"Delete zone?"`. */
   title: string;
 
   /** The body text explaining what confirming will do, including anything irreversible. */
   message: string;
 
-  /** The confirming button's own label. Defaults to `"Delete"` if not supplied. */
+  /** The confirm button's label. Defaults to `"Delete"`. */
   confirmLabel?: string;
 }
 
 /**
- * This component is a small, reusable yes/no confirmation dialog -- used by every list/detail
- * component across this app before it calls a destructive backend endpoint (a `DELETE`, or a
- * service lifecycle action like stop/restart), since none of those actions are undoable or safe
- * to run by accident. Kept in `shared/` rather than any one feature folder specifically because
- * nothing about it is feature-specific -- every later feature reuses this component rather than
- * writing a second one.
+ * This component is the shared yes/no dialog that pages show before a destructive call: a
+ * `DELETE`, or an action such as stopping a service or restoring a backup.
  *
- * Unlike its Material `MatDialog`-based predecessor, this component is a plain, declaratively
- * embedded child -- a caller places `<app-confirm-dialog [visible]="..." [data]="..."
- * (resolved)="..." />` directly in its own template and drives visibility with a signal, rather
- * than imperatively calling `MatDialog.open(...).afterClosed()`. It wraps CoreUI's own `c-modal`,
- * and emits exactly one {@link resolved} event per open/close cycle -- `true` if the operator
- * clicked the confirm button, `false` for every other way the dialog closes (the Cancel button,
- * a backdrop click, or the Escape key) -- so a caller can treat a dismissal the same way
- * `MatDialogRef.afterClosed()` emitting `false`/`undefined` used to be treated: "do nothing."
+ * <p>A caller puts `<app-confirm-dialog [visible]="..." [data]="..." (resolved)="..." />` in its
+ * template and drives `visible` with a signal. The component wraps CoreUI's `c-modal`. It emits
+ * {@link resolved} with `true` when the confirm button is clicked and `false` for Cancel, a
+ * backdrop click or Escape. The caller hides the dialog in its handler.
  */
 @Component({
   selector: 'app-confirm-dialog',
@@ -67,29 +59,28 @@ export interface ConfirmDialogData {
   `,
 })
 export class ConfirmDialogComponent {
-  /** Whether this dialog is currently shown -- a caller drives this with its own signal. */
+  /** Whether the dialog is shown; the caller drives this with a signal. */
   readonly visible = input<boolean>(false);
 
-  /** The text this dialog instance shows while {@link visible}. `null` renders an empty prompt (kept out of the DOM by the modal's own closed state). */
+  /** The text to show. `null` gives an empty prompt, which is fine while the dialog is closed. */
   readonly data = input<ConfirmDialogData | null>(null);
 
-  /** Emits exactly once per open/close cycle: `true` if the operator confirmed, `false` for a Cancel click, a backdrop click, or Escape. */
+  /** Emits `true` when the operator confirms, `false` for Cancel, a backdrop click or Escape. */
   readonly resolved = output<boolean>();
 
-  /** This method runs when the operator clicks the dialog's own destructive confirm button. */
+  /** This method runs when the operator clicks the confirm button. */
   onConfirm(): void {
     this.resolved.emit(true);
   }
 
-  /** This method runs when the operator clicks the dialog's own Cancel button. */
+  /** This method runs when the operator clicks Cancel. */
   onCancel(): void {
     this.resolved.emit(false);
   }
 
   /**
-   * This method runs whenever the underlying CoreUI modal reports a new visibility on its own --
-   * a backdrop click or an Escape press, neither of which routes through {@link onConfirm}/
-   * {@link onCancel}. Both count as a cancel.
+   * This method runs when the CoreUI modal closes itself, on a backdrop click or Escape. Both
+   * count as a cancel.
    */
   onModalVisibleChange(visible: boolean): void {
     if (!visible) this.resolved.emit(false);

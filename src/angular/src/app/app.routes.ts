@@ -7,20 +7,21 @@ import { AppShellComponent } from './layout/app-shell/app-shell.component';
 import { ForbiddenComponent } from './layout/forbidden/forbidden.component';
 
 /**
- * This constant contains this app's full route table. Every route under {@link AppShellComponent}
- * requires at least a signed-in session ({@link authGuard} on the shell route itself, checked
- * once for the whole subtree); several also require a specific permission
- * ({@link permissionGuard}), checked again on that specific child route so a direct navigation
- * (a typed-in URL, a bookmark) is blocked exactly like a nav click would be -- this app's own
- * "hidden in nav AND blocked by a guard, not just visually hidden" requirement. Every permission
- * string here matches {@link NAV_ITEMS}'s own real, already-checked-against-the-backend value.
+ * This constant is the app's route table. The public pages (login, forgot and reset password,
+ * SSO callback) sit at the top level. Every other page renders inside {@link AppShellComponent},
+ * whose route has {@link authGuard}, so they all need a session.
  *
- * <p>Every page is lazy-loaded (`loadComponent`), so the initial bundle carries only the shell,
- * the guards, and what the first screen needs; each feature page downloads as its own chunk the
- * first time it is visited. Only {@link AppShellComponent} (the frame every signed-in page
- * renders inside) and {@link ForbiddenComponent} (tiny, and reached precisely when navigation is
- * being refused) stay eager. Add new pages the same way -- an eager `component:` import here
- * pulls the page, and everything it imports, back into the initial bundle.
+ * <p>Most areas also have a {@link permissionGuard} for the backend's read permission on the
+ * parent route and for the write permission on each create and edit route. The guard blocks a
+ * typed-in URL or bookmark as well as a nav click; the nav hides the same items. Each permission
+ * matches the `[RequirePermission]` on the controller the page calls and the entry in
+ * {@link NAV_ITEMS}. Actions on a page that need more (delete, start/stop, restore) are hidden by
+ * the page itself.
+ *
+ * <p>Every page is lazy-loaded with `loadComponent`, so it downloads as a separate chunk on first
+ * visit. Only {@link AppShellComponent} and the small {@link ForbiddenComponent} are eager. Add
+ * new pages the same way: an eager `component:` import pulls the page and its imports into the
+ * initial bundle.
  */
 export const routes: Routes = [
   {
@@ -29,10 +30,8 @@ export const routes: Routes = [
       import('./features/auth/login/login.component').then((m) => m.LoginComponent),
   },
   {
-    // This project's public, self-service "request a password reset e-mail" page --
-    // `LoginComponent`'s own "Forgot your password?" link leads here. A top-level route sibling
-    // to `login`/`reset-password`, with no `authGuard` (matching both their shape exactly), since
-    // a visitor reaching this page has, by definition, no session to guard.
+    // The public page for requesting a password reset e-mail, linked from the login page. Like
+    // the other public pages it has no guard: the visitor has no session.
     path: 'forgot-password',
     loadComponent: () =>
       import('./features/auth/forgot-password/forgot-password.component').then(
@@ -40,13 +39,9 @@ export const routes: Routes = [
       ),
   },
   {
-    // This project's shared, public "set new password" landing page -- see
-    // `SetNewPasswordComponent`'s own doc comment for why it exists as a standalone,
-    // authentication-free route (no `authGuard`, matching `login`'s own shape exactly, both
-    // reachable by a caller with no session at all) serving both an administrator-driven
-    // `EmailLink` reset e-mail and a genuinely self-service Forgot Password request raised via
-    // `forgot-password` above, unchanged. `userId`/`token` arrive as query params, not route
-    // params, since a mailed link is the only way this route is ever reached.
+    // The public "set new password" page that reset e-mails link to, both those an administrator
+    // sends and those from `forgot-password`. `userId` and `token` arrive as query parameters
+    // in the mailed link.
     path: 'reset-password',
     loadComponent: () =>
       import('./features/auth/reset-password/set-new-password.component').then(
@@ -54,11 +49,8 @@ export const routes: Routes = [
       ),
   },
   {
-    // The landing page a completed OpenID Connect sign-in redirects the browser back to, tokens
-    // in the URL fragment -- see `SsoCallbackComponent`'s own doc comment. A top-level route
-    // sibling to `login`/`forgot-password`/`reset-password`, with no `authGuard`, matching all
-    // three exactly: a caller reaching this page has no session yet, by definition -- applying
-    // the tokens this page parses is what creates one.
+    // Where a completed OpenID Connect sign-in redirects, with the access token in the URL
+    // fragment. No guard: the visitor has no session until this page applies the token.
     path: 'sso-callback',
     loadComponent: () =>
       import('./features/auth/sso-callback/sso-callback.component').then(
@@ -78,12 +70,9 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
       },
       {
-        // This app's own zone/record management area -- one flat children list, since a route
-        // like ':zoneId/records/new' already carries every param it needs (`zoneId`) without a
-        // further level of route nesting. `zones:read` gates the whole subtree (matching every
-        // other top-level nav destination's own single guard on its parent route); the 3
-        // write-capable routes (create/edit a zone, create/edit a record) additionally require
-        // `zones:write`, mirroring `ZonesController`/`RecordsController`'s own permission split.
+        // Zones, their records and their DNSSEC keys, as one flat list of child routes. Every
+        // route needs `zones:read`; create and edit routes also need `zones:write`, as in
+        // ZonesController, RecordsController and DnssecKeysController.
         path: 'zones',
         canActivate: [permissionGuard('zones:read')],
         children: [
@@ -133,10 +122,7 @@ export const routes: Routes = [
               ),
             canActivate: [permissionGuard('zones:write')],
           },
-          // This app's own DNSSEC key management, nested here rather than under a separate
-          // top-level nav item -- DnssecKeysController itself requires the exact same
-          // zones:read/zones:write permission pair RecordsController does, since a key belongs
-          // to exactly one zone (DnssecKeyEntity.ZoneId), not a resource of its own.
+          // DNSSEC keys belong to one zone, so they live here and use the zone permissions.
           {
             path: ':zoneId/dnssec-keys',
             loadComponent: () =>
@@ -163,9 +149,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own DNS rewrite management -- flat/standalone, matching
-        // DnsRewritesController's own non-nested `/api/dns-rewrites` shape exactly (a rewrite
-        // has no zone/parent relationship at all, unlike a zone's own records).
+        // DNS rewrites (`/api/dns-rewrites`), which belong to no zone.
         path: 'dns-rewrites',
         canActivate: [permissionGuard('dnsrewrites:read')],
         children: [
@@ -195,8 +179,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own TSIG key management -- standalone (not zone-scoped), matching
-        // TsigKeysController's own `/api/tsig-keys` shape exactly.
+        // TSIG keys (`/api/tsig-keys`), shared by all zones.
         path: 'tsig-keys',
         canActivate: [permissionGuard('tsigkeys:read')],
         children: [
@@ -226,18 +209,16 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own cluster peer management -- standalone (not settings-scoped), matching
-        // ClusterController's own `/api/cluster/nodes` shape. See ClusterSettingsComponent
-        // (under settings/cluster) for the Enable/AdvertisedHost toggle an operator must set
-        // before either action here can succeed.
+        // Cluster peers (`/api/cluster/nodes`). Clustering itself is switched on under
+        // Settings > Cluster (ClusterSettingsComponent), which must be done before joining or
+        // adding a peer here succeeds.
         path: 'cluster',
         loadComponent: () =>
           import('./features/cluster/cluster.component').then((m) => m.ClusterComponent),
         canActivate: [permissionGuard('clusternodes:read')],
       },
       {
-        // This app's own cloud provider credential management -- standalone, matching
-        // CloudProviderCredentialsController's own `/api/cloud-provider-credentials` shape.
+        // Cloud provider credentials (`/api/cloud-provider-credentials`).
         path: 'cloud-provider-credentials',
         canActivate: [permissionGuard('cloudprovidercredentials:read')],
         children: [
@@ -267,10 +248,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own filtering area: filter lists (standalone) with their own entries
-        // nested underneath, following the identical shape ZonesController/RecordsController
-        // already established. filterlists:read gates the whole subtree; filterlists:write
-        // additionally guards every create/edit route, mirroring every other resource area.
+        // Filter lists with their entries nested underneath, shaped like zones and records.
         path: 'filter-lists',
         canActivate: [permissionGuard('filterlists:read')],
         children: [
@@ -323,13 +301,9 @@ export const routes: Routes = [
         ],
       },
       {
-        // The known-client registry: the client itself (the top-level resource) with its own
-        // identifiers (addresses), direct filter-list assignments, time-of-day parental-control schedules, and read-only
-        // activity view nested underneath -- mirroring exactly the same "one parent, a nested
-        // child collection, separate routes rather than tabs" shape client-groups establishes
-        // below for a group's own networks/list assignments/schedules. Safe Search/instant pause
-        // are inline panels on the edit form itself instead, since neither has a real paginated
-        // collection of its own to list.
+        // Known clients, with their identifiers (addresses), filter-list assignments, schedules
+        // and activity as separate nested pages, like client groups below. Safe Search and
+        // instant pause are panels on the edit form, since neither is a list.
         path: 'clients',
         canActivate: [permissionGuard('clients:read')],
         children: [
@@ -357,8 +331,8 @@ export const routes: Routes = [
             canActivate: [permissionGuard('clients:write')],
           },
           {
-            // Add/remove only, on one page -- an identifier is immutable once added, so there is
-            // no edit route; the page hides its own write controls without clients:write.
+            // Add and remove only, on one page: an identifier cannot be edited, so there is no
+            // edit route. The page hides its write controls without clients:write.
             path: ':clientId/addresses',
             loadComponent: () =>
               import('./features/clients/addresses/client-address-list/client-address-list.component').then(
@@ -373,10 +347,8 @@ export const routes: Routes = [
               ),
           },
           {
-            // No edit route here -- ClientListAssignmentsController itself has no PUT/PATCH;
-            // changing which list is assigned means deleting one assignment and creating
-            // another, so this "new" route is the only write route this sub-resource ever needs
-            // -- mirroring ClientGroupListAssignmentsController's own identical contract below.
+            // No edit route: ClientListAssignmentsController has no PUT or PATCH. Changing the
+            // list means deleting one assignment and creating another.
             path: ':clientId/list-assignments/new',
             loadComponent: () =>
               import('./features/clients/list-assignments/client-list-assignment-form/client-list-assignment-form.component').then(
@@ -407,11 +379,8 @@ export const routes: Routes = [
               ),
             canActivate: [permissionGuard('clients:write')],
           },
-          // Read-only -- no "new"/"edit" routes at all, since an activity entry is server-written
-          // history, never an operator-authored resource, mirroring QueryLogListComponent's own
-          // identical posture. It is the client's slice of the query log, so it needs
-          // `querylog:read` (as ClientActivityController does) on top of the parent's
-          // `clients:read`.
+          // Read-only. It is the client's slice of the query log, so it needs `querylog:read`
+          // (as ClientActivityController does) on top of the parent's `clients:read`.
           {
             path: ':clientId/activity',
             loadComponent: () =>
@@ -423,10 +392,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own manual static address-to-client-identity mapping set --
-        // flat/standalone, matching DnsClientStaticAddressMappingsController's own non-nested
-        // `/api/client-static-address-mappings` shape exactly, the same route-nesting posture
-        // access-control-rules already establishes below for its own comparable flat entity.
+        // Manual address-to-client mappings (`/api/client-static-address-mappings`). They use
+        // the client permissions, as the controller does.
         path: 'client-static-address-mappings',
         canActivate: [permissionGuard('clients:read')],
         children: [
@@ -456,12 +423,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own client-group area: client groups (standalone) with their own networks,
-        // filter-list assignments, and time-of-day parental-control schedules nested underneath
-        // -- three separate nested sub-resources, matching
-        // ClientGroupNetworksController/ClientGroupListAssignmentsController/
-        // ClientGroupSchedulesController's own separate REST shapes rather than combining them
-        // into one page.
+        // Client groups, with their networks, filter-list assignments and schedules as separate
+        // nested pages, one per controller.
         path: 'client-groups',
         canActivate: [permissionGuard('clientgroups:read')],
         children: [
@@ -519,10 +482,7 @@ export const routes: Routes = [
               ),
           },
           {
-            // No edit route here -- ClientGroupListAssignmentsController itself has no
-            // PUT/PATCH; changing which list is assigned means deleting one assignment and
-            // creating another, so this "new" route is the only write route this sub-resource
-            // ever needs.
+            // No edit route: ClientGroupListAssignmentsController has no PUT or PATCH.
             path: ':groupId/list-assignments/new',
             loadComponent: () =>
               import('./features/client-groups/list-assignments/client-group-list-assignment-form/client-group-list-assignment-form.component').then(
@@ -556,15 +516,10 @@ export const routes: Routes = [
         ],
       },
       {
-        // DHCP-family service control's own real hot start/stop surface -- flat/standalone,
-        // matching DhcpServiceControlController's own non-nested `/api/dhcp-services` shape,
-        // the same "no create/edit/delete route, a fixed set nothing an operator authors" posture
-        // ServiceListComponent's own `services` route establishes below for its general
-        // Service Lifecycle Management surface. Deliberately kept separate from that page (see
-        // DhcpServiceListComponent's own doc comment for the real structural reason) but gated the
-        // identical way: the route itself needs only the lighter `dhcpservices:read` (matching
-        // `List`'s own permission), with the far more consequential start/stop actions
-        // additionally hidden, in-component, from a session lacking `dhcpservices:manage`.
+        // Start and stop the DHCP services (`/api/dhcp-services`). A fixed set, so there is no
+        // create or edit route. It is separate from the `services` page below; see
+        // DhcpServiceListComponent. The route needs `dhcpservices:read`; the page hides start
+        // and stop without `dhcpservices:manage`.
         path: 'dhcp-services',
         loadComponent: () =>
           import('./features/dhcp/services/dhcp-service-list/dhcp-service-list.component').then(
@@ -573,13 +528,8 @@ export const routes: Routes = [
         canActivate: [permissionGuard('dhcpservices:read')],
       },
       {
-        // This app's own DHCP scope area: scopes (the top-level resource) with their own
-        // reservations nested underneath, matching DhcpReservationsController's own nested REST
-        // shape, the same "one parent, several nested child collections" pattern client-groups
-        // establishes above for a group's own networks/list assignments. A scope's own custom
-        // options are no longer a separate nested route at all -- DhcpScopeFormComponent manages
-        // them inline, as a dynamic table, directly on this same create/edit page (see that
-        // class's own doc comment).
+        // DHCP scopes with their reservations nested underneath. A scope's custom options are a
+        // table on the scope form (DhcpScopeFormComponent), not a separate route.
         path: 'dhcp-scopes',
         canActivate: [permissionGuard('dhcpscopes:read')],
         children: [
@@ -632,10 +582,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own DHCP tag-rule area: rules (global, since a rule's own scopeId is
-        // nullable). A rule's own contributed options are no longer a separate nested route
-        // either -- DhcpTagRuleFormComponent manages them inline the same way DhcpScopeFormComponent
-        // manages a scope's own custom options (see that class's own doc comment).
+        // DHCP tag rules, top level because a rule's scope is optional. A rule's options are a
+        // table on the rule form (DhcpTagRuleFormComponent), not a separate route.
         path: 'dhcp-tag-rules',
         canActivate: [permissionGuard('dhcptagrules:read')],
         children: [
@@ -665,9 +613,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own DHCP lease table -- flat/read-only, matching DhcpLeasesController's own
-        // "a lease is a live, engine-owned artifact, never operator-created" contract exactly
-        // (no "new"/"edit" routes at all, the same posture the query-log route above establishes).
+        // DHCP leases. The DHCP server creates them, so there is no create or edit route. The
+        // page hides the release action without `dhcpleases:manage`.
         path: 'dhcp-leases',
         loadComponent: () =>
           import('./features/dhcp/leases/dhcp-lease-list/dhcp-lease-list.component').then(
@@ -676,10 +623,8 @@ export const routes: Routes = [
         canActivate: [permissionGuard('dhcpleases:read')],
       },
       {
-        // This app's own forwarder area -- flat/standalone, matching ForwardersController's own
-        // non-nested `/api/forwarders` shape exactly (this is this server's own global upstream-
-        // forwarder set, entirely separate from a zone's own per-zone forwarderAddresses
-        // override, which ZoneFormComponent already manages).
+        // The server-wide upstream forwarders (`/api/forwarders`). Per-zone forwarder addresses
+        // are set on the zone form instead.
         path: 'forwarders',
         canActivate: [permissionGuard('forwarders:read')],
         children: [
@@ -709,9 +654,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own real per-client/network ACL rule set -- flat/standalone, matching
-        // DnsAccessControlRulesController's own non-nested `/api/access-control-rules` shape
-        // exactly (one row per network+capability set, no owning parent).
+        // DNS access control rules (`/api/access-control-rules`), one per network.
         path: 'access-control-rules',
         canActivate: [permissionGuard('accesscontrol:read')],
         children: [
@@ -741,12 +684,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // The persistent query log -- flat/standalone, matching QueryLogController's own
-        // non-nested `/api/query-log` shape exactly. There is no "new"/"edit" route here at all
-        // (a log entry is written by the server itself, never authored by an operator) -- the
-        // list component's own "Clear log" action is gated in-component on `querylog:write`
-        // rather than by a second, dedicated route, since there is no separate route for it to
-        // guard.
+        // The query log (`/api/query-log`). The server writes it, so there is no create or edit
+        // route. The page hides "Clear log" without `querylog:write`.
         path: 'query-log',
         canActivate: [permissionGuard('querylog:read')],
         children: [
@@ -760,11 +699,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own outbound webhook subscription management -- flat/standalone, matching
-        // WebhooksController's own non-nested `/api/webhooks` shape exactly. The event-type
-        // picker inside WebhookFormComponent is deliberately restricted to the 7 curated event
-        // types WebhookDeliverySubscriber<TEvent> actually delivers (see `webhook.model.ts`), not
-        // every name WebhooksController's own validation would technically accept.
+        // Outbound webhook subscriptions (`/api/webhooks`) and their delivery history.
         path: 'webhooks',
         canActivate: [permissionGuard('webhooks:read')],
         children: [
@@ -791,10 +726,8 @@ export const routes: Routes = [
               ),
             canActivate: [permissionGuard('webhooks:write')],
           },
-          // Read-only delivery-attempt history for one subscription -- matches
-          // WebhooksController's own GET /api/webhooks/{id}/delivery-attempts shape. Gated only
-          // by the parent route's own webhooks:read guard above (no separate ':write' route
-          // exists here, since there is nothing on this page an operator can write).
+          // Read-only delivery attempts for one subscription
+          // (`GET /api/webhooks/{id}/delivery-attempts`), so only the parent's webhooks:read.
           {
             path: ':id/deliveries',
             loadComponent: () =>
@@ -805,32 +738,11 @@ export const routes: Routes = [
         ],
       },
       {
-        // The settings area: a small tabbed shell (SettingsShellComponent) hosting one sub-page
-        // per REST surface -- presets (PresetsController), the recursive resolver
-        // (RecursiveSettingsController), every DNS transport (TransportSettingsController),
-        // block/allow-list filtering's own engine toggle (FilteringSettingsController), upstream
-        // forwarding's own engine toggle (ForwardingSettingsController), DNS rewrites' own engine
-        // toggle (RewriteSettingsController), rate limiting (RateLimitingSettingsController), the
-        // message-broker event transport (EventBrokerSettingsController), DNS Cookies
-        // (DnsCookieSettingsController), query logging (QueryLoggingSettingsController),
-        // reverse-proxy trust (ReverseProxySettingsController), the global default appearance
-        // (AppearanceSettingsController), the live storage-engine switch wizard
-        // (StorageController), ACME/Let's Encrypt issuance plus the real per-domain
-        // certificate inventory (AcmeSettingsController), the SMTP server this host already
-        // sends e-mail-based two-factor authentication codes through (SmtpSettingsController),
-        // which DNSSEC algorithms a new signing key may use (DnssecPolicySettingsController),
-        // ASP.NET Core Identity's own password-complexity/lockout policy
-        // (IdentitySettingsController), the admin web listener's own port/certificate
-        // (WebListenSettingsController, confirm-then-apply-on-restart, never live-apply -- see
-        // that controller's own doc comment), the global PTR/reverse-zone sync default
-        // (PtrSyncSettingsController), DNSSEC signature validity/inception/refresh timing
-        // (ZoneSigningSettingsController), and the admin-login brute-force limiter's own attempt
-        // threshold/lockout window (AdminLoginRateLimitSettingsController -- genuinely distinct
-        // from, and independent of, the "Rate limiting" tab's own DNS-query limiter). Each
-        // sub-page requires its own distinct permission, matching each controller's own real
-        // `[RequirePermission(...)]` attribute -- see SettingsShellComponent's own doc comment
-        // for why. The shell itself opens for anyone holding any one of them, and the presets
-        // page at its root sends a user without `presets:read` on to a tab they can read.
+        // The settings area: SettingsShellComponent with one child page per settings controller.
+        // `settings-nav.ts` lists the pages and their permissions. Each child route checks the
+        // read permission of its controller; the shell opens for anyone holding any one of them.
+        // The presets page at the root sends a user without `presets:read` on to a page they can
+        // read (settingsLandingGuard).
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings-shell/settings-shell.component').then(
@@ -1169,11 +1081,8 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own user-account management -- standalone, matching UsersController's own
-        // `/api/users` shape. Role assignment and direct-permission-claim assignment both live
-        // inside UserFormComponent itself (edit mode only -- a user must exist first), rather
-        // than as further nested routes, since neither has a REST shape distinct enough to
-        // justify its own page the way, say, a zone's own records do.
+        // User accounts (`/api/users`). Roles and direct permissions are edited on the user
+        // form, not on nested routes.
         path: 'users',
         canActivate: [permissionGuard('users:read')],
         children: [
@@ -1203,9 +1112,7 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own role management -- standalone, matching RolesController's own
-        // `/api/roles` shape. Permission-claim assignment lives inside RoleFormComponent itself
-        // (edit mode only), the same reasoning as `users` above.
+        // Roles (`/api/roles`). A role's permissions are edited on the role form.
         path: 'roles',
         canActivate: [permissionGuard('roles:read')],
         children: [
@@ -1235,11 +1142,9 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own self-service API token management -- no permission guard at all, per
-        // NAV_ITEMS's own `permission: null`: ApiTokensController itself carries no
-        // [RequirePermission(...)], scoped server-side to the calling user's own tokens only.
-        // No edit route -- a token has nothing editable after creation, only revocation, which
-        // ApiTokenListComponent's own row action already covers.
+        // The signed-in user's API tokens. No permission guard: ApiTokensController needs only a
+        // session and works on the caller's tokens alone (NAV_ITEMS has `permission: null`).
+        // No edit route: a token cannot be changed after creation, only revoked from the list.
         path: 'api-tokens',
         children: [
           {
@@ -1259,11 +1164,9 @@ export const routes: Routes = [
         ],
       },
       {
-        // This app's own self-service account-security page -- reachable from the app shell's
-        // own user menu, not a NAV_ITEMS entry (no nav slot was reserved for it). Gated only by
-        // authGuard (any signed-in session, the same bar the shell route above it already sets)
-        // since TwoFactorController itself carries no [RequirePermission(...)] either -- every
-        // action on this page acts on the caller's own account, never anyone else's.
+        // The signed-in user's two-factor settings, opened from the user menu rather than the
+        // nav. Only authGuard: TwoFactorController needs only a session and acts on the caller's
+        // account.
         path: 'account/security',
         loadComponent: () =>
           import('./features/account/security/account-security.component').then(
@@ -1272,12 +1175,9 @@ export const routes: Routes = [
         canActivate: [authGuard],
       },
       {
-        // This app's own self-service Profile page -- display name, phone number, and a
-        // Gravatar-backed avatar, distinct from `AccountSecurityComponent` above. Reachable from
-        // the app shell's own user menu, not a NAV_ITEMS entry, mirroring that route's own shape
-        // exactly: gated only by authGuard, since UsersController's own GetMine/PatchMine carry
-        // no [RequirePermission(...)] either -- every action here acts on the caller's own
-        // account, never anyone else's.
+        // The signed-in user's profile (display name, phone number, Gravatar avatar), opened
+        // from the user menu. Only authGuard: `GET` and `PATCH /api/users/me` need only a
+        // session and act on the caller's account.
         path: 'account/profile',
         loadComponent: () =>
           import('./features/account/profile/account-profile.component').then(
@@ -1286,28 +1186,18 @@ export const routes: Routes = [
         canActivate: [authGuard],
       },
       {
-        // The full-system backup/restore page -- a single, standalone route with no
-        // create/edit split, since there is exactly one backup archive an operator can create
-        // at a time and exactly one restore action, neither a persisted, listable resource.
-        // Gated on `backup:read` alone (the permission required to create a backup); the far
-        // more destructive restore section within the page itself is additionally hidden,
-        // in-component, from a session that lacks `backup:write` -- matching
-        // `QueryLogListComponent`'s own "hide, don't merely disable, a destructive action the
-        // session cannot use" precedent, since there is no separate route to guard for it.
+        // Full backup and restore on one page; backups are downloaded, not stored as a list.
+        // The route needs `backup:read`, which is what creating a backup requires. The page
+        // hides the restore section without `backup:write`.
         path: 'backup',
         loadComponent: () =>
           import('./features/backup/backup.component').then((m) => m.BackupComponent),
         canActivate: [permissionGuard('backup:read')],
       },
       {
-        // Service Lifecycle Management's own real hot start/stop/restart surface -- flat/
-        // standalone, matching ServicesController's own non-nested `/api/services` shape. No
-        // create/edit/delete route exists here at all -- every service is registered in code, a
-        // fixed set with nothing an operator authors. Gated on the lighter `services:read`
-        // (matching `List`'s own permission); the far more dangerous start/stop/restart actions
-        // are additionally hidden, in-component, from a session lacking `services:manage` --
-        // mirroring `BackupComponent`'s own "hide, don't merely disable" precedent, since there
-        // is no separate route to guard for them either.
+        // Start, stop and restart the server's services (`/api/services`). The services are a
+        // fixed set registered in code. The route needs `services:read`; the page hides the
+        // actions without `services:manage`.
         path: 'services',
         loadComponent: () =>
           import('./features/services/service-list/service-list.component').then(

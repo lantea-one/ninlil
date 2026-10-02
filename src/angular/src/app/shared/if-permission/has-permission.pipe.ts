@@ -3,8 +3,8 @@ import { AuthService } from '../../core/auth/auth.service';
 
 /**
  * This pipe answers whether the signed-in user holds a permission, for a control that should stay
- * visible but inert without it -- typically a status button that also toggles the status, where
- * hiding it (as `IfPermissionDirective` would) would hide the status too:
+ * visible but disabled without it. The usual case is a status button that also toggles the
+ * status, where hiding it (as `IfPermissionDirective` would) would hide the status too:
  * ```html
  * <button cButton [disabled]="!('zones:write' | hasPermission)" (click)="toggleDisabled(zone)">
  * ```

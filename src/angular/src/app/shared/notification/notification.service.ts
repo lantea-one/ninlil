@@ -4,28 +4,26 @@ let nextToastId = 0;
 
 /** One toast {@link NotificationService} is currently showing, rendered by `NotificationHostComponent`. */
 export interface NotificationToast {
-  /** A monotonically increasing id, unique for the lifetime of this app instance -- used only to track/dismiss one specific toast among several shown at once. */
+  /** An increasing id, unique within the page load, used to track and dismiss one toast. */
   readonly id: number;
 
-  /** The toast's own message text. */
+  /** The message text. */
   readonly message: string;
 
-  /** The CoreUI theme color this toast renders in -- `'success'` (green) or `'danger'` (red), matching {@link NotificationService.success}/{@link NotificationService.error}. */
+  /** The CoreUI color: `'success'` from {@link NotificationService.success}, `'danger'` from {@link NotificationService.error}. */
   readonly color: 'success' | 'danger';
 
-  /** Auto-hide delay in milliseconds, or `null` for a toast the operator must dismiss manually (an error, which should stay visible until acted on). */
+  /** The auto-hide delay in milliseconds, or `null` for a toast the user must close (errors). */
   readonly autoHideDelayMs: number | null;
 }
 
 /**
- * This service is a thin, app-wide, signal-backed queue of toast notifications -- giving every
- * feature one consistent way to show a lightweight, non-blocking "it worked"/"it failed" message
- * without each feature managing its own toast state. `NotificationHostComponent` (mounted once,
- * at the app root, so it renders above every route including the login page) reads {@link toasts}
- * and renders each one as a CoreUI `c-toast`. Kept deliberately tiny -- a form's own inline
- * validation/submission errors still use a local `errorMessage` signal (matching `LoginComponent`'s
- * own precedent), since those need to stay visible until the user acts, not disappear after a few
- * seconds or get lost among other toasts the way this queue's own entries do.
+ * This service is the app-wide queue of toast notifications, held in a signal. Pages call
+ * {@link success} and {@link error} for short "it worked" or "it failed" messages, and
+ * `NotificationHostComponent` renders {@link toasts}.
+ *
+ * <p>Forms show their validation and submit errors in a local `errorMessage` alert instead, so the
+ * message stays beside the form until the user acts on it.
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
@@ -34,17 +32,17 @@ export class NotificationService {
   /** Every toast currently shown, oldest first. */
   readonly toasts = this._toasts.asReadonly();
 
-  /** This method shows a brief, auto-dismissing confirmation toast. */
+  /** This method shows a success toast that hides itself after 4 seconds. */
   success(message: string): void {
     this.push(message, 'success', 4000);
   }
 
-  /** This method shows a longer-lived error toast, dismissed only by the user. */
+  /** This method shows an error toast that stays until the user closes it. */
   error(message: string): void {
     this.push(message, 'danger', null);
   }
 
-  /** This method removes one toast by id -- called by `NotificationHostComponent` once a toast auto-hides or the operator dismisses it explicitly. */
+  /** This method removes a toast by id; `NotificationHostComponent` calls it when a toast hides. */
   dismiss(id: number): void {
     this._toasts.update((toasts) => toasts.filter((toast) => toast.id !== id));
   }

@@ -1,35 +1,31 @@
 /**
- * This union describes {@link DnsEventsHubService}'s own tracked SignalR connection lifecycle
- * state, driven by the real `HubConnection` callbacks (`onreconnecting`/`onreconnected`/
- * `onclose`) rather than guessed from the connection's own `state` property alone, so a
- * transient reconnect attempt is visibly distinct from a fully dropped connection in the
- * dashboard's own live-feed header.
+ * This union is the SignalR connection state that {@link DnsEventsHubService} tracks from the
+ * `HubConnection` callbacks (`onreconnecting`, `onreconnected`, `onclose`). The dashboard's live
+ * feed header shows it, so a reconnect attempt looks different from a dropped connection.
  */
 export type DnsEventsHubConnectionState =
   'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
 /**
- * This union lists the exact 4 event names `Ninlil.Web.Hubs.DnsEventsHubBroadcaster`
- * forwards over `/hubs/events` -- one literal per its own `SendAsync` method-name argument, not
- * guessed from the underlying `IDnsServerEvent` record type names (which differ: e.g.
- * `DnsQueryReceivedEvent` the C# type vs. `"DnsQueryReceived"` the SignalR method name).
+ * This union lists the four SignalR method names `DnsEventsHubBroadcaster` sends over
+ * `/hubs/events`. They differ from the C# event type names: `DnsQueryReceivedEvent` is sent as
+ * `"DnsQueryReceived"`.
  */
 export type DnsFeedEventType =
   'DnsQueryReceived' | 'DnsQueryAnswered' | 'DnsZoneChanged' | 'DnsCacheEvicted';
 
 /**
- * This interface describes one entry in the dashboard's own live, session-only activity feed --
- * a human-readable summary derived from whichever real event payload produced it, not the raw
- * payload itself, since a live feed is read at a glance, not inspected field-by-field.
+ * This interface is one entry in the dashboard's live activity feed: a one-line summary of the
+ * event, not the raw payload, since the feed is read at a glance.
  */
 export interface DnsFeedEntry {
-  /** A locally-assigned, monotonically increasing identifier, used only for `@for` tracking. */
+  /** A locally assigned, increasing id, used only for `@for` tracking. */
   id: number;
 
-  /** Which of the 4 curated event types produced this entry. */
+  /** Which of the four event types produced this entry. */
   eventType: DnsFeedEventType;
 
-  /** The event's own `occurredAtUtc`, in its original ISO-8601 wire form. */
+  /** The event's `occurredAtUtc`, as the ISO-8601 string sent over the wire. */
   occurredAtUtc: string;
 
   /** A one-line, human-readable summary of what happened. */
@@ -37,11 +33,9 @@ export interface DnsFeedEntry {
 }
 
 /**
- * This interface mirrors `Ninlil.Dns.Server.Core.Events.DnsQueryReceivedEvent`'s own
- * camelCase JSON shape, exactly as `JsonHubProtocol`'s default camelCase naming policy serializes
- * it over the wire -- deliberately hand-written here rather than generated, since this event
- * never appears in the REST OpenAPI surface the generated `api-client/` is built from (it only
- * ever travels over the SignalR hub).
+ * This interface mirrors the camelCase JSON of the backend's `DnsQueryReceivedEvent` as the hub
+ * sends it (enums as strings, IP addresses as text). It is hand-written because hub events are not
+ * in the OpenAPI document that `api-client/` is generated from.
  */
 export interface DnsQueryReceivedEventPayload {
   occurredAtUtc: string;
@@ -52,9 +46,8 @@ export interface DnsQueryReceivedEventPayload {
 }
 
 /**
- * This interface mirrors `Ninlil.Dns.Server.Core.Events.DnsQueryAnsweredEvent`'s own
- * camelCase JSON shape -- see {@link DnsQueryReceivedEventPayload}'s own doc comment for why this
- * is hand-written rather than generated.
+ * This interface mirrors the JSON of the backend's `DnsQueryAnsweredEvent`; see
+ * {@link DnsQueryReceivedEventPayload} for why it is hand-written.
  */
 export interface DnsQueryAnsweredEventPayload {
   occurredAtUtc: string;
@@ -67,9 +60,8 @@ export interface DnsQueryAnsweredEventPayload {
 }
 
 /**
- * This interface mirrors `Ninlil.Dns.Server.Core.Events.DnsZoneChangedEvent`'s own camelCase
- * JSON shape -- see {@link DnsQueryReceivedEventPayload}'s own doc comment for why this is
- * hand-written rather than generated.
+ * This interface mirrors the JSON of the backend's `DnsZoneChangedEvent`; see
+ * {@link DnsQueryReceivedEventPayload} for why it is hand-written.
  */
 export interface DnsZoneChangedEventPayload {
   occurredAtUtc: string;
@@ -78,9 +70,8 @@ export interface DnsZoneChangedEventPayload {
 }
 
 /**
- * This interface mirrors `Ninlil.Dns.Server.Core.Events.DnsCacheEvictedEvent`'s own camelCase
- * JSON shape -- see {@link DnsQueryReceivedEventPayload}'s own doc comment for why this is
- * hand-written rather than generated.
+ * This interface mirrors the JSON of the backend's `DnsCacheEvictedEvent`; see
+ * {@link DnsQueryReceivedEventPayload} for why it is hand-written.
  */
 export interface DnsCacheEvictedEventPayload {
   occurredAtUtc: string;

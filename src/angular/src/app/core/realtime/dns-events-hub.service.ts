@@ -10,32 +10,27 @@ import {
   DnsZoneChangedEventPayload,
 } from './dns-event.model';
 
-/** The hub's own route, mapped by `Program.cs` via `app.MapHub<DnsEventsHub>("/hubs/events")`. */
+/** The hub's route, mapped in `Program.cs` by `app.MapHub<DnsEventsHub>("/hubs/events")`. */
 const HUB_URL = '/hubs/events';
 
 /**
- * This constant caps how many entries {@link DnsEventsHubService.feed} ever retains -- a live
- * feed with no cap would grow unbounded for a long-lived dashboard tab, exactly the kind of
- * "set up once and left running for years" homelab deployment this whole project targets
- * targets. 50 is enough to scroll through a recent burst of
- * activity without ever needing more, since this feed is explicitly not a persisted history.
+ * This constant caps how many entries {@link DnsEventsHubService.feed} keeps, so a dashboard tab
+ * left open for weeks does not grow without bound. The feed is not a history; 50 covers a recent
+ * burst of activity.
  */
 const MAX_FEED_ENTRIES = 50;
 
 /**
- * This type describes the function {@link DNS_EVENTS_HUB_CONNECTION_FACTORY} resolves to: given
- * an access-token factory (re-read fresh on every SignalR reconnect attempt, so a token refreshed
- * by {@link AuthService} mid-session is picked up automatically), build a real, not-yet-started
- * `HubConnection`.
+ * This type is the function {@link DNS_EVENTS_HUB_CONNECTION_FACTORY} provides: it builds an
+ * unstarted `HubConnection` from an access-token factory. SignalR calls the factory on every
+ * connect and reconnect, so a token that {@link AuthService} refreshed is picked up.
  */
 export type DnsEventsHubConnectionFactory = (accessTokenFactory: () => string) => HubConnection;
 
 /**
- * This injection token exists purely so {@link DnsEventsHubService}'s own unit tests can swap in
- * a fake `HubConnection` (one exposing only the handful of members this service actually calls)
- * without ever opening a real SignalR/WebSocket connection during a `ng test` run -- the same
- * "inject the thing that talks to the outside world, don't hand-mock a whole vendor SDK" shape
- * this workspace's own `AuthApiService`-fake tests already use one layer up.
+ * This injection token builds the hub connection. It exists so the {@link DnsEventsHubService}
+ * tests can supply a fake `HubConnection` with only the members the service calls, and never
+ * open a SignalR connection.
  */
 export const DNS_EVENTS_HUB_CONNECTION_FACTORY = new InjectionToken<DnsEventsHubConnectionFactory>(
   'DNS_EVENTS_HUB_CONNECTION_FACTORY',
@@ -50,24 +45,19 @@ export const DNS_EVENTS_HUB_CONNECTION_FACTORY = new InjectionToken<DnsEventsHub
 );
 
 /**
- * This service owns the dashboard's own live SignalR connection to `DnsEventsHub`
- * (`/hubs/events`), bridging its 4 curated broadcast events (`DnsQueryReceived`/
- * `DnsQueryAnswered`/`DnsZoneChanged`/`DnsCacheEvicted` -- see `DnsEventsHubBroadcaster` on the
- * backend) into a small, capped, human-readable activity feed plus a connection-state signal the
- * dashboard's own live-feed header renders.
- * <para>
- *   **Deliberately, inherently session-only** -- no backend endpoint returns historical events,
- *   only live ones from the moment this service's own `start()` succeeds onward;
- *   {@link feed} always starts empty on every fresh connection
- *   and is never persisted across a page reload. The dashboard's own template labels this
- *   explicitly rather than letting it read like a persisted history it is not.
- * </para>
- * <para>
- *   Since a browser cannot attach an `Authorization` header to a WebSocket handshake, the access
- *   token is instead supplied via `HubConnectionOptions.accessTokenFactory` -- the client-side
- *   half of the same query-string-based JWT pattern `Program.cs`'s own `OnMessageReceived`
- *   override implements on the backend (see that file's own comment for the exact reasoning).
- * </para>
+ * This service holds the dashboard's SignalR connection to `DnsEventsHub` (`/hubs/events`). It
+ * turns the four events `DnsEventsHubBroadcaster` sends (`DnsQueryReceived`, `DnsQueryAnswered`,
+ * `DnsZoneChanged`, `DnsCacheEvicted`) into a short, capped activity feed, and exposes the
+ * connection state for the feed header. The backend only sends each event to users holding its
+ * permission (`querylog:read`, `zones:read` or `recursivesettings:read`).
+ *
+ * <p>The feed is live only. No endpoint returns past events, so the feed holds what arrived since
+ * `start()` and is lost on a page reload; the dashboard template says so. Because the service is a
+ * root singleton, entries survive leaving and returning to the dashboard within one page load.
+ *
+ * <p>A browser cannot set an `Authorization` header on a WebSocket handshake, so the token goes
+ * through `accessTokenFactory`, which SignalR sends as the `access_token` query parameter. The
+ * `OnMessageReceived` handler in `Program.cs` accepts it for `/hubs` paths.
  */
 @Injectable({ providedIn: 'root' })
 export class DnsEventsHubService {
@@ -75,30 +65,27 @@ export class DnsEventsHubService {
   private readonly connectionFactory = inject(DNS_EVENTS_HUB_CONNECTION_FACTORY);
 
   /**
-   * This field holds the currently-active connection, or `null` when never started (or already
-   * stopped) -- checked by {@link start} so a second call while already connected/connecting is a
-   * harmless no-op rather than opening a duplicate connection.
+   * This field holds the active connection, or `null` when not started or stopped. {@link start}
+   * checks it so a second call does not open a duplicate connection.
    */
   private connection: HubConnection | null = null;
 
-  /** This field assigns each new {@link DnsFeedEntry} its own locally-unique, incrementing id. */
+  /** This field holds the next {@link DnsFeedEntry} id. */
   private nextEntryId = 0;
 
   private readonly connectionStateSignal = signal<DnsEventsHubConnectionState>('disconnected');
   private readonly feedSignal = signal<DnsFeedEntry[]>([]);
 
-  /** The connection's own current lifecycle state, rendered by the dashboard's feed header. */
+  /** The connection state, shown in the dashboard's feed header. */
   readonly connectionState = this.connectionStateSignal.asReadonly();
 
-  /** The live activity feed itself, most-recent-first, capped at {@link MAX_FEED_ENTRIES}. */
+  /** The activity feed, newest first, capped at {@link MAX_FEED_ENTRIES}. */
   readonly feed = this.feedSignal.asReadonly();
 
   /**
-   * This method opens the hub connection (a no-op if one is already open or in progress) and
-   * wires every curated event to {@link feed}. A connection failure is caught and reflected as
-   * `'disconnected'` rather than thrown -- the dashboard's own REST-backed tiles (`/status`, the
-   * quick-stat counts) must still render even when the live feed itself cannot connect, since the
-   * live feed is additive, never a hard dependency of the rest of the page.
+   * This method opens the hub connection (a no-op if one is open or opening) and feeds every event
+   * into {@link feed}. A failure to connect sets `'disconnected'` instead of throwing, so the rest
+   * of the dashboard still renders without the live feed.
    */
   async start(): Promise<void> {
     if (this.connection) return;
@@ -144,19 +131,18 @@ export class DnsEventsHubService {
       await connection.start();
       this.connectionStateSignal.set('connected');
     } catch {
-      // A failed initial connection is not retried here -- withAutomaticReconnect() only covers
-      // a connection that *was* established and later dropped, not the very first attempt.
-      // Reflecting 'disconnected' lets the dashboard's own template show a clear, non-crashing
-      // "not connected" state instead of an unhandled rejection.
+      // withAutomaticReconnect() only retries a connection that was established and then
+      // dropped, not a failed first attempt, so the feed stays 'disconnected' until the next
+      // start().
       this.connection = null;
       this.connectionStateSignal.set('disconnected');
     }
   }
 
   /**
-   * This method closes the hub connection, if one is open, and resets the connection-state
-   * signal -- called from the dashboard component's own `ngOnDestroy` so navigating away stops
-   * an open SignalR connection rather than leaking it for the rest of the session.
+   * This method closes the hub connection, if one is open, and sets the state to
+   * `'disconnected'`. The dashboard calls it from `ngOnDestroy` so leaving the page closes the
+   * connection. The feed entries are kept.
    */
   async stop(): Promise<void> {
     const connection = this.connection;
@@ -177,7 +163,7 @@ export class DnsEventsHubService {
   }
 }
 
-/** This function renders a query's own name/type pair, or a placeholder for a question-less message. */
+/** This function renders a query's name and type, or a placeholder for a message with no question. */
 function describeQuestion(queriedName: string | null, queriedType: string | null): string {
   if (!queriedName) return '(no question)';
   return queriedType ? `${queriedName} ${queriedType}` : queriedName;

@@ -3,9 +3,10 @@ import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 
 /**
- * This guard blocks navigation to any route requiring a signed-in session, redirecting an
- * unauthenticated caller to `/login` with the attempted URL preserved as a `returnUrl` query
- * parameter, so the login page can send them back on to where they were headed.
+ * This guard protects the signed-in part of the app (the app shell route in `app.routes.ts`). A
+ * visitor without a session goes to `/login`, with the attempted URL in a `returnUrl` query
+ * parameter so the login page can send them on after sign-in. It only checks that a session
+ * exists; {@link permissionGuard} checks permissions.
  */
 export const authGuard: CanActivateFn = (_route, state) => {
   const authService = inject(AuthService);

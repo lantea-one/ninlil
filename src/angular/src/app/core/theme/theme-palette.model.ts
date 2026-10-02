@@ -7,18 +7,17 @@ export interface PaletteOption {
   /** The human-readable label shown next to this option's swatch. */
   readonly label: string;
   /**
-   * The color swatch shown for this option -- this palette's own light-mode `--cui-primary`
-   * value from `src/styles/themes/`, kept in sync with that CSS by hand since a CSS custom
-   * property cannot itself be read back into a plain TypeScript constant at build time.
+   * The color swatch shown for this option: the palette's light-mode `--cui-primary` from
+   * `src/styles/themes/`. It is copied by hand, since TypeScript cannot read a CSS custom
+   * property at build time.
    */
   readonly swatch: string;
 }
 
 /**
- * This constant lists every palette the switcher UI's palette picker offers, in the same order
- * `UiThemePaletteEnum` declares them in. Each entry's {@link PaletteOption.swatch} must be kept
- * in sync by hand with that palette's own light-mode `--cui-primary` value in
- * `src/styles/themes/_<palette>.scss` if either is ever re-tuned.
+ * This constant lists every palette the theme switcher offers, in `UiThemePaletteEnum` order.
+ * Each {@link PaletteOption.swatch} must match the light-mode `--cui-primary` in
+ * `src/styles/themes/_<palette>.scss`; change both together.
  */
 export const PALETTE_OPTIONS: readonly PaletteOption[] = [
   { value: UiThemePaletteEnum.Teal, label: 'Teal', swatch: '#0f766e' },
@@ -34,14 +33,11 @@ export interface ModeOption {
   readonly value: UiThemeModeEnum;
   /** The human-readable label shown next to this option's icon. */
   readonly label: string;
-  /** The `@coreui/icons` icon (from `app.config.ts`'s own registered icon set) shown for this option. */
+  /** The `@coreui/icons` icon shown for this option; it must be registered in `app.config.ts`. */
   readonly icon: string;
 }
 
-/**
- * This constant lists every mode the switcher UI's mode picker offers, in the same order
- * `UiThemeModeEnum` declares them in.
- */
+/** This constant lists every mode the theme switcher offers, in `UiThemeModeEnum` order. */
 export const MODE_OPTIONS: readonly ModeOption[] = [
   { value: UiThemeModeEnum.Light, label: 'Light', icon: 'cilSun' },
   { value: UiThemeModeEnum.Dark, label: 'Dark', icon: 'cilMoon' },

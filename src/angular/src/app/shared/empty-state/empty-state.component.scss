@@ -31,8 +31,7 @@
 .empty-state-action {
   margin-top: var(--ninlil-space-4);
 
-  // A caller with nothing to project (rare, but not disallowed) collapses this back down to the
-  // description's own gap rather than leaving a dangling empty margin.
+  // With nothing projected, drop the margin so no empty gap is left.
   &:empty {
     margin-top: 0;
   }

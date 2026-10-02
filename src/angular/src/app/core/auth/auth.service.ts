@@ -6,26 +6,25 @@ import { AuthClaims, LoginOutcome } from './auth.model';
 import { decodeAuthClaims } from './jwt-claims.util';
 
 /**
- * This constant contains the exact permission value
- * `Ninlil.Dns.Identity.Authorization.PermissionAuthorizationHandler.WildcardPermission`
- * resolves to on the backend -- a permission claim holding this literal value satisfies every
- * permission check, the same bootstrap-administrator behavior the backend itself implements.
+ * This constant matches the backend's `PermissionAuthorizationHandler.WildcardPermission`. A
+ * permission claim with this value satisfies every permission check, on the backend and here.
  */
 const WILDCARD_PERMISSION = '*';
 
 /**
- * This service owns this app's sign-in session: the access token and the claims decoded out of it,
- * held **only in memory** (plain Angular signals, never `localStorage`/`sessionStorage`), per this
- * project's own deliberate security decision.
+ * This service owns the sign-in session: the access token and the claims decoded from it. Both
+ * live **only in memory** (Angular signals, never `localStorage` or `sessionStorage`), so script
+ * injected by an XSS bug cannot find a stored token. The login, two-factor, SSO callback and
+ * forgot/reset password pages call it; `authInterceptor` reads the token; the guards,
+ * `IfPermissionDirective`, `HasPermissionPipe` and the nav call {@link hasPermission}.
  *
- * <p>The refresh token is never held here at all. Every sign-in asks the backend for cookie
- * delivery (`refreshTokenDelivery: Cookie`), so the refresh token lives only in an HttpOnly,
- * `SameSite=Strict` cookie scoped to `/api/auth` -- page script, and therefore an XSS bug, can never
- * read it, yet the browser presents it to the refresh and sign-out endpoints on its own. That is
- * what lets {@link restoreSession} renew the session after a full page reload. "Remember me"
- * decides whether that cookie (and the server-side session behind it) outlives the browser:
+ * <p>The refresh token is never held here. Every sign-in asks for cookie delivery
+ * (`refreshTokenDelivery: Cookie`), so the refresh token lives only in an HttpOnly,
+ * `SameSite=Strict` cookie scoped to `/api/auth`. Page script cannot read it, but the browser
+ * sends it to the refresh and logout endpoints, which is how {@link restoreSession} renews the
+ * session after a page reload. "Remember me" decides whether that cookie outlives the browser:
  * checked, it lasts the long refresh lifetime; unchecked, it is a browser-session cookie backed by
- * a short, activity-renewed server-side lifetime.
+ * a short server-side lifetime that activity renews.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -33,33 +32,30 @@ export class AuthService {
   private readonly claimsSignal = signal<AuthClaims | null>(null);
 
   /**
-   * This field holds an in-flight refresh's own promise, so two requests that both 401 at
-   * roughly the same moment (a real, ordinary race under concurrent requests, not a contrived
-   * edge case) share one refresh attempt rather than each rotating the refresh cookie out from
-   * under the other -- the second caller's own cookie would already have been revoked by the
-   * first's successful exchange (rotation, per `AuthController.Refresh`'s own doc comment),
-   * making the second call fail even though the session is, in truth, still healthy.
+   * This field holds the promise of a refresh in flight, so concurrent requests that all get a
+   * 401 share one refresh. Each refresh rotates the cookie and revokes the old one, so a second,
+   * parallel refresh would fail and end a healthy session.
    */
   private refreshInFlight: Promise<boolean> | null = null;
 
   /**
    * The "Remember me" choice of a sign-in still waiting on its second factor, repeated to the
-   * two-factor endpoint so the completed session gets the lifetime the operator actually chose.
+   * two-factor endpoint so the completed session gets the lifetime the operator chose.
    */
   private pendingRememberMe = false;
 
   /** Whether a completed sign-in currently holds a usable access token. */
   readonly isAuthenticated = computed(() => this.accessTokenSignal() !== null);
 
-  /** The current session's own decoded claims, or `null` when signed out. */
+  /** The current session's decoded claims, or `null` when signed out. */
   readonly claims = computed(() => this.claimsSignal());
 
-  /** The current session's own sign-in name, or `null` when signed out. */
+  /** The current session's sign-in name, or `null` when signed out. */
   readonly userName = computed(() => this.claimsSignal()?.userName ?? null);
 
   private readonly authApi = inject(AuthApiService);
 
-  /** The current access token, read by {@link AuthInterceptor}. Never persisted. */
+  /** The current access token, read by `authInterceptor`. Never persisted. */
   get accessToken(): string | null {
     return this.accessTokenSignal();
   }
@@ -67,7 +63,7 @@ export class AuthService {
   /**
    * This method checks a username and password against `POST /api/auth/login`, either
    * completing sign-in immediately or reporting that a second factor is still required. The
-   * refresh token always comes back as the HttpOnly cookie, never in the response this app sees.
+   * refresh token always comes back as the HttpOnly cookie, never in the response body.
    *
    * @param rememberMe Whether the session should outlive the browser (see this class's doc).
    */
@@ -120,13 +116,13 @@ export class AuthService {
   /**
    * This method exchanges the browser's refresh cookie for a new access token (the backend
    * rotates the cookie in the same response) against `POST /api/auth/refresh`, returning whether
-   * it succeeded. Used by {@link AuthInterceptor}'s own silent-refresh-and-retry and by
-   * {@link restoreSession}.
+   * it succeeded. `authInterceptor` calls it to retry a request after a 401, and
+   * {@link restoreSession} calls it at startup. On failure it clears the session.
    *
-   * <p>A 401 is retried exactly once before giving up: when two tabs refresh at the same moment,
-   * both present the same cookie, the first rotates it, and the second's request fails with the
-   * old one -- by the time it retries, the browser holds the rotated cookie and the retry
-   * succeeds. A session that has genuinely ended simply fails twice.
+   * <p>A 401 is retried once. When two tabs refresh at the same moment, both send the same
+   * cookie, the first rotates it and the second fails with the old one. By the time the second
+   * retries, the browser holds the rotated cookie and the retry succeeds. A session that has ended
+   * fails twice.
    */
   async refresh(): Promise<boolean> {
     if (this.refreshInFlight) return this.refreshInFlight;
@@ -171,8 +167,7 @@ export class AuthService {
    * This method signs out: clears the in-memory session immediately (so the UI reflects
    * signed-out state even if the network call below fails), then best-effort revokes the session
    * against `POST /api/auth/logout`, which also tells the browser to discard the refresh cookie.
-   * That endpoint requires no access token -- the cookie itself is sufficient authorization to
-   * revoke the session it belongs to, mirroring `AuthController.Logout`'s own reasoning.
+   * That endpoint needs no access token: holding the cookie is enough to revoke its session.
    */
   async logout(): Promise<void> {
     this.clearSession();
@@ -180,19 +175,16 @@ export class AuthService {
     try {
       await firstValueFrom(this.authApi.apiAuthLogoutPost({ refreshRequest: {} }));
     } catch {
-      // Best-effort only -- the session is already cleared locally regardless.
+      // Best effort: the session is already cleared locally.
     }
   }
 
   /**
-   * This method completes a token-based password reset against `POST /api/auth/reset-password`
-   * (`AuthController.ResetPassword`) -- the shared confirming action every "set new password"
-   * landing page submits to, reused unchanged by `SetNewPasswordComponent` for both an
-   * administrator-driven `EmailLink` reset e-mail and a genuinely self-service request raised via
-   * {@link forgotPassword} below. This action is `[AllowAnonymous]` on the backend and
-   * touches no session state here either -- neither caller is signed in at this point, and a
-   * completed reset does not itself sign the caller in (they still submit their new password
-   * through the ordinary {@link login} flow afterward).
+   * This method completes a token-based password reset against the anonymous
+   * `POST /api/auth/reset-password`. The `/reset-password` page calls it for both kinds of reset
+   * link: one an administrator sends from the Users page and one requested through
+   * {@link forgotPassword}. It does not touch the session; after a reset the user signs in
+   * through {@link login} as usual.
    */
   async resetPassword(userId: string, token: string, newPassword: string): Promise<void> {
     await firstValueFrom(
@@ -203,13 +195,10 @@ export class AuthService {
   }
 
   /**
-   * This method submits a genuinely self-service Forgot Password request against
-   * `POST /api/auth/forgot-password` (`AuthController.ForgotPassword`), given only an e-mail
-   * address -- no sign-in of any kind. The backend's own response is deliberately identical
-   * whether or not the address actually has an account (see that action's own doc comment for
-   * why this is a security property, not an oversight) -- this method simply returns that one
-   * message string as-is, and {@link ForgotPasswordComponent} shows it unconditionally, so this
-   * app never introduces a distinction the backend itself refuses to make.
+   * This method submits a Forgot Password request for an e-mail address against the anonymous
+   * `POST /api/auth/forgot-password`. The backend returns the same message whether or not the
+   * address has an account, so the response cannot be used to discover accounts. This method
+   * returns that message unchanged and `ForgotPasswordComponent` always shows it.
    */
   async forgotPassword(email: string): Promise<string> {
     const result = await firstValueFrom(
@@ -219,20 +208,18 @@ export class AuthService {
   }
 
   /**
-   * This method applies the access token minted by a completed OpenID Connect sign-in, exactly
-   * the same way {@link login}/{@link completeTwoFactorLogin}/{@link refresh} apply a local
-   * sign-in's own -- the one, shared token-store path every completed sign-in in this app goes
-   * through. {@link SsoCallbackComponent} calls this after parsing the access token out of the URL
-   * fragment `OpenIdConnectOptions.Events.OnTokenValidated` redirects the browser to; that same
-   * response already set the refresh cookie, so no refresh token ever passes through the URL.
+   * This method stores the access token from a completed OpenID Connect sign-in, the same way
+   * {@link login} and {@link refresh} store theirs. `SsoCallbackComponent` calls it after reading
+   * the token from the URL fragment the backend redirects to. That redirect already set the
+   * refresh cookie, so no refresh token ever appears in the URL.
    */
   applySsoAccessToken(accessToken: string): void {
     this.applyAccessToken(accessToken);
   }
 
   /**
-   * This method checks whether the current session holds a given permission, including the
-   * wildcard-permission shortcut the bootstrap administrator's own role carries.
+   * This method checks whether the current session holds a permission, counting the `"*"`
+   * wildcard as every permission. It only drives UI; the backend enforces every permission.
    */
   hasPermission(permission: string): boolean {
     const claims = this.claimsSignal();
@@ -243,9 +230,8 @@ export class AuthService {
   }
 
   /**
-   * This method checks whether the current session holds at least one of several permissions --
-   * for a page, such as the settings area, that is useful to anyone who can read any one of its
-   * sub-pages.
+   * This method checks whether the current session holds at least one of several permissions,
+   * for a page such as Settings that is useful to anyone who can read any one of its sub-pages.
    */
   hasAnyPermission(permissions: readonly string[]): boolean {
     return permissions.some((permission) => this.hasPermission(permission));

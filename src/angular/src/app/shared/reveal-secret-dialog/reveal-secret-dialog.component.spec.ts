@@ -5,6 +5,10 @@ import {
   RevealSecretDialogData,
 } from './reveal-secret-dialog.component';
 
+/**
+ * These tests cover the reveal-once dialog: rendering one or several secrets, copying (with the
+ * per-row "copied" mark) and closing. TestBed with a spy `Clipboard`.
+ */
 describe('RevealSecretDialogComponent', () => {
   let fixture: ComponentFixture<RevealSecretDialogComponent>;
   let clipboardSpy: jasmine.SpyObj<Clipboard>;

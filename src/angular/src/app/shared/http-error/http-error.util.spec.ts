@@ -1,6 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { extractErrorMessage } from './http-error.util';
 
+/**
+ * These tests cover `extractErrorMessage`: each body shape it reads (validation `errors`,
+ * `detail`, `title`, a plain string), the fixed messages for 0, 404 and 409, and the fallbacks.
+ * Plain calls with hand-built `HttpErrorResponse` values.
+ */
 describe('extractErrorMessage', () => {
   it('returns a bare JSON string body verbatim (Conflict("...")/BadRequest("..."))', () => {
     const error = new HttpErrorResponse({ error: 'A zone named foo already exists.', status: 409 });

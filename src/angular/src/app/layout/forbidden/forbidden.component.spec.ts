@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ForbiddenComponent } from './forbidden.component';
 
+/** This test checks that the forbidden page renders its message and dashboard link (TestBed). */
 describe('ForbiddenComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({

@@ -7,12 +7,16 @@ import {
 } from '../../api-client';
 import { ThemeSwitcherComponent } from './theme-switcher.component';
 
-/** See `ThemeService`'s own spec for why a plain Jasmine-spy fake is used here instead of `jasmine.SpyObj`. */
+/** A plain spy object rather than `jasmine.SpyObj`; the `AuthService` spec explains why. */
 interface FakeAppearanceApiService {
   apiAppearanceSettingsMeGet: jasmine.Spy;
   apiAppearanceSettingsMePatch: jasmine.Spy;
 }
 
+/**
+ * These tests cover the theme switcher: the options it lists and choosing a palette or mode,
+ * through the real `ThemeService` backed by a fake appearance API.
+ */
 describe('ThemeSwitcherComponent', () => {
   let appearanceApiSpy: FakeAppearanceApiService;
 

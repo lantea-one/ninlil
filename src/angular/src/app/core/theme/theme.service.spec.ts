@@ -8,10 +8,9 @@ import {
 import { ThemeService } from './theme.service';
 
 /**
- * This class stands in for the real `MediaQueryList` `window.matchMedia('(prefers-color-scheme:
- * dark)')` returns, so this spec can both control the initial `prefers-color-scheme` state and
- * simulate a live change -- neither of which a real headless browser's own OS-level color scheme
- * lets a test control directly.
+ * This class stands in for the `MediaQueryList` that `matchMedia('(prefers-color-scheme: dark)')`
+ * returns, so a test can set the initial scheme and simulate a change. A headless browser does
+ * not let a test control the OS color scheme.
  */
 class FakeMediaQueryList {
   matches = false;
@@ -22,10 +21,10 @@ class FakeMediaQueryList {
   }
 
   removeEventListener(): void {
-    // Not exercised by this spec -- the service never unsubscribes for its own lifetime.
+    // Not used: the service never unsubscribes.
   }
 
-  /** Simulates the operating system's own color-scheme preference changing. */
+  /** Simulates the operating system's color-scheme preference changing. */
   dispatchChange(matches: boolean): void {
     this.matches = matches;
     for (const listener of this.listeners) listener({ matches });
@@ -33,15 +32,20 @@ class FakeMediaQueryList {
 }
 
 /**
- * This spec's own hand-rolled fake for the generated `AppearanceApiService`, mirroring
- * `AuthService`'s own spec -- see that spec's doc comment for why a plain Jasmine-spy object is
- * used instead of `jasmine.SpyObj`.
+ * A hand-written fake for the generated `AppearanceApiService`. The `AuthService` spec explains
+ * why it is a plain object rather than a `jasmine.SpyObj`.
  */
 interface FakeAppearanceApiService {
   apiAppearanceSettingsMeGet: jasmine.Spy;
   apiAppearanceSettingsMePatch: jasmine.Spy;
 }
 
+/**
+ * These tests cover `ThemeService`: the fallback before sign-in, applying a preference, setting
+ * and clearing overrides, explicit and System modes (including a live system change) and the
+ * document root attributes. TestBed with a fake `AppearanceApiService` and a fake
+ * `MediaQueryList` swapped in for `window.matchMedia`.
+ */
 describe('ThemeService', () => {
   let service: ThemeService;
   let appearanceApiSpy: FakeAppearanceApiService;
@@ -64,7 +68,7 @@ describe('ThemeService', () => {
   });
 
   afterEach(() => {
-    // Leaves no stray theming attributes behind for whichever spec runs next.
+    // Remove the theming attributes so they do not leak into the next spec.
     document.documentElement.removeAttribute('data-coreui-theme');
     document.documentElement.removeAttribute('data-ninlil-palette');
   });
@@ -174,7 +178,7 @@ describe('ThemeService', () => {
         effectiveMode: UiThemeModeEnum.Light,
       }),
     );
-    fakeMediaQueryList.matches = true; // The OS itself prefers dark -- Light must still win.
+    fakeMediaQueryList.matches = true; // The OS prefers dark; Light must still win.
 
     await service.setMode(UiThemeModeEnum.Light);
 

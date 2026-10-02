@@ -3,6 +3,11 @@ import { Router, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { anyPermissionGuard, permissionGuard } from './permission.guard';
 
+/**
+ * These tests cover `permissionGuard` and `anyPermissionGuard`: `/login` without a session,
+ * `/forbidden` without the permission, and pass-through with it. The guards run in a TestBed
+ * injection context with a fake `AuthService`.
+ */
 describe('permissionGuard', () => {
   let authServiceFake: { isAuthenticated: jasmine.Spy; hasPermission: jasmine.Spy };
   let router: Router;

@@ -88,28 +88,18 @@ import { ThemeService } from './core/theme/theme.service';
 import { routes } from './app.routes';
 
 /**
- * CoreUI for Angular's bootstrap pattern, applied here as this app's own established convention:
+ * The CoreUI icons the app uses. How CoreUI is set up:
  *
- * - No CoreUI-specific `provideXxx()` function or `NgModule` import is needed to use its
- *   components/directives (`CardComponent`, `ButtonDirective`, `FormControlDirective`, etc.) --
- *   every one of them is a standalone Angular 22 component/directive, imported directly into a
- *   consuming component's own `imports` array, and `ColorModeService` (light/dark theme) is
- *   `providedIn: 'root'` so it needs no explicit provider either.
- * - The one piece of real app-wide setup CoreUI needs is its **icon set**: `IconSetService` is
- *   also `providedIn: 'root'`, but its `icons` property starts empty -- population happens once,
- *   here, via `provideAppInitializer` (the functional replacement for the older `APP_INITIALIZER`
- *   token), assigning whichever icons (from the separate, tree-shakeable `@coreui/icons` data
- *   package -- distinct from the Angular integration package `@coreui/icons-angular`, which only
- *   supplies the `cIcon` directive/component and the service, no actual icon artwork) this app
- *   actually references. Add new icon names to this object as new pages need them, rather
- *   than importing the whole `freeSet`, to keep the icon payload tree-shaken to what's used.
- * - CoreUI's compiled CSS (Bootstrap 5 reboot + grid + every component's styling, including the
- *   `[data-coreui-theme]` light/dark custom-property tokens `ColorModeService` toggles) is wired
- *   as a plain global stylesheet in `angular.json`'s `styles` array (both the `build` and `test`
- *   targets), loaded *before* `src/styles.scss` -- not via a Sass `@use`/`@import`, since
- *   Bootstrap's own SCSS source assumes classic `@import` semantics that don't mix cleanly with
- *   `src/styles.scss`'s own modern `@use`-based theming (see that file's own doc comment for its
- *   5-palette x light/dark catalog) if pulled into the same Sass compilation instead.
+ * - Its components and directives are standalone, so each page imports what it uses. No
+ *   `provideXxx()` or `NgModule` is needed.
+ * - `IconSetService` starts with no icons. An app initializer below fills it from this object,
+ *   which takes icon data from `@coreui/icons` (`@coreui/icons-angular` supplies only the `cIcon`
+ *   component and the service). Add each new icon here instead of importing the whole `freeSet`,
+ *   so the bundle carries only the icons in use. An icon missing from this list renders blank.
+ * - CoreUI's compiled CSS is a global stylesheet in the `styles` array of `angular.json` (build
+ *   and test), loaded before `src/styles.scss`. It is not pulled in through Sass, because
+ *   Bootstrap's SCSS relies on `@import`, which does not mix well with the `@use`-based theming in
+ *   `styles.scss`.
  */
 const coreUiIcons = {
   cilAccountLogout,
@@ -190,23 +180,18 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
-    // The generated API client's own BaseService defaults to "http://localhost" when no base
-    // path is configured (see api-client/api.base.service.ts) -- an empty string here makes
-    // every generated request relative, so it resolves against whatever origin this app is
-    // actually served from, matching this project's own same-origin hosting decision.
+    // The generated client defaults to "http://localhost" (api-client/api.base.service.ts). An
+    // empty base path makes every request relative, so it goes to the origin that served the
+    // app; the backend serves the app and the API from the same origin.
     provideApi(''),
     provideAppInitializer(() => {
       inject(IconSetService).icons = coreUiIcons;
     }),
-    // Resumes a session from the refresh cookie first (a full page reload keeps the operator
-    // signed in -- see `AuthService.restoreSession`), then resolves the signed-in caller's own
-    // appearance preference and custom site title. The order matters: both of those read
-    // per-user settings, so they must see the restored session, not an anonymous one, or the app
-    // would render its default palette and title until the next navigation. With no session
-    // (still on the login page), each falls back to this app's own compiled-in default -- see
-    // `ThemeService.initialize`/`BrandingService.initialize`. Everything here finishes before the
-    // first real render and the first route guard, so every CoreUI component -- including the
-    // login page itself -- renders in the right palette/mode rather than flashing a default.
+    // Restore the session from the refresh cookie first (see AuthService.restoreSession), then
+    // load the user's appearance preference and the site title. Both need the restored session,
+    // or the app would show the default palette and title. Without a session they fall back to
+    // the built-in defaults. All of this finishes before the first render and the first route
+    // guard, so the first page, including the login page, appears in the right theme.
     provideAppInitializer(async () => {
       const authService = inject(AuthService);
       const themeService = inject(ThemeService);

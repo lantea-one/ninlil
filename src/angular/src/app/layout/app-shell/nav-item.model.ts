@@ -1,7 +1,7 @@
 import { SETTINGS_TAB_PERMISSIONS } from '../../features/settings/settings-shell/settings-nav';
 
 /**
- * This interface describes one entry in the app shell's own side navigation.
+ * This interface describes one entry in the app shell's side navigation.
  */
 export interface NavItem {
   /** The label shown in the nav. */
@@ -14,21 +14,17 @@ export interface NavItem {
   icon: string;
 
   /**
-   * The permission claim (`resource:action`, matching the backend's own
-   * `[RequirePermission("...")]` names) required to see and navigate to this item. A list means
-   * any one of those permissions will do. `null` means "any signed-in user," with no specific
-   * permission required.
+   * The permission (`resource:action`, as in the backend's `[RequirePermission("...")]`) needed
+   * to see this item. A list means any one of them will do; `null` means any signed-in user. The
+   * route in `app.routes.ts` must have a guard with the same permission.
    */
   permission: string | readonly string[] | null;
 }
 
 /**
- * This constant contains every top-level nav destination this shell knows about, each backed by
- * its own feature page. Every permission string
- * below is a real, already-checked-against-the-backend value (see `RequirePermissionAttribute`
- * usages across `Ninlil.Web/Controllers`), not a guess -- so the permission-gating pattern this
- * array demonstrates is always wired to the exact claims each real page requires. Icon names are
- * `@coreui/icons` names, registered in `app.config.ts`.
+ * This constant lists the sidebar's nav items, in display order. Each permission is the read
+ * permission of the controller behind the page. Icon names are `@coreui/icons` names and must be
+ * registered in `app.config.ts`.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', path: 'dashboard', icon: 'cilSpeedometer', permission: null },

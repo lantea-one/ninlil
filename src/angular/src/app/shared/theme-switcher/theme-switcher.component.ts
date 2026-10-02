@@ -14,16 +14,12 @@ import { MODE_OPTIONS, PALETTE_OPTIONS } from '../../core/theme/theme-palette.mo
 import { ThemeService } from '../../core/theme/theme.service';
 
 /**
- * This component is this app's own reusable appearance switcher: a single dropdown, hosted in the
- * app shell's own header nav ({@link AppShellComponent}), offering both the 5-palette picker and
- * the light/dark/system mode picker in one place. It reads and writes exclusively
- * through {@link ThemeService} -- selecting an option calls
- * {@link ThemeService.setPalette}/{@link ThemeService.setMode} directly, and the resulting theme
- * change is reflected immediately, with no page reload, through {@link ThemeService}'s own
- * signal-based reactivity.
+ * This component is the appearance dropdown in the app shell header ({@link AppShellComponent}).
+ * It offers the five palettes and the Light, Dark and System modes. Choosing one calls
+ * {@link ThemeService.setPalette} or {@link ThemeService.setMode}, which saves the signed-in
+ * user's preference through `PATCH /api/appearance-settings/me` and applies it at once.
  *
- * <p>The trigger button itself shows the currently-resolved mode's own icon (sun/moon/contrast),
- * so the switcher communicates the active state even before it is opened.
+ * <p>The trigger button shows the selected mode's icon (sun, moon or contrast for System).
  */
 @Component({
   selector: 'app-theme-switcher',
@@ -58,16 +54,16 @@ export class ThemeSwitcherComponent {
   /** The mode currently in effect (possibly `System`). */
   readonly activeMode = this.themeService.mode;
 
-  /** The `@coreui/icons` icon name for whichever mode is currently in effect -- shown on the trigger button. */
+  /** The icon of the selected mode, shown on the trigger button. */
   readonly triggerIcon = computed(
     () =>
       this.modeOptions.find((option) => option.value === this.activeMode())?.icon ?? 'cilContrast',
   );
 
-  /** Whether a palette/mode change is currently in flight, disabling every option to prevent a racing double-click. */
+  /** Whether a change is in flight; every option is disabled meanwhile, so requests cannot race. */
   readonly pending = signal(false);
 
-  /** This method applies a newly-selected palette, guarding against overlapping in-flight requests. */
+  /** This method saves a newly selected palette. A failed save is not reported to the user. */
   async selectPalette(palette: UiThemePaletteEnum): Promise<void> {
     if (this.pending() || palette === this.activePalette()) return;
 
@@ -79,7 +75,7 @@ export class ThemeSwitcherComponent {
     }
   }
 
-  /** This method applies a newly-selected mode, guarding against overlapping in-flight requests. */
+  /** This method saves a newly selected mode. A failed save is not reported to the user. */
   async selectMode(mode: UiThemeModeEnum): Promise<void> {
     if (this.pending() || mode === this.activeMode()) return;
 

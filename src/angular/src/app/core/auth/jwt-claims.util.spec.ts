@@ -1,9 +1,8 @@
 import { decodeAuthClaims } from './jwt-claims.util';
 
 /**
- * This function builds a syntactically-valid (but unsigned) JWT string carrying a given payload
- * object, the same three-dot-separated shape a real access token has -- enough for
- * {@link decodeAuthClaims} to decode, since it never checks the signature.
+ * This function builds an unsigned JWT with the given payload. {@link decodeAuthClaims} never
+ * checks the signature, so this is enough to decode.
  */
 function buildFakeToken(payload: Record<string, unknown>): string {
   const base64UrlEncode = (value: string) =>
@@ -14,6 +13,10 @@ function buildFakeToken(payload: Record<string, unknown>): string {
   return `${header}.${body}.`;
 }
 
+/**
+ * These tests cover `decodeAuthClaims`: single- and multi-valued role and permission claims,
+ * missing claims, and malformed tokens. Plain function calls on hand-built unsigned tokens.
+ */
 describe('decodeAuthClaims', () => {
   it('decodes sub/unique_name plus single-valued role and permission claims', () => {
     const token = buildFakeToken({

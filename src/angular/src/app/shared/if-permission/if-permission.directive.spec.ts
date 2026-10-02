@@ -13,9 +13,14 @@ import { IfPermissionDirective } from './if-permission.directive';
 })
 class HostComponent {}
 
+/**
+ * These tests cover `*appIfPermission`: rendering with the permission, the else template without
+ * it, and re-rendering when the permissions change. A host component with a signal-backed fake
+ * `AuthService`.
+ */
 describe('IfPermissionDirective', () => {
-  // A signal-backed fake, so a test can change the session's permissions after the first render
-  // the way a token refresh or sign-out changes the real AuthService's claims.
+  // A signal-backed fake, so a test can change permissions after the first render, as a token
+  // refresh or sign-out does.
   const grantedPermissions = signal<string[]>([]);
 
   beforeEach(() => {

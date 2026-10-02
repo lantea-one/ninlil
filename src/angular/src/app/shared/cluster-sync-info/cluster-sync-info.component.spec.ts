@@ -3,14 +3,17 @@ import { IconSetService } from '@coreui/icons-angular';
 import { cilReload } from '@coreui/icons';
 import { ClusterSyncInfoComponent } from './cluster-sync-info.component';
 
+/**
+ * These tests cover the cluster sync indicator: nothing without a timestamp, the icon with one,
+ * and the tooltip text with and without a node id. TestBed, setting inputs on the fixture.
+ */
 describe('ClusterSyncInfoComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ClusterSyncInfoComponent],
     }).compileComponents();
 
-    // IconSetService starts empty outside a full app bootstrap (app.config.ts's app initializer is
-    // what normally registers the icons), so seed the one icon this component renders.
+    // The app initializer in app.config.ts normally registers icons; seed the one this renders.
     TestBed.inject(IconSetService).icons = { cilReload };
   });
 

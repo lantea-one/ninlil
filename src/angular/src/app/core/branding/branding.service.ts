@@ -4,26 +4,20 @@ import { firstValueFrom } from 'rxjs';
 import { BrandingSettingsService as BrandingApiService } from '../../api-client';
 
 /**
- * This app's own compiled-in default page title -- the literal `<title>` this project's
- * `index.html` sets statically. Used as this service's own fallback whenever no custom site title
- * is configured (or cannot be read yet, e.g. an anonymous caller still on the login page), so
- * {@link BrandingService.initialize} never leaves the document with a blank or stale title.
+ * The default page title, the same as the `<title>` in `index.html`. It applies when no custom
+ * title is configured or the branding cannot be read yet (on the login page, for example).
  */
 const DEFAULT_SITE_TITLE = 'Ninlil Admin';
 
 /**
- * This service applies this host's own global branding (`BrandingOptions`: a custom site
- * title/logo) to the running SPA -- specifically, `document.title` -- mirroring
- * {@link ThemeService}'s own "resolve once at app startup, re-resolve once more after sign-in"
- * shape exactly, since both read from a self-service endpoint that only succeeds for an
- * authenticated caller (`GET /api/branding-settings/effective`, gated by `[Authorize]` alone --
- * see `BrandingSettingsController.GetEffective`'s own doc comment for why no specific permission
- * is required).
+ * This service applies the server's branding (`BrandingOptions`: a custom site title and logo) to
+ * the app. It reads `GET /api/branding-settings/effective`, which any signed-in user may call
+ * (`[Authorize]`, no permission). Like {@link ThemeService}, it runs once at startup and again
+ * after sign-in, because the first call fails without a session. The Branding settings page
+ * edits these values.
  *
- * <p>The logo itself ({@link logoDataUri}) is exposed as a signal for any future consumer (a
- * branding mark somewhere in the app shell, for example), but only the page title actually
- * updates live today -- no such consumer exists yet, so this signal is currently only ever read
- * by this service's own tests.
+ * <p>Only the page title is applied. {@link logoDataUri} holds the logo, but no component
+ * displays it.
  */
 @Injectable({ providedIn: 'root' })
 export class BrandingService {
@@ -40,16 +34,13 @@ export class BrandingService {
   readonly logoDataUri = computed(() => this.logoDataUriSignal());
 
   /**
-   * This method reads `GET /api/branding-settings/effective` and applies the result to
-   * `document.title` (falling back to {@link DEFAULT_SITE_TITLE} when no custom title is
-   * configured, or when the read itself fails -- an anonymous caller still on the login page, or a
-   * transient network failure).
+   * This method reads `GET /api/branding-settings/effective` and sets `document.title`, falling
+   * back to {@link DEFAULT_SITE_TITLE} when no title is configured or the read fails (no session
+   * yet, or a network error). It never throws.
    *
-   * <p>Call this once at application startup (wired via `provideAppInitializer` in
-   * `app.config.ts`) and again after a successful sign-in (`LoginComponent.navigateAfterSignIn`,
-   * alongside `ThemeService.initialize`) -- the first call, made before any session exists, always
-   * falls through to the fallback title since this endpoint requires authentication; re-calling it
-   * once a real session exists picks up the real configured title.
+   * <p>It runs at startup (`provideAppInitializer` in `app.config.ts`) and again after sign-in
+   * (`LoginComponent.navigateAfterSignIn`, with `ThemeService.initialize`). The startup call
+   * usually has no session yet; it still has one when a refresh cookie restored the session.
    */
   async initialize(): Promise<void> {
     try {

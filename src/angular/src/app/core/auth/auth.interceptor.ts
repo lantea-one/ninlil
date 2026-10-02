@@ -5,17 +5,14 @@ import { catchError, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 
 /**
- * This constant lists the exact paths of every `[AllowAnonymous]` `AuthController` endpoint --
- * `/api/auth/login`, `/api/auth/login/two-factor`, `/api/auth/refresh`, `/api/auth/logout` --
- * none of them attach a (possibly stale) access token, and a 401 from one of them is never
- * treated as "the session expired, try a silent refresh" (a bad-password login attempt is a
- * normal 401, not a token expiry). This is deliberately a list of exact paths rather than a
- * single `/api/auth/` prefix fragment: `TwoFactorController` is also routed under
- * `api/auth/two-factor` but is fully `[Authorize]`-gated self-service (TOTP setup, recovery
- * codes, etc.) -- a blanket `/api/auth/` prefix match would silently strip the Authorization
- * header from every one of its requests too, breaking the entire self-service 2FA feature with
- * an opaque 401 (a real regression this project once shipped; see `auth.interceptor.spec.ts`'s
- * own two-factor-scoped regression tests for the exact shape).
+ * This constant lists the anonymous `AuthController` endpoints that handle sign-in and session
+ * tokens. Requests to them never carry an access token, and a 401 from one of them never
+ * triggers a silent refresh: a wrong password is an ordinary 401, not an expired session.
+ *
+ * <p>It must stay a list of paths, not an `/api/auth/` prefix. `TwoFactorController` is routed
+ * under `api/auth/two-factor` and requires a signed-in user, so a prefix match would strip its
+ * Authorization header and break two-factor setup with a 401. The spec file has regression tests
+ * for this.
  */
 const ANONYMOUS_AUTH_ENDPOINTS = [
   '/api/auth/login',
@@ -25,26 +22,20 @@ const ANONYMOUS_AUTH_ENDPOINTS = [
 ];
 
 /**
- * This interceptor attaches the current in-memory access token to every outgoing request (other
- * than the auth endpoints themselves), and, on a 401 response *from a request this session
- * actually believed was authenticated*, attempts exactly one silent refresh-and-retry before
- * giving up and routing to `/login`. A request that
- * still 401s after a successful refresh (a permission-claim mismatch on an otherwise-valid
- * token, for example) is *not* retried a second time; its own 401 is simply passed through to
- * the caller as-is, since a second retry would not plausibly succeed where a fresh token already
- * failed.
+ * This interceptor, registered in `app.config.ts`, adds the in-memory access token as a Bearer
+ * header to every API request except the endpoints in `ANONYMOUS_AUTH_ENDPOINTS`.
  *
- * <p>A request that was already anonymous when it was made (no access token attached at all --
- * the case for every request made while no session exists, including on a page load whose
- * refresh cookie turned out to be missing or dead) never triggers the refresh-and-redirect-to-`/login`
- * path, even on a 401: there is no session for that 401 to mean "expired," and a caller in this
- * position (an app-startup initializer probing a self-service `/me`-style endpoint before any
- * sign-in exists, for example -- see `BrandingService.initialize`/`ThemeService.initialize`) has
- * already designed its own graceful, request-scoped fallback for exactly this outcome. Routing
- * away to `/login` regardless used to hijack navigation on a cold load of a genuinely public
- * route with no session at all -- `/forgot-password`, or the emailed `/reset-password` link
- * itself -- the moment either page's own app-startup initializer call predictably 401ed, before
- * the visitor had any chance to use the page they actually opened.
+ * <p>When a request that carried a token gets a 401, the token has most likely expired. The
+ * interceptor then calls {@link AuthService.refresh} once and retries the request with the new
+ * token. If the refresh fails, or the retry also gets a 401, it sends the browser to `/login`
+ * and passes the error on to the caller. A retry is never retried again: a fresh token that still
+ * gets a 401 will not do better a second time.
+ *
+ * <p>A request sent without a token is never refreshed or redirected, even on a 401. There is no
+ * session for that 401 to have expired, and such callers handle it themselves. For example,
+ * `BrandingService.initialize` and `ThemeService.initialize` run at startup before anyone signs
+ * in. Redirecting there would pull a visitor off public pages such as `/forgot-password` and
+ * `/reset-password` as soon as they load.
  */
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const authService = inject(AuthService);

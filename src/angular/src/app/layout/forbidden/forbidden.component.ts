@@ -11,10 +11,9 @@ import {
 import { IconDirective } from '@coreui/icons-angular';
 
 /**
- * This component is shown when {@link permissionGuard} blocks navigation to a route the current
- * user does not hold the required permission for -- a real, rendered "you can't be here" page,
- * not a silent redirect back to the dashboard, so a user who follows a stale link or bookmark
- * gets an honest answer about why nothing loaded.
+ * This component is the `/forbidden` page that {@link permissionGuard} redirects to when the user
+ * lacks a route's permission. It says so plainly and links back to the dashboard, so a user who
+ * follows an old link or bookmark knows why the page did not open.
  */
 @Component({
   selector: 'app-forbidden',

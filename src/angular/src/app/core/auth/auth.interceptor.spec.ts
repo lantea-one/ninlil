@@ -5,6 +5,12 @@ import { Router } from '@angular/router';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
 
+/**
+ * These tests cover `authInterceptor`: which requests get a Bearer header, the refresh-and-retry
+ * after a 401, the redirect to `/login` when refresh fails, and the cases that must never refresh
+ * (anonymous auth endpoints and requests sent without a token). A real `HttpClient` runs against
+ * `HttpTestingController`, with a fake `AuthService` and a spied `Router.navigateByUrl`.
+ */
 describe('authInterceptor', () => {
   let httpClient: HttpClient;
   let httpMock: HttpTestingController;
@@ -115,9 +121,8 @@ describe('authInterceptor', () => {
     expect(firstAttempt.request.headers.get('Authorization')).toBe('Bearer expired-access-token');
     firstAttempt.flush('unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-    // The retried request is issued asynchronously, once the fake refresh's own promise
-    // resolves -- flushMicrotasks isn't available outside fakeAsync, so this second
-    // expectOne is scheduled on a microtask via Promise.resolve().then() below instead.
+    // The retry is sent once the fake refresh's promise resolves. This test is not fakeAsync,
+    // so the second expectOne waits a couple of microtasks with Promise.resolve().then().
     Promise.resolve()
       .then(() => Promise.resolve())
       .then(() => {
@@ -145,10 +150,8 @@ describe('authInterceptor', () => {
   });
 
   it('never attempts a refresh or routes to /login for a 401 on a request that was already anonymous (no access token attached)', (done) => {
-    // No accessToken set on authServiceFake -- this reproduces an app-startup initializer call
-    // (BrandingService.initialize()/ThemeService.initialize()) made before any sign-in exists,
-    // the exact call shape that used to hijack navigation away from a public route like
-    // /forgot-password or /reset-password the moment it predictably 401ed.
+    // No access token: this is a startup call such as BrandingService.initialize() made before
+    // sign-in. Redirecting here would pull a visitor off /forgot-password or /reset-password.
     httpClient.get('/api/branding-settings/effective').subscribe({
       error: () => {
         expect(authServiceFake.refresh).not.toHaveBeenCalled();

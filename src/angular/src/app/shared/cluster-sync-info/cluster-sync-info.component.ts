@@ -3,16 +3,13 @@ import { TooltipDirective } from '@coreui/angular';
 import { IconDirective } from '@coreui/icons-angular';
 
 /**
- * This component renders cluster config sync's own "when was this last changed, and by which
- * cluster node" indicator -- a small, unobtrusive icon carrying a tooltip, dropped into an
- * existing list table's own row rather than a new dedicated page. Shown for any of the five
- * operational-config categories cluster config sync covers (filter lists, filter list entries,
- * access-control rules, rewrites, forwarders) and, on a settings tab, a settings section.
+ * This component shows when a cluster-synced item was last changed and by which cluster node:
+ * a small icon with a tooltip. List pages put it in a row (filter lists and their entries, access
+ * control rules, DNS rewrites, forwarders, users, roles), and some settings pages (DNS cookies,
+ * event broker, rate limiting, reverse proxy) put it beside a section.
  *
- * Deliberately renders nothing at all (not even a placeholder dash) when
- * {@link lastModifiedUtc} is absent -- an entity created before cluster config sync existed, or
- * on a deployment where sync bookkeeping was never written, has nothing honest to report, and a
- * placeholder would look like a real (if empty) value rather than "no data".
+ * It renders nothing when {@link lastModifiedUtc} is absent, since a placeholder would look like
+ * a value.
  */
 @Component({
   selector: 'app-cluster-sync-info',
@@ -51,17 +48,15 @@ import { IconDirective } from '@coreui/icons-angular';
   `,
 })
 export class ClusterSyncInfoComponent {
-  /** The instant this entity (or settings section) was last created or modified, if known. */
+  /** When the item or settings section was last created or changed, if known. */
   readonly lastModifiedUtc = input<string | null | undefined>();
 
   /** The cluster node that made that last change, if known. */
   readonly originatingNodeId = input<string | null | undefined>();
 
   /**
-   * This method builds the tooltip's own text -- the full timestamp plus the originating node's
-   * own identifier (truncated to its first segment, the same shortened form
-   * `ClusterComponent`'s own peer list already shows for a node id, since the full 36-character
-   * GUID is rarely useful to read at a glance).
+   * This method builds the tooltip text: the local time and the node id shortened to its first
+   * segment, since a full GUID is hard to read at a glance.
    */
   tooltipText(): string {
     const timestamp = this.lastModifiedUtc();

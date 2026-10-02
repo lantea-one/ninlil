@@ -1,15 +1,8 @@
-// Teal palette -- WCAG-AA-checked (4.5:1 minimum for normal text) CoreUI custom-property
-// overrides. Contrast pairs verified via the standard relative-luminance/contrast-ratio formula
-// (WCAG 2 formula, not assumed): the light-mode accent (#0f766e) against a white
-// (--cui-body-bg) background for link-text use, the dark-mode accent (#2dd4bf) against
-// CoreUI's own dark --cui-body-bg (#212631), and each accent's own paired --cui-*-contrast
-// (the text color placed on a solid accent background, e.g. a primary button) against that
-// accent -- every one of those pairs clears 4.5:1. Only the accent/link/focus-ring tokens are
-// overridden here; --cui-body-bg/--cui-body-color/--cui-border-color and the rest of CoreUI's
-// own neutral/greyscale and semantic (success/warning/danger/info) tokens are left at their
-// own light/dark defaults (already contrast-checked by CoreUI itself), since a "palette" in
-// this app's own theming model is an accent-color identity layered on CoreUI's existing
-// light/dark neutrals, not a wholesale re-theme of every token.
+// Teal palette: CoreUI custom-property overrides for the accent color only. The light accent
+// (#0f766e) on white, the dark accent (#2dd4bf) on CoreUI's dark background (#212631), and each
+// accent's `--cui-primary-contrast` text on the accent all meet WCAG AA (4.5:1). Backgrounds,
+// text, borders and the success/warning/danger/info colors stay at CoreUI's light and dark
+// defaults: a palette is an accent on top of CoreUI's neutrals, not a full re-theme.
 [data-coreui-theme='light'][data-ninlil-palette='Teal'] {
   --cui-primary: #0f766e;
   --cui-primary-rgb: 15, 118, 110;
@@ -38,22 +31,14 @@
   --cui-focus-ring-color: rgba(45, 212, 191, 0.25);
 }
 
-// Sidebar chrome: this app's own dark, colored sidebar identity (per this project's original
-// "dark, colored sidebar over light content" design direction) -- deliberately scoped only by
-// `[data-ninlil-palette]`, independent of `[data-coreui-theme]`, so the sidebar's own dark,
-// palette-branded background stays constant whether the main content area itself renders in
-// light or dark mode. The active/hover highlight reuses this palette's own already
-// WCAG-AA-checked dark-mode accent/contrast pair from above rather than inventing new,
-// unverified colors.
+// Sidebar: a dark sidebar tinted with the palette, the same in light and dark mode, so it is
+// scoped by `[data-ninlil-palette]` alone. The active and hover highlight reuse the dark-mode
+// accent and contrast pair checked above.
 //
-// Both `.sidebar` and `.sidebar-nav` are targeted explicitly (not just the `[data-ninlil-palette]`
-// root) because CoreUI's own compiled CSS redeclares every one of these custom properties again,
-// locally, directly on those same two classes (`--cui-sidebar-bg: var(--cui-body-bg)` on
-// `.sidebar` itself, `--cui-sidebar-nav-link-active-bg`/etc. on `.sidebar-nav` itself) -- a
-// property an element redeclares on itself always wins over one merely inherited from an
-// ancestor, so overriding only the ancestor `[data-ninlil-palette]` selector is silently
-// shadowed and never takes visual effect. Matching those two classes directly, with the added
-// `[data-ninlil-palette]` attribute qualifier for higher specificity, is what actually wins.
+// The rules target `.sidebar` and `.sidebar-nav` directly because CoreUI's CSS declares these
+// custom properties on those two classes (`--cui-sidebar-bg: var(--cui-body-bg)` on `.sidebar`,
+// the nav-link ones on `.sidebar-nav`). A property declared on the element beats one inherited
+// from an ancestor, so setting them on `[data-ninlil-palette]` alone would have no effect.
 [data-ninlil-palette='Teal'] .sidebar,
 [data-ninlil-palette='Teal'] .sidebar-nav {
   --cui-sidebar-bg: #042f2e;

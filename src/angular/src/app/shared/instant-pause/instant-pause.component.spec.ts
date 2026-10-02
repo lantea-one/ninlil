@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the instant pause panel for both a client and a client group: loading the
+ * state, pausing, pausing until morning, resuming, errors and invalid durations. TestBed with
+ * spy-backed `ClientsService`, `ClientGroupsService` and `NotificationService`.
+ */
 describe('InstantPauseComponent', () => {
   let clientsApiSpy: {
     apiClientsIdGet: jasmine.Spy;

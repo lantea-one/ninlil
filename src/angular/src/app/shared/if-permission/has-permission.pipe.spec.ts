@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
 import { HasPermissionPipe } from './has-permission.pipe';
 
+/** This test checks that the pipe returns `AuthService.hasPermission`'s answer (spy-backed). */
 describe('HasPermissionPipe', () => {
   it("answers with AuthService.hasPermission's own answer for the given permission", () => {
     const authServiceSpy = jasmine.createSpyObj('AuthService', ['hasPermission']);

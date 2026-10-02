@@ -1,14 +1,10 @@
 /**
- * This module computes an MD5 message digest, per RFC 1321 (Rivest, 1992) -- sourced directly
- * from that RFC's own pseudocode, the same IANA/IETF-sourcing convention this project's DNS wire-
- * format code already follows for protocol details. MD5 is a public, standardized algorithm, not
- * derived from any third party's own implementation.
+ * This module computes an MD5 digest, written from the algorithm in RFC 1321. The browser's Web
+ * Crypto API does not offer MD5.
  *
- * The only consumer is {@link buildGravatarUrl} (`gravatar.util.ts`) -- Gravatar's own public API
- * mandates an MD5 hash of the account e-mail address to look up an avatar image. MD5's well-known
- * cryptographic weaknesses (collision resistance) are irrelevant to that single, non-security use:
- * this hash is never used to protect a secret, only to compute a lookup key an external image host
- * itself requires to be MD5.
+ * The only caller is {@link buildGravatarUrl} (`gravatar.util.ts`): Gravatar looks avatars up by
+ * the MD5 of the e-mail address. MD5's weaknesses do not matter here, since the hash is only a
+ * lookup key and protects nothing.
  */
 
 /** Per-round left-rotation amounts, 4 groups of 16, defined by RFC 1321 §3.4. */
@@ -23,7 +19,7 @@ const ADDITIVE_CONSTANTS = Array.from({ length: 64 }, (_, index) =>
   Math.floor(Math.abs(Math.sin(index + 1)) * 2 ** 32),
 );
 
-/** Adds two 32-bit values with the wraparound RFC 1321's own modular arithmetic requires. */
+/** Adds two 32-bit values modulo 2^32, as RFC 1321 requires. */
 function addWrapped(a: number, b: number): number {
   return (a + b) | 0;
 }
@@ -34,17 +30,16 @@ function rotateLeft(value: number, amount: number): number {
 }
 
 /**
- * This function computes the MD5 digest of `input` (interpreted as UTF-8 bytes, matching how a
- * Gravatar hash is defined against the e-mail address's own byte representation) and returns it
- * as a 32-character lowercase hexadecimal string.
+ * This function computes the MD5 digest of `input`, encoded as UTF-8 (as Gravatar hashes the
+ * address), and returns it as 32 lowercase hex digits.
  */
 export function md5(input: string): string {
   const messageBytes = Array.from(new TextEncoder().encode(input));
   const bitLength = messageBytes.length * 8;
 
-  // Padding: RFC 1321 §3.1 -- append a single 0x80 byte, then zero bytes, until the length is
-  // congruent to 56 modulo 64, then append the original bit length as a 64-bit little-endian
-  // integer (only the low 32 bits matter for any input this project will ever hash).
+  // Padding (RFC 1321 §3.1-3.2): a 0x80 byte, zero bytes until the length is 56 modulo 64, then
+  // the bit length as a 64-bit little-endian integer. Only the low 32 bits are written; the high
+  // ones are zero for any input under 512 MiB.
   const paddedBytes = [...messageBytes, 0x80];
   while (paddedBytes.length % 64 !== 56) paddedBytes.push(0);
   for (let shift = 0; shift < 32; shift += 8) paddedBytes.push((bitLength >>> shift) & 0xff);
@@ -106,7 +101,7 @@ export function md5(input: string): string {
   return [a0, b0, c0, d0].map(toLittleEndianHex).join('');
 }
 
-/** Renders a 32-bit word as 8 lowercase hex digits, byte-swapped to little-endian per RFC 1321's own output convention. */
+/** Renders a 32-bit word as 8 lowercase hex digits, low byte first, as RFC 1321 outputs the digest. */
 function toLittleEndianHex(word: number): string {
   const bytes = [word & 0xff, (word >>> 8) & 0xff, (word >>> 16) & 0xff, (word >>> 24) & 0xff];
   return bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
