@@ -31,11 +31,8 @@
 
 .full-width {
   width: 100%;
-  // `.field`'s own `flex: 1 1 200px` basis is meant for a row-context (`.field-row`) sibling; a
-  // `.field.full-width` used directly inside `.filter-list-form` (a column flex container) would
-  // otherwise inherit that same 200px basis as its own *height*, not width, in a column flex
-  // context -- pinning the basis back to 100% here is the exact fix `ZoneFormComponent`'s own
-  // `.full-width` already established for the identical shape.
+  // `.field` has `flex: 1 1 200px` for use in a `.field-row`. Inside the column-direction form
+  // that basis would become a 200px height, so a full-width field resets it.
   flex-basis: 100%;
 }
 

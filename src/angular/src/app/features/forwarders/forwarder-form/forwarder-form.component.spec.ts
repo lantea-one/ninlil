@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the forwarder form: create and edit, appending lines, naming known and typed
+ * lines, bulk create with partial failure, errors and validation. TestBed with a spy-backed
+ * `ForwardersService` and a stubbed route.
+ */
 describe('ForwarderFormComponent', () => {
   let forwardersApiSpy: {
     apiForwardersIdGet: jasmine.Spy;
@@ -78,10 +83,9 @@ describe('ForwarderFormComponent', () => {
   });
 
   it('save() in create mode POSTs the built request and navigates back to the list', async () => {
-    // '203.0.113.5' is an RFC 5737 TEST-NET-3 documentation address, deliberately not one of
-    // KNOWN_FORWARDER_OPTIONS' own real public-resolver values -- this exercises the manually-
-    // typed, single-line path (the patched 'name' is used verbatim), not the known-resolver
-    // name-derivation path (covered by its own dedicated test below).
+    // 203.0.113.5 is an RFC 5737 documentation address, not a known resolver, so this tests the
+    // typed single-line path, which uses the 'name' field. The known-resolver naming has its own
+    // test below.
     const fixture = await createComponent(null, () => {
       forwardersApiSpy.apiForwardersPost.and.returnValue(of({ id: 'new-forwarder' }));
     });
@@ -105,10 +109,8 @@ describe('ForwarderFormComponent', () => {
     const fixture = await createComponent(null, () => {
       forwardersApiSpy.apiForwardersPost.and.returnValue(of({ id: 'new-forwarder' }));
     });
-    // Typing the exact value KNOWN_FORWARDER_OPTIONS lists for Cloudflare's plain endpoint is
-    // indistinguishable, once it sits in the textarea, from having picked it off the dropdown --
-    // both take the known option's own descriptive name, never the 'name' field (still required,
-    // and still ignored here, to prove the known-value match wins).
+    // A typed line equal to Cloudflare's plain endpoint looks the same as a picked one, so it
+    // takes the known option's name; the 'name' field is filled in only to show it is ignored.
     fixture.componentInstance.form.patchValue({ name: 'ignored', definitionString: '1.1.1.1' });
 
     await fixture.componentInstance.save();

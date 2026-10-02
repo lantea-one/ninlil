@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the forwarder list: loading, the toggle and delete with its confirmation.
+ * TestBed with a spy-backed `ForwardersService` and `NotificationService`.
+ */
 describe('ForwarderListComponent', () => {
   let forwardersApiSpy: {
     apiForwardersGet: jasmine.Spy;

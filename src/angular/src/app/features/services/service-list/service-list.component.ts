@@ -35,27 +35,17 @@ import {
 } from '../service.model';
 
 /**
- * This component lists every service `IManagedServiceRegistry` tracks -- every DNS transport
- * listener and every background maintenance loop this server runs -- grouped into its own
- * {@link ManagedServiceCategoryEnum.Transport}/{@link ManagedServiceCategoryEnum.Background}
- * section, each showing a real running-state badge sourced from `GET /api/services`. This is a
- * fixed, server-defined set with no create/edit/delete of its own (a service is registered in
- * code, not authored by an operator), so this feature has only this one list view -- start/stop/
- * restart are the entirety of what this page offers, matching `ServicesController`'s own three
- * write actions exactly.
+ * This component is the Services page (`/services`, `services:read`). It lists the services
+ * `IManagedServiceRegistry` tracks, from `GET /api/services`: the DNS transport listeners and the
+ * background maintenance loops, in two sections, each with a running badge. The set is fixed in
+ * code, so the page only starts, stops and restarts services
+ * (`POST /api/services/{name}/start`, `/stop`, `/restart`).
  *
- * <p>`ServicesController`'s own doc comment calls this "one of the most operationally dangerous
- * endpoints in this entire REST API": stopping the wrong transport cuts off real client DNS
- * resolution immediately, and stopping the wrong background loop can leave DNSSEC signatures to
- * silently expire, a secondary zone to drift stale, or a filter list to stop refreshing. This page
- * reflects that directly rather than rendering a plain list with buttons -- a persistent risk
- * banner, a dedicated confirmation dialog per action/category pairing (see
- * {@link lifecycleConfirmation}) naming the real consequence in its own words, and every
- * start/stop/restart button hidden outright (not merely disabled) for a session lacking
- * `services:manage`, mirroring {@link QueryLogListComponent}'s own "hide, don't merely disable, a
- * destructive action the session cannot use" precedent. The route itself is gated on the lighter
- * `services:read` (see `app.routes.ts`), since this list only reveals which services exist and
- * whether each is running -- no secret or configuration data.
+ * <p>These actions are dangerous: stopping a transport cuts off DNS for its clients at once, and
+ * stopping a background loop can let DNSSEC signatures expire, a secondary zone go stale or a
+ * filter list stop refreshing. So the page shows a risk banner, asks for confirmation with text
+ * naming the consequence ({@link lifecycleConfirmation}), and shows the buttons only with
+ * `services:manage`.
  */
 @Component({
   selector: 'app-service-list',
@@ -82,13 +72,13 @@ export class ServiceListComponent {
   private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending lifecycle action. */
+  /** Whether the action confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly categoryLabel = categoryLabel;
@@ -97,22 +87,22 @@ export class ServiceListComponent {
 
   readonly displayedColumns = ['name', 'status', 'actions'];
 
-  /** Whether the signed-in session holds `services:manage` -- gates every start/stop/restart button. */
+  /** Whether the user holds `services:manage`; the action buttons show only then. */
   readonly canManage = this.authService.hasPermission('services:manage');
 
   readonly services = signal<ManagedServiceSummary[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The name of whichever single service currently has a lifecycle action in flight, if any. */
+  /** The service whose action is in flight, if any. */
   readonly actingOn = signal<string | null>(null);
 
-  /** Every {@link ManagedServiceCategoryEnum.Transport} service, in the order the backend returned. */
+  /** The transport services, in backend order. */
   readonly transportServices = computed(() =>
     this.services().filter((service) => service.category === ManagedServiceCategoryEnum.Transport),
   );
 
-  /** Every {@link ManagedServiceCategoryEnum.Background} service, in the order the backend returned. */
+  /** The background services, in backend order. */
   readonly backgroundServices = computed(() =>
     this.services().filter((service) => service.category === ManagedServiceCategoryEnum.Background),
   );
@@ -122,9 +112,8 @@ export class ServiceListComponent {
   }
 
   /**
-   * This method runs one lifecycle action against one service, but only after the operator
-   * confirms a dialog naming the action's own real, category-specific risk -- see
-   * {@link lifecycleConfirmation}.
+   * This method asks for confirmation ({@link lifecycleConfirmation}), then runs the action and
+   * puts the returned status in the service's row.
    */
   async invoke(action: ServiceLifecycleAction, service: ManagedServiceSummary): Promise<void> {
     if (!service.name) return;
@@ -147,9 +136,7 @@ export class ServiceListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -159,7 +146,7 @@ export class ServiceListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -177,7 +164,7 @@ export class ServiceListComponent {
     }
   }
 
-  /** This method swaps one updated service summary into {@link services} in place, by name. */
+  /** This method replaces one service in {@link services}, matched by name. */
   private replaceService(updated: ManagedServiceSummary): void {
     this.services.update((services) =>
       services.map((service) => (service.name === updated.name ? updated : service)),
@@ -199,7 +186,7 @@ export class ServiceListComponent {
   }
 }
 
-/** This function renders one lifecycle action's own past-tense verb, for a success notification. */
+/** This function returns the past tense of an action, for the success notification. */
 function pastTense(action: ServiceLifecycleAction): string {
   switch (action) {
     case 'start':

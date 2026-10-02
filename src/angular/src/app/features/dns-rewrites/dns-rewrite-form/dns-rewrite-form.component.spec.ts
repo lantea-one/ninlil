@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the rewrite form: create and edit, saving, load and save errors and
+ * validation. TestBed with a spy-backed `DnsRewritesService` and a stubbed route.
+ */
 describe('DnsRewriteFormComponent', () => {
   let rewritesApiSpy: {
     apiDnsRewritesIdGet: jasmine.Spy;

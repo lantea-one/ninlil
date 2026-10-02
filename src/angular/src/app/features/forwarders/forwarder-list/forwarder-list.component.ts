@@ -26,17 +26,16 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many forwarders one page of this list shows -- matches `ZoneListComponent`'s own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every global upstream forwarder this server knows about
- * (`DnsForwarderEntity` -- entirely separate from a zone's own per-zone `forwarderAddresses`
- * override, which is managed through `ZoneFormComponent` instead), backed by
- * `GET /api/forwarders`'s own real `skip`/`take` pagination, ordered by the forwarder's own
- * `sortOrder` the same way `ForwardersController.List` itself orders them. `Protocol` is shown
- * as a plain, read-only badge -- `ForwarderDetail.Protocol` is computed server-side from the
- * stored `definitionString` via the real parser, not something this UI derives itself.
+ * This component is the Forwarders page (`/forwarders`, `forwarders:read`). It lists the
+ * server-wide upstream forwarders a page at a time from `GET /api/forwarders`, ordered by
+ * `sortOrder`. Per-zone forwarder addresses are set on the zone form instead. The protocol
+ * badge comes from the backend's parse of the definition. With `forwarders:write` it offers
+ * create, edit, delete and an enable/disable toggle (`PATCH`); without it the toggle is disabled
+ * and the rest hidden.
  */
 @Component({
   selector: 'app-forwarder-list',
@@ -63,13 +62,13 @@ export class ForwarderListComponent {
   private readonly forwardersApi = inject(ForwardersService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = [
@@ -92,14 +91,14 @@ export class ForwarderListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a forwarder's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a forwarder's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(forwarder: ForwarderDetail): Promise<void> {
     if (!forwarder.id) return;
 
@@ -119,7 +118,7 @@ export class ForwarderListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a forwarder. */
+  /** This method asks for confirmation, then deletes a forwarder. */
   async deleteForwarder(forwarder: ForwarderDetail): Promise<void> {
     if (!forwarder.id) return;
 
@@ -141,9 +140,7 @@ export class ForwarderListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -153,7 +150,7 @@ export class ForwarderListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Roles page: loading and paging, load errors and delete with its
+ * confirmation. TestBed with spy-backed `RolesService` and `NotificationService`.
+ */
 describe('RoleListComponent', () => {
   let rolesApiSpy: { apiRolesGet: jasmine.Spy; apiRolesIdDelete: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };

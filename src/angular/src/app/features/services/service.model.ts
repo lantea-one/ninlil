@@ -1,30 +1,30 @@
 import { ManagedServiceCategoryEnum, ManagedServiceSummary } from '../../api-client';
 
-/** The three lifecycle actions {@link ServiceListComponent} can invoke against a service. */
+/** The three actions the Services page can run on a service. */
 export type ServiceLifecycleAction = 'start' | 'stop' | 'restart';
 
-/** This constant maps each {@link ManagedServiceCategoryEnum} onto its human-readable list heading. */
+/** This constant maps each {@link ManagedServiceCategoryEnum} to its section heading. */
 const CATEGORY_LABELS: Readonly<Record<ManagedServiceCategoryEnum, string>> = {
   [ManagedServiceCategoryEnum.Transport]: 'Transport services',
   [ManagedServiceCategoryEnum.Background]: 'Background services',
 };
 
-/** This function returns the section heading a service's own category is grouped under. */
+/** This function returns the section heading for a service's category. */
 export function categoryLabel(category: ManagedServiceCategoryEnum | undefined): string {
   return category ? (CATEGORY_LABELS[category] ?? category) : 'Uncategorized';
 }
 
-/** This function reports which badge color represents a service's own current running state. */
+/** This function returns the badge color for whether a service is running. */
 export function statusBadgeColor(isRunning: boolean | undefined): string {
   return isRunning ? 'success' : 'danger';
 }
 
-/** This function reports the label a service's own running-state badge shows. */
+/** This function returns the label of the running-state badge. */
 export function statusLabel(isRunning: boolean | undefined): string {
   return isRunning ? 'Running' : 'Stopped';
 }
 
-/** This interface describes the title/message/confirm-label text one confirmation dialog shows. */
+/** This interface describes the title, message and button label of a confirmation dialog. */
 export interface ServiceLifecycleConfirmation {
   title: string;
   message: string;
@@ -32,15 +32,10 @@ export interface ServiceLifecycleConfirmation {
 }
 
 /**
- * This function builds the risk-aware confirmation text one lifecycle action against one service
- * shows before it fires, per `ServicesController`'s own doc comment describing exactly what each
- * category risks: stopping a {@link ManagedServiceCategoryEnum.Transport} service immediately cuts
- * off real client DNS resolution over that transport, and stopping a
- * {@link ManagedServiceCategoryEnum.Background} service can leave a zone's DNSSEC signatures to
- * silently expire, a secondary zone to drift stale, or a filter list to stop refreshing, with no
- * other guardrail in front of it. A generic "are you sure?" would hide exactly the risk this
- * dedicated `services:manage` permission exists to gate, so every action/category pairing gets its
- * own real, specific wording instead.
+ * This function builds the confirmation text for an action on a service. It names the risk of
+ * the service's category instead of asking "are you sure?": stopping a transport cuts off DNS
+ * over it at once, and stopping a background loop can let DNSSEC signatures expire, a secondary
+ * zone go stale or a filter list stop refreshing.
  */
 export function lifecycleConfirmation(
   action: ServiceLifecycleAction,
@@ -56,7 +51,7 @@ export function lifecycleConfirmation(
   return { title, message, confirmLabel };
 }
 
-/** This function capitalizes one lifecycle action into the verb its dialog title/button use. */
+/** This function returns the capitalized verb used in the dialog title and button. */
 function actionVerb(action: ServiceLifecycleAction): string {
   switch (action) {
     case 'start':
@@ -68,7 +63,7 @@ function actionVerb(action: ServiceLifecycleAction): string {
   }
 }
 
-/** This function builds the risk message for a {@link ManagedServiceCategoryEnum.Transport} service. */
+/** This function builds the message for a transport service. */
 function transportMessage(action: ServiceLifecycleAction, name: string): string {
   switch (action) {
     case 'start':
@@ -80,7 +75,7 @@ function transportMessage(action: ServiceLifecycleAction, name: string): string 
   }
 }
 
-/** This function builds the risk message for a {@link ManagedServiceCategoryEnum.Background} service. */
+/** This function builds the message for a background service. */
 function backgroundMessage(action: ServiceLifecycleAction, name: string): string {
   switch (action) {
     case 'start':

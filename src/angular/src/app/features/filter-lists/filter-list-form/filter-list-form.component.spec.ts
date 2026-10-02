@@ -15,6 +15,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the filter list form: the refresh interval format, the subscription fields,
+ * create and edit, validation and errors, and bulk subscribe (appending, naming, one call per
+ * line, partial failure). TestBed with a spy-backed `FilterListsService` and a stubbed route.
+ */
 describe('FilterListFormComponent', () => {
   let filterListsApiSpy: {
     apiFilterListsIdGet: jasmine.Spy;
@@ -24,7 +29,10 @@ describe('FilterListFormComponent', () => {
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
   let navigateSpy: jasmine.Spy;
 
-  /** See `record-form.component.spec.ts`'s own identical helper for why `configureApis` must run before construction. */
+  /**
+   * This helper builds fresh spies, applies `configureApis` and creates the component.
+   * `configureApis` must run first because `ngOnInit` calls the APIs at once.
+   */
   async function createComponent(listId: string | null, configureApis?: () => void) {
     filterListsApiSpy = jasmine.createSpyObj('FilterListsService', [
       'apiFilterListsIdGet',

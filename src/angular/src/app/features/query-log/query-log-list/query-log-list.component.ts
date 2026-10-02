@@ -38,26 +38,16 @@ import {
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component searches and displays the persistent query log
- * `Server.QueryLog.DnsQueryLogSubscriber` writes to for every answered query -- a real,
- * searchable historical record, unlike the dashboard's own live SignalR feed, which is capped and
- * resets on every reload. Unlike every other list component in this workspace, this one has no
- * "new"/"edit" routes at all (a log entry is written by the server itself, never authored by an
- * operator) -- its only write action is clearing the log outright, which this component gates on
- * the `querylog:write` permission directly (mirroring `SettingsShellComponent`'s own precedent
- * for hiding, not merely disabling, a control the current session cannot actually use), since
- * there is no dedicated route of its own for a route guard to protect the way every other
- * feature's own write actions are protected.
+ * This component is the Query Log page (`/query-log`, `querylog:read`). It searches the stored
+ * query log that `DnsQueryLogSubscriber` writes for every answered query, unlike the dashboard's
+ * live feed, which is capped and resets on reload. Log entries are written by the server, so the
+ * page has no create or edit; its one write action, "Clear log" (`querylog:write`), is hidden
+ * without that permission.
  *
- * Every filter this component's own form exposes is pushed all the way down into
- * `GET /api/query-log`'s own real, server-side `skip`/`take` pagination and search criteria --
- * unlike this project's own much lower-cardinality entities, where an in-memory list is an
- * accepted tradeoff, a query log can genuinely reach millions of rows, so a filter change always
- * re-issues a fresh search rather than filtering an already-fetched page client-side. The table
- * itself uses Angular CDK's `CdkTableModule` styled with CoreUI's `cTable` classes, plus
- * {@link CoreuiPaginationComponent} for page chrome -- the confirmed fallback for a
- * sortable/paginated/filterable data grid, since CoreUI for Angular's free tier gates a real
- * data-grid component behind its commercial tier.
+ * <p>The log can hold millions of rows, so every filter and the paging go to the server
+ * (`GET /api/query-log`) and a filter change runs a new search. The table is a CDK table styled
+ * with CoreUI's `cTable`, with {@link CoreuiPaginationComponent}, because CoreUI's free tier has
+ * no data grid.
  */
 @Component({
   selector: 'app-query-log-list',
@@ -89,13 +79,13 @@ export class QueryLogListComponent {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for the pending clear-log action. */
+  /** Whether the clear-log confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = [
@@ -119,14 +109,14 @@ export class QueryLogListComponent {
   readonly clearing = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether the current session holds `querylog:write`, gating the "Clear log" action. */
+  /** Whether the user holds `querylog:write`; "Clear log" shows only then. */
   readonly canClear = this.authService.hasPermission('querylog:write');
 
   constructor() {
     void this.search();
   }
 
-  /** This method re-runs the search from the first page, using the filter form's own current values. */
+  /** This method searches again from the first page with the current filters. */
   async search(): Promise<void> {
     this.pageIndex.set(0);
     await this.loadPage();
@@ -152,7 +142,7 @@ export class QueryLogListComponent {
     await this.search();
   }
 
-  /** This method reloads the current search's own page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
@@ -160,9 +150,8 @@ export class QueryLogListComponent {
   }
 
   /**
-   * This method confirms, then permanently clears the entire query log -- an explicit,
-   * operator-triggered action distinct from the automatic, retention-driven cleanup this server
-   * already runs on its own schedule.
+   * This method asks for confirmation, then deletes the whole query log
+   * (`DELETE /api/query-log`). This is separate from the scheduled retention cleanup.
    */
   async clearLog(): Promise<void> {
     const confirmed = await this.confirm({
@@ -189,9 +178,7 @@ export class QueryLogListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -201,7 +188,7 @@ export class QueryLogListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

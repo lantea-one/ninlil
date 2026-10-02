@@ -34,14 +34,12 @@ import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every DNS rewrite this server knows about (`DnsRewriteEntity` -- a
- * lightweight `domain -> target` override consulted early in the query pipeline, before
- * zone/forwarder/recursive resolution), backed by `GET /api/dns-rewrites`'s own real
- * `skip`/`take` pagination, ordered by domain the same way `DnsRewritesController.List` itself
- * orders them. `Target kind` is shown as a plain, read-only badge -- `DnsRewriteDetail.TargetKind`
- * is computed server-side from the stored `target` (an IP address classifies as `A`/`Aaaa`,
- * anything else as `Cname`), not something this UI derives itself, the same convention
- * `ForwarderDetail.Protocol` already establishes.
+ * This component is the DNS Rewrites page (`/dns-rewrites`, `dnsrewrites:read`). A rewrite answers
+ * a domain with a fixed target, before zones, forwarders or recursion are consulted. The page
+ * lists rewrites a page at a time from `GET /api/dns-rewrites`, ordered by domain. The target kind
+ * badge (A, AAAA or CNAME) comes from the backend. With `dnsrewrites:write` it offers create, edit,
+ * delete and an enable/disable toggle (`PATCH`); without it the toggle is disabled and the rest
+ * hidden.
  *
  * <p>The list also holds the rewrites Safe Search creates for a single client or client group
  * (`clientId`/`clientGroupId`). Those are labelled with the client or group they apply to, and
@@ -75,13 +73,13 @@ export class DnsRewriteListComponent {
   private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = [
@@ -108,14 +106,14 @@ export class DnsRewriteListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a rewrite's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a rewrite's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(rewrite: DnsRewriteDetail): Promise<void> {
     if (!rewrite.id) return;
 
@@ -133,7 +131,7 @@ export class DnsRewriteListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a rewrite. */
+  /** This method asks for confirmation, then deletes a rewrite. */
   async deleteRewrite(rewrite: DnsRewriteDetail): Promise<void> {
     if (!rewrite.id) return;
 
@@ -155,9 +153,7 @@ export class DnsRewriteListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -167,7 +163,7 @@ export class DnsRewriteListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

@@ -3,8 +3,7 @@
   margin: var(--ninlil-space-6) auto;
 }
 
-// The bulk-create textarea and its own explanatory hint text read more comfortably at the
-// standard form-width step than the compact one a short form (New TSIG key) uses.
+// The bulk-create textarea and its hint need the standard form width, not the compact one.
 .form-card {
   max-width: var(--ninlil-form-max-width);
   margin: var(--ninlil-space-5) auto;

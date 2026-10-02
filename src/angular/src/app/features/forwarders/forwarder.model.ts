@@ -1,52 +1,37 @@
 /**
- * One well-known public DNS resolver endpoint offered by `ForwarderFormComponent`'s own
- * "known resolvers" dropdown -- a single transport (plain/DoT/DoH/DoQ) of a single,
- * independently-operated public resolver.
+ * One public DNS resolver endpoint offered in the forwarder form's resolver dropdown: one
+ * transport (plain, DoT, DoH or DoQ) of one provider.
  *
- * Every {@link value} here is a publicly documented fact about a real third-party service (an
- * address or URL the operator itself publishes for exactly this purpose), sourced from this
- * project's own general knowledge of these well-known services -- never read, copied, or derived
- * from Technitium's or dnsmasq's own source or bundled configuration, per the clean-room
- * rule in `NOTICE.md`. Each {@link value} uses exactly the definition-string syntax
- * `UpstreamForwarderDefinitionParser` accepts: a bare address for plain DNS, `tls://host[:port]`
- * for DNS-over-TLS, a complete `https://` URL for DNS-over-HTTPS, and `quic://host[:port]` for
- * DNS-over-QUIC -- confirmed directly against that parser's own source before writing any of
- * these values, not guessed.
+ * Each {@link value} is an address or URL the provider publishes for this use, written in the
+ * definition syntax `UpstreamForwarderDefinitionParser` accepts: a bare address for plain DNS,
+ * `tls://host[:port]` for DNS-over-TLS, a full `https://` URL for DNS-over-HTTPS and
+ * `quic://host[:port]` for DNS-over-QUIC.
  */
 export interface KnownForwarderOption {
-  /** The provider grouping this option belongs to, used as this dropdown's own `<optgroup>` label. */
+  /** The provider, used as the dropdown's `<optgroup>` label. */
   readonly provider: string;
   /** The text shown for this option inside its provider's `<optgroup>`. */
   readonly label: string;
   /** The literal forwarder definition string appended to the textarea when this option is picked. */
   readonly value: string;
-  /** The forwarder name auto-derived when a bulk-create line's content exactly matches this option's {@link value}. */
+  /** The forwarder name used when a bulk-create line equals this option's {@link value}. */
   readonly name: string;
 }
 
 /**
- * This constant lists every known-public-resolver option `ForwarderFormComponent`'s dropdown
- * offers. Deliberately not exhaustive -- four independently-operated public resolvers, covering
- * every transport `UpstreamForwarderDefinitionParser` supports across the set as a whole (not
- * every provider necessarily offers every transport, since not every real provider publicly
- * documents one -- Google Public DNS and OpenDNS, for example, do not publish a DNS-over-QUIC
- * endpoint, so none is listed for them here rather than guessing one).
+ * This constant lists the resolvers the forwarder form's dropdown offers: four public providers,
+ * not an exhaustive list. A provider's transport appears only if the provider documents it
+ * (Google Public DNS and OpenDNS publish no DNS-over-QUIC endpoint, so none is listed).
  *
- * Every provider also lists its own well-known IPv6 address(es) alongside its IPv4 ones, so an
- * operator running a dual-stack network can forward over either family -- an IPv6 literal always
- * uses this parser's own required bracketed form (`[addr]`, or `[addr]:port`) even with no port,
- * since the unbracketed host/port split (`ParseHostPort`'s own `LastIndexOf(':')` path) would
- * otherwise misread an IPv6 address's own colons as a port separator; confirmed directly against
- * `UpstreamForwarderDefinitionParser` before writing any of these values. Only Cloudflare's
- * DNS-over-TLS/-QUIC entries get an IPv6-literal variant, matching the existing IPv4 pattern
- * already established for that provider specifically (its own encrypted-transport entries use a
- * bare IP literal, not a hostname); Google Public DNS/Quad9's own DoT/DoH/DoQ entries already use
- * a hostname, which resolves over whichever address family the operating system prefers, so no
- * separate IPv6-literal variant is needed for those.
+ * Each provider's IPv6 addresses are listed with its IPv4 ones. An IPv6 literal is always
+ * bracketed (`[addr]` or `[addr]:port`), because the parser splits host and port at the last `:`
+ * and would otherwise read part of the address as a port. Cloudflare's encrypted entries use IP
+ * literals, so they get IPv6 variants too; the Google and Quad9 encrypted entries use host names,
+ * which resolve over either address family.
  */
 export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
-  // Cloudflare's own public resolver, 1.1.1.1 -- its plain/DoT/DoH/DoQ endpoints are all
-  // documented at https://developers.cloudflare.com/1.1.1.1/.
+  // Cloudflare (1.1.1.1): plain, DoT, DoH and DoQ, documented at
+  // https://developers.cloudflare.com/1.1.1.1/.
   {
     provider: 'Cloudflare',
     label: 'Plain -- 1.1.1.1',
@@ -102,7 +87,7 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     name: 'Cloudflare (DoQ, IPv6)',
   },
 
-  // Google Public DNS -- documented at https://developers.google.com/speed/public-dns.
+  // Google Public DNS, documented at https://developers.google.com/speed/public-dns.
   {
     provider: 'Google Public DNS',
     label: 'Plain -- 8.8.8.8',
@@ -140,7 +125,7 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     name: 'Google Public DNS (Plain, IPv6 secondary)',
   },
 
-  // Quad9 -- filtered (malware-blocking) + DNSSEC-validating by default, documented at
+  // Quad9, which blocks malware and validates DNSSEC by default, documented at
   // https://www.quad9.net/service/service-addresses-and-features.
   {
     provider: 'Quad9',
@@ -185,7 +170,7 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
     name: 'Quad9 (Plain, IPv6 secondary)',
   },
 
-  // OpenDNS (Cisco) -- plain-only public documentation at https://use.opendns.com/.
+  // OpenDNS (Cisco), plain DNS only, documented at https://use.opendns.com/.
   {
     provider: 'OpenDNS',
     label: 'Plain -- 208.67.222.222',
@@ -213,17 +198,11 @@ export const KNOWN_FORWARDER_OPTIONS: readonly KnownForwarderOption[] = [
 ];
 
 /**
- * This function derives the `name` a bulk-create line gets when `ForwarderFormComponent.save()`
- * turns one non-blank textarea line into its own `POST /api/forwarders` call. A line whose
- * trimmed content exactly matches a {@link KnownForwarderOption.value} always takes that option's
- * own descriptive {@link KnownForwarderOption.name}, regardless of whether the operator reached
- * it by picking the dropdown or by typing the identical value by hand -- the two are
- * indistinguishable once the line sits in the textarea, and giving a recognized public resolver
- * its real name either way is strictly more useful than a generic fallback. An unrecognized
- * (manually typed) line falls back to `namePrefix` verbatim when it is the only line being
- * created (preserving this form's original single-create behavior exactly), or `"<namePrefix>
- * <lineNumber>"` when multiple lines are being created in the same bulk save, so no two
- * unrecognized lines in the same save collide on name.
+ * This function returns the name for one bulk-create line. A line equal to a
+ * {@link KnownForwarderOption.value} gets that option's name, whether it was picked or typed.
+ * Any other line gets the trimmed `namePrefix` (or "Forwarder" when blank) when it is the only
+ * line, or `"<prefix> <lineNumber>"` when several lines are saved, so they do not clash with each
+ * other.
  */
 export function deriveForwarderName(
   line: string,

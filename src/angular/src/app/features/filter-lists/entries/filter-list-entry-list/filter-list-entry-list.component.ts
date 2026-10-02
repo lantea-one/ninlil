@@ -30,19 +30,18 @@ import { ClusterSyncInfoComponent } from '../../../../shared/cluster-sync-info/c
 import { isSubscribedList } from '../../filter-list.model';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 
-/** How many entries one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every entry stored in one filter list, backed by
- * `GET /api/filter-lists/{listId}/entries`'s own real `skip`/`take` pagination.
+ * This component is a filter list's entries page (`/filter-lists/:listId/entries`,
+ * `filterlists:read`). It lists entries a page at a time from
+ * `GET /api/filter-lists/{listId}/entries` and, with `filterlists:write`, links to add and edit
+ * and deletes one (`DELETE .../entries/{id}`).
  *
- * Surfaces `FilterListEntriesController`'s own real `409 Conflict` rule as genuine UI state,
- * rather than letting an operator attempt a write only to be rejected after the fact: once the
- * owning list's own `source` is loaded, every add/edit/delete control on this page is disabled
- * outright (with a tooltip/banner explaining that the list's entries are managed by its own
- * scheduled refresh) whenever {@link isSubscribedList} reports `true`. `GET`/`List` are never
- * restricted -- inspecting a subscribed list's own currently-fetched entries is always useful.
+ * <p>A subscribed list's entries come from its scheduled refresh, and the backend answers 409 to
+ * a manual change. Once the list's source loads, the page disables every add, edit and delete
+ * control for such a list and says why; its entries can still be browsed.
  */
 @Component({
   selector: 'app-filter-list-entry-list',
@@ -70,13 +69,13 @@ export class FilterListEntryListComponent {
   private readonly filterListsApi = inject(FilterListsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending entry delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly listId = this.route.snapshot.paramMap.get('listId') ?? '';
@@ -84,7 +83,7 @@ export class FilterListEntryListComponent {
   readonly displayedColumns = ['value', 'kind', 'comment', 'sync', 'actions'];
 
   readonly listName = signal<string | null>(null);
-  /** Whether the owning list is subscribed -- when `true`, every write control on this page is disabled. */
+  /** Whether the list is subscribed; then every write control is disabled. */
   readonly isReadOnly = signal(false);
   readonly entries = signal<FilterListEntryDetail[]>([]);
   readonly totalCount = signal(0);
@@ -98,14 +97,14 @@ export class FilterListEntryListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then deletes, an entry -- blocked entirely for a subscribed list. */
+  /** This method asks for confirmation, then deletes an entry; it does nothing for a subscribed list. */
   async deleteEntry(entry: FilterListEntryDetail): Promise<void> {
     if (!entry.id || this.isReadOnly()) return;
 
@@ -129,9 +128,7 @@ export class FilterListEntryListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -141,7 +138,7 @@ export class FilterListEntryListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -156,8 +153,8 @@ export class FilterListEntryListComponent {
       this.listName.set(list.name ?? null);
       this.isReadOnly.set(isSubscribedList(list.source));
     } catch {
-      // A missing list name/source is only cosmetic here -- the entry list load below surfaces
-      // its own real error if the owning list itself doesn't exist.
+      // If the list is missing, the entry load shows the error. Without the source, the write
+      // controls stay enabled and the backend's 409 still applies.
     }
   }
 

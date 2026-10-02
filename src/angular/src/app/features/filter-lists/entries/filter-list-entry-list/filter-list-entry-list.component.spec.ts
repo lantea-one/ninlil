@@ -13,6 +13,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a list's entries page: loading, read-only mode for a subscribed list,
+ * deleting and the exception badge. TestBed with spy-backed entry and list APIs.
+ */
 describe('FilterListEntryListComponent', () => {
   let entriesApiSpy: {
     apiFilterListsListIdEntriesGet: jasmine.Spy;

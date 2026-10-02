@@ -3,9 +3,7 @@
   margin: var(--ninlil-space-6) auto;
 }
 
-// This form's own edit-mode content includes the shared `app-permission-picker` (its own dense,
-// flex-wrapping checkbox grid across every permission resource group), which genuinely benefits
-// from the widest form-width step rather than the compact/standard ones a simpler form uses.
+// The permission picker's checkbox grid needs the wide form width.
 .form-card {
   max-width: var(--ninlil-form-max-width-wide);
   margin: var(--ninlil-space-5) auto;

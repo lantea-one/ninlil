@@ -21,6 +21,11 @@ const SAMPLE_ENTRY = {
   answerCount: 1,
 };
 
+/**
+ * These tests cover the Query Log page: searching, resetting and paging, the "Clear log" action
+ * with and without `querylog:write`, errors, and the client identity column and filter. TestBed
+ * with spy-backed `QueryLogService`, `AuthService` and `NotificationService`.
+ */
 describe('QueryLogListComponent', () => {
   let apiSpy: { apiQueryLogGet: jasmine.Spy; apiQueryLogDelete: jasmine.Spy };
   let authServiceSpy: { hasPermission: jasmine.Spy };

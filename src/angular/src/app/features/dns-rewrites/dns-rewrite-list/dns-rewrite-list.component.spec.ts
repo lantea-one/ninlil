@@ -16,6 +16,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the rewrite list: loading, the toggle, delete, errors, and the Safe Search
+ * rewrites (labels by client or group name, no actions, the fallback label). TestBed with
+ * spy-backed rewrite, client and group APIs and a fake `AuthService`.
+ */
 describe('DnsRewriteListComponent', () => {
   let rewritesApiSpy: {
     apiDnsRewritesGet: jasmine.Spy;
@@ -213,7 +218,7 @@ describe('DnsRewriteListComponent', () => {
     const fixture = await createComponent([
       { ...GLOBAL_REWRITE, id: 'rewrite-2', clientId: 'client-1' },
     ]);
-    // Replaces the lookup after the fact, then reloads, so the second lookup is the one refused.
+    // Swap in a failing lookup and reload, so the second lookup is the one refused.
     clientsApiSpy.apiClientsIdGet.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 403 })),
     );

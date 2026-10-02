@@ -15,9 +15,14 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the filter list page: loading and paging, the toggle, delete with its
+ * confirmation and failure, and the last-fetched column. TestBed with spy-backed
+ * `FilterListsService` and `NotificationService`.
+ */
 describe('FilterListListComponent', () => {
-  // A manually-shaped spy interface, not `jasmine.SpyObj<FilterListsService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why.
+  // A hand-written spy type rather than `jasmine.SpyObj<FilterListsService>`; the AuthService
+  // spec explains why (overloaded generated methods).
   let filterListsApiSpy: {
     apiFilterListsGet: jasmine.Spy;
     apiFilterListsIdPatch: jasmine.Spy;

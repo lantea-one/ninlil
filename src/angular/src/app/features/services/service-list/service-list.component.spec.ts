@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Services page: grouping by category, the `services:manage` check, load
+ * errors, and the confirmation, start and failure paths. TestBed with spy-backed
+ * `ServicesService`, `AuthService` and `NotificationService`.
+ */
 describe('ServiceListComponent', () => {
   let servicesApiSpy: {
     apiServicesGet: jasmine.Spy;

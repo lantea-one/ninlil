@@ -23,18 +23,14 @@ import {
 } from '../../../shared/permission-picker/permission-picker.component';
 
 /**
- * This component is both the "create a role" and "edit a role" page -- one component for both,
- * distinguished by whether the route supplies an `id`, mirroring `TsigKeyFormComponent`'s own
- * precedent. A role's own name is only ever set at creation -- `RolesController.Update`'s own
- * `UpdateRoleRequest` carries just a `description`, so the name field is disabled in edit mode
- * rather than silently accepted and ignored.
+ * This component is the create and edit page for a role (`/roles/new` and `/roles/:id/edit`,
+ * `roles:write`); edit mode is chosen by the `id` route parameter. It saves with
+ * `POST /api/roles` or `PUT /api/roles/{id}`. The name is set only at creation, since the update
+ * request carries just the description, so it is disabled in edit mode.
  *
- * The permission-claim section only appears in edit mode (a role must already exist before it can
- * be granted a permission at all -- `RolesController.AddPermission` is its own separate endpoint,
- * not part of `CreateRoleRequest`). Every checkbox toggle applies immediately, via
- * `POST`/`DELETE .../permissions`, rather than being queued for a later "Save" -- there is no
- * bulk-replace endpoint to batch them into, and reflects `TsigKeyListComponent.toggleDisabled`'s
- * own established "apply this one field's own change right away" convention.
+ * <p>In edit mode the page also shows the role's permissions in a {@link PermissionPickerComponent}
+ * (all permissions from `GET /api/permissions`). Each checkbox is saved at once with `POST` or
+ * `DELETE /api/roles/{id}/permissions`, since there is no endpoint to replace them all.
  */
 @Component({
   selector: 'app-role-form',
@@ -79,24 +75,21 @@ export class RoleFormComponent implements OnInit {
 
   readonly form = this.formBuilder.group({
     name: ['', [Validators.required]],
-    // Not required: RoleEntity.Description has no [Required]/IsRequired() constraint on the
-    // backend, and neither CreateRoleRequest nor UpdateRoleRequest rejects a blank one.
+    // Not required: the backend accepts a blank description.
     description: [''],
   });
 
   ngOnInit(): void {
     if (this.isEditMode) {
-      // A role's own name can never change after creation (RolesController.Update's own
-      // UpdateRoleRequest carries only a description) -- disabled, not merely left editable and
-      // silently ignored, so an operator is never misled into thinking a typed change took
-      // effect.
+      // The name cannot change after creation; disabling it avoids a typed change that would be
+      // silently ignored.
       this.form.controls.name.disable();
       void this.loadExistingRole();
       void this.loadAllPermissions();
     }
   }
 
-  /** This method creates (`POST`) or updates the description of (`PUT`) the role. */
+  /** This method creates the role (`POST`) or updates its description (`PUT`). */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -131,8 +124,8 @@ export class RoleFormComponent implements OnInit {
   }
 
   /**
-   * This method grants or revokes one permission immediately, optimistically updating local
-   * state and reverting it if the request fails.
+   * This method grants or revokes one permission at once. It updates the checkboxes first and
+   * restores them if the request fails.
    */
   async onPermissionToggled(event: PermissionToggleEvent): Promise<void> {
     if (!this.roleId || this.togglingPermission()) return;

@@ -35,13 +35,12 @@ import {
 } from '../filter-list.model';
 
 /**
- * The pattern a non-empty refresh-interval field must match -- .NET's own `TimeSpan` "c" format
- * shape, `[d.]hh:mm:ss`. `DnsFilterListEntity.RefreshInterval` is a real `TimeSpan`, not bounded
- * to under 24 hours, so the optional days prefix must be accepted here too.
+ * The pattern a non-empty refresh interval must match: the .NET `TimeSpan` "c" format,
+ * `[d.]hh:mm:ss`. The interval can exceed 24 hours, so the days prefix is allowed.
  */
 const REFRESH_INTERVAL_PATTERN = /^(\d{1,2}\.)?\d{1,2}:\d{2}:\d{2}$/;
 
-/** The single write request shape shared by every filter-list POST/PUT this component issues. */
+/** The request body of every filter list `POST` and `PUT` this page sends. */
 interface FilterListWriteRequestValue {
   readonly name: string;
   readonly kind: DnsFilterListKindEnum;
@@ -53,38 +52,26 @@ interface FilterListWriteRequestValue {
   readonly comments: string | null;
 }
 
-/** One outcome of a single line's own `POST /api/filter-lists` call inside a bulk create. */
+/** A failed line of a bulk subscribe, with the backend's message. */
 interface BulkCreateOutcome {
   readonly line: string;
   readonly message: string;
 }
 
 /**
- * This component is both the "create a filter list" and "edit a filter list" page -- one
- * component for both, distinguished by whether the route supplies a `listId` (see
- * `app.routes.ts`), the same shape `ZoneFormComponent` established. A list's own entries are
- * managed separately, through `FilterListEntryListComponent`/`FilterListEntryFormComponent`; this
- * page only ever touches `DnsFilterListEntity`'s own metadata.
+ * This component is the create and edit page for a filter list (`/filter-lists/new` and
+ * `/filter-lists/:listId/edit`, `filterlists:write`); edit mode is chosen by the `listId` route
+ * parameter. It saves the list's settings with `POST /api/filter-lists` or
+ * `PUT /api/filter-lists/{id}`; entries have their own pages.
  *
- * The subscription-specific fields (`subscriptionUrl`/`refreshInterval`) only show, and are only
- * required, when `source` is {@link DnsFilterListSourceEnum.Subscribed} -- mirroring
- * `FilterListsController.TryValidateSubscription`'s own real server-side rule as genuine UI
- * state, so a caller sees the requirement before submitting rather than after a `400`.
+ * <p>The subscription URL and refresh interval show, and are required, only when the source is
+ * {@link DnsFilterListSourceEnum.Subscribed}, as the backend requires.
  *
- * **In create mode, with `source` set to `Subscribed` only**, `subscriptionUrl` doubles as a
- * multi-line bulk-create field: a dropdown of well-known public block lists (see
- * `../filter-list.model.ts`) and a small manual-entry box both append a new line to it (never
- * replacing existing content) via {@link appendLine}, and `save()` splits it on newlines, skips
- * blank lines, and issues one `POST /api/filter-lists` per remaining line via
- * {@link saveByCreatingEachSubscription} -- one new `DnsFilterListEntity` per URL, all sharing
- * this form's own `kind`/`action`/`refreshInterval`/`isDisabled`/`comments` fields, with no new
- * backend endpoint (`FilterListsController` gained no bulk route; this is a client-side loop
- * against its existing `POST`). Every other combination (a `Local` list, or **any** edit-mode
- * save, subscribed or not) keeps this form's original single-entity semantics deliberately -- a
- * `Local` list never had a URL to bulk-append in the first place, and an existing `Subscribed`
- * list is already 1:1 with its one `subscriptionUrl`, so a second textarea line has no sensible
- * target entity to apply to; both keep showing the original single-line `subscriptionUrl` input
- * untouched.
+ * <p>When creating a `Subscribed` list, `subscriptionUrl` is a textarea that takes one URL per
+ * line. A dropdown of public block lists (`../filter-list.model.ts`) and a manual entry box both
+ * append lines ({@link appendLine}), and save creates one list per URL
+ * ({@link saveByCreatingEachSubscription}); there is no bulk endpoint. A `Local` list, and any
+ * list in edit mode, has a single URL field, since a list has one URL.
  */
 @Component({
   selector: 'app-filter-list-form',
@@ -125,7 +112,7 @@ export class FilterListFormComponent implements OnInit {
   readonly actionOptions = FILTER_LIST_ACTION_OPTIONS;
   readonly sourceOptions = FILTER_LIST_SOURCE_OPTIONS;
 
-  /** Every well-known public block-list option the create-mode dropdown offers. */
+  /** The public block lists the create-mode dropdown offers. */
   readonly knownBlocklistOptions = KNOWN_BLOCKLIST_OPTIONS;
 
   readonly loading = signal(this.isEditMode);
@@ -143,7 +130,7 @@ export class FilterListFormComponent implements OnInit {
     comments: [''],
   });
 
-  /** The source currently selected, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected source as a signal (the form's `valueChanges` is not one). */
   readonly selectedSource = signal<DnsFilterListSourceEnum>(DnsFilterListSourceEnum.Local);
 
   readonly showSubscriptionSection = computed(
@@ -151,8 +138,7 @@ export class FilterListFormComponent implements OnInit {
   );
 
   /**
-   * Whether `subscriptionUrl` is currently behaving as a bulk multi-line field -- true only for a
-   * new (not-yet-existing) `Subscribed` list, per this component's own class-level doc comment.
+   * Whether `subscriptionUrl` is a multi-line bulk field: only when creating a `Subscribed` list.
    */
   readonly isBulkSubscriptionMode = computed(
     () => !this.isEditMode && this.showSubscriptionSection(),
@@ -167,11 +153,10 @@ export class FilterListFormComponent implements OnInit {
   }
 
   /**
-   * This method appends `value` as a new, trailing line of the `subscriptionUrl` textarea --
-   * never replacing what is already there -- skipping a blank value and skipping a value already
-   * present verbatim as one of the existing lines (a same-pick double-click is a much more likely
-   * accident than a genuine intent to subscribe to the identical URL twice). Called both by the
-   * known-block-list dropdown's own change handler and by the manual-entry box's "Add" button.
+   * This method adds `value` as a new last line of the `subscriptionUrl` textarea. It skips a
+   * blank value and a URL already present, since picking the same entry twice is more likely a
+   * slip than a wish for two identical subscriptions. The dropdown and the manual "Add" button
+   * both call it.
    */
   appendLine(value: string): void {
     const trimmed = value.trim();
@@ -188,7 +173,7 @@ export class FilterListFormComponent implements OnInit {
     control.setValue([...existingLines, trimmed].join('\n'));
   }
 
-  /** This method handles the known-block-list `<select>`'s own change event, appending the picked option's value and resetting the select back to its placeholder. */
+  /** This method appends the block list picked in the dropdown and resets the dropdown to its placeholder. */
   onPickKnownBlocklist(value: string, selectElement: HTMLSelectElement): void {
     this.appendLine(value);
     selectElement.value = '';
@@ -200,7 +185,7 @@ export class FilterListFormComponent implements OnInit {
     inputElement.value = '';
   }
 
-  /** This method creates (`POST`, one call per non-blank line in bulk-subscription mode) or fully replaces (`PUT`) the filter list, per {@link isEditMode} and {@link isBulkSubscriptionMode}. */
+  /** This method creates the list (one `POST` per line in bulk-subscription mode) or, in edit mode, replaces it (`PUT`). */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -263,22 +248,14 @@ export class FilterListFormComponent implements OnInit {
   }
 
   /**
-   * This method implements bulk-subscription create mode's own save path: split
-   * `subscriptionUrl` on newlines, skip blank lines, and `POST` one filter list per remaining
-   * line, in order, awaiting each call before issuing the next (rather than firing them
-   * concurrently) so that a mid-loop name collision against a list a prior line in the same save
-   * just created is caught by the real backend, not raced past client-side. Every created list
-   * shares this form's own `kind`/`action`/`refreshInterval`/`isDisabled`/`comments` fields --
-   * only `name` and `subscriptionUrl` vary per line.
-   * <br><br>
-   * A total success navigates back to the list, exactly like the pre-existing single-create path
-   * did. A partial or total failure never silently drops what went wrong: every failed line's own
-   * backend error is kept, the textarea is narrowed down to just the failed lines so the operator
-   * can fix and retry them without having to re-enter what already succeeded, and a follow-up
-   * notification records how many lines did succeed when at least one did. A single-line save
-   * that fails reports the raw backend message alone, unwrapped -- identical to this form's
-   * original single-create error UX -- rather than the multi-line "N of M" summary, which only
-   * appears once there is genuinely more than one line to summarize.
+   * This method is the bulk-subscribe save: it splits `subscriptionUrl` into non-blank lines and
+   * sends one `POST` per line, in order and one at a time, so a name clash with a list an earlier
+   * line just created is reported by the backend. All lists share the form's kind, action,
+   * refresh interval, disabled flag and comments; only name and URL vary.
+   *
+   * <p>If every line succeeds, the page returns to the list. Otherwise the textarea keeps only the
+   * failed lines for a retry, each failure's message is shown, and a notification says how many
+   * succeeded. A single-line save that fails shows the backend's message alone.
    */
   private async saveByCreatingEachSubscription(): Promise<void> {
     const value = this.form.getRawValue();

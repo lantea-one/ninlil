@@ -4,6 +4,7 @@ import {
   clientIdentifierKind,
 } from './query-log.model';
 
+/** These tests cover building the search parameters: blank fields left out, trimming, UTC dates. */
 describe('buildQueryLogSearchParams', () => {
   it('omits every blank filter field, keeping only skip and take', () => {
     const params = buildQueryLogSearchParams(EMPTY_QUERY_LOG_FILTERS, 0, 25);
@@ -71,6 +72,7 @@ describe('buildQueryLogSearchParams', () => {
   });
 });
 
+/** This test covers naming a client identity a MAC or a DUID by protocol. */
 describe('clientIdentifierKind', () => {
   it('calls a DHCPv4 identity a MAC and a DHCPv6 one a DUID', () => {
     expect(clientIdentifierKind({ clientProtocolVersion: 'IPv4' })).toBe('MAC');

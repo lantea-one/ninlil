@@ -24,14 +24,13 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
-/** How many roles one page of this list shows -- matches `ZoneListComponent`'s own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every role on this server, backed by `GET /api/roles`'s own real
- * `skip`/`take` pagination (`RolesController`, `RoleSummaryPagedResult`). Each row shows how many
- * permissions the role currently grants; managing exactly which ones is `RoleFormComponent`'s own
- * job, reached via the edit action.
+ * This component is the Roles page (`/roles`, `roles:read`). It lists roles a page at a time from
+ * `GET /api/roles`, each with how many permissions it grants. With `roles:write` it offers
+ * create, edit (where the permissions are chosen) and delete (`DELETE /api/roles/{id}`).
  */
 @Component({
   selector: 'app-role-list',
@@ -56,13 +55,13 @@ export class RoleListComponent {
   private readonly rolesApi = inject(RolesService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'description', 'permissionCount', 'sync', 'actions'];
@@ -78,14 +77,14 @@ export class RoleListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then permanently deletes, a role. */
+  /** This method asks for confirmation, then deletes a role. */
   async deleteRole(role: RoleSummary): Promise<void> {
     if (!role.id) return;
 
@@ -108,9 +107,7 @@ export class RoleListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -120,7 +117,7 @@ export class RoleListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

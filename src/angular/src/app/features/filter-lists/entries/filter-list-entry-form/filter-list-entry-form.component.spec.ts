@@ -21,11 +21,16 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Waits past the 300ms preview debounce, then flushes microtasks for the preview call itself. */
+/** Waits past the 300 ms preview debounce and the preview call that follows. */
 function flushPreviewDebounce(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 320));
 }
 
+/**
+ * These tests cover the entry form: the subscribed-list notice, create and edit, wildcard and
+ * regex kinds and their validation, hiding the kind for non-domain lists, and the debounced
+ * pattern preview with its sample domains. TestBed with spy-backed entry, list and preview APIs.
+ */
 describe('FilterListEntryFormComponent', () => {
   let entriesApiSpy: {
     apiFilterListsListIdEntriesIdGet: jasmine.Spy;

@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the role form: create and edit (name locked), saving, validation and granting
+ * or revoking permissions with the rollback on failure. TestBed with spy-backed roles and
+ * permissions APIs and a stubbed route.
+ */
 describe('RoleFormComponent', () => {
   let rolesApiSpy: {
     apiRolesIdGet: jasmine.Spy;

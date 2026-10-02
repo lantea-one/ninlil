@@ -27,15 +27,15 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many filter lists one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every block/allow list this server knows about, backed by
- * `GET /api/filter-lists`'s own real `skip`/`take` pagination, with actions to manage a list's
- * own entries, edit its metadata, toggle it disabled (via `PATCH`), and delete it (behind a
- * confirmation dialog, since `FilterListsController.Delete` also removes any client-group
- * assignment still referencing it -- a fact surfaced directly in the confirmation message).
+ * This component is the Filter Lists page (`/filter-lists`, `filterlists:read`). It lists block
+ * and allow lists a page at a time from `GET /api/filter-lists` and links to each list's entries.
+ * With `filterlists:write` it offers create, edit, delete and an enable/disable toggle (`PATCH`);
+ * without it the toggle is disabled and the rest hidden. Deleting a list also removes its client
+ * group assignments.
  */
 @Component({
   selector: 'app-filter-list-list',
@@ -63,13 +63,13 @@ export class FilterListListComponent {
   private readonly filterListsApi = inject(FilterListsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'kind', 'action', 'source', 'disabled', 'sync', 'actions'];
@@ -85,19 +85,19 @@ export class FilterListListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method maps a list's own `action` to a badge color -- `Block` reads as a warning-adjacent danger, `Allow` as a positive success. */
+  /** This method returns the badge color of a list's action: `danger` for Block, `success` for Allow. */
   actionBadgeColor(action: DnsFilterListActionEnum | undefined): string {
     return action === DnsFilterListActionEnum.Allow ? 'success' : 'danger';
   }
 
-  /** This method toggles a filter list's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a list's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(list: FilterListDetail): Promise<void> {
     if (!list.id) return;
 
@@ -115,7 +115,7 @@ export class FilterListListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a filter list -- including any client-group assignment referencing it. */
+  /** This method asks for confirmation, then deletes a list. */
   async deleteList(list: FilterListDetail): Promise<void> {
     if (!list.id) return;
 
@@ -138,9 +138,7 @@ export class FilterListListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -150,7 +148,7 @@ export class FilterListListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

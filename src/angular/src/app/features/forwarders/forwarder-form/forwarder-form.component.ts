@@ -23,7 +23,7 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { KNOWN_FORWARDER_OPTIONS, deriveForwarderName } from '../forwarder.model';
 
-/** The single write request shape shared by every forwarder POST/PUT this component issues. */
+/** The request body of every forwarder `POST` and `PUT` this page sends. */
 interface ForwarderWriteRequestValue {
   readonly name: string;
   readonly definitionString: string;
@@ -32,35 +32,25 @@ interface ForwarderWriteRequestValue {
   readonly comments: string | null;
 }
 
-/** One outcome of a single line's own `POST /api/forwarders` call inside a bulk create. */
+/** A failed line of a bulk create, with the backend's message. */
 interface BulkCreateOutcome {
   readonly line: string;
   readonly message: string;
 }
 
 /**
- * This component is both the "create a forwarder" and "edit a forwarder" page -- one component
- * for both, distinguished by whether the route supplies an `id` (see `app.routes.ts`).
+ * This component is the create and edit page for an upstream forwarder (`/forwarders/new` and
+ * `/forwarders/:id/edit`, `forwarders:write`); edit mode is chosen by the `id` route parameter.
+ * It saves with `POST /api/forwarders` or `PUT /api/forwarders/{id}`.
  *
- * `definitionString` is a plain text field, not a structured builder -- matching this project's
- * own established "accept a string, let the real backend parser validate it" pattern (the same
- * one `RecordsController`'s own `data` field and `DnsCryptStampParser` already follow). Any
- * rejection `ForwardersController`'s own `TryValidateDefinitionString` returns (an unparseable
- * plain address, `udp://`/`tcp://`/`tls://`/`https://`/`quic://` URL, or `sdns://` stamp) is
- * surfaced here verbatim via {@link extractErrorMessage}, not re-validated client-side.
+ * <p>`definitionString` is plain text: a plain address, a `udp://`, `tcp://`, `tls://`,
+ * `https://` or `quic://` URL, or an `sdns://` stamp. The backend parses it, and its error is
+ * shown as returned; the page does not validate it further.
  *
- * In **create mode only**, `definitionString` doubles as a multi-line bulk-create field: a
- * dropdown of well-known public resolvers (see `../forwarder.model.ts`) and a small manual-entry
- * box both append a new line to it (never replacing existing content) via {@link appendLine}, and
- * `save()` splits it on newlines, skips blank lines, and issues one `POST /api/forwarders` per
- * remaining line via {@link saveByCreatingEachLine} -- turning what was a single-entity create
- * into a genuine bulk create, with no new backend endpoint (`ForwardersController` gained no bulk
- * route; this is a client-side loop against its existing `POST`). **Edit mode keeps the original
- * single-value semantics deliberately** -- an existing forwarder is one entity with one `Id`, and
- * `PUT` fully replaces it, so there is no sensible way for a second textarea line to map onto the
- * same `PUT` call; the dropdown/append affordance and bulk-save path are therefore both gated
- * behind {@link isEditMode} being `false`; an edit-mode instance still shows the original
- * single-line `definitionString` input untouched.
+ * <p>In create mode only, `definitionString` is a textarea that takes one forwarder per line. A
+ * dropdown of public resolvers (`../forwarder.model.ts`) and a manual entry box both append lines
+ * ({@link appendLine}), and save creates one forwarder per line ({@link saveByCreatingEachLine});
+ * there is no bulk endpoint. Edit mode shows a single line, because `PUT` replaces one forwarder.
  */
 @Component({
   selector: 'app-forwarder-form',
@@ -97,10 +87,10 @@ export class ForwarderFormComponent implements OnInit {
   /** Whether this instance is editing an existing forwarder rather than creating a new one. */
   readonly isEditMode = this.forwarderId !== null;
 
-  /** Every well-known public resolver option the create-mode dropdown offers, grouped by provider. */
+  /** The public resolvers the create-mode dropdown offers. */
   readonly knownForwarderOptions = KNOWN_FORWARDER_OPTIONS;
 
-  /** The distinct {@link KnownForwarderOption.provider} values, in first-seen order, used as this dropdown's own `<optgroup>` labels. */
+  /** The providers, in first-seen order, used as the dropdown's `<optgroup>` labels. */
   readonly providerGroups: readonly string[] = [
     ...new Set(KNOWN_FORWARDER_OPTIONS.map((option) => option.provider)),
   ];
@@ -122,12 +112,10 @@ export class ForwarderFormComponent implements OnInit {
   }
 
   /**
-   * This method appends `value` as a new, trailing line of the `definitionString` textarea --
-   * never replacing what is already there -- skipping a blank value and skipping a value already
-   * present verbatim as one of the existing lines (a same-pick double-click is a much more likely
-   * accident than a genuine intent to create two forwarders with the identical definition
-   * string). Called both by the known-resolver dropdown's own change handler and by the
-   * manual-entry box's "Add" button.
+   * This method adds `value` as a new last line of the `definitionString` textarea. It skips a
+   * blank value and a value already present as a line, since picking the same entry twice is more
+   * likely a slip than a wish for two identical forwarders. The resolver dropdown and the manual
+   * "Add" button both call it.
    */
   appendLine(value: string): void {
     const trimmed = value.trim();
@@ -144,7 +132,7 @@ export class ForwarderFormComponent implements OnInit {
     control.setValue([...existingLines, trimmed].join('\n'));
   }
 
-  /** This method handles the known-resolver `<select>`'s own change event, appending the picked option's value and resetting the select back to its placeholder. */
+  /** This method appends the resolver picked in the dropdown and resets the dropdown to its placeholder. */
   onPickKnownResolver(value: string, selectElement: HTMLSelectElement): void {
     this.appendLine(value);
     selectElement.value = '';
@@ -156,7 +144,7 @@ export class ForwarderFormComponent implements OnInit {
     inputElement.value = '';
   }
 
-  /** This method creates (`POST`, one call per non-blank line) or fully replaces (`PUT`) the forwarder, per {@link isEditMode}. */
+  /** This method creates one forwarder per non-blank line (`POST`) or, in edit mode, replaces the forwarder (`PUT`). */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -194,20 +182,14 @@ export class ForwarderFormComponent implements OnInit {
   }
 
   /**
-   * This method implements create mode's own bulk-save path: split `definitionString` on
-   * newlines, skip blank lines, and `POST` one forwarder per remaining line, in order, awaiting
-   * each call before issuing the next (rather than firing them concurrently) so that a mid-loop
-   * name collision against a forwarder a prior line in the same save just created is caught by
-   * the real backend, not raced past client-side.
-   * <br><br>
-   * A total success navigates back to the list, exactly like the pre-existing single-create path
-   * did. A partial or total failure never silently drops what went wrong: every failed line's own
-   * backend error is kept, the textarea is narrowed down to just the failed lines so the operator
-   * can fix and retry them without having to re-enter what already succeeded, and a follow-up
-   * notification records how many lines did succeed when at least one did. A single-line save
-   * that fails reports the raw backend message alone, unwrapped -- identical to this form's
-   * original single-create error UX -- rather than the multi-line "N of M" summary, which only
-   * appears once there is genuinely more than one line to summarize.
+   * This method is the create-mode save: it splits `definitionString` into non-blank lines and
+   * sends one `POST` per line, in order and one at a time, so a name clash with a forwarder an
+   * earlier line just created is reported by the backend rather than lost in a race.
+   *
+   * <p>If every line succeeds, the page returns to the list. Otherwise the textarea keeps only the
+   * failed lines, so they can be fixed and retried, each failure's message is shown, and a
+   * notification says how many lines succeeded. A single-line save that fails shows the backend's
+   * message alone instead of the "N of M" summary.
    */
   private async saveByCreatingEachLine(): Promise<void> {
     const value = this.form.getRawValue();

@@ -39,15 +39,15 @@ import {
 } from '../../filter-list.model';
 
 /**
- * This component is both the "add an entry" and "edit an entry" page for a filter list -- one
- * component for both, distinguished by whether the route supplies an `entryId` (see
- * `app.routes.ts`).
+ * This component is the add and edit page for a filter list entry
+ * (`/filter-lists/:listId/entries/new` and `.../entries/:entryId/edit`, `filterlists:write`);
+ * edit mode is chosen by the `entryId` route parameter. It saves with `POST` or
+ * `PUT /api/filter-lists/{listId}/entries/{id}`.
  *
- * A manual write against a subscribed list is blocked in the UI itself, not just left to fail
- * with a raw `409`: this component loads the owning list first and, if it is subscribed, replaces
- * the form entirely with an explanatory notice -- covering a direct navigation (a typed-in URL, a
- * stale bookmark) that `FilterListEntryListComponent`'s own disabled controls would otherwise not
- * prevent.
+ * <p>The page loads the list first. For a subscribed list, whose entries the backend refuses to
+ * change by hand (409), it shows a notice instead of the form; the entry list disables its links
+ * already, so this covers a typed-in URL or bookmark. While a `Wildcard` or `Regex` pattern is
+ * typed, a preview shows which sample domains it matches.
  */
 @Component({
   selector: 'app-filter-list-entry-form',
@@ -85,14 +85,12 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   /** Whether this instance is editing an existing entry rather than creating a new one. */
   readonly isEditMode = this.entryId !== null;
 
-  /** Whether the owning list is subscribed -- when `true`, this form is replaced by a blocking notice. */
+  /** Whether the list is subscribed; then the form is replaced by a notice. */
   readonly isReadOnly = signal(false);
 
   /**
-   * Whether the owning list is itself a `DnsFilterListKindEnum.Domain` list -- when `false`, the
-   * `Wildcard`/`Regex` kind options are hidden entirely, mirroring
-   * `FilterListEntriesController`'s own rejection of a pattern kind against a
-   * `ResponseIp`/`ClientSource` list's own IP address/CIDR network entries.
+   * Whether the list is a `Domain` list. Otherwise the `Wildcard` and `Regex` kinds are hidden,
+   * since the backend refuses them for address and network lists.
    */
   readonly isDomainKindList = signal(true);
 
@@ -110,21 +108,20 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   });
 
   /**
-   * The kind currently selected, tracked as a plain signal since `valueChanges` isn't one --
-   * the same pattern `ZoneFormComponent.selectedType` already establishes for a conditional
-   * template section driven by a sibling form control's own live value.
+   * The selected kind as a signal (the form's `valueChanges` is not one), for the parts of the
+   * template that depend on it.
    */
   private readonly selectedKind = signal<DnsFilterEntryKindEnum>(DnsFilterEntryKindEnum.Domain);
 
-  /** Whether the currently selected kind is `Wildcard`/`Regex` -- drives the pattern-syntax hint. */
+  /** Whether the selected kind is `Wildcard` or `Regex`; shows the pattern hint. */
   readonly isPatternKind = computed(() => isPatternEntryKind(this.selectedKind()));
 
-  /** The human-readable grammar name for the currently selected pattern kind's own error/hint text. */
+  /** The name of the selected pattern grammar, for the hint and error text. */
   readonly patternKindLabel = computed(() =>
     this.selectedKind() === DnsFilterEntryKindEnum.Wildcard ? 'wildcard' : 'regular expression',
   );
 
-  /** A representative example value for the currently selected kind, shown as the value field's own placeholder. */
+  /** An example value for the selected kind, used as the value field's placeholder. */
   readonly valuePlaceholder = computed(() => {
     switch (this.selectedKind()) {
       case DnsFilterEntryKindEnum.Wildcard:
@@ -137,10 +134,10 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   });
 
   /**
-   * The live "as I type" preview of which sample domains the current pattern would actually
-   * match -- calls `FilterPatternPreviewController` directly rather than a second, JavaScript-side
-   * regex engine, so the preview can never show a match the real server-side filter engine
-   * wouldn't also make (see that controller's own doc comment for the full reasoning).
+   * The live preview of which sample domains the pattern matches. It comes from
+   * `POST /api/filter-pattern-preview` (`filterlists:read`) rather than a JavaScript regex, so it
+   * shows what the server's filter engine would match. A failed request leaves the last
+   * preview in place.
    */
   readonly previewResult = signal<{
     isValid: boolean;
@@ -149,9 +146,9 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   } | null>(null);
 
   /**
-   * The operator's own domains to test the pattern against, as typed (separated by spaces, commas
-   * or new lines). Kept outside {@link form} because it's only for the preview and is never
-   * saved. Left empty, the preview uses the server's built-in sample set.
+   * Domains to test the pattern against, separated by spaces, commas or new lines. It is outside
+   * {@link form} because it is only for the preview and is never saved. When empty, the server
+   * uses its built-in samples.
    */
   readonly sampleDomainsControl = new FormControl('', { nonNullable: true });
 
@@ -163,12 +160,10 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   constructor() {
     this.form.controls.kind.valueChanges.subscribe((kind) => {
       this.selectedKind.set(kind);
-      // Switching kind changes which pattern grammar applies, so the value control's own
-      // validity must be re-checked -- Angular does not do this automatically for a sibling
-      // control's own change.
+      // The value's validator depends on the kind, and Angular does not re-run it when a
+      // sibling control changes.
       this.form.controls.value.updateValueAndValidity();
-      // A pattern that was valid under the old kind may not mean the same thing under the new
-      // one -- re-run the preview immediately rather than waiting for the next keystroke.
+      // The same text can match differently under another kind, so preview again now.
       this.runPreview(this.form.controls.value.value, kind);
     });
 
@@ -189,9 +184,8 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * This method calls `FilterPatternPreviewController` for the current pattern, debounced by the
-   * caller (see this component's own constructor) rather than on every raw keystroke. A blank
-   * value clears the preview outright instead of calling the endpoint for nothing.
+   * This method requests a preview for the pattern. The constructor debounces calls by 300 ms. A
+   * blank value clears the preview without a request.
    */
   private runPreview(value: string, kind: DnsFilterEntryKindEnum): void {
     if (!value || value.trim().length === 0) {
@@ -221,7 +215,7 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the entry, per {@link isEditMode}. */
+  /** This method adds the entry (`POST`) or replaces it (`PUT`), then returns to the entry list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting() || this.isReadOnly()) return;
 
@@ -291,11 +285,9 @@ export class FilterListEntryFormComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * This validator mirrors (never replaces) `FilterListEntriesController`'s own real
-   * compile-before-persist validation -- a cheap, immediate rejection of an obviously malformed
-   * pattern before ever submitting it. Reads the sibling `kind` control's own current value at
-   * validation time, rather than being bound once at form construction, so switching kind
-   * re-evaluates correctly (see this component's own constructor).
+   * This validator rejects an obviously malformed pattern before submit; the backend still
+   * compiles it on save. It reads the `kind` control at validation time, so it follows a kind
+   * change (see the constructor).
    */
   private patternValidator(value: string): ValidationErrors | null {
     const kind = this.form?.controls.kind.value ?? DnsFilterEntryKindEnum.Domain;

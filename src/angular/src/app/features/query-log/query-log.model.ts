@@ -5,13 +5,9 @@ import {
 } from '../../api-client';
 
 /**
- * This interface describes the shape of {@link QueryLogListComponent}'s own filter form value --
- * every field is a plain string (including the two date/time fields, which come straight out of
- * an `<input type="datetime-local">` control) since every one of them is optional and this
- * component never validates a field's own syntax beyond "is it non-empty" -- the real backend
- * search endpoint is the only place any of these values are ever actually interpreted (an
- * unparseable `queriedType`/`responseCode` comes back as a real, surfaced `400`, matching this
- * project's own established "accept a string, let the real backend validate it" convention).
+ * This interface is the value of the Query Log page's filter form. Every field is an optional
+ * string, the dates as `datetime-local` gives them. The page does not validate them; the backend
+ * interprets them and answers 400 for, say, an unknown `queriedType`, which the page shows.
  */
 export interface QueryLogFilterFormValue {
   clientAddress: string;
@@ -27,16 +23,10 @@ export interface QueryLogFilterFormValue {
 }
 
 /**
- * This function converts one page request's own filter values, offset, and page size into the
- * exact request-parameter shape `QueryLogService.apiQueryLogGet` accepts. A blank string field is
- * omitted entirely (rather than sent as `""`), matching `QueryLogController.Search`'s own
- * `string.IsNullOrWhiteSpace(...)  ? null : ...` treatment of an absent filter axis -- sending an
- * empty string instead of omitting the parameter would still behave correctly server-side, but
- * omitting it here keeps the actual outgoing request legible when inspected. A
- * `datetime-local` input's own value carries no UTC offset at all (it is always local wall-clock
- * time); `new Date(value)` interprets that value in the browser's own local time zone, and
- * `.toISOString()` converts it to a real, unambiguous UTC instant the backend's own
- * `DateTimeOffset?` model binder parses correctly.
+ * This function builds the `QueryLogService.apiQueryLogGet` parameters from the filters, offset
+ * and page size. Blank fields are left out rather than sent empty, which keeps the request
+ * readable (the backend treats both the same). A `datetime-local` value has no offset, so it is
+ * read as browser local time and sent as a UTC ISO string.
  */
 export function buildQueryLogSearchParams(
   filters: QueryLogFilterFormValue,
@@ -68,7 +58,7 @@ export function buildQueryLogSearchParams(
   return params;
 }
 
-/** This constant contains the empty filter form value {@link QueryLogListComponent} starts from and resets to. */
+/** The empty filter value the Query Log page starts from and resets to. */
 export const EMPTY_QUERY_LOG_FILTERS: QueryLogFilterFormValue = {
   clientAddress: '',
   domain: '',

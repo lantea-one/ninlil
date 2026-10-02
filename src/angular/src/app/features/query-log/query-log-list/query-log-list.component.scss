@@ -7,11 +7,8 @@
   margin: var(--ninlil-space-5) var(--ninlil-space-5) var(--ninlil-space-2);
 }
 
-// A dense, information-forward filter row -- every field laid out on one wrapping flex line rather
-// than a taller stacked form, matching this sub-phase's own resolved dense/data-forward direction.
-// Each field's own `flex: 1 1 9rem` basis (down from a plain `200px` min-width) lets the row hold
-// up to 4-5 fields per line at 1600px and gracefully drop to 2 columns around 820px without any
-// `@media` query, consistent with every other responsive layout in this app.
+// The filters sit in one wrapping row. A `flex: 1 1 9rem` basis gives four or five fields per
+// line at 1600px and two around 820px, with no media query.
 .filter-card {
   margin: 0 var(--ninlil-space-5) var(--ninlil-space-4);
 }

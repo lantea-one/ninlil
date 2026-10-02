@@ -22,18 +22,14 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 
 /**
- * This component is both the "create a rewrite" and "edit a rewrite" page -- one component for
- * both, distinguished by whether the route supplies an `id` (see `app.routes.ts`).
+ * This component is the create and edit page for a DNS rewrite (`/dns-rewrites/new` and
+ * `/dns-rewrites/:id/edit`, `dnsrewrites:write`); edit mode is chosen by the `id` route parameter.
+ * It saves with `POST /api/dns-rewrites` or `PUT /api/dns-rewrites/{id}`.
  *
- * `domain` and `target` are both plain text fields, not structured builders -- matching this
- * project's own established "accept a string, let the real backend validator/classifier decide"
- * pattern (the same one `ForwarderFormComponent`'s own `definitionString` field and
- * `RecordFormComponent`'s own `data` field already follow). Any rejection
- * `DnsRewritesController`'s own domain/target validation returns (an invalid domain name, or a
- * target that is neither a valid IP address nor a valid domain name) is surfaced here verbatim
- * via {@link extractErrorMessage}, not re-validated client-side beyond "not empty." A `target`'s
- * own record kind (A/AAAA/CNAME) is never asked for here -- it is always computed server-side
- * from the value actually submitted, per `DnsRewriteDetail.TargetKind`'s own doc comment.
+ * <p>`domain` and `target` are plain text, checked here only as required. The backend validates
+ * them (a valid domain name; a target that is an IP address or a domain name) and its message is
+ * shown as returned. The record kind (A, AAAA or CNAME) is not asked for: the backend derives it
+ * from the target.
  */
 @Component({
   selector: 'app-dns-rewrite-form',
@@ -84,7 +80,7 @@ export class DnsRewriteFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingRewrite();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the rewrite, per {@link isEditMode}. */
+  /** This method creates the rewrite (`POST`) or replaces it (`PUT`), then returns to the list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
