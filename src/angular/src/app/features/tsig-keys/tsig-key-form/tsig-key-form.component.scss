@@ -3,8 +3,6 @@
   margin: var(--ninlil-space-6) auto;
 }
 
-// A short form (key name, algorithm, an optional secret, disabled/comments) fits this app's
-// compact form-width step, the same one a short single-purpose form (New API Token) uses.
 .form-card {
   max-width: var(--ninlil-form-max-width-compact);
   margin: var(--ninlil-space-5) auto;

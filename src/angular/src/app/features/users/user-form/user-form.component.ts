@@ -27,25 +27,22 @@ import {
 import { AuthService } from '../../../core/auth/auth.service';
 
 /**
- * This constant bounds the single page this component requests from `GET /api/roles`, for the
- * role-assignment section's own "every role on this server" checklist -- this checklist has no
- * paginator control of its own (unlike `RoleListComponent`'s own real page-at-a-time list), so it
- * requests the largest page the backend allows to preserve a "show every role" checklist.
+ * The page size requested from `GET /api/roles` for the role checkboxes. The checklist has no
+ * paging, so it asks for the largest page the backend allows (500).
  */
 const MAX_ROLES_PER_PAGE = 500;
 
 /**
- * This component is both the "create a user" and "edit a user" page -- one component for both,
- * mirroring `RoleFormComponent`'s/`TsigKeyFormComponent`'s own precedent. `userName` and
- * `password` are create-only fields (`UsersController.Update`'s own `UpdateUserRequest` has
- * neither -- a sign-in name is permanent, and a password change is deliberately not this
- * endpoint's job either, per that controller's own doc comment).
+ * This component is the create and edit page for a user account (`/users/new` and
+ * `/users/:id/edit`, `users:write`); edit mode is chosen by the `id` route parameter. It saves with
+ * `POST /api/users` or `PUT /api/users/{id}`. The user name and password are create-only: the
+ * update request has neither, since a sign-in name is permanent and passwords are reset from the
+ * Users page.
  *
- * The role-assignment and direct-permission-claim sections both only appear in edit mode (a user
- * must already exist before either can be granted at all), and both apply every toggle
- * immediately -- `UsersController` has no bulk "replace the whole role/permission set" endpoint,
- * only `POST`/`DELETE` per role name and per permission, mirroring `RoleFormComponent`'s own
- * identical reasoning for its own permission section.
+ * <p>In edit mode the page also shows role checkboxes and a {@link PermissionPickerComponent} for
+ * the user's direct permissions. Each change is saved at once with `POST` or `DELETE` on
+ * `/api/users/{id}/roles` or `/api/users/{id}/permissions`, since there is no endpoint to replace
+ * them all.
  */
 @Component({
   selector: 'app-user-form',
@@ -121,7 +118,7 @@ export class UserFormComponent implements OnInit {
     }
   }
 
-  /** This method creates (`POST`) or updates the profile of (`PUT`) the user account. */
+  /** This method creates the account (`POST`) or updates its profile (`PUT`). */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -164,17 +161,17 @@ export class UserFormComponent implements OnInit {
     }
   }
 
-  /** This method reports whether a given role is currently checked in the role picker. */
+  /** This method reports whether a role's checkbox is checked. */
   isRoleChecked(roleName: string): boolean {
     return this.assignedRoleNames().includes(roleName);
   }
 
-  /** This method builds a DOM-safe `id` for one role's own checkbox. */
+  /** This method builds the checkbox `id` for a role, replacing characters unsafe in an `id`. */
   roleCheckboxId(roleName: string): string {
     return `role-${roleName.replace(/[^a-zA-Z0-9]+/g, '-')}`;
   }
 
-  /** This method grants or revokes one role immediately, reverting on failure. */
+  /** This method adds or removes one role at once, restoring the checkbox on failure. */
   async onRoleToggled(roleName: string, event: Event): Promise<void> {
     if (!this.userId || this.togglingRoleName()) return;
 
@@ -209,7 +206,7 @@ export class UserFormComponent implements OnInit {
     }
   }
 
-  /** This method grants or revokes one direct permission claim immediately, reverting on failure. */
+  /** This method grants or revokes one direct permission at once, restoring it on failure. */
   async onPermissionToggled(event: PermissionToggleEvent): Promise<void> {
     if (!this.userId || this.togglingPermission()) return;
 
@@ -270,10 +267,9 @@ export class UserFormComponent implements OnInit {
   }
 
   /**
-   * This method loads the role and permission lists the two pickers offer, each on its own: the
-   * role list needs `roles:read`, which a user administrator may lack, and without it only the
-   * role picker is replaced by a note (see {@link rolesUnavailable}) -- the permission picker and
-   * the rest of the form stay usable.
+   * This method loads the role list and the permission list separately. The role list needs
+   * `roles:read`, which a user administrator may lack; then only the role checkboxes are replaced
+   * by a note ({@link rolesUnavailable}) and the rest of the form still works.
    */
   private async loadRolesAndPermissions(): Promise<void> {
     await Promise.all([this.loadRoles(), this.loadPermissions()]);

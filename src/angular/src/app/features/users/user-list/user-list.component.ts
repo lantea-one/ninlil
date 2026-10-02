@@ -30,16 +30,15 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many accounts one page of this list shows -- matches `ZoneListComponent`'s own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every user account on this server, backed by `GET /api/users`'s own real
- * `skip`/`take` pagination (`UsersController`, `UserSummaryPagedResult`). A row's own
- * enabled/disabled toggle uses a full `PUT` (`UsersController.Update`'s own `UpdateUserRequest`),
- * not a merge patch -- unlike `TsigKeyListComponent`'s own `PATCH`-based toggle, `UsersController`
- * exposes no `PATCH` action at all, so this sends the row's own already-loaded
- * `displayName`/`email` back unchanged alongside the flipped `isDisabled` flag.
+ * This component is the Users page (`/users`, `users:read`). It lists accounts a page at a time
+ * from `GET /api/users`. With `users:write` it offers create, edit, delete, a password reset
+ * ({@link ResetPasswordDialogComponent}) and an enable/disable toggle; without it the toggle is
+ * disabled and the rest hidden. The toggle sends a full `PUT` with the row's display name and
+ * e-mail unchanged, since the users API has no `PATCH` for an account.
  */
 @Component({
   selector: 'app-user-list',
@@ -67,19 +66,19 @@ export class UserListComponent {
   private readonly usersApi = inject(UsersService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  /** Whether {@link ResetPasswordDialogComponent} is currently shown for this list's pending administrator-driven password reset. */
+  /** Whether the password reset dialog is shown. */
   readonly resetPasswordDialogVisible = signal(false);
 
-  /** Which account {@link ResetPasswordDialogComponent} is currently resetting the password for. */
+  /** The account the password reset dialog is for. */
   readonly resetPasswordDialogTarget = signal<ResetPasswordDialogTarget | null>(null);
 
   readonly displayedColumns = [
@@ -103,14 +102,14 @@ export class UserListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a user account's own enabled/disabled state via a full `PUT`. */
+  /** This method enables or disables an account with a full `PUT`. */
   async toggleDisabled(user: UserSummary): Promise<void> {
     if (!user.id) return;
 
@@ -132,7 +131,7 @@ export class UserListComponent {
     }
   }
 
-  /** This method opens {@link ResetPasswordDialogComponent} for a given account -- built for a locked-out account that cannot use the self-service change-password flow on `AccountProfileComponent`'s own Profile page at all, since that flow requires already knowing the account's current password. */
+  /** This method opens the password reset dialog for an account, for a user who cannot change the password on the Profile page because they do not know it. */
   resetPassword(user: UserSummary): void {
     if (!user.id) return;
 
@@ -144,7 +143,7 @@ export class UserListComponent {
     this.resetPasswordDialogVisible.set(true);
   }
 
-  /** This method confirms, then permanently deletes, a user account. */
+  /** This method asks for confirmation, then deletes an account. */
   async deleteUser(user: UserSummary): Promise<void> {
     if (!user.id) return;
 
@@ -166,9 +165,7 @@ export class UserListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -178,7 +175,7 @@ export class UserListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

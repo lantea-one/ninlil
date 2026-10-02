@@ -17,6 +17,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a webhook's delivery history: loading and paging, status colors, errors, the
+ * payload dialog and copy, and the pretty-print helper. TestBed with a spy-backed
+ * `WebhooksService` and a stubbed route.
+ */
 describe('WebhookDeliveryAttemptsComponent', () => {
   let webhooksApiSpy: {
     apiWebhooksIdGet: jasmine.Spy;

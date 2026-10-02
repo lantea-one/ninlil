@@ -10,9 +10,14 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the TSIG key form: create with the reveal-once dialog (generated or supplied
+ * secret), edit without a secret field, errors and validation. TestBed with a spy-backed
+ * `TsigKeysService` and a stubbed route.
+ */
 describe('TsigKeyFormComponent', () => {
-  // A manually-shaped spy interface, not `jasmine.SpyObj<TsigKeysService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why.
+  // A hand-written spy type rather than `jasmine.SpyObj<TsigKeysService>`; the AuthService spec
+  // explains why (overloaded generated methods).
   let tsigKeysApiSpy: {
     apiTsigKeysIdGet: jasmine.Spy;
     apiTsigKeysPost: jasmine.Spy;
@@ -22,8 +27,8 @@ describe('TsigKeyFormComponent', () => {
   let navigateSpy: jasmine.Spy;
 
   /**
-   * See `zone-form.component.spec.ts`'s own identical helper for why `configureApis` must run
-   * before the component is constructed.
+   * This helper builds fresh spies, applies `configureApis` and creates the component.
+   * `configureApis` must run first because `ngOnInit` calls the API at once.
    */
   async function createComponent(keyId: string | null, configureApis?: () => void) {
     tsigKeysApiSpy = jasmine.createSpyObj('TsigKeysService', [

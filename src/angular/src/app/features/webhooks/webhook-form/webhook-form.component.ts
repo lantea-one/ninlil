@@ -35,32 +35,21 @@ import {
 } from '../webhook.model';
 
 /**
- * This component is both the "create a webhook subscription" and "edit a subscription" page --
- * one component for both, distinguished by whether the route supplies an `id` (see
- * `app.routes.ts`), mirroring `TsigKeyFormComponent`'s/`CloudProviderCredentialFormComponent`'s
- * own precedent. This entity carries *two* secrets with two different mutability postures, each
- * deliberately matching its own closest existing precedent (see `WebhookSubscriptionCreateRequest`'s
- * own doc comment for the backend's own reasoning):
+ * This component is the create and edit page for a webhook subscription (`/webhooks/new` and
+ * `/webhooks/:id/edit`, `webhooks:write`); edit mode is chosen by the `id` route parameter. It
+ * saves with `POST /api/webhooks` or `PATCH /api/webhooks/{id}`. A subscription has two kinds of
+ * secret, handled differently:
  *
- * - **Auth credential(s)** (`authCredentials`) behave like a cloud provider credential's own
- *   secret -- always operator-supplied, so they follow {@link CloudProviderCredentialFormComponent}'s
- *   own "rotate" affordance: edit mode starts with the auth mode and every credential field
- *   disabled, and {@link startRotatingCredentials} reveals them so an operator can resupply a new
- *   value, sent as part of the very same `PATCH` `save()` always issues in edit mode.
- * - **HMAC signing secret** (`hmacSigningSecret`) behaves like a TSIG key's own server-generated
- *   secret instead -- optionally supplied (or, if left blank, server-generated) only at creation,
- *   and **immutable afterward**: `WebhooksController.Patch` has no field for it at all, so this
- *   component's own edit mode never renders an input for it, only a read-only "configured/not
- *   configured" indicator, matching this project's own confirmed "no edit affordance for it at
- *   all once set" requirement.
+ * - **Auth credentials** (`authCredentials`) are always typed by the operator. Edit mode starts
+ *   with the auth mode and credential fields disabled; {@link startRotatingCredentials} enables
+ *   them so new values can be sent with the same `PATCH`.
+ * - **HMAC signing secret** (`hmacSigningSecret`) can be typed or left blank to have the server
+ *   generate one, at creation only. The `PATCH` has no field for it, so edit mode only shows
+ *   whether one is configured.
  *
- * On a successful **create**, this component shows {@link RevealSecretDialogComponent} with every
- * secret the response actually returned (the auth credential field(s), if `authMode` is not
- * `None`, and the HMAC signing secret, if signing was enabled) -- the one and only place either is
- * ever shown, matching `WebhookSubscriptionDetail`'s own deliberate omission of both from every
- * later `GET`/list response. The dialog is embedded declaratively (`[visible]`/`[data]`/`(closed)`)
- * rather than opened imperatively, so navigation away from this page is deferred until the
- * operator dismisses it -- see {@link RevealSecretDialogComponent}'s own doc comment for why.
+ * <p>After a create, the page shows the returned secrets (the credentials unless the auth mode is
+ * None, and the signing secret if signing is on) once in {@link RevealSecretDialogComponent};
+ * later reads never include them. The page returns to the list when the dialog is closed.
  */
 @Component({
   selector: 'app-webhook-form',
@@ -87,7 +76,7 @@ import {
   styleUrl: './webhook-form.component.scss',
 })
 export class WebhookFormComponent implements OnInit {
-  /** Exposed so the template can pick the right fixed control per dynamic credential field, without a hand-written ternary chain. */
+  /** Exposed so the template can find the form control for each credential field. */
   readonly toControlName = toControlName;
 
   private readonly route = inject(ActivatedRoute);
@@ -108,19 +97,19 @@ export class WebhookFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether this subscription (edit mode only) already has an HMAC signing secret configured -- read-only, never editable here. */
+  /** Whether the subscription has an HMAC signing secret (edit mode; shown read-only). */
   readonly hasHmacSigningSecret = signal(false);
 
   /**
-   * Whether the auth mode select and credential fields are currently editable -- always `true` in
-   * create mode, and `false` in edit mode until {@link startRotatingCredentials} is called.
+   * Whether the auth mode and credential fields are editable: always in create mode, and in edit
+   * mode only after {@link startRotatingCredentials}.
    */
   readonly credentialsEditable = signal(!this.isEditMode);
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown -- only ever set after a successful create that returned at least one secret. */
+  /** Whether the reveal-once dialog is shown; set after a create that returned at least one secret. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-created subscription's own secret field(s), shown exactly once via {@link RevealSecretDialogComponent}. */
+  /** The new subscription's secrets, shown once in {@link RevealSecretDialogComponent}. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -138,10 +127,10 @@ export class WebhookFormComponent implements OnInit {
     comments: [''],
   });
 
-  /** The auth mode currently selected, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected auth mode as a signal (the form's `valueChanges` is not one). */
   readonly selectedAuthMode = signal<WebhookAuthModeEnum>(WebhookAuthModeEnum.None);
 
-  /** The credential field(s) the currently selected auth mode's own shape requires. */
+  /** The credential fields the selected auth mode needs. */
   readonly credentialFields = computed(() => credentialFieldsForAuthMode(this.selectedAuthMode()));
 
   constructor() {
@@ -152,7 +141,7 @@ export class WebhookFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingSubscription();
   }
 
-  /** This method reveals the auth mode select and credential fields so an operator can rotate them. */
+  /** This method enables the auth mode and credential fields so the operator can replace the credentials. */
   startRotatingCredentials(): void {
     this.credentialsEditable.set(true);
     this.form.controls.authMode.enable();
@@ -162,9 +151,8 @@ export class WebhookFormComponent implements OnInit {
   }
 
   /**
-   * This method creates (`POST`) a new subscription, or, in edit mode, partially updates
-   * (`PATCH`) an existing one -- including its auth mode/credentials only when
-   * {@link credentialsEditable} is `true`, per this component's own class-level doc comment.
+   * This method creates the subscription (`POST`) or, in edit mode, updates it (`PATCH`),
+   * including the auth mode and credentials only when {@link credentialsEditable} is `true`.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -253,8 +241,7 @@ export class WebhookFormComponent implements OnInit {
         ];
 
         if (secrets.length > 0) {
-          // Reveal every returned secret exactly once -- navigation away is deferred to
-          // onSecretDialogClosed(), once the operator has actually dismissed the dialog.
+          // Stay on the page until the dialog is closed (onSecretDialogClosed).
           this.revealDialogData.set({
             title: 'Webhook subscription created',
             message:
@@ -281,7 +268,7 @@ export class WebhookFormComponent implements OnInit {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once secret dialog, navigating away only now that they have confirmed saving the values. */
+  /** This method hides the dialog and returns to the subscription list. */
   onSecretDialogClosed(): void {
     this.revealDialogVisible.set(false);
     void this.router.navigate(['/webhooks']);
@@ -307,9 +294,8 @@ export class WebhookFormComponent implements OnInit {
       this.selectedAuthMode.set(subscription.authMode ?? WebhookAuthModeEnum.None);
       this.hasHmacSigningSecret.set(subscription.hasHmacSigningSecret ?? false);
 
-      // Edit mode starts with the auth mode and every credential field disabled -- see this
-      // component's own class-level doc comment for why: a metadata-only save must never
-      // accidentally submit an authMode change without matching new credentials.
+      // Edit mode starts with the auth fields disabled, so a save cannot change the auth mode
+      // without new credentials (the backend would refuse it).
       this.form.controls.authMode.disable();
       this.form.controls.bearerToken.disable();
       this.form.controls.username.disable();

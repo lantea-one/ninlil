@@ -8,6 +8,7 @@ import {
   toControlName,
 } from './webhook.model';
 
+/** These tests cover the event type list, the credential fields per auth mode and the helpers. */
 describe('webhook.model', () => {
   it('CURATED_WEBHOOK_EVENT_TYPE_NAMES contains exactly the 7 actually-delivering event types', () => {
     expect(CURATED_WEBHOOK_EVENT_TYPE_NAMES).toEqual([

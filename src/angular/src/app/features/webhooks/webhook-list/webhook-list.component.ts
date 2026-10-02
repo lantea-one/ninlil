@@ -25,17 +25,15 @@ import { summarizeEventTypeNames } from '../webhook.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many subscriptions one page of this list shows -- matches every other list's own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every outbound webhook subscription this server knows about, backed by
- * `GET /api/webhooks`'s own real `skip`/`take` pagination. Neither a subscription's own auth
- * credential(s) nor its HMAC signing secret is ever fetched or shown here -- `WebhookSubscriptionDetail`
- * (the shape this list's own `GET` returns) never carries either, per this project's uniform
- * "reveal exactly once, on creation" secret-exposure policy; only `WebhookFormComponent`'s own
- * create flow ever sees either plaintext value, via the dedicated `WebhookSubscriptionCreateResponse`
- * this list never receives.
+ * This component is the Webhooks page (`/webhooks`, `webhooks:read`). It lists subscriptions a page
+ * at a time from `GET /api/webhooks` and links to each one's delivery history; the response never
+ * includes the credentials or signing secret. With `webhooks:write` it offers create, edit,
+ * delete and an enable/disable toggle (`PATCH`); without it the toggle is disabled and the rest
+ * hidden.
  */
 @Component({
   selector: 'app-webhook-list',
@@ -60,13 +58,13 @@ export class WebhookListComponent {
   private readonly webhooksApi = inject(WebhooksService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly summarizeEventTypeNames = summarizeEventTypeNames;
@@ -91,14 +89,14 @@ export class WebhookListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a subscription's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a subscription's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(subscription: WebhookSubscriptionDetail): Promise<void> {
     if (!subscription.id) return;
 
@@ -118,7 +116,7 @@ export class WebhookListComponent {
     }
   }
 
-  /** This method confirms, then permanently deletes, a webhook subscription. */
+  /** This method asks for confirmation, then deletes a subscription. */
   async deleteSubscription(subscription: WebhookSubscriptionDetail): Promise<void> {
     if (!subscription.id) return;
 
@@ -141,9 +139,7 @@ export class WebhookListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -153,7 +149,7 @@ export class WebhookListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

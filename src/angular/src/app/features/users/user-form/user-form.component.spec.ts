@@ -11,9 +11,14 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the user form: create and edit (user name locked), the role list with and
+ * without `roles:read`, role and permission toggles with rollback, errors and validation. TestBed
+ * with spy-backed users, roles and permissions APIs and a fake `AuthService`.
+ */
 describe('UserFormComponent', () => {
-  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
-  // the page as an administrator would unless it denies something first.
+  // The permissions the test user lacks. It holds all others, so a test sees the page as an
+  // administrator would unless it denies something first.
   let deniedPermissions: string[] = [];
   beforeEach(() => (deniedPermissions = []));
 

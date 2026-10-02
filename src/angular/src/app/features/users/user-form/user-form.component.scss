@@ -3,10 +3,7 @@
   margin: var(--ninlil-space-6) auto;
 }
 
-// This form's own edit-mode content includes both a role-checkbox grid and the shared
-// `app-permission-picker` (its own dense, flex-wrapping checkbox grid across every permission
-// resource group) -- both genuinely benefit from the widest form-width step, the same one
-// `RoleFormComponent` uses for the same reason.
+// The role and permission checkbox grids need the wide form width.
 .form-card {
   max-width: var(--ninlil-form-max-width-wide);
   margin: var(--ninlil-space-5) auto;

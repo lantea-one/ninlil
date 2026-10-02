@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Users page: loading and paging, the full-`PUT` toggle, delete with its
+ * confirmation, and opening the password reset dialog. TestBed with spy-backed `UsersService` and
+ * `NotificationService`.
+ */
 describe('UserListComponent', () => {
   let usersApiSpy: {
     apiUsersGet: jasmine.Spy;

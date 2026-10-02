@@ -22,34 +22,28 @@ import {
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 
-/** This interface describes which account {@link ResetPasswordDialogComponent} is currently resetting the password for. */
+/** This interface describes the account whose password {@link ResetPasswordDialogComponent} resets. */
 export interface ResetPasswordDialogTarget {
-  /** The account's own identifier. */
+  /** The account id. */
   id: string;
 
-  /** The account's sign-in name, shown in this dialog's own title. */
+  /** The sign-in name, shown in the dialog title. */
   userName: string;
 
-  /** The account's e-mail address, if any -- shown alongside the "email link" delivery option, and used to explain why that option is unavailable when absent. */
+  /** The e-mail address, if any; shown with the e-mail link option, which is unavailable without one. */
   email: string | null | undefined;
 }
 
 /**
- * This component is the administrator-driven password-reset dialog `UserListComponent` opens for
- * a locked-out account, wired to `POST /api/users/{id}/reset-password`
- * (`UsersController.ResetPassword`). It offers the same two delivery modes that endpoint itself
- * supports (see `AdminPasswordResetMode`'s own backend doc comment for the full reasoning):
- * auto-generate a strong password and reveal it exactly once (via the shared
- * {@link RevealSecretDialogComponent}, this project's established reveal-once secret UI, reused
- * unchanged rather than re-built), or e-mail the account a real password-reset link to this
- * project's shared "set new password" landing page (`SetNewPasswordComponent`, at
- * `/reset-password`).
+ * This component is the password reset dialog the Users page (`UserListComponent`) opens for an
+ * account that cannot sign in. It calls `POST /api/users/{id}/reset-password` (`users:write`)
+ * with one of two modes: generate a password and show it once in
+ * {@link RevealSecretDialogComponent}, or e-mail the account a link to the `/reset-password` page
+ * (`SetNewPasswordComponent`).
  *
- * Unlike {@link RevealSecretDialogComponent}/`ConfirmDialogComponent`, this dialog's own backdrop
- * and Escape key are left enabled while the mode-selection step is showing (nothing irreplaceable
- * is at stake yet) -- but once a generated password is being revealed, this component defers
- * entirely to `RevealSecretDialogComponent`'s own non-dismissible modal for that step, so the same
- * "cannot lose an unsaved secret to an accidental dismiss" guarantee still applies.
+ * <p>While the mode is being chosen, a backdrop click or Escape closes the dialog, since nothing
+ * is lost yet. A generated password is shown in the reveal-once dialog, which cannot be closed by
+ * accident.
  */
 @Component({
   selector: 'app-reset-password-dialog',
@@ -76,16 +70,16 @@ export class ResetPasswordDialogComponent {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Whether this dialog's own mode-selection step is currently shown -- a caller drives this with its own signal. */
+  /** Whether the mode-selection step is shown; the caller drives this with a signal. */
   readonly visible = input<boolean>(false);
 
-  /** Which account this dialog instance resets the password for. */
+  /** The account whose password is reset. */
   readonly target = input<ResetPasswordDialogTarget | null>(null);
 
-  /** Emits this dialog's own new visibility -- `false` on every close, whether cancelled, a delivery failure the operator gave up on, or (for the email-link mode) a completed send. */
+  /** Emits `false` whenever the mode step closes: a cancel, a backdrop click or Escape, or a successful reset. */
   readonly visibleChange = output<boolean>();
 
-  /** Emits once this whole flow is fully done and dismissed -- after the operator closes the reveal-once password dialog (auto-generate mode), or immediately after a successful send (email-link mode). A caller needs no payload here; nothing this dialog did changes what a caller should refresh. */
+  /** Emits when the flow is finished: after the password dialog closes, or right after the link is sent. */
   readonly completed = output<void>();
 
   readonly submitting = signal(false);
@@ -95,16 +89,16 @@ export class ResetPasswordDialogComponent {
     mode: this.formBuilder.control<AdminPasswordResetMode>('AutoGenerate'),
   });
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown for a just-generated password. */
+  /** Whether the reveal-once dialog is shown for a generated password. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-generated password, shown exactly once. */
+  /** The generated password, shown once. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
   readonly modeAutoGenerate: AdminPasswordResetMode = 'AutoGenerate';
   readonly modeEmailLink: AdminPasswordResetMode = 'EmailLink';
 
-  /** This method submits the selected delivery mode against `POST /api/users/{id}/reset-password`. */
+  /** This method resets the password with the chosen mode, then shows the password or reports the e-mail. */
   async submit(): Promise<void> {
     const target = this.target();
     if (!target || this.submitting()) return;
@@ -121,8 +115,7 @@ export class ResetPasswordDialogComponent {
       );
 
       if (result.mode === this.modeAutoGenerate && result.generatedPassword) {
-        // Hand off to the shared reveal-once dialog -- this dialog's own visibility closes now,
-        // the reveal dialog's own non-dismissible modal takes over from here.
+        // Close this dialog and show the password in the reveal-once dialog.
         this.visibleChange.emit(false);
         this.revealDialogData.set({
           title: `Password reset for ${target.userName}`,
@@ -144,7 +137,7 @@ export class ResetPasswordDialogComponent {
     }
   }
 
-  /** This method runs when the mode-selection step's own modal reports a new visibility on its own (a backdrop click or Escape). */
+  /** This method handles the mode step's modal closing itself (a backdrop click or Escape) as a cancel. */
   onModalVisibleChange(visible: boolean): void {
     if (!visible) {
       this.errorMessage.set(null);
@@ -152,7 +145,7 @@ export class ResetPasswordDialogComponent {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once password dialog, completing this whole flow. */
+  /** This method hides the password dialog and finishes the flow. */
   onRevealDialogClosed(): void {
     this.revealDialogVisible.set(false);
     this.completed.emit();

@@ -24,18 +24,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many keys one page of this list shows -- matches `ZoneListComponent`'s own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every TSIG key this server knows about, backed by `GET /api/tsig-keys`'s
- * own real `skip`/`take` pagination. A key's own shared secret is never fetched or shown here --
- * `TsigKeyDetail` (the shape this list's own `GET` returns) never carries one at all, per this
- * project's uniform "reveal exactly once, on creation" secret-exposure policy; only
- * `TsigKeyFormComponent`'s own create flow ever sees the plaintext value, via the dedicated
- * `TsigKeyCreateResponse` this list never receives. A TSIG key is immutable once created (rotate =
- * delete + recreate, never edit), which shows up here as an "edit" action that only ever reaches
- * `TsigKeyFormComponent`'s own metadata (name/algorithm/disabled/comments) fields, never a secret.
+ * This component is the TSIG Keys page (`/tsig-keys`, `tsigkeys:read`). It lists keys a page at a
+ * time from `GET /api/tsig-keys`; the response never includes the secret, which is shown only once
+ * when a key is created. With `tsigkeys:write` it offers create, edit (name, algorithm, disabled
+ * flag and comments, not the secret), delete and an enable/disable toggle (`PATCH`); without it
+ * the toggle is disabled and the rest hidden.
  */
 @Component({
   selector: 'app-tsig-key-list',
@@ -60,13 +57,13 @@ export class TsigKeyListComponent {
   private readonly tsigKeysApi = inject(TsigKeysService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending key delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'algorithmName', 'disabled', 'actions'];
@@ -82,14 +79,14 @@ export class TsigKeyListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a key's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a key's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(key: TsigKeyDetail): Promise<void> {
     if (!key.id) return;
 
@@ -104,7 +101,7 @@ export class TsigKeyListComponent {
     }
   }
 
-  /** This method confirms, then permanently deletes, a TSIG key. */
+  /** This method asks for confirmation, then deletes a key. */
   async deleteKey(key: TsigKeyDetail): Promise<void> {
     if (!key.id) return;
 
@@ -127,9 +124,7 @@ export class TsigKeyListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -139,7 +134,7 @@ export class TsigKeyListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

@@ -8,6 +8,11 @@ import {
   ResetPasswordDialogTarget,
 } from './reset-password-dialog.component';
 
+/**
+ * These tests cover the password reset dialog: generating and revealing a password, sending a
+ * link, errors, guards and closing. TestBed with spy-backed `UsersService` and
+ * `NotificationService`.
+ */
 describe('ResetPasswordDialogComponent', () => {
   let fixture: ComponentFixture<ResetPasswordDialogComponent>;
   let usersApiSpy: { apiUsersIdResetPasswordPost: jasmine.Spy };

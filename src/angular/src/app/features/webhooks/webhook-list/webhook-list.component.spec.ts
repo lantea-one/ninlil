@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the webhook list: loading and paging, the toggle and delete with its
+ * confirmation. TestBed with spy-backed `WebhooksService` and `NotificationService`.
+ */
 describe('WebhookListComponent', () => {
   let webhooksApiSpy: {
     apiWebhooksGet: jasmine.Spy;

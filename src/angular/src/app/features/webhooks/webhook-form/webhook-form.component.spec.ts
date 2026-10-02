@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the webhook form: the event type choices, create with the reveal-once dialog,
+ * required credentials, edit with and without rotating credentials, errors and validation.
+ * TestBed with a spy-backed `WebhooksService` and a stubbed route.
+ */
 describe('WebhookFormComponent', () => {
   let webhooksApiSpy: {
     apiWebhooksIdGet: jasmine.Spy;

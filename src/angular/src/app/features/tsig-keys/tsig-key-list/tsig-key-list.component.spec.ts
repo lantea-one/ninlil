@@ -10,9 +10,13 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the TSIG key list: loading and paging, the toggle and delete with its
+ * confirmation. TestBed with spy-backed `TsigKeysService` and `NotificationService`.
+ */
 describe('TsigKeyListComponent', () => {
-  // A manually-shaped spy interface, not `jasmine.SpyObj<TsigKeysService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why.
+  // A hand-written spy type rather than `jasmine.SpyObj<TsigKeysService>`; the AuthService spec
+  // explains why (overloaded generated methods).
   let tsigKeysApiSpy: {
     apiTsigKeysGet: jasmine.Spy;
     apiTsigKeysIdPatch: jasmine.Spy;

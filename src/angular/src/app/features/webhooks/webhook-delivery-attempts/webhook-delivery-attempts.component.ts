@@ -30,18 +30,15 @@ import {
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 
-/** How many delivery attempts one page of this history view shows -- matches every other list's own default. */
+/** The page size the history starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component shows a single webhook subscription's own persisted delivery-attempt history,
- * backed by `GET /api/webhooks/{id}/delivery-attempts`'s own real `skip`/`take` pagination,
- * most-recently-created attempt first. This is a read-only view: there is no create/edit affordance
- * anywhere here, since a delivery-attempt row is written exclusively by this server's own delivery
- * engine (`WebhookDeliveryService`/`WebhookDeliveryRetrySweepService`), never by an operator -- the
- * closest existing precedent for a route with no write affordance at all is
- * `QueryLogListComponent`, for the same underlying reason (server-written history, not
- * operator-authored data).
+ * This component is a webhook's delivery history page (`/webhooks/:id/deliveries`,
+ * `webhooks:read`). It lists delivery attempts, newest first, a page at a time from
+ * `GET /api/webhooks/{id}/delivery-attempts`, and can show and copy the payload each attempt sent.
+ * The attempts are written by the delivery service (`WebhookDeliveryService`,
+ * `WebhookDeliveryRetrySweepService`), so the page is read-only.
  */
 @Component({
   selector: 'app-webhook-delivery-attempts',
@@ -71,7 +68,7 @@ export class WebhookDeliveryAttemptsComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly clipboard = inject(Clipboard);
 
-  /** The subscription identifier this history view targets, taken from the route's own `:id` segment. */
+  /** The subscription id, from the `:id` route parameter. */
   private readonly subscriptionId = this.route.snapshot.paramMap.get('id') ?? '';
 
   readonly displayedColumns = [
@@ -89,13 +86,13 @@ export class WebhookDeliveryAttemptsComponent {
   /** The delivery whose request body is shown in the payload dialog, or `null` while it's closed. */
   readonly payloadAttempt = signal<WebhookDeliveryAttemptDetail | null>(null);
 
-  /** The shown payload, pretty-printed; the stored text as-is if it somehow isn't valid JSON. */
+  /** The shown payload, pretty-printed, or the stored text unchanged if it is not JSON. */
   readonly formattedPayload = computed(() => formatPayload(this.payloadAttempt()?.payloadJson));
 
   /** Whether the dialog's copy button has just copied, to swap its icon and tooltip. */
   readonly payloadCopied = signal(false);
 
-  /** The targeted subscription's own name, shown in this page's heading once loaded. */
+  /** The subscription name, shown in the heading once loaded. */
   readonly subscription = signal<WebhookSubscriptionDetail | null>(null);
 
   readonly attempts = signal<WebhookDeliveryAttemptDetail[]>([]);
@@ -110,14 +107,14 @@ export class WebhookDeliveryAttemptsComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method maps a delivery attempt's own status onto the {@link BadgeComponent} color that best conveys its severity. */
+  /** This method returns the badge color for a delivery attempt's status. */
   statusBadgeColor(status: WebhookDeliveryAttemptStatusEnum | undefined): string {
     switch (status) {
       case WebhookDeliveryAttemptStatusEnum.Succeeded:
@@ -156,10 +153,8 @@ export class WebhookDeliveryAttemptsComponent {
       );
       this.subscription.set(subscription);
     } catch {
-      // The page still works with just the identifier in its heading if this lookup fails
-      // (a subscription deleted moments after this page was opened, for example) -- the
-      // delivery-attempt history itself is unaffected, since WebhookDeliveryAttemptEntity
-      // snapshots its own subscription name independently (see that entity's own doc comment).
+      // If the lookup fails (e.g. the subscription was just deleted), the heading shows the id;
+      // the history still loads.
     }
   }
 
