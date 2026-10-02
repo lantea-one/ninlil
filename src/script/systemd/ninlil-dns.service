@@ -1,5 +1,6 @@
-# systemd unit for Ninlil. Installed by install.sh alongside this file; see that script for the
-# directory layout this unit expects.
+# systemd unit for Ninlil installed by hand: install.sh copies it to /etc/systemd/system and
+# creates the ninlil-dns user and the /opt/ninlil-dns layout it expects. The Arch Linux packages
+# use src/archlinux/common/ninlil.service instead.
 [Unit]
 Description=Ninlil DNS, DHCP and Router Advertisement server
 After=network-online.target
@@ -18,17 +19,19 @@ WorkingDirectory=/opt/ninlil-dns
 ExecStart=/opt/ninlil-dns/Ninlil.Web --contentRoot=/opt/ninlil-dns/data --webroot=/opt/ninlil-dns/wwwroot
 EnvironmentFile=-/etc/ninlil-dns/ninlil-dns.env
 # A single-file binary extracts its bundled native libraries on first start; keep them inside
-# the writable data directory rather than the service account's (protected) home.
+# the writable data directory, since install.sh creates no home directory for the account.
 Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/opt/ninlil-dns/data/.bundle
 Restart=on-failure
 RestartSec=5
-# Ports 53/67/80/443 without running as root, and raw sockets for DHCP and Router Advertisement.
+# Ports below 1024 (53, 67, 80, 443, 547) without root, and raw sockets and interface access for
+# DHCP and Router Advertisement.
 AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# ProtectSystem=strict makes everything else read-only.
 ReadWritePaths=/opt/ninlil-dns/data /var/log/ninlil-dns
 
 [Install]

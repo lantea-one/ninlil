@@ -3,7 +3,11 @@
 # Builds the newest Ninlil release from source: the most recent v<yyyy>.<mm>.<dd>.<increment>
 # release branch, compiled into the same self-contained single-file executable (admin console
 # included) the release binaries are. For the prebuilt binary instead, install the ninlil
-# package every release carries; for the latest develop commit, ninlil-git-next.
+# package every release carries; for the latest develop commit, ninlil-git-next. The unit,
+# sysusers entry and environment file come from src/archlinux/common in the checkout.
+#
+# Build needs: the .NET 10 SDK, Node.js with npm, and a Java runtime (the admin console build
+# regenerates its API client with openapi-generator-cli). Downloads go to caches under $srcdir.
 
 pkgname=ninlil-git-stable
 pkgver=2026.09.24.1
@@ -23,7 +27,8 @@ options=('!strip' '!debug')
 source=("${pkgname}::git+${url}.git")
 sha256sums=('SKIP')
 
-# The newest release branch, by version order.
+# The newest release branch, by version order. Branches whose name is not a full
+# v<yyyy>.<mm>.<dd>.<increment> are ignored.
 _release_branch() {
   git -C "${srcdir}/${pkgname}" for-each-ref --format='%(refname:lstrip=3)' 'refs/remotes/origin/v*' \
     | grep -E '^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$' \

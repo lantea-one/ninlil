@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# This script installs Ninlil as a systemd service: it creates a dedicated, unprivileged
-# service account, lays down the directories the service needs, installs the unit file sitting
-# alongside this script, and enables (but does not start) the service.
+# Installs Ninlil as a systemd service on a systemd-based Linux host: it creates an unprivileged
+# system account (ninlil-dns), the directories the service needs and a starter environment file,
+# installs the unit file that sits next to this script, and enables (but does not start) it.
 #
 # It accepts either a release binary (ninlil-linux-amd64 / ninlil-linux-arm64) or the output
 # directory of `dotnet publish src/dotnet/src/Ninlil.Web`:
@@ -10,8 +10,12 @@
 #   sudo ./install.sh ./ninlil-linux-amd64
 #   sudo ./install.sh /path/to/published/Ninlil.Web
 #
-# Re-running it upgrades the installed program and leaves the data directory and the
-# environment file untouched.
+# Writes: /opt/ninlil-dns (program, data/ and wwwroot/), /etc/ninlil-dns/ninlil-dns.env,
+# /var/log/ninlil-dns and /etc/systemd/system/ninlil-dns.service. Exits non-zero when not run as
+# root, when the argument is missing or does not exist, or when a step fails.
+#
+# Re-running it upgrades the installed program and the unit file, and leaves the data directory
+# and the environment file untouched.
 
 set -euo pipefail
 
@@ -34,7 +38,7 @@ CONFIG_DIRECTORY="/etc/ninlil-dns"
 LOG_DIRECTORY="/var/log/ninlil-dns"
 SERVICE_USER="ninlil-dns"
 
-# Create the dedicated, unprivileged service account, if it does not already exist.
+# Create the unprivileged service account, if it does not already exist.
 if ! id "${SERVICE_USER}" &>/dev/null; then
     useradd --system --no-create-home --shell /usr/sbin/nologin "${SERVICE_USER}"
 fi

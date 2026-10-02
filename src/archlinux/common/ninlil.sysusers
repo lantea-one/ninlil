@@ -1,1 +1,3 @@
+# The system user and group the ninlil service runs as, with /var/lib/ninlil as its home.
+# Installed as /usr/lib/sysusers.d/ninlil.conf; systemd-sysusers creates it on install.
 u ninlil - "Ninlil DNS/DHCP server" /var/lib/ninlil

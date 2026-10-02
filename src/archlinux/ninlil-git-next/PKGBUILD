@@ -3,7 +3,11 @@
 # Builds Ninlil's next release from source: the latest commit on the develop branch, compiled into
 # the same self-contained single-file executable (admin console included) the release binaries
 # are. For the newest release instead, install ninlil-git-stable, or the prebuilt ninlil package
-# every release carries.
+# every release carries. The unit, sysusers entry and environment file come from
+# src/archlinux/common in the checkout.
+#
+# Build needs: the .NET 10 SDK, Node.js with npm, and a Java runtime (the admin console build
+# regenerates its API client with openapi-generator-cli). Downloads go to caches under $srcdir.
 
 pkgname=ninlil-git-next
 pkgver=2026.09.24.19.develop.c0ba18f
@@ -24,7 +28,8 @@ source=("${pkgname}::git+${url}.git#branch=develop")
 sha256sums=('SKIP')
 
 # The develop commit's version, in the same shape the pipeline gives a develop build: the commit's
-# UTC date, its position among that day's commits, and its short hash. Prints
+# UTC date, its position among that day's commits, and its short hash. The pipeline counts builds
+# rather than commits, so the increment can differ from the matching pre-release's. Prints
 # "<yyyy> <mm> <dd> <increment> <short-sha>".
 _version_parts() {
   local day
