@@ -4,24 +4,19 @@ import { firstValueFrom } from 'rxjs';
 import { extractErrorMessage } from '../../shared/http-error/http-error.util';
 
 /**
- * This service downloads a full-system backup archive via a raw {@link HttpClient} request,
- * deliberately bypassing the generated `BackupService.apiBackupPost` -- the OpenAPI document
- * Swashbuckle produced for `POST /api/backup` declares no response schema at all (an
- * `ActionResult`-returning `File(...)` response carries no `[ProducesResponseType]` of its
- * own), so the generated method's own response handling defaults to `responseType: 'json'`,
- * which would try to `JSON.parse` this endpoint's real, binary octet-stream body and fail. A
- * plain `HttpClient` call with an explicit `responseType: 'blob'` sidesteps that entirely, and
- * still picks up the current session's own bearer token automatically via `authInterceptor`,
- * which attaches to every outgoing request outside `/api/auth/*` regardless of which client
- * issued it.
+ * This service downloads a backup archive from `POST /api/backup` with a plain
+ * {@link HttpClient} call instead of the generated `BackupService.apiBackupPost`. The OpenAPI
+ * document declares no response schema for that endpoint, so the generated method expects JSON
+ * and would fail to parse the binary body; this call asks for a `blob`. `authInterceptor` still
+ * adds the Bearer token, as it does for every request.
  */
 @Injectable({ providedIn: 'root' })
 export class BackupDownloadService {
   private readonly httpClient = inject(HttpClient);
 
   /**
-   * This method requests a complete backup archive encrypted with `passphrase`, returning its
-   * raw bytes as a {@link Blob}.
+   * This method requests a backup archive, encrypted with `passphrase` unless it is empty, and
+   * returns it as a {@link Blob}. On failure it throws an `Error` with a readable message.
    */
   async downloadBackup(passphrase: string): Promise<Blob> {
     try {
@@ -34,14 +29,10 @@ export class BackupDownloadService {
   }
 
   /**
-   * This method reads a human-readable message out of an error raised by
-   * {@link downloadBackup}. A `responseType: 'blob'` request that fails still parses its own
-   * error body as a `Blob` too -- Angular's `HttpClient` uses the same response type for both
-   * the success and failure path -- so `extractErrorMessage`'s own assumption that
-   * `HttpErrorResponse.error` is already a parsed JSON value or string does not hold here; this
-   * reads the blob's own text content first and re-parses it the identical way
-   * `extractErrorMessage` would, before falling back to it for every other error shape (a
-   * network failure, a non-blob body).
+   * This method gets a readable message from a {@link downloadBackup} error. With
+   * `responseType: 'blob'` the error body is a `Blob` too, which `extractErrorMessage` cannot
+   * read, so this reads the text, takes `detail` or `title` from JSON, or uses the text itself.
+   * Other errors (a network failure, no body) go to `extractErrorMessage`.
    */
   private async extractBlobErrorMessage(error: unknown): Promise<string> {
     if (error instanceof HttpErrorResponse && error.error instanceof Blob) {
@@ -52,8 +43,7 @@ export class BackupDownloadService {
         if (parsed.detail) return parsed.detail;
         if (parsed.title) return parsed.title;
       } catch {
-        // The body was not JSON -- a bare string body (Conflict("...")/BadRequest("...")) is
-        // already exactly what should be shown.
+        // Not JSON: show the plain text body as it is.
       }
 
       if (bodyText.trim().length > 0) return bodyText;

@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Security page: loading the status, authenticator setup and confirmation,
+ * turning two-factor off, the e-mailed code, and recovery codes with the reveal-once dialog.
+ * TestBed with a spy-backed `TwoFactorService` and `NotificationService`.
+ */
 describe('AccountSecurityComponent', () => {
   let twoFactorApiSpy: {
     apiAuthTwoFactorStatusGet: jasmine.Spy;
@@ -179,8 +184,7 @@ describe('AccountSecurityComponent', () => {
         secrets: codes.map((value, index) => ({ label: `Code ${index + 1}`, value })),
       }),
     );
-    // Only the one initial load from createComponent() has happened so far -- reloading is
-    // deferred to onSecretDialogClosed(), once the operator actually dismisses the dialog.
+    // Only the initial load has happened; the reload waits for onSecretDialogClosed().
     expect(twoFactorApiSpy.apiAuthTwoFactorStatusGet).toHaveBeenCalledTimes(1);
   });
 

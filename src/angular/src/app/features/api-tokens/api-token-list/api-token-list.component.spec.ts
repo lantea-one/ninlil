@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the token list: loading, each status and its color, and revoking with the
+ * confirmation accepted, dismissed or failing. TestBed with a spy-backed `ApiTokensService` and
+ * `NotificationService`.
+ */
 describe('ApiTokenListComponent', () => {
   let apiTokensApiSpy: { apiApiTokensGet: jasmine.Spy; apiApiTokensIdDelete: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };

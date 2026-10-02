@@ -7,9 +7,6 @@ h1 {
   margin: var(--ninlil-space-6) auto;
 }
 
-// Widened from a fixed 700px to this app's own standard form-width step, the same single-section
-// create/edit form width `WebhookFormComponent`/`ForwarderFormComponent` use, per this sub-phase's
-// own form-width consistency pass.
 .profile-card {
   max-width: var(--ninlil-form-max-width);
   margin: 0 auto var(--ninlil-space-5);

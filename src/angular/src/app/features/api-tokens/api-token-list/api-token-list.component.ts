@@ -21,13 +21,10 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 
 /**
- * This component lists the current caller's own API tokens, via `GET /api/api-tokens` -- a
- * plain, unpaginated array, scoped server-side to the signed-in caller alone
- * (`ApiTokensController` reads `User.GetUserId()` directly, never an `id` route parameter), which
- * is also why this whole feature carries no `permission` in `NAV_ITEMS` at all: possessing a
- * valid session is itself sufficient authorization to manage one's own tokens. A token's own raw
- * value is never shown here -- `ApiTokenSummary` (this list's own response shape) never carries
- * one at all; only `ApiTokenFormComponent`'s own create flow ever sees it.
+ * This component is the API Tokens page (`/api-tokens`). It lists the signed-in user's tokens
+ * from `GET /api/api-tokens` (not paged) and revokes one with `DELETE /api/api-tokens/{id}`.
+ * `ApiTokensController` needs only a session and works on the caller's tokens alone, so the page
+ * has no permission check. Raw token values are never listed; they are shown once, at creation.
  */
 @Component({
   selector: 'app-api-token-list',
@@ -51,13 +48,13 @@ export class ApiTokenListComponent {
   private readonly apiTokensApi = inject(ApiTokensService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending revoke. */
+  /** Whether the revoke confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'type', 'createdAtUtc', 'expiresAtUtc', 'status', 'actions'];
@@ -70,7 +67,7 @@ export class ApiTokenListComponent {
     void this.load();
   }
 
-  /** This method reports a token's own current status, for display. */
+  /** This method returns a token's status for display: Revoked, Consumed, Expired or Active. */
   status(token: ApiTokenSummary): string {
     if (token.revokedAtUtc) return 'Revoked';
     if (token.type === 'OneTime' && token.consumedAtUtc) return 'Consumed';
@@ -80,7 +77,7 @@ export class ApiTokenListComponent {
     return 'Active';
   }
 
-  /** This method reports which badge color best represents a token's own current status. */
+  /** This method returns the badge color for a token's status. */
   statusColor(token: ApiTokenSummary): string {
     switch (this.status(token)) {
       case 'Active':
@@ -94,7 +91,7 @@ export class ApiTokenListComponent {
     }
   }
 
-  /** This method confirms, then revokes, one of the current caller's own tokens. */
+  /** This method asks for confirmation, then revokes a token and reloads the list. */
   async revokeToken(token: ApiTokenSummary): Promise<void> {
     if (!token.id) return;
 
@@ -117,9 +114,7 @@ export class ApiTokenListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -129,7 +124,7 @@ export class ApiTokenListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

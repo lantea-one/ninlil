@@ -7,9 +7,6 @@ h1 {
   margin: var(--ninlil-space-6) auto;
 }
 
-// Widened from a fixed 700px to this app's own standard form-width step, matching
-// `AccountProfileComponent`'s own identical change, per this sub-phase's own form-width
-// consistency pass.
 .security-card {
   max-width: var(--ninlil-form-max-width);
   margin: 0 auto var(--ninlil-space-5);
@@ -28,11 +25,9 @@ h1 {
   gap: var(--ninlil-space-1);
 }
 
-// The pending-setup step's own authenticator URI/shared key -- a real, deliberately sensitive
-// value shown in-page rather than inside the reveal-once dialog (it is re-derivable/re-visible on
-// demand until enrollment is confirmed, unlike a true one-time secret) -- gets the same
-// code-block treatment `RevealSecretDialogComponent`'s own `.secret-value` uses, so it reads as a
-// distinct, copyable value rather than plain paragraph text.
+// The authenticator key during setup. It is shown on the page, not in the reveal-once dialog,
+// because losing it costs nothing: starting setup again issues a new key. It is styled like the
+// dialog's `.secret-value`.
 .mono {
   display: inline-block;
   font-family: monospace;

@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Profile page: loading, the Gravatar URL and initials fallback, saving
+ * (trimming, `null` for cleared fields), and changing the password with its validation and errors.
+ * TestBed with a spy-backed `UsersService` and `NotificationService`.
+ */
 describe('AccountProfileComponent', () => {
   let usersApiSpy: {
     apiUsersMeGet: jasmine.Spy;
@@ -72,8 +77,7 @@ describe('AccountProfileComponent', () => {
       );
     });
 
-    // No response body accompanies this 500 -- extractErrorMessage falls back to the fallback
-    // string plus the raw HTTP status, per its own doc comment.
+    // A 500 with no body: extractErrorMessage returns the fallback text plus the status.
     expect(fixture.componentInstance.errorMessage()).toBe(
       'Could not load your profile. (HTTP 500)',
     );
@@ -92,7 +96,7 @@ describe('AccountProfileComponent', () => {
     fixture.componentInstance.onAvatarError();
 
     expect(fixture.componentInstance.avatarFailed()).toBeTrue();
-    // "Jamie Smith" -> "JS", confirming the fallback initials read from the loaded profile.
+    // "Jamie Smith" gives "JS", read from the loaded profile.
     expect(fixture.componentInstance.avatarInitials()).toBe('JS');
   });
 

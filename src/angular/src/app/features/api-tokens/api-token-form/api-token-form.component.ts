@@ -25,16 +25,12 @@ import {
 } from '../../../shared/reveal-secret-dialog/reveal-secret-dialog.component';
 
 /**
- * This component creates a new API token for the current caller -- create-only, unlike
- * `TsigKeyFormComponent`/`RoleFormComponent`, since `ApiTokensController` exposes no edit action
- * at all (a token's own name/type/expiry are fixed at issuance; only revoking it is possible
- * afterward, which `ApiTokenListComponent` already covers). On a successful create, this
- * component shows {@link RevealSecretDialogComponent} with the response's own `rawToken` -- the
- * one and only place this whole feature ever shows a token's own raw, secret value, matching
- * `ApiTokenSummary`'s own deliberate omission of it from every later `GET`/list response. The
- * dialog is embedded declaratively (`[visible]`/`[data]`/`(closed)`) rather than opened
- * imperatively, so navigation away from this page is deferred until the operator dismisses it --
- * see {@link RevealSecretDialogComponent}'s own doc comment for why.
+ * This component is the New API Token page (`/api-tokens/new`). It creates a token for the
+ * signed-in user through `POST /api/api-tokens`, which needs only a session. A token cannot be
+ * edited after creation, only revoked from the list, so there is no edit mode.
+ *
+ * <p>The response carries the raw token, which is never returned again. The page shows it in
+ * {@link RevealSecretDialogComponent} and returns to the list once the dialog is closed.
  */
 @Component({
   selector: 'app-api-token-form',
@@ -67,10 +63,10 @@ export class ApiTokenFormComponent {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown -- set once, right after a successful create. */
+  /** Whether the reveal-once dialog is shown; set after a successful create. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-issued token's own raw value, shown exactly once via {@link RevealSecretDialogComponent}. */
+  /** The new token's raw value, shown once in {@link RevealSecretDialogComponent}. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -79,7 +75,7 @@ export class ApiTokenFormComponent {
     expiresAtUtc: [''],
   });
 
-  /** This method issues the new token, then reveals its raw value exactly once. */
+  /** This method creates the token and shows its raw value. The expiry is sent as UTC. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -102,8 +98,7 @@ export class ApiTokenFormComponent {
         }),
       );
 
-      // Reveal the raw token exactly once -- navigation away is deferred to
-      // onSecretDialogClosed(), once the operator has actually dismissed the dialog.
+      // Stay on the page until the dialog is closed (onSecretDialogClosed).
       this.revealDialogData.set({
         title: 'API token created',
         message:
@@ -118,7 +113,7 @@ export class ApiTokenFormComponent {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once secret dialog, navigating away only now that they have confirmed saving the token. */
+  /** This method hides the dialog and returns to the token list. */
   onSecretDialogClosed(): void {
     this.revealDialogVisible.set(false);
     void this.router.navigate(['/api-tokens']);

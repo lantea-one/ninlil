@@ -1,6 +1,4 @@
-// Same page-level centering/backdrop treatment LoginComponent's own stylesheet documents in
-// detail -- kept as its own small, local copy rather than a shared class, matching that
-// stylesheet's own established "each auth page owns its layout" convention.
+// The same centering and backdrop as login.component.scss; each public page has a copy.
 .sso-callback-page {
   display: flex;
   flex-direction: column;
@@ -29,8 +27,6 @@
   letter-spacing: 0.01em;
 }
 
-// See `LoginComponent`'s own `.login-card` -- widened from a fixed 400px to the shared compact
-// form-width token for the same reason (the audit's own finding 5).
 .sso-callback-card {
   width: 100%;
   max-width: var(--ninlil-form-max-width-compact);

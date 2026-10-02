@@ -22,21 +22,16 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 
 /**
- * This component is both the "create a rule" and "edit a rule" page -- one component for both,
- * distinguished by whether the route supplies an `id` (see `app.routes.ts`), mirroring
- * `ClientGroupFormComponent`'s own shape exactly since this is likewise a flat, single-entity,
- * no-secrets form.
- * <p>
- * The two known capabilities (`RecursionAccess`/`RateLimitBypass` --
- * `DnsAccessControlCapabilityEnum` is extensible to a third later, at which point this form gains
- * a third checkbox) are each their own boolean checkbox, combined into the
- * `capabilities: string[]` array `DnsAccessControlRuleWriteRequest` actually carries only at
- * submit time, and expanded back into the two booleans on load -- the same
- * `WebListenSettingsComponent` pattern this project already uses for its own
- * `allowedProtocolTls12`/`allowedProtocolTls13` checkboxes feeding a single `allowedProtocols`
- * array field, chosen here over a generic multi-select since there are only ever two (soon three)
- * well-known values, not an open-ended list.
- * </p>
+ * This component is the create and edit page for a DNS access control rule
+ * (`/access-control-rules/new` and `/access-control-rules/:id/edit`); edit mode is chosen by the
+ * `id` route parameter. It loads a rule with `GET /api/access-control-rules/{id}` and saves with
+ * `POST /api/access-control-rules` or `PUT /api/access-control-rules/{id}`
+ * (`accesscontrol:write`, which the route also requires).
+ *
+ * <p>A rule grants capabilities to a network. The two capabilities (`RecursionAccess` and
+ * `RateLimitBypass`, from `DnsAccessControlCapabilityEnum`) are separate checkboxes, combined into
+ * the request's `capabilities` array on save and split back out on load. A new capability needs a
+ * new checkbox here.
  */
 @Component({
   selector: 'app-access-control-rule-form',
@@ -88,7 +83,7 @@ export class AccessControlRuleFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingRule();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the rule, per {@link isEditMode}. */
+  /** This method creates the rule (`POST`) or replaces it (`PUT`), then returns to the list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

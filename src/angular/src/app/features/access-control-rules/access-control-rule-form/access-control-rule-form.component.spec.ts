@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the rule form: create and edit modes, turning the two checkboxes into the
+ * capabilities array and back, saving and errors. TestBed with a spy-backed
+ * `DnsAccessControlRulesService` and a stubbed route.
+ */
 describe('AccessControlRuleFormComponent', () => {
   let apiSpy: {
     apiAccessControlRulesIdGet: jasmine.Spy;

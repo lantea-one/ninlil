@@ -1,5 +1,3 @@
-// A short, single-purpose form (name, one-time flag, optional expiry) fits this app's own
-// compact form-width step, the same one `LoginComponent`'s own card uses.
 .form-card {
   max-width: var(--ninlil-form-max-width-compact);
   margin: var(--ninlil-space-5) auto;

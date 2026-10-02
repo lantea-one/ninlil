@@ -23,11 +23,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 
 /**
- * This validator checks that this page's own `newPassword`/`confirmNewPassword` fields hold the
- * same value, reporting the mismatch on the group itself, mirroring
- * `AccountProfileComponent`'s own identical validator for its change-password section (kept as
- * its own small, local copy rather than a shared import -- nothing else about these two forms is
- * shared, and this is the only piece either would need from the other).
+ * This validator checks that `newPassword` and `confirmNewPassword` match, reporting the mismatch
+ * on the group. `AccountProfileComponent` has the same small validator.
  */
 function passwordsMatchValidator(control: AbstractControl): ValidationErrors | null {
   const newPassword = control.get('newPassword')?.value;
@@ -36,25 +33,15 @@ function passwordsMatchValidator(control: AbstractControl): ValidationErrors | n
 }
 
 /**
- * This component is Ninlil's shared, public "set new password" landing page, reachable at
- * `/reset-password?userId=...&token=...` with no sign-in required (a top-level route sibling to
- * `AppShellComponent`, mirroring `LoginComponent`'s own route shape exactly -- see
- * `app.routes.ts`). It exists to serve two entry points that both need the exact same landing
- * page and confirming backend action (`AuthController.ResetPassword`):
+ * This component is the public "set new password" page
+ * (`/reset-password?userId=...&token=...`). Two e-mails link here: the reset link an administrator
+ * sends from the Users page (`EmailLink` delivery of `POST /api/users/{id}/reset-password`), and
+ * the one from the Forgot Password page. Both are confirmed by the anonymous
+ * `POST /api/auth/reset-password`; the page does not need to know which e-mail was used.
  *
- * - The `EmailLink` delivery mode of `UsersController.ResetPassword` (administrator-driven reset
- *   for a locked-out account) e-mails a link to this exact page.
- * - `ForgotPasswordComponent`'s own self-service request flow, reachable from the login page,
- *   e-mails a link to this same page too -- this page was built generic enough (it neither knows
- *   nor cares which flow produced its `userId`/`token` query params) to need no changes at all to
- *   serve both.
- *
- * `userId`/`token` are read once, from this page's own initial navigation (`ActivatedRoute`'s
- * `snapshot`, mirroring `LoginComponent.navigateAfterSignIn`'s own `returnUrl` read) -- this page
- * is never navigated to again in place with different query params, so there is no need for the
- * reactive `queryParamMap` observable instead. A missing/malformed pair is treated as an
- * immediately invalid link, with no form shown at all, rather than letting the operator fill out
- * a form doomed to fail against `AuthController.ResetPassword`'s own real validation.
+ * <p>`userId` and `token` are read once from the route snapshot, since the page is never
+ * re-navigated with other values. If either is missing, the page shows an invalid-link message
+ * instead of a form that could only fail. A completed reset does not sign the user in.
  */
 @Component({
   selector: 'app-set-new-password',
@@ -80,13 +67,13 @@ export class SetNewPasswordComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** The account identifier this page's own link carries, or `null` for a malformed/missing link. */
+  /** The `userId` from the link, or `null` if missing. */
   private readonly userId = this.route.snapshot.queryParamMap.get('userId');
 
-  /** The reset token this page's own link carries, or `null` for a malformed/missing link. */
+  /** The reset `token` from the link, or `null` if missing. */
   private readonly token = this.route.snapshot.queryParamMap.get('token');
 
-  /** Whether this page's own link carried both a `userId` and a `token` -- when `false`, no form is shown at all. */
+  /** Whether the link carried both `userId` and `token`; without them no form is shown. */
   readonly hasValidLink = this.userId !== null && this.token !== null;
 
   readonly submitting = signal(false);
@@ -94,10 +81,8 @@ export class SetNewPasswordComponent {
   readonly completed = signal(false);
 
   /**
-   * This constant is the client-side floor {@link form}'s own `newPassword` field enforces before
-   * ever submitting, mirroring `AccountProfileComponent`'s own identical constant for its
-   * change-password section (see that class's own doc comment for why this floor is independent
-   * of this server's admin-configurable password-complexity policy).
+   * The minimum new-password length checked in the browser, the same as on the Profile page. The
+   * server's password policy can be stricter; its errors are shown as they come back.
    */
   readonly passwordMinLength = 12;
 
@@ -109,7 +94,10 @@ export class SetNewPasswordComponent {
     { validators: [passwordsMatchValidator] },
   );
 
-  /** This method submits the new password against `POST /api/auth/reset-password`. */
+  /**
+   * This method submits the new password to `POST /api/auth/reset-password`. An error without a
+   * readable message is shown as an expired link.
+   */
   async submit(): Promise<void> {
     if (this.form.invalid || this.submitting() || !this.userId || !this.token) return;
 

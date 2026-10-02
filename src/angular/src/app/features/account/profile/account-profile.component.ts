@@ -23,15 +23,13 @@ import { buildGravatarInitials, buildGravatarUrl } from '../../../shared/gravata
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 
-/** The pixel size requested from Gravatar -- large enough to look sharp at this page's own 96px display size (see the stylesheet), matching a common `@2x`-friendly Gravatar convention. */
+/** The size requested from Gravatar: twice the 96px display size, so the avatar stays sharp on high-density screens. */
 const AVATAR_SIZE_PIXELS = 192;
 
 /**
- * This validator checks that {@link AccountProfileComponent.changePasswordForm}'s own
- * `newPassword`/`confirmNewPassword` fields hold the same value, reporting the mismatch on the
- * group itself (`confirmNewPassword` alone has nothing wrong with it in isolation) so the
- * template can show one clear message rather than a per-field error that would not make sense on
- * either field individually.
+ * This validator checks that `newPassword` and `confirmNewPassword` in
+ * {@link AccountProfileComponent.changePasswordForm} match. It reports the mismatch on the group,
+ * since neither field is wrong on its own.
  */
 function passwordsMatchValidator(control: AbstractControl): ValidationErrors | null {
   const newPassword = control.get('newPassword')?.value;
@@ -40,39 +38,18 @@ function passwordsMatchValidator(control: AbstractControl): ValidationErrors | n
 }
 
 /**
- * This component is the current caller's own self-service Profile page -- reachable from the app
- * shell's own user menu, at `/account/profile`, gated only by `authGuard` (any signed-in
- * session), mirroring `AccountSecurityComponent`'s own self-service bar: `UsersController`'s own
- * `GetMine`/`PatchMine` actions carry no `[RequirePermission(...)]` either, since every action
- * here acts on the caller's own account, never anyone else's.
+ * This component is the signed-in user's Profile page (`/account/profile`), opened from the
+ * account menu. It needs only a session: `GET` and `PATCH /api/users/me` and
+ * `POST /api/users/me/change-password` act on the caller's account and require no permission.
  *
- * Distinct from `AccountSecurityComponent` (authenticator/2FA/recovery codes): this page covers
- * the account's own profile identity -- display name, phone number, and a Gravatar-backed avatar
- * built client-side from the account's e-mail address. `UserEntity.DisplayName`/`PhoneNumber`
- * already existed as unused database columns before this page; this is their first real
- * consumer. The account's e-mail address itself is shown read-only -- changing it needs its own
- * re-verification flow this project does not yet build (see `UserProfileDetail`'s own doc
- * comment on the backend).
+ * <p>It edits the display name and phone number, shows the e-mail address read-only, and shows a
+ * Gravatar avatar built in the browser from the e-mail address (`shared/gravatar/`). The browser
+ * loads the avatar from gravatar.com; when that fails, because the address has no Gravatar or the
+ * server has no internet access, the page shows initials instead.
  *
- * The avatar itself is never fetched or computed server-side: the `<img>` element's own `src` is
- * a plain `gravatar.com` URL built from an MD5 hash of the account's e-mail address (see
- * `shared/gravatar/gravatar.util.ts`), fetched by the *viewer's own browser* the same way any
- * ordinary external image is. Gravatar's own `d=404` query parameter makes a lookup with no
- * registered avatar fail with a real HTTP 404 rather than silently serving a generic silhouette,
- * so this page's own `onAvatarError()` handler can reliably tell "no Gravatar for this address"
- * and "gravatar.com is entirely unreachable" (a fully offline homelab install) apart from an
- * actual photo -- both cases fall back identically to a local, CSS-only initials avatar, so the
- * offline case degrades to cosmetic-only (a plain-letter avatar instead of a photo), never a
- * functional break. Confirmed via `AskUserQuestion`, 2026-09-02 -- an opt-in toggle and a
- * local-only avatar were both considered and rejected as unnecessary given this fallback already
- * covers the offline case.
- *
- * This page also carries a self-service change-password section, wired to
- * `POST /api/users/me/change-password` (`UsersController.ChangeMyPassword`) -- a wrong current
- * password surfaces the real `IdentityResult` failure from the backend (via
- * {@link extractErrorMessage}'s own field-keyed validation handling), never a generic message.
- * See `ResetPasswordDialogComponent` (on `UserListComponent`) for the administrator-driven
- * counterpart, for an account that cannot supply its own current password at all.
+ * <p>The change-password section needs the current password. An administrator can reset the
+ * password of an account that does not know it from the Users page (`ResetPasswordDialogComponent`).
+ * Two-factor settings are on the Security page (`AccountSecurityComponent`).
  */
 @Component({
   selector: 'app-account-profile',
@@ -101,7 +78,7 @@ export class AccountProfileComponent {
   readonly profile = signal<UserProfileDetail | null>(null);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Set once the Gravatar `<img>` element's own load fails (a real 404 or a fully offline install) -- switches the template over to the local initials fallback. */
+  /** Set when the Gravatar image fails to load (a 404 or no internet access); the template then shows initials. */
   readonly avatarFailed = signal(false);
 
   readonly profileForm = this.formBuilder.group({
@@ -113,12 +90,10 @@ export class AccountProfileComponent {
   readonly changePasswordErrorMessage = signal<string | null>(null);
 
   /**
-   * This constant is the client-side floor {@link changePasswordForm}'s own `newPassword` field
-   * enforces before ever submitting -- a fixed baseline independent of this server's own
-   * admin-configurable password-complexity policy (`IdentitySettingsController`'s
-   * `Password.RequiredLength`, which an ordinary self-service caller has no permission to read).
-   * A submission that clears this floor but still fails that server-side policy is rejected with
-   * the real reason, surfaced via {@link changePasswordErrorMessage}.
+   * The minimum new-password length checked in the browser. It is fixed, because the server's
+   * password policy (Settings > Identity, `identitysettings:read`) is not readable by every user.
+   * A password that passes here but fails the server policy comes back with the server's reason
+   * in {@link changePasswordErrorMessage}.
    */
   readonly passwordMinLength = 12;
 
@@ -131,13 +106,13 @@ export class AccountProfileComponent {
     { validators: [passwordsMatchValidator] },
   );
 
-  /** The Gravatar image URL for the current profile's own e-mail address, or `null` before the profile has loaded (or if the account somehow has no e-mail address at all). */
+  /** The Gravatar URL for the profile's e-mail address, or `null` before loading or without an address. */
   readonly avatarUrl = computed(() => {
     const current = this.profile();
     return current?.email ? buildGravatarUrl(current.email, AVATAR_SIZE_PIXELS) : null;
   });
 
-  /** The initials shown by the local fallback avatar, derived from the current profile's own display name (or, absent that, its sign-in user name). */
+  /** The initials for the fallback avatar, from the display name or else the user name. */
   readonly avatarInitials = computed(() =>
     buildGravatarInitials(this.profile()?.displayName, this.profile()?.userName),
   );
@@ -147,20 +122,17 @@ export class AccountProfileComponent {
   }
 
   /**
-   * This method runs once the Gravatar `<img>` element's own load fails, switching the template
-   * over to the local initials fallback -- see this class's own doc comment for why this single
-   * handler correctly covers both "no Gravatar registered for this address" and "this install has
-   * no path to gravatar.com at all" identically.
+   * This method runs when the Gravatar image fails to load and switches to the initials avatar.
+   * The same fallback serves "no Gravatar for this address" and "gravatar.com unreachable".
    */
   onAvatarError(): void {
     this.avatarFailed.set(true);
   }
 
   /**
-   * This method saves the form's own current display name/phone number via `PATCH
-   * /api/users/me`, sending an explicit JSON `null` (via RFC 7396 merge-patch semantics) for a
-   * field the operator has cleared entirely, and applies the response -- rather than trusting the
-   * submitted form values verbatim -- back onto both this page's own state and the form.
+   * This method saves the display name and phone number through `PATCH /api/users/me`. A
+   * cleared field is sent as JSON `null`, which clears it (RFC 7396 merge patch). The form is then
+   * refilled from the response, not from what was typed.
    */
   async save(): Promise<void> {
     if (this.profileForm.invalid || this.saving()) return;
@@ -191,10 +163,9 @@ export class AccountProfileComponent {
   }
 
   /**
-   * This method changes the current caller's own password via
-   * `POST /api/users/me/change-password`. A wrong current password reports the backend's own
-   * real error message (via {@link extractErrorMessage}), never a generic one -- see this class's
-   * own doc comment.
+   * This method changes the signed-in user's password through
+   * `POST /api/users/me/change-password` and clears the form on success. Errors, such as a wrong
+   * current password, show the backend's message.
    */
   async changePassword(): Promise<void> {
     if (this.changePasswordForm.invalid || this.changingPassword()) return;
@@ -240,11 +211,8 @@ export class AccountProfileComponent {
   }
 
   /**
-   * This method applies a `UserProfileDetail` response to both this page's own state and the
-   * editable form, and resets the avatar-fallback flag -- a fresh `GET`/`PATCH` result always
-   * deserves a fresh attempt at loading the Gravatar image (its own URL is unchanged, since
-   * e-mail is read-only here, but there is no reason to stay stuck on a stale failure flag from
-   * before this particular load either).
+   * This method stores a `UserProfileDetail` response, refills the form and clears the avatar
+   * failure flag so the Gravatar image is tried again.
    */
   private applyProfile(profile: UserProfileDetail): void {
     this.profile.set(profile);

@@ -11,22 +11,17 @@ import {
 } from '../../../api-client';
 
 /**
- * A fake for {@link SsoService}'s own generated `SsoApiService` dependency, the same shape as
- * {@link FakeAppearanceApiService}/{@link FakeBrandingApiService} below: `apiAuthSsoGet` defaults
- * to reporting SSO as unavailable (`enabled: false`), matching every deployment that hasn't
- * configured `Identity:Sso` at all; individual tests below override it to verify this
- * component's own SSO button.
+ * A fake for the generated `SsoService`. `apiAuthSsoGet` reports SSO as unavailable by default,
+ * as on a server without SSO configured; the SSO button tests override it.
  */
 interface FakeSsoApiService {
   apiAuthSsoGet: jasmine.Spy;
 }
 
 /**
- * A fake for `ThemeService`'s own `AppearanceApiService` dependency -- see
- * `ThemeSwitcherComponent`'s own spec for why a plain Jasmine-spy fake is used here instead of
- * `jasmine.SpyObj`. `apiAppearanceSettingsMeGet` defaults to rejecting (the real, anonymous-
- * caller shape `GET /me` returns pre-sign-in, a 401), matching production; individual tests below
- * override it to verify {@link LoginComponent}'s own post-sign-in `ThemeService.initialize()` call.
+ * A fake for the `AppearanceApiService` that `ThemeService` uses (a plain spy object; the
+ * `AuthService` spec explains why). `apiAppearanceSettingsMeGet` rejects by default, as it does
+ * before sign-in; tests of the post-sign-in `ThemeService.initialize()` call override it.
  */
 interface FakeAppearanceApiService {
   apiAppearanceSettingsMeGet: jasmine.Spy;
@@ -34,16 +29,20 @@ interface FakeAppearanceApiService {
 }
 
 /**
- * A fake for `BrandingService`'s own `BrandingApiService` dependency, the same shape as
- * {@link FakeAppearanceApiService} and for the same reason: `apiBrandingSettingsEffectiveGet`
- * defaults to rejecting (the real, anonymous-caller pre-sign-in shape), and individual tests below
- * override it to verify {@link LoginComponent}'s own post-sign-in `BrandingService.initialize()`
- * call.
+ * A fake for the `BrandingApiService` that `BrandingService` uses. It rejects by default, as before
+ * sign-in; tests of the post-sign-in `BrandingService.initialize()` call override it.
  */
 interface FakeBrandingApiService {
   apiBrandingSettingsEffectiveGet: jasmine.Spy;
 }
 
+/**
+ * These tests cover the login page: the credentials and two-factor steps (each provider, errors,
+ * cancel), "Remember me", the SSO button and error banner, and the theme, branding and
+ * `returnUrl` handling after sign-in. TestBed with a fake `AuthService` and
+ * `BrowserNavigationService`, the real `ThemeService` and `BrandingService` over fake API
+ * services, and a stubbed route.
+ */
 describe('LoginComponent', () => {
   let authServiceFake: { login: jasmine.Spy; completeTwoFactorLogin: jasmine.Spy };
   let appearanceApiSpy: FakeAppearanceApiService;
@@ -107,11 +106,8 @@ describe('LoginComponent', () => {
 
     const fixture = TestBed.createComponent(LoginComponent);
     fixture.detectChanges();
-    // ngOnInit fires this component's own loadSsoStatus() as a fire-and-forget promise chain
-    // (void this.loadSsoStatus()), not something this test awaits directly -- under this app's
-    // zoneless change detection, fixture.whenStable() does not reliably wait for it, so a real
-    // microtask-queue flush is used instead, the same helper SmtpSettingsComponent's own spec
-    // already establishes for an identical reason.
+    // ngOnInit starts loadSsoStatus() without awaiting it, and with zoneless change detection
+    // fixture.whenStable() does not wait for it, so flush the task queue instead.
     await new Promise((resolve) => setTimeout(resolve, 0));
     fixture.detectChanges();
     return fixture;
@@ -121,9 +117,7 @@ describe('LoginComponent', () => {
     const fixture = await createComponent();
     const root = fixture.nativeElement as HTMLElement;
 
-    // A genuine like-for-like swap: the card/form/input/button structure is now CoreUI's own
-    // components (`c-card`, `cForm`, `cFormControl`, `cButton`), and no Material component
-    // selector should remain anywhere in the rendered tree.
+    // The card, form, inputs and button are CoreUI components.
     expect(root.querySelector('c-card')).not.toBeNull();
     expect(root.querySelector('form[cForm]')).not.toBeNull();
     expect(root.querySelectorAll('input[cFormControl]').length).toBe(2);
@@ -155,9 +149,7 @@ describe('LoginComponent', () => {
     await fixture.componentInstance.submitCredentials();
     fixture.detectChanges();
 
-    // No zone.js is loaded in this app (zoneless change detection) -- this assertion only
-    // passes because Angular's signal-based reactivity itself schedules the re-render once
-    // `errorMessage` is set, the same mechanism this app already relies on everywhere else.
+    // The app is zoneless: setting the `errorMessage` signal is what schedules the re-render.
     const alert = root.querySelector('c-alert');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('Incorrect username or password.');
@@ -198,9 +190,8 @@ describe('LoginComponent', () => {
     });
     await fixture.componentInstance.submitCredentials();
 
-    // The app-startup call (before this component even existed) ran anonymously and always
-    // fails; this is the one call a real session makes, and it must happen before navigating
-    // away so the next page never renders in the stale, pre-sign-in fallback theme.
+    // The startup call ran without a session and failed. This call must happen before
+    // navigating, so the next page does not render in the fallback theme.
     expect(appearanceApiSpy.apiAppearanceSettingsMeGet).toHaveBeenCalledTimes(1);
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/dashboard');
   });
@@ -220,10 +211,8 @@ describe('LoginComponent', () => {
       });
       await fixture.componentInstance.submitCredentials();
 
-      // The app-startup call ran anonymously and always fails (BrandingService.initialize()
-      // catches that and falls back to the compiled-in title); this is the one call a real
-      // session makes, and document.title genuinely reflects the real configured value
-      // afterward -- not merely that the API was called.
+      // The startup call ran without a session and fell back to the default title. Check that
+      // document.title shows the configured value, not only that the API was called.
       expect(brandingApiSpy.apiBrandingSettingsEffectiveGet).toHaveBeenCalledTimes(1);
       expect(document.title).toBe('Acme Corp DNS');
       expect(navigateByUrlSpy).toHaveBeenCalledWith('/dashboard');

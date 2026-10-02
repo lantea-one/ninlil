@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the rule list: loading, the enable/disable toggle's full `PUT`, and delete
+ * with the confirmation dialog accepted, dismissed or failing. TestBed with a spy-backed
+ * `DnsAccessControlRulesService` and `NotificationService`.
+ */
 describe('AccessControlRuleListComponent', () => {
   let apiSpy: {
     apiAccessControlRulesGet: jasmine.Spy;

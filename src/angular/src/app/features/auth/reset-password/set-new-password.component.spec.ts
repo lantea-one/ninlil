@@ -3,6 +3,10 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { AuthService } from '../../../core/auth/auth.service';
 import { SetNewPasswordComponent } from './set-new-password.component';
 
+/**
+ * These tests cover the set-new-password page: links missing `userId` or `token`, validation,
+ * a successful reset and backend errors. TestBed with a spy `AuthService` and a stubbed route.
+ */
 describe('SetNewPasswordComponent', () => {
   let fixture: ComponentFixture<SetNewPasswordComponent>;
   let authServiceSpy: { resetPassword: jasmine.Spy };

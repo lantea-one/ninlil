@@ -9,21 +9,25 @@ import {
 import { AuthService } from '../../../core/auth/auth.service';
 
 /**
- * A fake for `ThemeService`'s own `AppearanceApiService` dependency -- the same fake shape
- * `LoginComponent`'s own spec already establishes for this exact purpose (see that file's own
- * doc comment). Defaults to rejecting (the real, anonymous-caller shape `GET /me` would return
- * before {@link SsoCallbackComponent} applies its own tokens), overridden per test.
+ * A fake for the `AppearanceApiService` that `ThemeService` uses, as in the login spec. It rejects
+ * by default, as before sign-in; tests override it.
  */
 interface FakeAppearanceApiService {
   apiAppearanceSettingsMeGet: jasmine.Spy;
   apiAppearanceSettingsMePatch: jasmine.Spy;
 }
 
-/** A fake for `BrandingService`'s own `BrandingApiService` dependency -- see {@link FakeAppearanceApiService}. */
+/** A fake for the `BrandingApiService` that `BrandingService` uses; see {@link FakeAppearanceApiService}. */
 interface FakeBrandingApiService {
   apiBrandingSettingsEffectiveGet: jasmine.Spy;
 }
 
+/**
+ * These tests cover the SSO callback: applying the token from the fragment, clearing it from the
+ * address bar, reloading theme and branding, navigating, and the error state without a token.
+ * TestBed with a fake `AuthService` and the real `ThemeService` and `BrandingService` over fake
+ * APIs; tests set `window.location.hash`.
+ */
 describe('SsoCallbackComponent', () => {
   let authServiceFake: { applySsoAccessToken: jasmine.Spy };
   let appearanceApiSpy: FakeAppearanceApiService;
@@ -32,8 +36,8 @@ describe('SsoCallbackComponent', () => {
   const originalHash = window.location.hash;
 
   afterEach(() => {
-    // window.location.hash is real browser state -- a same-document change, harmless to set
-    // directly (unlike location.href), but it must not leak into the next test.
+    // window.location.hash can be set in a test (it does not navigate away), but it must be
+    // cleared so it does not leak into the next test.
     window.location.hash = originalHash;
   });
 
@@ -72,11 +76,8 @@ describe('SsoCallbackComponent', () => {
 
     const fixture = TestBed.createComponent(SsoCallbackComponent);
     fixture.detectChanges();
-    // ngOnInit fires this component's own completeSignIn() as a fire-and-forget promise chain
-    // (void this.completeSignIn()) rather than something this test awaits directly -- under this
-    // app's zoneless change detection, fixture.whenStable() does not reliably wait for it, so a
-    // real microtask-queue flush is used instead, the same helper SmtpSettingsComponent's own
-    // spec already establishes for an identical reason.
+    // ngOnInit starts completeSignIn() without awaiting it, and with zoneless change detection
+    // fixture.whenStable() does not wait for it, so flush the task queue instead.
     await new Promise((resolve) => setTimeout(resolve, 0));
     fixture.detectChanges();
     return fixture;

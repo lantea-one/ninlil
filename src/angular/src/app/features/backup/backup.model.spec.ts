@@ -1,5 +1,6 @@
 import { buildBackupFileName, triggerBlobDownload } from './backup.model';
 
+/** These tests cover the backup file name pattern and its zero-padding. */
 describe('buildBackupFileName', () => {
   it('builds a name matching the backend own ninlil-backup-{yyyyMMdd-HHmmss}.ltbk convention', () => {
     const fixedDate = new Date(2026, 7, 31, 9, 5, 3);
@@ -14,6 +15,7 @@ describe('buildBackupFileName', () => {
   });
 });
 
+/** These tests cover the hidden-link download, with spies on the object URL functions. */
 describe('triggerBlobDownload', () => {
   it('creates an object URL, clicks a temporary anchor, then revokes the URL', () => {
     const blob = new Blob(['archive bytes'], { type: 'application/octet-stream' });

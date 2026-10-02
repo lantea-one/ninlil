@@ -31,27 +31,19 @@ import {
 } from './backup.model';
 
 /**
- * This component is the full-system backup/restore page: a "Create a backup" section that
- * downloads an archive of every entity this server persists (plus the Data Protection key ring,
- * the shared TLS certificate, and the runtime configuration file), and a "Restore from a backup"
- * section that uploads one back and, once confirmed, wipes and replaces this server's own live
- * data with its contents. This is a single, standalone page with no list/form split and no route
- * beyond its own root -- there is exactly one backup archive an operator can create at a time,
- * and exactly one restore action, neither of which is itself a persisted, listable resource.
+ * This component is the Backup & Restore page (`/backup`, `backup:read`). "Create a backup"
+ * downloads an archive of all stored data plus the Data Protection key ring, the TLS certificate
+ * and the runtime configuration file (`POST /api/backup`, `backup:read`, through
+ * {@link BackupDownloadService}). "Restore from a backup" uploads an archive and, after a
+ * confirmation, wipes all stored data and replaces it (`POST /api/backup/restore`,
+ * `backup:write`).
  *
- * The passphrase is optional on both sides, matching the real backend behavior
- * (`SystemBackupService.CreateBackupAsync`): supplied, the archive is encrypted with it;
- * omitted, the archive is written out deliberately unencrypted, never a weak or
- * default-derived key standing in for a real one. Skipping it is ill-advised, so the create
- * section shows a prominent warning the moment the passphrase field is left empty (see
- * {@link passphraseOmitted}), rather than merely relaxing the requirement silently.
+ * <p>The passphrase is optional. With one the backend encrypts the archive; without one it writes
+ * it unencrypted. The create section shows a warning while the passphrase field is empty
+ * ({@link passphraseOmitted}).
  *
- * The restore section is shown only to a session holding `backup:write` (checked directly via
- * {@link AuthService.hasPermission}, mirroring `SettingsShellComponent`'s own "hide, don't merely
- * disable, a section the current session cannot use" precedent) -- a caller who can only create a
- * backup (`backup:read`) never sees the far more destructive restore form at all, even though the
- * route itself, gated only by `backup:read`, does not block navigating to this page in the first
- * place.
+ * <p>The restore section is shown only with `backup:write` ({@link canRestore}); a user who can
+ * only create backups never sees it.
  */
 @Component({
   selector: 'app-backup',
@@ -81,26 +73,25 @@ export class BackupComponent {
   private readonly authService = inject(AuthService);
   private readonly notificationService = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this page's pending restore. */
+  /** Whether the restore confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  /** Whether the current session holds `backup:write` -- gates whether the restore section renders at all. */
+  /** Whether the user holds `backup:write`; the restore section renders only then. */
   readonly canRestore = this.authService.hasPermission('backup:write');
 
-  /** The fewest characters a supplied passphrase must contain -- see {@link MINIMUM_BACKUP_PASSPHRASE_LENGTH}'s own doc comment for where this real value comes from. */
+  /** The minimum passphrase length; see {@link MINIMUM_BACKUP_PASSPHRASE_LENGTH}. */
   readonly minimumPassphraseLength = MINIMUM_BACKUP_PASSPHRASE_LENGTH;
 
   /**
-   * The "Create a backup" form -- one optional passphrase field, confirmed by typing it twice
-   * when supplied. Neither field is `Validators.required`: an empty passphrase is a deliberate,
-   * valid choice to skip encryption entirely, surfaced instead via {@link passphraseOmitted}'s
-   * own prominent warning rather than a validation error.
+   * The "Create a backup" form: an optional passphrase, typed twice. Neither field is required,
+   * since an empty passphrase means no encryption; {@link passphraseOmitted} warns about it
+   * instead of a validation error.
    */
   readonly createForm = this.formBuilder.group({
     passphrase: ['', [Validators.minLength(MINIMUM_BACKUP_PASSPHRASE_LENGTH)]],
@@ -108,19 +99,18 @@ export class BackupComponent {
   });
 
   /**
-   * The "Restore from a backup" form -- an uploaded archive file plus the passphrase it was
-   * encrypted with, if any. Left blank when restoring an archive that was itself created without
-   * one; the backend detects which case applies from the archive's own contents, not from
-   * whether this field is populated.
+   * The "Restore from a backup" form: the passphrase the archive was encrypted with, blank for an
+   * unencrypted archive. The backend reads from the archive header whether it is encrypted. The
+   * file itself is in {@link selectedArchiveFile}.
    */
   readonly restoreForm = this.formBuilder.group({
     passphrase: [''],
   });
 
-  /** Tracks the create-section passphrase's own live value as a signal, so {@link passphraseOmitted} updates as the operator types (`valueChanges` itself is an `Observable`, not a signal). */
+  /** The create passphrase as a signal, so {@link passphraseOmitted} updates while typing. */
   private readonly createPassphraseValue = signal('');
 
-  /** Whether the operator has currently left the create-section passphrase empty -- drives the "this backup will not be encrypted" warning. */
+  /** Whether the create passphrase is empty; shows the "not encrypted" warning. */
   readonly passphraseOmitted = computed(() => this.createPassphraseValue().length === 0);
 
   constructor() {
@@ -129,13 +119,13 @@ export class BackupComponent {
     );
   }
 
-  /** The archive file most recently chosen in the restore section's own file input. */
+  /** The archive file chosen in the restore section. */
   readonly selectedArchiveFile = signal<File | null>(null);
 
-  /** Whether a backup is currently being created, disabling the create button while it runs. */
+  /** Whether a backup is being created; disables the create button. */
   readonly creatingBackup = signal(false);
 
-  /** Whether a restore is currently in progress, disabling the restore button while it runs. */
+  /** Whether a restore is running; disables the restore button. */
   readonly restoringBackup = signal(false);
 
   /** The most recent create-section error, or `null` when there is none to show. */
@@ -144,13 +134,12 @@ export class BackupComponent {
   /** The most recent restore-section error, or `null` when there is none to show. */
   readonly restoreErrorMessage = signal<string | null>(null);
 
-  /** The summary returned by the most recently successful restore, shown until the page is left. */
+  /** The summary of the last successful restore, shown until the page is left. */
   readonly lastRestoreSummary = signal<BackupRestoreResponse | null>(null);
 
   /**
-   * This method reads the file the operator picked in the restore section's own file input --
-   * a plain DOM `change` event handler, since Reactive Forms has no native binding for a file
-   * input's own `FileList`.
+   * This method stores the file picked in the restore section. It is a plain `change` handler
+   * because Reactive Forms cannot bind a file input.
    */
   onArchiveFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -158,9 +147,9 @@ export class BackupComponent {
   }
 
   /**
-   * This method requests a real backup archive -- encrypted with the form's own confirmed
-   * passphrase when one was supplied, deliberately unencrypted when it was left blank -- and
-   * triggers a real browser download of it once the request succeeds.
+   * This method checks that the two passphrases match, requests the archive (encrypted when a
+   * passphrase was given) and saves it as a browser download. Errors show in the create
+   * section.
    */
   async createBackup(): Promise<void> {
     this.createErrorMessage.set(null);
@@ -192,9 +181,8 @@ export class BackupComponent {
   }
 
   /**
-   * This method opens a confirmation prompt naming exactly what a restore does (every entity
-   * this server persists is wiped and replaced), and, if confirmed, uploads the selected archive
-   * and passphrase to actually perform it.
+   * This method asks for confirmation (all stored data is wiped and replaced), then uploads the
+   * archive and passphrase and shows the restored entity counts.
    */
   async confirmAndRestoreBackup(): Promise<void> {
     this.restoreErrorMessage.set(null);
@@ -246,9 +234,7 @@ export class BackupComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -258,14 +244,14 @@ export class BackupComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
     this.confirmResolve = null;
   }
 
-  /** The entity-type/count pairs from {@link lastRestoreSummary}, sorted alphabetically for display. */
+  /** This method returns the entity type and count pairs from {@link lastRestoreSummary}, sorted by name. */
   restoredEntityCounts(): [string, number][] {
     const counts = this.lastRestoreSummary()?.entityCounts;
     if (!counts) return [];

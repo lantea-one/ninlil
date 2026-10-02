@@ -3,6 +3,11 @@ import { provideRouter } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ForgotPasswordComponent } from './forgot-password.component';
 
+/**
+ * These tests cover the Forgot Password page: validation, the backend message shown after any
+ * submit (never different for unknown addresses) and the failure message. TestBed with a spy
+ * `AuthService`.
+ */
 describe('ForgotPasswordComponent', () => {
   let fixture: ComponentFixture<ForgotPasswordComponent>;
   let authServiceSpy: { forgotPassword: jasmine.Spy };
@@ -54,10 +59,8 @@ describe('ForgotPasswordComponent', () => {
   });
 
   it('shows the exact same completed state for an address that exists and one that does not -- this component never branches on the backend response', async () => {
-    // The backend's own contract (AuthController.ForgotPassword) is to return byte-for-byte the
-    // same response no matter what -- this test proves this component has no code path that could
-    // ever diverge, by submitting twice with the exact same (mocked) resolved value and confirming
-    // the exact same rendered outcome both times.
+    // The backend returns the same response for any address. Submitting twice with the same
+    // response must give the same outcome, so the page has nothing to branch on.
     await createComponent();
     const genericMessage =
       'If an account exists for that e-mail address, a password reset link has been sent to it.';
@@ -70,7 +73,7 @@ describe('ForgotPasswordComponent', () => {
       message: fixture.componentInstance.confirmationMessage(),
     };
 
-    // Reset local component state to simulate a second, independent visit.
+    // Reset the component state to simulate a second visit.
     fixture.componentInstance.completed.set(false);
     fixture.componentInstance.confirmationMessage.set(null);
     fixture.componentInstance.form.setValue({ email: 'no-such-account@example.com' });

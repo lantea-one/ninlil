@@ -7,6 +7,12 @@ import { NotificationService } from '../../shared/notification/notification.serv
 import { BackupDownloadService } from './backup-download.service';
 import { BackupComponent } from './backup.component';
 
+/**
+ * These tests cover the Backup page: whether restore is offered, the create form (matching and
+ * length checks, no passphrase, the warning, download, errors) and restore (file required,
+ * confirmation, summary, errors). TestBed with spies for `AuthService`, `BackupDownloadService`,
+ * the backup API and `NotificationService`.
+ */
 describe('BackupComponent', () => {
   let backupApiSpy: { apiBackupRestorePost: jasmine.Spy };
   let backupDownloadSpy: { downloadBackup: jasmine.Spy };

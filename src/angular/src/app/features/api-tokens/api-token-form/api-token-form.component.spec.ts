@@ -6,6 +6,11 @@ import { ApiTokensService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ApiTokenFormComponent } from './api-token-form.component';
 
+/**
+ * These tests cover the New API Token form: validation, the request (including the expiry
+ * conversion), the reveal-once dialog before navigating, and errors. TestBed with a spy-backed
+ * `ApiTokensService` and a spied `Router.navigate`.
+ */
 describe('ApiTokenFormComponent', () => {
   let apiTokensApiSpy: { apiApiTokensPost: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };

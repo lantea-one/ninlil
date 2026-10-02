@@ -1,20 +1,16 @@
 /**
- * This constant contains the fewest characters a backup passphrase must contain when one is
- * supplied at all. It mirrors this project's real source of truth,
- * `BackupOptions.MinimumPassphraseLength`
- * (`src/dotnet/src/Ninlil.Dns.Server.Backup/Options/BackupOptions.cs`), hardcoded here rather
- * than read live because `BackupOptions` has no REST settings surface of its own to read it
- * from -- if one is ever added, this constant should be replaced by reading the real value from
- * it instead of duplicating it a second place.
+ * This constant is the minimum length of a backup passphrase, when one is given. It copies the
+ * default of `BackupOptions.MinimumPassphraseLength` (`Ninlil.Dns.Server.Backup/Options/
+ * BackupOptions.cs`), since no endpoint exposes that setting. If the setting is changed in the
+ * configuration file, the backend's 400 still enforces it.
  */
 export const MINIMUM_BACKUP_PASSPHRASE_LENGTH = 12;
 
 /**
- * This function builds the default file name a downloaded backup archive is saved under,
- * matching `BackupController.Create`'s own `ninlil-backup-{yyyyMMdd-HHmmss}.ltbk` naming
- * convention exactly, computed client-side since the server's own `Content-Disposition` header
- * is not read by this feature's own download call (a raw `HttpClient` request bypassing the
- * generated API client entirely -- see `backup.service.ts`'s own doc comment for why).
+ * This function builds the file name a downloaded backup is saved under, in the
+ * `ninlil-backup-{yyyyMMdd-HHmmss}.ltbk` pattern `BackupController.Create` uses, but in browser
+ * local time (the server uses UTC). The download does not read the server's
+ * `Content-Disposition` header, so the name is built here.
  */
 export function buildBackupFileName(now: Date = new Date()): string {
   const pad = (value: number) => value.toString().padStart(2, '0');
@@ -26,10 +22,8 @@ export function buildBackupFileName(now: Date = new Date()): string {
 }
 
 /**
- * This function triggers a real browser download of `blob`, saved as `fileName`, via a
- * temporary, invisible anchor element -- the standard technique for turning an in-memory
- * `Blob` (already fetched over XHR/`fetch`, not a plain hyperlink) into a "Save As" prompt,
- * since neither `HttpClient` nor the DOM offers a more direct API for it.
+ * This function saves `blob` as a browser download named `fileName`, by clicking a temporary
+ * hidden link to an object URL. The DOM has no more direct way to save an in-memory `Blob`.
  */
 export function triggerBlobDownload(blob: Blob, fileName: string): void {
   const objectUrl = URL.createObjectURL(blob);
@@ -43,9 +37,8 @@ export function triggerBlobDownload(blob: Blob, fileName: string): void {
     anchor.click();
     document.body.removeChild(anchor);
   } finally {
-    // Revoking synchronously right after click() is safe -- the browser has already queued the
-    // navigation/download by the time click() returns, and holding the object URL open any
-    // longer than that would just leak memory for the life of this page.
+    // Revoking right after click() is safe: the browser has already started the download, and
+    // keeping the URL would hold the blob in memory until the page closes.
     URL.revokeObjectURL(objectUrl);
   }
 }

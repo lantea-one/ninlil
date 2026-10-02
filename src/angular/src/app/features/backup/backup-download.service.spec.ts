@@ -3,6 +3,11 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { BackupDownloadService } from './backup-download.service';
 
+/**
+ * These tests cover the archive download: the request and blob response, and reading error
+ * messages from JSON, plain-text and missing bodies. `HttpTestingController` with a real
+ * `HttpClient`.
+ */
 describe('BackupDownloadService', () => {
   let service: BackupDownloadService;
   let httpMock: HttpTestingController;

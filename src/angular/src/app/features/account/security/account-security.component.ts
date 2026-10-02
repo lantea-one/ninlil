@@ -22,27 +22,16 @@ import {
 } from '../../../shared/reveal-secret-dialog/reveal-secret-dialog.component';
 
 /**
- * This component is the current caller's own self-service account-security page -- reachable
- * from the app shell's own user menu, at `/account/security`, gated only by `authGuard` (any
- * signed-in session), since `TwoFactorController` itself carries no `[RequirePermission(...)]`
- * at all: every action here acts on the caller's own account, never anyone else's. It covers
- * authenticator (TOTP) setup, disabling two-factor, and requesting an e-mailed verification code
- * -- everything `TwoFactorController` exposes.
+ * This component is the signed-in user's Security page (`/account/security`), opened from the
+ * account menu. It needs only a session: `TwoFactorController` (`/api/auth/two-factor`) acts on
+ * the caller's account and requires no permission.
  *
- * The page's own real enrollment state is read from the `GET .../two-factor/status` endpoint
- * rather than assumed from any locally-decoded token claim.
+ * <p>It shows the two-factor status from `GET .../status` and offers authenticator (TOTP) setup
+ * and confirmation, turning two-factor off (which needs an authenticator code), new recovery
+ * codes, and sending an e-mailed code when the account has a confirmed address.
  *
- * This page's own "Recovery codes" section generates a batch and reveals all 10 codes exactly
- * once via the shared {@link RevealSecretDialogComponent} (one row per code), the same
- * reveal-once pattern every other secret in this project already follows -- see
- * `TsigKeyFormComponent` for the precedent this mirrors, including the declarative
- * (`[visible]`/`[data]`/`(closed)`) embedding rather than an imperative dialog-service call. Only
- * `status().recoveryCodesRemaining` is ever knowable again afterward, matching
- * `TwoFactorController.GetStatus`'s own deliberate omission of the actual code values from every
- * response but the one that just generated them.
- *
- * This page mounts no "Appearance" card -- the palette/mode switcher lives in its real, permanent
- * home in the shell's own header (`layout/app-shell/`), reachable from every page.
+ * <p>Generating recovery codes replaces any earlier batch. The 10 new codes are shown once in
+ * {@link RevealSecretDialogComponent}; after that only the number left is available.
  */
 @Component({
   selector: 'app-account-security',
@@ -72,7 +61,7 @@ export class AccountSecurityComponent {
   readonly status = signal<TwoFactorStatus | null>(null);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The just-generated (not yet confirmed) authenticator enrollment, if setup was started. */
+  /** The authenticator enrollment that was started but not yet confirmed, if any. */
   readonly pendingSetup = signal<AuthenticatorSetupResult | null>(null);
 
   readonly settingUp = signal(false);
@@ -81,10 +70,10 @@ export class AccountSecurityComponent {
   readonly sendingEmailCode = signal(false);
   readonly generatingRecoveryCodes = signal(false);
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown -- set once, right after a successful recovery-code generation. */
+  /** Whether the recovery-code dialog is shown; set after codes are generated. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-generated batch of recovery codes, shown exactly once via {@link RevealSecretDialogComponent}. */
+  /** The new recovery codes, shown once in {@link RevealSecretDialogComponent}. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
   readonly enableForm = this.formBuilder.group({
@@ -99,7 +88,7 @@ export class AccountSecurityComponent {
     void this.loadStatus();
   }
 
-  /** This method starts (or restarts) authenticator enrollment. */
+  /** This method starts or restarts authenticator enrollment (`POST .../authenticator/setup`). */
   async startAuthenticatorSetup(): Promise<void> {
     this.settingUp.set(true);
     this.errorMessage.set(null);
@@ -116,7 +105,7 @@ export class AccountSecurityComponent {
     }
   }
 
-  /** This method confirms a just-generated authenticator enrollment with a produced code. */
+  /** This method confirms enrollment with a code from the authenticator app (`POST .../authenticator/enable`). */
   async confirmAuthenticatorSetup(): Promise<void> {
     if (this.enableForm.invalid || this.confirming()) return;
 
@@ -140,7 +129,7 @@ export class AccountSecurityComponent {
     }
   }
 
-  /** This method turns off the requirement for a second factor at sign-in. */
+  /** This method turns off two-factor sign-in (`POST .../disable`), which needs an authenticator code. */
   async disable(): Promise<void> {
     if (this.disableForm.invalid || this.disabling()) return;
 
@@ -164,11 +153,9 @@ export class AccountSecurityComponent {
   }
 
   /**
-   * This method generates a fresh batch of 10 recovery codes, replacing (invalidating) any
-   * previous batch, and reveals them exactly once via {@link RevealSecretDialogComponent} --
-   * this account's own two-factor status is reloaded once the operator dismisses the dialog (see
-   * {@link onSecretDialogClosed}), so the displayed remaining count reflects the fresh batch
-   * immediately.
+   * This method generates 10 new recovery codes (`POST .../recovery-codes/generate`), which
+   * replace any earlier batch, and shows them once in {@link RevealSecretDialogComponent}. The
+   * status, with its count of codes left, reloads when the dialog closes.
    */
   async generateRecoveryCodes(): Promise<void> {
     this.generatingRecoveryCodes.set(true);
@@ -194,13 +181,13 @@ export class AccountSecurityComponent {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once recovery-codes dialog, reloading this account's own status only now that they have confirmed saving the codes. */
+  /** This method hides the recovery-code dialog and reloads the status. */
   async onSecretDialogClosed(): Promise<void> {
     this.revealDialogVisible.set(false);
     await this.loadStatus();
   }
 
-  /** This method e-mails the current caller a one-time verification code. */
+  /** This method e-mails the signed-in user a one-time code (`POST .../email/send`). */
   async sendEmailCode(): Promise<void> {
     this.sendingEmailCode.set(true);
 

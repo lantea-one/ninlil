@@ -29,13 +29,11 @@ import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every access-control rule this server knows about
- * (`DnsAccessControlRuleEntity`, one row per network+capability set -- entirely flat, no owning
- * parent), backed by `GET /api/access-control-rules`'s own real `skip`/`take` pagination. Every
- * capability a rule grants is shown as its own badge, since `DnsAccessControlRuleDetail
- * .Capabilities` is already the REST-boundary array-of-strings projection
- * `DnsAccessControlRulesController` computes from the entity's own stored bitmask -- this
- * component never touches the bitmask itself.
+ * This component is the Access Control Rules page (`/access-control-rules`, `accesscontrol:read`).
+ * It lists the rules a page at a time from `GET /api/access-control-rules` (`skip`/`take`), with
+ * each granted capability as a badge. With `accesscontrol:write` it offers create, edit, delete
+ * (`DELETE /api/access-control-rules/{id}`) and an enable/disable toggle; without it the toggle
+ * is shown disabled and the other actions are hidden.
  */
 @Component({
   selector: 'app-access-control-rule-list',
@@ -62,13 +60,13 @@ export class AccessControlRuleListComponent {
   private readonly accessControlRulesApi = inject(DnsAccessControlRulesService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'cidr', 'capabilities', 'disabled', 'sync', 'actions'];
@@ -84,14 +82,14 @@ export class AccessControlRuleListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a rule's own `isDisabled` flag via a full `PUT` (this controller has no `PATCH`). */
+  /** This method flips a rule's `isDisabled` with a full `PUT`, since the controller has no `PATCH`. */
   async toggleDisabled(rule: DnsAccessControlRuleDetail): Promise<void> {
     if (!rule.id) return;
 
@@ -149,7 +147,7 @@ export class AccessControlRuleListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

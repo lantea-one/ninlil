@@ -24,30 +24,21 @@ import { BrowserNavigationService } from '../../../core/browser/browser-navigati
 import { ThemeService } from '../../../core/theme/theme.service';
 
 /**
- * This component covers the whole sign-in flow in one page, switching between two steps rather
- * than two separate routes: submitting a username/password (`credentials`), and, only for an
- * account with two-factor authentication enabled, submitting the second-factor code
- * (`two-factor`). A single component keeps the pending sign-in's own `mfaToken` (returned by
- * `POST /api/auth/login`) as plain component state, with no need to round-trip it through a
- * route parameter.
+ * This component is the public login page (`/login`). It has two steps on one page:
+ * `credentials` (user name, password, "Remember me") and, for an account with two-factor sign-in,
+ * `two-factor`. Keeping both in one component lets the pending sign-in's `mfaToken` from
+ * `POST /api/auth/login` stay in component state. Sign-in goes through {@link AuthService}.
  *
- * The two-factor step's own provider radio offers a third option, `"RecoveryCode"`, alongside
- * the `"Authenticator"`/`"Email"` pair -- a fallback for an operator who has lost access to both
- * (see `AccountSecurityComponent` for where a recovery code batch is generated). The code text
- * field is reused as-is for all three; a recovery code is redeemed
- * (single-use) rather than merely verified, which `AuthController.TwoFactorLogin` itself already
- * handles transparently based on this same `provider` value.
+ * <p>The two-factor step accepts an authenticator code, an e-mailed code or a recovery code (a
+ * fallback when the others are unavailable; the Security page generates them). One text field
+ * serves all three; the backend redeems a recovery code so it cannot be used again.
  *
- * <p>This page also renders an optional "Sign in with SSO" button, driven by `GET /api/auth/sso`
- * (`SsoController.Get`) -- the honest, live "is the OpenID Connect scheme actually registered on
- * this running process right now" signal, not merely `OidcSsoOptions.Enable`'s own raw
- * configuration value (see that action's own doc comment for why those two can genuinely
- * disagree). Clicking it is a real, full-page navigation to
- * `/api/auth/sso/challenge` (`window.location.href`, never a router link) -- it must leave this
- * Angular app entirely and hit the server-side redirect to the identity provider; there is
- * nothing for the Angular router to navigate to here. `SsoCallbackComponent` is where the
- * browser lands once that whole round trip completes. A failed/cancelled identity-provider flow
- * instead redirects back here with `?ssoError=1`, shown as an inline banner.
+ * <p>A "Sign in with SSO" button appears when `GET /api/auth/sso` reports that OpenID Connect is
+ * available. That endpoint checks whether the scheme was registered at startup, not the current
+ * setting, so the button never leads to a 404. The button does a full-page navigation to
+ * `/api/auth/sso/challenge`, because the server redirects to the identity provider. A completed
+ * sign-in lands on `SsoCallbackComponent`; a failed or cancelled one returns here with
+ * `?ssoError=1`, shown as a banner.
  */
 @Component({
   selector: 'app-login',
@@ -90,13 +81,13 @@ export class LoginComponent implements OnInit {
   /** The most recent error message to show, or `null` when there isn't one. */
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether this running process currently has a working OIDC scheme to challenge against -- see this class's own doc comment. */
+  /** Whether SSO sign-in is available (see the class comment). */
   readonly ssoEnabled = signal(false);
 
   /** The label to render on the "Sign in with SSO" button, once {@link ssoEnabled} is `true`. */
   readonly ssoDisplayName = signal('Single Sign-On');
 
-  /** Whether this page loaded with `?ssoError=1` -- a failed/cancelled identity-provider flow bounced back here. */
+  /** Whether the page loaded with `?ssoError=1` after a failed or cancelled SSO sign-in. */
   readonly ssoError = signal(false);
 
   /** The opaque token identifying a pending two-factor sign-in, once one exists. */
@@ -108,12 +99,9 @@ export class LoginComponent implements OnInit {
   }
 
   /**
-   * This method starts the OIDC challenge with a real, full-page browser navigation -- not a
-   * `fetch()`/router call -- so the browser genuinely leaves this Angular app and follows the
-   * server's own redirect chain all the way to the identity provider. See this class's own doc
-   * comment for why a router link would be wrong here. Delegates to
-   * {@link BrowserNavigationService} rather than touching `window.location` directly -- see that
-   * service's own doc comment for why.
+   * This method starts SSO sign-in with a full-page navigation to `/api/auth/sso/challenge`,
+   * which redirects to the identity provider. It goes through {@link BrowserNavigationService} so
+   * tests can fake it.
    */
   startSsoSignIn(): void {
     // The "Remember me" choice rides along, so an SSO sign-in gets the same session lifetime a
@@ -123,9 +111,8 @@ export class LoginComponent implements OnInit {
   }
 
   /**
-   * This method loads the current "is SSO available at all" status. A network failure here is
-   * treated the same as `enabled: false` -- there is no meaningful error state for this page's
-   * own optional SSO button, only "show it" or "don't."
+   * This method asks whether SSO is available. A failure hides the button, since there is no
+   * useful error to show for an optional button.
    */
   private async loadSsoStatus(): Promise<void> {
     try {
@@ -140,7 +127,7 @@ export class LoginComponent implements OnInit {
   readonly credentialsForm = this.formBuilder.nonNullable.group({
     userName: ['', Validators.required],
     password: ['', Validators.required],
-    // Whether the session should outlive the browser -- see `AuthService`'s own doc comment.
+    // Whether the session outlives the browser; see AuthService.
     rememberMe: [false],
   });
 
@@ -149,7 +136,10 @@ export class LoginComponent implements OnInit {
     provider: ['Authenticator' as 'Authenticator' | 'Email' | 'RecoveryCode', Validators.required],
   });
 
-  /** This method submits the credentials step. */
+  /**
+   * This method submits the credentials step. Any failure shows "Incorrect username or
+   * password.", including a locked account (423) or a network error.
+   */
   async submitCredentials(): Promise<void> {
     if (this.credentialsForm.invalid || this.submitting()) return;
 
@@ -200,20 +190,10 @@ export class LoginComponent implements OnInit {
   }
 
   /**
-   * This method navigates to wherever {@link authGuard} originally redirected from, or the
-   * dashboard, once a real access token already exists (`AuthService.login`/
-   * `completeTwoFactorLogin` both apply their tokens synchronously before resolving). It first
-   * re-runs {@link ThemeService.initialize} -- the app-startup call made before this page even
-   * rendered ran anonymously (`GET /api/appearance-settings/me` always 401s pre-sign-in) and so
-   * only ever applied this app's own compiled-in fallback palette/mode; re-running it now, with
-   * a real session in hand, is what actually pulls in the signed-in caller's own persisted
-   * preference -- without this call the rest of the session would silently stay on the fallback
-   * theme until a full page reload, which itself signs the caller back out (in-memory-only
-   * tokens, see `AuthService`'s own doc comment), so it would never happen in practice. It also
-   * re-runs {@link BrandingService.initialize} for exactly the same reason -- the app-startup call
-   * made before this page rendered ran anonymously too (`GET /api/branding-settings/effective`
-   * also requires authentication), so this is what actually applies a real configured site title
-   * once a session exists.
+   * This method runs after a successful sign-in. It reloads the user's theme
+   * ({@link ThemeService.initialize}) and the site title ({@link BrandingService.initialize}),
+   * since the startup calls ran without a session and fell back to the defaults. It then goes to
+   * the `returnUrl` that {@link authGuard} added, or to the dashboard.
    */
   private async navigateAfterSignIn(): Promise<void> {
     await Promise.all([this.themeService.initialize(), this.brandingService.initialize()]);
