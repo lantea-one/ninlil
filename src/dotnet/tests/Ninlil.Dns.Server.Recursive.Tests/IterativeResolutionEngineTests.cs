@@ -564,4 +564,118 @@ public class IterativeResolutionEngineTests
         Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
         Assert.Equal(0, client.QueryCount);
     }
+
+    /// <summary>
+    ///     This method caches example.com as served by two name servers with glue, as a referral
+    ///     would, and returns their addresses.
+    /// </summary>
+    private static (IPAddress First, IPAddress Second) CacheTwoServerZone(
+        Harness harness,
+        DnsName zone
+    )
+    {
+        DnsName firstNs = DnsName.Parse($"ns1.{zone}");
+        DnsName secondNs = DnsName.Parse($"ns2.{zone}");
+        IPAddress firstAddress = IPAddress.Parse("198.51.100.11");
+        IPAddress secondAddress = IPAddress.Parse("198.51.100.12");
+
+        harness.Cache.StorePositive(
+            zone,
+            DnsResourceRecordTypeEnum.NS,
+            DnsClassEnum.Internet,
+            [BuildNsRecord(zone, firstNs), BuildNsRecord(zone, secondNs)],
+            []
+        );
+        harness.Cache.StorePositive(
+            firstNs,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(firstNs, firstAddress)],
+            []
+        );
+        harness.Cache.StorePositive(
+            secondNs,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(secondNs, secondAddress)],
+            []
+        );
+
+        return (firstAddress, secondAddress);
+    }
+
+    [Theory]
+    [InlineData(DnsResponseCodeEnum.ServerFailure)]
+    [InlineData(DnsResponseCodeEnum.Refused)]
+    [InlineData(DnsResponseCodeEnum.NotImplemented)]
+    [InlineData(DnsResponseCodeEnum.FormatError)]
+    public async Task ResolveAsyncFallsOverToTheNextServerWhenOneAnswersWithAnError(
+        DnsResponseCodeEnum errorCode
+    )
+    {
+        Harness harness = CreateHarness();
+        DnsName queried = DnsName.Parse("www.example.com");
+        (IPAddress first, IPAddress second) = CacheTwoServerZone(
+            harness,
+            DnsName.Parse("example.com")
+        );
+        DnsResourceRecord answer = BuildARecord(queried, IPAddress.Parse("192.0.2.70"));
+
+        harness.Client.AddResponse(
+            first,
+            queried,
+            DnsResourceRecordTypeEnum.A,
+            new DnsMessage { ResponseCode = errorCode }
+        );
+        harness.Client.AddResponse(
+            second,
+            queried,
+            DnsResourceRecordTypeEnum.A,
+            BuildAnswer(answer)
+        );
+
+        IterativeResolutionResult result = await harness.Engine.ResolveAsync(
+            queried,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            false
+        );
+
+        Assert.Equal(RecursiveResolutionStatusEnum.Success, result.Status);
+        Assert.Equal(answer, Assert.Single(result.Answer));
+    }
+
+    [Theory]
+    [InlineData(DnsResponseCodeEnum.Refused)]
+    [InlineData(DnsResponseCodeEnum.NotImplemented)]
+    [InlineData(DnsResponseCodeEnum.FormatError)]
+    public async Task ResolveAsyncReturnsServFailRatherThanNoDataWhenEveryServerAnswersWithAnError(
+        DnsResponseCodeEnum errorCode
+    )
+    {
+        Harness harness = CreateHarness();
+        DnsName queried = DnsName.Parse("www.example.com");
+        (IPAddress first, IPAddress second) = CacheTwoServerZone(
+            harness,
+            DnsName.Parse("example.com")
+        );
+
+        foreach (IPAddress address in new[] { first, second })
+            harness.Client.AddResponse(
+                address,
+                queried,
+                DnsResourceRecordTypeEnum.A,
+                new DnsMessage { ResponseCode = errorCode }
+            );
+
+        IterativeResolutionResult result = await harness.Engine.ResolveAsync(
+            queried,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            false
+        );
+
+        Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
+        Assert.Equal(2, harness.Client.QueryCount);
+    }
 }

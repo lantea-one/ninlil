@@ -16,13 +16,13 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///     CNAME. Answers, negative answers, referrals and in-bailiwick glue are cached in
 ///     <see cref="IRecursiveCache" />.
 ///     <para>
-///         Name server addresses are tried in order until one returns any response; that
-///         response is used whatever its code, so a SERVFAIL ends the resolution (with
-///         serve-stale as the fallback), and other error codes are treated like an empty
-///         answer. When <see cref="RecursiveServerOptions.EnableQnameMinimization" /> is on,
-///         intermediate servers get RFC 9156 minimized NS queries, with the fallbacks noted
-///         below. Every query, and every step the cache answers, counts against the
-///         <see cref="QueryBudget" />.
+///         Name server addresses are tried in order until one returns a usable response. A
+///         SERVFAIL, REFUSED, NOTIMP or FORMERR to the full query says nothing about the name
+///         (the server is broken or lame), so the next server is tried; when every server fails
+///         this way the resolution fails, with serve-stale as the fallback. When
+///         <see cref="RecursiveServerOptions.EnableQnameMinimization" /> is on, intermediate
+///         servers get RFC 9156 minimized NS queries, with the fallbacks noted below. Every
+///         query, and every step the cache answers, counts against the <see cref="QueryBudget" />.
 ///     </para>
 /// </summary>
 /// <param name="cache">The cache this engine reads name servers and answers from, and writes them back to.</param>
@@ -247,7 +247,7 @@ public sealed class IterativeResolutionEngine(
                             zoneCutsTraversed
                         ) ?? IterativeResolutionResult.ServFail();
 
-                response = await upstreamClient.QueryAsync(
+                DnsMessage candidate = await upstreamClient.QueryAsync(
                     address,
                     queryName,
                     queryType,
@@ -257,7 +257,14 @@ public sealed class IterativeResolutionEngine(
                     stoppingToken
                 );
 
-                if (response is not null)
+                if (candidate is null)
+                    continue;
+
+                response = candidate;
+
+                // An error to a minimized probe is handled below, by dropping minimization. An
+                // error to the full query is one server's problem, so ask the zone's next server.
+                if (isMinimizedProbe || !IsServerError(candidate.ResponseCode))
                     break;
             }
 
@@ -273,19 +280,17 @@ public sealed class IterativeResolutionEngine(
                         zoneCutsTraversed
                     ) ?? IterativeResolutionResult.ServFail();
 
-            if (response.ResponseCode == DnsResponseCodeEnum.ServerFailure)
+            if (isMinimizedProbe && response.ResponseCode == DnsResponseCodeEnum.ServerFailure)
             {
-                if (isMinimizedProbe)
-                {
-                    // SERVFAIL to a minimized probe is treated like FORMERR/NOTIMP/REFUSED below:
-                    // stop minimizing and retry this hop with the full query (RFC 9156 §4.3).
-                    minimizationDisabled = true;
-                    continue;
-                }
+                // SERVFAIL to a minimized probe is treated like FORMERR/NOTIMP/REFUSED below:
+                // stop minimizing and retry this hop with the full query (RFC 9156 §4.3).
+                minimizationDisabled = true;
+                continue;
+            }
 
-                // RFC 8767 serve-stale: the first server to respond answered SERVFAIL to the full
-                // query (the others are not tried), so serve a stale cached answer if there is
-                // one.
+            // Every server that responded to the full query answered with an error. RFC 8767
+            // serve-stale: serve a stale cached answer if there is one.
+            if (!isMinimizedProbe && IsServerError(response.ResponseCode))
                 return TryServeStale(
                         name,
                         type,
@@ -294,7 +299,6 @@ public sealed class IterativeResolutionEngine(
                         precedingHops,
                         zoneCutsTraversed
                     ) ?? IterativeResolutionResult.ServFail();
-            }
 
             if (isMinimizedProbe)
             {
@@ -460,7 +464,7 @@ public sealed class IterativeResolutionEngine(
             }
 
             // Neither an answer nor a referral: NODATA. Without an SOA it is not cached, but it is
-            // still reported as NODATA (so a REFUSED from a lame server reads as NODATA).
+            // still reported as NODATA.
             return HandleNegativeResponse(
                 name,
                 type,
@@ -511,8 +515,8 @@ public sealed class IterativeResolutionEngine(
     }
 
     /// <summary>
-    ///     This method implements RFC 8767 serve-stale: when no name server answered, the answer was
-    ///     SERVFAIL, the query budget ran out or the referral depth was exceeded, a cache entry
+    ///     This method implements RFC 8767 serve-stale: when no name server answered, every answer
+    ///     was an error, the query budget ran out or the referral depth was exceeded, a cache entry
     ///     within <see cref="RecursiveServerOptions.MaxStaleServeAge" /> of expiry is used instead
     ///     of failing. The CNAME-length and malformed-CNAME failures do not try it.
     /// </summary>
@@ -900,6 +904,17 @@ public sealed class IterativeResolutionEngine(
                 );
         }
     }
+
+    /// <summary>
+    ///     This method checks whether a response code means the server could not or would not
+    ///     answer (a broken or lame server), rather than saying anything about the name.
+    /// </summary>
+    private static bool IsServerError(DnsResponseCodeEnum responseCode) =>
+        responseCode
+            is DnsResponseCodeEnum.ServerFailure
+                or DnsResponseCodeEnum.Refused
+                or DnsResponseCodeEnum.NotImplemented
+                or DnsResponseCodeEnum.FormatError;
 
     /// <summary>
     ///     This method checks whether one name is a suffix of (or equal to) another, the

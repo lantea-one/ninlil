@@ -12,10 +12,10 @@ using Ninlil.Dns.Server.Core.Transport;
 namespace Ninlil.Dns.Server.Recursive.Transport;
 
 /// <summary>
-///     This class implements <see cref="IUpstreamDnsClient" /> over UDP and TCP port 53. UDP
+///     This class implements <see cref="IUpstreamDnsClient" /> over UDP and TCP. UDP
 ///     goes through the shared <see cref="IOutboundUdpSocketPool" /> when one is registered. A
-///     response is accepted only from the queried address and with the query's message ID; the
-///     question section is not compared.
+///     response is accepted only from the queried address and with the query's message ID and
+///     question (RFC 5452 §4.1).
 /// </summary>
 /// <param name="options">
 ///     The per-query timeout (<see cref="RecursiveServerOptions.UpstreamQueryTimeout" />), read
@@ -28,13 +28,18 @@ namespace Ninlil.Dns.Server.Recursive.Transport;
 ///     new connected socket on an OS-chosen port per query.
 /// </param>
 /// <param name="logger">
-///     The logger this client records datagrams from the wrong source to.
+///     The logger this client records discarded datagrams to.
 ///     <see langword="null" /> (the default) drops them without logging.
+/// </param>
+/// <param name="serverPort">
+///     The port queries go to: the IANA-assigned DNS port 53 by default. Tests point it at an
+///     unprivileged port.
 /// </param>
 public sealed class UpstreamDnsClient(
     IOptionsMonitor<RecursiveServerOptions> options,
     IOutboundUdpSocketPool socketPool = null,
-    ILogger<UpstreamDnsClient> logger = null
+    ILogger<UpstreamDnsClient> logger = null,
+    int serverPort = UpstreamDnsClient.DnsPort
 ) : IUpstreamDnsClient
 {
     /// <summary>
@@ -80,30 +85,44 @@ public sealed class UpstreamDnsClient(
         );
         timeoutCts.CancelAfter(options.CurrentValue.UpstreamQueryTimeout);
 
-        DnsMessage response = await QueryUdpAsync(serverAddress, requestBytes, timeoutCts.Token);
+        DnsMessage response = await QueryUdpAsync(
+            serverAddress,
+            request,
+            requestBytes,
+            timeoutCts.Token
+        );
 
         if (response is { IsTruncated: true })
             response =
                 await QueryTcpAsync(serverAddress, requestBytes, timeoutCts.Token) ?? response;
 
-        // A reply with the wrong ID is stray or spoofed. It makes this query fail rather than
-        // waiting for the right one.
-        return response is not null && response.Id == id ? response : null;
+        // A connected UDP socket or a TCP connection gets one reply; if it does not match, it is
+        // stray or spoofed, and this query fails rather than waiting for the right one.
+        return response is not null && IsResponseTo(response, request) ? response : null;
     }
 
     /// <summary>
-    ///     This method sends one query over UDP and returns the first datagram that comes from the
-    ///     queried server, or <see langword="null" /> on timeout, a socket error or a malformed
-    ///     reply. The source check adds to the ID check in <see cref="QueryAsync" />: an off-path
-    ///     attacker can guess a 16-bit ID, so the ID alone is not enough.
+    ///     This method checks that a response answers a request: the same message ID and the
+    ///     same question (RFC 5452 §4.1). The question check stops a reply to an earlier query
+    ///     with a colliding ID from being taken for this one.
+    /// </summary>
+    private static bool IsResponseTo(DnsMessage response, DnsMessage request) =>
+        response.Id == request.Id && response.Questions.SequenceEqual(request.Questions);
+
+    /// <summary>
+    ///     This method sends one query over UDP and returns the queried server's reply, or
+    ///     <see langword="null" /> on timeout, a socket error or a malformed reply. The source
+    ///     check adds to the ID and question check: an off-path attacker can guess a 16-bit ID,
+    ///     so the ID alone is not enough.
     /// </summary>
     private async Task<DnsMessage> QueryUdpAsync(
         IPAddress serverAddress,
+        DnsMessage request,
         byte[] requestBytes,
         CancellationToken stoppingToken
     )
     {
-        IPEndPoint endpoint = new(serverAddress, DnsPort);
+        IPEndPoint endpoint = new(serverAddress, serverPort);
 
         if (socketPool is null)
             return await QueryUdpWithFreshSocketAsync(endpoint, requestBytes, stoppingToken);
@@ -121,7 +140,8 @@ public sealed class UpstreamDnsClient(
 
             // A pooled socket is unconnected, since it is reused across servers, so the OS does
             // not filter senders. A datagram from anyone else is logged and skipped, and the
-            // loop keeps waiting until the timeout.
+            // loop keeps waiting until the timeout. So is one that does not answer this query:
+            // a late reply to an earlier query on the same socket, or a spoofed one.
             while (!stoppingToken.IsCancellationRequested)
             {
                 SocketReceiveFromResult result = await lease.Socket.ReceiveFromAsync(
@@ -141,7 +161,19 @@ public sealed class UpstreamDnsClient(
                     continue;
                 }
 
-                return DnsMessageReader.Read(buffer.AsSpan(0, result.ReceivedBytes));
+                DnsMessage response = DnsMessageReader.Read(buffer.AsSpan(0, result.ReceivedBytes));
+
+                if (!IsResponseTo(response, request))
+                {
+                    logger?.LogDebug(
+                        "Discarding a UDP response to an upstream query from {Endpoint}: its "
+                            + "message ID or question does not match the query.",
+                        endpoint
+                    );
+                    continue;
+                }
+
+                return response;
             }
 
             return null;
@@ -194,7 +226,7 @@ public sealed class UpstreamDnsClient(
     ///     length-prefixed response (RFC 1035 §4.2.2), or returns <see langword="null" /> on any
     ///     failure.
     /// </summary>
-    private static async Task<DnsMessage> QueryTcpAsync(
+    private async Task<DnsMessage> QueryTcpAsync(
         IPAddress serverAddress,
         byte[] requestBytes,
         CancellationToken stoppingToken
@@ -207,7 +239,7 @@ public sealed class UpstreamDnsClient(
                 SocketType.Stream,
                 ProtocolType.Tcp
             );
-            await socket.ConnectAsync(new IPEndPoint(serverAddress, DnsPort), stoppingToken);
+            await socket.ConnectAsync(new IPEndPoint(serverAddress, serverPort), stoppingToken);
 
             byte[] lengthPrefix = new byte[2];
             BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)requestBytes.Length);
