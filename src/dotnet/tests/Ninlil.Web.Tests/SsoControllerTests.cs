@@ -6,18 +6,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="Controllers.SsoController" /> against the shared test host,
-///     which deliberately never configures <c>Identity:Sso</c> (see
-///     <see cref="NinlilDnsWebApplicationFactory" />'s own doc comment on why this factory's
-///     environment-variable overrides are process-wide, shared across every test class in this
-///     collection) -- so every assertion here proves the "not configured" side of both actions:
-///     <see cref="Get_ReportsDisabledWhenNoIdentityProviderIsConfigured" />/
-///     <see cref="Challenge_ReturnsNotFoundWhenNoIdentityProviderIsConfigured" />. The "actually
-///     configured and working" side of this feature needs a real (or realistically faked) OIDC
-///     issuer to redirect to, which is out of scope for this shared, general-purpose host --
+///     This class covers <see cref="Controllers.SsoController" /> over HTTP on the shared
+///     in-process host, which does not configure <c>Identity:Sso</c>, so only the not-configured
+///     side is tested: <see cref="Get_ReportsDisabledWhenNoIdentityProviderIsConfigured" />, the
+///     anonymous access to <c>Get</c>, and
+///     <see cref="Challenge_ReturnsNotFoundWhenNoIdentityProviderIsConfigured" />. The configured
+///     flow needs an OIDC issuer to redirect to;
 ///     <c>Ninlil.Dns.Identity.Tests.OidcUserProvisioningServiceTests</c> and
-///     <see cref="OidcSignInJwtMintingTests" /> cover the parts of that flow this project can
-///     verify without one.
+///     <see cref="OidcSignInJwtMintingTests" /> cover the parts that work without one.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SsoControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -38,8 +34,7 @@ public class SsoControllerTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task Get_RequiresNoAuthenticationAtAll()
     {
-        // A brand-new, never-authenticated client -- this action must work for the exact
-        // audience it exists for: an anonymous caller on the login page, before any sign-in.
+        // A client with no token: the login page calls this action before anyone signs in.
         HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response = await client.GetAsync("/api/auth/sso");
@@ -52,9 +47,8 @@ public class SsoControllerTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = factory.CreateClient();
 
-        // A real browser navigation would follow this without HttpClient's own default
-        // auto-redirect behavior mattering (there is nothing to redirect to here at all) --
-        // 404, matching Get's own enabled:false, rather than an unhandled server error.
+        // With nothing configured there is no redirect, so the answer is 404, matching Get's
+        // enabled:false, rather than a server error.
         HttpResponseMessage response = await client.GetAsync("/api/auth/sso/challenge");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);

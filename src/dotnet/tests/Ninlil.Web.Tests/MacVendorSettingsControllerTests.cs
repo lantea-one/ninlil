@@ -12,10 +12,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="MacVendorSettingsController" /> through the real host: the
-///     settings and loaded-data report, a merge patch landing in the runtime configuration file,
-///     validation of every field, and an on-demand refresh against unreachable registries that is
-///     reported as failed while the embedded snapshot keeps answering lookups.
+///     This class covers <see cref="MacVendorSettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the settings and loaded-data
+///     report, a merge patch landing in the runtime configuration file, field validation, and an
+///     on-demand refresh against unreachable registries that is reported as failed while the
+///     embedded snapshot keeps answering lookups.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class MacVendorSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -68,7 +69,7 @@ public class MacVendorSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         );
 
         // The shared test host turns automatic refresh off and points every registry at an
-        // unreachable local URL, both through the real NINLIL_ environment variables.
+        // unreachable local URL, both through NINLIL_ environment variables.
         Assert.False(detail.EnableAutomaticRefresh);
         Assert.Null(detail.Status.NextRefreshDueUtc);
         Assert.Equal(

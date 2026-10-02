@@ -8,14 +8,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers direct happy-path CRUD coverage for
-///     <see cref="RolesController" />, against a real, in-process host and a real SQLite database
-///     (see <see cref="NinlilDnsWebApplicationFactory" />) -- a full create/list/get/PUT/delete
-///     lifecycle plus permission grant/revoke, and confirming <see cref="RolesController.List" />
-///     now genuinely paginates rather than returning every role in one unbounded response. Before
-///     this pass, <see cref="RolesController" /> was touched only by
-///     <see cref="IdentityErrorResponseTests" /> (a 404 case and a validation-error POST) -- no
-///     test anywhere created, listed, fetched, updated, or deleted a role.
+///     This class covers <see cref="RolesController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the create, list, get, update and delete
+///     lifecycle, granting and revoking a permission, and pagination of
+///     <see cref="RolesController.List" />. Its error responses are covered by
+///     <see cref="IdentityErrorResponseTests" />. Granting a permission the caller does not hold,
+///     such as <c>*</c>, is not tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -100,7 +98,7 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
             await afterRevokeResponse.Content.ReadFromJsonAsync<RoleSummary>();
         Assert.DoesNotContain("zones:read", afterRevoke.Permissions);
 
-        // PUT updates the role's own description, keeping its identifier and name.
+        // PUT updates the description and keeps the identifier and name.
         HttpResponseMessage updateResponse = await client.PutAsJsonAsync(
             $"/api/roles/{created.Id}",
             new UpdateRoleRequest("Updated by test.")
@@ -126,8 +124,8 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // Seed enough roles that a page size of 1 is guaranteed to truncate the result -- the
-        // bootstrap administrator's own role plus at least these two.
+        // Create enough roles that a page size of 1 must truncate the result: the bootstrap
+        // administrator's role plus these two.
         string firstRoleName = $"page-role-{Guid.NewGuid():N}";
         string secondRoleName = $"page-role-{Guid.NewGuid():N}";
         (
@@ -143,7 +141,7 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
             )
         ).EnsureSuccessStatusCode();
 
-        // A full, unbounded listing to learn the real total.
+        // A large page to learn the total.
         HttpResponseMessage fullListResponse = await client.GetAsync("/api/roles?skip=0&take=500");
         fullListResponse.EnsureSuccessStatusCode();
         PagedResult<RoleSummary> fullPage = await fullListResponse.Content.ReadFromJsonAsync<
@@ -152,7 +150,7 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         int realTotal = fullPage.TotalCount;
         Assert.True(realTotal >= 2);
 
-        // A page size of 1 must return exactly one item, yet still report the real total.
+        // A page size of 1 must return one item and still report the full total.
         HttpResponseMessage smallPageResponse = await client.GetAsync("/api/roles?skip=0&take=1");
         smallPageResponse.EnsureSuccessStatusCode();
         PagedResult<RoleSummary> smallPage = await smallPageResponse.Content.ReadFromJsonAsync<
@@ -163,9 +161,8 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(1, smallPage.Take);
         Assert.Equal(realTotal, smallPage.TotalCount);
 
-        // The second page, still with a page size of 1, must return a different item than the
-        // first page did -- proving the skip actually moved the window rather than just
-        // truncating the same unpaginated list twice.
+        // The second page must return a different item, so skip moves the window rather than
+        // truncating the same list twice.
         HttpResponseMessage secondPageResponse = await client.GetAsync("/api/roles?skip=1&take=1");
         secondPageResponse.EnsureSuccessStatusCode();
         PagedResult<RoleSummary> secondPage = await secondPageResponse.Content.ReadFromJsonAsync<

@@ -11,12 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="PtrSyncSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>PtrSyncOptions</c>' own global default already drove real,
-///     enforced PTR/reverse-zone sync behavior, but had zero admin-facing REST/UI configuration
-///     surface (the per-zone override already had one, through <c>ZonesController</c>).
+///     This class covers <see cref="PtrSyncSettingsController" /> (the global default for keeping
+///     PTR records in step with forward records; zones override it through <c>ZonesController</c>)
+///     over HTTP on the shared in-process host, signed in as the bootstrap administrator: the
+///     compiled-in defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class PtrSyncSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,7 +64,7 @@ public class PtrSyncSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         PtrSyncSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<PtrSyncSettingsDetail>();
 
-        // PtrSyncOptions' own compiled-in default: off.
+        // The compiled-in default: off.
         Assert.False(detail.DefaultEnabled);
     }
 
@@ -84,13 +84,9 @@ public class PtrSyncSettingsControllerTests(NinlilDnsWebApplicationFactory facto
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for PtrSyncOptions is proved instead, directly, by
-            // PtrSyncOptionsHotReloadTests (in Ninlil.Dns.Server.Authoritative.Tests).
+            // Only the file is checked; a GET would still show the old value (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by PtrSyncOptionsHotReloadTests in Ninlil.Dns.Server.Authoritative.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Authoritative"]["PtrSync"];
@@ -98,8 +94,7 @@ public class PtrSyncSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore the compiled-in default afterward.
+            // The settings file is shared with every other test, so write the default back.
             await client.SendAsync(
                 PatchRequest("/api/ptr-sync-settings", new { defaultEnabled = false })
             );

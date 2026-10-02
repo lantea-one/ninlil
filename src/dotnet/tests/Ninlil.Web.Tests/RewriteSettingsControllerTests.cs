@@ -11,11 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="RewriteSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: rewrite entries already existed via <c>DnsRewritesController</c>, but
-///     the engine-level toggle had no REST/UI surface until this controller.
+///     This class covers <see cref="RewriteSettingsController" /> (the rewrite engine switch and
+///     answer TTL; the rewrites themselves are managed by <c>DnsRewritesController</c>) over HTTP
+///     on the shared in-process host, signed in as the bootstrap administrator: the compiled-in
+///     defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RewriteSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -63,8 +64,7 @@ public class RewriteSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         RewriteSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<RewriteSettingsDetail>();
 
-        // Off by default, the same "capability-expanding toggle" convention every other engine
-        // toggle in this project follows -- see DnsRewriteOptions.Enable's own doc comment.
+        // Off by default, like the other feature switches (see DnsRewriteOptions.Enable).
         Assert.False(detail.Enable);
         Assert.Equal(300u, detail.TimeToLiveSeconds);
     }
@@ -96,11 +96,8 @@ public class RewriteSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection (see that collection's own doc comment) -- restore rewrites back
-            // to off afterward, the same "restore before returning" discipline
-            // ServicesControllerCrudTests already establishes for exactly this shared-state
-            // concern, so no other test in the collection observes rewrites left on.
+            // Turn rewrites off again in the shared settings file. The TTL written above is left
+            // in the file.
             await client.SendAsync(PatchRequest("/api/rewrite-settings", new { enable = false }));
         }
     }

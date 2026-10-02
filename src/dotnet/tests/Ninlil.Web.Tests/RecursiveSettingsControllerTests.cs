@@ -11,12 +11,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="RecursiveSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing
-///     the single highest-priority gap a full REST/UI configuration-completeness audit found: a
-///     fresh install starts with recursion off and, before this controller existed, had no way to
-///     turn it on short of hand-editing the configuration file and restarting.
+///     This class covers <see cref="RecursiveSettingsController" /> (the recursive resolver,
+///     including the switch that turns recursion on) over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the compiled-in defaults, patches checked by
+///     reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation. <see cref="RecursiveOptionsHotReloadTests" /> covers
+///     the reload. Recursion stays off in the host, since the settings file is never loaded.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RecursiveSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,9 +65,8 @@ public class RecursiveSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         RecursiveSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<RecursiveSettingsDetail>();
 
-        // The exact, documented, security-conscious defaults -- see
-        // RecursiveServerOptions.EnableRecursion's own doc comment for why recursion itself
-        // defaults off while DNSSEC validation and automatic trust anchor update both default on.
+        // Recursion defaults off while DNSSEC validation and automatic trust anchor updates
+        // default on (see RecursiveServerOptions.EnableRecursion for why).
         Assert.False(detail.EnableRecursion);
         Assert.True(detail.EnableDnssecValidation);
         Assert.True(detail.EnableQnameMinimization);

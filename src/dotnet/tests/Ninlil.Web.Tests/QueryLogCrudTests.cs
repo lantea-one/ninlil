@@ -10,15 +10,13 @@ namespace Ninlil.Web.Tests;
 
 /// <summary>
 ///     This class covers <see cref="QueryLogController" /> and
-///     <see cref="QueryLoggingSettingsController" /> end to end, against a real, in-process host.
-///     Its own most important coverage is a direct regression test for a real bug found while
-///     integrating the Angular admin SPA against this already-built controller: a query-string
-///     enum filter (<c>responseCode</c>/<c>queriedType</c>) must accept a value spelled either as
-///     the enum's own C# member name or as the wire-format string a response body actually
-///     renders that same value as -- the two differ by more than casing for several
-///     <see cref="Ninlil.Dns.Common.Enum.DnsResponseCodeEnum" /> members, so accepting only
-///     the member name would silently reject the exact value a caller had just read back out of
-///     an earlier search result.
+///     <see cref="QueryLoggingSettingsController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: search filters, clearing the log, the default
+///     logging settings and the reload notes a patch returns. A query-string enum filter
+///     (<c>responseCode</c>, <c>queriedType</c>) must accept both the C# member name and the wire
+///     string a response body shows, because for several
+///     <see cref="Ninlil.Dns.Common.Enum.DnsResponseCodeEnum" /> members the two differ by more
+///     than case, and a caller must be able to filter by a value read from an earlier result.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class QueryLogCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -46,14 +44,12 @@ public class QueryLogCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Theory]
-    // "FORMERR"/"SERVFAIL"/"NOTIMP" are DnsResponseCodeEnum's own [EnumMember] wire strings --
-    // the exact text a response body actually renders, and letters that genuinely differ (not
-    // just casing) from the C# member name below.
+    // "FORMERR", "SERVFAIL" and "NOTIMP" are the [EnumMember] wire strings of DnsResponseCodeEnum,
+    // the text a response body shows, and differ from the member names by more than case.
     [InlineData("FORMERR")]
     [InlineData("SERVFAIL")]
     [InlineData("NOTIMP")]
-    // "FormatError"/"ServerFailure"/"NotImplemented" are the same three values spelled as their
-    // own literal C# member name instead.
+    // The same three values spelled as their C# member names.
     [InlineData("FormatError")]
     [InlineData("ServerFailure")]
     [InlineData("NotImplemented")]
@@ -139,14 +135,10 @@ public class QueryLogCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test confirms a write touching only <c>privacyLevel</c> reports this project's own
-    ///     "no restart required" note. It deliberately does not also assert the following
-    ///     <c>GET</c> reflects the new value -- see <see cref="AppearanceSettingsControllerTests" />'s
-    ///     own doc comment for why this shared HTTP fixture's own isolated runtime settings file
-    ///     is never wired back in as a real, reload-on-change configuration source the way a real
-    ///     deployment's <c>appsettings.json</c> is; <see cref="QueryLoggingOptionsHotReloadTests" />
-    ///     is the dedicated test that actually proves the live reload happens, end to end, against
-    ///     the real .NET configuration/options binding pipeline.
+    ///     This test confirms that a write touching only <c>privacyLevel</c> returns a "no restart
+    ///     required" note. A later <c>GET</c> would still show the old value (see
+    ///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />);
+    ///     <see cref="QueryLoggingOptionsHotReloadTests" /> covers the reload.
     /// </summary>
     [Fact]
     public async Task QueryLoggingSettings_PatchPrivacyLevelOnly_ReportsNoRestartRequired()
@@ -165,10 +157,9 @@ public class QueryLogCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test confirms a write touching both <c>privacyLevel</c> (hot-reloading) and
-    ///     <c>retentionPeriod</c> (restart-required) reports the mixed-reload note naming both --
-    ///     unlike <see cref="QueryLoggingSettings_PatchPrivacyLevelOnly_ReportsNoRestartRequired" />,
-    ///     which touches only the hot-reloading field.
+    ///     This test confirms that a write touching <c>privacyLevel</c> (hot-reloading) and
+    ///     <c>retentionPeriod</c> (needs a restart) returns the mixed note, which names
+    ///     <c>privacyLevel</c> and mentions a restart.
     /// </summary>
     [Fact]
     public async Task QueryLoggingSettings_PatchPrivacyLevelAndRetentionPeriod_ReportsAMixedReloadNote()

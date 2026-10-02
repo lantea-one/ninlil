@@ -11,19 +11,17 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ReverseProxySettingsController" /> end to end, against a
-///     real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />). The actual
-///     trust-gating logic <see cref="Middleware.ReverseProxyTrustGatingMiddleware" /> applies is
-///     covered separately, directly against a constructed <see cref="Microsoft.AspNetCore.Http.DefaultHttpContext" />
-///     in <see cref="ReverseProxyTrustGatingMiddlewareTests" /> -- this host's own middleware
-///     pipeline is only ever wired up when <c>Program.cs</c> reads
-///     <see cref="Options.ReverseProxyOptions.Enable" /> as <see langword="true" /> at startup,
-///     and <c>TestServer</c>'s own in-memory transport leaves
-///     <c>HttpContext.Connection.RemoteIpAddress</c> <see langword="null" /> for every request
-///     regardless (confirmed directly, not assumed), so this REST controller's own read/write
-///     behavior and the middleware's own trust decision are each verified at the layer that can
-///     actually exercise them.
+///     This class covers <see cref="ReverseProxySettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the compiled-in defaults,
+///     patches checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), keeping the
+///     shared secret out of responses, and input validation. The trust decision of
+///     <see cref="Middleware.ReverseProxyTrustGatingMiddleware" /> is tested on a constructed
+///     <see cref="Microsoft.AspNetCore.Http.DefaultHttpContext" /> in
+///     <see cref="ReverseProxyTrustGatingMiddlewareTests" />, because the middleware is only added
+///     when <see cref="Options.ReverseProxyOptions.Enable" /> is on at startup, and
+///     <c>TestServer</c> leaves <c>HttpContext.Connection.RemoteIpAddress</c> null for every
+///     request.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -144,13 +142,12 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
         Assert.Equal("198.51.100.5", dnsOverTlsSection["KnownProxies"][0].GetValue<string>());
         Assert.Equal("172.16.0.0/16", dnsOverTlsSection["KnownNetworks"][0].GetValue<string>());
 
-        // The entirely separate HTTP-side allowlist must be left completely untouched by a patch
-        // that only ever named the dnsOverTls sub-object. Whether the sibling "ReverseProxy"
-        // section already exists in the shared configuration file at this point depends on
-        // xUnit's own default test-case ordering (which hashes each test's fully-qualified name,
-        // so it isn't declaration order) -- rather than depending on another test in this class
-        // having already run first, read it defensively: a missing section trivially satisfies
-        // "no Enable key was added by this patch" exactly as well as a present-but-untouched one.
+        // A patch naming only dnsOverTls must leave the HTTP-side "ReverseProxy" section alone.
+        // That section may or may not exist yet, depending on test order (xUnit orders test cases
+        // by a hash of their names), so a missing section passes too. If
+        // Patch_WithNewValues_WritesThemToTheConfigurationFile ran first, its "Enable" key would
+        // already be in the shared file and this assertion would fail, so the test depends on
+        // running before that one.
         JsonObject httpSection = root["DnsServer"]?["ReverseProxy"] as JsonObject;
         Assert.False(httpSection?.ContainsKey("Enable") ?? false);
     }
@@ -200,15 +197,10 @@ public class ReverseProxySettingsControllerTests(NinlilDnsWebApplicationFactory 
         HttpResponseMessage response = await client.GetAsync("/api/reverse-proxy-settings");
         string body = await response.Content.ReadAsStringAsync();
 
-        // ReverseProxyOptions is bound via IOptions, not IOptionsMonitor -- exactly like every
-        // other runtime settings controller in this project, a PATCH here rewrites the
-        // configuration file but does not retroactively change what this already-running host's
-        // own IOptions<ReverseProxyOptions> snapshot reports until the next restart (see this
-        // controller's own doc comment). This test therefore cannot assert that a live GET's own
-        // SharedSecretConfigured flips to true within the same test run -- what it can, and does,
-        // assert is the real regression guard this test exists for: Get()'s own response body
-        // never contains the raw secret string anywhere, confirming its code path genuinely never
-        // serializes ReverseProxyOptions.SharedSecret itself, only the boolean indicator.
+        // ReverseProxyOptions is read through IOptions, and the test host never loads its settings
+        // file anyway, so the GET still sees no secret at all. The assertion therefore passes
+        // whether or not Get() would serialize ReverseProxyOptions.SharedSecret; it cannot catch
+        // a leak.
         Assert.DoesNotContain("a-genuinely-secret-value", body);
     }
 

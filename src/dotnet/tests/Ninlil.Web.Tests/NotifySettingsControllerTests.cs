@@ -11,9 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="NotifySettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="NotifySettingsController" /> (outgoing DNS NOTIFY) over HTTP on
+///     the shared in-process host, signed in as the bootstrap administrator: the compiled-in
+///     defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class NotifySettingsControllerTests(NinlilDnsWebApplicationFactory factory)

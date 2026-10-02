@@ -10,26 +10,21 @@ using Ninlil.Web.ExceptionHandling;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class tests <see cref="NinlilExceptionHandler" /> directly, against a real
-///     <see cref="IProblemDetailsService" /> resolved from a real, minimal dependency-injection
-///     container (the same registration <c>AddProblemDetails()</c> in <c>Program.cs</c> makes),
-///     rather than through a full HTTP round trip -- this handler's own classification logic is
-///     what actually needs coverage here, not a specific controller's own error path (those are
-///     covered separately, end to end, by <see cref="UsersController" />/
-///     <see cref="TwoFactorController" />'s own real conversion in
-///     <see cref="IdentityAdminEndpointTests" /> and this class's own converted-endpoint tests
-///     below). Two of this hierarchy's four exception types (<see cref="ConflictException" /> and
-///     <see cref="NinlilException" /> itself), and the genuinely-unhandled-exception fallback,
-///     have no real, converted endpoint anywhere in this project to exercise them
-///     through yet -- direct unit testing of the handler is what actually verifies their own
-///     mapping is correct today.
+///     This class tests <see cref="NinlilExceptionHandler" /> directly, without a host or an HTTP
+///     round trip. The handler gets an <see cref="IProblemDetailsService" /> from a minimal
+///     service collection with the <c>AddProblemDetails()</c> registration <c>Program.cs</c> also
+///     makes, and writes to a <see cref="DefaultHttpContext" />. Each test checks how one
+///     exception type is classified, including the fallback for an unexpected exception, which
+///     must hide its message and return a correlation ID. The responses of endpoints such as
+///     <see cref="UsersController" /> are covered by <see cref="AdministrativeErrorResponseTests" />
+///     and <see cref="IdentityErrorResponseTests" />.
 /// </summary>
 public class NinlilExceptionHandlerTests
 {
     /// <summary>
-    ///     This method builds a real <see cref="NinlilExceptionHandler" /> wired to a real
+    ///     This method builds a <see cref="NinlilExceptionHandler" /> with an
     ///     <see cref="IProblemDetailsService" />, plus a <see cref="DefaultHttpContext" /> whose
-    ///     response body is captured in memory so a test can read back exactly what was written.
+    ///     response body is kept in memory so a test can read back what was written.
     /// </summary>
     private static (NinlilExceptionHandler Handler, DefaultHttpContext HttpContext) CreateHandler()
     {
@@ -54,8 +49,7 @@ public class NinlilExceptionHandlerTests
 
     /// <summary>
     ///     This method hands the given exception to a fresh <see cref="NinlilExceptionHandler" />
-    ///     and returns the resulting HTTP status code plus the parsed JSON response body, so each
-    ///     test below only has to assert on the shape it actually cares about.
+    ///     and returns the HTTP status code and the parsed JSON response body.
     /// </summary>
     private static async Task<(int StatusCode, JsonElement Body)> HandleAsync(Exception exception)
     {

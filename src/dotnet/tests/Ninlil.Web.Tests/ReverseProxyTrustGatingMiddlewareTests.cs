@@ -10,16 +10,12 @@ using MicrosoftOptions = Microsoft.Extensions.Options.Options;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ReverseProxyTrustGatingMiddleware" />'s own trust decision
-///     directly, against a hand-constructed <see cref="DefaultHttpContext" /> rather than through
-///     a real <see cref="NinlilDnsWebApplicationFactory" /> host -- confirmed necessary, not
-///     merely convenient, by first checking <c>TestServer</c>'s own actual behavior directly: its
-///     in-memory transport leaves <c>HttpContext.Connection.RemoteIpAddress</c>
-///     <see langword="null" /> for every request, which would make every request this
-///     middleware ever sees "untrusted" by construction and leave the one branch that matters
-///     most (a genuinely trusted request) impossible to exercise through that host at all. This
-///     class needs no <see cref="NinlilDnsWebApplicationFactory" />/<see cref="WebTestCollection" />
-///     of its own, and is not part of that shared collection, since it builds no host.
+///     This class tests the trust decision of <see cref="ReverseProxyTrustGatingMiddleware" />
+///     directly, on a hand-built <see cref="DefaultHttpContext" />, without a host. Through
+///     <see cref="NinlilDnsWebApplicationFactory" /> it could not be tested: <c>TestServer</c>
+///     leaves <c>HttpContext.Connection.RemoteIpAddress</c> null for every request, so every
+///     request would be untrusted and the trusted branch could never run. The class therefore
+///     does not join <see cref="WebTestCollection" />.
 /// </summary>
 public class ReverseProxyTrustGatingMiddlewareTests
 {
@@ -42,13 +38,10 @@ public class ReverseProxyTrustGatingMiddlewareTests
                 sharedSecretHeaderName ?? ReverseProxyOptions.DefaultSharedSecretHeaderName,
         };
 
-        // A brand-new ForwardedHeadersOptions() already pre-trusts loopback on its own (see
-        // ReverseProxyForwardedHeadersConfigurator's own doc comment) -- routing every test
-        // through that same real configurator, exactly as Program.cs itself does, rather than
-        // building a ForwardedHeadersOptions by hand here, is what makes
-        // InvokeAsync_FromLoopbackWithNoAllowlistConfigured_StripsForwardedHeaders below a
-        // genuine regression test for that real bug, not merely a hand-crafted scenario that
-        // could never have caught it.
+        // A new ForwardedHeadersOptions() already trusts loopback (see
+        // ReverseProxyForwardedHeadersConfigurator). Building it through that configurator, as
+        // Program.cs does, rather than by hand, is what lets the loopback tests below catch the
+        // configurator leaving those defaults in place.
         ForwardedHeadersOptions forwardedHeadersOptions = new();
         ReverseProxyForwardedHeadersConfigurator.Configure(
             forwardedHeadersOptions,
@@ -129,10 +122,9 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_WithNoAllowlistConfiguredAtAll_StripsForwardedHeaders()
     {
-        // A real, deliberate difference from ForwardedHeadersMiddleware's own built-in default
-        // (which trusts every peer when its own KnownProxies/KnownIPNetworks are both empty) --
-        // this middleware never falls back to trusting everyone just because nothing has been
-        // configured yet.
+        // Unlike ForwardedHeadersMiddleware, which trusts every peer when KnownProxies and
+        // KnownIPNetworks are both empty, this middleware never trusts everyone just because
+        // nothing is configured.
         ReverseProxyTrustGatingMiddleware middleware = CreateMiddleware();
         DefaultHttpContext context = CreateContext("203.0.113.10");
 
@@ -144,17 +136,12 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_FromLoopbackWithNoAllowlistConfigured_StripsForwardedHeaders()
     {
-        // A regression test for a real bug found only by an actual end-to-end request, not by
-        // inspection: a brand-new ForwardedHeadersOptions() already pre-trusts loopback on its
-        // own (KnownProxies seeded with ::1, KnownIPNetworks seeded with 127.0.0.0/8) -- a first
-        // attempt at this wiring only ever added this project's own configured entries to that
-        // already-populated instance, without clearing it first, so a request arriving over
-        // loopback (::1, exactly what a local `curl` connects as) had its forwarded headers
-        // honored regardless of what an operator had actually configured, or even with nothing
-        // configured at all. CreateMiddleware() below routes through the exact same
-        // ReverseProxyForwardedHeadersConfigurator.Configure this project's own Program.cs calls,
-        // so this test genuinely exercises the real fix (clearing those defaults first), not a
-        // hand-crafted stand-in that could never have caught the original bug.
+        // A new ForwardedHeadersOptions() trusts loopback (KnownProxies holds ::1 and
+        // KnownIPNetworks 127.0.0.0/8). The configurator must clear those defaults before adding
+        // the configured entries; otherwise a request over loopback (::1, as a local curl
+        // connects) would have its forwarded headers honored with nothing configured.
+        // CreateMiddleware() goes through the same ReverseProxyForwardedHeadersConfigurator.Configure
+        // call Program.cs makes, so this test checks that rule.
         ReverseProxyTrustGatingMiddleware middleware = CreateMiddleware();
         DefaultHttpContext context = CreateContext("::1");
 
@@ -166,9 +153,8 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_FromLoopbackNotInAnExplicitlyConfiguredAllowlist_StripsForwardedHeaders()
     {
-        // The same regression, with a real, explicit (non-loopback) allowlist configured, so
-        // this also confirms the framework's own default loopback trust never survives alongside
-        // an operator's own real entries either.
+        // The same rule with a non-loopback allowlist configured: the default loopback trust
+        // must not survive alongside the operator's entries.
         ReverseProxyTrustGatingMiddleware middleware = CreateMiddleware(
             knownProxies: ["203.0.113.10"],
             knownNetworks: ["10.0.0.0/24"]
@@ -248,8 +234,8 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_FromAnUntrustedAddressEvenWithTheCorrectSharedSecret_StripsHeaders()
     {
-        // The allowlist and the shared secret are both required, not either/or -- a correct
-        // secret from a source outside the allowlist is still never trusted.
+        // The allowlist and the shared secret are both required, so a correct secret from an
+        // address outside the allowlist is not trusted.
         ReverseProxyTrustGatingMiddleware middleware = CreateMiddleware(
             knownProxies: ["203.0.113.10"],
             sharedSecret: "correct-horse-battery-staple",
@@ -269,9 +255,8 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_FromAnIPv4MappedIPv6AddressMatchingAPlainIPv4KnownProxy_LeavesHeadersIntact()
     {
-        // Kestrel's own dual-stack IPv6Any listener reports an IPv4 connection as its own
-        // ::ffff:a.b.c.d mapped form -- an operator who configures a plain IPv4 proxy address
-        // must still match regardless of which form the connection actually arrived in.
+        // Kestrel's dual-stack IPv6Any listener reports an IPv4 connection in the mapped
+        // ::ffff:a.b.c.d form, and a plain IPv4 proxy address must still match it.
         ReverseProxyTrustGatingMiddleware middleware = CreateMiddleware(
             knownProxies: ["203.0.113.10"]
         );
@@ -285,8 +270,8 @@ public class ReverseProxyTrustGatingMiddlewareTests
     [Fact]
     public async Task InvokeAsync_AlwaysCallsTheNextDelegateRegardlessOfTrust()
     {
-        // An untrusted request is answered normally, using the real connection's own address --
-        // never rejected outright.
+        // An untrusted request is answered normally, using the connection's address; it is
+        // never rejected.
         bool nextCalled = false;
         ReverseProxyTrustGatingMiddleware middleware = new(
             context =>

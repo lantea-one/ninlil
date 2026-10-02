@@ -5,16 +5,16 @@ using Ninlil.Web.EnvironmentVariables;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers how <see cref="NativeRuntimeSettingsRelaunch" /> maps a
-///     <c>NINLIL_DOTNET_*</c> variable onto the .NET runtime's own case-sensitive setting name --
-///     the part of the relaunch that decides whether a process restarts at all, and under which
-///     exact spelling a setting reaches the runtime.
+///     This class covers, without a host, how <see cref="NativeRuntimeSettingsRelaunch" /> maps a
+///     <c>NINLIL_DOTNET_*</c> variable onto the case-sensitive setting name the .NET runtime
+///     reads. That mapping decides whether the process relaunches at all, and under which
+///     spelling a setting reaches the runtime.
 /// </summary>
 public sealed class NativeRuntimeSettingsRelaunchTests
 {
     /// <summary>
-    ///     Confirms an upper-case, word-split name resolves to the runtime's own mixed-case
-    ///     spelling, with or without the word-break underscores.
+    ///     Confirms an upper-case, word-split name resolves to the runtime's mixed-case spelling,
+    ///     with or without the word-break underscores.
     /// </summary>
     [Theory]
     [InlineData("NINLIL_DOTNET_GC_SERVER", "DOTNET_gcServer")]

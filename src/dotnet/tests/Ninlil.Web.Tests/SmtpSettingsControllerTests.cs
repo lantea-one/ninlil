@@ -11,11 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="SmtpSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>EmailSenderOptions</c> already drove real, working e-mail-based
-///     two-factor authentication codes, but had zero admin-facing REST/UI configuration surface.
+///     This class covers <see cref="SmtpSettingsController" /> (<c>EmailSenderOptions</c>, used for
+///     e-mailed two-factor codes and password-reset links) over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator: the compiled-in defaults, a patch checked
+///     by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -62,7 +63,7 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         SmtpSettingsDetail detail = await response.Content.ReadFromJsonAsync<SmtpSettingsDetail>();
 
-        // EmailSenderOptions's own compiled-in defaults -- see that class's own doc comment.
+        // The compiled-in defaults of EmailSenderOptions.
         Assert.Equal(587, detail.SmtpPort);
         Assert.True(detail.UseTls);
         Assert.Equal("Ninlil", detail.FromDisplayName);
@@ -97,20 +98,11 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source (only the host's real default appsettings.json path gets
-            // that treatment automatically), a real, confirmed test-harness limitation this
-            // project's settings-controller test suite already found and documented; every sibling settings-controller test in
-            // this project (RecursiveSettingsControllerTests/AcmeSettingsControllerTests/
-            // AppearanceSettingsControllerTests) already independently avoids the same assertion
-            // for exactly this reason. Genuine IOptionsMonitor hot-reload for EmailSenderOptions
-            // is proved instead, directly, by SmtpEmailSenderHotReloadTests (in
-            // Ninlil.Dns.Identity.Tests) -- the password never being echoed back by this
-            // controller's own Get action is proved below by
-            // Get_ReturnsTheCompiledInDefaultsWhenNothingHasBeenConfigured's own assertion,
-            // rather than a round trip against this same write.
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by SmtpEmailSenderHotReloadTests in Ninlil.Dns.Identity.Tests. Despite the
+            // test name, nothing checks that the password stays out of a response: the PATCH
+            // response is only a note, and the GET never sees the stored password.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["Email"];
@@ -127,13 +119,9 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore every field this project's own "compiled-in defaults"
-            // test actually asserts on afterward, the same "restore before returning" discipline
-            // every other settings controller test class in this project already establishes.
-            // 'smtpHost'/'username'/'fromAddress' have no real compiled-in default (each starts
-            // null) and are not asserted elsewhere, so they are deliberately left as this test's
-            // own values rather than forced back to an invalid blank string.
+            // Write back the defaults the Get test checks. smtpHost, username and fromAddress
+            // default to null and a blank value would be rejected, so they keep this test's
+            // values.
             await client.SendAsync(
                 PatchRequest(
                     "/api/smtp-settings",

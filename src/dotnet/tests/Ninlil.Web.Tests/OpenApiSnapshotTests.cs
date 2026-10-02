@@ -5,10 +5,11 @@ namespace Ninlil.Web.Tests;
 
 /// <summary>
 ///     This class keeps the admin console's committed OpenAPI snapshot
-///     (<c>src/angular/openapi/swagger.json</c>) in step with the controllers. The Angular build
-///     generates its typed API client from that file, not from a running server, so a controller
-///     change that nobody re-fetched the snapshot for would otherwise ship a client that no longer
-///     matches the API, with nothing failing until a page broke at runtime.
+///     (<c>src/angular/openapi/swagger.json</c>) in step with the controllers, by comparing it with
+///     the document the shared in-process host serves at <c>/swagger/v1/swagger.json</c>. The
+///     Angular build generates its typed API client from that file, not from a running server, so
+///     a controller change that nobody re-fetched the snapshot for would otherwise ship a client
+///     that no longer matches the API, with nothing failing until a page broke at runtime.
 ///     <para>
 ///         The comparison is on the parsed JSON rather than the raw text, so a difference in line
 ///         endings or a trailing newline never fails it; any change to a path, schema, enum or
@@ -37,7 +38,7 @@ public class OpenApiSnapshotTests(NinlilDnsWebApplicationFactory factory)
 
         if (Environment.GetEnvironmentVariable(UpdateVariableName) == "true")
         {
-            // Written exactly as served, the same bytes `npm run fetch:openapi` would save.
+            // Written as served, the same bytes `npm run fetch:openapi` would save.
             await File.WriteAllTextAsync(snapshotPath, served);
             return;
         }

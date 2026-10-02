@@ -9,24 +9,22 @@ using Ninlil.Dns.Server.QueryLog;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     rather than through the full HTTP host, that <see cref="QueryLoggingOptions.PrivacyLevel" />
-///     genuinely hot-reloads: a write <see cref="PresetConfigurationFileApplier" /> merges into a
-///     JSON file is visible on <see cref="IOptionsMonitor{TOptions}" />'s own
-///     <c>CurrentValue</c> with no restart, mirroring <see cref="AppearanceOptionsHotReloadTests" />'s
-///     own identical shape and reasoning for <c>AppearanceOptions</c> -- the same real, reload-
-///     on-change configuration source, the same real merge-patch write mechanism, just against a
-///     different options class's own one hot-reloading field.
+///     This class checks that <see cref="QueryLoggingOptions.PrivacyLevel" />, the one
+///     hot-reloading field of <see cref="QueryLoggingOptions" />, hot-reloads: a write that
+///     <see cref="PresetConfigurationFileApplier" /> merges into a JSON file shows up on
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> without a restart. It builds its own
+///     configuration root with one reload-on-change file, as
+///     <see cref="AppearanceOptionsHotReloadTests" /> does and explains.
 /// </summary>
 public class QueryLoggingOptionsHotReloadTests
 {
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_IsVisibleOnIOptionsMonitorWithNoRestart()
     {
-        // A directory of this test's own, rather than the shared temp directory itself: the file
-        // watcher behind reloadOnChange sees every change in the directory it watches, and on a
-        // busy machine unrelated churn there can overflow its queue, which makes it report a
-        // change to every watched file at once.
+        // A directory for this test rather than the shared temp directory: the file watcher
+        // behind reloadOnChange sees every change in the directory it watches, and on a busy
+        // machine unrelated churn there can overflow its queue, which makes it report a change
+        // to every watched file at once.
         string directory = Directory
             .CreateTempSubdirectory("ninlil-dns-querylogging-hot-reload-")
             .FullName;
@@ -34,9 +32,8 @@ public class QueryLoggingOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the kind WebApplicationBuilder.CreateBuilder()
+            // adds for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -51,9 +48,8 @@ public class QueryLoggingOptionsHotReloadTests
                 IOptionsMonitor<QueryLoggingOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // default, exactly as a fresh installation would see it: full detail, unchanged from
-            // before this privacy scale even existed.
+            // The file does not exist yet, so this is the compiled-in default a fresh
+            // installation sees: full detail.
             Assert.Equal(QueryLogPrivacyLevelEnum.Full, monitor.CurrentValue.PrivacyLevel);
 
             await PresetConfigurationFileApplier.ApplyAsync(
@@ -67,10 +63,10 @@ public class QueryLoggingOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits (up to ten seconds) for the written value to
-            // actually arrive, rather than for the first change notification or a fixed delay: a
-            // spurious notification can trigger an earlier reload that still reads the old file.
+            // The JSON configuration provider debounces file-change notifications by a few hundred
+            // milliseconds. Wait up to ten seconds for the written value itself, not for the first
+            // change notification or a fixed delay: a spurious notification can trigger an earlier
+            // reload that still reads the old file.
             for (
                 int attempt = 0;
                 attempt < 200
@@ -92,7 +88,7 @@ public class QueryLoggingOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }

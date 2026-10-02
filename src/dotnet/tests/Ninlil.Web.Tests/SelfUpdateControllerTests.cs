@@ -14,11 +14,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="SelfUpdateController" /> end to end, against a real,
-///     in-process host and a real, local <see cref="HttpListener" /> standing in for an
-///     operator's own release-feed server -- proving this feature's own outbound HTTP fetch and
-///     JSON parsing genuinely work end to end, not merely that the surrounding REST plumbing
-///     compiles.
+///     This class covers <see cref="SelfUpdateController" /> on the shared in-process host, signed
+///     in as the bootstrap administrator, with a local <see cref="HttpListener" /> playing the
+///     operator's release feed. It checks the unconfigured status, and that a check against the
+///     feed fetches and parses the release and updates the status that <c>GET</c> then reports.
+///     The check runs on a second <see cref="SelfUpdateCheckService" /> built in the test (see
+///     <see cref="FixedOptionsMonitor{TOptions}" />), not through an HTTP endpoint.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -56,10 +57,10 @@ public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
         };
 
     /// <summary>
-    ///     This method starts a real, local <see cref="HttpListener" /> on an ephemeral loopback
-    ///     port that answers every request with the given raw JSON body, standing in for a real
-    ///     operator-hosted release feed -- returning the listener (the caller must dispose it) and
-    ///     the base URL to point <c>SelfUpdateOptions.ReleaseFeedUrl</c> at.
+    ///     This method starts an <see cref="HttpListener" /> on a free loopback port that answers
+    ///     every request with the given JSON body, playing the release feed. It returns the
+    ///     listener (the caller must dispose it) and the URL to set as
+    ///     <c>SelfUpdateOptions.ReleaseFeedUrl</c>.
     /// </summary>
     private static (HttpListener Listener, string FeedUrl) StartFakeReleaseFeed(string jsonBody)
     {
@@ -94,9 +95,9 @@ public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method finds a currently-unused loopback TCP port by briefly binding a socket to
-    ///     port 0 (the OS picks a free one) and releasing it immediately -- the standard,
-    ///     race-tolerated way to reserve an ephemeral port for a short-lived local listener.
+    ///     This method finds a free loopback TCP port by binding to port 0 and releasing it at
+    ///     once. Another process could take the port in between, which is accepted for a
+    ///     short-lived test listener.
     /// </summary>
     private static int GetFreeLoopbackPort()
     {
@@ -128,24 +129,15 @@ public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This nested class stands in for a real, DI-built <see cref="IOptionsMonitor{TOptions}" />,
-    ///     reporting a fixed value -- used only to point a probe <see cref="SelfUpdateCheckService" />
-    ///     instance at this test's own real local feed. <c>SelfUpdateOptions</c> written through a
-    ///     REST <c>PATCH</c> against this test host's own isolated runtime-settings file can never
-    ///     actually be observed by the real, DI-registered <see cref="SelfUpdateCheckService" />
-    ///     singleton within this same test process -- that file is never registered as its own
-    ///     reload-on-change <see cref="Microsoft.Extensions.Configuration.IConfiguration" /> source
-    ///     (a known <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}" />
-    ///     limitation this project has already documented elsewhere, and the same reason
-    ///     <c>SelfUpdateSettingsControllerTests</c> only ever proves a <c>PATCH</c>'s effect by
-    ///     reading the configuration file directly, never through a live re-<c>GET</c>). So this
-    ///     test proves the real end-to-end HTTP fetch/parse a different way: it builds a second,
-    ///     throwaway <see cref="SelfUpdateCheckService" /> instance sharing the running host's own
-    ///     real, DI-resolved <see cref="IHttpClientFactory" />, <see cref="ISelfUpdateStatusCache" />,
-    ///     and <see cref="ICurrentAssemblyVersionProvider" /> singletons -- so the one status cache
-    ///     <see cref="Controllers.SelfUpdateController.Get" /> itself reads from is genuinely
-    ///     updated -- with only the options value substituted, standing in for what a real
-    ///     configuration write would eventually deliver.
+    ///     This class is a fake <see cref="IOptionsMonitor{TOptions}" /> with a fixed value, used to
+    ///     point a second <see cref="SelfUpdateCheckService" /> at the test's local feed. A
+    ///     <c>PATCH</c> of <c>SelfUpdateOptions</c> never reaches the host's registered service,
+    ///     because the host does not load its settings file (see
+    ///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />). The second
+    ///     service shares the host's <see cref="IHttpClientFactory" />,
+    ///     <see cref="ISelfUpdateStatusCache" /> and <see cref="ICurrentAssemblyVersionProvider" />,
+    ///     so it updates the same status cache <see cref="Controllers.SelfUpdateController.Get" />
+    ///     reads.
     /// </summary>
     private sealed class FixedOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>
     {
@@ -187,9 +179,8 @@ public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
             Assert.Equal("https://example.com/999.0.0", status.ReleaseUrl);
             Assert.Equal("A real, locally served release note.", status.ReleaseNotes);
 
-            // GET must now reflect the same, real check result -- both this probe and the real,
-            // DI-registered SelfUpdateCheckService write into (and Controllers.SelfUpdateController
-            // reads from) the exact same ISelfUpdateStatusCache singleton.
+            // GET must now show the same result, since the probe and the registered service both
+            // write to the ISelfUpdateStatusCache singleton the controller reads.
             HttpClient client = await CreateAuthenticatedClientAsync();
             HttpResponseMessage getResponse = await client.GetAsync("/api/self-update");
             SelfUpdateStatusDetail getDetail =
@@ -207,9 +198,7 @@ public class SelfUpdateControllerTests(NinlilDnsWebApplicationFactory factory)
             listener.Stop();
             listener.Close();
 
-            // Restore the shared cache to what it was before this test -- shared across
-            // WebTestCollection, the same "restore what you changed before returning" discipline
-            // SafeSearchControllerTests already establishes for a shared setting.
+            // Put the shared status cache back as it was before the test.
             statusCache.Update(originalStatus);
         }
     }

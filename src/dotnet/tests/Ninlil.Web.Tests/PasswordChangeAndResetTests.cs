@@ -13,15 +13,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers three password-management flows against a real,
-///     in-process host and a real SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />): self-service change-password
-///     (<see cref="UsersController.ChangeMyPassword" />), the administrator-driven reset
-///     (<see cref="UsersController.ResetPassword" />, both delivery modes), and the shared
-///     token-based confirm-reset action every "set new password" landing page submits to
-///     (<see cref="AuthController.ResetPassword" />). Every "the new password actually works"
-///     assertion below signs in for real with it (and confirms the old password no longer signs
-///     in), rather than trusting a bare <c>200</c>/<c>204</c> status code alone.
+///     This class covers three password flows over HTTP on the shared in-process host, each on a
+///     new user with no permissions: changing one's own password
+///     (<see cref="UsersController.ChangeMyPassword" />), the administrator reset
+///     (<see cref="UsersController.ResetPassword" />, both delivery modes, signed in as the
+///     bootstrap administrator), and the token-based confirm action the "set new password" page
+///     submits to (<see cref="AuthController.ResetPassword" />). A changed password is checked by
+///     signing in with it and failing to sign in with the old one, not by the status code alone.
+///     Whether existing refresh tokens stop working after a change is not tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
@@ -51,11 +50,9 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method creates a fresh, dedicated, ordinary (non-administrative) user account via
-    ///     the admin API, and returns both its identifier/user name/initial password and a client
-    ///     already authenticated as it -- reused by every test below that needs its own account,
-    ///     never the shared bootstrap administrator, so a password change in one test can never
-    ///     affect another sharing this fixture.
+    ///     This method creates a new user with no permissions through the admin API and returns
+    ///     its identifier, user name and initial password, with a client signed in as it, so
+    ///     password changes never touch the bootstrap administrator other tests sign in as.
     /// </summary>
     private async Task<(
         HttpClient Client,
@@ -119,10 +116,10 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
-        // The new password genuinely signs in...
+        // The new password signs in...
         Assert.True(await CanSignInAsAsync(userName, newPassword));
 
-        // ...and the old one genuinely no longer does.
+        // ...and the old one no longer does.
         Assert.False(await CanSignInAsAsync(userName, password));
     }
 
@@ -139,12 +136,12 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        // Identity's own real PasswordMismatch failure must surface, not a swallowed generic
-        // message -- ThrowIfFailed keys every ValidationException error by IdentityError.Code.
+        // Identity's PasswordMismatch error must come through rather than a generic message;
+        // ThrowIfFailed keys each ValidationException error by IdentityError.Code.
         string body = await response.Content.ReadAsStringAsync();
         Assert.Contains("PasswordMismatch", body, StringComparison.OrdinalIgnoreCase);
 
-        // The account's real password must be completely unaffected by the failed attempt.
+        // The failed attempt must leave the password unchanged.
         Assert.True(await CanSignInAsAsync(userName, password));
     }
 
@@ -181,10 +178,10 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(AdminPasswordResetMode.AutoGenerate, result.Mode);
         Assert.False(string.IsNullOrWhiteSpace(result.GeneratedPassword));
 
-        // The generated password genuinely signs in...
+        // The generated password signs in...
         Assert.True(await CanSignInAsAsync(userName, result.GeneratedPassword));
 
-        // ...and the account's old password genuinely no longer does.
+        // ...and the old one no longer does.
         Assert.False(await CanSignInAsAsync(userName, oldPassword));
     }
 
@@ -219,11 +216,8 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task AdminResetPassword_EmailLink_WithNoSmtpConfigured_ReturnsAClearValidationErrorRatherThanARawSmtpFailure()
     {
-        // This test collection's own shared host never configures an SMTP server (see
-        // NinlilDnsWebApplicationFactory's own doc comment) -- exactly the common, real state
-        // this project's homelab-first deployment default leaves an install in until an operator
-        // deliberately sets one up via SmtpSettingsController, so this is a genuine, not merely
-        // simulated, "SMTP not configured" state.
+        // The shared host has no SMTP server configured, the default state of an installation
+        // until an operator sets one up through SmtpSettingsController.
         (_, Guid id, _, _) = await CreateOrdinaryUserClientAsync(Guid.NewGuid().ToString("N"));
         HttpClient adminClient = await CreateAuthenticatedAdminClientAsync();
 
@@ -238,16 +232,12 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the shared "set new password" landing page's own confirming endpoint
-    ///     (<see cref="AuthController.ResetPassword" />) for real, end to end: a real Identity
-    ///     reset token is generated directly through <see cref="UserManager{TUser}" /> (reached
-    ///     via this factory's own DI container, the same real path
-    ///     <see cref="UsersController.ResetPassword" />'s own <c>EmailLink</c> mode uses --
-    ///     standing in for actually receiving the e-mail, since this test collection's own shared
-    ///     host has no SMTP server to send or receive through), Base64Url-encoded exactly the way
-    ///     the controller encodes it for a URL query string, then submitted to the real,
-    ///     unauthenticated confirm endpoint -- and the resulting new password is proven to
-    ///     actually sign in afterward, with the old password proven to no longer work.
+    ///     This test covers the confirm endpoint (<see cref="AuthController.ResetPassword" />). The
+    ///     host has no SMTP server, so instead of receiving an e-mail the test gets a reset token
+    ///     from the host's <see cref="UserManager{TUser}" />, as the <c>EmailLink</c> mode of
+    ///     <see cref="UsersController.ResetPassword" /> does, encodes it as the controller does for
+    ///     the link, and submits it without signing in. The new password must then sign in and the
+    ///     old one must not.
     /// </summary>
     [Fact]
     public async Task ConfirmPasswordReset_WithARealGeneratedToken_SetsANewWorkingPassword()
@@ -297,9 +287,9 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task ConfirmPasswordReset_ForAnUnknownAccount_ReturnsAGenericValidationErrorNotFound()
     {
-        // Deliberately not 404 -- see AuthController.ResetPassword's own doc comment on why a
-        // missing account and an unparseable/invalid token both report the exact same generic
-        // message, so this action never confirms or denies whether a given account exists.
+        // Not 404: a missing account and an invalid token get the same generic message, so the
+        // action never reveals whether an account exists (see AuthController.ResetPassword). Only
+        // the status code is checked, not that the messages match.
         HttpResponseMessage response = await CreateClient()
             .PostAsJsonAsync(
                 "/api/auth/reset-password",
@@ -314,10 +304,9 @@ public class PasswordChangeAndResetTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method reaches into this factory's own real DI container to generate a real
-    ///     Identity password-reset token for <paramref name="userId" />, then Base64Url-encodes it
-    ///     exactly the way <see cref="UsersController.ResetPassword" />'s own <c>EmailLink</c>
-    ///     delivery mode encodes it before placing it in a URL query string.
+    ///     This method generates an Identity password-reset token for <paramref name="userId" />
+    ///     through the host's services and Base64Url-encodes it as the <c>EmailLink</c> mode of
+    ///     <see cref="UsersController.ResetPassword" /> does before putting it in the link.
     /// </summary>
     private async Task<string> GenerateEncodedResetTokenAsync(Guid userId)
     {

@@ -5,11 +5,11 @@ using Ninlil.Web.EnvironmentVariables;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class checks that every listener's <c>ListenAddresses</c> setting really has the
-///     <c>NINLIL_</c> environment variable ENVIRONMENT.md documents for it -- the reason the
-///     setting is a comma-separated string rather than a list (the environment mapping skips
-///     lists). Choosing a container's listen addresses from the environment is the main way this
-///     setting is expected to be used.
+///     This class checks, without a host, that every listener's <c>ListenAddresses</c> setting has
+///     the <c>NINLIL_</c> environment variable ENVIRONMENT.md documents for it, by building the
+///     mappings from <see cref="OptionsEnvironmentVariableRegistry" />. The environment mapping
+///     skips lists, which is why the setting is a comma-separated string. Setting a container's
+///     listen addresses from the environment is the main way the setting is expected to be used.
 /// </summary>
 public class ListenAddressEnvironmentVariableTests
 {

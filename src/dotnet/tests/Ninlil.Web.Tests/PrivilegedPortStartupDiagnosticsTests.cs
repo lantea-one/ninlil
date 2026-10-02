@@ -11,29 +11,24 @@ using Xunit;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class tests <see cref="PrivilegedPortStartupDiagnostics" /> in full isolation from any
-///     real OS-level privilege state: <see cref="BuildConfiguredListeners_HonorsEachTransportsOwnEnableFlag" />
-///     and its siblings exercise the pure "which listeners are actually configured" logic
-///     directly, and every "does this warn" test below supplies a
-///     <see cref="FakePrivilegedPortBindProbe" /> with a deterministic, injected answer rather
-///     than depending on whether the account actually running this test suite happens to have
-///     <c>CAP_NET_BIND_SERVICE</c> or not -- exactly the reason
-///     <see cref="Ninlil.Web.Startup.IPrivilegedPortBindProbe" /> exists as an interface in
-///     the first place. The real, live bind-probe behavior of <see cref="SocketPrivilegedPortBindProbe" />
-///     itself is inherently about genuine OS privilege state and is proven separately, by hand,
-///     against a real, running process, per this project's own "a passing build is not evidence
-///     anything works" convention for anything touching real runtime/OS behavior.
+///     This class tests <see cref="PrivilegedPortStartupDiagnostics" /> without a host and without
+///     depending on the privileges of the account running the tests.
+///     <see cref="BuildConfiguredListeners_HonorsEachTransportsOwnEnableFlag" /> checks which
+///     listeners count as configured, and the warning tests pass a
+///     <see cref="FakePrivilegedPortBindProbe" /> with a fixed answer instead of asking whether
+///     the process holds <c>CAP_NET_BIND_SERVICE</c>, which is why
+///     <see cref="Ninlil.Web.Startup.IPrivilegedPortBindProbe" /> is an interface. The bind probe
+///     itself, <see cref="SocketPrivilegedPortBindProbe" />, depends on the operating system's
+///     privilege state and is not covered here.
 /// </summary>
 public sealed class PrivilegedPortStartupDiagnosticsTests
 {
     /// <summary>
-    ///     This method confirms every configured listener this diagnostic actually reports
-    ///     against reflects both <see cref="PlainProtocolOptions" />'s own lack of an
-    ///     <c>Enable</c> flag (Plain DNS is always included) and each of
-    ///     <see cref="DnsOverTlsOptions" />/<see cref="DnsOverQuicOptions" />/
-    ///     <see cref="DnsCryptOptions" />'s own real <c>Enable</c> flag (each is included only
-    ///     when actually turned on) -- the same gating <c>Program.cs</c>'s own composition root
-    ///     already applies when it decides which transport actually starts.
+    ///     This method confirms that the configured listeners always include HTTP, HTTPS and
+    ///     Plain DNS (<see cref="PlainProtocolOptions" /> has no <c>Enable</c> flag), and include
+    ///     <see cref="DnsOverTlsOptions" />, <see cref="DnsOverQuicOptions" /> and
+    ///     <see cref="DnsCryptOptions" /> only when their <c>Enable</c> flag is on, the same rule
+    ///     <c>Program.cs</c> applies when it decides which transports start.
     /// </summary>
     [Fact]
     public void BuildConfiguredListeners_HonorsEachTransportsOwnEnableFlag()
@@ -98,8 +93,8 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
     }
 
     /// <summary>
-    ///     This method confirms a privileged port (1023 or below) this process genuinely cannot
-    ///     bind, per the injected probe, produces exactly one warning naming that transport.
+    ///     This method confirms that a privileged port (1023 or below) the probe reports as
+    ///     unbindable produces one warning naming the transport and port.
     /// </summary>
     [Fact]
     public void WarnAboutUnbindablePrivilegedPorts_WarnsForAnUnbindablePrivilegedPort()
@@ -120,10 +115,9 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
     }
 
     /// <summary>
-    ///     This method confirms a privileged port this process genuinely can bind (for example
-    ///     because it holds <c>CAP_NET_BIND_SERVICE</c>, per the injected probe's own answer)
-    ///     produces no warning at all -- this diagnostic must never misfire purely off a low port
-    ///     number.
+    ///     This method confirms that a privileged port the probe reports as bindable (for example
+    ///     because the process holds <c>CAP_NET_BIND_SERVICE</c>) produces no warning; a low port
+    ///     number alone must not trigger one.
     /// </summary>
     [Fact]
     public void WarnAboutUnbindablePrivilegedPorts_StaysSilentWhenTheProbeReportsItCanBind()
@@ -142,9 +136,8 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
     }
 
     /// <summary>
-    ///     This method confirms an ordinary, non-privileged port (above 1023) never produces a
-    ///     warning, even if the injected probe would otherwise report it as unbindable -- the
-    ///     privileged-port threshold gate must run before the probe is ever consulted at all.
+    ///     This method confirms that a port above 1023 produces no warning even when the probe
+    ///     reports it as unbindable, so only privileged ports are warned about.
     /// </summary>
     [Fact]
     public void WarnAboutUnbindablePrivilegedPorts_StaysSilentForANonPrivilegedPort()
@@ -163,9 +156,8 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
     }
 
     /// <summary>
-    ///     This class implements <see cref="IPrivilegedPortBindProbe" /> with a deterministic,
-    ///     in-memory answer -- a given port is reported unbindable only if it appears in
-    ///     <paramref name="unbindablePorts" />, with every other port reported bindable.
+    ///     This class is a fake <see cref="IPrivilegedPortBindProbe" /> that reports a port as
+    ///     unbindable only if it is in <paramref name="unbindablePorts" />.
     /// </summary>
     /// <param name="unbindablePorts">Every port this fake probe reports as unbindable.</param>
     private sealed class FakePrivilegedPortBindProbe(IReadOnlyCollection<int> unbindablePorts)
@@ -176,16 +168,15 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
     }
 
     /// <summary>
-    ///     This class implements <see cref="ILogger" /> by recording every message logged at
-    ///     <see cref="LogLevel.Warning" />, so a test can assert on exactly what this diagnostic
-    ///     actually told an operator, without a real logging provider (console, a file, and so
-    ///     on) in the loop at all.
+    ///     This class is a fake <see cref="ILogger" /> that records every message logged at
+    ///     <see cref="LogLevel.Warning" />, so a test can check what the diagnostic told the
+    ///     operator.
     /// </summary>
     private sealed class FakeLogger : ILogger
     {
         /// <summary>
-        ///     This property contains the fully formatted text of every message this logger has
-        ///     recorded at <see cref="LogLevel.Warning" />, in the order each was logged.
+        ///     This property contains the formatted text of every message logged at
+        ///     <see cref="LogLevel.Warning" />, in order.
         /// </summary>
         public List<string> WarningMessages { get; } = [];
 
@@ -210,14 +201,13 @@ public sealed class PrivilegedPortStartupDiagnosticsTests
         }
 
         /// <summary>
-        ///     This class implements a no-op <see cref="IDisposable" /> scope, since this fake
-        ///     logger has no real scope stack to push onto or pop from.
+        ///     This class is a no-op <see cref="IDisposable" /> scope, since the fake logger keeps
+        ///     no scopes.
         /// </summary>
         private sealed class NullScope : IDisposable
         {
             /// <summary>
-            ///     This property contains the single, shared instance every <see cref="BeginScope{TState}" />
-            ///     call returns.
+            ///     This property contains the shared instance <see cref="BeginScope{TState}" /> returns.
             /// </summary>
             public static readonly NullScope Instance = new();
 

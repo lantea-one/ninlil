@@ -7,12 +7,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the <c>GET /api/permissions</c> endpoint end to end, against
-///     a real, in-process host (see <see cref="NinlilDnsWebApplicationFactory" />) --
-///     confirming the reflection-computed permission set actually contains a real, spot-checked
-///     permission string, and that the endpoint requires an authenticated caller (any one, not a
-///     specific permission -- see <see cref="Controllers.PermissionsController" />'s own doc
-///     comment for why).
+///     This class covers <c>GET /api/permissions</c> over HTTP on the shared in-process host. It
+///     checks that the list built by reflection from the <c>[RequirePermission]</c> attributes
+///     contains known permissions, is sorted and distinct, and follows the
+///     <c>resource:action</c> shape, and that the endpoint rejects a request without a token.
+///     The endpoint needs only a signed-in caller, not a permission (see
+///     <see cref="Controllers.PermissionsController" />), but the test signs in as the bootstrap
+///     administrator, so a caller without permissions is not tried.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class PermissionsEndpointTests(NinlilDnsWebApplicationFactory factory)
@@ -60,9 +61,8 @@ public class PermissionsEndpointTests(NinlilDnsWebApplicationFactory factory)
 
         List<string> permissions = await response.Content.ReadFromJsonAsync<List<string>>();
 
-        // Spot-check a handful of real, known permission strings this project's own controllers
-        // actually declare via [RequirePermission(...)] -- confirming this is genuinely computed
-        // from the real attribute usages, not an empty or hardcoded stub list.
+        // Spot-check permissions the controllers declare with [RequirePermission(...)], so the list
+        // is not empty or a fixed stub.
         Assert.Contains("zones:read", permissions);
         Assert.Contains("zones:write", permissions);
         Assert.Contains("roles:read", permissions);
@@ -71,30 +71,23 @@ public class PermissionsEndpointTests(NinlilDnsWebApplicationFactory factory)
         Assert.Contains("users:write", permissions);
         Assert.Contains("webhooks:write", permissions);
 
-        // ServicesController's own permission pair -- services:manage is this project's one
-        // deliberate exception to the otherwise-universal resource:read/resource:write shape (see
-        // that controller's own doc comment for the full reasoning): a distinct verb, apart from
-        // every other resource's own :write, gates its genuinely dangerous start/stop/restart
-        // actions specifically, so granting a role ordinary write access elsewhere never silently
-        // also grants the ability to take real DNS resolution offline.
+        // ServicesController uses a separate :manage verb for start, stop and restart, so that
+        // write access elsewhere never also grants the power to take DNS resolution offline (see
+        // ServicesController).
         Assert.Contains("services:read", permissions);
         Assert.Contains("services:manage", permissions);
 
-        // Every entry is distinct and the whole list is sorted -- both real, checkable
-        // properties of the reflection-computed result, not just "some entries exist".
+        // Every entry is distinct and the list is sorted.
         Assert.Equal(permissions.Distinct(StringComparer.Ordinal).Count(), permissions.Count);
         Assert.Equal(
             permissions.OrderBy(permission => permission, StringComparer.Ordinal),
             permissions
         );
 
-        // Every permission string this project actually uses follows the "resource:action" shape
-        // -- a real structural check, not just presence. "manage" is allowed alongside
-        // "read"/"write" only for services:manage, ServicesController's own single, deliberate
-        // exception to the otherwise-universal two-verb convention. Digits are allowed in the
-        // resource segment -- "dns64settings" is the one real case, and "dns64" is the actual RFC
-        // 6147 term, not an arbitrary name a stricter letters-only pattern should be forcing away
-        // from.
+        // Every permission has the "resource:action" shape with read, write or manage as the
+        // action. Several resources use manage for dangerous actions (services, storage,
+        // selfupdate, dhcpservices and others); the pattern does not restrict which. Digits are
+        // allowed in the resource for "dns64settings", since DNS64 is the RFC 6147 term.
         Assert.All(
             permissions,
             permission => Assert.Matches("^[a-z0-9]+:(read|write|manage)$", permission)

@@ -11,9 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="SelfUpdateSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="SelfUpdateSettingsController" /> (the release feed and check
+///     interval) over HTTP on the shared in-process host, signed in as the bootstrap
+///     administrator: the compiled-in defaults, a patch checked by reading the host's temporary
+///     settings file (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />)
+///     and the returned note, and input validation.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SelfUpdateSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -109,8 +111,8 @@ public class SelfUpdateSettingsControllerTests(NinlilDnsWebApplicationFactory fa
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // Only http/https are legal -- a file:// (or any other) scheme must be rejected, not
-        // silently accepted as "a valid absolute URI."
+        // Only http and https are allowed; a file:// URL is a valid absolute URI but must still
+        // be rejected.
         HttpResponseMessage response = await client.SendAsync(
             PatchRequest("/api/self-update-settings", new { releaseFeedUrl = "file:///etc/passwd" })
         );

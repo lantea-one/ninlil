@@ -11,12 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="RateLimitingSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real, previously-unaddressed gap: this feature's own `DnsRateLimitOptions` had zero REST
-///     surface despite the sibling block/allow-list and forwarder features each eventually
-///     getting one of their own.
+///     This class covers <see cref="RateLimitingSettingsController" /> (<c>DnsRateLimitOptions</c>)
+///     over HTTP on the shared in-process host, signed in as the bootstrap administrator: the
+///     compiled-in defaults, patches checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), the cluster
+///     sync bookkeeping a GET reports after a write, and input validation. The returned note is
+///     only checked to contain "restart", which every note does.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RateLimitingSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -102,15 +102,12 @@ public class RateLimitingSettingsControllerTests(NinlilDnsWebApplicationFactory 
     }
 
     /// <summary>
-    ///     This test proves the cluster's own settings-sync bookkeeping is genuinely live, unlike
-    ///     the settings <em>values</em> themselves -- <see cref="RateLimitingSettingsDetail.LastModifiedUtc" />/
-    ///     <see cref="RateLimitingSettingsDetail.OriginatingNodeId" /> are read fresh from
-    ///     <c>IClusterSyncedSettingsStateRepository</c> (a real database row), not from this
-    ///     project's usual <see cref="Microsoft.Extensions.Options.IOptionsMonitor{TOptions}" />-vs-
-    ///     <see cref="Microsoft.Extensions.Options.IOptions{TOptions}" /> distinction, so a
-    ///     subsequent <c>GET</c> observes a write immediately even though the shared test
-    ///     factory's own well-known isolated-runtime-settings-file limitation (see this class's
-    ///     own doc comment) means the compiled-in settings values themselves do not.
+    ///     This test checks that the cluster sync bookkeeping follows a write at once, unlike the
+    ///     settings values. <see cref="RateLimitingSettingsDetail.LastModifiedUtc" /> and
+    ///     <see cref="RateLimitingSettingsDetail.OriginatingNodeId" /> are read from a database row
+    ///     (<c>IClusterSyncedSettingsStateRepository</c>), not from options, so a later
+    ///     <c>GET</c> shows them even though it still shows the old values (see
+    ///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
     /// </summary>
     [Fact]
     public async Task Patch_ThenGet_ReportsWhenAndByWhichNodeThisSectionWasLastWritten()

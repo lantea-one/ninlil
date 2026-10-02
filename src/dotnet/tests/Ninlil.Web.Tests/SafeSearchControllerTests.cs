@@ -10,12 +10,15 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="SafeSearchController" /> end to end, against a real,
-///     in-process host, a real SQLite database, and an isolated, throwaway JSON configuration
-///     file (see <see cref="NinlilDnsWebApplicationFactory" />) -- confirming a catalog toggle
-///     really does create/remove ordinary <see cref="DnsRewritesController" /> rows, that enabling
-///     an entry turns the global rewrite engine on when it was off, that disabling never turns it
-///     back off, and that a genuine hostname conflict is rejected with nothing at all written.
+///     This class covers <see cref="SafeSearchController" /> over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator. It checks that turning a catalog entry on
+///     creates ordinary rewrites (visible through <see cref="DnsRewritesController" />) and
+///     turning it off removes them, that turning one on writes the rewrite engine switch on in the
+///     host's temporary settings file and turning it off never writes it back off, that a
+///     conflicting existing rewrite is rejected with nothing written, and that a client or
+///     client-group target creates rewrites scoped to that target only. Each test turns its
+///     entries and the switch off again afterwards, since the database and settings file are
+///     shared.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -75,21 +78,16 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 await enableResponse.Content.ReadFromJsonAsync<SafeSearchDetail>();
             Assert.True(enabled.IsEnabled);
 
-            // The single global rewrite toggle turned on as a side effect -- documented behavior,
-            // see SafeSearchController's own doc comment. Confirmed by reading the isolated
-            // runtime configuration file directly, not by re-GETting /api/rewrite-settings -- this
-            // test host's own isolated runtime-settings file is never registered as its own
-            // reload-on-change IConfiguration source (a known WebApplicationFactory limitation
-            // this project's settings-controller test suite already documented), so a live re-read can't be trusted
-            // to reflect a just-written value; ClientSubnetSettingsControllerTests establishes the
-            // same direct-file-read workaround for the identical reason.
+            // The global rewrite switch was turned on as a side effect (see SafeSearchController).
+            // It is checked in the settings file, since a GET of /api/rewrite-settings would still
+            // show the old value (see NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
             JsonNode rewriteSection = JsonNode
                 .Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath))
                 ?["DnsServer"]?["Rewrites"];
             Assert.NotNull(rewriteSection);
             Assert.True(rewriteSection["Enable"].GetValue<bool>());
 
-            // The real rewrite row exists, exactly matching DuckDuckGo's own official mapping.
+            // The rewrite row exists and matches DuckDuckGo's published mapping.
             HttpResponseMessage rewritesResponse = await client.GetAsync(
                 "/api/dns-rewrites?take=200"
             );
@@ -103,7 +101,7 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
             Assert.Equal("safe.duckduckgo.com", rewrite.Target);
             Assert.False(rewrite.IsDisabled);
 
-            // Enabling an already-enabled entry is idempotent -- no duplicate row.
+            // Enabling an enabled entry is idempotent: no duplicate row.
             HttpResponseMessage reEnableResponse = await client.PostAsync(
                 "/api/safe-search/duckduckgo",
                 content: null
@@ -119,9 +117,8 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 >();
             Assert.Single(rewritesAfterReEnable.Items, item => item.Domain == "duckduckgo.com");
 
-            // Disabling removes the row but leaves the global toggle exactly as it was --
-            // documented, deliberate: it must never silently break an operator's own unrelated
-            // rewrites that might depend on it staying on.
+            // Disabling removes the row but leaves the global switch alone, so the operator's
+            // other rewrites that rely on it keep working.
             HttpResponseMessage disableResponse = await client.DeleteAsync(
                 "/api/safe-search/duckduckgo"
             );
@@ -139,9 +136,7 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 item => item.Domain == "duckduckgo.com"
             );
 
-            // Same direct-file-read workaround as above -- confirms disabling never wrote the
-            // toggle back off (it was true from the earlier Enable call, and nothing here should
-            // have changed it).
+            // Read from the file as above: disabling must not have written the switch back off.
             JsonNode rewriteSectionAfterDisable = JsonNode
                 .Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath))
                 ?["DnsServer"]?["Rewrites"];
@@ -150,9 +145,8 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
         }
         finally
         {
-            // Restore before returning -- shared database and configuration file across
-            // WebTestCollection, the same discipline RewriteSettingsControllerTests already
-            // establishes.
+            // Turn the entry and the switch off again, since the database and settings file are
+            // shared with every other test.
             await client.DeleteAsync("/api/safe-search/duckduckgo");
             await client.SendAsync(
                 new HttpRequestMessage(HttpMethod.Patch, "/api/rewrite-settings")
@@ -230,12 +224,10 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the real per-client scoping Phase 15e adds: enabling Safe Search for
-    ///     one specific client creates rewrite rows carrying that client's own id (confirmed
-    ///     directly via <see cref="DnsRewriteDetail.ClientId" />, not merely inferred from
-    ///     behavior), reports enabled only for that client (not globally, and not for an unrelated
-    ///     client), and disabling it for that client removes only its own scoped rows, leaving
-    ///     every global row -- and any other target's own rows -- completely untouched.
+    ///     This test checks per-client scoping. Enabling Safe Search for one client creates rewrite
+    ///     rows carrying that client's id (<see cref="DnsRewriteDetail.ClientId" />) next to the
+    ///     global rows, the entry reads as enabled for that client but not for another, and
+    ///     disabling it for that client removes only its rows and leaves the global ones.
     /// </summary>
     [Fact]
     public async Task Enable_WithAClientTarget_CreatesScopedRewrites_AndDisableLeavesOtherScopesUntouched()
@@ -262,9 +254,8 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 await enableResponse.Content.ReadFromJsonAsync<SafeSearchDetail>();
             Assert.True(enabledForFirstClient.IsEnabled);
 
-            // The second, unrelated client has no scoped rows of its own -- it is unaffected by
-            // the first client's own targeted enable, and unaffected by the global one too
-            // (scoping is purely additive: this assertion only concerns the scoped view).
+            // The second client has no scoped rows. The scoped view ignores the global rows, so it
+            // reads as disabled even though bing is on globally.
             HttpResponseMessage secondClientListResponse = await client.GetAsync(
                 $"/api/safe-search?clientId={secondClientId}"
             );
@@ -274,7 +265,7 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 >();
             Assert.False(secondClientCatalog.Single(entry => entry.Key == "bing").IsEnabled);
 
-            // The real rewrite rows this created genuinely carry the first client's own id.
+            // The rows created carry the first client's id.
             HttpResponseMessage rewritesResponse = await client.GetAsync(
                 "/api/dns-rewrites?take=200"
             );
@@ -291,9 +282,8 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
             Assert.Equal(2, scopedRows.Count);
             Assert.All(scopedRows, row => Assert.Null(row.ClientGroupId));
 
-            // The pre-existing global "bing" rows (created by the very first, untargeted Enable
-            // above) are still present and still unscoped -- a targeted enable is additive, never
-            // a replacement for the global rows.
+            // The global bing rows from the untargeted enable are still there and unscoped; a
+            // targeted enable adds rows and replaces nothing.
             List<DnsRewriteDetail> globalRows =
             [
                 .. rewrites.Items.Where(item =>
@@ -304,7 +294,7 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
             ];
             Assert.Equal(2, globalRows.Count);
 
-            // Disabling for the first client only removes its own scoped rows.
+            // Disabling for the first client removes only its scoped rows.
             HttpResponseMessage disableForFirstResponse = await client.DeleteAsync(
                 $"/api/safe-search/bing?clientId={firstClientId}"
             );
@@ -321,7 +311,7 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
                 rewritesAfterDisable.Items,
                 item => item.ClientId == firstClientId
             );
-            // The global rows must still be there, completely untouched by the targeted disable.
+            // The global rows must still be there.
             Assert.Equal(
                 2,
                 rewritesAfterDisable.Items.Count(item =>
@@ -348,8 +338,8 @@ public class SafeSearchControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the same scoping contract for a client-group target, and that naming
-    ///     both a client and a group at once is rejected.
+    ///     This test checks that a client-group target creates group-scoped rewrites, and that
+    ///     naming both a client and a group is rejected.
     /// </summary>
     [Fact]
     public async Task Enable_WithAClientGroupTarget_CreatesGroupScopedRewrites_AndBothTargetsAtOnceIsRejected()

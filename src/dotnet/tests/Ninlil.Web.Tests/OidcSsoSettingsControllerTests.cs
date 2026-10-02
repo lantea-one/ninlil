@@ -11,9 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="OidcSsoSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="OidcSsoSettingsController" /> (OIDC single sign-on) over HTTP
+///     on the shared in-process host, signed in as the bootstrap administrator: the compiled-in
+///     defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) with the
+///     client secret not stored in plain text, and input validation. The secret is only checked
+///     not to be the plain text, not to decrypt back, and the note only to contain "restart".
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class OidcSsoSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -103,16 +106,13 @@ public class OidcSsoSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         Assert.Equal("https://auth.example.com", section["Authority"].GetValue<string>());
         Assert.Equal("ninlil-dns", section["ClientId"].GetValue<string>());
 
-        // The secret written to disk must never be the plaintext this test itself submitted.
+        // The stored secret must not be the plain text the test sent.
         string clientSecretEncrypted = section["ClientSecretEncrypted"].GetValue<string>();
         Assert.NotEqual("correct-horse-battery-staple", clientSecretEncrypted);
         Assert.DoesNotContain("correct-horse-battery-staple", clientSecretEncrypted);
 
-        // This factory's own isolated runtime settings file is deliberately never wired back in
-        // as a live configuration source for this same in-process host (the same reasoning
-        // AppearanceSettingsControllerTests's own Patch test documents in detail), so there is no
-        // "read it back via a live GET" step here -- the configuration-file assertions above are
-        // this test's own real, complete proof of what Patch actually wrote.
+        // Only the file is checked; a GET would still show the old values (see
+        // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
         JsonArray scopes = (JsonArray)section["Scopes"];
         Assert.Equal(
             new[] { "openid", "profile", "email", "groups" },

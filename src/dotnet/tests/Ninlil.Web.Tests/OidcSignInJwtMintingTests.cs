@@ -12,22 +12,17 @@ using Ninlil.Dns.Identity.Token;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves the one part of the full OIDC sign-in redirect chain that does not need
-///     a live external identity provider to verify for real: given a
-///     <see cref="ClaimsPrincipal" /> shaped exactly like the one a completed handshake would hand
+///     This class covers the part of OIDC sign-in that needs no external identity provider. It
+///     builds a <see cref="ClaimsPrincipal" /> shaped like the one a completed handshake hands
 ///     <c>OpenIdConnectOptions.Events.OnTokenValidated</c> (see
-///     <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />'s own
-///     doc comment for that event's real body), <see cref="IOidcUserProvisioningService" /> and
-///     <see cref="IJwtTokenService" /> -- resolved from this real, running host's own dependency
-///     injection container, not new stand-ins -- genuinely mint a working Ninlil access token:
-///     one this same host's own JWT bearer scheme accepts against a real protected endpoint.
+///     <see cref="ServiceCollectionAuthenticationExtension.AddNinlilDnsAuthentication" />), passes
+///     it to the shared host's <see cref="IOidcUserProvisioningService" /> and
+///     <see cref="IJwtTokenService" />, and checks that the minted access token is accepted by the
+///     host's JWT bearer scheme on a protected endpoint.
 ///     <para>
-///         A full live-IdP round trip (actually reaching <see cref="Controllers.SsoController.StartChallenge" />,
-///         following a redirect to a real identity provider, and completing its own login form)
-///         is out of scope here, matching every other ACME/live-CA/live-broker feature in this
-///         project that is verified only up to the boundary of a real external service this
-///         environment cannot stand one up for -- see <see cref="SsoControllerTests" />'s own doc
-///         comment for the "not configured" side this class does not repeat.
+///         The redirect chain itself (<see cref="Controllers.SsoController.StartChallenge" />, the
+///         identity provider's login form and the callback) needs a live identity provider and is
+///         not tested. <see cref="SsoControllerTests" /> covers the not-configured case.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -36,9 +31,8 @@ public class OidcSignInJwtMintingTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task AHandCraftedOidcPrincipalProvisionsAnAccountAndMintsAWorkingAccessToken()
     {
-        // Build the exact ClaimsPrincipal shape a real completed OIDC handshake's own
-        // OnTokenValidated event would hand IOidcUserProvisioningService -- claims under their
-        // own real OIDC short names ("sub", "email", ...), matching MapInboundClaims = false.
+        // The principal OnTokenValidated would pass on, with claims under their OIDC short
+        // names ("sub", "email", ...), since MapInboundClaims is false.
         ClaimsPrincipal principal = new(
             new ClaimsIdentity(
                 [
@@ -63,13 +57,10 @@ public class OidcSignInJwtMintingTests(NinlilDnsWebApplicationFactory factory)
         AccessTokenResult accessToken = await jwtTokenService.CreateAccessTokenAsync(user);
         Assert.False(string.IsNullOrWhiteSpace(accessToken.AccessToken));
 
-        // The real proof: this host's own JWT bearer scheme (Program.cs's
-        // AddNinlilDnsAuthentication) genuinely accepts the token this test just minted, against
-        // a real permission-gated endpoint -- not merely "a JWT string with the right shape got
-        // produced." A freshly-provisioned OIDC account holds no permissions at all (by design,
-        // see OidcUserProvisioningService's own doc comment), so /api/dns64-settings correctly
-        // still rejects it with 403 Forbidden, not 401 Unauthorized -- proving authentication
-        // succeeded and only authorization (as expected) did not.
+        // The host's JWT bearer scheme must accept the token on a permission-gated endpoint. A
+        // newly provisioned OIDC account has no permissions (see OidcUserProvisioningService), so
+        // the answer is 403 Forbidden rather than 401 Unauthorized: authentication succeeded and
+        // only authorization failed.
         HttpClient client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",

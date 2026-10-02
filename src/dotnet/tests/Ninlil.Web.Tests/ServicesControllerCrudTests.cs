@@ -12,42 +12,31 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers Service Lifecycle Management's own <c>/api/services</c> REST endpoints
-///     (<see cref="ServicesController" />) end to end, against a real, in-process host (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- listing every registered service, and,
-///     critically, proving start/stop/restart is a real, observable, in-process hot lifecycle, not
-///     merely a controller returning a plausible-looking <c>200</c>: stopping Plain DNS's own UDP
-///     listener through this REST endpoint makes a real UDP query against this test host's own
-///     real socket genuinely time out, and starting it again makes the exact same query answer
-///     normally, the same "send a real UDP datagram at the real bound port" mechanism
-///     <see cref="DnsWiringTests" /> already establishes for confirming this engine is wired up at
-///     all.
+///     This class covers <c>/api/services</c> of <see cref="ServicesController" /> on the shared
+///     in-process host, signed in as the bootstrap administrator. It lists the registered
+///     services, and checks that start, stop and restart change what the host does, not just the
+///     reported status: stopping the Plain DNS UDP listener makes a UDP query to
+///     <see cref="NinlilDnsWebApplicationFactory.PlainDnsPort" /> go unanswered, and starting it
+///     again makes the same query answer, as in <see cref="DnsWiringTests" />.
 ///     <para>
-///         Every test that stops a real service restores it before returning (even though this
-///         collection's own tests never run concurrently with each other -- see
-///         <see cref="WebTestCollection" />'s own doc comment -- execution order across test
-///         classes within the collection is not guaranteed, and other classes, most notably
-///         <see cref="DnsWiringTests" /> itself, depend on Plain DNS's own listeners staying up).
+///         Test classes in the collection never run concurrently (see
+///         <see cref="WebTestCollection" />), but their order is not fixed, and others, such as
+///         <see cref="DnsWiringTests" />, need the Plain DNS listeners up. Every test that stops a
+///         service therefore starts it again before returning. Starting a service that is already
+///         running is not tested.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
 {
     /// <summary>
-    ///     This constant contains the exact count of services
-    ///     <see cref="Services.ManagedServiceRegistry.Build" /> registers against this test host's
-    ///     own default configuration -- 7 DNS transport listeners (Plain UDP/TCP, DNS-over-TLS,
-    ///     DNS-over-QUIC, DNSCrypt UDP/TCP, DNS-over-HTTPS) plus 19 background maintenance loops
-    ///     (18 pre-existing, plus <c>webhook-delivery-retry-sweep</c>).
-    ///     <c>filter-list-external-refresh</c> is included even though filtering is left at its own
-    ///     off-by-default configuration for this test host:
-    ///     <c>DnsFilterListExternalRefreshService</c> is registered unconditionally (the same
-    ///     "always registered, gated internally" shape every other background service in this
-    ///     registry already followed) so a live <c>FilteringSettingsController.Patch</c> write can
-    ///     turn filtering on with no restart -- see
-    ///     <see cref="Services.ManagedServiceRegistry.Build" />'s own doc comment. Asserted directly
-    ///     so a future change to the registry's own membership is caught here rather than silently
-    ///     drifting unnoticed.
+    ///     This constant contains the number of services <see cref="Services.ManagedServiceRegistry.Build" />
+    ///     registers: 7 DNS transport listeners (Plain UDP and TCP, DNS-over-TLS, DNS-over-QUIC,
+    ///     DNSCrypt UDP and TCP, DNS-over-HTTPS) and 19 background loops. Every service is
+    ///     registered whether or not its feature is on; <c>filter-list-external-refresh</c>, for
+    ///     example, is listed with filtering off, so a live <c>FilteringSettingsController.Patch</c>
+    ///     can turn filtering on without a restart. The count is asserted so a change to the
+    ///     registry is noticed here.
     /// </summary>
     private const int ExpectedServiceCount = 26;
 
@@ -90,11 +79,10 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         };
 
     /// <summary>
-    ///     This method sends one real UDP datagram to this test host's own real Plain DNS
-    ///     listener and reports whether a well-formed answer came back within a short timeout --
-    ///     <see langword="false" /> both when the socket is genuinely unreachable (connection
-    ///     refused/reset) and when nothing arrives at all before the timeout, either of which is
-    ///     the correct observable outcome of the listener being stopped.
+    ///     This method sends one UDP query to the host's Plain DNS listener and reports whether a
+    ///     matching answer came back within two seconds. It returns <see langword="false" /> when
+    ///     the socket is unreachable (connection refused or reset) or nothing arrives in time,
+    ///     either of which is what a stopped listener looks like.
     /// </summary>
     private async Task<bool> TryRealUdpQueryAsync()
     {
@@ -139,16 +127,14 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Equal(ExpectedServiceCount, services.Count);
 
-        // Every name is distinct -- a real, checkable structural property, not just "some
-        // entries exist".
+        // Every name is distinct.
         Assert.Equal(
             services.Select(service => service.Name).Distinct(StringComparer.Ordinal).Count(),
             services.Count
         );
 
-        // A representative transport and a representative background service, both genuinely
-        // running -- this test host's own real generic host already started every one of them
-        // before this request was ever made.
+        // One transport and one background service, both running, since the host started them
+        // before the request.
         ManagedServiceSummary plainUdp = Assert.Single(
             services,
             service => service.Name == "plain-udp"
@@ -195,19 +181,17 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This is the real, load-bearing test for this whole phase: stopping Plain DNS's own UDP
-    ///     listener through this REST endpoint genuinely unbinds the real socket, so a real UDP
-    ///     query against this test host's own real port gets no answer at all -- not merely a
-    ///     controller reporting <c>IsRunning: false</c> while the listener keeps quietly working.
-    ///     Starting it again genuinely rebinds it, restoring real answers, and this test always
-    ///     leaves the listener running when it returns (see this class's own doc comment for why).
+    ///     This test checks that stopping the Plain DNS UDP listener through the API unbinds its
+    ///     socket, so a UDP query gets no answer, rather than only reporting <c>IsRunning: false</c>.
+    ///     Starting it again rebinds the socket and answers return. The test always leaves the
+    ///     listener running (see the class summary).
     /// </summary>
     [Fact]
     public async Task Stop_OnThePlainUdpTransport_ActuallyStopsAnsweringRealQueries_AndStartResumes()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // Confirm a real answer arrives before touching anything.
+        // An answer must arrive before anything is changed.
         Assert.True(await TryRealUdpQueryAsync());
 
         try
@@ -221,7 +205,7 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
                 await stopResponse.Content.ReadFromJsonAsync<ManagedServiceSummary>();
             Assert.False(stopped.IsRunning);
 
-            // The real socket is genuinely unbound now -- a real UDP datagram gets no answer.
+            // The socket is unbound, so the query gets no answer.
             Assert.False(await TryRealUdpQueryAsync());
         }
         finally
@@ -236,18 +220,18 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
             Assert.True(started.IsRunning);
         }
 
-        // The real socket answers again.
+        // The socket answers again.
         Assert.True(await TryRealUdpQueryAsync());
     }
 
     /// <summary>
-    ///     This test covers <see cref="ServicesController.Restart" />'s own stop-then-start
-    ///     sequence against Plain DNS's own TCP listener (kept separate from the UDP listener
+    ///     This test covers the stop-then-start sequence of <see cref="ServicesController.Restart" />
+    ///     on the Plain DNS TCP listener, kept apart from the UDP listener that
     ///     <see cref="Stop_OnThePlainUdpTransport_ActuallyStopsAnsweringRealQueries_AndStartResumes" />
-    ///     exercises, so a failure in one never masks or interferes with the other) -- confirming
-    ///     the socket is genuinely rebound afterward via <see cref="ManagedServiceSummary.IsRunning" />,
-    ///     the same real, independently-observed <c>IsListening</c> signal
-    ///     <c>TransportListenersHealthCheck</c> already relies on.
+    ///     uses so a failure in one does not affect the other. The socket being bound again is
+    ///     read from <see cref="ManagedServiceSummary.IsRunning" />, which for a transport is the
+    ///     listener's <c>IsListening</c>, the signal <c>TransportListenersHealthCheck</c> uses. No
+    ///     TCP query is sent.
     /// </summary>
     [Fact]
     public async Task Restart_OnThePlainTcpTransport_RoundTripsBackToRunning()
@@ -268,11 +252,10 @@ public class ServicesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test covers a background maintenance loop with no real socket-level signal of its
-    ///     own -- <see cref="ManagedServiceSummary.IsRunning" /> here falls back to
-    ///     <see cref="ManagedServiceRegistration" />'s own start/stop bookkeeping (see that class's
-    ///     own doc comment), so this confirms that bookkeeping genuinely flips both directions
-    ///     through this REST endpoint, not just that the endpoint returns <c>200</c>.
+    ///     This test covers a background loop, which has no running signal of its own, so
+    ///     <see cref="ManagedServiceSummary.IsRunning" /> comes from the start and stop bookkeeping
+    ///     of <see cref="ManagedServiceRegistration" />. It checks that the bookkeeping changes in
+    ///     both directions, not that the loop stops working.
     /// </summary>
     [Fact]
     public async Task Stop_ThenStart_OnTheQueryLogCleanupBackgroundService_TogglesIsRunning()

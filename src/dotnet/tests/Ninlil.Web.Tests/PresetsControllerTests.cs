@@ -9,12 +9,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="PresetsController" /> end to end, against a real, in-process
-///     host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- confirming
-///     that <c>PresetApplier</c>, fully built and unit-tested but never once invoked from
-///     anywhere in this host until this REST surface was added, now has a real REST invocation
-///     surface that actually calls it.
+///     This class covers <see cref="PresetsController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: listing the five built-in presets, applying one
+///     through <c>PresetApplier</c> (checked by reading two of its settings back from the host's
+///     temporary settings file, <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />),
+///     an unknown preset name, and rejection without a token.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class PresetsControllerTests(NinlilDnsWebApplicationFactory factory)

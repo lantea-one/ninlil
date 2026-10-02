@@ -7,12 +7,11 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ReverseProxyForwardedHeadersConfigurator" /> directly -- the
-///     dedicated regression test for a real bug found while verifying reverse-proxy configuration
-///     end to end (see that class's own doc comment for the full story): a brand-new
-///     <see cref="ForwardedHeadersOptions" /> instance already pre-trusts loopback on its own,
-///     and this configurator must clear those defaults before adding this project's own
-///     configured entries, not merely append to them.
+///     This class tests <see cref="ReverseProxyForwardedHeadersConfigurator" /> directly, without
+///     a host. A new <see cref="ForwardedHeadersOptions" /> already trusts loopback, so the
+///     configurator must clear those defaults before adding the configured entries rather than
+///     append to them; otherwise forwarded headers from loopback would be trusted even when no
+///     proxy is configured (see <see cref="ReverseProxyForwardedHeadersConfigurator" />).
 /// </summary>
 public class ReverseProxyForwardedHeadersConfiguratorTests
 {
@@ -21,9 +20,8 @@ public class ReverseProxyForwardedHeadersConfiguratorTests
     {
         ForwardedHeadersOptions forwardedHeadersOptions = new();
 
-        // Sanity-check the real framework default this test exists to defeat -- if this
-        // assertion itself ever starts failing, ForwardedHeadersOptions's own default
-        // constructor behavior changed, and this whole class's reasoning needs re-checking.
+        // Check the framework default this class guards against. If this assertion fails,
+        // the ForwardedHeadersOptions constructor has changed and the reasoning needs checking.
         Assert.NotEmpty(forwardedHeadersOptions.KnownProxies);
         Assert.NotEmpty(forwardedHeadersOptions.KnownIPNetworks);
 

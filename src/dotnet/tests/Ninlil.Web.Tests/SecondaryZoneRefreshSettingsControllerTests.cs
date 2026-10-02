@@ -11,12 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="SecondaryZoneRefreshSettingsController" /> end to end, against
-///     a real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>SecondaryZoneRefreshOptions</c> already drove
-///     <c>SecondaryZoneRefreshService</c>'s own polling loop, but had zero admin-facing REST/UI
-///     configuration surface.
+///     This class covers <see cref="SecondaryZoneRefreshSettingsController" /> (the polling of
+///     <c>SecondaryZoneRefreshService</c>) over HTTP on the shared in-process host, signed in as
+///     the bootstrap administrator: the compiled-in defaults, a patch checked by reading the host's
+///     temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and rejection of malformed and zero durations.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class SecondaryZoneRefreshSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -66,7 +66,7 @@ public class SecondaryZoneRefreshSettingsControllerTests(NinlilDnsWebApplication
         SecondaryZoneRefreshSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<SecondaryZoneRefreshSettingsDetail>();
 
-        // SecondaryZoneRefreshOptions' own compiled-in defaults.
+        // The compiled-in defaults of SecondaryZoneRefreshOptions.
         Assert.Equal(TimeSpan.FromSeconds(15), detail.PollInterval);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.DefaultRetryInterval);
     }
@@ -90,14 +90,9 @@ public class SecondaryZoneRefreshSettingsControllerTests(NinlilDnsWebApplication
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for SecondaryZoneRefreshOptions is proved instead,
-            // directly, by SecondaryZoneRefreshServiceHotReloadTests (in
-            // Ninlil.Dns.Server.Authoritative.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). No test in
+            // Ninlil.Dns.Server.Authoritative.Tests covers the hot reload of these options.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)
@@ -107,8 +102,7 @@ public class SecondaryZoneRefreshSettingsControllerTests(NinlilDnsWebApplication
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore every compiled-in default afterward.
+            // The settings file is shared with every other test, so write the defaults back.
             await client.SendAsync(
                 PatchRequest(
                     "/api/secondary-zone-refresh-settings",

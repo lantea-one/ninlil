@@ -14,41 +14,30 @@ using Ninlil.Dns.Server.Recursive.Validation;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     and a real <see cref="RecursiveQueryResolver" /> instance -- not merely
-///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> read in isolation, the way
-///     <c>AppearanceOptionsHotReloadTests</c> proves it for <c>AppearanceOptions</c> -- that
-///     flipping <see cref="RecursiveServerOptions.EnableRecursion" /> via a write
-///     <see cref="PresetConfigurationFileApplier" /> merges into a JSON file (the exact mechanism
-///     <see cref="Controllers.RecursiveSettingsController.Patch" /> itself calls) takes effect on
-///     the <b>same, already-constructed</b> resolver instance, with no restart -- closing the real
-///     functional gap a full REST/UI audit found: before this class's own hot-reload fix,
-///     <see cref="RecursiveQueryResolver" /> read <see cref="RecursiveServerOptions" /> via the
-///     usual, snapshotted <see cref="IOptions{TOptions}" />, which is computed once and cached for
-///     the life of the process -- a write reaching the configuration file would never have been
-///     seen by an already-running, singleton-registered resolver at all.
+///     This class checks that turning on <see cref="RecursiveServerOptions.EnableRecursion" /> with
+///     a write that <see cref="PresetConfigurationFileApplier" /> merges into a JSON file (the call
+///     <see cref="Controllers.RecursiveSettingsController.Patch" /> makes) takes effect on a
+///     <see cref="RecursiveQueryResolver" /> constructed before the write, with no restart. Unlike
+///     <c>AppearanceOptionsHotReloadTests</c>, it checks the resolver's behavior and not only
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" />. The resolver must read the options
+///     through <see cref="IOptionsMonitor{TOptions}" />; with <see cref="IOptions{TOptions}" />,
+///     which is computed once, the singleton resolver would never see the write.
 ///     <para>
-///         Deliberately exercised at <see cref="RecursiveQueryResolver" /> itself, not through the
-///         full HTTP/DNS transport stack: a query for a name this server neither hosts nor
-///         forwards for is, before the write, declined outright
-///         (<see cref="DnsQueryResolution.NotHandled" />, which <c>IDnsQueryDispatcher</c> turns
-///         into a REFUSED response the client actually sees); after the write, the identical
-///         resolver instance genuinely reaches <see cref="IIterativeResolutionEngine.ResolveAsync(DnsName,DnsResourceRecordTypeEnum,DnsClassEnum,bool,DnsEdnsOption,CancellationToken)" />
-///         and returns a real, handled response -- a SERVFAIL, since the fake engine below has no
-///         real network to resolve against, but categorically different from the earlier
-///         "declined entirely" outcome, and proof the toggle's own gate was actually re-evaluated
-///         rather than the resolver simply always answering the same way regardless of
-///         configuration.
+///         The test calls the resolver directly, with a fake iterative engine and validator, not
+///         through the DNS transports. Before the write, a query for a name the server neither
+///         hosts nor forwards is declined (<see cref="DnsQueryResolution.NotHandled" />, which
+///         <c>IDnsQueryDispatcher</c> turns into REFUSED). After it, the same resolver calls
+///         <see cref="IIterativeResolutionEngine.ResolveAsync(DnsName,DnsResourceRecordTypeEnum,DnsClassEnum,bool,DnsEdnsOption,CancellationToken)" />
+///         and returns a handled SERVFAIL from the fake engine, which shows the switch was read
+///         again.
 ///     </para>
 /// </summary>
 public class RecursiveOptionsHotReloadTests
 {
     /// <summary>
-    ///     This class stands in for a real <see cref="IIterativeResolutionEngine" />: since this
-    ///     test never seeds it with a canned answer for the name it queries, any invocation at all
-    ///     reports <see cref="RecursiveResolutionStatusEnum.ServFail" /> -- reachable proof
-    ///     this engine was actually invoked, distinguishing "the resolver declined outright" from
-    ///     "the resolver tried and failed."
+    ///     This class is a fake <see cref="IIterativeResolutionEngine" /> that answers every call
+    ///     with <see cref="RecursiveResolutionStatusEnum.ServFail" />, so a SERVFAIL shows the
+    ///     resolver tried to resolve instead of declining.
     /// </summary>
     private sealed class UnreachableIterativeResolutionEngine : IIterativeResolutionEngine
     {
@@ -82,9 +71,8 @@ public class RecursiveOptionsHotReloadTests
     }
 
     /// <summary>
-    ///     This class stands in for a real <see cref="IDnssecValidator" />, throwing if it is ever
-    ///     actually invoked -- this test's own <see cref="RecursiveServerOptions.EnableDnssecValidation" />
-    ///     is off throughout, so the resolver under test should never reach it.
+    ///     This class is a fake <see cref="IDnssecValidator" /> that throws if called, since
+    ///     <see cref="RecursiveServerOptions.EnableDnssecValidation" /> is off throughout the test.
     /// </summary>
     private sealed class UnreachableDnssecValidator : IDnssecValidator
     {
@@ -104,10 +92,8 @@ public class RecursiveOptionsHotReloadTests
     [Fact]
     public async Task AWriteThroughPresetConfigurationFileApplier_MakesTheSameResolverInstanceAttemptRecursionWithNoRestart()
     {
-        // A directory of this test's own, rather than the shared temp directory itself: the file
-        // watcher behind reloadOnChange sees every change in the directory it watches, and on a
-        // busy machine unrelated churn there can overflow its queue, which makes it report a
-        // change to every watched file at once.
+        // A directory for this test rather than the shared temp directory (see
+        // QueryLoggingOptionsHotReloadTests for why).
         string directory = Directory
             .CreateTempSubdirectory("ninlil-dns-recursive-hot-reload-")
             .FullName;
@@ -115,9 +101,8 @@ public class RecursiveOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the kind WebApplicationBuilder.CreateBuilder()
+            // adds for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -132,12 +117,10 @@ public class RecursiveOptionsHotReloadTests
                 IOptionsMonitor<RecursiveServerOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // default, exactly as a fresh installation would see it: recursion off.
+            // The file does not exist yet, so this is the compiled-in default: recursion off.
             Assert.False(monitor.CurrentValue.EnableRecursion);
 
-            // Constructed once, exactly as the real DI container constructs it as a singleton --
-            // never rebuilt for the rest of this test.
+            // Constructed once, as the singleton is, and never rebuilt during the test.
             RecursiveQueryResolver resolver = new(
                 new UnreachableIterativeResolutionEngine(),
                 new UnreachableDnssecValidator(),
@@ -168,7 +151,7 @@ public class RecursiveOptionsHotReloadTests
             DnsQueryResolution before = await resolver.TryResolveAsync(BuildContext());
             Assert.False(before.IsHandled);
 
-            // The exact same write mechanism RecursiveSettingsController.Patch itself calls.
+            // The same call RecursiveSettingsController.Patch makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new PresetConfigurationSetting(
@@ -180,19 +163,14 @@ public class RecursiveOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits (up to ten seconds) for the written value to
-            // actually arrive, rather than for the first change notification: a spurious
-            // notification can trigger an earlier reload that still reads the old file.
+            // Wait up to ten seconds for the written value itself rather than the first change
+            // notification, which can be spurious (see QueryLoggingOptionsHotReloadTests).
             for (int attempt = 0; attempt < 200 && !monitor.CurrentValue.EnableRecursion; attempt++)
                 await Task.Delay(50);
             Assert.True(monitor.CurrentValue.EnableRecursion);
 
-            // The identical resolver instance, constructed before the write, now genuinely
-            // attempts resolution -- reaching the fake engine (which reports ServerFailure, since
-            // it was never seeded with a canned answer) -- instead of declining outright. This is
-            // the "REFUSED vs. a genuine resolution attempt" behavioral proof: no restart, no new
-            // resolver instance, just the live configuration write actually taking effect.
+            // The resolver built before the write now tries to resolve, reaching the fake engine
+            // (which answers ServerFailure), instead of declining.
             DnsQueryResolution after = await resolver.TryResolveAsync(BuildContext());
             Assert.True(after.IsHandled);
             Assert.Equal(DnsResponseCodeEnum.ServerFailure, after.Response.ResponseCode);
@@ -205,7 +183,7 @@ public class RecursiveOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }

@@ -12,19 +12,20 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers cookie delivery of the refresh token through the real host: the
-///     cookie's security attributes, "Remember me" choosing a persistent or a browser-session
-///     session (both in the cookie and in the server-side lifetime), rotation through the cookie
-///     keeping that choice, sign-out clearing it, and body delivery staying exactly as it was.
-///     The <c>Set-Cookie</c> header is read raw, from a client that does not handle cookies
-///     itself, so every attribute is asserted exactly as a browser would receive it.
+///     This class covers cookie delivery of the refresh token on the shared in-process host,
+///     signed in as the bootstrap administrator: the cookie's security attributes, "Remember me"
+///     choosing a persistent or a browser-session session (both in the cookie and in the
+///     server-side lifetime, read from storage), rotation through the cookie keeping that choice,
+///     sign-out clearing it, and body delivery staying as before. The <c>Set-Cookie</c> header is
+///     read raw, from a client that does not handle cookies itself, so each attribute is checked
+///     as a browser would receive it.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class RefreshTokenCookieTests(NinlilDnsWebApplicationFactory factory)
 {
     /// <summary>
-    ///     This method creates a client that leaves cookies alone, so each test decides exactly
-    ///     which cookie a request carries.
+    ///     This method creates a client that leaves cookies alone, so each test decides which
+    ///     cookie a request carries.
     /// </summary>
     private HttpClient CreateRawClient() =>
         factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
