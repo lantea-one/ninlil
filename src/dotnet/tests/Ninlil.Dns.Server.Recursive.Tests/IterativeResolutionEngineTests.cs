@@ -505,4 +505,63 @@ public class IterativeResolutionEngineTests
 
         Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
     }
+
+    [Fact]
+    public async Task ResolveAsyncReturnsServFailForAGluelessSelfReferentialDelegationWithoutOverflowing()
+    {
+        // Serve-stale is off so the expired glue cannot be served stale either.
+        Harness harness = CreateHarness(options => options.EnableServeStale = false);
+        DnsName queried = DnsName.Parse("www.example.com");
+        DnsName exampleZoneCut = DnsName.Parse("example.com");
+        DnsName exampleNs = DnsName.Parse("ns1.example.com");
+
+        // The zone's only name server lies inside it and its glue has expired, so finding its
+        // address leads back to the same zone cut and the same name server.
+        harness.Cache.StorePositive(
+            exampleZoneCut,
+            DnsResourceRecordTypeEnum.NS,
+            DnsClassEnum.Internet,
+            [BuildNsRecord(exampleZoneCut, exampleNs)],
+            []
+        );
+        harness.Cache.StorePositive(
+            exampleNs,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(exampleNs, IPAddress.Parse("198.51.100.2"), ttl: 0)],
+            []
+        );
+
+        IterativeResolutionResult result = await harness.Engine.ResolveAsync(
+            queried,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            false
+        );
+
+        Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
+        Assert.Equal(0, harness.Client.QueryCount);
+    }
+
+    [Fact]
+    public async Task ResolveAsyncReturnsServFailWithoutOverflowingWhenNoNameServerAddressIsCached()
+    {
+        // An unprimed cache: the engine falls back to the root hint names, and every root
+        // server's address lookup needs the root servers again.
+        RecursiveServerOptions options = new() { EnableQnameMinimization = false };
+        StaticOptionsMonitor<RecursiveServerOptions> optionsMonitor = new(options);
+        RecursiveCache cache = new(optionsMonitor, new RecordingEventPublisher());
+        FakeUpstreamDnsClient client = new();
+        IterativeResolutionEngine engine = new(cache, client, optionsMonitor);
+
+        IterativeResolutionResult result = await engine.ResolveAsync(
+            DnsName.Parse("www.example.com"),
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            false
+        );
+
+        Assert.Equal(RecursiveResolutionStatusEnum.ServFail, result.Status);
+        Assert.Equal(0, client.QueryCount);
+    }
 }

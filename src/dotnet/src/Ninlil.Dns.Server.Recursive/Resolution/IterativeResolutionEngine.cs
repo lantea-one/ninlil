@@ -21,7 +21,8 @@ namespace Ninlil.Dns.Server.Recursive.Resolution;
 ///         serve-stale as the fallback), and other error codes are treated like an empty
 ///         answer. When <see cref="RecursiveServerOptions.EnableQnameMinimization" /> is on,
 ///         intermediate servers get RFC 9156 minimized NS queries, with the fallbacks noted
-///         below. Every query counts against the <see cref="QueryBudget" />.
+///         below. Every query, and every step the cache answers, counts against the
+///         <see cref="QueryBudget" />.
 ///     </para>
 /// </summary>
 /// <param name="cache">The cache this engine reads name servers and answers from, and writes them back to.</param>
@@ -139,6 +140,12 @@ public sealed class IterativeResolutionEngine(
         CancellationToken stoppingToken
     )
     {
+        // Every step counts, including those the cache answers, since a cached delegation can
+        // otherwise send this method round in circles without issuing a query.
+        if (!budget.TryConsumeStep())
+            return TryServeStale(name, type, recordClass, precedingChain, precedingHops, [])
+                ?? IterativeResolutionResult.ServFail();
+
         // A cached answer (positive or negative) is returned directly. The cache does not record
         // which zone it came from, so BuildResultFromCacheEntry recovers the zone cut from the
         // cached NS sets, which DNSSEC validation needs. Prefetch skips this (see PrefetchAsync).
@@ -740,27 +747,41 @@ public sealed class IterativeResolutionEngine(
             return addresses;
 
         // No address is known for any of these servers: look up a few, one at a time, and stop
-        // at the first that yields an address.
+        // at the first that yields an address. A server whose address is already being looked
+        // up further up this resolution is skipped, since its lookup would lead back here (a
+        // name server inside the zone it serves, with no glue).
         const int maxNameServersToResolve = 3;
 
         foreach (DnsName nsName in nameServerNames.Take(maxNameServersToResolve))
         {
-            // No ECS option: a name server address is not the client's question (see
-            // IIterativeResolutionEngine).
-            IterativeResolutionResult aResult = await ResolveInternalAsync(
-                nsName,
-                DnsResourceRecordTypeEnum.A,
-                DnsClassEnum.Internet,
-                requestDnssec,
-                budget,
-                0,
-                [],
-                [],
-                forceRootStart: false,
-                clientSubnetOption: null,
-                bypassCache: false,
-                stoppingToken
-            );
+            if (!budget.TryBeginNameServerLookup(nsName))
+                continue;
+
+            IterativeResolutionResult aResult;
+
+            try
+            {
+                // No ECS option: a name server address is not the client's question (see
+                // IIterativeResolutionEngine).
+                aResult = await ResolveInternalAsync(
+                    nsName,
+                    DnsResourceRecordTypeEnum.A,
+                    DnsClassEnum.Internet,
+                    requestDnssec,
+                    budget,
+                    0,
+                    [],
+                    [],
+                    forceRootStart: false,
+                    clientSubnetOption: null,
+                    bypassCache: false,
+                    stoppingToken
+                );
+            }
+            finally
+            {
+                budget.EndNameServerLookup(nsName);
+            }
 
             if (aResult.Status == RecursiveResolutionStatusEnum.Success)
                 addresses.AddRange(ExtractAddresses(aResult.Answer));
