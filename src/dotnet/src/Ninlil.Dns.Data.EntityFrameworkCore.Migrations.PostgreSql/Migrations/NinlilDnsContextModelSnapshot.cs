@@ -538,6 +538,39 @@ namespace Ninlil.Dns.Data.EntityFrameworkCore.Migrations.PostgreSql.Migrations
                     b.ToTable("NinlilDnsClusterNodes", (string)null);
                 });
 
+            modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncTombstoneEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EntityKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("OriginatingNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "EntityKey")
+                        .IsUnique();
+
+                    b.ToTable("NinlilDnsClusterSyncTombstones", (string)null);
+                });
+
             modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncedSettingsStateEntity", b =>
                 {
                     b.Property<Guid>("Id")

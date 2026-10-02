@@ -44,6 +44,7 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
         _unitOfWork = new EntityFrameworkUnitOfWork(_context);
         _applier = new RoleClusterConfigSyncApplier(
             _repository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<RoleClusterConfigSyncApplier>.Instance
         );
@@ -212,5 +213,57 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
         );
 
         Assert.Null(await _repository.GetByIdAsync(roleId));
+    }
+
+    /// <summary>
+    ///     This test renames a synced role, through an older update, onto a name another local
+    ///     role holds; the incoming role loses the collision and gets a renamed, flagged name.
+    /// </summary>
+    [Fact]
+    public async Task AnOlderUpdateThatRenamesOntoATakenNameIsRenamedItself()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Guid holderId = Guid.NewGuid();
+        Guid renamedId = Guid.NewGuid();
+
+        await _repository.AddAsync(
+            new RoleEntity
+            {
+                Id = holderId,
+                Name = "Operators",
+                NormalizedName = "OPERATORS",
+                CreatedAtUtc = now,
+                OriginatingNodeId = NodeA,
+            }
+        );
+        await _repository.AddAsync(
+            new RoleEntity
+            {
+                Id = renamedId,
+                Name = "Viewers",
+                NormalizedName = "VIEWERS",
+                CreatedAtUtc = now.AddMinutes(-10),
+                OriginatingNodeId = NodeA,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                RoleClusterConfigSyncApplier.EntityTypeName,
+                renamedId.ToString(),
+                IsDeleted: false,
+                Payload("Operators"),
+                now.AddMinutes(-5),
+                NodeB
+            ),
+            CancellationToken.None
+        );
+
+        RoleEntity holder = await _repository.GetByIdAsync(holderId);
+        RoleEntity renamed = await _repository.GetByIdAsync(renamedId);
+        Assert.Equal("Operators", holder.Name);
+        Assert.StartsWith("Operators-conflict-", renamed.Name);
+        Assert.NotNull(renamed.ClusterConflictNote);
     }
 }

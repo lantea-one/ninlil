@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Store;
 using Ninlil.Dns.Server.Cluster.Options;
+using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
 using Ninlil.Dns.Server.Core.Events;
 
@@ -82,10 +83,22 @@ public class UserClusterSyncEventSubscriber(
     {
         try
         {
-            Guid ownNodeId = clusterOptions.CurrentValue.NodeId;
+            ClusterOptions options = clusterOptions.CurrentValue;
+            Guid ownNodeId = options.NodeId;
 
             if (isDeleted)
             {
+                // Remembered only while clustering is on (see ClusterSyncTombstones).
+                if (options.Enable)
+                    await ClusterSyncTombstones.RecordLocalDeletionAsync(
+                        scopeFactory,
+                        UserClusterConfigSyncApplier.EntityTypeName,
+                        userId,
+                        occurredAtUtc,
+                        ownNodeId,
+                        stoppingToken
+                    );
+
                 await broadcaster.BroadcastAsync(
                     new ClusterConfigSyncEnvelope(
                         UserClusterConfigSyncApplier.EntityTypeName,

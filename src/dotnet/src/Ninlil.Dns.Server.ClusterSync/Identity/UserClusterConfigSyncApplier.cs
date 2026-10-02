@@ -35,17 +35,24 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///         keeps the name; the other is renamed and given a note by
 ///         <see cref="ClusterCollisionRenamer" /> (see <see cref="UserEntity.ClusterConflictNote" />),
 ///         never dropped or merged. Every node applies the same rule to the same timestamps and
-///         node ids, so all pick the same winner; a test checks this.
+///         node ids, so all pick the same winner; a test checks this. An update that renames an
+///         account onto a name another local account holds is resolved the same way.
+///     </para>
+///     <para>
+///         <b>Deletions</b> leave a tombstone (see <see cref="ClusterSyncTombstones" />), so a
+///         stale create or update arriving after the delete does not bring the account back.
 ///     </para>
 /// </summary>
 /// <param name="userRepository">The repository this applier reads and writes user accounts through.</param>
 /// <param name="roleRepository">The repository used to check that an incoming role exists here before assigning it.</param>
+/// <param name="tombstoneRepository">The repository deletions are remembered through (see <see cref="ClusterSyncTombstones" />).</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
 /// <param name="dataProtectionProvider">This node's Data Protection provider, used to encrypt incoming plaintext secrets.</param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
 public class UserClusterConfigSyncApplier(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     IDataProtectionProvider dataProtectionProvider,
     ILogger<UserClusterConfigSyncApplier> logger
@@ -91,7 +98,7 @@ public class UserClusterConfigSyncApplier(
 
         UserEntity local = await userRepository.GetByIdAsync(id, stoppingToken);
 
-        // Only a new id can collide on the username (see ApplyToNewLocalUserAsync).
+        // A new id is handled apart: a tombstone may block it (see ApplyToNewLocalUserAsync).
         if (local is null)
         {
             await ApplyToNewLocalUserAsync(id, envelope, stoppingToken);
@@ -113,17 +120,23 @@ public class UserClusterConfigSyncApplier(
         if (envelope.IsDeleted)
         {
             userRepository.Remove(local);
+            await RecordDeletionAsync(id, envelope, stoppingToken);
             await unitOfWork.SaveChangesAsync(stoppingToken);
             return;
         }
 
-        // An update overwrites every field: the username here, the rest (including encrypting
-        // the secrets) in ApplyCommonFields. A rename that collides with another local user is
-        // not checked on this path.
+        // An update overwrites every field: the username here, after resolving a collision with
+        // another local account, the rest (including encrypting the secrets) in
+        // ApplyCommonFields.
         UserSyncPayload payload = JsonSerializer.Deserialize<UserSyncPayload>(envelope.PayloadJson);
 
-        local.UserName = payload.UserName;
-        local.NormalizedUserName = payload.NormalizedUserName;
+        (string userName, string normalizedUserName, string conflictNote) =
+            await ResolveUserNameCollisionAsync(id, payload, envelope, stoppingToken);
+
+        local.UserName = userName;
+        local.NormalizedUserName = normalizedUserName;
+        if (conflictNote is not null)
+            local.ClusterConflictNote = conflictNote;
         ApplyCommonFields(local, payload);
         local.UpdatedAtUtc = envelope.LastModifiedUtc;
         local.OriginatingNodeId = envelope.OriginatingNodeId;
@@ -135,8 +148,9 @@ public class UserClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method handles an id this node has not seen, the case where a username collision
-    ///     is resolved (see the class summary).
+    ///     This method handles an id this node has not seen: a deletion is only remembered, and
+    ///     a create must not be older than such a deletion and may collide on the username (see
+    ///     the class summary).
     /// </summary>
     private async Task ApplyToNewLocalUserAsync(
         Guid id,
@@ -144,12 +158,66 @@ public class UserClusterConfigSyncApplier(
         CancellationToken stoppingToken
     )
     {
-        // A deletion for an account we never had locally is already a no-op.
         if (envelope.IsDeleted)
+        {
+            await RecordDeletionAsync(id, envelope, stoppingToken);
+            await unitOfWork.SaveChangesAsync(stoppingToken);
+            return;
+        }
+
+        if (
+            !await ClusterSyncTombstones.AllowsCreateAsync(
+                tombstoneRepository,
+                id,
+                envelope,
+                stoppingToken
+            )
+        )
             return;
 
         UserSyncPayload payload = JsonSerializer.Deserialize<UserSyncPayload>(envelope.PayloadJson);
 
+        (string effectiveUserName, string effectiveNormalizedUserName, string conflictNote) =
+            await ResolveUserNameCollisionAsync(id, payload, envelope, stoppingToken);
+
+        // The new row uses the effective names: the payload's, or the renamed ones when the
+        // incoming account lost a collision.
+        UserEntity created = new()
+        {
+            Id = id,
+            CreatedAtUtc = envelope.LastModifiedUtc,
+            UpdatedAtUtc = null,
+            OriginatingNodeId = envelope.OriginatingNodeId,
+            UserName = effectiveUserName,
+            NormalizedUserName = effectiveNormalizedUserName,
+            ClusterConflictNote = conflictNote,
+        };
+        ApplyCommonFields(created, payload);
+
+        await userRepository.AddAsync(created, stoppingToken);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        await ReconcileRolesAndClaimsAsync(created.Id, payload, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method resolves a collision between the incoming account's username and a
+    ///     different local account holding it (see the class summary). When the local account
+    ///     loses, it is renamed and saved here; when the incoming one loses, the renamed name and
+    ///     note are returned for it.
+    /// </summary>
+    /// <returns>The username, normalized username and conflict note (or null) the incoming account gets.</returns>
+    private async Task<(
+        string UserName,
+        string NormalizedUserName,
+        string ConflictNote
+    )> ResolveUserNameCollisionAsync(
+        Guid id,
+        UserSyncPayload payload,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    )
+    {
         string effectiveUserName = payload.UserName;
         string effectiveNormalizedUserName = payload.NormalizedUserName;
         string conflictNote = null;
@@ -227,25 +295,25 @@ public class UserClusterConfigSyncApplier(
             }
         }
 
-        // The new row uses the effective names: the payload's, or the renamed ones when the
-        // incoming account lost a collision.
-        UserEntity created = new()
-        {
-            Id = id,
-            CreatedAtUtc = envelope.LastModifiedUtc,
-            UpdatedAtUtc = null,
-            OriginatingNodeId = envelope.OriginatingNodeId,
-            UserName = effectiveUserName,
-            NormalizedUserName = effectiveNormalizedUserName,
-            ClusterConflictNote = conflictNote,
-        };
-        ApplyCommonFields(created, payload);
-
-        await userRepository.AddAsync(created, stoppingToken);
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        await ReconcileRolesAndClaimsAsync(created.Id, payload, stoppingToken);
+        return (effectiveUserName, effectiveNormalizedUserName, conflictNote);
     }
+
+    /// <summary>
+    ///     This method stages the tombstone for an incoming deletion.
+    /// </summary>
+    private Task RecordDeletionAsync(
+        Guid id,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    ) =>
+        ClusterSyncTombstones.RecordDeletionAsync(
+            tombstoneRepository,
+            EntityTypeName,
+            id,
+            envelope.LastModifiedUtc,
+            envelope.OriginatingNodeId,
+            stoppingToken
+        );
 
     /// <summary>
     ///     This method copies every <see cref="UserSyncPayload" /> field except the username onto

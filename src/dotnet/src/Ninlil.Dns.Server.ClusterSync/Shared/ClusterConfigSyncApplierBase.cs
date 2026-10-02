@@ -15,15 +15,18 @@ namespace Ninlil.Dns.Server.ClusterSync.Shared;
 ///     change wins under <see cref="ClusterSyncConflictResolver.IncomingWins" />. A subclass
 ///     supplies only <see cref="CreateFromPayload" /> and <see cref="ApplyPayload" />, the JSON
 ///     shape of its entity's fields. The repositories are written directly, so applying a
-///     change raises no change event and is not broadcast again. Deletions leave no record, so
-///     an older create or update that arrives after a delete brings the row back.
+///     change raises no change event and is not broadcast again. A deletion leaves a tombstone
+///     (see <see cref="ClusterSyncTombstones" />), so an older create or update that arrives
+///     after it does not bring the row back.
 /// </summary>
 /// <typeparam name="TEntity">The entity type this applier synchronizes.</typeparam>
 /// <param name="repository">The repository this applier reads and writes the entity through.</param>
+/// <param name="tombstoneRepository">The repository deletions are remembered through.</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
 /// <param name="logger">The logger a malformed envelope is recorded to.</param>
 public abstract class ClusterConfigSyncApplierBase<TEntity>(
     IRepository<TEntity> repository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger logger
 ) : IClusterConfigSyncApplier
@@ -100,8 +103,24 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
 
         if (local is null)
         {
-            // A new id: a delete is a no-op, and a create or update must pass CanApplyAsync.
+            // A new id: a delete is only remembered, in case the create it follows is still on
+            // its way; a create or update must not be older than such a deletion and must pass
+            // CanApplyAsync.
             if (envelope.IsDeleted)
+            {
+                await RecordDeletionAsync(id, envelope, stoppingToken);
+                await unitOfWork.SaveChangesAsync(stoppingToken);
+                return;
+            }
+
+            if (
+                !await ClusterSyncTombstones.AllowsCreateAsync(
+                    tombstoneRepository,
+                    id,
+                    envelope,
+                    stoppingToken
+                )
+            )
                 return;
 
             if (!await CanApplyAsync(envelope.PayloadJson, envelope, stoppingToken))
@@ -133,6 +152,7 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
         if (envelope.IsDeleted)
         {
             repository.Remove(local);
+            await RecordDeletionAsync(id, envelope, stoppingToken);
             await unitOfWork.SaveChangesAsync(stoppingToken);
             return;
         }
@@ -147,4 +167,21 @@ public abstract class ClusterConfigSyncApplierBase<TEntity>(
         repository.Update(local);
         await unitOfWork.SaveChangesAsync(stoppingToken);
     }
+
+    /// <summary>
+    ///     This method stages the tombstone for an incoming deletion.
+    /// </summary>
+    private Task RecordDeletionAsync(
+        Guid id,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    ) =>
+        ClusterSyncTombstones.RecordDeletionAsync(
+            tombstoneRepository,
+            EntityType,
+            id,
+            envelope.LastModifiedUtc,
+            envelope.OriginatingNodeId,
+            stoppingToken
+        );
 }

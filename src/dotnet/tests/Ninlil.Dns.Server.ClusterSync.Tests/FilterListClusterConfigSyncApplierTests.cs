@@ -46,6 +46,7 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
         _unitOfWork = new EntityFrameworkUnitOfWork(_context);
         _applier = new FilterListClusterConfigSyncApplier(
             _repository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<FilterListClusterConfigSyncApplier>.Instance
         );
@@ -323,5 +324,69 @@ public sealed class FilterListClusterConfigSyncApplierTests : IDisposable
 
         Assert.Null(exception);
         Assert.Null(await _repository.GetByIdAsync(listId));
+    }
+
+    private static ClusterConfigSyncEnvelope Envelope(
+        Guid listId,
+        bool isDeleted,
+        DateTimeOffset timestamp,
+        Guid nodeId,
+        string name = "Ads"
+    ) =>
+        new(
+            FilterListClusterConfigSyncApplier.EntityTypeName,
+            listId.ToString(),
+            isDeleted,
+            isDeleted ? null : Payload(name),
+            timestamp,
+            nodeId
+        );
+
+    /// <summary>
+    ///     This test applies a create, a delete and then an update made before the delete; the
+    ///     late update must not bring the deleted list back.
+    /// </summary>
+    [Fact]
+    public async Task AStaleUpdateArrivingAfterADeleteDoesNotRecreateTheList()
+    {
+        Guid listId = Guid.NewGuid();
+        DateTimeOffset created = DateTimeOffset.UtcNow;
+
+        await _applier.ApplyAsync(Envelope(listId, false, created, NodeA), CancellationToken.None);
+        await _applier.ApplyAsync(
+            Envelope(listId, true, created.AddMinutes(2), NodeA),
+            CancellationToken.None
+        );
+        await _applier.ApplyAsync(
+            Envelope(listId, false, created.AddMinutes(1), NodeB, "Stale-Rename"),
+            CancellationToken.None
+        );
+
+        Assert.Null(await _repository.GetByIdAsync(listId));
+    }
+
+    /// <summary>
+    ///     This test delivers a delete before the create it follows, as concurrent delivery can;
+    ///     the create must then be dropped, while a later re-create of the same id still applies.
+    /// </summary>
+    [Fact]
+    public async Task ADeleteThatOvertakesItsCreateStillWinsButANewerCreateApplies()
+    {
+        Guid listId = Guid.NewGuid();
+        DateTimeOffset created = DateTimeOffset.UtcNow;
+
+        await _applier.ApplyAsync(
+            Envelope(listId, true, created.AddMinutes(1), NodeA),
+            CancellationToken.None
+        );
+        await _applier.ApplyAsync(Envelope(listId, false, created, NodeA), CancellationToken.None);
+        Assert.Null(await _repository.GetByIdAsync(listId));
+
+        await _applier.ApplyAsync(
+            Envelope(listId, false, created.AddMinutes(2), NodeB, "Recreated"),
+            CancellationToken.None
+        );
+        DnsFilterListEntity list = await _repository.GetByIdAsync(listId);
+        Assert.Equal("Recreated", list.Name);
     }
 }

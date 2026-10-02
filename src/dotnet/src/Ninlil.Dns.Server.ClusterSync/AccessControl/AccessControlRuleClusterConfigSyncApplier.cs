@@ -15,9 +15,16 @@ namespace Ninlil.Dns.Server.ClusterSync.AccessControl;
 /// </summary>
 public class AccessControlRuleClusterConfigSyncApplier(
     IDnsAccessControlRuleRepository repository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<AccessControlRuleClusterConfigSyncApplier> logger
-) : ClusterConfigSyncApplierBase<DnsAccessControlRuleEntity>(repository, unitOfWork, logger)
+)
+    : ClusterConfigSyncApplierBase<DnsAccessControlRuleEntity>(
+        repository,
+        tombstoneRepository,
+        unitOfWork,
+        logger
+    )
 {
     /// <summary>
     ///     This constant contains the entity type of access-control-rule envelopes.

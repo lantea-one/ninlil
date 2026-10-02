@@ -30,7 +30,9 @@ namespace Ninlil.Dns.Server.Backup.Catalog;
 ///         <see cref="ZoneChangeJournalEntryEntity" /> (the incremental-transfer journal, whose
 ///         absence costs nothing beyond a secondary's next refresh falling back from IXFR to a
 ///         full AXFR once); <see cref="DnsQueryLogEntryEntity" /> (the persistent query log); and
-///         <see cref="WebhookDeliveryAttemptEntity" /> (webhook delivery history). A new
+///         <see cref="WebhookDeliveryAttemptEntity" /> (webhook delivery history). Cluster sync
+///         tombstones (<see cref="ClusterSyncTombstoneEntity" />) are left out too: they only
+///         guard against stale changes still in flight between peers. A new
 ///         configuration entity belongs in this catalog; only a new history table belongs in
 ///         this list.
 ///     </para>

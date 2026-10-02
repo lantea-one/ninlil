@@ -99,6 +99,7 @@ public static class MongoClassMapRegistrar
             RegisterEntity<DnsClientStaticAddressMappingEntity>();
             RegisterEntity<ClusterNodeEntity>();
             RegisterEntity<ClusterSyncedSettingsStateEntity>();
+            RegisterEntity<ClusterSyncTombstoneEntity>();
 
             // UserRoleEntity has no Id; the user and role pair identifies it.
             if (!BsonClassMap.IsClassMapRegistered(typeof(UserRoleEntity)))

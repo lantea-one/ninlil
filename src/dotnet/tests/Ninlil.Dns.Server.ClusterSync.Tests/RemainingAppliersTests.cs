@@ -61,6 +61,7 @@ public sealed class RemainingAppliersTests : IDisposable
         DnsAccessControlRuleRepository repository = new(_context);
         AccessControlRuleClusterConfigSyncApplier applier = new(
             repository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<AccessControlRuleClusterConfigSyncApplier>.Instance
         );
@@ -100,6 +101,7 @@ public sealed class RemainingAppliersTests : IDisposable
         DnsRewriteRepository repository = new(_context);
         RewriteClusterConfigSyncApplier applier = new(
             repository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<RewriteClusterConfigSyncApplier>.Instance
         );
@@ -133,6 +135,7 @@ public sealed class RemainingAppliersTests : IDisposable
         DnsForwarderRepository repository = new(_context);
         ForwarderClusterConfigSyncApplier applier = new(
             repository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<ForwarderClusterConfigSyncApplier>.Instance
         );
@@ -168,6 +171,7 @@ public sealed class RemainingAppliersTests : IDisposable
         FilterListEntryClusterConfigSyncApplier applier = new(
             entryRepository,
             listRepository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<FilterListEntryClusterConfigSyncApplier>.Instance
         );
@@ -207,6 +211,7 @@ public sealed class RemainingAppliersTests : IDisposable
         FilterListEntryClusterConfigSyncApplier applier = new(
             entryRepository,
             listRepository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<FilterListEntryClusterConfigSyncApplier>.Instance
         );

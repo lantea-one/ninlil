@@ -11,8 +11,8 @@ namespace Ninlil.Dns.Server.ClusterSync.Shared;
 /// <summary>
 ///     This class is the sending-side flow shared by the simple config-sync event subscribers
 ///     (<c>FilterListClusterSyncEventSubscriber</c> and the four like it). On a local change it
-///     reads the entity again in a new scope (create or update) or builds a bare deletion
-///     envelope, and hands the <see cref="ClusterConfigSyncEnvelope" /> to
+///     reads the entity again in a new scope (create or update) or records a tombstone (see
+///     <see cref="ClusterSyncTombstones" />) and builds a bare deletion envelope, and hands the <see cref="ClusterConfigSyncEnvelope" /> to
 ///     <see cref="IClusterConfigSyncBroadcaster.BroadcastAsync" />. A subclass supplies
 ///     <see cref="EntityType" />, <see cref="FindLocalAsync" /> and <see cref="Serialize" />, and
 ///     calls <see cref="BroadcastChangeAsync" /> on a detached task from its <c>HandleAsync</c>,
@@ -80,10 +80,23 @@ public abstract class ClusterConfigSyncSubscriberBase<TEntity>(
     {
         try
         {
-            Guid ownNodeId = clusterOptions.CurrentValue.NodeId;
+            ClusterOptions options = clusterOptions.CurrentValue;
+            Guid ownNodeId = options.NodeId;
 
             if (isDeleted)
             {
+                // Remembered only while clustering is on; a single node has nobody to hear a
+                // stale change from.
+                if (options.Enable)
+                    await ClusterSyncTombstones.RecordLocalDeletionAsync(
+                        scopeFactory,
+                        EntityType,
+                        entityId,
+                        occurredAtUtc,
+                        ownNodeId,
+                        stoppingToken
+                    );
+
                 await broadcaster.BroadcastAsync(
                     new ClusterConfigSyncEnvelope(
                         EntityType,

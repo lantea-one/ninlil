@@ -128,6 +128,7 @@ public static class ServiceCollectionMongoDbExtension
             IClusterSyncedSettingsStateRepository,
             ClusterSyncedSettingsStateMongoRepository
         >();
+        instance.AddScoped<IClusterSyncTombstoneRepository, ClusterSyncTombstoneMongoRepository>();
 
         return instance;
     }

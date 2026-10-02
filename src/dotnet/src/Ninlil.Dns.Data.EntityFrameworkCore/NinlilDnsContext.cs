@@ -274,6 +274,13 @@ public class NinlilDnsContext(DbContextOptions<NinlilDnsContext> options) : DbCo
         Set<ClusterSyncedSettingsStateEntity>();
 
     /// <summary>
+    ///     This property contains the deletions cluster config sync remembers, one row per deleted
+    ///     synced entity.
+    /// </summary>
+    public DbSet<ClusterSyncTombstoneEntity> ClusterSyncTombstones =>
+        Set<ClusterSyncTombstoneEntity>();
+
+    /// <summary>
     ///     This method applies every <see cref="Microsoft.EntityFrameworkCore.IEntityTypeConfiguration{TEntity}" />
     ///     found in this assembly, so a new entity only needs its configuration class, not a
     ///     registration here.

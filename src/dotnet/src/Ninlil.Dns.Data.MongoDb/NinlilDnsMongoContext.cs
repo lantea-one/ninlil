@@ -271,4 +271,11 @@ public class NinlilDnsMongoContext(IMongoClient client, string databaseName)
         Database.GetCollection<ClusterSyncedSettingsStateEntity>(
             "NinlilDnsClusterSyncedSettingsStates"
         );
+
+    /// <summary>
+    ///     This property contains the deletions cluster config sync remembers, one document per
+    ///     deleted synced entity.
+    /// </summary>
+    public IMongoCollection<ClusterSyncTombstoneEntity> ClusterSyncTombstones =>
+        Database.GetCollection<ClusterSyncTombstoneEntity>("NinlilDnsClusterSyncTombstones");
 }

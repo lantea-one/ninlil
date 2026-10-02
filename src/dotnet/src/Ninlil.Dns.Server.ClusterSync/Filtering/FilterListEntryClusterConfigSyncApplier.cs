@@ -17,9 +17,16 @@ namespace Ninlil.Dns.Server.ClusterSync.Filtering;
 public class FilterListEntryClusterConfigSyncApplier(
     IDnsFilterListEntryRepository entryRepository,
     IDnsFilterListRepository listRepository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<FilterListEntryClusterConfigSyncApplier> logger
-) : ClusterConfigSyncApplierBase<DnsFilterListEntryEntity>(entryRepository, unitOfWork, logger)
+)
+    : ClusterConfigSyncApplierBase<DnsFilterListEntryEntity>(
+        entryRepository,
+        tombstoneRepository,
+        unitOfWork,
+        logger
+    )
 {
     /// <summary>
     ///     This constant contains the entity type of filter-list-entry envelopes.

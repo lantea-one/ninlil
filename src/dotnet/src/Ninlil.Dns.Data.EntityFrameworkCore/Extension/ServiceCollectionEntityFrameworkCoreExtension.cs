@@ -103,6 +103,7 @@ public static class ServiceCollectionEntityFrameworkCoreExtension
             IClusterSyncedSettingsStateRepository,
             ClusterSyncedSettingsStateRepository
         >();
+        instance.AddScoped<IClusterSyncTombstoneRepository, ClusterSyncTombstoneRepository>();
 
         return instance;
     }

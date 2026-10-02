@@ -52,6 +52,7 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         _applier = new UserClusterConfigSyncApplier(
             _userRepository,
             _roleRepository,
+            new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             _dataProtectionProvider,
             NullLogger<UserClusterConfigSyncApplier>.Instance
@@ -513,5 +514,105 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
 
         Assert.Null(exception);
         Assert.Null(await _userRepository.GetByIdAsync(userId));
+    }
+
+    /// <summary>
+    ///     This test deletes an account and then applies an update made before the delete; the
+    ///     account must stay deleted.
+    /// </summary>
+    [Fact]
+    public async Task AStaleUpdateArrivingAfterADeleteDoesNotRecreateTheAccount()
+    {
+        Guid userId = Guid.NewGuid();
+        DateTimeOffset created = DateTimeOffset.UtcNow;
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                userId.ToString(),
+                IsDeleted: false,
+                Payload("carol"),
+                created,
+                NodeA
+            ),
+            CancellationToken.None
+        );
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                userId.ToString(),
+                IsDeleted: true,
+                PayloadJson: null,
+                created.AddMinutes(2),
+                NodeA
+            ),
+            CancellationToken.None
+        );
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                userId.ToString(),
+                IsDeleted: false,
+                Payload("carol"),
+                created.AddMinutes(1),
+                NodeB
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Null(await _userRepository.GetByIdAsync(userId));
+    }
+
+    /// <summary>
+    ///     This test renames a synced account, through an update, onto a username another local
+    ///     account holds. The update must resolve the collision like a create does instead of
+    ///     failing on the unique username.
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateThatRenamesOntoATakenUsernameResolvesTheCollision()
+    {
+        DateTimeOffset earlier = DateTimeOffset.UtcNow;
+        Guid holderId = Guid.NewGuid();
+        Guid renamedId = Guid.NewGuid();
+
+        await _userRepository.AddAsync(
+            new UserEntity
+            {
+                Id = holderId,
+                UserName = "dave",
+                NormalizedUserName = "DAVE",
+                CreatedAtUtc = earlier,
+                OriginatingNodeId = NodeA,
+            }
+        );
+        await _userRepository.AddAsync(
+            new UserEntity
+            {
+                Id = renamedId,
+                UserName = "erin",
+                NormalizedUserName = "ERIN",
+                CreatedAtUtc = earlier,
+                OriginatingNodeId = NodeA,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                renamedId.ToString(),
+                IsDeleted: false,
+                Payload("dave"),
+                earlier.AddMinutes(1),
+                NodeB
+            ),
+            CancellationToken.None
+        );
+
+        UserEntity renamed = await _userRepository.GetByIdAsync(renamedId);
+        UserEntity holder = await _userRepository.GetByIdAsync(holderId);
+        Assert.Equal("dave", renamed.UserName);
+        Assert.NotEqual("dave", holder.UserName);
+        Assert.NotNull(holder.ClusterConflictNote);
     }
 }

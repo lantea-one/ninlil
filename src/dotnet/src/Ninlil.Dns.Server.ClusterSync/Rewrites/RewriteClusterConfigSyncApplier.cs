@@ -15,9 +15,16 @@ namespace Ninlil.Dns.Server.ClusterSync.Rewrites;
 /// </summary>
 public class RewriteClusterConfigSyncApplier(
     IDnsRewriteRepository repository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<RewriteClusterConfigSyncApplier> logger
-) : ClusterConfigSyncApplierBase<DnsRewriteEntity>(repository, unitOfWork, logger)
+)
+    : ClusterConfigSyncApplierBase<DnsRewriteEntity>(
+        repository,
+        tombstoneRepository,
+        unitOfWork,
+        logger
+    )
 {
     /// <summary>
     ///     This constant contains the entity type of rewrite envelopes.

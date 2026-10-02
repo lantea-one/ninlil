@@ -14,13 +14,16 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///     <see cref="RoleEntity" /> name, description and permissions. It works like
 ///     <see cref="UserClusterConfigSyncApplier" /> without the secrets, and is not built on
 ///     <see cref="Shared.ClusterConfigSyncApplierBase{TEntity}" /> for the same reason: role names
-///     are unique too, so a new id can collide on the name and is resolved the same way.
+///     are unique too, so a new id or a rename can collide on the name and is resolved the same
+///     way. Deletions leave a tombstone, as for users.
 /// </summary>
 /// <param name="roleRepository">The repository this applier reads and writes roles through.</param>
+/// <param name="tombstoneRepository">The repository deletions are remembered through (see <see cref="ClusterSyncTombstones" />).</param>
 /// <param name="unitOfWork">The unit of work every applied change is committed through.</param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
 public class RoleClusterConfigSyncApplier(
     IRoleRepository roleRepository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<RoleClusterConfigSyncApplier> logger
 ) : IClusterConfigSyncApplier
@@ -53,7 +56,7 @@ public class RoleClusterConfigSyncApplier(
 
         RoleEntity local = await roleRepository.GetByIdAsync(id, stoppingToken);
 
-        // Only a new id can collide on the name (see ApplyToNewLocalRoleAsync).
+        // A new id is handled apart: a tombstone may block it (see ApplyToNewLocalRoleAsync).
         if (local is null)
         {
             await ApplyToNewLocalRoleAsync(id, envelope, stoppingToken);
@@ -75,15 +78,22 @@ public class RoleClusterConfigSyncApplier(
         if (envelope.IsDeleted)
         {
             roleRepository.Remove(local);
+            await RecordDeletionAsync(id, envelope, stoppingToken);
             await unitOfWork.SaveChangesAsync(stoppingToken);
             return;
         }
 
-        // An update overwrites every field, then the permissions are reconciled below.
+        // An update overwrites every field, the name after resolving a collision with another
+        // local role, then the permissions are reconciled below.
         RoleSyncPayload payload = JsonSerializer.Deserialize<RoleSyncPayload>(envelope.PayloadJson);
 
-        local.Name = payload.Name;
-        local.NormalizedName = payload.NormalizedName;
+        (string name, string normalizedName, string conflictNote) =
+            await ResolveRoleNameCollisionAsync(id, payload, envelope, stoppingToken);
+
+        local.Name = name;
+        local.NormalizedName = normalizedName;
+        if (conflictNote is not null)
+            local.ClusterConflictNote = conflictNote;
         local.Description = payload.Description;
         local.ConcurrencyStamp = payload.ConcurrencyStamp;
         local.UpdatedAtUtc = envelope.LastModifiedUtc;
@@ -96,8 +106,9 @@ public class RoleClusterConfigSyncApplier(
     }
 
     /// <summary>
-    ///     This method handles a role id this node has not seen, resolving a name collision as
-    ///     <see cref="UserClusterConfigSyncApplier.ApplyToNewLocalUserAsync" /> does for users.
+    ///     This method handles a role id this node has not seen, with the tombstone check and
+    ///     name collision handling <see cref="UserClusterConfigSyncApplier.ApplyToNewLocalUserAsync" />
+    ///     has for users.
     /// </summary>
     private async Task ApplyToNewLocalRoleAsync(
         Guid id,
@@ -106,10 +117,64 @@ public class RoleClusterConfigSyncApplier(
     )
     {
         if (envelope.IsDeleted)
+        {
+            await RecordDeletionAsync(id, envelope, stoppingToken);
+            await unitOfWork.SaveChangesAsync(stoppingToken);
+            return;
+        }
+
+        if (
+            !await ClusterSyncTombstones.AllowsCreateAsync(
+                tombstoneRepository,
+                id,
+                envelope,
+                stoppingToken
+            )
+        )
             return;
 
         RoleSyncPayload payload = JsonSerializer.Deserialize<RoleSyncPayload>(envelope.PayloadJson);
 
+        (string effectiveName, string effectiveNormalizedName, string conflictNote) =
+            await ResolveRoleNameCollisionAsync(id, payload, envelope, stoppingToken);
+
+        // The new row uses the effective names: the payload's, or the renamed ones when the
+        // incoming role lost a collision.
+        RoleEntity created = new()
+        {
+            Id = id,
+            CreatedAtUtc = envelope.LastModifiedUtc,
+            UpdatedAtUtc = null,
+            OriginatingNodeId = envelope.OriginatingNodeId,
+            Name = effectiveName,
+            NormalizedName = effectiveNormalizedName,
+            Description = payload.Description,
+            ConcurrencyStamp = payload.ConcurrencyStamp,
+            ClusterConflictNote = conflictNote,
+        };
+
+        await roleRepository.AddAsync(created, stoppingToken);
+        await unitOfWork.SaveChangesAsync(stoppingToken);
+
+        await ReconcileClaimsAsync(created.Id, payload.PermissionClaims, stoppingToken);
+    }
+
+    /// <summary>
+    ///     This method resolves a collision between the incoming role's name and a different local
+    ///     role holding it, as <see cref="UserClusterConfigSyncApplier" /> does for usernames.
+    /// </summary>
+    /// <returns>The name, normalized name and conflict note (or null) the incoming role gets.</returns>
+    private async Task<(
+        string Name,
+        string NormalizedName,
+        string ConflictNote
+    )> ResolveRoleNameCollisionAsync(
+        Guid id,
+        RoleSyncPayload payload,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    )
+    {
         string effectiveName = payload.Name;
         string effectiveNormalizedName = payload.NormalizedName;
         string conflictNote = null;
@@ -182,26 +247,25 @@ public class RoleClusterConfigSyncApplier(
             }
         }
 
-        // The new row uses the effective names: the payload's, or the renamed ones when the
-        // incoming role lost a collision.
-        RoleEntity created = new()
-        {
-            Id = id,
-            CreatedAtUtc = envelope.LastModifiedUtc,
-            UpdatedAtUtc = null,
-            OriginatingNodeId = envelope.OriginatingNodeId,
-            Name = effectiveName,
-            NormalizedName = effectiveNormalizedName,
-            Description = payload.Description,
-            ConcurrencyStamp = payload.ConcurrencyStamp,
-            ClusterConflictNote = conflictNote,
-        };
-
-        await roleRepository.AddAsync(created, stoppingToken);
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        await ReconcileClaimsAsync(created.Id, payload.PermissionClaims, stoppingToken);
+        return (effectiveName, effectiveNormalizedName, conflictNote);
     }
+
+    /// <summary>
+    ///     This method stages the tombstone for an incoming deletion.
+    /// </summary>
+    private Task RecordDeletionAsync(
+        Guid id,
+        ClusterConfigSyncEnvelope envelope,
+        CancellationToken stoppingToken
+    ) =>
+        ClusterSyncTombstones.RecordDeletionAsync(
+            tombstoneRepository,
+            EntityTypeName,
+            id,
+            envelope.LastModifiedUtc,
+            envelope.OriginatingNodeId,
+            stoppingToken
+        );
 
     /// <summary>
     ///     This method makes the role's permission claims match the payload, after the role row

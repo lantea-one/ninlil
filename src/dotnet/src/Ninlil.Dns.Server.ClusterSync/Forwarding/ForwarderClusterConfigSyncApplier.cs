@@ -15,9 +15,16 @@ namespace Ninlil.Dns.Server.ClusterSync.Forwarding;
 /// </summary>
 public class ForwarderClusterConfigSyncApplier(
     IDnsForwarderRepository repository,
+    IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<ForwarderClusterConfigSyncApplier> logger
-) : ClusterConfigSyncApplierBase<DnsForwarderEntity>(repository, unitOfWork, logger)
+)
+    : ClusterConfigSyncApplierBase<DnsForwarderEntity>(
+        repository,
+        tombstoneRepository,
+        unitOfWork,
+        logger
+    )
 {
     /// <summary>
     ///     This constant contains the entity type of forwarder envelopes.
