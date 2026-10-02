@@ -9,11 +9,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="FilterPatternPreviewController" /> end to end, against a
-///     real, in-process host -- confirming the preview reuses the exact same
-///     <c>DnsFilterEngine.CompileOrNull</c>/<c>DnsFilterEngine.BuildWildcardRegexPattern</c>
-///     compilation the real filter engine and <see cref="FilterListEntriesController" />'s own
-///     write-time validation already use, for every <see cref="DnsFilterEntryKindEnum" /> value.
+///     This class covers <see cref="FilterPatternPreviewController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. It checks the match results for
+///     wildcard, regex and domain patterns against the default sample domains and against
+///     caller-supplied ones, and that a malformed regex is reported as invalid. The preview
+///     compiles patterns with <c>DnsFilterEngine.CompileOrNull</c> and
+///     <c>DnsFilterEngine.BuildWildcardRegexPattern</c>, as the filter engine and the write-time
+///     validation of <see cref="FilterListEntriesController" /> do.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class FilterPatternPreviewControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -56,8 +58,8 @@ public class FilterPatternPreviewControllerTests(NinlilDnsWebApplicationFactory 
         Assert.True(result.IsValid);
         Assert.Null(result.Error);
 
-        // "*.example.com" matches every subdomain but not the bare apex itself (the wildcard
-        // glob requires the literal "." before "example.com").
+        // "*.example.com" matches every subdomain but not the apex, because the glob requires
+        // the "." before "example.com".
         Assert.False(Match(result, "example.com"));
         Assert.True(Match(result, "www.example.com"));
         Assert.True(Match(result, "shop.example.com"));
@@ -98,9 +100,9 @@ public class FilterPatternPreviewControllerTests(NinlilDnsWebApplicationFactory 
         Assert.True(result.IsValid);
         Assert.True(Match(result, "example.com"));
         Assert.True(Match(result, "www.example.com"));
-        // "unrelated-domain.org" (not "notexample.com", which isn't in the controller's own
-        // DefaultSampleDomains at all and would make Match() throw) -- a real, unrelated domain
-        // from the default sample set, proving this isn't a naive substring match.
+        // "unrelated-domain.org" is an unrelated default sample domain. A look-alike such as
+        // "notexample.com" is not in DefaultSampleDomains (Match() would throw), so a substring
+        // match is not ruled out here.
         Assert.False(Match(result, "unrelated-domain.org"));
     }
 

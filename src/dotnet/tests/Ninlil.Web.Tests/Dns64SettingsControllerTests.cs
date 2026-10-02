@@ -11,9 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="Dns64SettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="Dns64SettingsController" /> over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator: the compiled-in defaults, a patch checked
+///     by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), and rejection
+///     of prefixes RFC 6052 does not allow.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class Dns64SettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -107,7 +109,7 @@ public class Dns64SettingsControllerTests(NinlilDnsWebApplicationFactory factory
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // TryParsePrefix requires an IPv6 CIDR -- an IPv4 one is never legal here.
+        // TryParsePrefix requires an IPv6 CIDR; an IPv4 one is never valid here.
         HttpResponseMessage response = await client.SendAsync(
             PatchRequest("/api/dns64-settings", new { synthesisPrefix = "192.0.2.0/24" })
         );

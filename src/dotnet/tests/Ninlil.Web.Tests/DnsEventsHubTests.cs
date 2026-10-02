@@ -11,6 +11,14 @@ using Ninlil.Web.Models;
 // Define our namespace.
 namespace Ninlil.Web.Tests;
 
+/// <summary>
+///     This class covers the SignalR hub at <c>/hubs/events</c> on the shared in-process host. A
+///     <see cref="HubConnection" /> connects with long polling through <c>TestServer</c> and a
+///     bearer token, an event is published through the host's
+///     <see cref="IDnsServerEventPublisher" />, and the test waits for it to arrive. It covers the
+///     bootstrap administrator receiving a zone event, an anonymous connection being refused, and
+///     query events reaching only users granted <c>querylog:read</c> directly.
+/// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsEventsHubTests(NinlilDnsWebApplicationFactory factory)
 {
@@ -29,10 +37,9 @@ public class DnsEventsHubTests(NinlilDnsWebApplicationFactory factory)
         loginResponse.EnsureSuccessStatusCode();
         LoginResponse login = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
 
-        // Long polling, not the default (WebSockets first), since TestServer's own in-memory
-        // transport speaks plain HTTP request/response, not a real WebSocket upgrade -- the same
-        // reason this is a real HTTP round trip through the actual hub pipeline (auth included),
-        // not a mock.
+        // Long polling rather than the default WebSockets, since TestServer's in-memory transport
+        // handles plain HTTP requests but not a WebSocket upgrade. The connection still goes
+        // through the hub pipeline, authentication included.
         await using HubConnection connection = new HubConnectionBuilder()
             .WithUrl(
                 new Uri(factory.Server.BaseAddress, "/hubs/events"),
@@ -85,6 +92,7 @@ public class DnsEventsHubTests(NinlilDnsWebApplicationFactory factory)
             )
             .Build();
 
+        // Any exception passes, so this does not check that the failure is a 401.
         await Assert.ThrowsAnyAsync<Exception>(() => connection.StartAsync());
     }
 
@@ -208,7 +216,7 @@ public class DnsEventsHubTests(NinlilDnsWebApplicationFactory factory)
 
     /// <summary>
     ///     This method builds a long-polling hub connection that presents the given access token
-    ///     (see the first test's own comment on why long polling).
+    ///     (see the first test for why long polling).
     /// </summary>
     private HubConnection CreateConnection(string accessToken) =>
         new HubConnectionBuilder()

@@ -12,12 +12,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpScopesController.Statistics" /> end to end, against a real,
-///     in-process host and a real SQLite database -- confirming the reported figures genuinely
-///     reflect real, currently-recorded lease/reservation rows (seeded directly through the real
-///     repositories, mirroring how <c>Ninlil.Dhcp.Server.Core</c>'s own allocation engine writes
-///     them in production) rather than a cached or approximate figure, and that the figures move
-///     when the underlying data does.
+///     This class covers <see cref="DhcpScopesController.Statistics" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. Lease and reservation rows are
+///     saved directly through the repositories, in the shape the allocation engine in
+///     <c>Ninlil.Dhcp.Server.Core</c> writes, and the tests check that the reported figures match
+///     those rows and change when they change.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -50,8 +49,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string scopeName = $"stats-scope-{Guid.NewGuid():N}";
 
-        // A /29-shaped, 10-address pool (192.168.90.1-192.168.90.10) -- small enough to reason
-        // about by hand.
+        // A 10-address pool (192.168.90.1 to 192.168.90.10), small enough to count by hand.
         HttpResponseMessage scopeResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -68,7 +66,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
         scopeResponse.EnsureSuccessStatusCode();
         DhcpScopeDetail scope = await scopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
 
-        // No leases/reservations yet -- every one of the 10 addresses is available.
+        // No leases or reservations yet, so all 10 addresses are available.
         DhcpScopeStatisticsDetail empty = await GetStatisticsAsync(client, scope.Id);
         Assert.Equal("10", empty.TotalSlots);
         Assert.Equal(0, empty.LeasedCount);
@@ -105,7 +103,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
                 }
             );
 
-            // One currently offered (not yet confirmed) lease -- still occupies a slot.
+            // One offered, not yet confirmed lease, which still takes a slot.
             await leaseRepository.AddAsync(
                 new LeaseEntity
                 {
@@ -120,7 +118,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
                 }
             );
 
-            // One enabled reservation, on an address with no lease of its own at all.
+            // One enabled reservation, on an address with no lease.
             await reservationRepository.AddAsync(
                 new DhcpReservationEntity
                 {
@@ -133,8 +131,8 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
                 }
             );
 
-            // One disabled reservation -- must not count against ReservedCount or AvailableSlots
-            // at all, since a disabled reservation returns its address to the ordinary pool.
+            // One disabled reservation, which must not count against ReservedCount or
+            // AvailableSlots, since a disabled reservation returns its address to the pool.
             await reservationRepository.AddAsync(
                 new DhcpReservationEntity
                 {
@@ -155,11 +153,11 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(1, populated.LeasedCount);
         Assert.Equal(1, populated.OfferedCount);
         Assert.Equal(1, populated.ReservedCount);
-        // 10 total, minus 3 distinct occupied slots (the active lease, the offered lease, and
-        // the one enabled reservation) -- the disabled reservation contributes nothing.
+        // 10 total minus 3 occupied (the active lease, the offered lease and the enabled
+        // reservation); the disabled reservation does not count.
         Assert.Equal("7", populated.AvailableSlots);
 
-        // Releasing the active lease frees its own slot back up.
+        // Setting the active lease to Released in storage frees its slot.
         using (IServiceScope scope1 = factory.Services.CreateScope())
         {
             ILeaseRepository leaseRepository =
@@ -209,8 +207,8 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
                 scope1.ServiceProvider.GetRequiredService<IDhcpReservationRepository>();
             IUnitOfWork unitOfWork = scope1.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-            // Reservation and lease share the exact same address -- the common case of a client
-            // that holds its own reserved address.
+            // The reservation and the lease share an address, as when a client holds its
+            // reserved address.
             await reservationRepository.AddAsync(
                 new DhcpReservationEntity
                 {
@@ -244,7 +242,7 @@ public class DhcpScopesControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal("4", statistics.TotalSlots);
         Assert.Equal(1, statistics.LeasedCount);
         Assert.Equal(1, statistics.ReservedCount);
-        // Only one distinct slot is actually occupied, not two.
+        // Only one slot is occupied, not two.
         Assert.Equal("3", statistics.AvailableSlots);
     }
 

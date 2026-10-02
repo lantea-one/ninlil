@@ -11,12 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="IdentitySettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: ASP.NET Core Identity's own built-in password-complexity/lockout
-///     policy already drove real, enforced behavior, but had zero admin-facing REST/UI
-///     configuration surface.
+///     This class covers <see cref="IdentitySettingsController" /> (the ASP.NET Core Identity
+///     password and lockout policy) over HTTP on the shared in-process host, signed in as the
+///     bootstrap administrator: the compiled-in defaults, a patch checked by reading the host's
+///     temporary settings file (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />)
+///     and the returned note, and input validation. Values that the password generator cannot
+///     meet, such as a required length above 24, are not tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class IdentitySettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,7 +64,7 @@ public class IdentitySettingsControllerTests(NinlilDnsWebApplicationFactory fact
         IdentitySettingsDetail detail =
             await response.Content.ReadFromJsonAsync<IdentitySettingsDetail>();
 
-        // ServiceCollectionIdentityExtension's own compiled-in defaults.
+        // The compiled-in defaults from ServiceCollectionIdentityExtension.
         Assert.Equal(12, detail.RequiredLength);
         Assert.True(detail.RequireDigit);
         Assert.True(detail.RequireLowercase);
@@ -99,13 +99,9 @@ public class IdentitySettingsControllerTests(NinlilDnsWebApplicationFactory fact
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine "next
-            // request" hot reload for IdentityOptions is proved instead, directly, by
-            // IdentityOptionsMonitorProxyHotReloadTests (in Ninlil.Dns.Identity.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by IdentityOptionsMonitorProxyHotReloadTests in Ninlil.Dns.Identity.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject identity = (JsonObject)root["Identity"];
@@ -118,10 +114,8 @@ public class IdentitySettingsControllerTests(NinlilDnsWebApplicationFactory fact
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection, and every other test authenticating against the bootstrap
-            // administrator's own fixed password depends on the compiled-in lockout/password
-            // policy staying in effect -- restore it afterward.
+            // Write the default policy back to the shared settings file; other tests sign in
+            // with fixed passwords that rely on it.
             await client.SendAsync(
                 PatchRequest(
                     "/api/identity-settings",

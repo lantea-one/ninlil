@@ -10,12 +10,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the DNSSEC key CRUD REST endpoints end-to-end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- generating a real keypair for a zone, confirming the private key material is never
-///     returned by any response, editing a key's own mutable state (retirement, comments) via both
-///     PUT and PATCH, and deleting. Also confirms deleting a zone cleans up its own DNSSEC keys
-///     (see <c>ZonesController.Delete</c>).
+///     This class covers the DNSSEC key endpoints over HTTP on the shared in-process host, signed
+///     in as the bootstrap administrator: generating a key pair for a zone, keeping private key
+///     material out of every response, editing the mutable fields (retirement and comments) with
+///     PUT and PATCH, deleting, the DNSKEY and DS records a parent zone needs, and deleting a zone
+///     that has keys (see <c>ZonesController.Delete</c>).
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -72,7 +71,7 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
 
-        // Generate a brand-new key. Its own private key material must never appear anywhere.
+        // Generate a key. Its private key material must never appear in a response.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/dnssec-keys",
             new
@@ -107,7 +106,7 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.DoesNotContain("private", listBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("pkcs8", listBody, StringComparison.OrdinalIgnoreCase);
 
-        // PUT fully replaces the key's own mutable state.
+        // PUT replaces the key's mutable fields.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}",
             new { isRetired = true, comments = "replaced via PUT" }
@@ -122,8 +121,7 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(created.Id, replaced.Id);
         Assert.True(replaced.IsRetired);
         Assert.Equal("replaced via PUT", replaced.Comments);
-        // Role/algorithm/key material are permanent -- untouched by a PUT that only ever exposes
-        // the mutable fields.
+        // Role, algorithm and key material are fixed; PUT accepts only the mutable fields.
         Assert.Equal(created.Algorithm, replaced.Algorithm);
         Assert.Equal(created.PublicKeyWireFormat, replaced.PublicKeyWireFormat);
 
@@ -142,7 +140,7 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         DnssecKeyDetail patched =
             await afterPatchResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
         Assert.False(patched.IsRetired);
-        // The field the patch never mentioned must survive untouched.
+        // The field the patch did not name must be unchanged.
         Assert.Equal("replaced via PUT", patched.Comments);
 
         // Deleting works and is reflected immediately.
@@ -177,6 +175,8 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage deleteZoneResponse = await client.DeleteAsync($"/api/zones/{zone.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteZoneResponse.StatusCode);
 
+        // Get answers 404 for a missing zone as well as a missing key, so this status alone does
+        // not show that the key row was removed.
         HttpResponseMessage afterDeleteResponse = await client.GetAsync(
             $"/api/zones/{zone.Id}/dnssec-keys/{created.Id}"
         );
@@ -195,9 +195,9 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Created, kskResponse.StatusCode);
         DnssecKeyDetail ksk = await kskResponse.Content.ReadFromJsonAsync<DnssecKeyDetail>();
 
-        // The digest is recomputed here from RFC 4034 §5.1.4 directly -- owner name in
-        // lowercase wire form, then the DNSKEY RDATA (flags 257, protocol 3, algorithm 13, key)
-        // -- rather than through the server's own helpers, so a mistake there can't hide.
+        // The digest is recomputed here from RFC 4034 §5.1.4 (the owner name in lowercase wire
+        // form, then the DNSKEY RDATA: flags 257, protocol 3, algorithm 13, key) rather than with
+        // the server's helpers, so a mistake there cannot hide.
         byte[] publicKey = Convert.FromBase64String(ksk.PublicKeyWireFormat);
         List<byte> input = [];
         foreach (string label in zone.Name.TrimEnd('.').ToLowerInvariant().Split('.'))
@@ -223,7 +223,7 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
             ignoreCase: true
         );
 
-        // The same fields come back from the single-key read and the list.
+        // The same fields come back from the single-key read. (The list is not checked.)
         DnssecKeyDetail fetched = await client.GetFromJsonAsync<DnssecKeyDetail>(
             $"/api/zones/{zone.Id}/dnssec-keys/{ksk.Id}"
         );

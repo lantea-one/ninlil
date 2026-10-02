@@ -8,27 +8,17 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the genuinely anonymous self-service password-recovery
-///     request (<see cref="AuthController.ForgotPassword" />) against a real, in-process host and a
-///     real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />). Its central
-///     concern is the account-enumeration property that action's own doc comment calls out as
-///     security-critical: a real, registered e-mail address and a completely unknown one must
-///     produce the exact same response, byte for byte, with no observable difference a caller could
-///     use to tell "an account exists here" from "it doesn't."
+///     This class covers the anonymous password-recovery request
+///     (<see cref="AuthController.ForgotPassword" />) over HTTP on the shared in-process host. Its
+///     main concern is account enumeration: a registered address, an unknown one, an empty one
+///     and a disabled account must all get the same status and body. Response timing is not
+///     compared.
 ///     <para>
-///         This test collection's own shared host never configures an SMTP server (see
-///         <see cref="NinlilDnsWebApplicationFactory" />'s own doc comment on why -- the same
-///         real, common "SMTP never set up" state <c>PasswordChangeAndResetTests</c>'s own
-///         <c>AdminResetPassword_EmailLink_WithNoSmtpConfigured_...</c> test already relies on).
-///         That means every test below that submits a real, registered account's e-mail address
-///         also proves this action's own SMTP pre-flight guard fires silently (no exception, no
-///         status-code difference, no observable effect at all) rather than letting an unconfigured
-///         <c>SmtpClient</c> throw and surface as a real <c>500</c> -- if the guard were missing or
-///         broken, these tests would fail with a server error instead of the expected <c>200</c>.
-///         The real, literal proof that an e-mail genuinely does (or does not) leave this server --
-///         a real outbound SMTP connection observed by a real catcher -- is covered separately by
-///         a real end-to-end smoke test against a real SMTP catcher, not reproducible inside this
-///         shared collection's SMTP-less host.
+///         The shared host has no SMTP server configured, as
+///         <c>PasswordChangeAndResetTests.AdminResetPassword_EmailLink_WithNoSmtpConfigured_...</c>
+///         also relies on. A registered address therefore also checks that the action skips the
+///         send when SMTP is not set up instead of letting <c>SmtpClient</c> throw and return a
+///         <c>500</c>. Whether an e-mail is sent when SMTP is configured is not tested here.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -59,9 +49,8 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method creates a fresh, dedicated, ordinary (non-administrative) user account with
-    ///     a real, unique e-mail address, via the admin API -- never the shared bootstrap
-    ///     administrator, so a test in this class never affects another sharing this fixture.
+    ///     This method creates a new user with no permissions and a unique e-mail address through
+    ///     the admin API, so the tests never touch the bootstrap administrator.
     /// </summary>
     private async Task<(Guid Id, string UserName, string Email)> CreateOrdinaryUserAsync(
         string suffix
@@ -113,8 +102,8 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
                 new ForgotPasswordRequest("definitely-not-a-real-account@localhost.local")
             );
 
-        // The whole point of this action: status code and response body must be byte-for-byte
-        // identical whether the address exists or not, so a caller can never tell the two apart.
+        // Status code and body must be identical whether the address exists or not, so a caller
+        // cannot tell the two apart from the response.
         Assert.Equal(knownResponse.StatusCode, unknownResponse.StatusCode);
         string knownBody = await knownResponse.Content.ReadAsStringAsync();
         string unknownBody = await unknownResponse.Content.ReadAsStringAsync();
@@ -125,6 +114,7 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
     public async Task ForgotPassword_WithAMalformedOrEmptyEmail_StillReturnsTheGenericOkResponse()
     {
         HttpResponseMessage response = await CreateClient()
+            // Only the empty address is tried, not a malformed one.
             .PostAsJsonAsync("/api/auth/forgot-password", new ForgotPasswordRequest(""));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -138,9 +128,9 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
         );
         HttpClient adminClient = await CreateAuthenticatedAdminClientAsync();
 
-        // Disable the account -- a disabled account must be treated exactly like an unknown one by
-        // this action, never surfacing a different response. Update is a full replace, so the
-        // account's own real display name/e-mail are echoed back unchanged alongside the flag.
+        // Disable the account; a disabled account must get the same response as an unknown one.
+        // Update is a full replace, so the e-mail is sent again (and the display name becomes
+        // the user name) along with the flag.
         HttpResponseMessage updateResponse = await adminClient.PutAsJsonAsync(
             $"/api/users/{id}",
             new UpdateUserRequest(userName, email, true)
@@ -156,9 +146,7 @@ public class ForgotPasswordTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task ForgotPassword_RequiresNoAuthentication_AnAnonymousCallerSucceeds()
     {
-        // Deliberately using a bare, never-authenticated HttpClient (no bearer token at all) --
-        // this action must be reachable by a completely signed-out visitor, the whole premise of
-        // a self-service Forgot Password flow.
+        // A client with no bearer token: a signed-out visitor must be able to use this action.
         HttpResponseMessage response = await CreateClient()
             .PostAsJsonAsync(
                 "/api/auth/forgot-password",

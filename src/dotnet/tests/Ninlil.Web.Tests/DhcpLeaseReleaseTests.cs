@@ -16,14 +16,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpLeasesController.Release" /> end to end, against a real,
-///     in-process host and a real SQLite database -- proving the exact thing this action's own doc
-///     comment promises: a lease genuinely granted by the real DHCPv4 allocation engine (a real
-///     DISCOVER/REQUEST exchange driven directly through the real, DI-registered
-///     <see cref="IDhcpv4RequestHandler" />, exactly as <c>Ninlil.Dhcp.Server.Core.Tests</c>'s own
-///     <c>Dhcpv4RequestHandlerTests</c> does), force-released through this REST action, genuinely
-///     becomes available for a real subsequent allocation by a different client -- not merely that
-///     the underlying database row's own <c>State</c> column changed.
+///     This class covers <see cref="DhcpLeasesController.Release" /> on the shared in-process
+///     host, signed in as the bootstrap administrator. A lease is granted by the host's DHCPv4
+///     engine through a DISCOVER and REQUEST passed straight to the registered
+///     <see cref="IDhcpv4RequestHandler" /> (no sockets), as
+///     <c>Dhcpv4RequestHandlerTests</c> in <c>Ninlil.Dhcp.Server.Core.Tests</c> does. After the
+///     release through the API, a DISCOVER from another client is offered the same address, which
+///     shows the address is free and not just that the row's <c>State</c> changed.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
@@ -31,16 +30,12 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
     private static readonly IPEndPoint RemoteEndPoint = new(IPAddress.Loopback, 68);
 
     /// <summary>
-    ///     This test's own scope subnet's real first address, set as every test message's own
-    ///     relay agent address (<c>giaddr</c>) -- this shared factory's own DHCPv4 engine (see
-    ///     <c>Ninlil.Dhcp.Server.Core.Scope.Dhcpv4ScopeResolver</c>'s own doc comment) can resolve
-    ///     an ordinary, non-relayed request to "the single enabled scope" only when this shared,
-    ///     collection-wide host has exactly one DHCPv4 scope registered at all -- never
-    ///     guaranteed true here, since many other test classes in this same collection each
-    ///     register their own scopes against the identical shared host. Setting a real relay
-    ///     address within this test's own scope's subnet makes scope resolution deterministic
-    ///     (RFC 2131 Section 4.1's own <c>giaddr</c> rule) regardless of how many unrelated scopes
-    ///     already exist.
+    ///     The first address of the test scope's subnet, set as the relay agent address
+    ///     (<c>giaddr</c>) of every message. Without a relay address the engine falls back to "the
+    ///     single enabled scope" only when exactly one DHCPv4 scope exists (see
+    ///     <c>Ninlil.Dhcp.Server.Core.Scope.Dhcpv4ScopeResolver</c>), and other test classes add
+    ///     scopes to the shared host. With <c>giaddr</c> inside this subnet, the scope is chosen by
+    ///     the RFC 2131 section 4.1 rule however many other scopes exist.
     /// </summary>
     private static readonly IPAddress RelayAgentAddress = IPAddress.Parse("192.168.77.1");
 
@@ -72,9 +67,8 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string scopeName = $"release-scope-{Guid.NewGuid():N}";
 
-        // A deliberately single-address pool -- the only way a second client's own DISCOVER can
-        // possibly succeed afterward is if this test's own force-release genuinely freed this
-        // exact address back into the real allocation engine's own pool.
+        // A single-address pool, so a second client's DISCOVER can only succeed once the release
+        // has freed this address.
         HttpResponseMessage scopeResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -90,8 +84,7 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
         );
         scopeResponse.EnsureSuccessStatusCode();
 
-        // Grant a real, active lease through the real, DI-registered DHCPv4 engine -- a genuine
-        // DISCOVER -> REQUEST -> ACK exchange, not a directly-seeded row.
+        // Grant a lease through the engine with DISCOVER, REQUEST and ACK, not a saved row.
         IDhcpv4RequestHandler handler =
             factory.Services.GetRequiredService<IDhcpv4RequestHandler>();
         byte[] clientHardwareAddress = [0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x50];
@@ -132,9 +125,7 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
         Assert.NotNull(grantedLease);
         Assert.Equal(LeaseStateEnum.Active, grantedLease.State);
 
-        // A different client's own DISCOVER against this now-full, single-address scope gets no
-        // offer at all -- the real engine's own genuine confirmation the address is currently
-        // unavailable, established before this test force-releases it.
+        // The pool is now full, so another client's DISCOVER gets no offer.
         byte[] otherClientHardwareAddress = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
         Dhcpv4Message discoverBeforeRelease = NewMessage(otherClientHardwareAddress, 0x9001);
         discoverBeforeRelease.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
@@ -146,7 +137,7 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Null(offerBeforeRelease);
 
-        // Force-release the lease through the new REST action.
+        // Release the lease through the API.
         HttpResponseMessage releaseResponse = await client.PostAsync(
             $"/api/dhcp-leases/{grantedLease.Id}/release",
             content: null
@@ -156,9 +147,8 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
             await releaseResponse.Content.ReadFromJsonAsync<DhcpLeaseDetail>();
         Assert.Equal(LeaseStateEnum.Released, released.State);
 
-        // The genuine proof: a second, different client's own DISCOVER now succeeds, offered the
-        // exact same address -- the real allocation engine's own decision, not an assertion
-        // against the database row directly.
+        // The other client's DISCOVER now succeeds and is offered the same address; the engine
+        // decides, not a check on the database row.
         Dhcpv4Message discoverAfterRelease = NewMessage(otherClientHardwareAddress, 0x9002);
         discoverAfterRelease.SetMessageType(Dhcpv4MessageTypeEnum.Discover);
         discoverAfterRelease.RelayAgentIpAddress = RelayAgentAddress;
@@ -237,8 +227,8 @@ public class DhcpLeaseReleaseTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method builds the common message shape every test in this class shares -- mirrors
-    ///     <c>Ninlil.Dhcp.Server.Core.Tests.Dhcpv4RequestHandlerTests</c>'s own helper exactly.
+    ///     This method builds a request message, as the helper in
+    ///     <c>Ninlil.Dhcp.Server.Core.Tests.Dhcpv4RequestHandlerTests</c> does.
     /// </summary>
     private static Dhcpv4Message NewMessage(byte[] clientHardwareAddress, uint transactionId) =>
         new()

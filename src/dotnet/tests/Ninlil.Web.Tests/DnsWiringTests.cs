@@ -7,16 +7,13 @@ using Ninlil.Dns.Common.Wire;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class is a direct regression test for the real DNS engine's wiring: sending a
-///     real UDP query to this test host's own real Plain DNS listener (a genuine
-///     <see cref="Socket" />-based background service, not something that only exists through
-///     <c>TestServer</c>'s in-memory HTTP abstraction) and confirming a well-formed answer comes
-///     back through the real, fully-wired <c>DnsQueryDispatcher</c> → <c>Server.Authoritative</c>
-///     → <c>Server.Forwarding</c> → <c>Server.Recursive</c> chain -- REFUSED is the only correct
-///     answer here, since this test host hosts no zones and has neither forwarding nor
-///     recursion enabled, but a REFUSED that actually arrives, with the right question echoed
-///     back, proves every piece of that chain (registered here for the first time ever outside a
-///     unit test fixture) is wired correctly end to end.
+///     This class checks that the DNS engine is wired up in the composed host. It sends a UDP
+///     query from a <see cref="Socket" /> to the shared host's Plain DNS listener
+///     (<see cref="NinlilDnsWebApplicationFactory.PlainDnsPort" />), which listens on a real
+///     socket rather than through <c>TestServer</c>, and checks that an answer comes back through
+///     <c>DnsQueryDispatcher</c> and the authoritative, forwarding and recursive stages. The test
+///     host has no zones and neither forwarding nor recursion enabled, so REFUSED is the correct
+///     answer, but it must arrive with the matching ID and the question echoed back.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsWiringTests(NinlilDnsWebApplicationFactory factory)
@@ -24,9 +21,8 @@ public class DnsWiringTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task ARealUdpQueryAgainstTheSharedHostReceivesAWellFormedRefusedAnswer()
     {
-        // Accessing the factory's own Server property is what actually triggers the host (and
-        // therefore every IHostedService it owns, including the Plain DNS listener) to start,
-        // the same way calling CreateClient() already does for the REST API's own tests.
+        // Reading Server starts the host and its hosted services, including the Plain DNS
+        // listener, as CreateClient() does for the API tests.
         _ = factory.Server;
 
         DnsMessage query = new()
@@ -55,14 +51,9 @@ public class DnsWiringTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(query.Id, response.Id);
         Assert.Equal(DnsResponseCodeEnum.Refused, response.ResponseCode);
 
-        // A real, previously-latent bug: a
-        // REFUSED/error response built via a fresh DnsMessage object initializer rather than
-        // derived from the request silently came back with an empty question section
-        // (QDCOUNT=0) on the real wire, even though this test's own doc comment above always
-        // claimed otherwise. Asserted here, over a real UDP socket round trip, rather than only
-        // in a narrower unit test, since the earlier bug was only ever discoverable this way --
-        // an in-process assertion against the DnsMessage object graph alone would not have caught
-        // the same regression this test's own missing assertion once let through.
+        // An error response must echo the question (QDCOUNT=1). A REFUSED built as a new
+        // DnsMessage instead of from the request has an empty question section, which only shows
+        // on the wire, so it is checked here over UDP rather than on the object graph.
         Assert.Single(response.Questions);
         Assert.Equal(query.Questions[0].Name, response.Questions[0].Name);
         Assert.Equal(query.Questions[0].Type, response.Questions[0].Type);

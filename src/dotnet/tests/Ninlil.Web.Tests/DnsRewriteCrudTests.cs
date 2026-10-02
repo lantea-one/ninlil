@@ -11,20 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the DNS rewrite CRUD REST endpoints
-///     (<see cref="DnsRewritesController" />) end to end, against a real, in-process host and a
-///     real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- a full
-///     create/list/get/PUT/PATCH/delete lifecycle, domain/target validation against the real
-///     <c>DnsName</c>/<c>DnsRewriteTargetClassifier</c>, the duplicate-(domain, record-kind)
-///     rejection, and the unauthenticated-request rejection every other controller already gets
-///     covered for. The real query-time answer-construction path
-///     (<c>DnsRewriteEngine.TryBuildResponseAsync</c>) is deliberately <b>not</b> covered here --
-///     it is a fresh permanent xUnit suite of its own
-///     (<c>Ninlil.Dns.Server.Rewrites.Tests.DnsRewriteEngineTests</c>) plus a real,
-///     end-to-end DNS-query-level smoke test against the actual compiled host, per this project's
-///     own "REST CRUD vs. real query-time behavior are two separate verification concerns"
-///     convention (see <see cref="ForwarderCrudTests" /> and its own sibling
-///     <c>Server.Forwarding.Tests</c> for the precedent).
+///     This class covers the DNS rewrite endpoints of <see cref="DnsRewritesController" /> over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator: the create,
+///     list, get, replace, patch and delete lifecycle, validation of the domain and target (with
+///     the target kind worked out by <c>DnsRewriteTargetClassifier</c>), rejection of a second
+///     rewrite with the same domain and record kind, and rejection without a token. How a
+///     rewrite answers a query is covered by <c>Ninlil.Dns.Server.Rewrites.Tests.DnsRewriteEngineTests</c>.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsRewriteCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -86,14 +78,14 @@ public class DnsRewriteCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(created.IsDisabled);
         Assert.NotNull(created.OriginatingNodeId);
 
-        // A second A-target rewrite for the same domain must be rejected -- ambiguous.
+        // A second A-target rewrite for the same domain is ambiguous and must be rejected.
         HttpResponseMessage duplicateResponse = await client.PostAsJsonAsync(
             "/api/dns-rewrites",
             new { domain, target = "203.0.113.6" }
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // An AAAA-target rewrite for the *same* domain is fine -- different record kind.
+        // An AAAA-target rewrite for the same domain is fine, since the record kind differs.
         HttpResponseMessage aaaaResponse = await client.PostAsJsonAsync(
             "/api/dns-rewrites",
             new { domain, target = "2001:db8::1" }
@@ -119,7 +111,7 @@ public class DnsRewriteCrudTests(NinlilDnsWebApplicationFactory factory)
         DnsRewriteDetail fetched = await getResponse.Content.ReadFromJsonAsync<DnsRewriteDetail>();
         Assert.Equal(created.Id, fetched.Id);
 
-        // PUT replaces the target (switching this rewrite to a CNAME-style one), keeping the
+        // PUT replaces the target, turning this into a CNAME-style rewrite, and keeps the
         // identifier.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/dns-rewrites/{created.Id}",

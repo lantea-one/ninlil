@@ -7,14 +7,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers two real, load-bearing additions to the Identity/Auth REST surface:
-///     <see cref="UserSummary" />'s own <c>DirectPermissions</c> field
-///     (so the users-management UI's own permission-picker checkbox list has something
-///     real to render its checked/unchecked state from), and
-///     <see cref="Controllers.TwoFactorController" />'s own <c>GET
-///     .../two-factor/status</c> self-service endpoint (so the account-security page
-///     can learn a caller's own two-factor enrollment state without needing the
-///     <c>users:read</c> permission an ordinary account has no reason to hold).
+///     This class covers two identity endpoints over HTTP on the shared in-process host: the
+///     <c>DirectPermissions</c> field of <see cref="UserSummary" /> across a grant and a revoke
+///     (the user-management permission picker shows it), signed in as the bootstrap administrator;
+///     and the self-service <c>GET .../two-factor/status</c> of
+///     <see cref="Controllers.TwoFactorController" />, signed in as a new user with no
+///     permissions, which the account-security page uses without <c>users:read</c>.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class IdentityAdminEndpointTests(NinlilDnsWebApplicationFactory factory)
@@ -58,7 +56,7 @@ public class IdentityAdminEndpointTests(NinlilDnsWebApplicationFactory factory)
         createResponse.EnsureSuccessStatusCode();
         UserSummary created = await createResponse.Content.ReadFromJsonAsync<UserSummary>();
 
-        // A freshly-created user starts with no direct permissions at all.
+        // A new user has no direct permissions.
         Assert.Empty(created.DirectPermissions);
 
         HttpResponseMessage grantResponse = await client.PostAsJsonAsync(
@@ -98,11 +96,8 @@ public class IdentityAdminEndpointTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task TwoFactorStatus_ForAFreshUser_ReflectsRealEnrollmentState()
     {
-        // A dedicated, freshly-created user is used here, rather than the shared bootstrap
-        // administrator every other test in this shared-fixture collection also authenticates
-        // as -- mirroring AuthenticationFlowTests's own established precedent for exactly this
-        // reason: mutating the administrator's own two-factor state could, in principle, ripple
-        // into an unrelated test elsewhere in this same collection.
+        // A new user rather than the bootstrap administrator, as in AuthenticationFlowTests,
+        // since changing the administrator's two-factor state would affect other tests.
         HttpClient adminClient = await CreateAuthenticatedClientAsync();
 
         const string userName = "two-factor-status-test-user";
@@ -136,8 +131,7 @@ public class IdentityAdminEndpointTests(NinlilDnsWebApplicationFactory factory)
 
         TwoFactorStatus status = await response.Content.ReadFromJsonAsync<TwoFactorStatus>();
 
-        // A freshly-created user has never enrolled an authenticator -- both fields must
-        // honestly reflect that, not a stale/default `true`.
+        // A new user has no authenticator, so both fields are false.
         Assert.False(status.IsEnabled);
         Assert.False(status.HasAuthenticator);
 
@@ -153,8 +147,8 @@ public class IdentityAdminEndpointTests(NinlilDnsWebApplicationFactory factory)
         TwoFactorStatus afterSetup =
             await afterSetupResponse.Content.ReadFromJsonAsync<TwoFactorStatus>();
 
-        // A shared secret now exists, but two-factor sign-in is not yet required -- confirming
-        // is a separate, later step (EnableAuthenticator).
+        // A shared secret now exists, but two-factor sign-in is not required until the code is
+        // confirmed (EnableAuthenticator).
         Assert.True(afterSetup.HasAuthenticator);
         Assert.False(afterSetup.IsEnabled);
     }

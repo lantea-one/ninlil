@@ -11,12 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="FilteringSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: filter list/entry CRUD already existed via
-///     <c>FilterListsController</c>/<c>FilterListEntriesController</c>, but whether the filter
-///     engine actually ran at all had no REST/UI surface until this controller.
+///     This class covers <see cref="FilteringSettingsController" /> (whether the filter engine
+///     runs and how it answers blocked queries) over HTTP on the shared in-process host, signed in
+///     as the bootstrap administrator: the compiled-in defaults, patches checked by reading the
+///     host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class FilteringSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,16 +64,14 @@ public class FilteringSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         FilteringSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<FilteringSettingsDetail>();
 
-        // Off by default, the same "capability-expanding toggle" convention every other engine
-        // toggle in this project follows -- see DnsFilterOptions.Enable's own doc comment.
+        // Off by default, like the other feature switches (see DnsFilterOptions.Enable).
         Assert.False(detail.Enable);
         Assert.Equal("0.0.0.0", detail.SinkholeAddressV4);
         Assert.Equal("::", detail.SinkholeAddressV6);
         Assert.Equal(60u, detail.SinkholeTimeToLiveSeconds);
 
-        // CNAME-cloaking protection is the exception: on by default, since it only ever
-        // applies once filtering itself has been turned on -- see
-        // DnsFilterOptions.BlockCnameCloaking's own doc comment.
+        // CNAME-cloaking protection is on by default, since it only applies once filtering is
+        // on (see DnsFilterOptions.BlockCnameCloaking).
         Assert.True(detail.BlockCnameCloaking);
     }
 
@@ -99,7 +97,7 @@ public class FilteringSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         }
         finally
         {
-            // Restore the default for every other test sharing this factory's configuration file.
+            // Write the default back to the shared settings file.
             await client.SendAsync(
                 PatchRequest("/api/filtering-settings", new { blockCnameCloaking = true })
             );
@@ -145,11 +143,8 @@ public class FilteringSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection (see that collection's own doc comment) -- restore filtering back
-            // to off afterward, the same "restore before returning" discipline
-            // ServicesControllerCrudTests already establishes for exactly this shared-state
-            // concern, so no other test in the collection observes filtering left on.
+            // Turn filtering off again in the shared settings file. The other fields written
+            // above are left in the file.
             await client.SendAsync(PatchRequest("/api/filtering-settings", new { enable = false }));
         }
     }

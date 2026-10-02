@@ -13,15 +13,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpLeasesController" /> end to end, against a real,
-///     in-process host and a real SQLite database. A lease is a live artifact the allocation
-///     engine itself creates, never an operator-created REST resource, so every lease this test
-///     reads back is seeded directly through <see cref="ILeaseRepository" /> first -- exactly the
-///     shape <c>Dhcpv4LeaseAllocationService</c> itself writes in production (see
-///     <c>Ninlil.Dhcp.Server.Core.Tests</c> for that write path's own dedicated coverage) -- so
-///     this test only proves the REST surface reads real, already-persisted rows back correctly,
-///     including the optional per-scope <c>scopeId</c> narrowing <see cref="DhcpLeasesController" />'s
-///     own doc comment documents.
+///     This class covers <see cref="DhcpLeasesController" /> over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator. Leases are created by the allocation
+///     engine, not through the API, so the tests save them directly through
+///     <see cref="ILeaseRepository" /> in the shape <c>Dhcpv4LeaseAllocationService</c> writes
+///     (that write path is covered in <c>Ninlil.Dhcp.Server.Core.Tests</c>) and then check what
+///     the endpoint returns, including the optional <c>scopeId</c> filter and the prefix length of
+///     a prefix delegation lease.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -55,8 +53,7 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
         string scopeAName = $"lease-scope-a-{Guid.NewGuid():N}";
         string scopeBName = $"lease-scope-b-{Guid.NewGuid():N}";
 
-        // Create one real scope through the REST surface -- its own identifier is what a caller
-        // actually has on hand to filter by.
+        // Create a scope through the API, since its identifier is what a caller filters by.
         HttpResponseMessage scopeResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -73,9 +70,8 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
         scopeResponse.EnsureSuccessStatusCode();
         DhcpScopeDetail scopeA = await scopeResponse.Content.ReadFromJsonAsync<DhcpScopeDetail>();
 
-        // Seed two real, persisted leases directly through the repository -- one in scope A, one
-        // in an unrelated scope B this test never creates through REST at all (a lease is keyed
-        // by scope name, not identifier, so no real DhcpScopeEntity needs to exist for it).
+        // Save two leases through the repository: one in scope A and one in scope B, which is
+        // never created. A lease refers to its scope by name, so no scope row is needed for it.
         Guid leaseInScopeAId = Guid.NewGuid();
         Guid leaseInScopeBId = Guid.NewGuid();
         using (IServiceScope scope = factory.Services.CreateScope())
@@ -127,7 +123,7 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Contains(allPage.Items, lease => lease.Id == leaseInScopeAId);
         Assert.Contains(allPage.Items, lease => lease.Id == leaseInScopeBId);
 
-        // Filtering by scope A's own identifier returns only its own lease.
+        // Filtering by scope A's identifier returns only its lease.
         HttpResponseMessage filteredResponse = await client.GetAsync(
             $"/api/dhcp-leases?scopeId={scopeA.Id}"
         );
@@ -159,9 +155,8 @@ public class DhcpLeasesControllerTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string scopeName = $"pd-lease-scope-{Guid.NewGuid():N}";
 
-        // A DHCPv6 Prefix Delegation lease has no MAC-shaped client identifier (a DUID instead)
-        // and carries a real PrefixLength -- confirming DhcpLeaseDetail actually surfaces it (a
-        // real gap this sub-phase closed: it previously had no column for it at all).
+        // A DHCPv6 prefix delegation lease has a DUID as its client identifier and carries a
+        // PrefixLength, which DhcpLeaseDetail must return.
         Guid pdLeaseId = Guid.NewGuid();
         using (IServiceScope scope = factory.Services.CreateScope())
         {

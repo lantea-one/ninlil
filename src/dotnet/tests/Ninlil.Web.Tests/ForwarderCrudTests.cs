@@ -11,14 +11,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the forwarder CRUD REST endpoints
-///     (<see cref="ForwardersController" />) end to end, against a real, in-process host and a
-///     real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- a full
-///     create/list/get/PUT/PATCH/delete lifecycle, definition-string validation against the real
-///     <c>IUpstreamForwarderDefinitionParser</c> (both a garbage string and a real <c>sdns://</c>
-///     DNSCrypt stamp, built by hand in <see cref="BuildPlainDnsCryptStamp" /> to exercise
-///     <c>DnsCryptStampParser</c> too), and the unauthenticated-request rejection every other
-///     controller already gets covered for.
+///     This class covers the forwarder endpoints of <see cref="ForwardersController" /> over HTTP
+///     on the shared in-process host, signed in as the bootstrap administrator: the create, list,
+///     get, replace, patch and delete lifecycle, validation of the definition string by
+///     <c>IUpstreamForwarderDefinitionParser</c> (a garbage string, an empty one, and an
+///     <c>sdns://</c> DNSCrypt stamp built by <see cref="BuildPlainDnsCryptStamp" /> so
+///     <c>DnsCryptStampParser</c> is exercised too), and rejection without a token. No query is
+///     forwarded; forwarding is off in the test host.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ForwarderCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -56,12 +55,11 @@ public class ForwarderCrudTests(NinlilDnsWebApplicationFactory factory)
         };
 
     /// <summary>
-    ///     This method hand-builds a well-formed <c>sdns://</c> plain-DNSCrypt stamp
-    ///     (protocol identifier <c>0x01</c>), independently of <c>DnsCryptStampParser</c> itself,
-    ///     so this test genuinely exercises that parser rather than merely reflecting its own
-    ///     encoding back at it. Wire layout: <c>0x01 || props (8 zero bytes) || LP(addr) ||
-    ///     LP(32-byte public key) || LP(providerName)</c>, base64url-encoded with no padding, per
-    ///     the stamps specification <c>DnsCryptStampParser</c>'s own doc comment cites.
+    ///     This method builds an <c>sdns://</c> DNSCrypt stamp (protocol identifier <c>0x01</c>) by
+    ///     hand, independently of <c>DnsCryptStampParser</c>, so the test checks the parser rather
+    ///     than its own encoding. Layout: <c>0x01 || props (8 zero bytes) || LP(addr) ||
+    ///     LP(32-byte public key) || LP(providerName)</c>, base64url-encoded without padding, as in
+    ///     the stamps specification <c>DnsCryptStampParser</c> cites.
     /// </summary>
     private static string BuildPlainDnsCryptStamp()
     {
@@ -132,12 +130,9 @@ public class ForwarderCrudTests(NinlilDnsWebApplicationFactory factory)
         ForwarderDetail fetched = await getResponse.Content.ReadFromJsonAsync<ForwarderDetail>();
         Assert.Equal(created.Id, fetched.Id);
 
-        // PUT replaces the definition string and sort order, keeping the identifier. A literal
-        // IP address (not a hostname) is used deliberately, so this assertion never depends on
-        // real DNS resolution succeeding (ParseHostPort skips ResolveHost entirely for a literal
-        // address) -- this project's own norm of not letting a permanent test depend on live
-        // external infrastructure, applied here even though this particular parse would only
-        // need outbound DNS, not a live server.
+        // PUT replaces the definition string and sort order and keeps the identifier. A literal
+        // IP address is used so the parse needs no DNS lookup (ParseHostPort skips ResolveHost
+        // for a literal), keeping the test free of external services.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/forwarders/{created.Id}",
             new
@@ -161,7 +156,7 @@ public class ForwarderCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(1, replaced.SortOrder);
         Assert.True(replaced.IsDisabled);
 
-        // PATCH partially updates just the comments, leaving everything else untouched.
+        // PATCH changes only the comments.
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest($"/api/forwarders/{created.Id}", new { comments = "patched" })
         );

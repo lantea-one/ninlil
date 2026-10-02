@@ -11,14 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsPipelineSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>DnsQueryProcessingPipelineOptions</c> already drove real
-///     worker-pool sizing and UDP amplification guarding, but had zero admin-facing REST/UI
-///     configuration surface. Also proves the three distinct response notes this controller's own
-///     doc comment describes, since <c>workerCount</c>/<c>channelCapacity</c> hot-reload on a
-///     materially different schedule than the three UDP safety fields.
+///     This class covers <see cref="DnsPipelineSettingsController" /> (worker pool sizing and UDP
+///     amplification limits of <c>DnsQueryProcessingPipelineOptions</c>) over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. Patches are checked by reading
+///     the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and by the
+///     returned note, which has three forms because <c>workerCount</c> and
+///     <c>channelCapacity</c> need a worker restart while the three UDP fields hot-reload. Each
+///     patch test writes the defaults back afterwards.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsPipelineSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -66,8 +66,8 @@ public class DnsPipelineSettingsControllerTests(NinlilDnsWebApplicationFactory f
         DnsPipelineSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<DnsPipelineSettingsDetail>();
 
-        // DnsQueryProcessingPipelineOptions' own compiled-in defaults. WorkerCount defaults to
-        // Environment.ProcessorCount, which varies by machine -- just confirm it is positive.
+        // The compiled-in defaults. WorkerCount defaults to Environment.ProcessorCount, which
+        // varies by machine, so it is only checked to be positive.
         Assert.True(detail.WorkerCount > 0);
         Assert.Equal(4096, detail.ChannelCapacity);
         Assert.Equal(1232, detail.MaxUdpPayloadSizeOctets);

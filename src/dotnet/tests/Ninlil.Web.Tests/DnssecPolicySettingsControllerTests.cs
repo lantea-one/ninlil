@@ -11,12 +11,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnssecPolicySettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>DnssecAlgorithmPolicyOptions</c> already drove a real, enforced
-///     restriction inside <c>DnssecKeyManagementService.GenerateKeyAsync</c>, but had zero
-///     admin-facing REST/UI configuration surface.
+///     This class covers <see cref="DnssecPolicySettingsController" /> (the allowed algorithms in
+///     <c>DnssecAlgorithmPolicyOptions</c>, enforced by
+///     <c>DnssecKeyManagementService.GenerateKeyAsync</c>) over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the compiled-in default, a patch checked by
+///     reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), and an
+///     unknown algorithm name.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnssecPolicySettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,7 +65,7 @@ public class DnssecPolicySettingsControllerTests(NinlilDnsWebApplicationFactory 
         DnssecPolicySettingsDetail detail =
             await response.Content.ReadFromJsonAsync<DnssecPolicySettingsDetail>();
 
-        // DnssecAlgorithmPolicyOptions' own compiled-in default: no restriction at all.
+        // The compiled-in default: no restriction.
         Assert.Empty(detail.AllowedAlgorithms);
     }
 
@@ -87,14 +88,9 @@ public class DnssecPolicySettingsControllerTests(NinlilDnsWebApplicationFactory 
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for DnssecAlgorithmPolicyOptions is proved instead,
-            // directly, by DnssecAlgorithmPolicyOptionsHotReloadTests (in
-            // Ninlil.Dns.Server.Dnssec.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by DnssecAlgorithmPolicyOptionsHotReloadTests in Ninlil.Dns.Server.Dnssec.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Dnssec"];
@@ -106,8 +102,7 @@ public class DnssecPolicySettingsControllerTests(NinlilDnsWebApplicationFactory 
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore the compiled-in default afterward.
+            // The settings file is shared with every other test, so write the default back.
             await client.SendAsync(
                 PatchRequest(
                     "/api/dnssec-policy-settings",

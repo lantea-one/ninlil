@@ -11,14 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the DHCP CRUD REST endpoints end to end, against a real, in-process host
-///     and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- full
-///     lifecycles for <see cref="DhcpScopesController" />, <see cref="DhcpReservationsController" />,
-///     <see cref="DhcpScopeCustomOptionsController" />, <see cref="DhcpTagRulesController" />, and
-///     <see cref="DhcpTagRuleOptionsController" />, plus this feature's own deliberate design
-///     choices: a scope's own address range must match its declared protocol version, a
-///     reservation is unique per scope by both client identifier and IP address, and deleting a
-///     scope/tag rule cascades to its own dependent rows.
+///     This class covers the DHCP configuration endpoints over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the lifecycles of
+///     <see cref="DhcpScopesController" />, <see cref="DhcpReservationsController" />,
+///     <see cref="DhcpScopeCustomOptionsController" />, <see cref="DhcpTagRulesController" /> and
+///     <see cref="DhcpTagRuleOptionsController" />, and the rules around them: a scope's range must
+///     match its protocol version, PXE and prefix-delegation fields are validated, a reservation is
+///     unique per scope by client identifier and by address, and deleting a scope or tag rule
+///     removes its reservations or options. No DHCP traffic is involved.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -102,7 +102,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // An IPv6 address inside an IPv4 scope's own range must be rejected.
+        // An IPv6 address in an IPv4 scope's range must be rejected.
         HttpResponseMessage badRangeResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -201,7 +201,9 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, badHexResponse.StatusCode);
 
-        // Deleting the scope cascades to its reservations and custom options.
+        // Deleting the scope removes its reservations and custom options. The reservation GET
+        // does not check the scope, so its 404 shows the row is gone; the custom option is not
+        // checked.
         HttpResponseMessage deleteResponse = await client.DeleteAsync(
             $"/api/dhcp-scopes/{created.Id}"
         );
@@ -224,9 +226,8 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string name = $"pxe-scope-{Guid.NewGuid():N}";
 
-        // A boot file name longer than RFC 2131's own 128-octet "file" header field cap is
-        // rejected outright, rather than only discovered later as a thrown exception the first
-        // time a lease is actually granted from this scope.
+        // A boot file name longer than the 128-octet "file" header field of RFC 2131 is rejected
+        // on write, instead of failing later when a lease from this scope is first granted.
         HttpResponseMessage tooLongResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -243,7 +244,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, tooLongResponse.StatusCode);
 
-        // An invalid next-server address is also rejected outright.
+        // An invalid next-server address is rejected too.
         HttpResponseMessage badAddressResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -281,7 +282,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal("pxelinux.0", afterPatch.BootFileName);
         Assert.Equal("192.168.60.10", afterPatch.NextServerAddress);
 
-        // Clearing both fields back out via a null merge-patch value works too.
+        // A null merge-patch value clears both fields.
         HttpResponseMessage clearResponse = await client.SendAsync(
             PatchRequest(
                 $"/api/dhcp-scopes/{created.Id}",
@@ -306,8 +307,8 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A 'PrefixDelegation' scope is IPv6-only -- RFC 8415 Prefix Delegation has no DHCPv4
-        // analogue at all.
+        // A 'PrefixDelegation' scope is IPv6-only; RFC 8415 Prefix Delegation has no DHCPv4
+        // equivalent.
         HttpResponseMessage ipv4PdResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -325,7 +326,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, ipv4PdResponse.StatusCode);
 
-        // A 'PrefixDelegation' scope requires a real, in-range delegated prefix length.
+        // A 'PrefixDelegation' scope requires an in-range delegated prefix length.
         HttpResponseMessage missingLengthResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -401,8 +402,8 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, badPatchResponse.StatusCode);
 
-        // An ordinary IPv4 scope created with no 'kind' at all defaults to 'AddressAssignment',
-        // with no delegated prefix length.
+        // An IPv4 scope created without 'kind' defaults to 'AddressAssignment', with no
+        // delegated prefix length.
         DhcpScopeDetail ordinaryScope = await CreateScopeAsync(
             client,
             $"ordinary-{Guid.NewGuid():N}"
@@ -419,10 +420,9 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A Prefix Delegation scope has no delegated-prefix reservation shape at all (a
-        // deliberate, documented Phase 14j scope cut) -- a reservation write against one is
-        // always rejected with a real ValidationException, not silently accepted as an ordinary
-        // address reservation.
+        // Prefix delegation scopes do not support reservations, so a reservation write to one is
+        // rejected with a ValidationException rather than stored as an address reservation.
+        // Despite the test name, only create is tested, not replace.
         HttpResponseMessage pdCreateResponse = await client.PostAsJsonAsync(
             "/api/dhcp-scopes",
             new
@@ -517,7 +517,7 @@ public class DhcpCrudTests(NinlilDnsWebApplicationFactory factory)
             >();
         Assert.Single(optionPage.Items);
 
-        // Deleting the rule cascades to its own options.
+        // Deleting the rule removes its options.
         HttpResponseMessage deleteResponse = await client.DeleteAsync(
             $"/api/dhcp-tag-rules/{created.Id}"
         );

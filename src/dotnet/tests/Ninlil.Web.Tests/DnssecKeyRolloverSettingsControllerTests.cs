@@ -11,11 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnssecKeyRolloverSettingsController" /> end to end, against a
-///     real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>DnssecKeyRolloverOptions</c> already drove real RFC 6781 key-rollover timing,
-///     but had zero admin-facing REST/UI configuration surface.
+///     This class covers <see cref="DnssecKeyRolloverSettingsController" /> (the RFC 6781 rollover
+///     timing in <c>DnssecKeyRolloverOptions</c>) over HTTP on the shared in-process host, signed
+///     in as the bootstrap administrator: the compiled-in defaults, a patch checked by reading the
+///     host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and rejection of zero, negative and malformed durations.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnssecKeyRolloverSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -63,7 +64,7 @@ public class DnssecKeyRolloverSettingsControllerTests(NinlilDnsWebApplicationFac
         DnssecKeyRolloverSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<DnssecKeyRolloverSettingsDetail>();
 
-        // DnssecKeyRolloverOptions' own compiled-in defaults.
+        // The compiled-in defaults of DnssecKeyRolloverOptions.
         Assert.Equal(TimeSpan.FromHours(1), detail.PropagationDelay);
         Assert.Equal(TimeSpan.FromDays(1), detail.ExternalParentDsTtl);
         Assert.Equal(TimeSpan.FromMinutes(15), detail.PollInterval);
@@ -93,12 +94,8 @@ public class DnssecKeyRolloverSettingsControllerTests(NinlilDnsWebApplicationFac
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime settings
-            // file is never separately registered as its own reload-on-change IConfiguration
-            // source, a real, confirmed test-harness limitation this project's settings-controller
-            // test suite already found and documented (see ZoneSigningSettingsControllerTests'
-            // own equivalent comment).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)
@@ -109,8 +106,7 @@ public class DnssecKeyRolloverSettingsControllerTests(NinlilDnsWebApplicationFac
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore every compiled-in default afterward.
+            // The settings file is shared with every other test, so write the defaults back.
             await client.SendAsync(
                 PatchRequest(
                     "/api/dnssec-key-rollover-settings",
@@ -145,8 +141,8 @@ public class DnssecKeyRolloverSettingsControllerTests(NinlilDnsWebApplicationFac
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // TimeSpan.TryParse accepts a leading '-', so this round-trips as a real negative
-        // duration rather than failing the parse itself.
+        // TimeSpan.TryParse accepts a leading '-', so this parses as a negative duration and
+        // the range check must reject it.
         HttpResponseMessage response = await client.SendAsync(
             PatchRequest(
                 "/api/dnssec-key-rollover-settings",

@@ -12,9 +12,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="EventBrokerSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="EventBrokerSettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the in-memory transport the test
+///     host runs with, a RabbitMQ patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) with no
+///     password written when none was sent, and a rejected patch that writes nothing. The
+///     returned note is only checked to contain "restart", which every note does.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class EventBrokerSettingsControllerTests(NinlilDnsWebApplicationFactory factory)

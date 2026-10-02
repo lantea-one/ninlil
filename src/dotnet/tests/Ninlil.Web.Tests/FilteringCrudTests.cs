@@ -11,14 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the filtering CRUD REST endpoints end to end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- full lifecycles for all 5 entity types (<see cref="FilterListsController" />,
+///     This class covers the filtering endpoints over HTTP on the shared in-process host, signed
+///     in as the bootstrap administrator: the lifecycles of <see cref="FilterListsController" />,
 ///     <see cref="FilterListEntriesController" />, <see cref="ClientGroupsController" />,
-///     <see cref="ClientGroupNetworksController" />, <see cref="ClientGroupListAssignmentsController" />),
-///     plus this feature's own two deliberate design choices: a subscribed filter list rejects
-///     manual entry writes with <c>409 Conflict</c>, and deleting a filter list/client group
-///     cascades to its own dependent rows.
+///     <see cref="ClientGroupNetworksController" /> and <see cref="ClientGroupListAssignmentsController" />,
+///     entry kinds (domain, wildcard, regex), a subscribed list rejecting manual entries with
+///     <c>409 Conflict</c>, a single default client group, and deleting a filter list or client
+///     group removing its assignments and networks. Whether a deleted list's entries are removed
+///     is not checked.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -129,7 +129,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
             await entryListResponse.Content.ReadFromJsonAsync<PagedResult<FilterListEntryDetail>>();
         Assert.Contains(entryPage.Items, item => item.Id == entry.Id);
 
-        // PUT replaces the entry's own value, keeping its identifier.
+        // PUT replaces the entry's value and keeps its identifier.
         HttpResponseMessage entryReplaceResponse = await client.PutAsJsonAsync(
             $"/api/filter-lists/{created.Id}/entries/{entry.Id}",
             new { value = "tracking.example.com", comment = "replaced" }
@@ -144,7 +144,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal("tracking.example.com", replacedEntry.Value);
         Assert.Equal(entry.Id, replacedEntry.Id);
 
-        // PATCH the list's own metadata (not touching entries).
+        // PATCH the list's metadata, not its entries.
         HttpResponseMessage listPatchResponse = await client.SendAsync(
             PatchRequest($"/api/filter-lists/{created.Id}", new { isDisabled = true })
         );
@@ -200,9 +200,8 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
         FilterListDetail list = await createResponse.Content.ReadFromJsonAsync<FilterListDetail>();
 
-        // Creating a manual entry against a subscribed list must be rejected -- see
-        // FilterListEntriesController's own summary for the reasoning: the next scheduled
-        // refresh would silently discard it anyway.
+        // A manual entry in a subscribed list must be rejected, because the next refresh would
+        // silently discard it (see FilterListEntriesController).
         HttpResponseMessage createEntryResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "manual.example.com" }
@@ -245,7 +244,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
             await regexCreateResponse.Content.ReadFromJsonAsync<FilterListEntryDetail>();
         Assert.Equal(DnsFilterEntryKindEnum.Regex, regexEntry.Kind);
 
-        // Defaulting to no "kind" at all must still round-trip as Domain.
+        // An entry without "kind" defaults to Domain.
         HttpResponseMessage plainCreateResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "plain.example.com" }
@@ -263,7 +262,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
             await wildcardGetResponse.Content.ReadFromJsonAsync<FilterListEntryDetail>();
         Assert.Equal(DnsFilterEntryKindEnum.Wildcard, wildcardFromGet.Kind);
 
-        // PUT can change an entry's own kind, keeping its identifier.
+        // PUT can change an entry's kind and keeps its identifier.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries/{wildcardEntry.Id}",
             new { value = @"tracker\.example\.com", kind = "Regex" }
@@ -296,7 +295,8 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         FilterListDetail list = await listResponse.Content.ReadFromJsonAsync<FilterListDetail>();
 
-        // "(" is not a well-formed .NET regular expression.
+        // "(" is not a valid .NET regular expression. Despite the test name, no malformed
+        // wildcard is tried.
         HttpResponseMessage malformedRegexResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "(", kind = "Regex" }
@@ -336,7 +336,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, wildcardOnNetworkListResponse.StatusCode);
 
-        // The plain, default Domain kind is still accepted for a network entry.
+        // The default Domain kind is accepted for a network entry.
         HttpResponseMessage domainKindOnNetworkListResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "10.0.0.5" }
@@ -478,8 +478,8 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, missingListAssignmentResponse.StatusCode);
 
-        // PATCH promotes this group to the default -- see ClientGroupsController's own
-        // DemoteExistingDefaultAsync reasoning for why at most one group may hold it.
+        // PATCH makes this group the default; at most one group may be the default (see
+        // ClientGroupsController.DemoteExistingDefaultAsync).
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest($"/api/client-groups/{created.Id}", new { isDefault = true })
         );
@@ -584,8 +584,8 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         ClientGroupListAssignmentDetail assignment =
             await assignmentResponse.Content.ReadFromJsonAsync<ClientGroupListAssignmentDetail>();
 
-        // Deleting the group directly, without first removing its own network/assignment,
-        // must still succeed -- ClientGroupsController.Delete removes both explicitly.
+        // Deleting the group without first removing its network and assignment must succeed;
+        // ClientGroupsController.Delete removes both.
         HttpResponseMessage deleteResponse = await client.DeleteAsync(
             $"/api/client-groups/{group.Id}"
         );

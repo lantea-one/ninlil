@@ -11,12 +11,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ForwardingSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: forwarder entries already existed via <c>ForwardersController</c>, but
-///     the engine-level toggle and failover/health-check tuning had no REST/UI surface until this
-///     controller.
+///     This class covers <see cref="ForwardingSettingsController" /> (the forwarding switch,
+///     failover and health-check tuning, and the forwarded-answer cache) over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the compiled-in defaults,
+///     patches checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation. A negative or zero health-check interval is not
+///     tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ForwardingSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,8 +65,7 @@ public class ForwardingSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         ForwardingSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<ForwardingSettingsDetail>();
 
-        // Off by default, the same "capability-expanding toggle" convention every other engine
-        // toggle in this project follows -- see ForwardingOptions.Enable's own doc comment.
+        // Off by default, like the other feature switches (see ForwardingOptions.Enable).
         Assert.False(detail.Enable);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.HealthCheckInterval);
         Assert.Equal(TimeSpan.FromSeconds(3), detail.PerForwarderTimeout);
@@ -98,7 +98,7 @@ public class ForwardingSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         }
         finally
         {
-            // Restored so later tests in this shared host see the defaults again.
+            // Write the defaults back to the shared settings file.
             await client.SendAsync(
                 PatchRequest(
                     "/api/forwarding-settings",
@@ -158,12 +158,9 @@ public class ForwardingSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection (see that collection's own doc comment), and -- unlike filtering
-            // or rewrites -- ForwarderQueryResolver is tried before this server's own recursive
-            // resolution, so leaving forwarding enabled could change how an unrelated test's own
-            // query is answered. Restored afterward, the same "restore before returning"
-            // discipline ServicesControllerCrudTests already establishes.
+            // Turn forwarding off again in the shared settings file. ForwarderQueryResolver runs
+            // before recursion, so forwarding left on would change how other tests' queries are
+            // answered if the file were ever loaded.
             await client.SendAsync(
                 PatchRequest("/api/forwarding-settings", new { enable = false })
             );

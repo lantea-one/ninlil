@@ -9,12 +9,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpOptionCatalogController" />'s own
-///     <c>GET /api/dhcp-option-catalog</c> REST endpoint end to end, against a real, in-process
-///     host (see <see cref="NinlilDnsWebApplicationFactory" />) -- proving this REST surface
-///     genuinely returns this project's own real, compiled-in <see cref="Dhcpv4OptionCatalog" />/
-///     <see cref="Dhcpv6OptionCatalog" /> contents, correctly mapped and correctly filtered by the
-///     requested protocol version, rather than a mock or a separate copy.
+///     This class covers <c>GET /api/dhcp-option-catalog</c> of
+///     <see cref="DhcpOptionCatalogController" /> over HTTP on the shared in-process host, signed
+///     in as the bootstrap administrator. It checks that the endpoint returns the compiled-in
+///     <see cref="Dhcpv4OptionCatalog" /> or <see cref="Dhcpv6OptionCatalog" /> for the requested
+///     protocol version, mapped entry by entry, and rejects a missing or unknown protocol version.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -62,8 +61,8 @@ public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory fac
             entry => entry.Code == 6 && entry.ValueType == DhcpOptionValueTypeEnum.IPv4AddressList
         );
 
-        // Every code returned is unique, and every entry carries a non-empty name/description --
-        // proving the real mapping, not just a count match.
+        // Every code is unique and every entry has a name and a description, so the mapping is
+        // checked and not just the count.
         Assert.Equal(entries.Select(entry => entry.Code).Distinct().Count(), entries.Count);
         Assert.All(
             entries,
@@ -95,8 +94,8 @@ public class DhcpOptionCatalogControllerTests(NinlilDnsWebApplicationFactory fac
             entry => entry.Code == 23 && entry.Name == "DNS Recursive Name Server"
         );
 
-        // The IPv4 and IPv6 responses are genuinely different -- confirms the protocol filter is
-        // real, not a coincidence of both catalogs happening to be the same size.
+        // The two catalogs differ in size, so a matching count above shows the IPv6 catalog was
+        // returned and not the IPv4 one.
         Assert.NotEqual(Dhcpv4OptionCatalog.Entries.Count, entries.Count);
     }
 

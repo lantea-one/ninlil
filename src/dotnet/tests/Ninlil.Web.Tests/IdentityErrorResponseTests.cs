@@ -8,14 +8,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers this project's own converted Identity/Auth error paths -- the real,
-///     end-to-end HTTP shape a caller now sees from <see cref="Controllers.UsersController" />,
-///     <see cref="Controllers.RolesController" />, <see cref="Controllers.ApiTokensController" />,
-///     and <see cref="Controllers.TwoFactorController" />, once each was converted to throw this
-///     project's own custom exception hierarchy instead of hand-rolling its own error result.
-///     Every response asserted on here is real RFC 7807 <c>application/problem+json</c>, produced
-///     by the real, registered <see cref="Ninlil.Web.ExceptionHandling.NinlilExceptionHandler" />
-///     -- not a mocked or hand-constructed body.
+///     This class checks the error responses of <see cref="Controllers.UsersController" />,
+///     <see cref="Controllers.RolesController" />, <see cref="Controllers.ApiTokensController" />
+///     and <see cref="Controllers.TwoFactorController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator (or a new user for the two-factor case). Each
+///     response must be an RFC 7807 <c>application/problem+json</c> body written by
+///     <see cref="Ninlil.Web.ExceptionHandling.NinlilExceptionHandler" />, with the Identity error
+///     codes as field errors where Identity reports them.
+///     <see cref="AdministrativeErrorResponseTests" /> does the same for the other controllers.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class IdentityErrorResponseTests(NinlilDnsWebApplicationFactory factory)
@@ -166,9 +166,7 @@ public class IdentityErrorResponseTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task EnableAuthenticator_WithAnInvalidCode_Returns400WithASingleMessageAndNoErrorsDictionary()
     {
-        // A dedicated, freshly-created user is used here, mirroring
-        // IdentityAdminEndpointTests's own established precedent, rather than the shared
-        // bootstrap administrator every other test in this collection also authenticates as.
+        // A new user rather than the bootstrap administrator, as in IdentityAdminEndpointTests.
         HttpClient adminClient = await CreateAuthenticatedClientAsync();
         string userName = $"bad-totp-code-user-{Guid.NewGuid():N}";
         const string password = "Bad-Totp-Code-Test-1234!";

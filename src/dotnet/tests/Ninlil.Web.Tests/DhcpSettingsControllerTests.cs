@@ -15,11 +15,15 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DhcpSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), for all eight
-///     of its own sub-resources (<c>core</c>/<c>protocol</c>/<c>relay</c>/<c>dhcpv6-protocol</c>/
-///     <c>dhcpv6-relay</c>/<c>tftp</c>/<c>ra-protocol</c>/<c>ra</c>).
+///     This class covers the eight sub-resources of <see cref="DhcpSettingsController" />
+///     (<c>core</c>, <c>protocol</c>, <c>relay</c>, <c>dhcpv6-protocol</c>, <c>dhcpv6-relay</c>,
+///     <c>tftp</c>, <c>ra-protocol</c> and <c>ra</c>) over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the compiled-in defaults, patches checked by
+///     reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and input validation. The note is only checked to contain "restart",
+///     which every note does (the hot-reload note says "no restart required"), so these
+///     assertions do not tell the restart note from the others.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -468,10 +472,8 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         RuntimeSettingsWriteResult result =
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        // Every DHCP settings section here is restart-required, with no live hot-reload at all --
-        // see this controller's own doc comment -- so the write is verified directly against the
-        // configuration file it was merged into, exactly like every other `PatchRa_With...` test
-        // in this class, rather than by reading it back through a subsequent `GetRa` call.
+        // Every DHCP setting needs a restart (see DhcpSettingsController), so the write is
+        // checked in the settings file, not with a later GetRa.
         Assert.Contains("restart", result.Note, StringComparison.OrdinalIgnoreCase);
 
         JsonObject root = (JsonObject)
@@ -490,13 +492,10 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation()
     {
-        // Unlike the write-side test above (which is restart-required and therefore verified
-        // against the configuration file directly), this proves `GetRa`'s own read-side mapping
-        // from `RaOptions.Routes` onto `DhcpRaRouteDetail` -- exercised through the real, already
-        // config-file-bound `RaOptions` this factory's own host starts with, by writing the config
-        // file `PresetConfigurationFileApplier` itself would write and confirming a fresh read of
-        // `IOptions<RaOptions>` (via a brand-new host, since this controller's own settings are
-        // restart-required) reports it back correctly.
+        // Despite its name, this test does not call GetRa. It writes a route with
+        // PresetConfigurationFileApplier to a temporary file and binds RaOptions from that file,
+        // which checks that what the controller writes binds back correctly. The mapping from
+        // RaOptions.Routes to DhcpRaRouteDetail is not exercised.
         string configPath = Path.Combine(
             Directory.CreateTempSubdirectory("ninlil-ra-route-get-test-").FullName,
             "appsettings.json"
@@ -677,10 +676,9 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task GetRa_MapsEveryConfiguredInterfaceOverrideFieldOntoItsOwnRestRepresentation()
     {
-        // Mirrors GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation's own approach:
-        // this is restart-required, so it is verified by writing the same configuration file
-        // PresetConfigurationFileApplier itself would write and confirming a fresh read of
-        // IOptions<RaOptions> reports it back correctly, rather than through this controller.
+        // As in GetRa_MapsEveryConfiguredRouteFieldOntoItsOwnRestRepresentation, this binds
+        // RaOptions from a file written by PresetConfigurationFileApplier and does not call GetRa
+        // or the controller.
         string configPath = Path.Combine(
             Directory.CreateTempSubdirectory("ninlil-ra-interface-override-get-test-").FullName,
             "appsettings.json"
@@ -716,8 +714,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(options.InterfaceOverrides[0].Exclude);
         Assert.Equal(TimeSpan.FromMinutes(5), options.InterfaceOverrides[0].RouterLifetime);
         Assert.Equal((byte)32, options.InterfaceOverrides[0].CurrentHopLimit);
-        // Every field this override entry never set still reports null -- inheriting the global
-        // default rather than silently defaulting to some other value.
+        // Fields the override did not set stay null, so the global value applies.
         Assert.Null(options.InterfaceOverrides[0].ManagedAddressConfiguration);
         Assert.Null(options.InterfaceOverrides[0].RecursiveDnsServers);
 
@@ -896,6 +893,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         HttpResponseMessage response = await client.SendAsync(
+            // A malformed value, not a negative one as the test name says.
             PatchRequest("/api/dhcp-settings/ra", new { routerLifetime = "not-a-timespan" })
         );
 

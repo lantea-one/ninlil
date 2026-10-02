@@ -11,11 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsCookieSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- the same
-///     previously-unaddressed REST-surface gap <see cref="RateLimitingSettingsController" />'s own
-///     doc comment describes for its sibling hardening primitive.
+///     This class covers <see cref="DnsCookieSettingsController" /> (DNS Cookies, RFC 7873) over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator: the
+///     compiled-in defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), and a bad
+///     duration. The returned note is only checked to contain "restart", which every note does.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsCookieSettingsControllerTests(NinlilDnsWebApplicationFactory factory)

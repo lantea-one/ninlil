@@ -13,9 +13,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="DnsCacheController" /> end to end against the real host: the
-///     forwarded and recursive caches it reports are the real DI singletons the resolvers use,
-///     seeded directly here since forwarding is off in the test host.
+///     This class covers <see cref="DnsCacheController" /> over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator, or as a new user with no permissions for
+///     the 403 test. Forwarding is off in the test host, so answers are put straight into the
+///     host's forwarded cache singleton (the one the forwarding resolver uses) and the tests then
+///     remove one name or flush through the API. The recursive cache is listed but never seeded.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class DnsCacheControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -64,7 +66,8 @@ public class DnsCacheControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method puts one forwarded answer for <paramref name="name" /> into the real cache.
+    ///     This method puts one forwarded answer for <paramref name="name" /> into the host's
+    ///     forwarded cache.
     /// </summary>
     private void SeedForwardedAnswer(string name, DnsResourceRecordTypeEnum type)
     {
