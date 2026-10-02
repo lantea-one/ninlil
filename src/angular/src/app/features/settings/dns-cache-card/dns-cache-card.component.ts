@@ -115,7 +115,7 @@ export class DnsCacheCardComponent implements OnInit {
     }
   }
 
-  /** This method confirms, then flushes, one cache -- or every cache when none is given. */
+  /** This method asks for confirmation, then flushes one cache, or every cache when none is given. */
   async flush(cache?: DnsCacheDetail): Promise<void> {
     const confirmed = await this.confirm({
       title: cache ? `Flush the ${this.label(cache).toLowerCase()} cache?` : 'Flush every cache?',

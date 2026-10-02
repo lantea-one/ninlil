@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Filtering page: loading, saving, the CNAME-cloaking toggle and its default,
+ * sinkhole validation and a save error. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('FilteringSettingsComponent', () => {
   let apiSpy: {
     apiFilteringSettingsGet: jasmine.Spy;

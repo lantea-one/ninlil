@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNSSEC Policy page: loading the allowlist, toggling an algorithm, saving
+ * and a save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('DnssecPolicySettingsComponent', () => {
   let apiSpy: {
     apiDnssecPolicySettingsGet: jasmine.Spy;

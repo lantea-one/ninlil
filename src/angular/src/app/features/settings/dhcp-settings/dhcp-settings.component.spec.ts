@@ -8,6 +8,12 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DHCP settings page: loading every card, each card's PATCH and restart
+ * note, the relay address lists, and the Router Advertisement routes and interface overrides
+ * (including blank fields inheriting). TestBed with a spy-backed `DhcpSettingsService` and
+ * `NotificationService`.
+ */
 describe('DhcpSettingsComponent', () => {
   let dhcpSettingsApiSpy: {
     apiDhcpSettingsCoreGet: jasmine.Spy;
@@ -407,7 +413,7 @@ describe('DhcpSettingsComponent', () => {
     const row = fixture.componentInstance.interfaceOverrides.at(0).value;
     expect(row.interfaceName).toBe('eth0');
     expect(row.exclude).toBe(false);
-    // A configured field round-trips through the tri-state select as its own string value...
+    // A set field round-trips through the three-way select as 'true' or 'false'...
     expect(row.managedAddressConfiguration).toBe('true');
     // ...while an unset (null) field round-trips as the "inherit" empty string.
     expect(row.otherConfiguration).toBe('');

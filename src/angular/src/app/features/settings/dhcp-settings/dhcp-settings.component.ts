@@ -45,9 +45,8 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This type alias names one advertised-route row's own typed shape explicitly, the same
- * `noPropertyAccessFromIndexSignature`-driven pattern `AplRecordFormComponent`'s own
- * `AplItemGroup` already establishes for a `FormArray` row.
+ * This type names one advertised-route row's shape, so `getRawValue()` allows dot access under
+ * `noPropertyAccessFromIndexSignature`.
  */
 type RaRouteFormGroup = FormGroup<{
   prefix: FormControl<string>;
@@ -57,13 +56,11 @@ type RaRouteFormGroup = FormGroup<{
 }>;
 
 /**
- * This type alias names one Router Advertisement interface override row's own typed shape
- * explicitly, the same pattern {@link RaRouteFormGroup} already establishes. Every field below
- * except `interfaceName`/`exclude` works in plain text -- a blank value means "inherit the
- * global default," parsed via `dhcp-settings.model.ts`'s own `parseOptional*` helpers rather
- * than Angular's own typed numeric/boolean controls, since a genuinely nullable field has no
- * "blank" representation in those. `managedAddressConfiguration`/`otherConfiguration` are a
- * three-option `<select>` (`''`/`'true'`/`'false'`) for the same reason.
+ * This type names one Router Advertisement interface override row's shape. Every field except
+ * `interfaceName` and `exclude` is text, where blank means "inherit the global value", parsed with
+ * the `parseOptional*` helpers in `dhcp-settings.model.ts`; typed number and boolean controls have
+ * no blank state. `managedAddressConfiguration` and `otherConfiguration` are three-way selects
+ * (`''`, `'true'`, `'false'`) for the same reason.
  */
 type RaInterfaceOverrideFormGroup = FormGroup<{
   interfaceName: FormControl<string>;
@@ -82,46 +79,24 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
 }>;
 
 /**
- * This component reads and writes every DHCP settings section under one thematic page -- the
- * six `DhcpSettingsController` sub-resources (`core`/`protocol`/`dhcpv6-protocol`/`relay`/
- * `dhcpv6-relay`/`tftp`), one card per section, each with its own independent load/save cycle --
- * the same "one page, several independent cards" shape `TransportSettingsComponent` already
- * establishes for the five DNS transports. The two DHCPv6 cards mirror their DHCPv4 counterparts'
- * exact shape (`dhcpv6ProtocolForm`/`dhcpv6RelayForm`), since `Dhcpv6ProtocolSettingsDetail`/
- * `Dhcpv6RelaySettingsDetail` carry the same fields as `DhcpProtocolSettingsDetail`/
- * `DhcpRelaySettingsDetail`, minus the DHCPv4 relay's own Agent Circuit/Remote ID fields (RFC 8415
- * Section 21.18's own Interface-ID option replaces both with a single free-form field).
+ * This component is the "DHCP" settings page (`/settings/dhcp`). It shows one card per
+ * `DhcpSettingsController` sub-resource under `/api/dhcp-settings` (`core`, `protocol`,
+ * `dhcpv6-protocol`, `relay`, `dhcpv6-relay`, `tftp`, `ra-protocol`, `ra`), each with its own
+ * `PATCH`, all needing `dhcpsettings:read` to view and `dhcpsettings:write` to save. The DHCPv6
+ * cards match their DHCPv4 counterparts, except that the DHCPv6 relay has one Interface-ID field
+ * (RFC 8415) where the DHCPv4 relay has Agent Circuit ID and Remote ID.
  *
- * <p><b>Every field here is genuinely restart-required, with no live toggle at all</b> -- unlike
- * `TransportSettingsComponent`'s own DNS transports, this backend never hot-reloads a DHCP setting:
- * `DhcpSettingsController.ApplyAsync` always returns `RuntimeSettingsWriteResult.RestartRequiredNote`
- * (see that controller's own doc comment for why -- most importantly, `Dhcpv4RelayOptions.Enable`
- * decides which of two mutually exclusive engines even answers a DHCPv4 request at all, decided
- * once in `Program.cs` before dependency injection is built). This component surfaces that note
- * directly in the success notification after every save, the exact mechanism
- * `TransportSettingsComponent` already establishes -- never a bespoke "restart required" banner of
- * its own.
+ * <p><b>Every DHCP setting needs a restart.</b> `DhcpSettingsController` always returns the
+ * restart note (for example, the relay `Enable` flags choose in `Program.cs`, at startup, whether
+ * the local engine or the relay agent answers), and each card shows that note after a save.
  *
- * <p>The two Router Advertisement cards (`raProtocolForm`/`raForm`) mirror
- * `DhcpSettingsController.GetRaProtocol`/`GetRa`'s own transport-vs-content split. `raForm`
- * deliberately has no control for `RaOptions.Prefixes` -- see that controller's own doc comment
- * for why a list of several independently-flagged/lifetimed prefix objects has no REST/UI surface
- * yet; advertised prefixes remain config-file-only. `raForm.routes` (a `FormArray`, one repeatable
- * row per RFC 4191 route -- add/remove rows the same way `AplRecordFormComponent` already
- * establishes for a repeatable record-data list) does get real coverage: it PATCHes as a genuine
- * whole-array replace, exactly like `recursiveDnsServers`/`dnsSearchListDomains` above it.
- *
- * <p>`raForm.interfaceOverrides` (a `FormArray`, the same repeatable-row shape `routes` already
- * establishes) lets an operator give one network interface its own distinct Router Advertisement
- * content -- or exclude it from Router Advertisement entirely -- rather than every interface
- * receiving the one shared advertisement this page used to be the only way to configure. Every
- * field on a row except `interfaceName`/`exclude` is a plain text control that means "inherit the
- * global default above" when left blank, parsed via `dhcp-settings.model.ts`'s own
- * `parseOptional*` helpers (`RaInterfaceOverrideFormGroup`'s own doc comment explains why a typed
- * numeric/boolean control does not fit a genuinely nullable field). This form deliberately has no
- * control for an override's own would-be nested `prefixes`/`routes` lists -- see
- * `DhcpRaInterfaceOverrideDetail`'s own doc comment for why, mirroring this same page's own
- * `Prefixes` scope boundary one level deeper; both remain config-file-only within an override.
+ * <p>The two Router Advertisement cards split transport and timing (`raProtocolForm`) from content
+ * (`raForm`). `raForm` has no control for `RaOptions.Prefixes`, which is set only in the
+ * configuration file (see the controller). `raForm.routes` is a `FormArray` with one row per RFC
+ * 4191 route, sent as a whole-list replace like `recursiveDnsServers` and `dnsSearchListDomains`.
+ * `raForm.interfaceOverrides` gives one interface its own advertisement content, or excludes it;
+ * blank fields on a row inherit the global values (see {@link RaInterfaceOverrideFormGroup}).
+ * Per-interface prefix and route lists are also configuration-file-only.
  */
 @Component({
   selector: 'app-dhcp-settings',
@@ -245,12 +220,12 @@ export class DhcpSettingsComponent implements OnInit {
     interfaceOverrides: this.formBuilder.array<RaInterfaceOverrideFormGroup>([]),
   });
 
-  /** Every advertised route (RFC 4191) row, as its own repeatable `FormArray`. */
+  /** The advertised route (RFC 4191) rows. */
   get routes() {
     return this.raForm.controls.routes;
   }
 
-  /** Every network interface's own content override row, as its own repeatable `FormArray`. */
+  /** The per-interface override rows. */
   get interfaceOverrides() {
     return this.raForm.controls.interfaceOverrides;
   }
@@ -259,7 +234,7 @@ export class DhcpSettingsComponent implements OnInit {
     void this.loadAll();
   }
 
-  /** This method appends a new, empty advertised-route row for the operator to fill in. */
+  /** This method appends an empty advertised-route row. */
   addRoute(): void {
     this.routes.push(this.buildRouteGroup(null));
   }
@@ -270,9 +245,8 @@ export class DhcpSettingsComponent implements OnInit {
   }
 
   /**
-   * This method builds one route row's own `FormGroup`, seeded from an existing
-   * `DhcpRaRouteDetail` when editing, or empty defaults (`'Medium'` preference, a 30-minute
-   * lifetime -- the same defaults `RaAdvertisedRouteOptions` itself uses) for a freshly added row.
+   * This method builds one route row from a loaded `DhcpRaRouteDetail`, or with the defaults of
+   * `RaAdvertisedRouteOptions` (Medium preference, 30-minute lifetime) for a new row.
    */
   private buildRouteGroup(route: DhcpRaRouteDetail | null): RaRouteFormGroup {
     return this.formBuilder.group({
@@ -286,7 +260,7 @@ export class DhcpSettingsComponent implements OnInit {
     });
   }
 
-  /** This method appends a new, empty interface override row for the operator to fill in. */
+  /** This method appends an empty interface override row. */
   addInterfaceOverride(): void {
     this.interfaceOverrides.push(this.buildInterfaceOverrideGroup(null));
   }
@@ -297,10 +271,8 @@ export class DhcpSettingsComponent implements OnInit {
   }
 
   /**
-   * This method builds one interface override row's own `FormGroup`, seeded from an existing
-   * `DhcpRaInterfaceOverrideDetail` when editing, or empty ("inherit everything") defaults for a
-   * freshly added row -- every field but `interfaceName` starts blank, meaning every one of them
-   * inherits the global default above until the operator actually overrides one.
+   * This method builds one interface override row from a loaded `DhcpRaInterfaceOverrideDetail`, or
+   * blank for a new row, so every field inherits the global value until set.
    */
   private buildInterfaceOverrideGroup(
     override: DhcpRaInterfaceOverrideDetail | null,
@@ -351,7 +323,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DHCPv4 UDP transport's own bind/port settings. */
+  /** This method PATCHes the DHCPv4 protocol settings (enable and ports). */
   async saveProtocol(): Promise<void> {
     if (this.protocolForm.invalid || this.protocolSubmitting()) return;
 
@@ -374,7 +346,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the DHCPv6 UDP transport's own bind/port settings. */
+  /** This method PATCHes the DHCPv6 protocol settings (enable and ports). */
   async saveDhcpv6Protocol(): Promise<void> {
     if (this.dhcpv6ProtocolForm.invalid || this.dhcpv6ProtocolSubmitting()) return;
 
@@ -397,7 +369,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes this host's own DHCPv4 relay agent settings. */
+  /** This method PATCHes the DHCPv4 relay agent settings. */
   async saveRelay(): Promise<void> {
     if (this.relayForm.invalid || this.relaySubmitting()) return;
 
@@ -429,7 +401,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes this host's own RFC 8415 DHCPv6 relay agent settings. */
+  /** This method PATCHes the RFC 8415 DHCPv6 relay agent settings. */
   async saveDhcpv6Relay(): Promise<void> {
     if (this.dhcpv6RelayForm.invalid || this.dhcpv6RelaySubmitting()) return;
 
@@ -460,7 +432,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes this host's own bundled read-only TFTP server settings. */
+  /** This method PATCHes the bundled read-only TFTP server settings. */
   async saveTftp(): Promise<void> {
     if (this.tftpForm.invalid || this.tftpSubmitting()) return;
 
@@ -481,7 +453,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes this host's own Router Advertisement transport/timing settings. */
+  /** This method PATCHes the Router Advertisement enable flag and timing. */
   async saveRaProtocol(): Promise<void> {
     if (this.raProtocolForm.invalid || this.raProtocolSubmitting()) return;
 
@@ -505,10 +477,8 @@ export class DhcpSettingsComponent implements OnInit {
   }
 
   /**
-   * This method PATCHes this host's own Router Advertisement content settings -- everything
-   * except `RaOptions.Prefixes`, which this page has no control for (see this component's own
-   * doc comment). `routes` is sent as a genuine whole-array replace: every route this server
-   * should advertise after this save, not merely the ones added since the last one.
+   * This method PATCHes the Router Advertisement content, everything except `RaOptions.Prefixes`.
+   * `routes` and `interfaceOverrides` replace the stored lists as a whole.
    */
   async saveRa(): Promise<void> {
     if (this.raForm.invalid || this.raSubmitting()) return;

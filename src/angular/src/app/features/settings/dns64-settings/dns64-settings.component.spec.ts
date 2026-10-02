@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNS64 page: loading, saving, a blank prefix and a save error. TestBed with a
+ * spy-backed settings service and `NotificationService`.
+ */
 describe('Dns64SettingsComponent', () => {
   let apiSpy: {
     apiDns64SettingsGet: jasmine.Spy;

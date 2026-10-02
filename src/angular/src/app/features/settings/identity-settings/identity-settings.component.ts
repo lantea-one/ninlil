@@ -23,16 +23,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own password-complexity and account-lockout policy
- * (`GET`/`PATCH /api/identity-settings`) -- ASP.NET Core Identity's own built-in policy classes,
- * previously configurable only by hand-editing the configuration file's own `Identity` section and
- * restarting. No secret material is involved, so every field is a plain read/PATCH-with-current-
- * value round trip -- built from {@link RateLimitingSettingsComponent}'s own reference pattern.
- * <p>Every field takes effect on the very next sign-in/registration/password-change attempt, not
- * true mid-instance hot reload -- worded carefully in the success note this component surfaces
- * verbatim, matching {@link IdentitySettingsController}'s own documented "next request" nuance
- * rather than claiming instantaneous, in-flight-request reload this options class cannot actually
- * provide.
+ * This component is the "Identity" settings page (`/settings/identity`). It edits the ASP.NET Core
+ * Identity password and account lockout policy through `GET` and `PATCH /api/identity-settings`
+ * (`identitysettings:read`, `identitysettings:write`).
+ * <p>A change applies from the next sign-in, registration or password change, not to requests
+ * already running (see `IdentitySettingsController`). The backend's note is shown on save.
  */
 @Component({
   selector: 'app-identity-settings',
@@ -82,7 +77,7 @@ export class IdentitySettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own "next request" hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

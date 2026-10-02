@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNS cache card: statistics, which actions a read-only user sees, flushing
+ * one or every cache after confirmation, removing a name and errors. TestBed with a spy-backed
+ * `DnsCacheService`, `NotificationService` and a stubbed `AuthService.hasPermission`.
+ */
 describe('DnsCacheCardComponent', () => {
   let apiSpy: {
     apiDnsCacheGet: jasmine.Spy;

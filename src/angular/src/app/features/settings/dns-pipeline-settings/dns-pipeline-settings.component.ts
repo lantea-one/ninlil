@@ -20,19 +20,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnsQueryProcessingPipelineOptions`
- * (`GET`/`PATCH /api/dns-pipeline-settings`) -- worker-pool/queue sizing plus UDP
- * amplification-guard tuning. No secret material is involved, so this is a plain
- * read/PATCH-with-current-value round trip -- built from {@link ZoneSigningSettingsComponent}'s
- * own reference pattern.
+ * This component is the "Pipeline" settings page (`/settings/pipeline`). It edits
+ * `DnsQueryProcessingPipelineOptions` through `GET` and `PATCH /api/dns-pipeline-settings`
+ * (`dnspipelinesettings:read`, `dnspipelinesettings:write`): worker pool and queue size, and the
+ * UDP amplification guard.
  * <p>
- * <b>Only half this options class's own fields genuinely hot-reload.</b> `workerCount`/
- * `channelCapacity` size a fixed worker pool and queue built once, when this pipeline's own
- * service starts -- a change to either needs that one service specifically restarted (from the
- * Services page), not a full process restart. Every other field takes effect immediately. The
- * backend's own returned note names exactly which case a given save falls into, so this page
- * surfaces it unconditionally rather than guessing, alongside a static hint next to the two
- * restart-needing fields themselves.
+ * `workerCount` and `channelCapacity` size a pool and queue built when the pipeline service starts,
+ * so they apply after that service is restarted (from the Services page) or the server restarts.
+ * The other fields are hot-reloaded. The page shows the backend's note, which says which case
+ * applies, and a hint beside the two restart fields.
  */
 @Component({
   selector: 'app-dns-pipeline-settings',
@@ -81,7 +77,7 @@ export class DnsPipelineSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own note (which one of its three cases applies depends on which fields changed). */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

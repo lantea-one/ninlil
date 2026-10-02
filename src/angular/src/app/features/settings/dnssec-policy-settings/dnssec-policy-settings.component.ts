@@ -19,14 +19,13 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnssecAlgorithmPolicyOptions` (`GET`/`PATCH
- * /api/dnssec-policy-settings`) -- which algorithms `DnssecKeyManagementService.GenerateKeyAsync`
- * will generate a brand-new signing key for. A checkbox group over every algorithm this project's
- * own `DnssecAlgorithmEnum` supports -- the right control type for "which of a small, fixed set
- * may be used," per this project's own UI/UX interaction-pattern conventions (a dropdown/select
- * only lets one value be chosen at a time, wrong for an allowlist). No other field exists on this
- * options class, so this component drives its own selection directly off a plain array signal
- * rather than a `FormGroup` a single checkbox group gains nothing from.
+ * This component is the "DNSSEC Policy" settings page (`/settings/dnssec-policy`). It edits
+ * `DnssecAlgorithmPolicyOptions` through `GET` and `PATCH /api/dnssec-policy-settings`
+ * (`dnssecpolicysettings:read`, `dnssecpolicysettings:write`): the algorithms
+ * `DnssecKeyManagementService.GenerateKeyAsync` may generate new keys with, which also limits
+ * rollovers. It is a checkbox per `DnssecAlgorithmEnum` value, since several may be allowed. The
+ * allowlist is the only field, so the selection is a signal rather than a `FormGroup`. Changes are
+ * hot-reloaded.
  */
 @Component({
   selector: 'app-dnssec-policy-settings',
@@ -51,14 +50,14 @@ export class DnssecPolicySettingsComponent implements OnInit {
   private readonly dnssecPolicyApi = inject(DnssecPolicySettingsService);
   private readonly notification = inject(NotificationService);
 
-  /** Every algorithm this project's own `DnssecAlgorithmEnum` supports, rendered as one checkbox each. */
+  /** Every `DnssecAlgorithmEnum` value, one checkbox each. */
   readonly algorithmOptions = Object.values(DnssecAlgorithmEnum);
 
   readonly loading = signal(true);
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The algorithms currently checked -- an empty set means "no restriction at all," this options class' own compiled-in default. */
+  /** The checked algorithms. An empty set means no restriction, the default. */
   readonly selectedAlgorithms = signal<ReadonlySet<DnssecAlgorithmEnum>>(new Set());
 
   ngOnInit(): void {
@@ -70,7 +69,7 @@ export class DnssecPolicySettingsComponent implements OnInit {
     return this.selectedAlgorithms().has(algorithm);
   }
 
-  /** This method flips a single algorithm's own checked state. */
+  /** This method checks or unchecks one algorithm. */
   toggle(algorithm: DnssecAlgorithmEnum): void {
     const next = new Set(this.selectedAlgorithms());
     if (next.has(algorithm)) next.delete(algorithm);
@@ -78,7 +77,7 @@ export class DnssecPolicySettingsComponent implements OnInit {
     this.selectedAlgorithms.set(next);
   }
 
-  /** This method PATCHes the full allowlist, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes the full allowlist, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.submitting()) return;
 

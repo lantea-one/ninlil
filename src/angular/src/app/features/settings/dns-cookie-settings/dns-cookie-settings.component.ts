@@ -23,10 +23,10 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnsCookieOptions` (RFC 7873 DNS Cookies) via
- * `GET`/`PATCH /api/dns-cookie-settings`. No secret material is involved, mirroring
- * {@link RateLimitingSettingsComponent}'s own exact shape. Every successful `PATCH`'s own
- * "restart required" note is surfaced directly in the success notification, never suppressed.
+ * This component is the "DNS Cookies" settings page (`/settings/dns-cookies`). It edits
+ * `DnsCookieOptions` (RFC 7873 DNS Cookies) through `GET` and `PATCH /api/dns-cookie-settings`
+ * (`dnscookies:read`, `dnscookies:write`). The cookie secret itself is never shown. Changes need a
+ * restart; the backend's note in the success notification says so.
  */
 @Component({
   selector: 'app-dns-cookie-settings',
@@ -60,7 +60,7 @@ export class DnsCookieSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** When this settings section was last written and by which cluster node, per the cluster's own config-sync mechanism. */
+  /** When this section was last written, from the cluster config sync; {@link originatingNodeId} names the node. */
   readonly lastModifiedUtc = signal<string | null | undefined>(null);
   readonly originatingNodeId = signal<string | null | undefined>(null);
 
@@ -74,7 +74,7 @@ export class DnsCookieSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own restart-required note. */
+  /** This method PATCHes every field, shows the backend's restart note and reloads. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

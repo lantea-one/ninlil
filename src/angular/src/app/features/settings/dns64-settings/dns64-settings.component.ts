@@ -23,12 +23,10 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `Dns64Options` (RFC 6147 DNS64) via
- * `GET`/`PATCH /api/dns64-settings`. No secret material is involved. Every field takes effect
- * immediately, with no restart, since the backend reads this options class live via
- * `IOptionsMonitor`. Off by default -- synthesizing an AAAA record nobody actually published is a
- * capability-expanding change, not a pure hardening one, so this form's own leading control is the
- * opt-in toggle itself, not a pre-enabled feature an operator merely tunes.
+ * This component is the "DNS64" settings page (`/settings/dns64`). It edits `Dns64Options`
+ * (RFC 6147 DNS64) through `GET` and `PATCH /api/dns64-settings` (`dns64settings:read`,
+ * `dns64settings:write`). Every field is hot-reloaded. DNS64 is off by default, because it
+ * invents AAAA records nobody published, so the opt-in switch comes first on the form.
  */
 @Component({
   selector: 'app-dns64-settings',
@@ -71,7 +69,7 @@ export class Dns64SettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -20,14 +20,13 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnssecKeyRolloverOptions` (`GET`/`PATCH
- * /api/dnssec-key-rollover-settings`) -- the RFC 6781 §4.1.1.1 (Pre-Publish, ZSK)/§4.1.2
- * (Double-Signature, KSK) key-rollover timing `DnssecKeyRolloverBackgroundService` walks every
- * locally signed zone's own keys against. `externalParentDsTtl` in particular is a real,
- * operator-tunable value: it stands in for a real external registrar's own DS record TTL, which
- * this project has no live way to observe. No secret material is involved, so every field is a
- * plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "DNSSEC Key Rollover" settings page (`/settings/dnssec-key-rollover`). It
+ * edits `DnssecKeyRolloverOptions` through `GET` and `PATCH /api/dnssec-key-rollover-settings`
+ * (`dnsseckeyrolloversettings:read`, `dnsseckeyrolloversettings:write`): the timing
+ * `DnssecKeyRolloverBackgroundService` uses to walk locally signed zones' keys through RFC 6781
+ * rollovers (Pre-Publish for a ZSK, §4.1.1.1; Double-Signature for a KSK, §4.1.2).
+ * `externalParentDsTtl` stands in for the DS record TTL at an external registrar, which the server
+ * cannot observe. Every field is hot-reloaded.
  */
 @Component({
   selector: 'app-dnssec-key-rollover-settings',
@@ -68,7 +67,7 @@ export class DnssecKeyRolloverSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

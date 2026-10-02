@@ -23,18 +23,15 @@ import { buildBrokerPatchFields } from './event-broker-settings.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own message-broker event-transport configuration
- * via `GET`/`PATCH /api/event-broker-settings`. Unlike every other settings form, this one entity
- * carries a genuine secret (each broker's own connection `password`), which
- * `EventBrokerSettingsController.Get` deliberately never returns -- so this form can never
- * pre-fill it, and leaving the password input blank on save must mean "leave the stored password
- * untouched," never "clear it." See {@link buildBrokerPatchFields}'s own doc comment for the full,
- * checked-against-the-backend reasoning; this component applies it to whichever of `rabbitMq`/
- * `activeMq` matches the currently-selected transport before sending the `PATCH`. Every successful
- * `PATCH`'s own "restart required" note is surfaced directly in the success notification, never
- * suppressed -- doubly relevant here, since `EventBrokerSettingsController`'s own doc comment
- * notes that *which* broker project's own extension method runs at all is decided once in
- * `Program.cs`, so switching transports always needs a restart to take effect.
+ * This component is the "Event broker" settings page (`/settings/event-broker`). It edits the
+ * event transport (in-memory, RabbitMQ or ActiveMQ) and the broker connection through `GET` and
+ * `PATCH /api/event-broker-settings` (`eventbroker:read`, `eventbroker:write`), and shows whether
+ * the broker is connected.
+ *
+ * <p>Broker passwords are never returned, so a blank password field means "keep the stored one"
+ * (see {@link buildBrokerPatchFields}). Only the sub-object of the selected transport is sent.
+ * Changes need a restart, since `Program.cs` picks the transport at startup; the backend's note in
+ * the success notification says so.
  */
 @Component({
   selector: 'app-event-broker-settings',
@@ -74,7 +71,7 @@ export class EventBrokerSettingsComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
   readonly isConnected = signal<boolean | null>(null);
 
-  /** When this settings section was last written and by which cluster node, per the cluster's own config-sync mechanism. */
+  /** When this section was last written, from the cluster config sync; {@link originatingNodeId} names the node. */
   readonly lastModifiedUtc = signal<string | null | undefined>(null);
   readonly originatingNodeId = signal<string | null | undefined>(null);
 
@@ -103,9 +100,8 @@ export class EventBrokerSettingsComponent implements OnInit {
   }
 
   /**
-   * This method PATCHes `transport` plus whichever of `rabbitMq`/`activeMq` matches the
-   * currently-selected transport -- always omitting that sub-object's own `password` field
-   * entirely when left blank, per {@link buildBrokerPatchFields}.
+   * This method PATCHes `transport` and the `rabbitMq` or `activeMq` sub-object of the selected
+   * transport, without a blank password (see {@link buildBrokerPatchFields}), then reloads.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -145,8 +141,7 @@ export class EventBrokerSettingsComponent implements OnInit {
         this.eventBrokerApi.apiEventBrokerSettingsPatch({ body }),
       );
       this.notification.success(result.note ?? 'Event broker settings saved.');
-      // Never re-populate the password field from the response -- it is never returned, so
-      // clearing it back to blank keeps this form's own "blank means unchanged" contract honest.
+      // The password is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ rabbitMqPassword: '', activeMqPassword: '' });
       await this.loadSettings();
     } catch (error) {

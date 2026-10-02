@@ -25,20 +25,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `ForwardingOptions` -- the engine-level toggle
- * and failover/health-check tuning for upstream forwarding, via `GET`/`PATCH /api/forwarding-settings`
- * (`forwardingsettings:read`/`forwardingsettings:write`). Forwarder entries themselves (the actual
- * upstream addresses) are a separate page (Forwarders); this page covers only whether the
- * forwarding resolver consults them at query time at all, plus how it picks among multiple
- * configured forwarders, and whether (and how many) forwarded answers are cached. The cache's
- * statistics and flush controls live on the Recursive Resolver page, beside the serve-stale
- * setting forwarded answers also follow.
+ * This component is the "Forwarding" settings page (`/settings/forwarding`). It edits
+ * `ForwardingOptions` through `GET` and `PATCH /api/forwarding-settings`
+ * (`forwardingsettings:read`, `forwardingsettings:write`): whether forwarding is used, how a
+ * forwarder is chosen, health checks and timeouts, and the forwarded-answer cache. The upstream
+ * addresses are on the Forwarders page; the cache statistics and flush controls are on the
+ * Recursive Resolver page, beside the serve-stale setting forwarded answers also follow.
  *
- * <p>Every field this form edits takes effect immediately, with no restart -- `ForwarderQueryResolver`
- * is now always constructed and registered as a query resolver regardless of `Enable`'s own value
- * at process startup, reading its own live `Enable`/failover-strategy/timeout configuration fresh
- * on every query via `IOptionsMonitor`. The backend's own PATCH response note (surfaced directly in
- * the success notification, never suppressed) confirms this explicitly.
+ * <p>Every field is hot-reloaded: `ForwarderQueryResolver` is always registered and reads these
+ * options on each query, whatever `Enable` was at startup.
  */
 @Component({
   selector: 'app-forwarding-settings',
@@ -70,7 +65,7 @@ export class ForwardingSettingsComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Every failover strategy this picker offers, mirroring the real backend enum. */
+  /** The failover strategies offered, one per backend enum value. */
   readonly failoverStrategyOptions = [
     { value: ForwarderFailoverStrategyEnum.TryInOrder, label: 'Try in order' },
     {
@@ -98,7 +93,7 @@ export class ForwardingSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

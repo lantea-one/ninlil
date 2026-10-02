@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNS Cookies page: loading, saving with the restart note and a save error.
+ * TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('DnsCookieSettingsComponent', () => {
   let apiSpy: { apiDnsCookieSettingsGet: jasmine.Spy; apiDnsCookieSettingsPatch: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };

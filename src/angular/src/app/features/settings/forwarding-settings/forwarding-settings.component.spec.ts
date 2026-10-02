@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Forwarding page: loading, saving, the answer cache fields, validation and a
+ * save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('ForwardingSettingsComponent', () => {
   let apiSpy: {
     apiForwardingSettingsGet: jasmine.Spy;

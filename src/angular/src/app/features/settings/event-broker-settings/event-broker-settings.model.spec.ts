@@ -1,5 +1,9 @@
 import { buildBrokerPatchFields } from './event-broker-settings.model';
 
+/**
+ * These tests cover buildBrokerPatchFields: a blank or whitespace password is left out, a typed one
+ * is kept. Plain unit tests.
+ */
 describe('event-broker-settings.model', () => {
   it('omits the password key entirely when the field is blank', () => {
     const result = buildBrokerPatchFields({ hostName: 'broker.local', password: '' });

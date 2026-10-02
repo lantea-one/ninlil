@@ -28,17 +28,14 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnsFilterOptions` -- the engine-level toggle
- * and block-response tuning for block/allow-list filtering, via `GET`/`PATCH /api/filtering-settings`
- * (`filteringsettings:read`/`filteringsettings:write`). Filter list and entry CRUD (the actual
- * block/allow rows) is a separate page (Filter Lists); this page covers only whether the filter
- * engine consults them at query time at all, plus how a block match is answered.
+ * This component is the "Filtering" settings page (`/settings/filtering`). It edits
+ * `DnsFilterOptions` through `GET` and `PATCH /api/filtering-settings` (`filteringsettings:read`,
+ * `filteringsettings:write`): whether the filter engine is used, how a blocked name is answered,
+ * allow/block precedence and CNAME-cloaking blocking. The lists and entries themselves are on the
+ * Filter Lists page.
  *
- * <p>Every field this form edits takes effect immediately, with no restart -- `DnsFilterEngine` is
- * now always constructed and consulted by the query pipeline regardless of `Enable`'s own value at
- * process startup, reading its own live `Enable`/block-response/precedence configuration fresh on
- * every check via `IOptionsMonitor`. The backend's own PATCH response note (surfaced directly in
- * the success notification, never suppressed) confirms this explicitly.
+ * <p>Every field is hot-reloaded: `DnsFilterEngine` is always in the query pipeline and reads these
+ * options on each check, whatever `Enable` was at startup.
  */
 @Component({
   selector: 'app-filtering-settings',
@@ -69,13 +66,13 @@ export class FilteringSettingsComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Every block-response mode this picker offers, mirroring the real backend enum. */
+  /** The block-response modes offered, one per backend enum value. */
   readonly blockResponseModeOptions = [
     { value: DnsFilterBlockResponseModeEnum.NxDomain, label: 'NXDOMAIN' },
     { value: DnsFilterBlockResponseModeEnum.SinkholeAddress, label: 'Sinkhole address' },
   ];
 
-  /** Every precedence this picker offers, mirroring the real backend enum. */
+  /** The precedences offered, one per backend enum value. */
   readonly precedenceOptions = [
     { value: DnsFilterListPrecedenceEnum.AllowWins, label: 'Allow wins' },
     { value: DnsFilterListPrecedenceEnum.BlockWins, label: 'Block wins' },
@@ -88,17 +85,14 @@ export class FilteringSettingsComponent implements OnInit {
   readonly form = this.formBuilder.group({
     enable: [false],
     blockResponseMode: [DnsFilterBlockResponseModeEnum.NxDomain as DnsFilterBlockResponseModeEnum],
-    // A loose, presentation-level pattern check, matching this project's own established
-    // A/AAAA-record-form convention (a-record-form.component.ts/aaaa-record-form.component.ts) --
-    // the real backend rejects a syntactically-valid-but-wrong-family address (an IPv6 literal in
-    // the V4 field, and vice versa) via a real System.Net.IPAddress parse + AddressFamily check.
+    // A loose shape check, as in the A and AAAA record forms; the backend parses the address and
+    // rejects one of the wrong family.
     sinkholeAddressV4: [
       '0.0.0.0',
       [Validators.required, Validators.pattern(/^(\d{1,3}\.){3}\d{1,3}$/)],
     ],
     sinkholeAddressV6: ['::', [Validators.required, Validators.pattern(/^[0-9a-fA-F:]+$/)]],
-    // 4294967295 is the real backend bound: DnsFilterOptions.SinkholeTimeToLiveSeconds is a
-    // 32-bit unsigned integer.
+    // DnsFilterOptions.SinkholeTimeToLiveSeconds is a 32-bit unsigned integer.
     sinkholeTimeToLiveSeconds: [
       60,
       [Validators.required, Validators.min(0), Validators.max(4294967295)],
@@ -113,7 +107,7 @@ export class FilteringSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

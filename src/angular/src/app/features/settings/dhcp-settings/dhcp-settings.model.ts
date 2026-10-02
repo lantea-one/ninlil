@@ -1,8 +1,4 @@
-/**
- * This function splits a textarea's own one-entry-per-line text into a trimmed, non-empty-only
- * array -- the same helper `TransportSettingsComponent`'s own `splitLines` already establishes,
- * applied here to the DHCPv4 relay's own upstream server address list.
- */
+/** This function splits one-entry-per-line textarea text into trimmed, non-empty entries. */
 export function splitLines(text: string): string[] {
   return text
     .split('\n')
@@ -10,16 +6,15 @@ export function splitLines(text: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-/** This function is {@link splitLines}'s own inverse, used to populate a textarea from a loaded array. */
+/** This function is the inverse of {@link splitLines}, for filling a textarea from a loaded array. */
 export function joinLines(values: readonly string[] | null | undefined): string {
   return (values ?? []).join('\n');
 }
 
 /**
- * This function parses one Router Advertisement interface override's own tri-state
- * ("inherit"/"On"/"Off") select control into the nullable boolean
- * `DhcpRaInterfaceOverrideDetail` itself carries -- an empty string (the "inherit the global
- * default" option) parses to `null`, never to `false`.
+ * This function turns a Router Advertisement interface override's three-way select ("inherit",
+ * "On", "Off") into the nullable boolean `DhcpRaInterfaceOverrideDetail` carries. The empty
+ * "inherit" value becomes `null`, not `false`.
  */
 export function parseOptionalTriStateBoolean(value: string): boolean | null {
   if (value === 'true') return true;
@@ -27,7 +22,7 @@ export function parseOptionalTriStateBoolean(value: string): boolean | null {
   return null;
 }
 
-/** This function is {@link parseOptionalTriStateBoolean}'s own inverse, used to populate that same select from a loaded nullable boolean. */
+/** This function is the inverse of {@link parseOptionalTriStateBoolean}, for filling the select from a loaded value. */
 export function triStateBooleanToSelectValue(value: boolean | null | undefined): string {
   if (value === true) return 'true';
   if (value === false) return 'false';
@@ -35,9 +30,8 @@ export function triStateBooleanToSelectValue(value: boolean | null | undefined):
 }
 
 /**
- * This function parses one Router Advertisement interface override's own "blank means inherit
- * the global default" numeric text field -- blank (after trimming) parses to `null`, never `0`
- * or `NaN`.
+ * This function parses an interface override's numeric text field, where blank means "inherit the
+ * global value". Blank, or text that is not a number, becomes `null`.
  */
 export function parseOptionalNumber(value: string): number | null {
   const trimmed = value.trim();
@@ -48,8 +42,8 @@ export function parseOptionalNumber(value: string): number | null {
 }
 
 /**
- * This function parses one Router Advertisement interface override's own "blank means inherit
- * the global default" duration/free-text field -- blank (after trimming) parses to `null`.
+ * This function parses an interface override's duration or text field, where blank means "inherit
+ * the global value" and becomes `null`.
  */
 export function parseOptionalText(value: string): string | null {
   const trimmed = value.trim();
@@ -57,13 +51,9 @@ export function parseOptionalText(value: string): string | null {
 }
 
 /**
- * This function parses one Router Advertisement interface override's own "blank textarea means
- * inherit the global default list" field -- a blank textarea parses to `null` (inherit), while
- * any non-blank textarea parses to the same one-entry-per-line array {@link splitLines} already
- * produces, even if every line turns out blank (a deliberate, documented simplification: this
- * form has no separate way to express "wholesale-replace with an explicitly empty list," only
- * "inherit" vs. "replace with these entries" -- see `DhcpRaInterfaceOverrideDetail`'s own doc
- * comment for the REST API's own fuller null-vs-empty-list distinction, still reachable directly).
+ * This function parses an interface override's list textarea: blank becomes `null` (inherit the
+ * global list), anything else the {@link splitLines} entries. The form cannot express "replace with
+ * an empty list"; the API can (see `DhcpRaInterfaceOverrideDetail`).
  */
 export function parseOptionalLines(value: string): string[] | null {
   return value.trim().length === 0 ? null : splitLines(value);
