@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Computes every form of the build version the pipeline stamps onto its outputs.
 #
-# Ninlil's versions are date-based, generated fresh for every build:
+# Ninlil's versions are date-based and computed for every build:
 #
 #   branch builds (pre-release)  v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>
 #   release builds               v<yyyy>.<mm>.<dd>.<increment>R<short-sha>
 #
 # A release build runs on a branch named v<yyyy>.<mm>.<dd>.<increment>, which supplies the date
-# and increment. A branch build takes today's UTC date and the next free increment for that
-# branch on that date, found by counting the pre-release tags already pushed for it (a
-# pre-release lives for 24 hours, so every tag from the current UTC day is still present).
+# and increment; the pipeline has already checked that the branch points at a commit on main. A
+# branch build takes today's UTC date and the next free increment for that branch on that date,
+# one above the highest pre-release tag already pushed for it (a pre-release lives for 24 hours,
+# so every tag from the current UTC day is still present).
 #
 # Not every consumer accepts that string as-is, so it is also emitted in each of their forms:
 #
@@ -21,8 +22,8 @@
 #   image-version     <yyyy>.<mm>.<dd>.<increment>[-<branch>-<short-sha>]  Docker tags allow
 #                     neither "+" nor "/"
 #   arch-version      the Arch Linux pkgver, which allows neither "-" nor "+": a release is its
-#                     plain date version (2026.09.24.1), a branch build appends its branch and
-#                     commit as further segments (2026.09.24.3.develop.a1b2c3d)
+#                     plain date version (2026.09.24.1), a branch build appends its branch (with
+#                     "-" turned into "_") and commit as further segments (2026.09.24.3.develop.a1b2c3d)
 #   prerelease        true for branch builds, false for release builds
 #
 # Branch names are reduced to lower-case letters, digits, and hyphens ("feature/DoT-tuning"
@@ -34,7 +35,8 @@
 #   COMMIT_SHA  the full commit hash being built
 #
 # Writes key=value lines to $GITHUB_OUTPUT when set (Forgejo Actions reads step outputs from it),
-# and always prints them.
+# and always prints them. Exits non-zero when the branch name or date is invalid, the release
+# version was already published from another commit, or the increment is out of range.
 
 set -euo pipefail
 

@@ -2,22 +2,27 @@ name: 'Release'
 ##
 ## A push to a branch named v<yyyy>.<mm>.<dd>.<increment> -- which must point at a commit on
 ## main -- builds, tests, and publishes a permanent release versioned
-## v<yyyy>.<mm>.<dd>.<increment>R<short-sha>: binaries attached to the release, a container
-## image tagged with the version and latest, and NuGet packages. A release version is published
-## once; pushing the same release branch again with a different commit fails. It can also be
-## started by hand on a release branch ("Run workflow" on the Actions page) to finish a release
-## whose run was interrupted.
+## v<yyyy>.<mm>.<dd>.<increment>R<short-sha>: binaries and Arch Linux packages attached to the
+## release, a container image tagged with the version and latest, and NuGet packages. A release
+## version is published once; pushing the same release branch again with a different commit
+## fails. It can also be started by hand on a release branch ("Run workflow" on the Actions page)
+## to finish a release whose run was interrupted.
 ##
 on:
   workflow_dispatch:
   push:
     branches:
       - 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9].*'
+##
+## Runs for one release branch queue behind each other rather than overlapping.
+##
 concurrency:
   group: >-
     release-${{ forgejo.ref_name }}
   cancel-in-progress: false
 jobs:
+  ##
+  ## The whole pipeline, as a release build.
   ##
   pipeline:
     name: 'Pipeline'

@@ -2,18 +2,21 @@
 # Publishes one self-contained, single-file Ninlil executable with the .NET SDK. The pipeline runs
 # it in the dotnet toolchain container (in-container.sh dotnet publish-binary.sh ...).
 #
-# The executable carries the .NET runtime, every native library (extracted to a per-user cache
-# directory on first start), and the admin console (NinlilEmbedWebRoot) inside one file. macOS
-# executables are ad-hoc code signed by the SDK itself, which Apple Silicon requires before it
-# will run them at all; that works from a Linux host too.
+# The executable carries the .NET runtime, every native library (extracted on first start to
+# DOTNET_BUNDLE_EXTRACT_BASE_DIR, or a per-user cache directory), and the admin console
+# (NinlilEmbedWebRoot) inside one file. macOS executables are ad-hoc code signed by the SDK,
+# which Apple Silicon requires before it runs them; that works from a Linux host too.
 #
 # The admin console's production build must already be in src/dotnet/src/Ninlil.Web/wwwroot/
 # (build-admin-console.sh puts it there).
 #
 # Usage: publish-binary.sh <linux-amd64|linux-arm64|macos-amd64|macos-arm64> <output-directory>
 #
-# Environment (all optional; a local build is 0.0.0-local). These deliberately avoid the
-# NINLIL_ prefix, which belongs to the application's own configuration settings:
+# Output: <output-directory>/ninlil-<name>. Exits non-zero for an unknown name, a missing admin
+# console build, or a failed publish.
+#
+# Environment (all optional; a local build is 0.0.0-local). These avoid the NINLIL_ prefix,
+# which the application reads as its configuration settings:
 #   BUILD_VERSION           InformationalVersion, e.g. v2026.09.24.1Ra1b2c3d
 #   BUILD_PACKAGE_VERSION   Version, e.g. 2026.9.24.1+a1b2c3d
 #   BUILD_ASSEMBLY_VERSION  AssemblyVersion/FileVersion, e.g. 2026.9.24.1

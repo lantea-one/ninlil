@@ -5,21 +5,23 @@ name: 'Ninlil Pipeline'
 ##
 ## Every build and test step runs in a throwaway container of one of the toolchains in
 ## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg), through
-## .forgejo/scripts/in-container.sh, with only the checkout mounted. The runners themselves need
-## just Docker, git, curl, and jq, for the version, the release API calls, and the container
-## image, which is the prebuilt Linux executables copied onto a chiseled base. Everything
-## cross-compiles, so any runner builds every platform.
+## .forgejo/scripts/in-container.sh, with only the checkout mounted. The runners (all labelled
+## 'archlinux') need just Docker (with buildx), git, curl, and jq, for the version, the release
+## API calls, and the container image, which is the prebuilt Linux executables copied onto a
+## chiseled base. Everything cross-compiles, so any runner builds every platform; the arch
+## toolchain image is amd64-only, so an arm64 runner needs amd64 emulation (binfmt) for it.
 ##
-## Tests run as the runner's unprivileged user on Docker's own network, so they can neither bind a
-## port below 1024 nor collide with the DNS, DHCP, web, and database services the runners host;
-## every test listener (Karma's included) also takes a port the operating system reports as free,
-## so two copies of the suite never meet.
+## Tests run as the runner's unprivileged user inside a container on Docker's bridge network, so
+## they never collide with the DNS, DHCP, web, and database services the runners host; every
+## test listener (Karma's included) also takes a port the operating system reports as free, so
+## two copies of the suite never meet.
 ##
-## Job graph:
+## Job graph (the tests start alongside version; 'verify' runs only the two test jobs):
 ##
-##   version ─┬─ test-dotnet ────────┬─ draft ── binaries (×4) ─┬─ arch-packages ─┬─ publish
-##            └─ test-admin-console ─┤                          └─ image ─────────┤
-##                                   └─ packages (×4) ────────────────────────────┘
+##   version ────────────┐
+##   test-dotnet ────────┼─ draft ── binaries (×4) ─┬─ arch-packages ─┬─ publish
+##   test-admin-console ─┤                          └─ image ─────────┤
+##                       └─ packages (×4) ────────────────────────────┘
 ##
 ## The draft release doubles as the hand-off between jobs: each binary job attaches its
 ## executable to it, and the Arch Linux and image jobs build from the two Linux executables they
@@ -43,6 +45,8 @@ env:
   DOTNET_NOLOGO: '1'
 jobs:
   ##
+  ## Computes every form of the version (compute-version.sh). Skipped for 'verify'.
+  ##
   version:
     name: 'Compute Version'
     if: >-
@@ -65,6 +69,8 @@ jobs:
           fetch-depth: 0
           ref: '${{ forgejo.sha }}'
       ##
+      ## A release branch must point at a commit on main.
+      ##
       - name: 'Require Release Commits to Come From main'
         if: >-
           inputs.kind == 'release'
@@ -86,6 +92,8 @@ jobs:
           ./.forgejo/scripts/compute-version.sh
         shell: 'bash'
   ##
+  ## Format check, build and every .NET test project. Runs for every kind, with no dependencies.
+  ##
   test-dotnet:
     name: 'Test .NET'
     runs-on: 'archlinux'
@@ -99,8 +107,8 @@ jobs:
       ##
       - name: 'Build the Admin Console'
         run: |-
-          # The web host's integration tests serve the real admin console (SPA fallback routing,
-          # static assets), exactly as a published host does.
+          # The web host's integration tests serve the built admin console (SPA fallback routing,
+          # static assets), as a published host does.
           ./.forgejo/scripts/in-container.sh node ./.forgejo/scripts/build-admin-console.sh
         shell: 'bash'
       ##
@@ -116,10 +124,10 @@ jobs:
       ##
       - name: 'Run Every Test Project'
         run: |-
-          # The live DNSSEC key-rollover test compresses a real rollover into two-second TTLs, so
+          # The live DNSSEC key-rollover test compresses a full rollover into two-second TTLs, so
           # it is sensitive to CPU contention while the other test projects run in parallel. It
-          # runs on its own, after everything else, rather than being skipped. The PostgreSQL
-          # query-log tests start their own database container, hence --docker.
+          # runs alone, after everything else, rather than being skipped. The PostgreSQL
+          # query-log tests start a database container (Testcontainers), hence --docker.
           ./.forgejo/scripts/in-container.sh --docker dotnet bash -c '
             set -euo pipefail
             timing_sensitive="DnssecKeyRolloverZskPrePublishLiveTests"
@@ -129,6 +137,9 @@ jobs:
               --filter "FullyQualifiedName~${timing_sensitive}"
           '
         shell: 'bash'
+  ##
+  ## Lint, format check and the Karma suite of the Angular admin console. Runs for every kind,
+  ## with no dependencies.
   ##
   test-admin-console:
     name: 'Test Admin Console'
@@ -168,6 +179,8 @@ jobs:
           '
         shell: 'bash'
   ##
+  ## Creates the draft release the later jobs attach to, once both test jobs pass.
+  ##
   draft:
     name: 'Stage Draft Release'
     if: >-
@@ -197,6 +210,8 @@ jobs:
         run: |-
           ./.forgejo/scripts/release.sh stage
         shell: 'bash'
+  ##
+  ## One self-contained executable per platform, attached to the draft.
   ##
   binaries:
     name: 'Build Binary (${{ matrix.binary }})'
@@ -245,6 +260,8 @@ jobs:
           ./.forgejo/scripts/release.sh upload "dist/ninlil-${{ matrix.binary }}"
         shell: 'bash'
   ##
+  ## The ninlil Arch Linux packages, built from the two Linux executables on the draft.
+  ##
   arch-packages:
     name: 'Build Arch Linux Packages'
     if: >-
@@ -282,6 +299,9 @@ jobs:
           ./.forgejo/scripts/release.sh upload dist/ninlil-*.pkg.tar.zst
         shell: 'bash'
   ##
+  ## The multi-platform container image, built from the two Linux executables on the draft and
+  ## pushed to the Forgejo container registry.
+  ##
   image:
     name: 'Build and Push Image'
     if: >-
@@ -316,14 +336,14 @@ jobs:
           PRERELEASE: '${{ needs.version.outputs.prerelease }}'
         run: |-
           # Registry credentials live in a throwaway configuration directory for this job only,
-          # never in the runner user's own ~/.docker, which every other job on this host shares.
+          # never in the runner user's ~/.docker, which every other job on this host shares.
           export DOCKER_CONFIG="$(mktemp -d)"
           trap 'rm -rf "${DOCKER_CONFIG}"' EXIT
           printf '%s' "${NINLIL_CI_TOKEN}" \
             | docker login "${REGISTRY}" --username "${NINLIL_CI_USER}" --password-stdin
 
-          # A pre-release is tagged with its own unique version only, so it can expire on its
-          # own; a release is also tagged latest.
+          # A pre-release gets only its unique version tag, so cleanup.sh can remove it alone; a
+          # release is also tagged latest.
           tags=(--tag "${IMAGE}:${IMAGE_VERSION}")
           if [[ "${PRERELEASE}" == 'false' ]]; then
             tags+=(--tag "${IMAGE}:latest")
@@ -340,6 +360,9 @@ jobs:
             --push \
             .
         shell: 'bash'
+  ##
+  ## NuGet packages for the libraries, one matrix job per family, pushed to the Forgejo NuGet
+  ## registry. Runs alongside the draft, binaries and image jobs once the tests pass.
   ##
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
@@ -404,6 +427,8 @@ jobs:
             esac
           done
         shell: 'bash'
+  ##
+  ## Turns the draft into the visible release once every artifact is in place.
   ##
   publish:
     name: 'Publish Release'

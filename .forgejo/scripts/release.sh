@@ -2,9 +2,10 @@
 # Creates, fills, and publishes the Forgejo release for one pipeline run.
 #
 # The release is created first, as a draft, and the pipeline's parallel jobs attach their files
-# to it as they finish; it doubles as the hand-off between jobs (the Arch Linux packages are built
-# from the Linux binaries other jobs uploaded). A draft is invisible to users and creates no git
-# tag, so a run that fails part-way publishes nothing (cleanup.sh removes stale drafts).
+# to it as they finish; it doubles as the hand-off between jobs (the Arch Linux packages and the
+# container image are built from the Linux binaries other jobs uploaded). A draft is visible only
+# to repository writers and creates no git tag, so a run that fails part-way publishes nothing
+# (cleanup.sh removes stale drafts after 24 hours).
 #
 #   release.sh stage                  Creates the empty draft for RELEASE_TAG, replacing a draft
 #                                     left over from an earlier attempt at the same tag.
@@ -22,6 +23,10 @@
 #   ARCH_VERSION        the Arch Linux package version (stage only, for the release notes)
 #   COMMIT_SHA          the commit being released (stage only)
 #   REF_NAME            the branch being built (stage only, for the release notes)
+#   FORGEJO_SERVER_URL / GITHUB_SERVER_URL, FORGEJO_REPOSITORY / GITHUB_REPOSITORY
+#                       set by the Actions runner
+#
+# Exits non-zero on any failed API call, and when upload, download or publish finds no draft.
 
 set -euo pipefail
 
@@ -193,8 +198,8 @@ publish() {
     assets="$(forgejo GET "/releases/${id}/assets")"
     work="$(mktemp -d)"
 
-    # One SHA256SUMS for every file, from the per-file checksums the jobs attached, which it
-    # then replaces.
+    # Merge the per-file checksums the jobs attached into one SHA256SUMS, deleting each one
+    # as it is read.
     : > "${work}/SHA256SUMS"
     while read -r asset; do
         [[ -z "${asset}" ]] && continue

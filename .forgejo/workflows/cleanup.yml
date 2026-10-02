@@ -1,8 +1,9 @@
 name: 'Expire Pre-Releases'
 ##
 ## Removes every pre-release build -- release, git tag, container image tag, and NuGet package
-## version -- once it is 24 hours old. Releases themselves are never touched. See
-## .forgejo/scripts/cleanup.sh for the exact rules.
+## version -- and every stale draft once it is 24 hours old. Published releases are never
+## touched. Runs every hour at minute 17, or by hand ("Run workflow") with an optional dry run.
+## See .forgejo/scripts/cleanup.sh for the rules.
 ##
 on:
   schedule:
@@ -10,15 +11,22 @@ on:
   workflow_dispatch:
     inputs:
       ##
+      ## Hand-started runs only; the scheduled run always removes.
+      ##
       dry-run:
         default: false
         description: 'List what would be removed without removing anything.'
         required: false
         type: boolean
+##
+## Two runs never delete at the same time.
+##
 concurrency:
   group: 'expire-pre-releases'
   cancel-in-progress: false
 jobs:
+  ##
+  ## Runs cleanup.sh on the runner itself; it needs only curl, jq and the CI token.
   ##
   cleanup:
     name: 'Expire Pre-Releases'

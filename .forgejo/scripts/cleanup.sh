@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
-# Expires pre-release builds 24 hours after they were published.
+# Removes pre-release builds once they are older than MAX_AGE_HOURS (24 by default), counted
+# from when each release or package version was created. The cleanup workflow runs it every hour.
 #
 # Removed once older than MAX_AGE_HOURS:
 #   releases        every pre-release, together with its git tag, and every draft (a draft is a
-#                   release whose pipeline never finished)
+#                   release whose pipeline never finished, including an interrupted release run)
 #   container image every version tagged <yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>, and
 #                   every untagged per-architecture manifest (a "sha256:..." version) that no
 #                   remaining tag's manifest index still references
 #   NuGet packages  every version with a pre-release label (<yyyy>.<m>.<d>.<increment>-<branch>)
 #
-# Never removed: full releases, their tags, their container tags (the release version and
-# latest), and their NuGet packages. Each rule matches only the pre-release shape of its own
-# artifact, so a release artifact can never be mistaken for one.
+# Never removed: published releases, their tags, their container tags (the release version and
+# latest), and their NuGet packages. Each rule matches only the pre-release shape of its
+# artifact, so a release artifact is never mistaken for one.
 #
 # Environment:
 #   NINLIL_CI_TOKEN  a Forgejo access token with repository and package write access
 #   NINLIL_CI_USER   that token's user name (for the container registry)
 #   MAX_AGE_HOURS    optional, default 24
 #   DRY_RUN          optional; "true" lists what would be removed without removing it
+#   FORGEJO_SERVER_URL / GITHUB_SERVER_URL, FORGEJO_REPOSITORY / GITHUB_REPOSITORY
+#                    set by the Actions runner
+#
+# Output: one "Removing ..." (or "Would remove ...") line per item. Exits non-zero when a removal
+# or a manifest lookup fails, leaving the remaining items for the next run.
 
 set -euo pipefail
 
@@ -146,7 +152,8 @@ for entry in "${versions[@]}"; do
     name="$(jq -r '.name' <<< "${entry}")"
     version="$(jq -r '.version' <<< "${entry}")"
     [[ "${type}" == 'container' && "${name}" == 'ninlil' && "${version}" != sha256:* ]] || continue
-    # A tag removed above no longer protects anything.
+    # A tag removed above no longer protects anything. In a dry run nothing was removed, so
+    # expired tags still count and the listing can miss manifests a real run would remove.
     [[ " ${expired_tags[*]:-} " == *" ${version} "* && "${dry_run}" != 'true' ]] && continue
     curl --fail --silent --show-error \
         --header "Authorization: Bearer ${registry_token}" \

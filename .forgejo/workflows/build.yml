@@ -26,6 +26,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   ##
+  ## The whole pipeline: a pre-release for a push or a hand-started run, tests only
+  ## ("verify") for a pull request.
+  ##
   pipeline:
     name: 'Pipeline'
     uses: './.forgejo/workflows/pipeline.yml'

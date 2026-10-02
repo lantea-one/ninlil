@@ -3,16 +3,20 @@
 # runs it in the dotnet toolchain container (in-container.sh dotnet pack-packages.sh ...).
 #
 # Every project under src/dotnet/src except the Ninlil.Web host is a reusable library. A project
-# reference between two of them becomes a NuGet dependency on the same version, so a set of
-# packages from one build always depends on exactly that build's other packages. Debug symbols
-# are embedded in each assembly so a consumer can step into the code with no symbol server.
+# reference between two of them becomes a NuGet dependency on the same build's version (as a
+# minimum, NuGet's default), so a package never resolves to an older build of its siblings.
+# Debug symbols are embedded in each assembly so a consumer can step into the code with no
+# symbol server.
 #
 # Usage: pack-packages.sh "<pattern>..." <output-directory>
 #   The patterns are shell patterns matched against project directory names, for example
 #   "Ninlil.Dns.Protocol.* Ninlil.Dns.Server.*"; "Ninlil.*" packs every library.
 #
-# Environment (all optional; a local build is 0.0.0-local). These deliberately avoid the
-# NINLIL_ prefix, which belongs to the application's own configuration settings:
+# Output: one .nupkg per matched project in <output-directory>. Exits non-zero when no project
+# matches or dotnet fails.
+#
+# Environment (all optional; a local build is 0.0.0-local). These avoid the NINLIL_ prefix,
+# which the application reads as its configuration settings:
 #   BUILD_VERSION           InformationalVersion, e.g. v2026.09.24.1Ra1b2c3d
 #   BUILD_PACKAGE_VERSION   Version, e.g. 2026.9.24.1+a1b2c3d
 #   BUILD_ASSEMBLY_VERSION  AssemblyVersion/FileVersion, e.g. 2026.9.24.1
@@ -34,7 +38,7 @@ for project in "${repository_root}"/src/dotnet/src/*/*.csproj; do
     directory="$(basename "$(dirname "${project}")")"
     [[ "${directory}" == 'Ninlil.Web' ]] && continue
     for pattern in "${selected_patterns[@]}"; do
-        # shellcheck disable=SC2053 # Deliberately a pattern match.
+        # shellcheck disable=SC2053 # The unquoted right side is meant as a pattern.
         if [[ "${directory}" == ${pattern} ]]; then
             dotnet sln "${work}/packages.slnx" add "${project}" > /dev/null
             count=$((count + 1))

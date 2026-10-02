@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# Builds the ninlil Arch Linux packages for one build, for x86_64 and aarch64, and writes them
-# into <binaries-directory> next to the binaries, so the pipeline attaches them to the release:
-# ninlil-<pkgver>-1-<arch>.pkg.tar.zst, installable directly with `pacman -U <url>`.
+# Builds the ninlil Arch Linux packages for one pipeline run, for x86_64 and aarch64, and copies
+# them into <binaries-directory> so the pipeline attaches them to the release. Each package
+# installs directly with `pacman -U <url>`.
 #
 # The PKGBUILD is generated from src/archlinux/ninlil/PKGBUILD.in with this build's version,
-# download URLs, and SHA256 sums filled in. The packages are built from the binaries this pipeline run just produced (the release
-# they would download from is published only after this step), and the checksums are still
-# verified against them. The package only copies files, so both architectures are built here,
-# with makepkg; the pipeline runs this in the arch toolchain container (in-container.sh arch ...).
+# download URLs and SHA256 sums filled in. The release those URLs point at is published only
+# after this step, so the packages are built from the binaries this run just produced, and
+# makepkg still checks them against the sums. The package only copies files, so one x86_64
+# makepkg builds both architectures. The pipeline runs this script in the arch toolchain
+# container (in-container.sh arch ...).
 #
 # Usage: arch-packages.sh <binaries-directory>
+#   The directory must hold ninlil-linux-amd64 and ninlil-linux-arm64.
 #
 # Environment:
 #   RELEASE_TAG   the release's tag (the computed version)
 #   ARCH_VERSION  the package's pkgver (compute-version.sh's arch-version)
+#
+# Output: ninlil-<pkgver>-1-x86_64.pkg.tar.zst and ninlil-<pkgver>-1-aarch64.pkg.tar.zst in
+# <binaries-directory>. Exits non-zero when a placeholder is left unfilled or makepkg fails.
 
 set -euo pipefail
 
@@ -28,7 +33,7 @@ trap 'rm -rf "${work}"' EXIT
 package="${work}/ninlil"
 mkdir -p "${package}"
 
-# The pkgver, computed alongside every other form of the version (compute-version.sh).
+# The pkgver comes from compute-version.sh, with every other form of the version.
 pkgver="${ARCH_VERSION:?ARCH_VERSION is required}"
 
 sha() { sha256sum "$1" | cut -d ' ' -f 1; }
@@ -56,12 +61,14 @@ if grep -n '@[A-Z0-9_]*@' "${package}/PKGBUILD"; then
     exit 1
 fi
 
-# The package's download names for the local binaries, so makepkg finds them instead of fetching.
+# Copy the binaries under the names the PKGBUILD downloads them as, so makepkg finds them in
+# SRCDEST and does not fetch them.
 cp "${binaries}/ninlil-linux-amd64" "${package}/ninlil-${pkgver}-x86_64"
 cp "${binaries}/ninlil-linux-arm64" "${package}/ninlil-${pkgver}-aarch64"
 
-# --nodeps skips the (runtime-only) dependency check, and a per-architecture copy of makepkg.conf
-# sets CARCH, so an x86_64 makepkg builds the aarch64 package too.
+# --nodeps skips the dependency check (the package has runtime dependencies only), and a
+# per-architecture copy of makepkg.conf sets CARCH, so an x86_64 makepkg builds the aarch64
+# package too.
 output="${work}/output"
 mkdir -p "${output}"
 (

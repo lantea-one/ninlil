@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 # Runs a command in a throwaway container of one of the pipeline's toolchains (docker/ci.Dockerfile),
-# with the repository mounted at /src, so nothing is built or tested on the host itself.
+# with the repository mounted at /src, so nothing is built or tested on the host.
 #
 # The command runs as the calling user, so everything it writes into the checkout stays owned by
-# that user, and with HOME in the container's own /tmp. The container is on Docker's own network,
-# so a test listener can never collide with a service the host runs. The only other thing shared
+# that user, with HOME set to the container's /tmp. The container is on Docker's bridge network,
+# so a test listener never collides with a service the host runs. The only other thing shared
 # with the host is a package cache (NuGet and npm) under ~/.cache/ninlil-ci, which saves every job
-# downloading the same packages again. NuGet's lock files are shared with it: they are what keeps
-# two jobs on one host from extracting the same package into that cache at once, and would
-# otherwise sit in each container's own /tmp, where no other container sees them.
+# downloading the same packages again. NuGet's lock files (NUGET_SCRATCH) are shared too: they
+# keep two jobs on one host from extracting the same package into that cache at once, and would
+# otherwise sit in each container's /tmp, where no other container sees them.
 #
 # Usage: in-container.sh [--docker] <dotnet|node|arch> <command> [argument...]
-#   --docker  Also hands the container the host's Docker socket, for the tests that start their
-#             own database containers (Testcontainers), and routes those containers' published
-#             ports back through the host gateway.
+#   --docker  Also hands the container the host's Docker socket, for the tests that start
+#             database containers (Testcontainers), and routes those containers' published ports
+#             back through the host gateway.
 #
 # BUILD_VERSION, BUILD_PACKAGE_VERSION, BUILD_ASSEMBLY_VERSION, RELEASE_TAG, and ARCH_VERSION are
-# passed through when they are set.
+# passed through when they are set. Exits with the command's status, or 1 when the toolchain
+# image fails to build (its build log is printed then).
 
 set -euo pipefail
 
@@ -33,13 +34,14 @@ image="ninlil-ci-${toolchain}"
 cache="${XDG_CACHE_HOME:-${HOME}/.cache}/ninlil-ci"
 mkdir -p "${cache}/nuget" "${cache}/nuget-scratch" "${cache}/npm"
 
+# Arch Linux publishes amd64 images only, so an arm64 runner needs amd64 emulation (binfmt) here.
 platform=()
 if [[ "${toolchain}" == 'arch' ]]; then
     platform=(--platform linux/amd64)
 fi
 
-# Built from the Dockerfile alone, with no build context; after the first build on a host every
-# layer is cached. The build's own output is shown only if it fails.
+# The image is built from the Dockerfile alone, with no build context; after the first build on
+# a host every layer is cached. The build output is shown only if it fails.
 build_log="$(mktemp)"
 trap 'rm -f "${build_log}"' EXIT
 if ! docker build --progress=plain "${platform[@]}" --target "${toolchain}" --tag "${image}" \
