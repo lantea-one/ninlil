@@ -11,15 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="WebListenSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>WebListenOptions</c> already drove this host's own real Kestrel
-///     HTTP/HTTPS binding, but had zero admin-facing REST/UI configuration surface. Unlike every
-///     sibling settings controller test class in this project, this one never asserts a live
-///     <c>GET</c> reflects a prior <c>PATCH</c> at all -- not because of the usual isolated-file
-///     test-harness limitation, but because <see cref="Controllers.WebListenSettingsController" />'s
-///     own <c>Get</c> is never live in the first place; see that controller's own doc comment.
+///     This class covers <see cref="WebListenSettingsController" /> (the HTTP and HTTPS listener
+///     and its certificate, <c>WebListenOptions</c>) over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the startup values, patches checked by reading
+///     the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) with the
+///     restart note, and input validation. <c>Get</c> always reports the values the listener was
+///     set up with at startup (see <see cref="Controllers.WebListenSettingsController" />), so a
+///     GET after a PATCH showing the old ports is the expected result here.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -67,10 +66,8 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         WebListenSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<WebListenSettingsDetail>();
 
-        // NinlilDnsWebApplicationFactory itself randomizes these two ports (see its own
-        // constructor) to keep this test host off privileged/colliding ports -- this asserts only
-        // that this controller reports the exact same values Kestrel was actually bound with, not
-        // any particular number.
+        // NinlilDnsWebApplicationFactory sets both ports to free ports, so only their range and
+        // that they differ are checked, not that they match the factory's values.
         Assert.InRange(detail.HttpPort, 1, 65535);
         Assert.InRange(detail.HttpsPort, 1, 65535);
         Assert.NotEqual(detail.HttpPort, detail.HttpsPort);
@@ -78,7 +75,7 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         // Every address, unless configured otherwise.
         Assert.Empty(detail.ListenAddresses);
 
-        // TlsCertificateOptions' own compiled-in defaults.
+        // The compiled-in defaults of TlsCertificateOptions.
         Assert.Equal("", detail.Certificate.PfxPath);
         Assert.False(detail.Certificate.PfxPasswordConfigured);
         Assert.Equal(["localhost"], detail.Certificate.SelfSignedSubjectAlternativeNames);
@@ -112,9 +109,8 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             RuntimeSettingsWriteResult result =
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
 
-            // Always the restart-required note, regardless of which fields were touched --
-            // unlike every other settings controller in this project, this one has no
-            // hot-reloading path at all to distinguish; see this controller's own doc comment.
+            // Always the restart note, whichever fields were touched, since nothing here
+            // hot-reloads (see WebListenSettingsController).
             Assert.Equal(RuntimeSettingsWriteResult.WebListenRestartRequiredNote, result.Note);
 
             JsonObject root = (JsonObject)
@@ -132,9 +128,8 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             );
             Assert.Equal("Tls12, Tls13", certificateSection["AllowedProtocols"].GetValue<string>());
 
-            // Confirms this write never took effect on this already-running host -- a genuinely
-            // live GET against the real, unmodified Kestrel listener still reports the original,
-            // randomized ports this factory started with, not the values just written.
+            // The write does not affect the running host: a GET still reports the startup ports,
+            // not the values just written.
             HttpResponseMessage liveResponse = await client.GetAsync("/api/web-listen-settings");
             liveResponse.EnsureSuccessStatusCode();
             WebListenSettingsDetail liveDetail =
@@ -144,11 +139,7 @@ public class WebListenSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         }
         finally
         {
-            // This factory's own isolated runtime configuration file is shared across every test
-            // in WebTestCollection -- restore the compiled-in shape afterward, the same "restore
-            // before returning" discipline every other settings controller test class in this
-            // project already establishes, even though (unlike every other one) no live host
-            // state actually depends on it here.
+            // Write the defaults back to the shared settings file.
             await client.SendAsync(
                 PatchRequest(
                     "/api/web-listen-settings",

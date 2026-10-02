@@ -9,26 +9,19 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers this host's own live storage-engine switch (<see cref="StorageController" />)
-///     end to end, against a real, in-process host and its real, running SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- proving the actual shipped feature, not
-///     just its underlying mechanism (<see cref="StorageEngineLiveSwitchMechanismTests" /> covers
-///     that in isolation): a zone created through the real REST API before the switch is still
-///     readable, by name and content, through the exact same already-authenticated
-///     <see cref="HttpClient" /> session immediately after <c>POST /api/storage/switch</c>
-///     completes -- this host never dropped its own already-open HTTP pipeline, never invalidated
-///     the bearer token it issued before the switch began, and never stopped answering requests
-///     for longer than the call itself took, all because the switch is a real, in-process
-///     mechanism (see <see cref="Services.Storage.StorageEngineSwitchService" />'s own doc
-///     comment) rather than any kind of restart.
+///     This class covers the live storage-engine switch of <see cref="StorageController" /> over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator.
+///     <see cref="StorageEngineLiveSwitchMechanismTests" /> covers the mechanism on its own. A zone
+///     is created, the host is switched to a second SQLite file with <c>POST /api/storage/switch</c>,
+///     and the same client, with the same bearer token, can still read the zone afterwards; the
+///     switch happens in process (see <see cref="Services.Storage.StorageEngineSwitchService" />),
+///     not by restarting. The test cannot tell whether the zone is read from the new file or the
+///     old one; it only checks that the new file was written and the data is still readable.
 ///     <para>
-///         This switches this test collection's own shared <see cref="NinlilDnsWebApplicationFactory" />
-///         onto a second, throwaway SQLite database for the duration of this test, then switches
-///         it back onto the factory's own original database before returning -- the same "restore
-///         what you changed before returning" convention <see cref="ServicesControllerCrudTests" />
-///         already applies to a stopped service, necessary here because every test class in this
-///         collection shares exactly one factory instance (see <see cref="WebTestCollection" />'s
-///         own doc comment).
+///         The switch changes the storage of the host every test class shares, so the test
+///         switches back to <see cref="NinlilDnsWebApplicationFactory.SqlitePath" /> before
+///         returning, as <see cref="ServicesControllerCrudTests" /> restarts a stopped service.
+///         A switch to MongoDB must be rejected.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -61,8 +54,8 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // Sanity check the status endpoint first: a fresh test host starts on SQLite, with no
-        // switch in progress, and reports every one of the four engines a live switch can target.
+        // The host starts on SQLite with no switch in progress, and reports the four engines a
+        // live switch can target (not MongoDB).
         StorageStatus statusBeforeSwitch = await (
             await client.GetAsync("/api/storage")
         ).Content.ReadFromJsonAsync<StorageStatus>();
@@ -74,8 +67,7 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
             statusBeforeSwitch.LiveSwitchSupportedEngines
         );
 
-        // Seed a real, distinguishable zone through the real REST API, into this factory's own
-        // original ("database A") SQLite file.
+        // Create a distinctive zone through the API in the original SQLite file ("database A").
         string zoneName = $"storage-switch-{Guid.NewGuid():N}.example.com";
         HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
             "/api/zones",
@@ -93,9 +85,8 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
 
         try
         {
-            // Act: switch this already-running host onto a brand-new, empty SQLite database
-            // ("database B") through the real REST endpoint -- no restart, no reconnection, this
-            // exact HttpClient/bearer token stays valid throughout.
+            // Switch the running host to a new, empty SQLite file ("database B") through the API;
+            // the same HttpClient and bearer token are used throughout.
             HttpResponseMessage switchResponse = await client.PostAsJsonAsync(
                 "/api/storage/switch",
                 new StorageEngineSwitchApiRequest(
@@ -116,20 +107,16 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
             Assert.True(switchResult.EntityCounts.TryGetValue("Zones", out int restoredZoneCount));
             Assert.True(restoredZoneCount >= 1);
 
-            // Assert: this is genuinely the same operating-system process throughout -- the switch
-            // mechanism never exits or respawns this process (there is no such code path in it to
-            // invoke), and this is the same in-process host that answered every call above.
+            // The process is the same. In an in-process host this always holds, so it only documents
+            // that the switch does not restart anything.
             Assert.Equal(processIdBeforeSwitch, Environment.ProcessId);
 
-            // Assert: the second database file genuinely exists on disk and was genuinely written
-            // to -- this is not a no-op.
+            // The second database file exists and was written to.
             Assert.True(File.Exists(secondDatabasePath));
             Assert.True(new FileInfo(secondDatabasePath).Length > 0);
 
-            // Assert: the exact same already-authenticated HttpClient, immediately after the
-            // switch, still reads the zone created before the switch began -- proving this process
-            // now genuinely serves it out of database B (restored there by the switch), not
-            // database A, with no interruption to this already-open session.
+            // The same client still reads the zone created before the switch. Database A still
+            // holds the zone too, so this does not show which file served it.
             HttpResponseMessage getZoneResponse = await client.GetAsync(
                 $"/api/zones/{createdZone.Id}"
             );
@@ -146,9 +133,7 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
         }
         finally
         {
-            // Switch this shared factory's own live storage back onto its original database
-            // before returning, so every other test class in this collection keeps seeing the
-            // storage engine/database it already assumes.
+            // Switch back to the original database, which the other test classes expect.
             HttpResponseMessage switchBackResponse = await client.PostAsJsonAsync(
                 "/api/storage/switch",
                 new StorageEngineSwitchApiRequest(

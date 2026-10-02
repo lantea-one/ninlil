@@ -10,28 +10,19 @@ using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly and in isolation from any REST layer, the exact low-level
-///     mechanism <see cref="Services.Storage.StorageEngineSwitchService" /> is built on: mutating
-///     the single, shared <see cref="StorageOptions" /> singleton
-///     <c>AddNinlilDnsEntityFrameworkCore</c> registers is, by itself, sufficient to make every
-///     subsequently opened dependency-injection scope resolve <see cref="NinlilDnsContext" />
-///     against a completely different SQLite database file -- with no dependency-injection
-///     re-registration, no new <see cref="IServiceProvider" />, and, critically, no restart of any
-///     kind: this is the exact same operating-system process throughout, proven directly via
-///     <see cref="Environment.ProcessId" /> rather than assumed. This is a controlled, narrower
-///     repeat of the throwaway console-app spike this mechanism was originally validated with,
-///     now committed as a
-///     permanent regression test so a future change to <c>AddDbContext</c>'s own scoped
-///     <c>DbContextOptions</c> lifetime (the entire mechanism this depends on) is caught here
-///     rather than silently breaking <see cref="Services.Storage.StorageEngineSwitchService" />
-///     with no test ever noticing.
+///     This class tests, without a host or the API, the mechanism
+///     <see cref="Services.Storage.StorageEngineSwitchService" /> is built on: changing the shared
+///     <see cref="StorageOptions" /> singleton is enough to make every scope opened afterwards
+///     resolve a <see cref="NinlilDnsContext" /> on a different SQLite file, with no
+///     re-registration and no new <see cref="IServiceProvider" />. The test registers the singleton
+///     and <c>AddDbContext</c> itself, in the shape <c>AddNinlilDnsEntityFrameworkCore</c> uses,
+///     rather than calling that method, so it guards against a change in how <c>AddDbContext</c>
+///     scopes <c>DbContextOptions</c>, which the switch depends on.
 ///     <para>
-///         Deliberately does not go through <see cref="Ninlil.Dns.Server.Backup.IBackupService" /> at all --
-///         database A and database B below are seeded independently, with their own distinct
-///         zones, before the switch, so that this test proves the raw "point the DbContext
-///         elsewhere" primitive on its own, isolated from the separate backup-and-restore
-///         orchestration <see cref="StorageControllerSwitchTests" /> covers end to end through the
-///         real REST API instead.
+///         It does not use <see cref="Ninlil.Dns.Server.Backup.IBackupService" />: databases A and B
+///         are each given their own zone before the switch, so only the redirection of the
+///         <c>DbContext</c> is tested. The backup-and-restore switch through the API is covered by
+///         <see cref="StorageControllerSwitchTests" />.
 ///     </para>
 /// </summary>
 public class StorageEngineLiveSwitchMechanismTests
@@ -39,8 +30,7 @@ public class StorageEngineLiveSwitchMechanismTests
     [Fact]
     public async Task NewScopeOpenedAfterMutatingTheSharedStorageOptionsSingletonServesTheNewDatabase()
     {
-        // Arrange: two entirely separate SQLite database files, seeded with their own distinct,
-        // easily distinguishable zone, standing in for "database A" and "database B".
+        // Two SQLite files, "database A" and "database B", each with its own zone.
         string pathA = Path.Combine(
             Path.GetTempPath(),
             $"ninlil-dns-storage-switch-a-{Guid.NewGuid():N}.sqlite3"
@@ -83,9 +73,8 @@ public class StorageEngineLiveSwitchMechanismTests
                 await context.SaveChangesAsync();
             }
 
-            // Seed database B independently, through a throwaway context pointed at it directly --
-            // not through the shared singleton, since the singleton must not be mutated until the
-            // Act step below.
+            // Seed database B through a separate context pointed at it, since the singleton must
+            // not change until the switch below.
             StorageOptions probeForB = new()
             {
                 Engine = StorageEngineEnum.Sqlite,
@@ -112,13 +101,11 @@ public class StorageEngineLiveSwitchMechanismTests
 
             int processIdBeforeMutation = Environment.ProcessId;
 
-            // Act: mutate the exact singleton instance already resolved above -- no
-            // re-registration, no new ServiceProvider.
+            // Change the registered singleton in place; no re-registration, no new ServiceProvider.
             options.ConnectionString = $"Data Source={pathB}";
 
-            // Assert: a fresh scope, opened only now, resolves a NinlilDnsContext that genuinely
-            // reads and writes database B, not database A -- repeatably, across more than one
-            // freshly opened scope, and all within the exact same operating-system process.
+            // A scope opened now resolves a NinlilDnsContext that reads database B, not A, and so
+            // does a second scope.
             await using (AsyncServiceScope scopeAfterSwitch = provider.CreateAsyncScope())
             {
                 NinlilDnsContext context =
@@ -142,9 +129,7 @@ public class StorageEngineLiveSwitchMechanismTests
                 );
             }
 
-            // The mutation above never invoked any process-supervision or host-restart code path
-            // at all -- there is none in this mechanism to invoke -- so this is trivially, but
-            // genuinely, still the exact same operating-system process throughout.
+            // Trivially the same process; this only documents that nothing restarts.
             Assert.Equal(processIdBeforeMutation, Environment.ProcessId);
         }
         finally

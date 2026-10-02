@@ -88,7 +88,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
 
         try
         {
-            // Enabling creates exactly one managed, subscribed filter list.
+            // Enabling creates a managed, subscribed filter list.
             HttpResponseMessage enableResponse = await client.PostAsync(
                 "/api/blocked-services/twitter",
                 content: null

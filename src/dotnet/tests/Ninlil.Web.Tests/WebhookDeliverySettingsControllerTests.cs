@@ -11,14 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="WebhookDeliverySettingsController" /> end to end, against a
-///     real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>WebhookDeliveryOptions</c> already drove real retry/backoff timing
-///     and outbound timeout for every webhook delivery, but had zero admin-facing REST/UI
-///     configuration surface. Also proves the three distinct response notes this controller's own
-///     doc comment describes, since <c>RequestTimeout</c> hot-reloads on a materially different
-///     schedule than <c>InitialRetryDelay</c>/<c>MaxRetryDelay</c>.
+///     This class covers <see cref="WebhookDeliverySettingsController" /> (retry timing and request
+///     timeout in <c>WebhookDeliveryOptions</c>) over HTTP on the shared in-process host, signed in
+///     as the bootstrap administrator: the compiled-in defaults, patches checked by reading the
+///     host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), and the
+///     returned note, which has three forms because <c>RequestTimeout</c> takes effect on a
+///     different schedule from <c>InitialRetryDelay</c> and <c>MaxRetryDelay</c>. Each patch test
+///     writes the defaults back afterwards.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class WebhookDeliverySettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -66,7 +66,7 @@ public class WebhookDeliverySettingsControllerTests(NinlilDnsWebApplicationFacto
         WebhookDeliverySettingsDetail detail =
             await response.Content.ReadFromJsonAsync<WebhookDeliverySettingsDetail>();
 
-        // WebhookDeliveryOptions' own compiled-in defaults.
+        // The compiled-in defaults of WebhookDeliveryOptions.
         Assert.Equal(TimeSpan.FromSeconds(1), detail.InitialRetryDelay);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.MaxRetryDelay);
         Assert.Equal(TimeSpan.FromSeconds(10), detail.RequestTimeout);

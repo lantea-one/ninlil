@@ -427,7 +427,7 @@ public class FilteringCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, invalidCidrResponse.StatusCode);
 
-        // PUT replaces the network's own CIDR, keeping its identifier.
+        // PUT replaces the network's CIDR and keeps its identifier.
         HttpResponseMessage networkReplaceResponse = await client.PutAsJsonAsync(
             $"/api/client-groups/{created.Id}/networks/{network.Id}",
             new { cidr = "198.51.100.0/24" }

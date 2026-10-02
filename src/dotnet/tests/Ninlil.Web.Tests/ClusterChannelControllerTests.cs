@@ -291,8 +291,8 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
 
     /// <summary>
     ///     This test checks that a <c>"User"</c> envelope reaches
-    ///     <see cref="UserClusterConfigSyncApplier" /> and the account is then saved. The applier's
-    ///     own logic is covered in <c>Ninlil.Dns.Server.ClusterSync.Tests</c>.
+    ///     <see cref="UserClusterConfigSyncApplier" /> and the account is then saved. The applier
+    ///     itself is covered in <c>Ninlil.Dns.Server.ClusterSync.Tests</c>.
     /// </summary>
     [Fact]
     public async Task ConfigSync_WithAUserEntityTypeAndAValidSignature_PersistsTheAccount()

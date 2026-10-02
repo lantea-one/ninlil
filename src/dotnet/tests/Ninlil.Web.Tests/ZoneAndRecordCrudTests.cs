@@ -9,13 +9,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the zone and record CRUD REST endpoints end-to-end, against a
-///     real, in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- creating a zone, bootstrapping it with its own SOA record, adding and editing an
-///     ordinary record via both PUT (full replace) and PATCH (RFC 7396 JSON Merge Patch), and
-///     deleting both a record and the zone itself. This is also the regression test for
-///     <c>IZoneUpdateService.ApplyRecordEditAsync</c>'s own REST-facing contract: a record's own
-///     identifier must survive a PUT/PATCH edit.
+///     This class covers the zone and record endpoints over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: creating a zone, giving it its SOA record, adding
+///     an ordinary record and editing it with PUT (full replace) and PATCH (RFC 7396 merge patch),
+///     the per-zone CAA settings, and deleting a record and the zone. A record must keep its
+///     identifier through a PUT or PATCH, which is the contract of
+///     <c>IZoneUpdateService.ApplyRecordEditAsync</c> that the API relies on. Changing a record's
+///     type to or from SOA through PUT or PATCH is not tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -58,7 +58,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string zoneName = $"crud-{Guid.NewGuid():N}.example.com";
 
-        // Create the zone's own metadata shell.
+        // Create the zone, which has no records yet.
         HttpResponseMessage createZoneResponse = await client.PostAsJsonAsync(
             "/api/zones",
             new { name = zoneName, type = "Primary" }
@@ -74,7 +74,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateZoneResponse.StatusCode);
 
-        // An ordinary record cannot be created before the zone has its own SOA.
+        // An ordinary record cannot be created before the zone has an SOA.
         HttpResponseMessage prematureRecordResponse = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/records",
             new
@@ -87,7 +87,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.BadRequest, prematureRecordResponse.StatusCode);
 
-        // Bootstrap the zone with its own SOA record.
+        // Give the zone its SOA record.
         HttpResponseMessage createSoaResponse = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/records",
             new
@@ -109,7 +109,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Created, createSoaResponse.StatusCode);
 
-        // A second SOA record must be rejected -- a zone has exactly one.
+        // A second SOA record must be rejected; a zone has exactly one.
         HttpResponseMessage secondSoaResponse = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/records",
             new
@@ -157,7 +157,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         >();
         Assert.Equal(2, recordsPage.TotalCount);
 
-        // PUT fully replaces the A record's content, keeping its own identifier.
+        // PUT replaces the A record's content and keeps its identifier.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/zones/{zone.Id}/records/{aRecord.Id}",
             new
@@ -194,10 +194,10 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         RecordDetail patchedRecord =
             await afterPatchResponse.Content.ReadFromJsonAsync<RecordDetail>();
         Assert.Equal("patched via merge patch", patchedRecord.Comments);
-        // The field the patch never mentioned must survive untouched.
+        // The field the patch did not name must be unchanged.
         Assert.Equal("192.0.2.20", patchedRecord.Data.GetProperty("address").GetString());
 
-        // The zone's own metadata can be merge-patched too.
+        // The zone's metadata can be merge-patched too.
         HttpResponseMessage zonePatchResponse = await client.SendAsync(
             PatchRequest($"/api/zones/{zone.Id}", new { comments = "zone-level note" })
         );
@@ -209,7 +209,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal("zone-level note", patchedZone.Comments);
         Assert.Equal(zoneName, patchedZone.Name);
 
-        // The zone's own SOA record cannot be deleted directly.
+        // The zone's SOA record cannot be deleted directly.
         HttpResponseMessage soaRecordsResponse = await client.GetAsync(
             $"/api/zones/{zone.Id}/records"
         );
@@ -236,7 +236,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
 
-        // Deleting the zone removes it (and its remaining SOA record) entirely.
+        // Deleting the zone removes it. (Removal of its SOA record is not checked.)
         HttpResponseMessage deleteZoneResponse = await client.DeleteAsync($"/api/zones/{zone.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteZoneResponse.StatusCode);
 
@@ -259,10 +259,9 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Created, createZoneResponse.StatusCode);
         ZoneDetail zone = await createZoneResponse.Content.ReadFromJsonAsync<ZoneDetail>();
 
-        // A zone that never set either field must round-trip as null (inherit the global
-        // CaaAutoManagementOptions default), never a hardcoded value baked into the entity --
-        // only CaaRecordReconciliationService's own reconciliation logic resolves that
-        // inheritance, never this REST layer.
+        // A zone that never set either field must return null (inherit the global
+        // CaaAutoManagementOptions default), not a value stored in the entity; only
+        // CaaRecordReconciliationService resolves the inheritance.
         Assert.Null(zone.AutoManageCaaRecords);
         Assert.Null(zone.CaaIssuerDomain);
 
@@ -322,7 +321,7 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpResponseMessage afterPatchResponse = await client.GetAsync($"/api/zones/{zone.Id}");
         ZoneDetail afterPatch = await afterPatchResponse.Content.ReadFromJsonAsync<ZoneDetail>();
         Assert.True(afterPatch.AutoManageCaaRecords);
-        // The field the patch never mentioned must survive untouched.
+        // The field the patch did not name must be unchanged.
         Assert.Equal("pki.goog", afterPatch.CaaIssuerDomain);
 
         // ...and an explicit JSON null clears a field back to "inherit the global default".
@@ -345,9 +344,8 @@ public class ZoneAndRecordCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A DNS label may be at most 63 octets -- this one is 64, guaranteed invalid regardless
-        // of which characters DnsName.TryParse otherwise tolerates (it deliberately allows most
-        // byte values in a label, since the wire format itself imposes no character restriction).
+        // A DNS label may be at most 63 octets, so a 64-octet label is invalid whatever
+        // characters DnsName.TryParse accepts (the wire format restricts none).
         string invalidName = $"{new string('a', 64)}.example.com";
 
         HttpResponseMessage response = await client.PostAsJsonAsync(

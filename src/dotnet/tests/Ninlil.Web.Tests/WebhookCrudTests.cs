@@ -14,20 +14,16 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the outbound webhook subscription CRUD REST endpoints
-///     (<see cref="WebhooksController" />) end to end, against a real, in-process host and a
-///     real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- a full
-///     create/list/get/PUT/PATCH/delete lifecycle, confirming both the auth credential(s) and
-///     the HMAC signing secret are each revealed exactly once (on creation) and omitted from
-///     every later response, event-type-name validation against the real
-///     <c>DnsServerEventTypeRegistry</c>, and the unauthenticated-request rejection every other
-///     controller already gets covered for. Also covers the read-only
-///     <c>GET /api/webhooks/{id}/delivery-attempts</c> history endpoint, seeding a real,
-///     persisted <see cref="WebhookDeliveryAttemptEntity" /> row directly through
-///     <see cref="IWebhookDeliveryAttemptRepository" /> -- the delivery engine's own retry/sweep
-///     behavior that actually writes such a row in production has its own dedicated coverage
-///     (see <c>Server.Webhooks</c>), so this suite only needs to prove the REST surface reads
-///     real, already-persisted rows back correctly.
+///     This class covers the webhook subscription endpoints of <see cref="WebhooksController" />
+///     over HTTP on the shared in-process host, signed in as the bootstrap administrator: the
+///     create, list, get, replace, patch and delete lifecycle, the authentication credentials and
+///     HMAC signing secret being returned once on creation and left out of every later response,
+///     validation of event type names against <c>DnsServerEventTypeRegistry</c> and of the target
+///     URL and authentication mode, and rejection without a token. It also covers
+///     <c>GET /api/webhooks/{id}/delivery-attempts</c>, with attempt rows saved directly through
+///     <see cref="IWebhookDeliveryAttemptRepository" />; the delivery engine that writes them is
+///     covered in the <c>Server.Webhooks</c> tests. Some subscriptions created here are left
+///     enabled, pointing at <c>https://example.invalid/hook</c>.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -70,8 +66,8 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string name = $"webhook-{Guid.NewGuid():N}";
 
-        // Creating a Bearer-authenticated, HMAC-signed subscription reveals both secrets exactly
-        // once, in this response only.
+        // Creating a Bearer-authenticated, HMAC-signed subscription returns both secrets in this
+        // response only.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/webhooks",
             new
@@ -111,7 +107,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // Listing reflects it, with pagination fields present, and never reveals either secret.
+        // The list shows it, with pagination fields, and neither secret.
         HttpResponseMessage listResponse = await client.GetAsync("/api/webhooks");
         listResponse.EnsureSuccessStatusCode();
         string listBody = await listResponse.Content.ReadAsStringAsync();
@@ -122,7 +118,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         >();
         Assert.Contains(page.Items, item => item.Id == created.Subscription.Id);
 
-        // Getting it by identifier never reveals either secret either.
+        // GET by identifier returns neither secret.
         HttpResponseMessage getResponse = await client.GetAsync(
             $"/api/webhooks/{created.Subscription.Id}"
         );
@@ -135,9 +131,8 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(created.Subscription.Id, fetched.Id);
         Assert.True(fetched.HasHmacSigningSecret);
 
-        // PUT replaces metadata and rotates the auth credentials -- an operator-supplied secret,
-        // not a server-generated one, so no reveal-again problem exists (see
-        // WebhookSubscriptionWriteRequest's own doc comment).
+        // PUT replaces metadata and the authentication credentials. The operator supplies those,
+        // so returning them is not an issue (see WebhookSubscriptionWriteRequest).
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/webhooks/{created.Subscription.Id}",
             new
@@ -168,11 +163,11 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(WebhookAuthModeEnum.Basic, replaced.AuthMode);
         Assert.Equal(5, replaced.MaxDeliveryAttempts);
         Assert.True(replaced.IsDisabled);
-        // The HMAC signing secret configured at creation survives a PUT untouched -- PUT cannot
-        // change it at all (see WebhookSubscriptionWriteRequest's own doc comment).
+        // The HMAC signing secret set at creation survives the PUT, which cannot change it (see
+        // WebhookSubscriptionWriteRequest).
         Assert.True(replaced.HasHmacSigningSecret);
 
-        // PATCH partially updates just the comments, leaving everything else untouched.
+        // PATCH changes only the comments.
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest($"/api/webhooks/{created.Subscription.Id}", new { comments = "patched" })
         );
@@ -294,9 +289,8 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string name = $"delivery-history-{Guid.NewGuid():N}";
 
-        // Create a real subscription through the REST surface first, exactly as an operator
-        // would -- the delivery-attempt row seeded below targets this subscription's own real
-        // identifier.
+        // Create a subscription through the API, as an operator would; the attempt rows below
+        // refer to its identifier.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/webhooks",
             new
@@ -310,11 +304,9 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
         WebhookSubscriptionCreateResponse created =
             await createResponse.Content.ReadFromJsonAsync<WebhookSubscriptionCreateResponse>();
 
-        // Seed two real, persisted delivery-attempt rows directly through the repository --
-        // exactly the shape WebhookDeliveryService/WebhookDeliveryRetrySweepService themselves
-        // write in production (see Server.Webhooks's own dedicated test coverage for that write
-        // path itself), so this test only needs to prove the REST surface reads real,
-        // already-persisted rows back correctly.
+        // Save two delivery-attempt rows through the repository, in the shape
+        // WebhookDeliveryService and WebhookDeliveryRetrySweepService write, and check what the
+        // endpoint returns.
         Guid succeededAttemptId = Guid.NewGuid();
         Guid pendingAttemptId = Guid.NewGuid();
         using (IServiceScope scope = factory.Services.CreateScope())
@@ -371,7 +363,7 @@ public class WebhookCrudTests(NinlilDnsWebApplicationFactory factory)
             >();
 
         Assert.Equal(2, page.TotalCount);
-        // Most-recently-created first.
+        // Newest first.
         Assert.Equal(pendingAttemptId, page.Items[0].Id);
         Assert.Equal(WebhookDeliveryAttemptStatusEnum.Pending, page.Items[0].Status);
         Assert.Equal(1, page.Items[0].AttemptCount);

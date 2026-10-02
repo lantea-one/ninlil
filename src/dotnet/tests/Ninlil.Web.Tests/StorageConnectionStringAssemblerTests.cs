@@ -7,14 +7,12 @@ using Ninlil.Web.Services.Storage;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="StorageConnectionStringAssembler" /> at the unit level --
-///     asserting the exact resulting ADO.NET connection string for representative structured-field
-///     input per engine, and that a malformed request throws <see cref="ValidationException" />
-///     rather than assembling a broken or misleading connection string. This is the real-instance,
-///     no-network-server-required coverage this environment can offer
-///     for PostgreSQL/MySQL/SQL Server -- no real instance of any of those three servers is
-///     reachable here, so the SQLite assembly path is the one additionally exercised end to end
-///     through a real live switch in <see cref="StorageControllerSwitchTests" />.
+///     This class tests <see cref="StorageConnectionStringAssembler" /> directly, without a host or
+///     a database server. For each relational engine it checks the ADO.NET connection string built
+///     from sample structured fields, and that a malformed request throws
+///     <see cref="ValidationException" /> instead of producing a broken connection string. No
+///     PostgreSQL, MySQL or SQL Server instance is available to the tests, so only the SQLite path
+///     is also exercised by a live switch, in <see cref="StorageControllerSwitchTests" />.
 /// </summary>
 public class StorageConnectionStringAssemblerTests
 {
@@ -246,9 +244,8 @@ public class StorageConnectionStringAssemblerTests
     [Fact]
     public void Assemble_ForMongoDb_ReturnsAnEmptyStringUnvalidated()
     {
-        // MongoDB has no structured-field section here at all -- IStorageEngineSwitchService
-        // itself already rejects this target with its own dedicated message, so this method
-        // never needs to validate anything for it.
+        // MongoDB has no structured-field section; IStorageEngineSwitchService rejects that
+        // target with its own message, so this method does not validate it.
         string connectionString = StorageConnectionStringAssembler.Assemble(
             new StorageEngineSwitchApiRequest(
                 StorageEngineEnum.MongoDb,

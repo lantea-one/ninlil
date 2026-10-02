@@ -111,7 +111,7 @@ public class RolesControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(roleName, updated.Name);
         Assert.Equal("Updated by test.", updated.Description);
 
-        // Deleting it removes it entirely.
+        // Deleting removes it.
         HttpResponseMessage deleteResponse = await client.DeleteAsync($"/api/roles/{created.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 

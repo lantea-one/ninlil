@@ -10,13 +10,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the self-service Profile page endpoints,
-///     <see cref="UsersController.GetMine" />/<see cref="UsersController.PatchMine" /> (mounted at
-///     <c>GET</c>/<c>PATCH /api/users/me</c>), against a real, in-process host and a real SQLite
-///     database (see <see cref="NinlilDnsWebApplicationFactory" />) -- mirroring
-///     <see cref="AppearanceSettingsControllerTests" />'s own self-service coverage shape (a
-///     dedicated, non-administrator account for every test, never the shared bootstrap
-///     administrator, so a write in one test can never bleed into another sharing this fixture).
+///     This class covers the self-service profile actions <see cref="UsersController.GetMine" />
+///     and <see cref="UsersController.PatchMine" /> (<c>GET</c> and <c>PATCH /api/users/me</c>)
+///     over HTTP on the shared in-process host. As in <see cref="AppearanceSettingsControllerTests" />,
+///     each test signs in as a new user with no permissions, so writes never touch the bootstrap
+///     administrator.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -46,9 +44,9 @@ public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This method creates a fresh, dedicated, ordinary (non-administrative) user account and
-    ///     returns a client already authenticated as it, plus that account's own e-mail address
-    ///     and identifier, so a test can assert the read-only fields round-trip correctly.
+    ///     This method creates a new user with no permissions and returns a client signed in as
+    ///     it, with the account's identifier and e-mail address so a test can check the read-only
+    ///     fields.
     /// </summary>
     private async Task<(HttpClient Client, Guid Id, string Email)> CreateOrdinaryUserClientAsync(
         string userNameSuffix
@@ -155,9 +153,8 @@ public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
         );
         firstPatch.EnsureSuccessStatusCode();
 
-        // Only phoneNumber is present this time -- displayName must be left exactly as it was,
-        // the same RFC 7396 "absent means untouched" semantics every other PATCH action in this
-        // project follows.
+        // Only phoneNumber is sent, so displayName must stay as it was (RFC 7396: an absent field
+        // is left alone).
         HttpResponseMessage secondPatch = await client.SendAsync(
             PatchRequest("/api/users/me", new { phoneNumber = "+1-555-0200" })
         );
@@ -205,10 +202,8 @@ public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
             Guid.NewGuid().ToString("N")
         );
 
-        // UserProfileDetail carries no writable Email field at all, so a caller attempting to
-        // sneak one into the patch body has nothing to bind against -- TryGetMergePatchField is
-        // never even asked about "email", confirming the read-only claim in this controller's own
-        // doc comment rather than merely trusting it.
+        // The e-mail address is read-only here, so an "email" field in the patch must be
+        // ignored while the other fields are still applied.
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest(
                 "/api/users/me",
@@ -236,9 +231,8 @@ public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task GetMe_DoesNotCollideWithTheAdministrativeGetByGuidRoute()
     {
-        // A literal "me" segment must route to GetMine, never fall through to Get(Guid id) and
-        // fail GUID-model-binding with a 400 -- a real route-ordering risk needing genuine
-        // end-to-end confirmation, not just a code read.
+        // A literal "me" segment must route to GetMine, not to Get(Guid id), where GUID binding
+        // would fail with a 400.
         (HttpClient client, Guid id, _) = await CreateOrdinaryUserClientAsync(
             Guid.NewGuid().ToString("N")
         );
@@ -248,8 +242,8 @@ public class UserProfileControllerTests(NinlilDnsWebApplicationFactory factory)
         UserProfileDetail profile = await meResponse.Content.ReadFromJsonAsync<UserProfileDetail>();
         Assert.Equal(id, profile.Id);
 
-        // And the administrative by-id route still works too, for a caller with the permission
-        // for it (the shared bootstrap administrator).
+        // The administrative by-id route still works for a caller with the permission (the
+        // bootstrap administrator).
         HttpClient adminClient = await CreateAuthenticatedAdminClientAsync();
         HttpResponseMessage byIdResponse = await adminClient.GetAsync($"/api/users/{id}");
         byIdResponse.EnsureSuccessStatusCode();

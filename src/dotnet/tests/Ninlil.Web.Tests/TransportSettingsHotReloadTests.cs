@@ -18,29 +18,20 @@ using Ninlil.Web.Tests.Fakes;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     and a real, already-constructed <see cref="DnsCryptUdpListener" /> instance -- the same
-///     shape <c>RecursiveOptionsHotReloadTests</c> already established for
-///     <see cref="Ninlil.Dns.Server.Recursive.RecursiveServerOptions" /> -- that a write
-///     <see cref="Controllers.TransportSettingsController.PatchDnsCrypt" /> itself makes via
-///     <see cref="PresetConfigurationFileApplier" /> genuinely reaches an already-running listener
-///     with no restart: this test constructs the listener once, confirms it declines to bind while
-///     <c>Enable</c> is <see langword="false" />, writes a fresh <c>Enable</c>/<c>Port</c>/
-///     <c>ProviderName</c> through the exact same merge-patch mechanism the controller calls, calls
-///     the identical listener instance's own <c>StartAsync</c> again, and confirms it now genuinely
-///     binds and answers a real, plaintext certificate-discovery UDP packet.
+///     This class checks that a DNSCrypt write made the way
+///     <see cref="Controllers.TransportSettingsController.PatchDnsCrypt" /> makes it, through
+///     <see cref="PresetConfigurationFileApplier" />, reaches a <see cref="DnsCryptUdpListener" />
+///     built before the write, without a restart, as <c>RecursiveOptionsHotReloadTests</c> does
+///     for <see cref="Ninlil.Dns.Server.Recursive.RecursiveServerOptions" />. The listener is built
+///     once on a minimal pipeline. With <c>Enable</c> off, starting it binds nothing and a UDP
+///     query to a free loopback port gets no answer; after <c>Enable</c>, <c>Port</c> and
+///     <c>ProviderName</c> are written, the same instance is started again and answers a
+///     plaintext certificate-discovery query; after it is stopped it answers nothing.
 ///     <para>
-///         Deliberately run here, standalone (its own <see cref="IConfigurationRoot" />/
-///         <see cref="ServiceProvider" />, no <see cref="NinlilDnsWebApplicationFactory" />
-///         involved), rather than as part of <c>TransportSettingsControllerTests</c>: that shared
-///         collection's own factory instance points every runtime settings write at an isolated
-///         file that is deliberately not one of its own host's watched
-///         <see cref="IConfiguration" /> sources (see that factory's own doc comment), so
-///         <see cref="IOptionsMonitor{TOptions}" /> never actually observes a write made that way
-///         inside that specific test process -- this class exists precisely to prove the real
-///         mechanism still works, against the real configuration-reload pipeline a production
-///         deployment (where the runtime settings file <em>is</em> the same, already-watched
-///         <c>appsettings.json</c>) actually has.
+///         It uses its own <see cref="IConfigurationRoot" /> and <see cref="ServiceProvider" />
+///         instead of <see cref="NinlilDnsWebApplicationFactory" />, whose settings file is not a
+///         configuration source (see <see cref="AppearanceOptionsHotReloadTests" />), so this is the
+///         reload a deployment gets, where the settings file is <c>appsettings.json</c>.
 ///     </para>
 /// </summary>
 public class TransportSettingsHotReloadTests
@@ -66,8 +57,7 @@ public class TransportSettingsHotReloadTests
         );
 
     /// <summary>
-    ///     This method finds an OS-assigned, currently-free UDP port to bind this test's own
-    ///     listener against.
+    ///     This method finds a free UDP port on loopback for the listener.
     /// </summary>
     private static int GetFreeUdpPort()
     {
@@ -119,10 +109,7 @@ public class TransportSettingsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source a production deployment's own appsettings.json is
-            // (see this class's own doc comment for why that specifically is not true of the
-            // shared WebApplicationFactory used elsewhere in this project's own test suite).
+            // A reload-on-change JSON file source, the kind appsettings.json is in a deployment.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(configPath, optional: true, reloadOnChange: true)
                 .Build();
@@ -137,8 +124,7 @@ public class TransportSettingsHotReloadTests
                 IOptionsMonitor<DnsCryptOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // default, exactly as a fresh installation would see it: DNSCrypt off.
+            // The file does not exist yet, so this is the compiled-in default: DNSCrypt off.
             Assert.False(monitor.CurrentValue.Enable);
 
             DnsServerEventPublisher eventPublisher = new(
@@ -162,8 +148,7 @@ public class TransportSettingsHotReloadTests
                 NullLogger<FileDnsCryptCertificateStore>.Instance
             );
 
-            // Constructed once, exactly as the real DI container constructs it as a singleton --
-            // never rebuilt for the rest of this test.
+            // Constructed once, as the singleton is, and never rebuilt during the test.
             DnsCryptUdpListener listener = new(
                 pipeline,
                 store,
@@ -173,9 +158,8 @@ public class TransportSettingsHotReloadTests
 
             byte[] discoveryQuery = BuildDiscoveryQuery(providerName);
 
-            // Before the write: Enable is false, so this StartAsync call's own ExecuteAsync
-            // returns immediately without ever binding a socket -- confirmed by a real UDP send
-            // that gets no reply at all, not merely by reading IsListening.
+            // Enable is false, so ExecuteAsync returns at once without binding a socket. A UDP
+            // query gets no reply, which is checked rather than IsListening.
             await listener.StartAsync(CancellationToken.None);
             Assert.Null(await TrySendAndReceiveAsync(discoveryQuery, port));
             await listener.StopAsync(CancellationToken.None);
@@ -183,8 +167,7 @@ public class TransportSettingsHotReloadTests
             TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-            // The exact same write mechanism TransportSettingsController.PatchDnsCrypt itself
-            // calls.
+            // The same call TransportSettingsController.PatchDnsCrypt makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new PresetConfigurationSetting(
@@ -215,17 +198,14 @@ public class TransportSettingsHotReloadTests
             Assert.Equal(port, monitor.CurrentValue.Port);
             Assert.Equal(providerName, monitor.CurrentValue.ProviderName);
 
-            // The identical listener instance, constructed before the write, now genuinely binds
-            // and answers a real UDP packet -- no restart, no new instance -- proving
-            // DnsCryptUdpListener's own IOptions<T> -> IOptionsMonitor<T> conversion is what makes
-            // TransportSettingsController's own live enable toggle real, not merely cosmetic.
+            // The listener built before the write now binds and answers, with no restart or new
+            // instance, because DnsCryptUdpListener reads its options through IOptionsMonitor.
             await listener.StartAsync(CancellationToken.None);
 
-            // BackgroundService.StartAsync schedules ExecuteAsync's own body (including the
-            // actual socket bind) as a continuation rather than running it inline before
-            // returning -- called directly here rather than through
-            // ManagedServiceRegistration.StartAsync (which polls exactly this signal itself, for
-            // exactly this reason), so this test polls it directly instead.
+            // BackgroundService.StartAsync runs ExecuteAsync, socket bind included, as a
+            // continuation rather than before returning. ManagedServiceRegistration.StartAsync
+            // waits on IsListening for that reason; calling the listener directly, the test polls
+            // it itself.
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
             while (!listener.IsListening && DateTime.UtcNow < deadline)
                 await Task.Delay(TimeSpan.FromMilliseconds(10));
@@ -245,7 +225,7 @@ public class TransportSettingsHotReloadTests
                 await listener.StopAsync(CancellationToken.None);
             }
 
-            // Stopped again: the same instance, once more, genuinely stops answering.
+            // Once stopped, the same instance no longer answers.
             Assert.Null(await TrySendAndReceiveAsync(discoveryQuery, port));
         }
         finally
@@ -258,8 +238,7 @@ public class TransportSettingsHotReloadTests
                 }
                 catch (IOException)
                 {
-                    // Best-effort cleanup only -- a lingering temp file from a test run is
-                    // harmless.
+                    // Best-effort cleanup; a leftover temporary file is harmless.
                 }
             }
         }

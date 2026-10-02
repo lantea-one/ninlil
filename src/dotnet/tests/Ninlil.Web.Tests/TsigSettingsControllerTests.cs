@@ -11,11 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="TsigSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>TsigServiceOptions</c> already drove the clock-skew tolerance every
-///     signed message carries, but had zero admin-facing REST/UI configuration surface.
+///     This class covers <see cref="TsigSettingsController" /> (the clock-skew tolerance, or fudge,
+///     in <c>TsigServiceOptions</c>) over HTTP on the shared in-process host, signed in as the
+///     bootstrap administrator: the compiled-in default, a patch checked by reading the host's
+///     temporary settings file (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />)
+///     and the returned note, and an out-of-range value.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class TsigSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -62,7 +62,7 @@ public class TsigSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         TsigSettingsDetail detail = await response.Content.ReadFromJsonAsync<TsigSettingsDetail>();
 
-        // TsigServiceOptions' own compiled-in default -- RFC 8945's own recommended value.
+        // The compiled-in default, the value RFC 8945 recommends.
         Assert.Equal(300, detail.DefaultFudgeSeconds);
     }
 
@@ -82,13 +82,9 @@ public class TsigSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for TsigServiceOptions is proved instead, directly, by
-            // TsigServiceHotReloadTests (in Ninlil.Dns.Server.Tsig.Tests).
+            // Only the file is checked; a GET would still show the old value (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath). The hot reload is
+            // covered by TsigServiceHotReloadTests in Ninlil.Dns.Server.Tsig.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Tsig"];
@@ -96,8 +92,7 @@ public class TsigSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore the compiled-in default afterward.
+            // The settings file is shared with every other test, so write the default back.
             await client.SendAsync(
                 PatchRequest("/api/tsig-settings", new { defaultFudgeSeconds = 300 })
             );

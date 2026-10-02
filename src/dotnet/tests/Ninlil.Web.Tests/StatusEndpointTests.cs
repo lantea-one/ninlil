@@ -11,22 +11,18 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the <c>GET /status</c> health-check endpoint end to end,
-///     against a real, in-process host and a real SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- confirming the additive
-///     unauthenticated/authenticated response shape this endpoint's design calls for: an unauthenticated
-///     caller only ever sees the high-level aggregate status, while an authenticated caller
-///     holding <c>status:read</c> (the bootstrap administrator's own wildcard-permission role
-///     already satisfies this, like every other permission) additionally sees the full
-///     per-component breakdown, naming every one of the 9 registered checks.
+///     This class covers <c>GET /status</c> over HTTP on the shared in-process host. A caller
+///     without a token sees only the overall status; a caller with <c>status:read</c> (here the
+///     bootstrap administrator, whose wildcard grants it) also gets one entry per health check,
+///     and all nine registered checks must be present. A dead-lettered webhook delivery saved
+///     through the repository must turn the <c>webhookDelivery</c> check Degraded.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class StatusEndpointTests(NinlilDnsWebApplicationFactory factory)
 {
     /// <summary>
-    ///     This constant contains every health-check name <c>Program.cs</c> registers -- this
-    ///     test asserts every one of them is actually present in an authenticated response,
-    ///     confirming the full 9-item checklist, not merely "some entries exist."
+    ///     This constant contains every health-check name <c>Program.cs</c> registers; each must
+    ///     appear in an authenticated response.
     /// </summary>
     private static readonly string[] ExpectedCheckNames =
     [
@@ -70,8 +66,8 @@ public class StatusEndpointTests(NinlilDnsWebApplicationFactory factory)
 
         HttpResponseMessage response = await client.GetAsync("/status");
 
-        // A health check reporting Degraded/Unhealthy is still a successful HTTP response, not a
-        // 4xx/5xx -- this endpoint serves operational status, not an availability gate on itself.
+        // A Degraded or Unhealthy check still gives a 200: the endpoint reports status and is
+        // not an availability gate.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         StatusResponse status = await response.Content.ReadFromJsonAsync<StatusResponse>();
@@ -95,8 +91,7 @@ public class StatusEndpointTests(NinlilDnsWebApplicationFactory factory)
         foreach (string expectedName in ExpectedCheckNames)
             Assert.Contains(status.Components, component => component.Name == expectedName);
 
-        // Every component must itself carry a real status string and description -- not just be
-        // present by name.
+        // Every component must have a status and a description, not just a name.
         foreach (StatusComponent component in status.Components)
         {
             Assert.False(string.IsNullOrWhiteSpace(component.Status));
@@ -107,11 +102,9 @@ public class StatusEndpointTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task Status_WithARecentlyDeadLetteredDelivery_ReportsWebhookDeliveryAsDegraded()
     {
-        // Seed a real, persisted, recently dead-lettered delivery-attempt row -- exactly the
-        // terminal state WebhookDeliveryService/WebhookDeliveryRetrySweepService themselves
-        // write once a delivery's own MaxAttempts budget is fully exhausted -- and confirm
-        // WebhookDeliveryHealthCheck picks it up as a real, pushed-down query against the same
-        // repository, not a mocked/faked signal.
+        // Save a recently dead-lettered delivery attempt, the final state
+        // WebhookDeliveryService and WebhookDeliveryRetrySweepService write once MaxAttempts is
+        // used up, and check that WebhookDeliveryHealthCheck finds it through the repository.
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             IWebhookDeliveryAttemptRepository attemptRepository =

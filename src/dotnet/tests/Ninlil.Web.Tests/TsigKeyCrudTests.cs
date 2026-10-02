@@ -9,11 +9,10 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the TSIG key CRUD REST endpoints end-to-end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- creating a key both with a server-generated and a caller-supplied secret, confirming the
-///     secret is revealed exactly once (on creation) and omitted from every later response, editing
-///     via both PUT and PATCH, and deleting.
+///     This class covers the TSIG key endpoints over HTTP on the shared in-process host, signed in
+///     as the bootstrap administrator: creating a key with a generated or a supplied secret, the
+///     secret being returned once on creation and left out of every later response, editing with
+///     PUT and PATCH, deleting, and rejecting an unsupported algorithm or an invalid name.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -56,7 +55,7 @@ public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string keyName = $"crud-{Guid.NewGuid():N}.example.com";
 
-        // Creating with no secret supplied generates a random one, revealed exactly once.
+        // With no secret supplied, a random one is generated and returned this once.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/tsig-keys",
             new { name = keyName, comments = "created by test" }
@@ -75,20 +74,20 @@ public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // The key's own secret is never returned again, from GET.
+        // GET never returns the secret.
         HttpResponseMessage getResponse = await client.GetAsync($"/api/tsig-keys/{created.Key.Id}");
         getResponse.EnsureSuccessStatusCode();
         string getBody = await getResponse.Content.ReadAsStringAsync();
         Assert.DoesNotContain(created.Secret, getBody, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", getBody, StringComparison.OrdinalIgnoreCase);
 
-        // Listing must show the key, and must not leak its secret either.
+        // The list must not include the secret either.
         HttpResponseMessage listResponse = await client.GetAsync("/api/tsig-keys");
         listResponse.EnsureSuccessStatusCode();
         string listBody = await listResponse.Content.ReadAsStringAsync();
         Assert.DoesNotContain(created.Secret, listBody, StringComparison.Ordinal);
 
-        // PUT fully replaces the key's own metadata, keeping its own identifier.
+        // PUT replaces the key's metadata and keeps its identifier.
         string renamedKeyName = $"renamed-{Guid.NewGuid():N}.example.com";
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/tsig-keys/{created.Key.Id}",
@@ -123,7 +122,7 @@ public class TsigKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         TsigKeyDetail patched = await afterPatchResponse.Content.ReadFromJsonAsync<TsigKeyDetail>();
         Assert.False(patched.IsDisabled);
-        // The field the patch never mentioned must survive untouched.
+        // The fields the patch did not name must be unchanged.
         Assert.Equal(renamedKeyName, patched.Name);
         Assert.Equal("replaced via PUT", patched.Comments);
 

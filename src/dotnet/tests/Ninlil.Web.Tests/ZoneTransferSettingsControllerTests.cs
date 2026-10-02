@@ -11,11 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ZoneTransferSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>ZoneTransferOptions</c> already drove real AXFR/IXFR chunking, but
-///     had zero admin-facing REST/UI configuration surface.
+///     This class covers <see cref="ZoneTransferSettingsController" /> (how many records each
+///     outgoing AXFR or IXFR message carries, <c>ZoneTransferOptions</c>) over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the compiled-in default, a patch
+///     checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, and a zero value.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ZoneTransferSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -63,7 +64,7 @@ public class ZoneTransferSettingsControllerTests(NinlilDnsWebApplicationFactory 
         ZoneTransferSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<ZoneTransferSettingsDetail>();
 
-        // ZoneTransferOptions' own compiled-in default.
+        // The compiled-in default of ZoneTransferOptions.
         Assert.Equal(100, detail.RecordsPerMessage);
     }
 
@@ -83,13 +84,10 @@ public class ZoneTransferSettingsControllerTests(NinlilDnsWebApplicationFactory 
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for ZoneTransferOptions is proved instead, directly, by
-            // ZoneTransferServiceHotReloadTests (in Ninlil.Dns.Server.Authoritative.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
+            // No test in Ninlil.Dns.Server.Authoritative.Tests covers the hot reload of these
+            // options.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Authoritative"]["ZoneTransfer"];
@@ -97,8 +95,7 @@ public class ZoneTransferSettingsControllerTests(NinlilDnsWebApplicationFactory 
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore the compiled-in default afterward.
+            // The settings file is shared with every other test, so write the default back.
             await client.SendAsync(
                 PatchRequest("/api/zone-transfer-settings", new { recordsPerMessage = 100 })
             );

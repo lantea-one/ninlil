@@ -7,11 +7,12 @@ using Ninlil.Web.Startup;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="WebListenAddressResolver" />'s rules for the web listener: the
-///     default of every address, skipping an address this host doesn't have instead of failing
-///     the whole startup, and falling back to loopback -- never binding nothing -- when no
-///     configured address is usable, so the admin console stays reachable from the host itself.
-///     Address ownership is faked, so these tests don't depend on the machine's interfaces.
+///     This class tests the rules of <see cref="WebListenAddressResolver" /> for the web listener
+///     directly, without a host: bind every address by default, skip an address this host does
+///     not have instead of failing startup, and fall back to loopback, never to binding nothing,
+///     when no configured address is usable, so the admin console stays reachable from the host
+///     itself. Address ownership is faked, so the tests do not depend on the machine's
+///     interfaces.
 /// </summary>
 public class WebListenAddressResolverTests
 {

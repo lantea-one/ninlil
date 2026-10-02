@@ -8,15 +8,10 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers direct happy-path CRUD coverage for
-///     <see cref="UsersController" /> -- create/list/get/PUT/delete, plus confirming
-///     <see cref="UsersController.List" /> now genuinely paginates -- against a real, in-process
-///     host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />).
-///     Before this pass, <see cref="UsersController" /> had no test exercising <c>Update</c> or
-///     <c>Delete</c> at all, and no test asserting on <c>List</c>'s own response shape directly --
-///     only indirect coverage via <see cref="IdentityAdminEndpointTests" />'s own permission
-///     round-trip test and <see cref="TwoFactorRecoveryCodeTests" />, both of which create a user
-///     only as setup for an unrelated assertion.
+///     This class covers <see cref="UsersController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator: the create, list, get, update and delete
+///     lifecycle, and pagination of <see cref="UsersController.List" />. Other tests create users
+///     only as setup; permission grants are covered by <see cref="IdentityAdminEndpointTests" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -81,8 +76,8 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(created.Id, fetched.Id);
         Assert.Equal(userName, fetched.UserName);
 
-        // PUT updates the account's profile fields and disables it, keeping its identifier and
-        // sign-in name (password changes are handled separately, not through this endpoint).
+        // PUT updates the profile fields and disables the account, keeping its identifier and
+        // sign-in name. Passwords are changed through other endpoints.
         HttpResponseMessage updateResponse = await client.PutAsJsonAsync(
             $"/api/users/{created.Id}",
             new UpdateUserRequest("Updated By Test", $"{userName}-updated@localhost.local", true)
@@ -97,7 +92,7 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal($"{userName}-updated@localhost.local", updated.Email);
         Assert.True(updated.IsDisabled);
 
-        // Deleting it removes it entirely.
+        // Deleting removes it.
         HttpResponseMessage deleteResponse = await client.DeleteAsync($"/api/users/{created.Id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
@@ -110,8 +105,8 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // Seed enough users that a page size of 1 is guaranteed to truncate the result -- the
-        // bootstrap administrator's own account plus at least these two.
+        // Create enough users that a page size of 1 must truncate the result: the bootstrap
+        // administrator plus these two.
         string firstUserName = $"page-user-{Guid.NewGuid():N}";
         string secondUserName = $"page-user-{Guid.NewGuid():N}";
         (
@@ -137,7 +132,7 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
             )
         ).EnsureSuccessStatusCode();
 
-        // A full, unbounded listing to learn the real total.
+        // A large page to learn the total.
         HttpResponseMessage fullListResponse = await client.GetAsync("/api/users?skip=0&take=500");
         fullListResponse.EnsureSuccessStatusCode();
         PagedResult<UserSummary> fullPage = await fullListResponse.Content.ReadFromJsonAsync<
@@ -146,7 +141,7 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         int realTotal = fullPage.TotalCount;
         Assert.True(realTotal >= 2);
 
-        // A page size of 1 must return exactly one item, yet still report the real total.
+        // A page size of 1 must return one item and still report the full total.
         HttpResponseMessage smallPageResponse = await client.GetAsync("/api/users?skip=0&take=1");
         smallPageResponse.EnsureSuccessStatusCode();
         PagedResult<UserSummary> smallPage = await smallPageResponse.Content.ReadFromJsonAsync<
@@ -157,9 +152,8 @@ public class UsersControllerCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(1, smallPage.Take);
         Assert.Equal(realTotal, smallPage.TotalCount);
 
-        // The second page, still with a page size of 1, must return a different item than the
-        // first page did -- proving the skip actually moved the window rather than just
-        // truncating the same unpaginated list twice.
+        // The second page must return a different item, so skip moves the window rather than
+        // truncating the same list twice.
         HttpResponseMessage secondPageResponse = await client.GetAsync("/api/users?skip=1&take=1");
         secondPageResponse.EnsureSuccessStatusCode();
         PagedResult<UserSummary> secondPage = await secondPageResponse.Content.ReadFromJsonAsync<

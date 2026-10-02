@@ -14,33 +14,26 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="TransportSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="TransportSettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the compiled-in defaults of each
+///     transport, patches checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note, listen-address normalization and validation, and other input validation.
 ///     <para>
 ///         <see cref="DnsOverHttps_TogglingEnable_GenuinelyStartsAndStopsAnsweringRealRequests" />
-///         goes further than a plain read/write round trip, proving this controller's own central
-///         claim -- that an <c>enable</c> toggle is genuinely live, with no restart -- against real
-///         transport behavior on the very same running host: it sends real GET requests at
-///         <c>/dns-query</c> through this host's own shared Kestrel pipeline (the exact same route
-///         <c>DnsOverHttpsRequestHandler</c> answers real traffic on) before and after each toggle,
-///         proving the structural fix in <c>EndpointRouteBuilderDnsOverHttpsExtension</c> (routes
-///         always mapped, gated by <c>DnsOverHttpsTransportGate</c> alone) actually works for an
-///         installation that started with this transport off, this project's own default. This is
-///         the one transport whose live-toggle proof this shared collection's own
-///         <see cref="NinlilDnsWebApplicationFactory" /> instance can actually observe --
-///         <c>DnsOverHttpsTransportGate</c>'s own start/stop is a plain in-memory flag flip, not
-///         driven by re-reading configuration, unlike every other transport's own real listener.
-///         <see cref="PatchDnsCrypt_EnablingWithAProviderNameAndPort_WritesEveryFieldAndReportsTheMixedNote" />'s
-///         own doc comment explains why DNSCrypt/DNS-over-TLS/DNS-over-QUIC's own equally-real live
-///         toggles are proven a different way instead -- a committed listener-level hot-reload test
-///         plus a throwaway smoke test against a real, standalone compiled host, not this class.
+///         also checks that the <c>enable</c> switch takes effect without a restart, by sending
+///         DNS-over-HTTPS GET requests to <c>/dns-query</c> on the same host before and after each
+///         toggle. The route is always mapped and only gated by <c>DnsOverHttpsTransportGate</c>
+///         (see <c>EndpointRouteBuilderDnsOverHttpsExtension</c>), so an installation that
+///         starts with the transport off, the default, can turn it on live. DNS-over-HTTPS is the
+///         one transport whose toggle this host can observe, because its gate is an in-memory
+///         flag rather than a listener that reads its options; for DNSCrypt see
+///         <see cref="TransportSettingsHotReloadTests" />. DNS-over-TLS and DNS-over-QUIC toggles
+///         are not checked here.
 ///     </para>
 ///     <para>
-///         The DNS-over-HTTPS live-toggle test restores the transport to disabled in a
-///         <c>finally</c> block -- this class shares one real host with every other test class in
-///         <see cref="WebTestCollection" />, so a live toggle left on would otherwise leak into an
-///         unrelated later test.
+///         Tests that turn a transport on turn it off again in a <c>finally</c> block, since the
+///         host is shared with every other test class.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -89,11 +82,9 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         PlainTransportSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<PlainTransportSettingsDetail>();
 
-        // This shared test host overrides Plain DNS's own port to a random high one (see
-        // NinlilDnsWebApplicationFactory's own doc comment -- binding the real, compiled-in
-        // default of 53 would need root), so that field is checked against the actual override
-        // rather than this class's own compiled-in default; every other field is untouched by
-        // that override and still reflects the real default.
+        // The test host moves Plain DNS to a free high port (port 53 needs root; see
+        // NinlilDnsWebApplicationFactory), so the port is checked against that override. The
+        // other fields keep their compiled-in defaults.
         Assert.Equal(factory.PlainDnsPort, detail.Port);
         Assert.Equal(TimeSpan.FromSeconds(30), detail.TcpIdleTimeout);
         Assert.Equal(512, detail.MaxConcurrentTcpConnections);
@@ -245,16 +236,9 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
         Assert.Contains("Tls12", allowedProtocols);
         Assert.Contains("Tls13", allowedProtocols);
 
-        // Deliberately does not also GET this setting back and assert the new value: this shared
-        // collection's own NinlilDnsWebApplicationFactory instance points every runtime
-        // settings write at an isolated file that is not one of this host's own watched
-        // IConfiguration sources (see its own doc comment), so IOptionsMonitor<DnsOverTlsOptions>
-        // never actually observes a write made this way inside this specific test process --
-        // exactly the same reason every other runtime settings controller's own test class in
-        // this project only ever asserts against the file's own content after a PATCH, never a
-        // live re-read. TransportSettingsHotReloadTests (a sibling file in this same project)
-        // proves the underlying IOptionsMonitor round trip directly for DNSCrypt, with no such
-        // isolation in the way.
+        // Only the file is checked; a GET would still show the old values (see
+        // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
+        // TransportSettingsHotReloadTests covers the IOptionsMonitor round trip for DNSCrypt.
     }
 
     [Fact]
@@ -329,9 +313,8 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
 
         try
         {
-            // Established as a known starting point, deliberately, rather than assumed from this
-            // transport's own compiled-in default -- another test earlier in this shared
-            // collection could conceivably have left it either way.
+            // Set a known starting point rather than assuming the default, since an earlier test
+            // could have left the transport on.
             HttpResponseMessage disablePatch = await client.SendAsync(
                 PatchRequest("/api/transport-settings/dns-over-https", new { enable = false })
             );
@@ -349,11 +332,8 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
                 await enablePatch.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.TransportEnableToggledNote, enableResult.Note);
 
-            // Genuinely live: the identical already-running host, with no restart, now answers a
-            // real DNS-over-HTTPS request at the exact route DnsOverHttpsRequestHandler always
-            // maps -- proof that EndpointRouteBuilderDnsOverHttpsExtension's own "always map,
-            // gate the answer" fix actually closes the gap an installation that started with this
-            // transport off (this project's own default) used to hit.
+            // Without a restart, the same host now answers a DNS-over-HTTPS request on the route
+            // that is always mapped and only gated (see the class summary).
             HttpResponseMessage afterResponse = await client.GetAsync(queryUrl);
             Assert.Equal(HttpStatusCode.OK, afterResponse.StatusCode);
 
@@ -398,20 +378,12 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             );
             response.EnsureSuccessStatusCode();
 
-            // enable is genuinely live (this controller starts/stops the real dnscrypt-udp/
-            // dnscrypt-tcp/dnscrypt-certificate-rotation registrations to match, see this
-            // controller's own doc comment) -- but observing that live effect from outside the
-            // process needs a real, standalone compiled host, not this shared collection's own
-            // WebApplicationFactory instance, whose own isolated runtime-settings file
-            // (NinlilDnsWebApplicationFactory's own doc comment) is deliberately not one of
-            // this host's own watched IConfiguration sources, so IOptionsMonitor<DnsCryptOptions>
-            // never actually observes a write made this way inside this specific test process.
-            // DnsOverHttpsTransportGate has no such dependency (its own start/stop is a plain
-            // in-memory flag, not driven by re-reading configuration at all), which is exactly
-            // why DnsOverHttps_TogglingEnable_GenuinelyStartsAndStopsAnsweringRealRequests above
-            // is this suite's own real, externally-observable live-toggle proof; a real socket-
-            // level DNSCrypt proof is instead a throwaway smoke test against the actual compiled
-            // Ninlil.Web.dll, per this project's own smoke-test convention.
+            // Enabling starts the dnscrypt-udp, dnscrypt-tcp and dnscrypt-certificate-rotation
+            // services (see TransportSettingsController). The host's DNSCrypt options never see
+            // the written port or provider name (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath), so the listeners use
+            // the startup values, and the test checks only the note and the file, not whether
+            // DNSCrypt answers.
             RuntimeSettingsWriteResult result =
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.TransportMixedReloadNote, result.Note);
@@ -457,8 +429,8 @@ public class TransportSettingsControllerTests(NinlilDnsWebApplicationFactory fac
             );
             response.EnsureSuccessStatusCode();
 
-            // Trimmed and de-duplicated, stored as the one string an environment variable can
-            // also hold.
+            // Trimmed and de-duplicated, and stored as one string so an environment variable can
+            // hold it too.
             Assert.Equal("127.0.0.1, ::1", ReadListenAddresses(sectionName));
         }
         finally

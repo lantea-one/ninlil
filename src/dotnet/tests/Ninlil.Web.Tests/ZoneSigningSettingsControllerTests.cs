@@ -11,11 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ZoneSigningSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing a
-///     real gap: <c>ZoneSigningOptions</c> already drove real DNSSEC signature timing,
-///     but had zero admin-facing REST/UI configuration surface.
+///     This class covers <see cref="ZoneSigningSettingsController" /> (DNSSEC signature timing in
+///     <c>ZoneSigningOptions</c>) over HTTP on the shared in-process host, signed in as the
+///     bootstrap administrator: the compiled-in defaults, a patch checked by reading the host's
+///     temporary settings file (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />)
+///     and the returned note, and rejection of zero and malformed durations.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ZoneSigningSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -63,7 +63,7 @@ public class ZoneSigningSettingsControllerTests(NinlilDnsWebApplicationFactory f
         ZoneSigningSettingsDetail detail =
             await response.Content.ReadFromJsonAsync<ZoneSigningSettingsDetail>();
 
-        // ZoneSigningOptions' own compiled-in defaults.
+        // The compiled-in defaults of ZoneSigningOptions.
         Assert.Equal(TimeSpan.FromDays(30), detail.SignatureValidityPeriod);
         Assert.Equal(TimeSpan.FromHours(1), detail.InceptionOffset);
         Assert.Equal(TimeSpan.FromDays(5), detail.RefreshBeforeExpiration);
@@ -95,13 +95,10 @@ public class ZoneSigningSettingsControllerTests(NinlilDnsWebApplicationFactory f
                 await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
             Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, result.Note);
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime
-            // settings file is never separately registered as its own reload-on-change
-            // IConfiguration source, a real, confirmed test-harness limitation this project's
-            // settings-controller test suite already found and documented. Genuine
-            // IOptionsMonitor hot-reload for ZoneSigningOptions is proved instead, directly, by
-            // ZoneSigningOptionsHotReloadTests (in Ninlil.Dns.Server.Authoritative.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
+            // The hot reload is covered by ZoneSigningOptionsHotReloadTests in
+            // Ninlil.Dns.Server.Authoritative.Tests.
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Authoritative"]["ZoneSigning"];
@@ -112,8 +109,7 @@ public class ZoneSigningSettingsControllerTests(NinlilDnsWebApplicationFactory f
         }
         finally
         {
-            // This factory's own runtime configuration file is shared across every test in
-            // WebTestCollection -- restore every compiled-in default afterward.
+            // The settings file is shared with every other test, so write the defaults back.
             await client.SendAsync(
                 PatchRequest(
                     "/api/zone-signing-settings",

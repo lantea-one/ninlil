@@ -7,10 +7,10 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class exercises the TOTP recovery-code feature end to end, against a
-///     real <see cref="NinlilDnsWebApplicationFactory" />-hosted instance: generating a batch,
-///     confirming the reveal-once policy, redeeming one to complete a challenged sign-in, and
-///     confirming a redeemed code is single-use.
+///     This class covers two-factor recovery codes over HTTP on the shared in-process host, each
+///     test on a new user enrolled in TOTP with <see cref="TotpGenerator" />: generating a batch,
+///     showing the codes only once, redeeming one to finish a challenged sign-in, and a redeemed
+///     code working only once.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
@@ -18,11 +18,9 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
     private HttpClient CreateClient() => factory.CreateClient();
 
     /// <summary>
-    ///     This method creates a fresh, dedicated user account and enrolls it in TOTP two-factor
-    ///     authentication, exactly mirroring
-    ///     <c>AuthenticationFlowTests.TwoFactorEnrollmentAndLoginFlowWorksEndToEnd</c>'s own setup
-    ///     -- a dedicated account, never the shared bootstrap administrator, so this test's own
-    ///     recovery-code redemption can never affect any other test in this shared fixture.
+    ///     This method creates a new user and enrolls it in TOTP two-factor authentication, as
+    ///     <c>AuthenticationFlowTests.TwoFactorEnrollmentAndLoginFlowWorksEndToEnd</c> does, so
+    ///     the tests never touch the bootstrap administrator.
     /// </summary>
     private async Task<(
         HttpClient Client,
@@ -160,9 +158,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(10, generated.Codes.Distinct().Count());
         Assert.All(generated.Codes, code => Assert.False(string.IsNullOrWhiteSpace(code)));
 
-        // The reveal-once policy: no later response, including the status endpoint whose whole
-        // job is to report on this account's own recovery-code state, ever includes the actual
-        // code values -- only a count.
+        // The codes are shown only once: the status endpoint reports a count, never the codes.
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
         statusResponse.EnsureSuccessStatusCode();
         string rawStatusBody = await statusResponse.Content.ReadAsStringAsync();
@@ -196,6 +192,8 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         RecoveryCodesResult secondBatch =
             await secondGenerateResponse.Content.ReadFromJsonAsync<RecoveryCodesResult>();
 
+        // Only checks that the batches differ and ten codes remain; no code from the first
+        // batch is tried, so the test does not show that the old codes stop working.
         Assert.Empty(firstBatch.Codes.Intersect(secondBatch.Codes));
 
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
@@ -219,8 +217,7 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
             await generateResponse.Content.ReadFromJsonAsync<RecoveryCodesResult>();
         string recoveryCode = generated.Codes[0];
 
-        // A fresh, unauthenticated client stands in for the operator locked out of their
-        // authenticator app -- the whole point of this feature.
+        // A client with no token plays the user locked out of their authenticator app.
         HttpClient loginClient = CreateClient();
         HttpResponseMessage challengedLoginResponse = await loginClient.PostAsJsonAsync(
             "/api/auth/login",
@@ -240,14 +237,14 @@ public class TwoFactorRecoveryCodeTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(completed.RequiresTwoFactor);
         Assert.False(string.IsNullOrWhiteSpace(completed.AccessToken));
 
-        // The remaining count dropped by exactly one.
+        // The remaining count dropped by one.
         HttpResponseMessage statusResponse = await client.GetAsync("/api/auth/two-factor/status");
         statusResponse.EnsureSuccessStatusCode();
         TwoFactorStatus status = await statusResponse.Content.ReadFromJsonAsync<TwoFactorStatus>();
         Assert.Equal(9, status.RecoveryCodesRemaining);
 
-        // The same code, used again against a second challenged login, must fail -- it was
-        // consumed by the first redemption, not merely checked.
+        // The same code must fail on a second challenged sign-in, since the first redemption
+        // used it up.
         HttpClient secondLoginClient = CreateClient();
         HttpResponseMessage secondChallengedLoginResponse = await secondLoginClient.PostAsJsonAsync(
             "/api/auth/login",
