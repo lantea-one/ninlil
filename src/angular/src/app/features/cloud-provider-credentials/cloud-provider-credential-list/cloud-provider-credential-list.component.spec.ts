@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the credential list: loading and paging, the enable/disable toggle and delete
+ * with its confirmation. TestBed with a spy-backed `CloudProviderCredentialsService` and
+ * `NotificationService`.
+ */
 describe('CloudProviderCredentialListComponent', () => {
   let credentialsApiSpy: {
     apiCloudProviderCredentialsGet: jasmine.Spy;

@@ -1,6 +1,7 @@
 import { DhcpOptionValueTypeEnum } from '../../../api-client';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from './dhcp-option-value.util';
 
+/** These tests cover encoding and decoding each option value type, and rejecting bad input. */
 describe('dhcp-option-value.util', () => {
   describe('IPv4Address', () => {
     it('round-trips a plain address', () => {

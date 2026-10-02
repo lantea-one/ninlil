@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DHCP Leases page: loading, the scope filter and paging, refresh, and
+ * force-release with its permission check and confirmation. TestBed with spy-backed lease and
+ * scope APIs, `AuthService` and `NotificationService`.
+ */
 describe('DhcpLeaseListComponent', () => {
   let leasesApiSpy: { apiDhcpLeasesGet: jasmine.Spy; apiDhcpLeasesIdReleasePost: jasmine.Spy };
   let scopesApiSpy: { apiDhcpScopesGet: jasmine.Spy };

@@ -149,10 +149,8 @@
           </div>
 
           <div formArrayName="options">
-            <!-- Tracked by the FormGroup instance itself, not $index -- see
-                 DhcpScopeFormComponent's own options table template for the real bug this avoids
-                 (confirmed live in a real browser: a native <select> can visually desync from its
-                 own bound FormControl's real value after a middle row is removed). -->
+            <!-- Track by the FormGroup, not $index; see the options table in the scope form
+                 template. -->
             @for (row of options.controls; track row) {
               <div [formGroupName]="$index" class="option-row">
                 <div class="field">

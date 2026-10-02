@@ -47,21 +47,19 @@ import { planDhcpOptionReconciliation } from '../../shared/dhcp-option-reconcile
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 
 /**
- * This interface is one merged catalog entry {@link DhcpTagRuleFormComponent.combinedCatalog}
- * carries -- a tag rule has no `protocolVersion` of its own (unlike a scope), since a rule can
- * apply regardless of which protocol a matching client actually used, so its own options table
- * dropdown shows both DHCPv4 and DHCPv6's own well-known options together, each labeled with its
- * own protocol so a same-numbered-but-different-meaning tag across the two protocols is never
- * ambiguous.
+ * This interface is one entry of {@link DhcpTagRuleFormComponent.combinedCatalog}. Unlike a
+ * scope, a tag rule has no protocol version, so its option dropdown lists the DHCPv4 and DHCPv6
+ * catalogs together, each entry labeled with its protocol, since the same tag number can mean
+ * different options in the two.
  */
 interface CombinedCatalogEntry {
   protocolVersion: InternetProtocolVersionEnum;
   entry: DhcpOptionCatalogEntryDetail;
-  /** This entry's own dropdown value -- `"{protocolVersion}:{code}"`, unique across both protocols' catalogs even where their raw tag/code numbers happen to collide. */
+  /** The dropdown value, `"{protocolVersion}:{code}"`, unique across both catalogs even where tag numbers collide. */
   selectionValue: string;
 }
 
-/** This type alias names one contributed-option table row's own typed shape explicitly -- the tag-rule analogue of `DhcpScopeFormComponent`'s own `DhcpScopeOptionRowFormGroup`, minus the `isDisabled`/`comments` fields a tag-rule option has no backend concept of at all. */
+/** This type names the typed shape of one option row, like the scope form's row but without `isDisabled` and `comments`, which tag rule options do not have. */
 type DhcpTagRuleOptionRowFormGroup = FormGroup<{
   id: FormControl<string | null>;
   catalogSelection: FormControl<string>;
@@ -70,25 +68,27 @@ type DhcpTagRuleOptionRowFormGroup = FormGroup<{
   value: FormControl<string>;
 }>;
 
-/** The literal `catalogSelection` value meaning "a raw, uncataloged tag" rather than a real catalog entry -- matches `DhcpScopeFormComponent`'s own sentinel. */
+/** The `catalogSelection` value for a tag typed by hand, as on the scope form. */
 const CUSTOM_TAG_SELECTION = 'custom';
 
-/** The small, per-row derived display state this component recomputes on every change that could invalidate it -- the tag-rule analogue of `DhcpScopeFormComponent`'s own `DhcpOptionRowViewState`. */
+/** The display state of one option row, rebuilt on every relevant change, as on the scope form. */
 interface DhcpOptionRowViewState {
   valueType: DhcpOptionValueTypeEnum | null;
   isServerAddressEligible: boolean;
 }
 
 /**
- * This component is both the "create a tag rule" and "edit a tag rule" page -- one component for
- * both, distinguished by whether the route supplies a `tagRuleId` (see `app.routes.ts`). A rule's
- * own contributed options are now managed inline, right here, as a dynamic table -- the same
- * catalog-driven option dropdown plus type-adaptive value editor `DhcpScopeFormComponent`'s own
- * doc comment describes, minus that form's own `isDisabled`/`comments` per-row fields, since
- * `DhcpTagRuleOptionEntity` has no backend concept of either (the owning rule's own `isDisabled`
- * flag is this table's only real on/off switch). Saving reconciles this table's current rows
- * against `DhcpTagRuleOptionsController`'s own real per-row CRUD endpoints via
- * {@link planDhcpOptionReconciliation}, exactly like the scope form's own table.
+ * This component is the create and edit page for a DHCP tag rule (`/dhcp-tag-rules/new` and
+ * `/dhcp-tag-rules/:tagRuleId/edit`, `dhcptagrules:write`); edit mode is chosen by the
+ * `tagRuleId` route parameter. A tag rule matches clients (by vendor class, user class or relay
+ * agent fields, optionally within one scope) and adds DHCP options for them. It saves with
+ * `POST /api/dhcp-tag-rules` or `PUT /api/dhcp-tag-rules/{id}`.
+ *
+ * <p>The rule's options are a table on this form, working like the scope form's table
+ * (`DhcpScopeFormComponent`) but drawing on both protocols' catalogs and without per-row
+ * `isDisabled` and `comments`; the rule's `isDisabled` switches them all. On save the rows are
+ * written one call at a time through `/api/dhcp-tag-rules/{id}/options`
+ * ({@link planDhcpOptionReconciliation}).
  */
 @Component({
   selector: 'app-dhcp-tag-rule-form',
@@ -134,16 +134,16 @@ export class DhcpTagRuleFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Every DHCP scope this rule's own optional scope restriction can be pinned to. */
+  /** The scopes offered for the rule's optional scope restriction. */
   readonly scopes = signal<DhcpScopeDetail[]>([]);
 
-  /** Both protocols' own well-known DHCP option catalogs, merged -- see this class's own doc comment for why a tag rule's options table isn't narrowed to one protocol. */
+  /** The DHCPv4 and DHCPv6 option catalogs merged; see {@link CombinedCatalogEntry}. */
   readonly combinedCatalog = signal<CombinedCatalogEntry[]>([]);
 
-  /** Every contributed-option row's own id as it stood right after this table was last loaded -- see {@link planDhcpOptionReconciliation}. */
+  /** The ids of the option rows as loaded, for {@link planDhcpOptionReconciliation}. */
   private originallyLoadedOptionIds: string[] = [];
 
-  /** One {@link DhcpOptionRowViewState} per {@link options} row -- see `DhcpScopeFormComponent`'s own identically-named signal for why this is a full recompute rather than an incremental patch. */
+  /** One {@link DhcpOptionRowViewState} per option row. */
   readonly optionRowViewState = signal<DhcpOptionRowViewState[]>([]);
 
   readonly form = this.formBuilder.group({
@@ -163,7 +163,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     options: this.formBuilder.array<DhcpTagRuleOptionRowFormGroup>([]),
   });
 
-  /** {@link options}'s own `FormArray`, exposed for the template. */
+  /** The option rows' `FormArray`, for the template. */
   get options() {
     return this.form.controls.options;
   }
@@ -174,19 +174,19 @@ export class DhcpTagRuleFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingRule();
   }
 
-  /** This method appends one new, empty contributed-option row, defaulting to a raw/custom tag exactly like this table's original standalone add page did. */
+  /** This method adds an empty option row, starting as a custom tag. */
   addOptionRow(): void {
     this.options.push(this.buildOptionRowGroup(null));
     this.recomputeOptionRowViewState();
   }
 
-  /** This method removes one contributed-option row -- its own `DELETE` (if it was ever persisted) is issued only when the whole rule is saved. */
+  /** This method removes an option row; a saved row is deleted on the server when the rule is saved. */
   removeOptionRow(index: number): void {
     this.options.removeAt(index);
     this.recomputeOptionRowViewState();
   }
 
-  /** This method runs when one row's own catalog dropdown changes -- the tag-rule analogue of `DhcpScopeFormComponent.onOptionCatalogSelectionChange`. */
+  /** This method runs when a row's catalog dropdown changes, as on the scope form (`DhcpScopeFormComponent.onOptionCatalogSelectionChange`). */
   onOptionCatalogSelectionChange(index: number): void {
     const row = this.options.at(index);
     const selection = row.controls.catalogSelection.value;
@@ -203,7 +203,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     this.recomputeOptionRowViewState();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the rule, then reconciles the options table's own rows. */
+  /** This method creates the rule (`POST`) or replaces it (`PUT`), then saves the option rows one call at a time. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -268,7 +268,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
     }
   }
 
-  /** This method looks up {@link combinedCatalog}'s own entry for one row, or `undefined` for {@link CUSTOM_TAG_SELECTION}/an unmatched tag. */
+  /** This method returns a row's catalog entry, or `undefined` for a custom or unknown tag. */
   catalogEntryFor(row: DhcpTagRuleOptionRowFormGroup): CombinedCatalogEntry | undefined {
     const selection = row.controls.catalogSelection.value;
     if (selection === CUSTOM_TAG_SELECTION) return undefined;
@@ -280,9 +280,8 @@ export class DhcpTagRuleFormComponent implements OnInit {
       const page = await firstValueFrom(this.scopesApi.apiDhcpScopesGet({ skip: 0, take: 500 }));
       this.scopes.set(page.items ?? []);
     } catch {
-      // A failed scope lookup only narrows this form's own optional scope-restriction dropdown --
-      // the rest of the form remains usable, and a genuinely invalid scopeId is still rejected
-      // server-side.
+      // Without the scopes the restriction select is empty; the rest of the form works, and the
+      // backend rejects an unknown scopeId.
     }
   }
 
@@ -310,8 +309,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
         ),
       ]);
     } catch {
-      // A failed catalog fetch only narrows the options table's own dropdown to the "Custom /
-      // other option..." choice for every row -- raw tag/hex entry still works.
+      // Without the catalog every row can only be a custom tag with a raw hex value.
       this.combinedCatalog.set([]);
     } finally {
       this.recomputeOptionRowViewState();
@@ -338,23 +336,13 @@ export class DhcpTagRuleFormComponent implements OnInit {
   }
 
   /**
-   * This method builds one option row's own `FormGroup`. A loaded row's own `catalogSelection`
-   * resolves against {@link combinedCatalog}'s own entries matching its `optionTag` -- since a
-   * rule's own contributed option carries no protocol of its own either, the same raw tag number
-   * can genuinely name two different options across the two catalogs (confirmed live: DHCPv4
-   * option 23, Default IP Time-to-live, collides with DHCPv6 option 23, DNS Recursive Name
-   * Server). Picking the wrong one isn't merely cosmetic here -- it drives which value-type editor
-   * {@link decodeDhcpOptionValue} renders, so blindly preferring whichever catalog was fetched
-   * first (DHCPv4) previously produced a genuinely broken display (a 16-byte IPv6 address decoded
-   * as a 1-byte UInt8, rendering an empty, invalid numeric spinbutton). When more than one
-   * candidate shares this row's own `optionTag`, this method now prefers whichever one's own
-   * value type actually decodes the stored `valueHex` without throwing (a strict, fixed/aligned
-   * byte-length type like an address or a fixed-width integer disambiguates this cleanly); when
-   * more than one candidate's type is lenient enough to "succeed" trivially (both `String` and
-   * `OpaqueHex` decode any byte sequence without throwing -- DHCPv4 option 17/Root Path vs DHCPv6
-   * option 17/Vendor-specific Information is exactly this case), the first match still wins, an
-   * accepted, narrower residual ambiguity given a tag-rule option has no protocol field at all to
-   * resolve it definitively.
+   * This method builds an option row's `FormGroup`. A stored option has no protocol, and the same
+   * tag can name different options in the two catalogs (DHCPv4 23 is Default IP Time-to-live,
+   * DHCPv6 23 is DNS Recursive Name Server). The choice decides the value editor, so when several
+   * catalog entries share the tag, the row takes the first whose type decodes the stored value. A
+   * fixed-size type (an address, an integer) settles it; `String` and `OpaqueHex` accept any
+   * bytes, so between those (DHCPv4 17 Root Path and DHCPv6 17 Vendor-specific Information) the
+   * first entry wins.
    */
   private buildOptionRowGroup(
     existing: DhcpTagRuleOptionDetail | null,
@@ -390,8 +378,8 @@ export class DhcpTagRuleFormComponent implements OnInit {
         matchingEntry = decodable.candidate;
         displayValue = decodable.decoded;
       } else {
-        // No candidate's own value type fits the stored bytes at all -- fall back to plain
-        // raw-hex editing for this one row, exactly like an uncataloged tag always has.
+        // No entry's type fits the stored bytes: keep the raw hex as the value rather than lose
+        // it. The row still selects the first entry, so its typed editor shows the hex.
         matchingEntry = candidates[0];
         displayValue = existing.valueHex ?? '';
       }
@@ -502,9 +490,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
         comments: rule.comments ?? '',
       });
 
-      // The combined catalog is fetched unconditionally at ngOnInit -- wait for it so each
-      // loaded row's own catalogSelection can resolve against the real catalog rather than an
-      // empty one.
+      // Load the catalog before building rows, so each row can match its catalog entry.
       await this.loadCombinedCatalog();
 
       const optionsPage = await firstValueFrom(

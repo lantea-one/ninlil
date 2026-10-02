@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { QuickStatsComponent } from './quick-stats.component';
 
+/** These tests cover the quick-stat tiles, including the em dash for an unavailable count. */
 describe('QuickStatsComponent', () => {
   async function createComponent() {
     await TestBed.configureTestingModule({ imports: [QuickStatsComponent] }).compileComponents();

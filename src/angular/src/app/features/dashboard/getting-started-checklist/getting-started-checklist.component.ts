@@ -10,17 +10,13 @@ import { IconDirective } from '@coreui/icons-angular';
 import { GettingStartedItem } from '../dashboard.model';
 
 /**
- * The `localStorage` key this component reads/writes to remember a dismissal across a page
- * reload. Deliberately per-browser, not per-account or server-persisted -- a per-viewer UI
- * convenience, matching the same scope every other browser-local preference in a web app of this
- * kind carries, and the first such convenience in this codebase (this app's session tokens are
- * the one thing deliberately kept in-memory-only instead, per `AuthService`'s own doc comment --
- * an unrelated security decision about a different kind of state, not a precedent against using
- * `localStorage` here).
+ * The `localStorage` key that remembers a dismissal across reloads. It is per browser, not per
+ * account, since it is only a display preference. (Keeping session tokens out of storage, as
+ * `AuthService` does, is a separate security rule that does not apply here.)
  */
 const DISMISSED_STORAGE_KEY = 'ninlil:dashboard:getting-started-dismissed';
 
-/** This function reads the dismissal flag, defaulting to `false` if storage is unavailable (private browsing, a disabled-storage browser setting) or simply empty. */
+/** This function reads the dismissal flag, or `false` when it is unset or storage is unavailable (e.g. blocked by the browser). */
 function readDismissedFlag(): boolean {
   try {
     return localStorage.getItem(DISMISSED_STORAGE_KEY) === 'true';
@@ -30,20 +26,14 @@ function readDismissedFlag(): boolean {
 }
 
 /**
- * This component renders the Dashboard's own "Getting Started" checklist card: a short, fixed
- * 4-row list ({@link GettingStartedChecklistService} resolves each row's real `complete` state
- * against a live backend endpoint), each row a real `routerLink` straight to the page that
- * satisfies it. Purely presentational -- {@link DashboardComponent} owns the actual fetch, the
- * same split this app's other dashboard-area components ({@link QuickStatsComponent},
- * {@link HealthTileGridComponent}) already follow -- except for the one piece of state that
- * belongs here and nowhere else: dismissal, a `localStorage`-persisted, per-browser UI
- * convenience with no server-side representation at all.
- * <p>
- * The card hides itself for two entirely different reasons, both handled by {@link visible}:
- * the caller dismissed it, or every visible row is now genuinely complete. The second case wins
- * even over a *stale* dismissal -- a caller who dismissed the card while 3 of 4 rows were done,
- * then later finishes the 4th without ever re-opening it, still sees it gone for good rather than
- * silently lingering as available-but-hidden forever.
+ * This component renders the Dashboard's "Getting Started" card: up to four onboarding steps, each
+ * linking to the page that completes it. {@link DashboardComponent} fetches the rows through
+ * {@link GettingStartedChecklistService}; this component only displays them and keeps the
+ * dismissal, which is stored in `localStorage` for this browser only.
+ *
+ * <p>The card is hidden ({@link visible}) when there are no rows, when every row is done, or when
+ * the user dismissed it. A dismissal is permanent for the browser, even if some steps are still
+ * open.
  */
 @Component({
   selector: 'app-getting-started-checklist',
@@ -59,34 +49,33 @@ function readDismissedFlag(): boolean {
   styleUrl: './getting-started-checklist.component.scss',
 })
 export class GettingStartedChecklistComponent {
-  /** The checklist rows to render, already permission-filtered by {@link GettingStartedChecklistService}. */
+  /** The rows to show, already filtered by permission in {@link GettingStartedChecklistService}. */
   readonly items = input<GettingStartedItem[]>([]);
 
-  /** Whether this browser has dismissed the card, seeded once from `localStorage` at construction. */
+  /** Whether this browser dismissed the card, read from `localStorage` when the component is created. */
   private readonly dismissedByUser = signal(readDismissedFlag());
 
-  /** Whether every row in {@link items} is complete -- vacuously `false` when {@link items} is empty, since there is then nothing to show either way. */
+  /** Whether every row is done; `false` when there are no rows. */
   readonly allComplete = computed(() => {
     const rows = this.items();
     return rows.length > 0 && rows.every((row) => row.complete);
   });
 
   /**
-   * Whether the card should render at all: at least one permission-visible row exists, not every
-   * one of them is already complete, and this browser hasn't dismissed it.
+   * Whether the card renders: there is at least one row, not all are done, and this browser has
+   * not dismissed it.
    */
   readonly visible = computed(
     () => this.items().length > 0 && !this.allComplete() && !this.dismissedByUser(),
   );
 
-  /** This method dismisses the card for this browser, persisting the choice so it stays gone across a reload. */
+  /** This method hides the card and remembers that in `localStorage`, so it stays hidden after a reload. */
   dismiss(): void {
     this.dismissedByUser.set(true);
     try {
       localStorage.setItem(DISMISSED_STORAGE_KEY, 'true');
     } catch {
-      // Private browsing / disabled storage -- the in-memory signal above still hides the card
-      // for the rest of this page visit, the only guarantee this method can make in that case.
+      // Storage is unavailable: the card stays hidden until the page is reloaded.
     }
   }
 }

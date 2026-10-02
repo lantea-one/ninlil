@@ -9,6 +9,10 @@ import {
 } from '../../api-client';
 import { DashboardStatsService } from './dashboard-stats.service';
 
+/**
+ * These tests cover the dashboard data service: `/status` with and without detail, the four
+ * `take=1` counts and a failed count becoming `null`. TestBed with spy-backed API services.
+ */
 describe('DashboardStatsService', () => {
   let service: DashboardStatsService;
   let statusApiSpy: { statusGet: jasmine.Spy };

@@ -5,6 +5,7 @@ interface TestRow {
   value: string;
 }
 
+/** These tests cover splitting edited option rows into creates, updates and deletes. */
 describe('planDhcpOptionReconciliation', () => {
   it('treats every id-less row as a create, regardless of originally loaded ids', () => {
     const rows: TestRow[] = [{ id: null, value: 'a' }];

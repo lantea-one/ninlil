@@ -14,6 +14,12 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the tag rule form: create and edit, the match fields (including the DHCPv6
+ * ones), and the options table (merged catalog, adding, encoding, server address, errors, tag
+ * collisions between catalogs, and the create/update/delete calls). TestBed with spy-backed rule,
+ * option, scope and catalog APIs and a stubbed route.
+ */
 describe('DhcpTagRuleFormComponent', () => {
   let tagRulesApiSpy: {
     apiDhcpTagRulesPost: jasmine.Spy;
@@ -329,10 +335,9 @@ describe('DhcpTagRuleFormComponent', () => {
     });
 
     it('disambiguates a loaded option whose tag collides across both catalogs by which one actually decodes the stored value', async () => {
-      // A real, live-confirmed collision: DHCPv4 option 23 (Default IP Time-to-live, UInt8 --
-      // exactly 1 byte) vs DHCPv6 option 23 (DNS Recursive Name Server, IPv4/IPv6AddressList --
-      // here a single IPv6 address, 16 bytes). Blindly preferring the first (IPv4) match used to
-      // decode a genuine 16-byte IPv6 address as an invalid 1-byte UInt8.
+      // DHCPv4 option 23 (Default IP Time-to-live, UInt8, 1 byte) collides with DHCPv6 option 23
+      // (DNS Recursive Name Server, an address list; here one 16-byte IPv6 address). Taking the
+      // first catalog's entry would decode the address as a 1-byte UInt8.
       const ipv4DefaultTtl = {
         code: 23,
         name: 'Default IP Time-to-live',
@@ -378,9 +383,8 @@ describe('DhcpTagRuleFormComponent', () => {
                 id: 'opt-1',
                 tagRuleId: 'rule-1',
                 optionTag: 23,
-                // 2001:db8::1, 16 bytes -- decodes as UInt8 only if truncated/misread, but
-                // DhcpOptionValueTypeEnum.UInt8's own decode strictly requires exactly 1 byte and
-                // throws otherwise, which is exactly what makes this disambiguation possible.
+                // 2001:db8::1, 16 bytes. Decoding as UInt8 requires exactly 1 byte and throws,
+                // which is what tells the two entries apart.
                 valueHex: '20010DB8000000000000000000000001',
               },
             ],

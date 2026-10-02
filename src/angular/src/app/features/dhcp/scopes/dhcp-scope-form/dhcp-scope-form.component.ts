@@ -48,13 +48,10 @@ import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-
 import { joinLines, splitLines } from './dhcp-scope-form.model';
 
 /**
- * This type alias names one custom-option table row's own typed shape explicitly, the same
- * `noPropertyAccessFromIndexSignature`-driven pattern `RaRouteFormGroup`
- * (`DhcpSettingsComponent`) already establishes for a `FormArray` row. `catalogSelection` is the
- * dropdown's own bound value -- either a catalog entry's `code` (as a string) or the literal
- * sentinel `'custom'` for a genuinely uncataloged raw tag; `optionTag` is the real numeric tag
- * this row actually submits, kept in sync with `catalogSelection` by
- * {@link DhcpScopeFormComponent.onOptionCatalogSelectionChange}.
+ * This type names the typed shape of one custom-option row, so the controls can be read without
+ * index-signature access. `catalogSelection` is the dropdown value: a catalog entry's `code` as a
+ * string, or `'custom'` for a tag not in the catalog. `optionTag` is the tag actually sent, kept
+ * in step with `catalogSelection` by {@link DhcpScopeFormComponent.onOptionCatalogSelectionChange}.
  */
 type DhcpScopeOptionRowFormGroup = FormGroup<{
   id: FormControl<string | null>;
@@ -66,77 +63,49 @@ type DhcpScopeOptionRowFormGroup = FormGroup<{
   comments: FormControl<string>;
 }>;
 
-/** The literal `catalogSelection` value meaning "a raw, uncataloged tag" rather than a real catalog entry. */
+/** The `catalogSelection` value for a tag typed by hand rather than chosen from the catalog. */
 const CUSTOM_TAG_SELECTION = 'custom';
 
 /**
- * This interface is the small, derived-per-row display state {@link DhcpScopeFormComponent}
- * recomputes (never incrementally patched) every time something that could invalidate it changes
- * -- a row added/removed, a row's own catalog selection changed, the catalog itself reloaded for
- * a new protocol version, or an existing scope's options finished loading. Recomputing the whole
- * array each time is simple and cheap at this table's realistic size, and keeps this zoneless
- * component's own reactivity explicit rather than relying on a template expression reading a
- * `FormControl`'s live value directly (which this app's own established convention -- see this
- * class's own `selectedProtocolVersion`/`selectedKind` signals -- avoids in favor of an explicit
- * signal update on every relevant `valueChanges`/DOM event instead).
+ * This interface is the display state of one option row. The component rebuilds the whole array
+ * whenever a row is added or removed, a row's catalog selection changes, the catalog reloads, or
+ * a scope's options finish loading. That is cheap at this size and keeps the zoneless template
+ * on signals instead of reading form control values directly.
  */
 interface DhcpOptionRowViewState {
-  /** The resolved catalog entry's own value type, or `null` for a row with no catalog match (an uncataloged/custom tag, or a stored option tag the current protocol's catalog doesn't recognize). */
+  /** The catalog entry's value type, or `null` for a custom tag or a tag the catalog does not know. */
   valueType: DhcpOptionValueTypeEnum | null;
-  /** Whether the resolved catalog entry allows "use this server's own address" as this row's value source. */
+  /** Whether the catalog entry allows "use this server's address" as the value. */
   isServerAddressEligible: boolean;
 }
 
 /**
- * This component is both the "create a DHCP scope" and "edit a DHCP scope" page -- one component
- * for both, distinguished by whether the route supplies a `scopeId` (see `app.routes.ts`). A
- * scope's own reservations are still managed separately, through `DhcpReservationListComponent`,
- * but its custom options are now managed inline, right here, as a dynamic table -- an option
- * dropdown (sourced from `GET /api/dhcp-option-catalog`, filtered to this scope's own
- * `protocolVersion`) plus a value editor that adapts to the selected option's own value type
- * (an IP address field, a number field, a checkbox, ...) instead of a raw hex box, and a "use
- * this server's own address" toggle for a catalog entry that allows it -- see
- * `DhcpOptionValueSourceEnum`'s own doc comment for exactly what that substitutes at delivery
- * time. A row whose tag isn't in the catalog (typed by hand via the dropdown's own "Custom /
- * other option..." choice) still falls back to a plain raw-hex value box, unchanged from this
- * form's original behavior -- nothing about a genuinely custom option's own real flexibility was
- * lost by adding the catalog-driven path alongside it. Saving reconciles this table's current
- * rows against `DhcpScopeCustomOptionsController`'s own real per-row CRUD endpoints (it has no
- * bulk-replace action) via {@link planDhcpOptionReconciliation} -- for a brand-new scope (no
- * `scopeId` yet), every row is naturally a create, issued only after the scope itself is created
- * and its own real id is known.
+ * This component is the create and edit page for a DHCP scope (`/dhcp-scopes/new` and
+ * `/dhcp-scopes/:scopeId/edit`, `dhcpscopes:write`); edit mode is chosen by the `scopeId` route
+ * parameter. It saves with `POST /api/dhcp-scopes` or `PUT /api/dhcp-scopes/{id}`. Reservations
+ * have their own page (`DhcpReservationListComponent`).
  *
- * <p>`gatewayAddresses`/`dnsServerAddresses` are each edited as a one-address-per-line textarea,
- * split/joined via {@link splitLines}/{@link joinLines} -- the same convention
- * `TransportSettingsComponent` already establishes for a certificate's own subject alternative
- * names list. `defaultLeaseDuration`/`maxLeaseDuration` are edited as raw .NET `TimeSpan` strings
- * (for example `1.00:00:00` for one day) -- this project's own established convention for every
- * duration field across the admin SPA (see `TransportSettingsComponent`'s own `tcpIdleTimeout`),
- * rather than a bespoke duration picker.
+ * <p>The scope's custom options are a table on this form. Each row picks an option from
+ * `GET /api/dhcp-option-catalog` for the scope's protocol version and edits its value with a
+ * field fitting the option's type (`dhcp-option-value.util.ts`), or with "use this server's
+ * address" where the catalog allows it (`DhcpOptionValueSourceEnum`). The "Custom / other option"
+ * choice takes a typed tag and a raw hex value. On save the rows are written one call at a time
+ * through `/api/dhcp-scopes/{id}/custom-options`, which has no bulk replace
+ * ({@link planDhcpOptionReconciliation}).
  *
- * <p>`dnsZoneId` is an optional DHCP-&gt;DNS integration setting: the zone a lease drawn from this
- * scope should auto-register an A/AAAA record for its own presented host name into. Its own
- * dropdown, populated from a one-time zones fetch narrowed to `Primary`/`CloudPrimary` (the only
- * zone types this feature ever actually acts on -- see `DhcpScopeEntity.DnsZoneId`'s own doc
- * comment), follows the exact same "optional dropdown resolved from a one-time fetch" pattern
- * `DhcpTagRuleFormComponent`'s own scope-restriction dropdown already establishes.
+ * <p>Gateways and DNS servers are one address per line ({@link splitLines}, {@link joinLines}).
+ * Lease durations are .NET `TimeSpan` strings, such as `1.00:00:00` for one day.
  *
- * <p>`bootFileName`/`nextServerAddress` are this scope's own optional PXE boot configuration --
- * see `DhcpScopeEntity.BootFileName`'s own doc comment. Left blank, `nextServerAddress` falls
- * back to this server's own Server Identifier address at lease-grant time.
+ * <p>`dnsZoneId` is the zone leases from this scope register A/AAAA records in; the select offers
+ * Primary and CloudPrimary zones, the only types registration works with. `bootFileName` and
+ * `nextServerAddress` are the PXE boot settings; a blank next server means this server's
+ * address.
  *
- * <p>`kind`/`delegatedPrefixLength` are meaningful only for an IPv6 scope -- RFC 8415 Prefix
- * Delegation (`DhcpScopeKindEnum.PrefixDelegation`) has no DHCPv4 analogue at all, so the `kind`
- * dropdown, and its own `delegatedPrefixLength` field, are shown only once {@link protocolVersion}
- * is IPv6 ({@link showKindField}); the `delegatedPrefixLength` field itself is shown, and required,
- * only once `kind` is actually `PrefixDelegation` ({@link showDelegatedPrefixLengthField}).
- * Switching `protocolVersion` away from IPv6 resets `kind` back to `AddressAssignment`, and
- * switching `kind` away from `PrefixDelegation` resets `delegatedPrefixLength` back to
- * `null` -- both mirror the exact "reset the field the new mode no longer uses, re-require the one
- * it does" convention `ClientGroupNetworkFormComponent`'s own `matchKind` switch already
- * establishes, so `save()` never submits a stale, no-longer-applicable value. Switching
- * `protocolVersion` also refetches the option catalog {@link options}'s own dropdown uses, since
- * DHCPv4 and DHCPv6 each have their own distinct set of well-known options.
+ * <p>`kind` and `delegatedPrefixLength` apply to IPv6 only, since Prefix Delegation (RFC 8415)
+ * has no DHCPv4 form: the `kind` select shows for IPv6 scopes ({@link showKindField}) and the
+ * prefix length for Prefix Delegation ({@link showDelegatedPrefixLengthField}). Switching away
+ * resets the field that no longer applies, so a stale value is never sent. Changing the protocol
+ * version also reloads the option catalog.
  */
 @Component({
   selector: 'app-dhcp-scope-form',
@@ -182,16 +151,16 @@ export class DhcpScopeFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Every zone this scope's own optional DHCP-&gt;DNS integration setting can designate. */
+  /** The zones offered for DNS registration (Primary and CloudPrimary). */
   readonly eligibleZones = signal<ZoneDetail[]>([]);
 
-  /** This scope's own well-known DHCP option catalog, refetched whenever {@link protocolVersion} changes. */
+  /** The DHCP option catalog for the selected protocol, refetched when the protocol changes. */
   readonly optionCatalog = signal<DhcpOptionCatalogEntryDetail[]>([]);
 
-  /** Every custom-option row's own id as it stood right after this table was last loaded -- see {@link planDhcpOptionReconciliation}. */
+  /** The ids of the option rows as loaded, for {@link planDhcpOptionReconciliation}. */
   private originallyLoadedOptionIds: string[] = [];
 
-  /** {@link DhcpOptionRowViewState}, one entry per {@link options} row, recomputed on every change that could invalidate it. */
+  /** One {@link DhcpOptionRowViewState} per option row. */
   readonly optionRowViewState = signal<DhcpOptionRowViewState[]>([]);
 
   readonly form = this.formBuilder.group({
@@ -217,25 +186,25 @@ export class DhcpScopeFormComponent implements OnInit {
     options: this.formBuilder.array<DhcpScopeOptionRowFormGroup>([]),
   });
 
-  /** {@link options}'s own `FormArray`, exposed for the template. */
+  /** The option rows' `FormArray`, for the template. */
   get options() {
     return this.form.controls.options;
   }
 
-  /** {@link form}'s own live `protocolVersion` value, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected `protocolVersion` as a signal (the form's `valueChanges` is not one). */
   private readonly selectedProtocolVersion = signal<InternetProtocolVersionEnum>(
     InternetProtocolVersionEnum.Ipv4,
   );
 
-  /** {@link form}'s own live `kind` value, tracked the same way {@link selectedProtocolVersion} is. */
+  /** The selected `kind` as a signal. */
   private readonly selectedKind = signal<DhcpScopeKindEnum>(DhcpScopeKindEnum.AddressAssignment);
 
-  /** Whether the `kind` dropdown itself is shown at all -- IPv6 scopes only, per this class's own doc comment. */
+  /** Whether the `kind` select is shown: IPv6 scopes only. */
   readonly showKindField = computed(
     () => this.selectedProtocolVersion() === InternetProtocolVersionEnum.Ipv6,
   );
 
-  /** Whether the `delegatedPrefixLength` field is shown (and required) -- an IPv6 scope set to `PrefixDelegation` only. */
+  /** Whether the `delegatedPrefixLength` field is shown and required: IPv6 Prefix Delegation scopes only. */
   readonly showDelegatedPrefixLengthField = computed(
     () => this.showKindField() && this.selectedKind() === DhcpScopeKindEnum.PrefixDelegation,
   );
@@ -244,8 +213,7 @@ export class DhcpScopeFormComponent implements OnInit {
     this.form.controls.protocolVersion.valueChanges.subscribe((protocolVersion) => {
       this.selectedProtocolVersion.set(protocolVersion);
 
-      // Prefix Delegation has no DHCPv4 analogue -- switching away from IPv6 always resets `kind`
-      // back to the only value a non-IPv6 scope ever legitimately has.
+      // Prefix Delegation exists only for IPv6, so a non-IPv6 scope is reset to AddressAssignment.
       if (
         protocolVersion !== InternetProtocolVersionEnum.Ipv6 &&
         this.form.controls.kind.value !== DhcpScopeKindEnum.AddressAssignment
@@ -280,23 +248,22 @@ export class DhcpScopeFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingScope();
   }
 
-  /** This method appends one new, empty custom-option row, defaulting to a raw/custom tag exactly like this form's original standalone add page did. */
+  /** This method adds an empty option row, starting as a custom tag. */
   addOptionRow(): void {
     this.options.push(this.buildOptionRowGroup(null));
     this.recomputeOptionRowViewState();
   }
 
-  /** This method removes one custom-option row -- its own `DELETE` (if it was ever persisted) is issued only when the whole scope is saved, per this class's own doc comment. */
+  /** This method removes an option row; a saved row is deleted on the server when the scope is saved. */
   removeOptionRow(index: number): void {
     this.options.removeAt(index);
     this.recomputeOptionRowViewState();
   }
 
   /**
-   * This method runs when one row's own catalog dropdown changes: keeps `optionTag` in sync with
-   * the newly chosen catalog entry (or leaves it freely editable for
-   * {@link CUSTOM_TAG_SELECTION}), resets `value`/`valueSource` since a prior value's own shape
-   * is very unlikely to still make sense for a genuinely different option, and recomputes
+   * This method runs when a row's catalog dropdown changes. It sets `optionTag` to the chosen
+   * entry (or leaves it editable for {@link CUSTOM_TAG_SELECTION}), clears `value` and
+   * `valueSource`, since the old value rarely fits a different option, and recomputes
    * {@link optionRowViewState}.
    */
   onOptionCatalogSelectionChange(index: number): void {
@@ -312,7 +279,11 @@ export class DhcpScopeFormComponent implements OnInit {
     this.recomputeOptionRowViewState();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the scope, then reconciles the options table's own rows. */
+  /**
+   * This method checks every option value, creates the scope (`POST`) or replaces it (`PUT`), then
+   * saves the option rows one call at a time ({@link planDhcpOptionReconciliation}). A new scope's
+   * options are saved after the scope exists, since they need its id.
+   */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -380,7 +351,7 @@ export class DhcpScopeFormComponent implements OnInit {
     }
   }
 
-  /** This method looks up {@link optionCatalog}'s own entry for one row, or `undefined` for {@link CUSTOM_TAG_SELECTION}/an unmatched tag. */
+  /** This method returns a row's catalog entry, or `undefined` for a custom or unknown tag. */
   catalogEntryFor(row: DhcpScopeOptionRowFormGroup): DhcpOptionCatalogEntryDetail | undefined {
     const selection = row.controls.catalogSelection.value;
     if (selection === CUSTOM_TAG_SELECTION) return undefined;
@@ -396,9 +367,8 @@ export class DhcpScopeFormComponent implements OnInit {
         ),
       );
     } catch {
-      // A failed zone lookup only narrows this form's own optional DNS zone dropdown -- the rest
-      // of the form remains usable, and a genuinely invalid dnsZoneId is still rejected
-      // server-side.
+      // Without the zones (e.g. no zones:read) the zone select is empty; the rest of the form
+      // works, and the backend rejects an unknown dnsZoneId.
     }
   }
 
@@ -409,16 +379,14 @@ export class DhcpScopeFormComponent implements OnInit {
       );
       this.optionCatalog.set(entries);
     } catch {
-      // A failed catalog fetch only narrows the options table's own dropdown to the "Custom /
-      // other option..." choice for every row -- raw tag/hex entry still works, exactly as this
-      // form always supported.
+      // Without the catalog every row can only be a custom tag with a raw hex value.
       this.optionCatalog.set([]);
     } finally {
       this.recomputeOptionRowViewState();
     }
   }
 
-  /** This method rebuilds {@link optionRowViewState} from scratch against {@link options}'s current rows and {@link optionCatalog}'s current entries -- see that signal's own doc comment for why this is a full recompute rather than an incremental patch. */
+  /** This method rebuilds {@link optionRowViewState} from the current rows and catalog. */
   private recomputeOptionRowViewState(): void {
     this.optionRowViewState.set(
       this.options.controls.map((row) => {
@@ -431,20 +399,15 @@ export class DhcpScopeFormComponent implements OnInit {
     );
   }
 
-  /** This method builds one option row's own `FormGroup`, from an existing loaded option or as a fresh, empty row defaulting to a raw/custom tag. */
+  /** This method builds an option row's `FormGroup` from a loaded option, or an empty custom-tag row. */
   private buildOptionRowGroup(
     existing: DhcpScopeCustomOptionDetail | null,
   ): DhcpScopeOptionRowFormGroup {
     const optionTag = existing?.optionTag ?? 1;
     const valueSource = existing?.valueSource ?? DhcpOptionValueSourceEnum.Custom;
 
-    // A loaded row's own catalogSelection starts as the matching catalog entry's own code (as a
-    // string) if one exists for the current catalog snapshot, or the "Custom / other option..."
-    // sentinel otherwise -- the catalog for a brand-new row's own protocol is already loaded by
-    // the time this method can be called from `addOptionRow`, but a row built while loading an
-    // existing scope (see `loadExistingScope`) may run before that fetch resolves, in which case
-    // every row starts as `CUSTOM_TAG_SELECTION` and is corrected retroactively by
-    // `recomputeOptionRowViewState`'s own caller once the catalog itself arrives.
+    // A loaded row selects the catalog entry for its tag, or the custom choice when the catalog
+    // has none. loadExistingScope() waits for the catalog before building rows, so it is here.
     const matchingEntry = existing
       ? this.optionCatalog().find((entry) => entry.code === optionTag)
       : undefined;
@@ -458,10 +421,8 @@ export class DhcpScopeFormComponent implements OnInit {
           existing.valueHex ?? '',
         );
       } catch {
-        // The stored value doesn't fit the matched catalog entry's own expected byte shape (or
-        // there's no catalog match at all) -- fall back to plain raw-hex editing for this one
-        // row, exactly like an uncataloged tag always has, rather than losing the value or
-        // crashing the form.
+        // The stored bytes do not fit the catalog type, so keep the raw hex as the value rather
+        // than lose it. The row keeps its catalog selection, so its typed editor shows the hex.
         displayValue = existing.valueHex ?? '';
       }
     }
@@ -477,7 +438,7 @@ export class DhcpScopeFormComponent implements OnInit {
     });
   }
 
-  /** This method turns {@link options}'s current rows into real write-request payloads, throwing with a row-identifying message the moment any one row's own value fails to encode. */
+  /** This method turns the option rows into write requests, throwing a message naming the row whose value fails to encode. */
   private buildOptionWriteRequests(): {
     id: string | null;
     request: DhcpScopeCustomOptionWriteRequest;
@@ -553,9 +514,8 @@ export class DhcpScopeFormComponent implements OnInit {
     try {
       const scope = await firstValueFrom(this.scopesApi.apiDhcpScopesIdGet({ id: this.scopeId }));
 
-      // `protocolVersion` and `kind` are patched before `delegatedPrefixLength` deliberately --
-      // each one's own valueChanges subscription (see this class's own constructor) may reset a
-      // later field, so the actual loaded value must be applied last to win over that reset.
+      // Keep this key order: the protocolVersion and kind subscriptions (constructor) can reset
+      // kind and delegatedPrefixLength, so the loaded values must be applied after them.
       this.form.patchValue({
         name: scope.name ?? '',
         protocolVersion: scope.protocolVersion ?? InternetProtocolVersionEnum.Ipv4,
@@ -575,9 +535,8 @@ export class DhcpScopeFormComponent implements OnInit {
         delegatedPrefixLength: scope.delegatedPrefixLength ?? null,
       });
 
-      // The protocolVersion patch above already triggered a fresh catalog fetch via its own
-      // valueChanges subscription -- wait for it so each loaded row's own catalogSelection can
-      // resolve against the real, matching catalog rather than whatever the form started with.
+      // Load the catalog for the scope's protocol before building rows, so each row can match
+      // its catalog entry.
       await this.loadOptionCatalog(scope.protocolVersion ?? InternetProtocolVersionEnum.Ipv4);
 
       const optionsPage = await firstValueFrom(

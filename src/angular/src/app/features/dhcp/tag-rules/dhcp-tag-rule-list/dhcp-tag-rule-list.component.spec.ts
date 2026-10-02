@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the tag rule list: loading with scope names and their fallbacks, the toggle
+ * and delete. TestBed with spy-backed rule and scope APIs and `NotificationService`.
+ */
 describe('DhcpTagRuleListComponent', () => {
   let tagRulesApiSpy: {
     apiDhcpTagRulesGet: jasmine.Spy;

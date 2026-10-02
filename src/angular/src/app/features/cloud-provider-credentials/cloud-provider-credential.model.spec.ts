@@ -6,6 +6,7 @@ import {
   toControlName,
 } from './cloud-provider-credential.model';
 
+/** These tests cover the per-provider credential fields, control names and payload building. */
 describe('cloud-provider-credential.model', () => {
   it('credentialFieldsFor() returns a single ApiToken field for Cloudflare', () => {
     expect(credentialFieldsFor(CloudDnsProviderTypeEnum.Cloudflare)).toEqual([

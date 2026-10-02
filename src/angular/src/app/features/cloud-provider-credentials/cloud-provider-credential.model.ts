@@ -1,24 +1,19 @@
 import { CloudDnsProviderTypeEnum } from '../../api-client';
 
-/** This interface describes one secret-material field a given provider type's own credential shape requires. */
+/** This interface describes one secret field a provider type's credentials need. */
 export interface CredentialFieldDefinition {
-  /** The exact key this field is stored under in the `credentials` dictionary the backend expects. */
+  /** The key of this field in the `credentials` dictionary the backend expects. */
   key: string;
 
-  /** The field's own human-readable label, shown both in the form and in the reveal-once dialog. */
+  /** The label shown in the form and in the reveal-once dialog. */
   label: string;
 }
 
 /**
- * This constant maps each {@link CloudDnsProviderTypeEnum} onto the secret-material field(s) its
- * own credential shape requires -- confirmed directly against
- * `CloudProviderCredentialsController.TryValidateCredentials`, not assumed from each provider's
- * own public API documentation: Cloudflare and DigitalOcean both authenticate with a single
- * `ApiToken`, while Route 53 needs an `AccessKeyId` *and* a `SecretAccessKey` together. Mirrored
- * here (not reused from the backend) since this is a client-side presentation concern, the same
- * "mirror, don't share a dependency across the REST boundary" precedent the backend's own
- * `TryValidateCredentials` doc comment already establishes for itself relative to
- * `ICloudDnsProvider`'s own sync-time checks.
+ * This constant maps each {@link CloudDnsProviderTypeEnum} to the secret fields its credentials
+ * need: one `ApiToken` for Cloudflare and DigitalOcean, `AccessKeyId` and `SecretAccessKey` for
+ * Route 53. It must match the backend's `CloudCredentialValidator`, which rejects a set missing a
+ * field with a 400.
  */
 export const CREDENTIAL_FIELDS_BY_PROVIDER_TYPE: Readonly<
   Record<CloudDnsProviderTypeEnum, readonly CredentialFieldDefinition[]>
@@ -31,7 +26,7 @@ export const CREDENTIAL_FIELDS_BY_PROVIDER_TYPE: Readonly<
   ],
 };
 
-/** This function returns the ordered credential field list a given provider type's own shape requires. */
+/** This function returns the credential fields a provider type needs, in display order. */
 export function credentialFieldsFor(
   providerType: CloudDnsProviderTypeEnum,
 ): readonly CredentialFieldDefinition[] {
@@ -39,11 +34,10 @@ export function credentialFieldsFor(
 }
 
 /**
- * This function converts one credential dictionary key (`"ApiToken"`, `"AccessKeyId"`, ...) into
- * the matching, idiomatically-camelCase Reactive Forms control name (`"apiToken"`,
- * `"accessKeyId"`, ...) `CloudProviderCredentialFormComponent`'s own fixed form group declares --
- * a small, pure, reversible transform rather than a second, hand-maintained key-to-control-name
- * map that could silently drift out of sync with {@link CREDENTIAL_FIELDS_BY_PROVIDER_TYPE}.
+ * This function turns a credential key (`"ApiToken"`, `"AccessKeyId"`, ...) into the form control
+ * name `CloudProviderCredentialFormComponent` uses (`"apiToken"`, `"accessKeyId"`, ...), by
+ * lowercasing the first letter. Deriving it avoids a second map that could drift from
+ * {@link CREDENTIAL_FIELDS_BY_PROVIDER_TYPE}.
  */
 export function toControlName(dictionaryKey: string): string {
   return dictionaryKey.length === 0
@@ -52,11 +46,9 @@ export function toControlName(dictionaryKey: string): string {
 }
 
 /**
- * This function builds the exact `credentials` dictionary shape the backend expects
- * (`Dictionary<string, string>`, keyed by each field's own PascalCase name) out of a form's own
- * flat, camelCase raw value object, reading only the fields the selected provider type's own
- * shape actually requires -- a Route 53 form's own unused `apiToken` control, for instance, is
- * never included even if a caller left a stray value in it from switching provider types.
+ * This function builds the `credentials` dictionary the backend expects (keyed by PascalCase
+ * name) from the form's camelCase values, reading only the fields the provider type needs. A
+ * stray value left in another provider's field, after switching type, is not sent.
  */
 export function buildCredentialsPayload(
   providerType: CloudDnsProviderTypeEnum,
@@ -69,7 +61,7 @@ export function buildCredentialsPayload(
   return payload;
 }
 
-/** This function reports whether every field a built credentials payload requires actually has a non-blank value. */
+/** This function reports whether every field in a built credentials payload is non-blank. */
 export function credentialsPayloadIsComplete(payload: Readonly<Record<string, string>>): boolean {
   return Object.values(payload).every((value) => value.trim().length > 0);
 }

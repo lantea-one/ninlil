@@ -36,32 +36,17 @@ import {
 } from '../dhcp-service.model';
 
 /**
- * This component lists the four DHCP-family services `DhcpServiceControlController` administers --
- * DHCPv4, DHCPv6, Router Advertisement, and TFTP -- sourced from `GET /api/dhcp-services`, each
- * showing two deliberately distinct signals side by side rather than collapsed into one badge: its
- * configured `Enabled` flag (whether it starts automatically at the next host boot) and its live
- * `IsRunning` signal (whether its socket is genuinely bound and serving traffic right now). These
- * two can legitimately differ in either direction -- a service can be configured off yet started
- * live through this same page, or configured on yet stopped live -- which is the entire point of
- * `IDhcpProtocolService`'s own real, in-process hot start/stop design (see that interface's own
- * doc comment, and `DhcpServiceControlController`'s own doc comment for why this is a separate REST
- * surface, and therefore a separate page, from this app's general Service Lifecycle Management page).
+ * This component is the DHCP Services page (`/dhcp-services`, `dhcpservices:read`). It lists the
+ * four services `DhcpServiceControlController` controls (DHCPv4, DHCPv6, Router Advertisement and
+ * TFTP) from `GET /api/dhcp-services`. Each row shows two separate badges: the configured `Enable`
+ * flag, which decides whether the service starts at boot, and whether it is running now. They
+ * can differ either way, because start and stop here change only the running state, not the flag.
  *
- * <p>This page is deliberately **not** merged into {@link ServiceListComponent} (`features/services/`)
- * for that same structural reason -- `IManagedServiceRegistration` has no way to express "configured
- * `Enable` governs only the automatic boot-time start, never a later live one." It does, however,
- * reuse that page's own established visual/interaction idiom end to end, so an operator experiences
- * one consistent "service control" pattern across both pages even though they are backed by
- * different controllers: a persistent risk banner, a real running-state badge per row (here, a
- * second, distinctly colored badge for the configured flag alongside it), a dedicated confirmation
- * dialog naming each action's own real, service-specific consequence (see
- * {@link dhcpLifecycleConfirmation}), and every start/stop button hidden outright -- not merely
- * disabled -- for a session lacking `dhcpservices:manage`, mirroring
- * {@link ServiceListComponent}'s own "hide, don't merely disable, a destructive action the session
- * cannot use" precedent. The route itself is gated on the lighter `dhcpservices:read` (see
- * `app.routes.ts`), matching {@link List}'s own permission, since this list only reveals which
- * services exist, their configured flag, and whether each is genuinely running -- no secret or
- * configuration data.
+ * <p>It is separate from the general Services page ({@link ServiceListComponent}) because that
+ * page's registration model cannot express "the flag governs only the start at boot". It looks
+ * and behaves the same way: a risk banner, a confirmation naming each action's consequence
+ * ({@link dhcpLifecycleConfirmation}), and start and stop buttons
+ * (`POST /api/dhcp-services/{kind}/start` and `/stop`) shown only with `dhcpservices:manage`.
  */
 @Component({
   selector: 'app-dhcp-service-list',
@@ -87,13 +72,13 @@ export class DhcpServiceListComponent {
   private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending lifecycle action. */
+  /** Whether the start/stop confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly kindLabel = kindLabel;
@@ -104,14 +89,14 @@ export class DhcpServiceListComponent {
 
   readonly displayedColumns = ['name', 'enabled', 'running', 'actions'];
 
-  /** Whether the signed-in session holds `dhcpservices:manage` -- gates every start/stop button. */
+  /** Whether the user holds `dhcpservices:manage`; the start and stop buttons show only then. */
   readonly canManage = this.authService.hasPermission('dhcpservices:manage');
 
   readonly services = signal<DhcpServiceStatus[]>([]);
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The kind of whichever single service currently has a lifecycle action in flight, if any. */
+  /** The service whose start or stop is in flight, if any. */
   readonly actingOn = signal<DhcpServiceKindEnum | null>(null);
 
   constructor() {
@@ -119,9 +104,8 @@ export class DhcpServiceListComponent {
   }
 
   /**
-   * This method runs one lifecycle action against one DHCP-family service, but only after the
-   * operator confirms a dialog naming that action's own real, service-specific consequence -- see
-   * {@link dhcpLifecycleConfirmation}.
+   * This method asks for confirmation ({@link dhcpLifecycleConfirmation}), then starts or stops
+   * a service and puts the returned status in its row.
    */
   async invoke(action: DhcpServiceLifecycleAction, service: DhcpServiceStatus): Promise<void> {
     if (!service.kind) return;
@@ -157,7 +141,7 @@ export class DhcpServiceListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -170,7 +154,7 @@ export class DhcpServiceListComponent {
       : this.dhcpServicesApi.apiDhcpServicesKindStopPost({ kind });
   }
 
-  /** This method swaps one updated service status into {@link services} in place, by kind. */
+  /** This method replaces one service's status in {@link services}, matched by kind. */
   private replaceService(updated: DhcpServiceStatus): void {
     this.services.update((services) =>
       services.map((service) => (service.kind === updated.kind ? updated : service)),
@@ -194,7 +178,7 @@ export class DhcpServiceListComponent {
   }
 }
 
-/** This function renders one lifecycle action's own past-tense verb, for a success notification. */
+/** This function returns the past tense of an action, for the success notification. */
 function pastTense(action: DhcpServiceLifecycleAction): string {
   return action === 'start' ? 'started' : 'stopped';
 }

@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the update banner: hidden without an update, shown with one, and no request
+ * without `selfupdate:read`. TestBed with spy-backed `SelfUpdateService` and `AuthService`.
+ */
 describe('SelfUpdateNoticeComponent', () => {
   let apiSpy: { apiSelfUpdateGet: jasmine.Spy };
   let authSpy: { hasPermission: jasmine.Spy };

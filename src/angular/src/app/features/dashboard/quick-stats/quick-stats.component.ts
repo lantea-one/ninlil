@@ -4,10 +4,9 @@ import { IconDirective } from '@coreui/icons-angular';
 import { QuickStat } from '../dashboard.model';
 
 /**
- * This component renders this app's own "quick stat" tiles -- a small row of icon-led count
- * cards (zones, forwarders, filter lists, webhooks) computed from a minimal `take=1` list request
- * each. A `null` count (a resource the signed-in caller lacks permission to list) renders as an
- * explicit em dash rather than a misleading `0`.
+ * This component renders the Dashboard's quick-stat tiles: counts of zones, forwarders, filter
+ * lists and webhooks, from {@link DashboardStatsService}. A `null` count (usually a resource the
+ * user may not list) shows an em dash instead of a misleading `0`.
  */
 @Component({
   selector: 'app-quick-stats',

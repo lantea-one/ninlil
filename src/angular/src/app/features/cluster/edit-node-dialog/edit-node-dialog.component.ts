@@ -19,17 +19,13 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 
 /**
- * This component is the "edit peer" dialog `ClusterComponent` opens from its own peer table,
- * wired to `PATCH /api/cluster/nodes/{id}` (`ClusterController.Patch`). It follows the same
- * dedicated-sibling-dialog shape `ResetPasswordDialogComponent` already establishes for a small,
- * low-field-count admin action reached from a list page: a `visible`/`node` input pair, a
- * `visibleChange` output for both an explicit cancel and the modal's own backdrop/Escape
- * dismissal, and a `saved` output the parent reloads its list from.
+ * This component is the "edit peer" dialog that `ClusterComponent` opens from its peer table. It
+ * saves a peer's name and notes with `PATCH /api/cluster/nodes/{id}` (`clusternodes:write`). The
+ * parent drives it with the `visible` and `node` inputs, hides it on `visibleChange(false)` and
+ * reloads its list on `saved`.
  *
- * Only `Name` and `Comments` are editable here -- every other field on {@link ClusterNodeDetail}
- * (address, port, TSIG key, pinned certificate thumbprint, heartbeat status) is fixed once a peer
- * row exists, learned once during the join handshake, exactly as `ClusterNodeWriteRequest`'s own
- * backend doc comment explains.
+ * <p>Only the name and comments can change. The address, port, TSIG key and pinned certificate
+ * are learned during the join, and the heartbeat status is the server's.
  */
 @Component({
   selector: 'app-edit-node-dialog',
@@ -54,16 +50,16 @@ export class EditNodeDialogComponent {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Whether this dialog is currently shown -- a caller drives this with its own signal. */
+  /** Whether the dialog is shown; the caller drives this with a signal. */
   readonly visible = input<boolean>(false);
 
-  /** Which peer this dialog instance edits the name/notes of. */
+  /** The peer whose name and notes are edited. */
   readonly node = input<ClusterNodeDetail | null>(null);
 
-  /** Emits this dialog's own new visibility -- `false` on every close, whether cancelled, a save failure the operator gave up on, or a completed save. */
+  /** Emits `false` whenever the dialog closes: a cancel, a backdrop click or Escape, or a successful save. */
   readonly visibleChange = output<boolean>();
 
-  /** Emits once a save has actually succeeded, so the caller can reload its own peer list. */
+  /** Emits after a successful save, so the caller can reload its peer list. */
   readonly saved = output<void>();
 
   readonly submitting = signal(false);
@@ -75,10 +71,8 @@ export class EditNodeDialogComponent {
   });
 
   constructor() {
-    // Re-seed the form every time a fresh peer is handed in (a new `node` input value), so
-    // reopening this same dialog instance for a different row -- or the same row after an
-    // external reload changed its own comments -- never shows stale values left over from a
-    // previous edit.
+    // Refill the form whenever a new `node` arrives, so reopening the dialog for another peer, or
+    // for the same peer after a reload, never shows values from an earlier edit.
     effect(() => {
       const current = this.node();
       this.editForm.reset({
@@ -89,7 +83,7 @@ export class EditNodeDialogComponent {
     });
   }
 
-  /** This method submits the edited name/notes against `PATCH /api/cluster/nodes/{id}`. */
+  /** This method saves the name and notes; empty notes are sent as `null`. */
   async submit(): Promise<void> {
     const target = this.node();
     if (!target?.id || this.editForm.invalid || this.submitting()) return;
@@ -119,7 +113,7 @@ export class EditNodeDialogComponent {
     }
   }
 
-  /** This method runs when the modal reports a new visibility on its own (a backdrop click or Escape). */
+  /** This method handles the modal closing itself (a backdrop click or Escape) as a cancel. */
   onModalVisibleChange(visible: boolean): void {
     if (!visible) {
       this.errorMessage.set(null);

@@ -1,9 +1,9 @@
 import { DhcpServiceKindEnum } from '../../../api-client';
 
-/** The two lifecycle actions {@link DhcpServiceListComponent} can invoke against a DHCP-family service. */
+/** The two actions the DHCP Services page can run on a service. */
 export type DhcpServiceLifecycleAction = 'start' | 'stop';
 
-/** This constant maps each {@link DhcpServiceKindEnum} onto its human-readable display name. */
+/** This constant maps each {@link DhcpServiceKindEnum} to its display name. */
 const KIND_LABELS: Readonly<Record<DhcpServiceKindEnum, string>> = {
   [DhcpServiceKindEnum.Dhcpv4]: 'DHCPv4',
   [DhcpServiceKindEnum.Dhcpv6]: 'DHCPv6',
@@ -16,33 +16,31 @@ export function kindLabel(kind: DhcpServiceKindEnum | undefined): string {
   return kind ? (KIND_LABELS[kind] ?? kind) : 'Unknown service';
 }
 
-/** This function reports which badge color represents a service's own live running state. */
+/** This function returns the badge color for whether a service is running. */
 export function runningBadgeColor(isRunning: boolean | undefined): string {
   return isRunning ? 'success' : 'danger';
 }
 
-/** This function reports the label a service's own live running-state badge shows. */
+/** This function returns the label of the running-state badge. */
 export function runningLabel(isRunning: boolean | undefined): string {
   return isRunning ? 'Running' : 'Stopped';
 }
 
 /**
- * This function reports which badge color represents a service's own configured `Enable` flag --
- * deliberately a distinct, muted pairing (`info`/`secondary`) from {@link runningBadgeColor}'s own
- * `success`/`danger` pairing, so the two signals this page's entire premise rests on -- "will this
- * start automatically at the next boot" versus "is this bound and serving traffic right now" --
- * never look like restatements of the same fact at a glance, even when they happen to agree.
+ * This function returns the badge color for the configured `Enable` flag. It uses muted colors
+ * (`info`/`secondary`), unlike {@link runningBadgeColor}'s `success`/`danger`, so "starts at boot"
+ * and "running now" never look like the same fact.
  */
 export function enabledBadgeColor(enabled: boolean | undefined): string {
   return enabled ? 'info' : 'secondary';
 }
 
-/** This function reports the label a service's own configured-`Enable` badge shows. */
+/** This function returns the label of the configured-`Enable` badge. */
 export function enabledLabel(enabled: boolean | undefined): string {
   return enabled ? 'Enabled at boot' : 'Disabled at boot';
 }
 
-/** This interface describes the title/message/confirm-label text one confirmation dialog shows. */
+/** This interface describes the title, message and button label of a confirmation dialog. */
 export interface DhcpServiceLifecycleConfirmation {
   title: string;
   message: string;
@@ -50,14 +48,10 @@ export interface DhcpServiceLifecycleConfirmation {
 }
 
 /**
- * This function builds the risk-aware confirmation text one lifecycle action against one DHCP-family
- * service shows before it fires -- the same "name the real, specific consequence, never a generic
- * 'are you sure?'" precedent {@link lifecycleConfirmation} (this app's general Services page)
- * establishes, reworded for what each of these four services specifically does: DHCPv4/DHCPv6
- * genuinely stop issuing/renewing real client leases, Router Advertisement stops SLAAC-configuring
- * IPv6 hosts and withdrawing itself as a default router, and TFTP stops answering PXE boot-file
- * requests (aborting any transfer already in progress, per `TftpServer`'s own documented live-stop
- * contract).
+ * This function builds the confirmation text for starting or stopping a service. As on the
+ * Services page, it names the consequence instead of asking "are you sure?": DHCPv4 and DHCPv6
+ * stop issuing and renewing leases, Router Advertisement stops advertising this server as a
+ * default router, and stopping TFTP aborts transfers in progress, such as a PXE boot download.
  */
 export function dhcpLifecycleConfirmation(
   action: DhcpServiceLifecycleAction,
@@ -71,12 +65,12 @@ export function dhcpLifecycleConfirmation(
   return { title, message, confirmLabel };
 }
 
-/** This function capitalizes one lifecycle action into the verb its dialog title/button use. */
+/** This function returns the capitalized verb used in the dialog title and button. */
 function actionVerb(action: DhcpServiceLifecycleAction): string {
   return action === 'start' ? 'Start' : 'Stop';
 }
 
-/** This function builds the risk message for starting one DHCP-family service live. */
+/** This function builds the message for starting a service. */
 function startMessage(kind: DhcpServiceKindEnum, name: string): string {
   switch (kind) {
     case DhcpServiceKindEnum.Dhcpv4:
@@ -89,7 +83,7 @@ function startMessage(kind: DhcpServiceKindEnum, name: string): string {
   }
 }
 
-/** This function builds the risk message for stopping one DHCP-family service live. */
+/** This function builds the message for stopping a service. */
 function stopMessage(kind: DhcpServiceKindEnum, name: string): string {
   switch (kind) {
     case DhcpServiceKindEnum.Dhcpv4:

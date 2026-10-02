@@ -11,20 +11,16 @@ import {
 import { QuickStat } from './dashboard.model';
 
 /**
- * This interface describes the one field every one of the 4 paged-list responses this service
- * reads actually needs -- every generated `*DetailPagedResult` model shape carries it, so this
- * narrower structural type lets {@link fetchCount} stay generic over all 4 without importing
- * each specific generated model just to read a single shared field.
+ * This interface is the one field the count needs from every generated `*PagedResult` model, so
+ * `fetchCount` can take any of the four responses without importing each model.
  */
 interface CountedPage {
   totalCount?: number;
 }
 
 /**
- * This service fetches the Dashboard's own data: the additive `GET /status` health response, and
- * 4 derived "quick stat" counts -- zones, forwarders, filter lists, and webhooks, picked as
- * whichever REST list endpoints are the most immediately meaningful to an operator landing on
- * this page.
+ * This service fetches the Dashboard's data: the `GET /status` health response and four quick-stat
+ * counts (zones, forwarders, filter lists and webhooks).
  */
 @Injectable({ providedIn: 'root' })
 export class DashboardStatsService {
@@ -34,19 +30,15 @@ export class DashboardStatsService {
   private readonly filterListsApi = inject(FilterListsApiService);
   private readonly webhooksApi = inject(WebhooksApiService);
 
-  /** This method fetches `GET /status`. */
+  /** This method fetches `GET /status`. Per-component detail is included only with `status:read`. */
   async fetchStatus(): Promise<StatusResponse> {
     return firstValueFrom(this.statusApi.statusGet());
   }
 
   /**
-   * This method fetches one lightweight `skip=0&take=1` page from each of the 4 list endpoints
-   * named above, reading only `PagedResult.totalCount` -- never a full page of data just to count
-   * it. Each request is resolved independently, not as one failure-propagating `Promise.all`, so
-   * a caller lacking one
-   * resource's own `*:read` permission (a real possibility: the dashboard route itself requires
-   * no specific permission at all) still sees every *other* stat tile, with the denied one
-   * rendered as unavailable rather than the whole dashboard failing to load.
+   * This method requests one `skip=0&take=1` page from each of the four list endpoints and reads
+   * `totalCount`. Each request catches its error and yields `count: null`, so a user without
+   * one resource's read permission still sees the other tiles. It never rejects.
    */
   async fetchQuickStats(): Promise<QuickStat[]> {
     return Promise.all([

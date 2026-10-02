@@ -10,20 +10,14 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { GettingStartedItem } from '../dashboard.model';
 
 /**
- * This service resolves the 4 fixed rows of the Dashboard's "Getting Started" checklist against
- * this session's own real, current server state -- deliberately kept to exactly 4 (add a zone,
- * create a non-admin user, enable a DNS transport beyond Plain DNS, configure SMTP), since a
- * longer list stops reading as "getting started."
- * <p>
- * Every row is gated by its own real backend permission first, matching this app's existing
- * `NAV_ITEMS`/`SettingsShellComponent.SETTINGS_TABS` filtering precedent: a caller lacking a
- * row's underlying `*:read` permission never sees that row at all -- there is no way for such a
- * caller to ever observe it change to "complete," so showing it would just be permanently
- * misleading, not merely unhelpful. A row whose own fetch fails despite holding that permission
- * (a transient network error, a permission revoked between the guard check and the request)
- * still renders, marked incomplete rather than thrown away entirely -- the same "a denied/failed
- * read degrades one tile, never the whole dashboard" precedent {@link DashboardStatsService}'s own
- * `fetchCount` already established for the quick-stat tiles.
+ * This service works out the rows of the Dashboard's "Getting Started" checklist from the current
+ * server state. There are four steps (add a zone, create a second user, enable a DNS transport
+ * besides plain DNS, configure SMTP); a longer list would stop being "getting started".
+ *
+ * <p>A row appears only when the user holds the read permission its check needs (`zones:read`,
+ * `users:read`, `transportsettings:read`, `smtpsettings:read`). Without it the row could never
+ * turn complete, so it is left out. A check that fails anyway (a network error) shows its row as
+ * incomplete, and the other rows still load.
  */
 @Injectable({ providedIn: 'root' })
 export class GettingStartedChecklistService {
@@ -34,10 +28,9 @@ export class GettingStartedChecklistService {
   private readonly smtpSettingsApi = inject(SmtpSettingsApiService);
 
   /**
-   * This method resolves every permission-visible row concurrently (not one after another, since
-   * no row's own completion check depends on another's) and returns them in the checklist's own
-   * fixed display order, regardless of which rows a given session can see -- a caller missing the
-   * `users:read` permission, say, simply gets a 3-row array back, never a gap or a placeholder.
+   * This method runs the checks of the rows the user may see in parallel and returns those rows
+   * in display order. A user without `users:read`, for example, gets three rows. It never
+   * rejects.
    */
   async fetchItems(): Promise<GettingStartedItem[]> {
     const checks: Promise<GettingStartedItem>[] = [];
@@ -54,8 +47,7 @@ export class GettingStartedChecklistService {
     if (this.authService.hasPermission('users:read')) {
       checks.push(
         this.resolveItem('create-user', 'Create a non-admin user', '/users', async () => {
-          // > 1, not > 0 -- every server always has at least the bootstrap administrator account,
-          // so this row is satisfied only once a second, real account exists alongside it.
+          // More than one, because the bootstrap administrator account always exists.
           const page = await firstValueFrom(this.usersApi.apiUsersGet({ skip: 0, take: 1 }));
           return (page.totalCount ?? 0) > 1;
         }),
@@ -69,9 +61,8 @@ export class GettingStartedChecklistService {
           'Enable a DNS transport beyond Plain DNS',
           '/settings/transports',
           async () => {
-            // Plain DNS itself is never checked here -- it is the one transport already on by
-            // default, so this row is deliberately about the other 4, and is satisfied the
-            // moment any single one of them is switched on, not all of them.
+            // Plain DNS is on by default, so this checks the other four; any one of them being
+            // enabled completes the row.
             const [dot, doh, doq, dnscrypt] = await Promise.all([
               firstValueFrom(this.transportSettingsApi.apiTransportSettingsDnsOverTlsGet()),
               firstValueFrom(this.transportSettingsApi.apiTransportSettingsDnsOverHttpsGet()),
@@ -102,8 +93,8 @@ export class GettingStartedChecklistService {
   }
 
   /**
-   * This method wraps one row's own `check` in a `try`/`catch` so a single failed request marks
-   * only that row incomplete, never rejects the whole {@link fetchItems} call.
+   * This method runs one row's `check`. A failure marks that row incomplete instead of rejecting
+   * {@link fetchItems}.
    */
   private async resolveItem(
     id: string,

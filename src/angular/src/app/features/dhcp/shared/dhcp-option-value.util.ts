@@ -1,19 +1,15 @@
 /**
- * This module translates between a DHCP option's own friendly, typed display value (an IP
- * address, a plain number, a checkbox state) and the raw, even-length uppercase hexadecimal
- * string `DhcpScopeCustomOptionEntity`/`DhcpTagRuleOptionEntity`'s own `ValueHex` field actually
- * stores and delivers on the wire -- the whole reason `DhcpOptionsFormArray` (see
- * `dhcp-option-row.util.ts`) can offer an IP-address field or a number field instead of a raw hex
- * box for a catalog-recognized option. Nothing on the backend interprets `ValueHex` by value
- * type at all (`Ninlil.Dhcp.Common.OptionCatalog`'s own catalog is metadata only, per its own
- * doc comment) -- this project's Angular workspace is the only place that ever does, so a
- * decode failure here (a stored value whose byte length doesn't match what its own catalog entry
- * expects) must never throw all the way up into a broken form; the caller always falls back to
- * plain raw-hex editing for that one row instead.
+ * This module converts between a DHCP option's display value (an IP address, a number, a
+ * checkbox) and the uppercase hex string stored in the option's `ValueHex`. It lets the scope and
+ * tag rule forms show a typed field for an option the catalog knows, instead of a raw hex box.
+ *
+ * <p>The backend does not interpret `ValueHex` by type (its option catalog is metadata only), so
+ * this module is the only place that does. When a stored value does not fit its catalog type, the
+ * forms catch the decode error and show that row as raw hex.
  */
 import { DhcpOptionValueTypeEnum } from '../../../api-client';
 
-/** This function splits a textarea's own one-entry-per-line text into a trimmed, non-empty-only array. */
+/** This function splits one-entry-per-line text into trimmed, non-empty entries. */
 function splitLines(text: string): string[] {
   return text
     .split('\n')
@@ -44,10 +40,9 @@ function formatIpv4(bytes: readonly number[]): string {
 }
 
 /**
- * This function parses an IPv6 address (with optional `::` zero-run compression, per RFC 4291
- * §2.2) into its 16 octets -- the same algorithm `AplRecordFormComponent`'s own `apl-cidr.util.ts`
- * establishes for the identical parsing problem, kept as its own small copy here rather than a
- * cross-feature import so this module stays self-contained within `features/dhcp`.
+ * This function parses an IPv6 address, with optional `::` compression (RFC 4291 §2.2), into 16
+ * octets. The zones feature's `apl-cidr.util.ts` has the same parser; this copy keeps the DHCP
+ * feature free of a cross-feature import.
  */
 function parseIpv6(address: string): number[] {
   const halves = address.split('::');
@@ -87,7 +82,7 @@ function parseIpv6(address: string): number[] {
   return bytes;
 }
 
-/** This function formats 16 octets into a full-form (non-compressed) IPv6 address. */
+/** This function formats 16 octets as an IPv6 address without `::` compression. */
 function formatIpv6(bytes: readonly number[]): string {
   const groups: string[] = [];
 
@@ -107,9 +102,8 @@ function bytesToHex(bytes: readonly number[]): string {
 }
 
 /**
- * This function decodes an even-length hexadecimal string into its raw bytes -- the same
- * `Convert.FromHexString` shape `DhcpScopeCustomOptionsController.TryValidate` validates
- * server-side, so anything this function accepts is also something the real backend accepts.
+ * This function decodes an even-length hex string into bytes. It accepts the same input as the
+ * backend's `Convert.FromHexString` check, so a value it accepts is not rejected on save.
  */
 function hexToBytes(hex: string): number[] {
   const trimmed = hex.trim();
@@ -140,12 +134,10 @@ function parseIntInRange(text: string, min: number, max: number): number {
 }
 
 /**
- * This function encodes a friendly, typed display value into the raw hexadecimal string this
- * option's own `ValueHex` field stores -- {@link decodeDhcpOptionValue}'s own inverse.
- * `valueType === null` (a genuinely uncataloged tag) is treated exactly like
- * {@link DhcpOptionValueTypeEnum.OpaqueHex}: the operator's own typed text is already the raw hex
- * value, unchanged (beyond validation/canonicalization) -- the same "trust the operator for a raw
- * tag" posture this entity has always had.
+ * This function encodes a display value into the hex string stored in `ValueHex`, the inverse of
+ * {@link decodeDhcpOptionValue}. It throws when the value is invalid. A `null` `valueType` (an
+ * option not in the catalog) is treated as {@link DhcpOptionValueTypeEnum.OpaqueHex}: the typed
+ * text is the hex value, only checked and uppercased.
  */
 export function encodeDhcpOptionValue(
   valueType: DhcpOptionValueTypeEnum | null,
@@ -183,8 +175,8 @@ export function encodeDhcpOptionValue(
       return bytesToHex([(value >> 8) & 0xff, value & 0xff]);
     }
 
-    // A Duration option is RFC 2132's own plain unsigned 32-bit seconds count (e.g. IP Address
-    // Lease Time) -- the same wire shape as UInt32, just labeled differently for the operator.
+    // A Duration is an unsigned 32-bit count of seconds (e.g. RFC 2132 IP Address Lease Time),
+    // encoded like UInt32.
     case DhcpOptionValueTypeEnum.UInt32:
     case DhcpOptionValueTypeEnum.Duration: {
       const value = parseIntInRange(trimmed, 0, 0xffffffff);
@@ -206,12 +198,9 @@ export function encodeDhcpOptionValue(
 }
 
 /**
- * This function decodes this option's own stored `ValueHex` back into the friendly, typed display
- * value {@link encodeDhcpOptionValue} produced -- throws (never silently produces a wrong value)
- * when the stored bytes don't match the shape `valueType` expects, e.g. a stored value that isn't
- * exactly 4 bytes for {@link DhcpOptionValueTypeEnum.Ipv4Address}. The caller is responsible for
- * catching that and falling back to raw-hex editing for the affected row -- see this module's own
- * doc comment for why.
+ * This function decodes a stored `ValueHex` into the display value for `valueType`. It throws,
+ * rather than returning a wrong value, when the bytes do not fit the type (e.g. not 4 bytes for
+ * {@link DhcpOptionValueTypeEnum.Ipv4Address}); the caller then shows the row as raw hex.
  */
 export function decodeDhcpOptionValue(
   valueType: DhcpOptionValueTypeEnum | null,

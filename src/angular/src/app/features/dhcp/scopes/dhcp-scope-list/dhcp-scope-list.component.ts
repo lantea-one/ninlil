@@ -29,25 +29,19 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 
-/** How many DHCP scopes one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every DHCP scope (address pool) this server manages, backed by
- * `GET /api/dhcp-scopes`'s own real `skip`/`take` pagination, with actions to manage a scope's own
- * static reservations and custom options, edit its metadata, and delete it (behind a confirmation
- * dialog, since `DhcpScopesController.Delete` also removes every reservation and custom option the
- * scope holds) -- the same "one parent, several nested child collections" shape
- * `ClientGroupListComponent` already establishes for a client group's own networks and list
- * assignments.
+ * This component is the DHCP Scopes page (`/dhcp-scopes`, `dhcpscopes:read`). It lists scopes a
+ * page at a time from `GET /api/dhcp-scopes` and links to each scope's reservations. With
+ * `dhcpscopes:write` it offers create, edit (which includes the custom options), delete and an
+ * enable/disable toggle (`PATCH`); without it the toggle is disabled and the rest hidden.
+ * Deleting a scope also deletes its reservations and custom options, but not its leases.
  *
- * <p>Each row also shows a compact, real "Utilization" summary -- this closes the "no utilization
- * view anywhere" gap: `DhcpScopesController.Statistics` (`GET /api/dhcp-scopes/{id}/statistics`)
- * is fetched once per scope on the current page, in parallel, right after the page itself loads,
- * so the figures shown are always freshly computed against this scope's own real, current
- * lease/reservation data -- never a cached or approximate one. A failed per-scope fetch (a
- * transient error, never expected in practice) simply leaves that one row's own utilization blank
- * rather than failing the whole list.
+ * <p>Each row shows the scope's utilization from `GET /api/dhcp-scopes/{id}/statistics`, fetched
+ * for every scope on the page in parallel after the page loads. A failed fetch leaves only that
+ * row's utilization blank.
  */
 @Component({
   selector: 'app-dhcp-scope-list',
@@ -73,13 +67,13 @@ export class DhcpScopeListComponent {
   private readonly scopesApi = inject(DhcpScopesService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = [
@@ -99,24 +93,24 @@ export class DhcpScopeListComponent {
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  /** This page's own current scopes' real, freshly-computed utilization, keyed by scope identifier. */
+  /** The utilization of the scopes on this page, by scope id. */
   readonly statisticsByScopeId = signal<ReadonlyMap<string, DhcpScopeStatisticsDetail>>(new Map());
 
-  /** Whether this page's own per-scope statistics fetch is still in flight. */
+  /** Whether the per-scope statistics are still loading. */
   readonly statisticsLoading = signal(true);
 
   constructor() {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a scope's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a scope's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(scope: DhcpScopeDetail): Promise<void> {
     if (!scope.id) return;
 
@@ -134,7 +128,7 @@ export class DhcpScopeListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a DHCP scope -- including every reservation and custom option it holds. */
+  /** This method asks for confirmation, then deletes a scope with its reservations and custom options. */
   async deleteScope(scope: DhcpScopeDetail): Promise<void> {
     if (!scope.id) return;
 
@@ -167,7 +161,7 @@ export class DhcpScopeListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -175,14 +169,10 @@ export class DhcpScopeListComponent {
   }
 
   /**
-   * This method formats one scope's own utilization -- `${leased} leased, ${available}
-   * available of ${total}`, with the offered (awaiting the client's confirmation) and reserved
-   * counts added only when there are any, so a typical row stays short -- with every figure
-   * grouped via `bigint.toLocaleString()`, which
-   * formats losslessly at any size (an IPv6 `AddressAssignment` scope's own total can genuinely
-   * exceed `Number.MAX_SAFE_INTEGER` by many orders of magnitude, e.g. 2^64 for an ordinary
-   * `/64`) since `DhcpScopeStatisticsDetail.totalSlots`/`availableSlots` are always decimal
-   * strings for exactly this reason.
+   * This method formats a scope's utilization as "N leased, A available of T", adding the offered
+   * (awaiting the client's confirmation) and reserved counts only when non-zero. Totals arrive as
+   * decimal strings and are formatted as `bigint`, because an IPv6 pool (2^64 for a /64) exceeds
+   * `Number.MAX_SAFE_INTEGER`.
    */
   utilizationText(statistics: DhcpScopeStatisticsDetail): string {
     const total = BigInt(statistics.totalSlots ?? '0');
@@ -195,11 +185,9 @@ export class DhcpScopeListComponent {
   }
 
   /**
-   * This method picks a badge color reflecting how full a scope's own pool currently is --
-   * `secondary` for an unset/broken range (nothing to report at all), `danger` under 5% free,
-   * `warning` under 20% free, `success` otherwise. Compared via exact `bigint` arithmetic
-   * (`available * 20n < total` rather than a floating-point `available / total < 0.05`) so this
-   * never loses precision at the astronomical scale an IPv6 pool's own total can reach.
+   * This method picks the utilization badge color: `secondary` for an empty range, `danger` under
+   * 5% free, `warning` under 20% free, else `success`. It compares with `bigint` arithmetic
+   * (`available * 20n < total`) so IPv6 pool sizes lose no precision.
    */
   utilizationColor(
     statistics: DhcpScopeStatisticsDetail,
@@ -236,9 +224,8 @@ export class DhcpScopeListComponent {
   }
 
   /**
-   * This method fetches every currently-listed scope's own real, freshly-computed utilization, in
-   * parallel, right after {@link loadPage} loads that page -- see this class's own doc comment for
-   * why a failed per-scope fetch never fails the whole list.
+   * This method fetches the utilization of every scope on the page in parallel. A failed fetch
+   * leaves out that scope.
    */
   private async loadStatistics(): Promise<void> {
     this.statisticsLoading.set(true);

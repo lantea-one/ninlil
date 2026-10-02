@@ -28,18 +28,16 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many credential sets one page of this list shows -- matches `ZoneListComponent`'s own default. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every cloud DNS provider credential set this server knows about, backed by
- * `GET /api/cloud-provider-credentials`'s own real `skip`/`take` pagination. A credential set's
- * own secret material is never fetched or shown here -- `CloudProviderCredentialDetail` (the
- * shape this list's own `GET` returns) never carries it at all; only
- * `CloudProviderCredentialFormComponent`'s own create/rotate flows ever see a plaintext value.
- * Unlike a TSIG key, a credential set's own secret material genuinely is rotatable in place, so
- * this list's own "edit" action leads to a page that can both edit metadata and rotate credentials
- * -- never a delete-and-recreate workflow.
+ * This component is the Cloud Credentials page (`/cloud-provider-credentials`,
+ * `cloudprovidercredentials:read`). It lists credential sets a page at a time from
+ * `GET /api/cloud-provider-credentials`; the response never includes the secrets. With
+ * `cloudprovidercredentials:write` it offers create, edit (which can also rotate the secrets),
+ * delete and an enable/disable toggle (`PATCH`); without it the toggle is disabled and the rest
+ * hidden. Deleting a set that zones still use is allowed; those zones then stop syncing.
  */
 @Component({
   selector: 'app-cloud-provider-credential-list',
@@ -65,13 +63,13 @@ export class CloudProviderCredentialListComponent {
   private readonly credentialsApi = inject(CloudProviderCredentialsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending credential-set delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'providerType', 'disabled', 'actions'];
@@ -87,14 +85,14 @@ export class CloudProviderCredentialListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a credential set's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a credential set's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(credential: CloudProviderCredentialDetail): Promise<void> {
     if (!credential.id) return;
 
@@ -114,7 +112,7 @@ export class CloudProviderCredentialListComponent {
     }
   }
 
-  /** This method confirms, then permanently deletes, a credential set. */
+  /** This method asks for confirmation, then deletes a credential set. */
   async deleteCredential(credential: CloudProviderCredentialDetail): Promise<void> {
     if (!credential.id) return;
 
@@ -139,9 +137,7 @@ export class CloudProviderCredentialListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -151,7 +147,7 @@ export class CloudProviderCredentialListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

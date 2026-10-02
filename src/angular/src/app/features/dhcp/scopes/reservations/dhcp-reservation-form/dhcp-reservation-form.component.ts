@@ -26,19 +26,15 @@ import { extractErrorMessage } from '../../../../../shared/http-error/http-error
 import { NotificationService } from '../../../../../shared/notification/notification.service';
 
 /**
- * This component is both the "add a reservation" and "edit a reservation" page for a DHCP scope
- * -- one component for both, distinguished by whether the route supplies a `reservationId` (see
- * `app.routes.ts`). `DhcpReservationsController` rejects a duplicate client identifier or IP
- * address within the same scope with `409 Conflict`, surfaced here the same way every other
- * form in this workspace surfaces a backend conflict: as {@link errorMessage}, not a bespoke
- * client-side uniqueness check.
+ * This component is the add and edit page for a DHCP reservation
+ * (`/dhcp-scopes/:scopeId/reservations/new` and `.../reservations/:reservationId/edit`,
+ * `dhcpscopes:write`); edit mode is chosen by the `reservationId` route parameter. It saves with
+ * `POST` or `PUT /api/dhcp-scopes/{scopeId}/reservations/{id}`. The backend answers 409 for a
+ * client identifier or IP address already reserved in the scope, shown in {@link errorMessage}.
  *
- * <p>RFC 8415 defines no delegated-prefix reservation shape at all, so this component also fetches
- * the owning scope's own `kind` ({@link loadScopeKind}) and, when it is
- * `DhcpScopeKindEnum.PrefixDelegation`, replaces the form entirely with an explanatory notice --
- * covering a direct navigation to this route (a typed-in URL, a stale bookmark) that
- * `DhcpReservationListComponent`'s own hidden "Add reservation" action would otherwise not
- * prevent, the same guard shape that list already establishes.
+ * <p>RFC 8415 has no reservation for a delegated prefix, so the page loads the scope's `kind`
+ * ({@link loadScopeKind}) and, for a Prefix Delegation scope, shows a notice instead of the form.
+ * The list page already hides "Add reservation" there; this covers a typed-in URL or bookmark.
  */
 @Component({
   selector: 'app-dhcp-reservation-form',
@@ -80,7 +76,7 @@ export class DhcpReservationFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether the owning scope is a Prefix Delegation scope -- see this class's own doc comment. */
+  /** Whether the scope is a Prefix Delegation scope; see the class comment. */
   readonly isPrefixDelegationScope = signal(false);
 
   readonly form = this.formBuilder.group({
@@ -96,7 +92,7 @@ export class DhcpReservationFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingReservation();
   }
 
-  /** This method adds (`POST`) or fully replaces (`PUT`) the reservation, per {@link isEditMode}. */
+  /** This method adds the reservation (`POST`) or replaces it (`PUT`), then returns to the reservation list. */
   async save(): Promise<void> {
     if (this.isPrefixDelegationScope() || this.form.invalid || this.submitting()) return;
 
@@ -145,8 +141,7 @@ export class DhcpReservationFormComponent implements OnInit {
       const scope = await firstValueFrom(this.scopesApi.apiDhcpScopesIdGet({ id: this.scopeId }));
       this.isPrefixDelegationScope.set(scope.kind === DhcpScopeKindEnum.PrefixDelegation);
     } catch {
-      // A failed scope lookup leaves this guard at its own default (false) -- a genuinely
-      // invalid scopeId is still rejected server-side by the reservation write/load calls below.
+      // On failure the guard stays false; the backend still rejects a bad scopeId on save.
     }
   }
 

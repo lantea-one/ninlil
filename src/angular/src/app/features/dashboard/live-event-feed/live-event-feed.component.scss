@@ -1,7 +1,5 @@
 .feed-section {
-  // No max-width here -- this component now renders inside `DashboardComponent`'s own
-  // `.dashboard-feed` sidebar column, which already constrains the available width; capping it a
-  // second time here would just waste space inside that column instead of the page.
+  // No max-width: the dashboard's `.dashboard-feed` column already limits the width.
   width: 100%;
   position: sticky;
   top: var(--ninlil-space-5);

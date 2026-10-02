@@ -25,23 +25,18 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 
-/** How many tag rules one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every tag-based conditional option delivery rule this server manages,
- * backed by `GET /api/dhcp-tag-rules`'s own real `skip`/`take` pagination, with actions to manage a
- * rule's own contributed options, edit its metadata, and delete it (behind a confirmation dialog,
- * since `DhcpTagRulesController.Delete` also removes every option the rule holds) -- the same
- * "one parent, one nested child collection" shape {@link DhcpScopeListComponent} already
- * establishes for a scope's own reservations/custom options.
+ * This component is the DHCP Tag Rules page (`/dhcp-tag-rules`, `dhcptagrules:read`). It lists
+ * rules a page at a time from `GET /api/dhcp-tag-rules`. With `dhcptagrules:write` it offers
+ * create, edit (which includes the rule's options), delete and an enable/disable toggle
+ * (`PATCH`); without it the toggle is disabled and the rest hidden. Deleting a rule also deletes
+ * its options.
  *
- * <p>A rule's own optional {@link DhcpTagRuleDetail.scopeId} is resolved to the owning scope's own
- * display name via a one-time lookup of every scope on load (a homelab-scale deployment has few
- * enough scopes that fetching them all up front is simpler and cheaper than a per-row lookup, or a
- * second server-side join this REST resource doesn't offer) -- a scope this session can't resolve
- * (deleted since the rule was created, or simply still loading) falls back to showing its raw
- * identifier rather than hiding the column.
+ * <p>A rule's optional scope is shown by name, from one load of all scopes. A scope that cannot
+ * be named (deleted, still loading, or no `dhcpscopes:read`) shows its id.
  */
 @Component({
   selector: 'app-dhcp-tag-rule-list',
@@ -68,13 +63,13 @@ export class DhcpTagRuleListComponent {
   private readonly scopesApi = inject(DhcpScopesService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'scope', 'priority', 'status', 'actions'];
@@ -86,7 +81,7 @@ export class DhcpTagRuleListComponent {
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  /** A one-time lookup of every scope's own display name, keyed by id -- see this class's own doc comment. */
+  /** The scope names, by id, loaded once. */
   readonly scopeNamesById = signal<ReadonlyMap<string, string>>(new Map());
 
   constructor() {
@@ -94,20 +89,20 @@ export class DhcpTagRuleListComponent {
     void this.loadPage();
   }
 
-  /** This method resolves a rule's own optional scope id to a display name, per this class's own doc comment. */
+  /** This method returns the scope column text: the scope name, its id when unknown, or a placeholder for no scope. */
   scopeLabel(rule: DhcpTagRuleDetail): string {
     if (!rule.scopeId) return 'Any scope';
     return this.scopeNamesById().get(rule.scopeId) ?? rule.scopeId;
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a rule's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a rule's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(rule: DhcpTagRuleDetail): Promise<void> {
     if (!rule.id) return;
 
@@ -125,7 +120,7 @@ export class DhcpTagRuleListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a tag rule -- including every option it contributes. */
+  /** This method asks for confirmation, then deletes a rule with its options. */
   async deleteRule(rule: DhcpTagRuleDetail): Promise<void> {
     if (!rule.id) return;
 
@@ -158,7 +153,7 @@ export class DhcpTagRuleListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -174,8 +169,7 @@ export class DhcpTagRuleListComponent {
       }
       this.scopeNamesById.set(byId);
     } catch {
-      // A missing scope-name lookup is only cosmetic -- scopeLabel() already falls back to the
-      // raw identifier when a name isn't resolved.
+      // Without the names, scopeLabel() shows the scope ids.
     }
   }
 

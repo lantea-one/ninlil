@@ -194,12 +194,8 @@
           </div>
 
           <div formArrayName="options">
-            <!-- Tracked by the FormGroup instance itself, not $index: removing a row from the
-                 middle otherwise leaves a later row's native <select> visually showing the
-                 removed row's own prior selection, since Angular reuses the DOM node at that
-                 index position and its value accessor doesn't force-resync a native <select>'s
-                 own selectedIndex purely because the bound FormGroup instance changed underneath
-                 it -- confirmed live in a real browser before landing this fix. -->
+            <!-- Track by the FormGroup, not $index: with $index, removing a middle row reuses
+                 its DOM node, and the native <select> keeps showing the removed row's choice. -->
             @for (row of options.controls; track row) {
               <div [formGroupName]="$index" class="option-row">
                 <div class="field">

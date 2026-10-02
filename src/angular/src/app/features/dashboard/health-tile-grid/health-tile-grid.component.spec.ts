@@ -1,6 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { HealthTileGridComponent } from './health-tile-grid.component';
 
+/**
+ * These tests cover the health grid: the state before loading, the summary-only note, the
+ * per-component tiles and the overall card's style. TestBed with the `status` input set.
+ */
 describe('HealthTileGridComponent', () => {
   async function createComponent() {
     await TestBed.configureTestingModule({

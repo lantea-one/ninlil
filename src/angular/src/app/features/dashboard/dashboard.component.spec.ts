@@ -10,20 +10,20 @@ import { DashboardStatsService } from './dashboard-stats.service';
 import { GettingStartedChecklistService } from './getting-started-checklist/getting-started-checklist.service';
 
 /**
- * This function drains every currently-pending microtask (the fake services' own resolved
- * promises, and every `await` continuation chained off them inside `DashboardComponent.ngOnInit`)
- * before returning. This app is zoneless (no `zone.js`, see this workspace's
- * README.md), so `ComponentFixture.whenStable()` -- which tracks Angular's own
- * framework-recognized pending work (HTTP requests, animations, and so on) -- has no visibility
- * into a plain, hand-resolved `Promise` a test double returns, and can resolve *before* this
- * component's own fire-and-forget `ngOnInit()` has actually finished. A real macrotask
- * (`setTimeout`) is scheduled only after every currently-queued microtask has drained, which is
- * exactly the guarantee needed here.
+ * This function waits until every pending microtask has run, including the `await`s in
+ * `DashboardComponent.ngOnInit`. The app is zoneless, so `fixture.whenStable()` does not see
+ * promises a fake returns and can resolve before `ngOnInit()` finishes. A `setTimeout` runs only
+ * after the microtask queue is empty.
  */
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Dashboard: the spinner, loading status, quick stats and checklist, the
+ * error state, and starting and stopping the live feed. TestBed with fake stats, checklist,
+ * events hub, self-update and auth services.
+ */
 describe('DashboardComponent', () => {
   let statsServiceFake: { fetchStatus: jasmine.Spy; fetchQuickStats: jasmine.Spy };
   let checklistServiceFake: { fetchItems: jasmine.Spy };
@@ -55,9 +55,8 @@ describe('DashboardComponent', () => {
     selfUpdateApiFake.apiSelfUpdateGet.and.returnValue(
       of({ configured: false, currentVersion: '1.0.0.0', updateAvailable: false }),
     );
-    // false, so SelfUpdateNoticeComponent (composed directly into this page's own template)
-    // never fetches at all -- this page's own tests are not about that card's own behavior,
-    // which SelfUpdateNoticeComponent's own spec covers directly.
+    // hasPermission() returns false, so SelfUpdateNoticeComponent in the template never fetches;
+    // its own spec covers it.
     const authFake = jasmine.createSpyObj('AuthService', ['hasPermission']);
     authFake.hasPermission.and.returnValue(false);
 
@@ -136,7 +135,7 @@ describe('DashboardComponent', () => {
 
     expect(fixture.componentInstance.loadError()).not.toBeNull();
     expect(fixture.nativeElement.querySelector('app-health-tile-grid')).toBeNull();
-    // The live feed is still shown -- it is not a dependency of the REST-backed load above.
+    // The live feed still shows; it does not depend on the load above.
     expect(fixture.nativeElement.querySelector('app-live-event-feed')).not.toBeNull();
   });
 

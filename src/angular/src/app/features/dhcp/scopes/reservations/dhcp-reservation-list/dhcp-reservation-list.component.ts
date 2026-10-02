@@ -29,22 +29,18 @@ import { extractErrorMessage } from '../../../../../shared/http-error/http-error
 import { NotificationService } from '../../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../../shared/if-permission/if-permission.directive';
 
-/** How many reservations one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every static reservation belonging to a DHCP scope, backed by
- * `GET /api/dhcp-scopes/{scopeId}/reservations`'s own real `skip`/`take` pagination, the same
- * nested-child-list shape `ClientGroupNetworkListComponent` already establishes for a client
- * group's own networks.
+ * This component is a DHCP scope's reservations page (`/dhcp-scopes/:scopeId/reservations`,
+ * `dhcpscopes:read`). It lists reservations a page at a time from
+ * `GET /api/dhcp-scopes/{scopeId}/reservations` and, with `dhcpscopes:write`, links to add and
+ * edit and deletes one (`DELETE .../reservations/{id}`).
  *
- * <p>RFC 8415 defines no delegated-prefix reservation shape at all, so
- * `DhcpReservationsController` rejects creating a reservation against a
- * `DhcpScopeKindEnum.PrefixDelegation` scope outright. This list fetches the owning scope's own
- * `kind` alongside its name ({@link loadScope}) and, when it is `PrefixDelegation`, hides its own
- * "Add reservation" actions and shows an explanatory notice instead -- guarding the same way
- * {@link FilterListEntryFormComponent} guards a subscribed filter list's own read-only form,
- * rather than only surfacing the backend's real rejection after the fact.
+ * <p>RFC 8415 has no reservation for a delegated prefix, and the backend refuses one for a Prefix
+ * Delegation scope. The page loads the scope's `kind` with its name ({@link loadScope}) and, for
+ * such a scope, hides "Add reservation" and shows a notice instead.
  */
 @Component({
   selector: 'app-dhcp-reservation-list',
@@ -71,13 +67,13 @@ export class DhcpReservationListComponent {
   private readonly scopesApi = inject(DhcpScopesService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly scopeId = this.route.snapshot.paramMap.get('scopeId') ?? '';
@@ -86,10 +82,10 @@ export class DhcpReservationListComponent {
 
   readonly scopeName = signal<string | null>(null);
 
-  /** The owning scope's own `kind`, or `null` before it has loaded -- see this class's own doc comment. */
+  /** The scope's `kind`, or `null` before it loads. */
   private readonly scopeKind = signal<DhcpScopeKindEnum | null>(null);
 
-  /** Whether the owning scope is a Prefix Delegation scope -- reservations are never legal against one. */
+  /** Whether the scope is a Prefix Delegation scope, which cannot have reservations. */
   readonly isPrefixDelegationScope = computed(
     () => this.scopeKind() === DhcpScopeKindEnum.PrefixDelegation,
   );
@@ -106,14 +102,14 @@ export class DhcpReservationListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then deletes, one reservation from this scope. */
+  /** This method asks for confirmation, then deletes a reservation. */
   async deleteReservation(reservation: DhcpReservationDetail): Promise<void> {
     if (!reservation.id) return;
 
@@ -150,7 +146,7 @@ export class DhcpReservationListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -163,8 +159,8 @@ export class DhcpReservationListComponent {
       this.scopeName.set(scope.name ?? null);
       this.scopeKind.set(scope.kind ?? DhcpScopeKindEnum.AddressAssignment);
     } catch {
-      // A missing scope name/kind is only cosmetic here -- the reservation list load below
-      // surfaces its own real error if the owning scope itself doesn't exist.
+      // The name and kind are for the heading and notice; if the scope is missing, the
+      // reservation load shows the error.
     }
   }
 

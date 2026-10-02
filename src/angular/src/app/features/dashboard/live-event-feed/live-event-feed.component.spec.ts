@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { LiveEventFeedComponent } from './live-event-feed.component';
 
+/** These tests cover the live feed card: the live-only label, the state badge and the entries. */
 describe('LiveEventFeedComponent', () => {
   async function createComponent() {
     await TestBed.configureTestingModule({ imports: [LiveEventFeedComponent] }).compileComponents();

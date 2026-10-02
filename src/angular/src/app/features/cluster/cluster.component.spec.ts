@@ -11,6 +11,12 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Cluster page: the peer list and paging, creating and showing an invite,
+ * joining, removing with confirmation, the edit dialog hand-off, the stats card (including an
+ * unreachable peer and a failure) and the thumbprint display and copy. TestBed with a spy-backed
+ * `ClusterService` and `NotificationService`.
+ */
 describe('ClusterComponent', () => {
   let clusterApiSpy: {
     apiClusterNodesGet: jasmine.Spy;

@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the reservation form: add and edit modes, validation, and refusing to save
+ * for a Prefix Delegation scope. TestBed with spy-backed reservation and scope APIs and a stubbed route.
+ */
 describe('DhcpReservationFormComponent', () => {
   let reservationsApiSpy: {
     apiDhcpScopesScopeIdReservationsPost: jasmine.Spy;

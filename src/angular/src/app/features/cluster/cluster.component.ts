@@ -43,27 +43,22 @@ import {
 import { EditNodeDialogComponent } from './edit-node-dialog/edit-node-dialog.component';
 import { IfPermissionDirective } from '../../shared/if-permission/if-permission.directive';
 
-/** How many peers one page of this list shows -- matches `TsigKeyListComponent`'s own default. */
+/** The page size the peer list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component manages this node's own cluster membership: listing every known peer, running
- * both halves of the invite-code join handshake, editing a peer's own display name/notes, and
- * removing a peer. It is deliberately separate from `ClusterSettingsComponent` (the `Cluster`
- * settings tab an operator must configure first -- `Enable`/`AdvertisedHost` -- before either
- * action here can succeed), the same split `ClusterController`/`ClusterSettingsController`
- * establish on the backend. Editing is handled by the sibling {@link EditNodeDialogComponent},
- * wired to `PATCH /api/cluster/nodes/{id}` -- every other field on a peer row (address, TSIG key,
- * pinned certificate thumbprint) is fixed once the row exists, learned once during the join
- * handshake.
+ * This component is the Cluster page (`/cluster`, `clusternodes:read`). It lists this node's
+ * known peers (`GET /api/cluster/nodes`) and, with `clusternodes:write`, runs both halves of the
+ * invite-code join (`POST .../invite` on the inviting node, `POST .../join` on the joining one),
+ * renames a peer through {@link EditNodeDialogComponent} (`PATCH .../{id}`) and removes one
+ * (`DELETE .../{id}`). Clustering must first be enabled, with an advertised host, on the
+ * Settings > Cluster page (`ClusterSettingsComponent`). A peer's address, TSIG key and pinned
+ * certificate are learned during the join and cannot be edited.
  *
- * This component also renders the aggregate cluster dashboard: one row per node
- * (this node itself, always reachable, plus one row per known peer collected live over the
- * existing TSIG-authenticated + TLS-encrypted cluster channel via `GET /api/cluster/nodes/stats`).
- * An unreachable peer is shown with a dash rather than omitted -- see that endpoint's own doc
- * comment for why. Loaded once alongside the peer list, and manually refreshable, rather than
- * polled continuously -- a real per-peer network fan-out on every timer tick would be wasteful for
- * a page most operators open only occasionally.
+ * <p>The page also shows the cluster dashboard from `GET /api/cluster/nodes/stats`: query counts
+ * for this node and for each peer, collected over the TSIG-authenticated, TLS-encrypted cluster
+ * channel. An unreachable peer shows a dash. The stats load once with the page and refresh on
+ * request, not on a timer, since each load contacts every peer.
  */
 @Component({
   selector: 'app-cluster',
@@ -122,7 +117,7 @@ export class ClusterComponent {
   readonly loading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The aggregate cluster dashboard rows -- see this class's own doc comment. */
+  /** The cluster dashboard rows: this node first, then one per peer. */
   readonly statsRows = signal<ClusterAggregateQueryStatsDetail[]>([]);
   readonly statsLoading = signal(true);
   readonly statsErrorMessage = signal<string | null>(null);
@@ -135,24 +130,24 @@ export class ClusterComponent {
     displayName: [''],
   });
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending peer removal. */
+  /** Whether the remove confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown for a just-created invite code. */
+  /** Whether the reveal-once dialog is shown for a new invite code. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-created invite's own one-time code, shown exactly once via {@link RevealSecretDialogComponent}. */
+  /** The new invite code, shown once in {@link RevealSecretDialogComponent}. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
-  /** Whether {@link EditNodeDialogComponent} is currently shown for this list's peer-under-edit. */
+  /** Whether the edit dialog is shown. */
   readonly editDialogVisible = signal(false);
 
-  /** Which peer {@link EditNodeDialogComponent} is currently editing, if any. */
+  /** The peer the edit dialog is editing, if any. */
   readonly editTarget = signal<ClusterNodeDetail | null>(null);
 
   constructor() {
@@ -161,9 +156,8 @@ export class ClusterComponent {
   }
 
   /**
-   * This method loads (or reloads) the aggregate cluster dashboard rows. A failure
-   * here is shown inline on the stats card only -- it never blocks the peer list above from
-   * loading or being usable.
+   * This method loads or reloads the cluster dashboard rows. A failure shows on the stats card
+   * only; the peer list is unaffected.
    */
   async loadStats(): Promise<void> {
     this.statsLoading.set(true);
@@ -179,7 +173,7 @@ export class ClusterComponent {
     }
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
@@ -187,9 +181,8 @@ export class ClusterComponent {
   }
 
   /**
-   * This method creates a fresh invite via `POST /api/cluster/nodes/invite` and reveals its own
-   * one-time code -- see `ClusterInviteService.CreateInviteAsync`'s own doc comment for why an
-   * invite is never shown again after this dialog is dismissed.
+   * This method creates an invite with `POST /api/cluster/nodes/invite` and shows its one-time
+   * code once, with its expiry. The code is for the "Join a cluster" form on the other node.
    */
   async createInvite(): Promise<void> {
     this.inviting.set(true);
@@ -212,12 +205,12 @@ export class ClusterComponent {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once invite-code dialog. */
+  /** This method hides the invite-code dialog. */
   onRevealDialogClosed(): void {
     this.revealDialogVisible.set(false);
   }
 
-  /** This method consumes an invite code, completing the join handshake against the inviting node. */
+  /** This method joins the cluster with an invite code from another node (`POST /api/cluster/nodes/join`). */
   async join(): Promise<void> {
     if (this.joinForm.invalid || this.joining()) return;
 
@@ -245,18 +238,18 @@ export class ClusterComponent {
     }
   }
 
-  /** This method opens {@link EditNodeDialogComponent} for the given peer's own display name/notes. */
+  /** This method opens {@link EditNodeDialogComponent} for a peer's name and notes. */
   editNode(node: ClusterNodeDetail): void {
     this.editTarget.set(node);
     this.editDialogVisible.set(true);
   }
 
-  /** This method runs once {@link EditNodeDialogComponent} reports a successful save -- reloading the peer list to pick up the new name/notes. */
+  /** This method reloads the peer list after the edit dialog saves. */
   async onEditSaved(): Promise<void> {
     await this.loadPage();
   }
 
-  /** This method confirms, then permanently removes, a peer from this node's own registry. */
+  /** This method asks for confirmation, then removes a peer from this node's list only. */
   async removeNode(node: ClusterNodeDetail): Promise<void> {
     if (!node.id) return;
 
@@ -289,7 +282,7 @@ export class ClusterComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

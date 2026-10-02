@@ -32,7 +32,7 @@ import {
   toControlName,
 } from '../cloud-provider-credential.model';
 
-/** Every cloud DNS provider type this form's own provider-type select offers, in the order shown. */
+/** The provider types the select offers, in display order. */
 const PROVIDER_TYPE_OPTIONS: readonly CloudDnsProviderTypeEnum[] = [
   CloudDnsProviderTypeEnum.Cloudflare,
   CloudDnsProviderTypeEnum.Route53,
@@ -40,37 +40,21 @@ const PROVIDER_TYPE_OPTIONS: readonly CloudDnsProviderTypeEnum[] = [
 ];
 
 /**
- * This component is both the "create a cloud provider credential set" and "edit a credential set"
- * page -- one component for both, distinguished by whether the route supplies an `id` (see
- * `app.routes.ts`), mirroring `ZoneFormComponent`'s/`TsigKeyFormComponent`'s own precedent.
+ * This component is the create and edit page for a cloud provider credential set
+ * (`/cloud-provider-credentials/new` and `.../:id/edit`, `cloudprovidercredentials:write`); edit
+ * mode is chosen by the `id` route parameter. Cloud-synced zones use these credentials to push
+ * records to Cloudflare, Route 53 or DigitalOcean.
  *
- * Unlike `TsigKeyFormComponent`, this resource's own secret material genuinely *is* rotatable
- * (`CloudProviderCredentialsController.Replace`'s own doc comment explains why: a cloud
- * credential is always operator-supplied, so there is no "reveal it again" problem the way there
- * is for a server-generated TSIG secret). This shapes edit mode's own two distinct save paths,
- * both built around a single, real, checked requirement -- "let an operator submit a new
- * credential value without the UI ever having shown them the old one" -- which this component
- * satisfies by never fetching or displaying the stored secret at all, in either path:
- * - **Metadata-only edit** (the default): {@link credentialsEditable} stays `false`, the
- *   provider-type select and every credential field stay disabled, and `save()` sends a `PATCH`
- *   with only `name`/`isDisabled`/`comments` -- deliberately omitting `providerType` and
- *   `credentials` entirely, so `CloudProviderCredentialsController.Patch`'s own "omit credentials
- *   to leave the stored secret material completely untouched" contract applies.
- * - **Rotate credentials** (after clicking "Rotate credentials", {@link startRotatingCredentials}):
- *   the provider-type select and every credential field become editable (starting blank -- this
- *   component never has the old value to pre-fill even if it wanted to), and `save()` instead
- *   sends a full `PUT` replacing every field, including the newly typed `credentials`.
+ * <p>The stored secrets are never fetched or shown. Edit mode has two save paths:
+ * - **Metadata only** (the default): the provider type and credential fields stay disabled, and
+ *   save sends a `PATCH` with only name, disabled flag and comments, which leaves the stored
+ *   secrets untouched.
+ * - **Rotate credentials** ({@link startRotatingCredentials}): the provider type and empty
+ *   credential fields become editable, and save sends a full `PUT` with the new credentials.
  *
- * On a successful **create**, this component shows {@link RevealSecretDialogComponent} with every
- * field `created.secrets` returns, labeled per {@link credentialFieldsFor}'s own per-provider
- * shape -- the same reveal-once pattern `TsigKeyFormComponent` established, extended here to
- * possibly more than one secret field at once (Route 53's own access key ID + secret access key
- * pair). Like `TsigKeyFormComponent`, the dialog is embedded declaratively, so navigation away is
- * deferred until the operator dismisses it (see {@link onSecretDialogClosed}). A **rotate** via
- * `PUT` deliberately does *not* show this dialog at all -- the operator just typed the new value
- * themselves in this very request, so there is nothing new to reveal, per
- * `CloudProviderCredentialWriteRequest`'s own documented reasoning; that path navigates away
- * immediately, exactly as a metadata-only `PATCH` does.
+ * <p>After a create, the backend echoes the secrets once and the page shows them in
+ * {@link RevealSecretDialogComponent}, one row per field, returning to the list when the dialog
+ * closes. A rotate shows no dialog, since the operator just typed the values.
  */
 @Component({
   selector: 'app-cloud-provider-credential-form',
@@ -97,7 +81,7 @@ const PROVIDER_TYPE_OPTIONS: readonly CloudDnsProviderTypeEnum[] = [
   styleUrl: './cloud-provider-credential-form.component.scss',
 })
 export class CloudProviderCredentialFormComponent implements OnInit {
-  /** Exposed so the template can pick the right fixed control per dynamic credential field, without a hand-written ternary chain. */
+  /** Exposed so the template can find the form control for each credential field. */
   readonly toControlName = toControlName;
 
   private readonly route = inject(ActivatedRoute);
@@ -118,16 +102,15 @@ export class CloudProviderCredentialFormComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   /**
-   * Whether the provider-type select and credential fields are currently editable -- always
-   * `true` in create mode (a brand-new credential set has no stored secret to protect yet), and
-   * `false` in edit mode until {@link startRotatingCredentials} is called.
+   * Whether the provider type and credential fields are editable: always in create mode, and in
+   * edit mode only after {@link startRotatingCredentials}.
    */
   readonly credentialsEditable = signal(!this.isEditMode);
 
-  /** Whether {@link RevealSecretDialogComponent} is currently shown -- only ever set after a successful create, never after a rotate. */
+  /** Whether the reveal-once dialog is shown; set after a create, never after a rotate. */
   readonly revealDialogVisible = signal(false);
 
-  /** The just-created credential set's own secret field(s), shown exactly once via {@link RevealSecretDialogComponent}. */
+  /** The new credential set's secret fields, shown once in {@link RevealSecretDialogComponent}. */
   readonly revealDialogData = signal<RevealSecretDialogData | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -143,12 +126,12 @@ export class CloudProviderCredentialFormComponent implements OnInit {
     secretAccessKey: [''],
   });
 
-  /** The provider type currently selected, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected provider type as a signal (the form's `valueChanges` is not one). */
   readonly selectedProviderType = signal<CloudDnsProviderTypeEnum>(
     CloudDnsProviderTypeEnum.Cloudflare,
   );
 
-  /** The credential field(s) the currently selected provider type's own shape requires. */
+  /** The credential fields the selected provider type needs. */
   readonly credentialFields = computed(() => credentialFieldsFor(this.selectedProviderType()));
 
   constructor() {
@@ -161,7 +144,7 @@ export class CloudProviderCredentialFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingCredential();
   }
 
-  /** This method reveals the provider-type select and credential fields so an operator can rotate them. */
+  /** This method enables the provider type and credential fields (empty) so the operator can rotate them. */
   startRotatingCredentials(): void {
     this.credentialsEditable.set(true);
     this.form.controls.providerType.enable();
@@ -171,9 +154,8 @@ export class CloudProviderCredentialFormComponent implements OnInit {
   }
 
   /**
-   * This method creates (`POST`) a new credential set, or, in edit mode, either fully replaces
-   * (`PUT`, when rotating) or partially updates (`PATCH`, metadata only) an existing one -- see
-   * this component's own class-level doc comment for the full reasoning behind the two edit paths.
+   * This method creates a credential set (`POST`) or, in edit mode, replaces it (`PUT`, when
+   * rotating) or updates its metadata (`PATCH`). See the class comment for the two edit paths.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -183,9 +165,8 @@ export class CloudProviderCredentialFormComponent implements OnInit {
 
     const value = this.form.getRawValue();
     const comments = value.comments.trim().length > 0 ? value.comments : null;
-    // buildCredentialsPayload() only ever reads the 3 fixed credential controls -- narrowed to
-    // just those here so its own `Record<string, string>` parameter type stays a real, useful
-    // constraint rather than accepting this form's whole (non-string-valued) raw value object.
+    // Pass only the three credential controls, so buildCredentialsPayload() can keep its
+    // Record<string, string> parameter type instead of taking the whole form value.
     const credentialFieldValues: Record<string, string> = {
       apiToken: value.apiToken,
       accessKeyId: value.accessKeyId,
@@ -224,9 +205,8 @@ export class CloudProviderCredentialFormComponent implements OnInit {
           this.notification.success('Credential set saved.');
         }
 
-        // A rotate's own new value was just typed by the operator themselves, and a
-        // metadata-only save never touched any secret at all -- neither path has anything new to
-        // reveal, so both navigate away immediately, unlike the create path below.
+        // Neither edit path has anything to reveal (the operator typed the rotated values), so
+        // both return to the list at once.
         await this.router.navigate(['/cloud-provider-credentials']);
       } else {
         const credentials = buildCredentialsPayload(value.providerType, credentialFieldValues);
@@ -247,8 +227,7 @@ export class CloudProviderCredentialFormComponent implements OnInit {
           }),
         );
 
-        // Reveal every returned secret field exactly once -- navigation away is deferred to
-        // onSecretDialogClosed(), once the operator has actually dismissed the dialog.
+        // Stay on the page until the dialog is closed (onSecretDialogClosed).
         this.revealDialogData.set({
           title: 'Credential set created',
           message:
@@ -271,7 +250,7 @@ export class CloudProviderCredentialFormComponent implements OnInit {
     }
   }
 
-  /** This method runs once the operator dismisses the reveal-once secret dialog, navigating away only now that they have confirmed saving the values. */
+  /** This method hides the dialog and returns to the credential list. */
   onSecretDialogClosed(): void {
     this.revealDialogVisible.set(false);
     void this.router.navigate(['/cloud-provider-credentials']);
@@ -293,9 +272,8 @@ export class CloudProviderCredentialFormComponent implements OnInit {
       });
       this.selectedProviderType.set(credential.providerType ?? CloudDnsProviderTypeEnum.Cloudflare);
 
-      // Edit mode starts with the provider type and every credential field disabled -- see this
-      // component's own class-level doc comment for why: a metadata-only save must never
-      // accidentally submit a `providerType` change without matching new credentials.
+      // Edit mode starts with the provider type and credential fields disabled, so a metadata
+      // save can never change the provider type without new credentials.
       this.form.controls.providerType.disable();
       this.form.controls.apiToken.disable();
       this.form.controls.accessKeyId.disable();

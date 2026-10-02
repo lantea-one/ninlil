@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a scope's reservations page: loading, the Prefix Delegation flag, and delete
+ * with its confirmation and failure. TestBed with spy-backed reservation and
+ * scope APIs.
+ */
 describe('DhcpReservationListComponent', () => {
   let reservationsApiSpy: {
     apiDhcpScopesScopeIdReservationsGet: jasmine.Spy;

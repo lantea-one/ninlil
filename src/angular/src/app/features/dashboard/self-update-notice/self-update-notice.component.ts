@@ -6,19 +6,13 @@ import { SelfUpdateService } from '../../../api-client';
 import { AuthService } from '../../../core/auth/auth.service';
 
 /**
- * This component renders a small, dismissible-by-navigation banner on the Dashboard when this
- * server's own self-update checker ({@link SelfUpdateService}, `GET /api/self-update`) has found
- * a genuinely newer release than the one currently running -- a real, visible notice, not just a
- * log line an unattended homelab operator would never read. Purely a notice: it links to the
- * Self-Update settings page, which is the only place this project surfaces "what to do about it";
- * this component never offers an "update now" action of its own.
- * <p>
- * Fetches its own data (unlike {@link QuickStatsComponent}/{@link HealthTileGridComponent},
- * which {@link DashboardComponent} feeds), since this is a single, small, independent read with
- * no shared state any sibling tile needs. Gated by the `selfupdate:read` permission -- a caller
- * without it simply never sees this card, the same "additive by permission" shape
- * {@link HealthTileGridComponent} already establishes, rather than surfacing a confusing
- * permission-denied error on a page that otherwise loaded fine.
+ * This component shows a banner on the Dashboard when the self-update checker
+ * (`GET /api/self-update`, `selfupdate:read`) knows of a newer release than the one running, so
+ * an operator sees it without reading logs. It only links to the Self-Update settings page and
+ * offers no update action itself.
+ *
+ * <p>Unlike the other dashboard pieces, it loads its own data, since nothing else on the page
+ * needs it. Without `selfupdate:read` it makes no request and shows nothing.
  */
 @Component({
   selector: 'app-self-update-notice',
@@ -30,10 +24,10 @@ export class SelfUpdateNoticeComponent implements OnInit {
   private readonly selfUpdateApi = inject(SelfUpdateService);
   private readonly auth = inject(AuthService);
 
-  /** Whether a genuinely newer release is currently known -- the one condition this card renders for. */
+  /** Whether a newer release is known; the banner shows only then. */
   readonly updateAvailable = signal(false);
 
-  /** The newest known version, shown in the banner's own text. */
+  /** The newest known version, shown in the banner text. */
   readonly latestKnownVersion = signal<string | null>(null);
 
   ngOnInit(): void {
@@ -47,8 +41,7 @@ export class SelfUpdateNoticeComponent implements OnInit {
       this.updateAvailable.set(status.updateAvailable ?? false);
       this.latestKnownVersion.set(status.latestKnownVersion ?? null);
     } catch {
-      // A failed read here is silent, deliberately -- this is a purely additive notice, not a
-      // page an operator depends on for correctness; the card just stays hidden.
+      // A failed read keeps the banner hidden; it is only a notice.
     }
   }
 }

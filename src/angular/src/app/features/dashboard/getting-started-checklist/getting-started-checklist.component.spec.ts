@@ -15,6 +15,11 @@ const allCompleteItems: GettingStartedItem[] = [
   { id: 'create-user', label: 'Create a non-admin user', complete: true, routerLink: '/users' },
 ];
 
+/**
+ * These tests cover the checklist card: rows and links, the complete style, hiding when all rows
+ * are done, and dismissal stored in `localStorage`. TestBed with a test router; the stored flag
+ * is removed after each test.
+ */
 describe('GettingStartedChecklistComponent', () => {
   async function createComponent() {
     await TestBed.configureTestingModule({
@@ -48,10 +53,8 @@ describe('GettingStartedChecklistComponent', () => {
     expect(html.textContent).toContain('Add your first zone');
     expect(html.textContent).toContain('Create a non-admin user');
 
-    // A bound `[routerLink]` (dynamic per row here, unlike a literal `routerLink="..."`) is never
-    // reflected back onto the DOM as a plain `routerLink` attribute -- RouterLink instead sets a
-    // real `href` from the resolved URL tree, which is what an `<a>` tag's own navigation, and
-    // this assertion, actually depend on.
+    // A bound `[routerLink]` is not written to the DOM as an attribute; RouterLink sets `href`
+    // instead, so the test checks that.
     const links = html.querySelectorAll('.getting-started-item a');
     expect(links.length).toBe(2);
     expect((links[0] as HTMLAnchorElement).getAttribute('href')).toBe('/zones');

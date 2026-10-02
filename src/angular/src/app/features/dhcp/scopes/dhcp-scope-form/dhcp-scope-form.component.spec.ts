@@ -17,6 +17,12 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DHCP scope form: create and edit, the DNS zone choices, PXE and zone
+ * fields, the IPv6 kind and prefix length rules, and the options table (adding, catalog choice,
+ * encoding, server address, errors and the create/update/delete calls). TestBed with spy-backed
+ * scope, option, catalog and zone APIs and a stubbed route.
+ */
 describe('DhcpScopeFormComponent', () => {
   let scopesApiSpy: {
     apiDhcpScopesGet: jasmine.Spy;
@@ -153,7 +159,7 @@ describe('DhcpScopeFormComponent', () => {
       }),
     );
 
-    // Re-trigger ngOnInit's own zone fetch against the new return value above.
+    // Run the zone fetch from ngOnInit again with the new return value.
     await fixture.componentInstance['loadEligibleZones']();
 
     const zoneIds = fixture.componentInstance.eligibleZones().map((zone) => zone.id);
@@ -587,8 +593,7 @@ describe('DhcpScopeFormComponent', () => {
 
       expect(fixture.componentInstance.options.length).toBe(2);
 
-      // Remove the second loaded row ("removed") from the table -- its own id must then be
-      // diffed into a DELETE call, per planDhcpOptionReconciliation.
+      // Remove the second loaded row ("removed"); its id must become a DELETE.
       fixture.componentInstance.removeOptionRow(1);
 
       await fixture.componentInstance.save();

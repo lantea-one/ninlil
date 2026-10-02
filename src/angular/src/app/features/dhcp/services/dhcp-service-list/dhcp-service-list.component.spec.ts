@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DHCP Services page: loading and its failure, the `dhcpservices:manage`
+ * check, the confirmation (accepted or cancelled), and start and stop success and failure.
+ * TestBed with spy-backed `DhcpServiceControlService`, `AuthService` and `NotificationService`.
+ */
 describe('DhcpServiceListComponent', () => {
   let dhcpServicesApiSpy: {
     apiDhcpServicesGet: jasmine.Spy;

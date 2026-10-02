@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DHCP Scopes page: loading, the utilization text and color (including
+ * IPv6-sized totals), a failed statistics fetch, the toggle and delete. TestBed with a spy-backed
+ * `DhcpScopesService` and `NotificationService`.
+ */
 describe('DhcpScopeListComponent', () => {
   let scopesApiSpy: {
     apiDhcpScopesGet: jasmine.Spy;

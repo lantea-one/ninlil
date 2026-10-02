@@ -38,22 +38,14 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component shows this server's own live DHCP lease table -- a real, engine-owned artifact,
- * never operator-created, so this page offers no "new"/"edit" route at all, the same posture
- * {@link QueryLogListComponent} already establishes for its own server-written data. `GET
- * /api/dhcp-leases`'s own real `skip`/`take` pagination and optional `scopeId` filter are both
- * pushed all the way down to the server -- narrowing to one scope, or a full "what is my network
- * doing right now" view across every scope, re-issues a fresh search rather than filtering an
- * already-fetched page client-side.
+ * This component is the DHCP Leases page (`/dhcp-leases`, `dhcpleases:read`). It lists leases a
+ * page at a time from `GET /api/dhcp-leases`, optionally filtered by scope; the server applies
+ * both the paging and the filter. The DHCP server creates leases, so there is no create or edit.
  *
- * <p>This page's one write action -- forcing a stuck or stale lease to release (`POST
- * /api/dhcp-leases/{id}/release`) -- is still not an ordinary resource mutation (this whole
- * resource still has no "new"/"edit" route), so it earns a single per-row action button rather
- * than the usual edit/delete pair, gated on `dhcpleases:manage` (hidden outright, not merely
- * disabled, for a session lacking it, mirroring {@link DhcpServiceListComponent}'s own established
- * "hide, don't merely disable" precedent) and confirmed first via {@link ConfirmDialogComponent},
- * since it immediately and irrevocably disconnects whatever real client currently holds that
- * lease.
+ * <p>The one write action is force-releasing a stuck or stale lease
+ * (`POST /api/dhcp-leases/{id}/release`). Its button shows only with `dhcpleases:manage`, and it
+ * asks for confirmation first: the address can be handed to another client at once and any DNS
+ * record the lease registered is removed.
  */
 @Component({
   selector: 'app-dhcp-lease-list',
@@ -99,24 +91,24 @@ export class DhcpLeaseListComponent {
     'actions',
   ];
 
-  /** Whether the signed-in session holds `dhcpleases:manage` -- gates the release button. */
+  /** Whether the user holds `dhcpleases:manage`; the release button shows only then. */
   readonly canManage = this.authService.hasPermission('dhcpleases:manage');
 
-  /** The identifier of whichever single lease currently has a release in flight, if any. */
+  /** The id of the lease whose release is in flight, if any. */
   readonly releasingLeaseId = signal<string | null>(null);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending release. */
+  /** Whether the release confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly filterForm = this.formBuilder.group({ scopeId: [''] });
 
-  /** Every DHCP scope this page's own scope-narrowing filter can select. */
+  /** The scopes offered in the scope filter (up to 200). */
   readonly scopes = signal<DhcpScopeDetail[]>([]);
 
   readonly leases = signal<DhcpLeaseDetail[]>([]);
@@ -131,18 +123,18 @@ export class DhcpLeaseListComponent {
     void this.loadPage();
   }
 
-  /** This method re-runs the search from the first page, using the filter form's own current scope selection. */
+  /** This method searches again from the first page with the selected scope. */
   async search(): Promise<void> {
     this.pageIndex.set(0);
     await this.loadPage();
   }
 
-  /** This method reloads the current page without changing any filter or page position -- a manual "refresh" for this live table. */
+  /** This method reloads the current page, for the Refresh button. */
   async refresh(): Promise<void> {
     await this.loadPage();
   }
 
-  /** This method reloads the current search's own page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
@@ -150,10 +142,9 @@ export class DhcpLeaseListComponent {
   }
 
   /**
-   * This method force-releases a stuck or stale lease, but only after the operator confirms a
-   * dialog naming this action's own real, irreversible consequence -- the address becomes
-   * available for a different client to claim immediately, and any DNS record this lease
-   * auto-registered is removed the same way a real client-initiated release already removes it.
+   * This method asks for confirmation, then force-releases a lease and puts the returned lease
+   * in its row. The backend treats it like a client release: the address is free again at once
+   * and any DNS record the lease registered is removed.
    */
   async release(lease: DhcpLeaseDetail): Promise<void> {
     if (!lease.id) return;
@@ -184,7 +175,7 @@ export class DhcpLeaseListComponent {
     }
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -203,7 +194,7 @@ export class DhcpLeaseListComponent {
     });
   }
 
-  /** This method swaps one updated lease into {@link leases} in place, by identifier. */
+  /** This method replaces one lease in {@link leases}, matched by id. */
   private replaceLease(updated: DhcpLeaseDetail): void {
     this.leases.update((leases) =>
       leases.map((lease) => (lease.id === updated.id ? updated : lease)),
@@ -215,8 +206,8 @@ export class DhcpLeaseListComponent {
       const page = await firstValueFrom(this.scopesApi.apiDhcpScopesGet({ skip: 0, take: 200 }));
       this.scopes.set(page.items ?? []);
     } catch {
-      // A failed scope lookup only narrows this page's own scope filter dropdown -- the
-      // all-scopes lease table below still loads and remains fully usable.
+      // Without the scopes (e.g. no dhcpscopes:read) the filter is empty; the lease list still
+      // loads for every scope.
     }
   }
 

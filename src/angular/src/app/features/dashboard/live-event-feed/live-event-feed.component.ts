@@ -11,11 +11,9 @@ import {
 import { DnsEventsHubConnectionState, DnsFeedEntry } from '../../../core/realtime/dns-event.model';
 
 /**
- * This component renders {@link DnsEventsHubService}'s own live feed of curated DNS server
- * events, plus the connection's own current lifecycle state. **Deliberately, visibly labeled as
- * session-only** -- no backend endpoint returns historical events, only live ones from the
- * moment the hub connection succeeds; the template says so explicitly rather than letting an
- * empty-on-reload feed read like a bug.
+ * This component renders the Dashboard's live event feed from {@link DnsEventsHubService} and the
+ * connection state. The template says the feed is live only and resets on reload, since no
+ * endpoint returns past events and an empty feed after a reload would otherwise look like a bug.
  */
 @Component({
   selector: 'app-live-event-feed',
@@ -36,10 +34,10 @@ export class LiveEventFeedComponent {
   /** The feed entries to render, most-recent-first. */
   readonly feed = input<DnsFeedEntry[]>([]);
 
-  /** The hub connection's own current lifecycle state, shown in this section's own header badge. */
+  /** The hub connection state, shown in the header badge. */
   readonly connectionState = input<DnsEventsHubConnectionState>('disconnected');
 
-  /** The CoreUI themed color the connection-state badge is shown in. */
+  /** The CoreUI color of the connection-state badge. */
   readonly connectionBadgeColor = computed(() => {
     switch (this.connectionState()) {
       case 'connected':

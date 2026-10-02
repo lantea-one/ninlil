@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the credential form: create with the reveal-once dialog, the incomplete
+ * payload check, and the two edit paths (metadata `PATCH` and rotating `PUT`), plus errors.
+ * TestBed with a spy-backed `CloudProviderCredentialsService` and a stubbed route.
+ */
 describe('CloudProviderCredentialFormComponent', () => {
   let credentialsApiSpy: {
     apiCloudProviderCredentialsIdGet: jasmine.Spy;
@@ -20,7 +25,10 @@ describe('CloudProviderCredentialFormComponent', () => {
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
   let navigateSpy: jasmine.Spy;
 
-  /** See `zone-form.component.spec.ts`'s own identical helper for why `configureApis` must run before construction. */
+  /**
+   * This helper builds fresh spies, applies `configureApis` and creates the component.
+   * `configureApis` must run first because `ngOnInit` calls the API at once.
+   */
   async function createComponent(credentialId: string | null, configureApis?: () => void) {
     credentialsApiSpy = jasmine.createSpyObj('CloudProviderCredentialsService', [
       'apiCloudProviderCredentialsIdGet',

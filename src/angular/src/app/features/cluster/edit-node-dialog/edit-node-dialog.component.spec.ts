@@ -5,6 +5,11 @@ import { ClusterNodeDetail, ClusterService } from '../../../api-client';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { EditNodeDialogComponent } from './edit-node-dialog.component';
 
+/**
+ * These tests cover the edit-peer dialog: seeding the form, saving (including `null` notes),
+ * errors, the guards against double or invalid submits, and closing. TestBed with a spy-backed
+ * `ClusterService` and `NotificationService`.
+ */
 describe('EditNodeDialogComponent', () => {
   let fixture: ComponentFixture<EditNodeDialogComponent>;
   let clusterApiSpy: { apiClusterNodesIdPatch: jasmine.Spy };

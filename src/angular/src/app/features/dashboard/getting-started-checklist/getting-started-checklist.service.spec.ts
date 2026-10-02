@@ -9,6 +9,11 @@ import {
 import { AuthService } from '../../../core/auth/auth.service';
 import { GettingStartedChecklistService } from './getting-started-checklist.service';
 
+/**
+ * These tests cover each checklist row's completion rule, leaving out rows without permission,
+ * and a failed check marking only its row incomplete. TestBed with spy-backed API services and a
+ * fake `AuthService`.
+ */
 describe('GettingStartedChecklistService', () => {
   let service: GettingStartedChecklistService;
   let authServiceSpy: { hasPermission: jasmine.Spy };
@@ -22,12 +27,12 @@ describe('GettingStartedChecklistService', () => {
   };
   let smtpSettingsApiSpy: { apiSmtpSettingsGet: jasmine.Spy };
 
-  /** Grants every one of the checklist's 4 underlying permissions, unless overridden per test. */
+  /** Grants all four of the checklist's permissions unless a test overrides it. */
   function allowAllPermissions(): void {
     authServiceSpy.hasPermission.and.returnValue(true);
   }
 
-  /** Stubs every transport GET to report `enable: false`, unless a test overrides one specifically. */
+  /** Makes every transport GET report `enable: false` unless a test overrides one. */
   function stubAllTransportsDisabled(): void {
     transportSettingsApiSpy.apiTransportSettingsDnsOverTlsGet.and.returnValue(
       of({ enable: false }),
