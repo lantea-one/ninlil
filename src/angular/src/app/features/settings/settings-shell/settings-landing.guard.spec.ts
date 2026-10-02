@@ -3,6 +3,10 @@ import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree } from '@a
 import { AuthService } from '../../../core/auth/auth.service';
 import { settingsLandingGuard } from './settings-landing.guard';
 
+/**
+ * These tests cover the /settings landing guard: presets for presets:read, otherwise the first
+ * readable tab, otherwise /forbidden. TestBed injection context with a stubbed `AuthService`.
+ */
 describe('settingsLandingGuard', () => {
   let grantedPermissions: string[];
   let router: Router;

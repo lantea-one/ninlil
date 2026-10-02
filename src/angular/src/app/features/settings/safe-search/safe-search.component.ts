@@ -16,19 +16,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component lists Ninlil's own bundled Safe Search / parental-control catalog
- * (`SafeSearchCatalog`/`SafeSearchController`) and lets an operator force network-wide safe
- * search on a major search engine with a single click, via each engine's own publicly documented
- * DNS-based mechanism. Enabling an entry also turns this server's single global DNS rewrite
- * toggle on if it was off -- surfaced directly in the success notification, since it's a real,
- * documented side effect (see `SafeSearchController`'s own doc comment) this page never hides.
+ * This component is the "Safe Search" settings page (`/settings/safe-search`). It lists the
+ * bundled catalog from `GET /api/safe-search` (`dnsrewrites:read`) and, with `dnsrewrites:write`,
+ * forces safe search on a search engine with one click, using the DNS mechanism each engine
+ * documents. Enabling an entry also turns the global DNS rewrite switch on if it was off; the
+ * success notification says so (see `SafeSearchController`).
  *
- * <p>Reused as a scoped panel, not just the global Settings page: an optional {@link clientId}/
- * {@link clientGroupId} input (mutually exclusive; set at most one) narrows every toggle to a
- * rewrite scoped to that single target instead of an unscoped, global one -- see
- * `SafeSearchController`'s own doc comment for the exact backend contract this thin wrapper
- * follows. Neither set (the global Settings page's own usage) reproduces this component's
- * pre-scoping behavior exactly.
+ * <p>The client and client group forms embed it as a panel with {@link clientId} or
+ * {@link clientGroupId} set (at most one), so each toggle creates or removes rewrites scoped to
+ * that target. On the settings page neither is set and the rewrites are global.
  */
 @Component({
   selector: 'app-safe-search',
@@ -50,10 +46,10 @@ export class SafeSearchComponent implements OnInit {
   private readonly safeSearchApi = inject(SafeSearchService);
   private readonly notification = inject(NotificationService);
 
-  /** The single client this panel's every toggle targets, or `undefined` for the shared, global default. */
+  /** The client every toggle targets, or `undefined` for the global setting. */
   @Input() clientId?: string;
 
-  /** The single client group this panel's every toggle targets, or `undefined` for the shared, global default. */
+  /** The client group every toggle targets, or `undefined` for the global setting. */
   @Input() clientGroupId?: string;
 
   readonly engines = signal<SafeSearchDetail[]>([]);
@@ -65,7 +61,7 @@ export class SafeSearchComponent implements OnInit {
     void this.load();
   }
 
-  /** This method enables or disables a single catalog entry, per its own current state, within this panel's own target scope (if any). */
+  /** This method enables or disables one catalog entry, depending on its state, for this panel's target. */
   async toggle(engine: SafeSearchDetail): Promise<void> {
     const key = engine.key;
     if (!key) return;

@@ -4,6 +4,7 @@ import {
   validateLogoFile,
 } from './branding-settings.model';
 
+/** These tests cover logo file validation and reading a file into a data URI. Plain unit tests. */
 describe('branding-settings.model', () => {
   describe('validateLogoFile', () => {
     it('accepts a real image file within the size bound', () => {
@@ -38,8 +39,7 @@ describe('branding-settings.model', () => {
       const dataUri = await readFileAsDataUri(file);
 
       expect(dataUri.startsWith('data:text/plain;base64,')).toBeTrue();
-      // "hello" base64-encodes to "aGVsbG8=" -- confirms the real file content round-trips,
-      // not just that some data: URI shape was produced.
+      // "hello" is "aGVsbG8=" in base64, so this checks the file content, not just the URI shape.
       expect(dataUri).toContain('aGVsbG8=');
     });
   });

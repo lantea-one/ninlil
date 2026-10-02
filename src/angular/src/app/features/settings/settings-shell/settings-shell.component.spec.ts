@@ -4,10 +4,15 @@ import { Router, provideRouter } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { SettingsShellComponent } from './settings-shell.component';
 
-/** A stand-in for whichever settings page the shell's own outlet would show. */
+/** A stand-in for the settings page the shell's outlet shows. */
 @Component({ template: '' })
 class SettingsPageStubComponent {}
 
+/**
+ * These tests cover the settings shell: which tabs and groups show for the permissions held, and
+ * the read-only notice for a page whose write permission is missing (including storage:manage).
+ * TestBed with a spy `AuthService` and a router with a stub settings page.
+ */
 describe('SettingsShellComponent', () => {
   async function createComponent(permissions: readonly string[], url?: string) {
     const authServiceSpy = jasmine.createSpyObj('AuthService', ['hasPermission']);
@@ -30,7 +35,7 @@ describe('SettingsShellComponent', () => {
     return fixture;
   }
 
-  /** Flattens every visible group's own tabs into one ordered list, for assertions that don't care about grouping. */
+  /** This helper flattens the visible groups' tab labels into one ordered list. */
   function flatTabLabels(
     fixture: ReturnType<typeof TestBed.createComponent<SettingsShellComponent>>,
   ) {
@@ -69,9 +74,8 @@ describe('SettingsShellComponent', () => {
   it('drops a group entirely once every one of its own tabs is filtered out, rather than rendering an empty category', async () => {
     const fixture = await createComponent(['presets:read']);
 
-    // 'DNS Security Presets' is the sole tab in the 'Overview' group -- holding only its own
-    // permission must leave every other group (which grants no tab at all here) absent from the
-    // result, not present with an empty `tabs` array.
+    // 'DNS Security Presets' is the only tab in 'Overview'. With only its permission, every
+    // other group must be absent, not present with an empty `tabs` array.
     expect(fixture.componentInstance.visibleGroups().map((group) => group.label)).toEqual([
       'Overview',
     ]);

@@ -23,22 +23,22 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * A .NET `TimeSpan` in its invariant `[d.]hh:mm:ss[.fffffff]` form -- the shape the backend both
- * returns and accepts. Positivity is enforced by the backend itself, which rejects a zero or
- * negative interval with a `400` this page surfaces as its own error banner.
+ * This constant matches a .NET `TimeSpan` in its invariant `[d.]hh:mm:ss[.fffffff]` form, as the
+ * backend returns and accepts it. The backend rejects a zero or negative interval with a 400, shown
+ * as the page's error banner.
  */
 const TIME_SPAN_PATTERN = /^(\d+\.)?\d{1,2}:\d{2}:\d{2}(\.\d+)?$/;
 
 /**
- * This component reads and writes this host's own `ClientPresenceOptions` via `GET`/`PATCH
- * /api/client-presence-settings`: how recently a known client must have been seen to count as
- * online, how often buffered sightings are persisted, and whether (and how often) the kernel
- * neighbor table is sampled as a presence signal.
+ * This component is the "Client Presence" settings page (`/settings/client-presence`). It edits
+ * `ClientPresenceOptions` through `GET` and `PATCH /api/client-presence-settings`
+ * (`clientpresencesettings:read`, `clientpresencesettings:write`): how recently a client must have
+ * been seen to count as online, how often sightings are saved, and whether and how often the
+ * kernel neighbor table is sampled.
  * <p>
- * Presence is entirely passive -- inferred from confirmed-reachable neighbor-table entries, DHCP
- * lease grants and renewals, and live DNS queries this server already sees, never from active
- * network scanning -- and online/offline is computed at read time against the online window, so a
- * change here applies to every client immediately, with no restart and no recomputation.
+ * Presence is passive: it comes from reachable neighbor-table entries, DHCP leases and DNS queries
+ * the server already sees, never from scanning. Online status is worked out when read, so every
+ * change applies at once without a restart.
  */
 @Component({
   selector: 'app-client-presence-settings',
@@ -86,7 +86,7 @@ export class ClientPresenceSettingsComponent implements OnInit {
     void this.load();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

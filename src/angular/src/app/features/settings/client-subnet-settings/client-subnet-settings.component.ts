@@ -23,13 +23,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `EdnsClientSubnetOptions` (RFC 7871 EDNS
- * Client Subnet) via `GET`/`PATCH /api/client-subnet-settings`. No secret material is involved.
- * Every field takes effect immediately, with no restart, since the backend reads this options
- * class live via `IOptionsMonitor`. Off by default -- disclosing a piece of the querying client's
- * own network location to every upstream authoritative server has a real, direct privacy cost, so
- * this form's own leading control is the opt-in toggle itself, not a pre-enabled feature an
- * operator merely tunes.
+ * This component is the "Client Subnet (ECS)" settings page (`/settings/client-subnet`). It edits
+ * `EdnsClientSubnetOptions` (RFC 7871 EDNS Client Subnet) through `GET` and
+ * `PATCH /api/client-subnet-settings` (`clientsubnetsettings:read`, `clientsubnetsettings:write`).
+ * Every field is hot-reloaded. ECS is off by default, because it tells upstream servers part of
+ * the client's network location, so the opt-in switch comes first on the form.
  */
 @Component({
   selector: 'app-client-subnet-settings',
@@ -74,7 +72,7 @@ export class ClientSubnetSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field (a blank override address as null), then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

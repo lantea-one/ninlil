@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the presets page: loading, applying only after confirmation, showing the
+ * backend note and showing an apply error. TestBed with a spy-backed `PresetsService` and
+ * `NotificationService`.
+ */
 describe('PresetListComponent', () => {
   let presetsApiSpy: { apiPresetsGet: jasmine.Spy; apiPresetsNameApplyPost: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };

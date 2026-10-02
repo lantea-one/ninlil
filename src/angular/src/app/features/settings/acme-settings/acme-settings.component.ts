@@ -27,11 +27,7 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
-/**
- * This method splits a textarea's own raw value into a trimmed, non-blank-line array -- the same
- * "one value per line" convention this project's forwarder/filter-list bulk-create forms already
- * established, applied here to `contactEmails`/`domains` instead of driving a bulk-create loop.
- */
+/** This function splits one-value-per-line textarea text into trimmed, non-blank entries. */
 function linesToArray(raw: string): string[] {
   return raw
     .split('\n')
@@ -40,21 +36,16 @@ function linesToArray(raw: string): string[] {
 }
 
 /**
- * This component is Ninlil's own centralized place to configure ACME/Let's Encrypt issuance
- * (`AcmeOptions`) and the global default for CAA auto-management (`CaaAutoManagementOptions`, the
- * per-zone override already lives on `ZoneFormComponent`), and to see and manage the real
- * certificates ACME already tracks for every configured domain -- not just a settings form.
+ * This component is the "ACME / Certificates" settings page (`/settings/acme`). It edits ACME
+ * certificate issuance (`AcmeOptions`) and the server-wide default for CAA management
+ * (`CaaAutoManagementOptions`; the per-zone override is on `ZoneFormComponent`) through `GET` and
+ * `PATCH /api/acme-settings` (`acmesettings:read`, `acmesettings:write`). It also lists each
+ * configured domain's certificate state (issue and expiry dates, last failure) from
+ * `GET /api/acme-settings/certificates`, and with `acmesettings:manage` can issue or renew one
+ * domain now through `POST .../certificates/{domain}/issue`.
  *
- * <p>Before this page existed, `AcmeOptions`/`CaaAutoManagementOptions` had no REST/UI surface at
- * all, and the real per-domain certificate state `IAcmeAccountStore` already tracked (issued/
- * expiry dates, the most recent renewal failure) was completely unexposed, forcing an operator to
- * read log output or hand-inspect a JSON state file to know whether ACME was actually working.
- *
- * <p>Every field except {@link accountStateFilePath} takes effect immediately, with no restart --
- * `AcmeOptions` is read live via `IOptionsMonitor` everywhere it actually matters for a live
- * issuance/renewal attempt. `accountStateFilePath` is the one deliberate exception (read once, at
- * or shortly after this host's own startup), called out directly in the save confirmation via the
- * backend's own returned note, never suppressed.
+ * <p>Every field except `accountStateFilePath` is hot-reloaded; that one needs a restart. The
+ * backend's note in the success notification says which applies.
  */
 @Component({
   selector: 'app-acme-settings',
@@ -96,7 +87,7 @@ export class AcmeSettingsComponent implements OnInit {
   readonly certificatesLoading = signal(true);
   readonly certificatesErrorMessage = signal<string | null>(null);
   readonly certificates = signal<AcmeCertificateInventoryEntry[]>([]);
-  /** Which domain's own "Issue/renew now" request is currently in flight, if any -- disables just that row's own button, not every row. */
+  /** The domain whose "Issue/renew now" request is in flight, if any; other rows wait for it. */
   readonly issuingDomain = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -118,7 +109,7 @@ export class AcmeSettingsComponent implements OnInit {
     void this.loadCertificates();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload/restart-required note. */
+  /** This method PATCHes every field, shows the backend's note and reloads the certificate list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -156,7 +147,7 @@ export class AcmeSettingsComponent implements OnInit {
     }
   }
 
-  /** This method drives a single domain's own real, on-demand issue/renew attempt, right now, outside the background poll loop's own timing. */
+  /** This method issues or renews one domain's certificate now, outside the renewal service's schedule. */
   async issueOrRenewNow(domain: string): Promise<void> {
     if (this.issuingDomain() !== null) return;
 

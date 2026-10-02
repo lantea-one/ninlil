@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the admin login rate limit page: loading, saving with the restart note, a save
+ * error and an invalid form. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('AdminLoginRateLimitSettingsComponent', () => {
   let apiSpy: {
     apiAdminLoginRateLimitSettingsGet: jasmine.Spy;

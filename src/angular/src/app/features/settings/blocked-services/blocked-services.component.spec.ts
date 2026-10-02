@@ -11,6 +11,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the blocked services panel: loading the catalog and blocking or unblocking a
+ * service, globally and for a client or client group. TestBed with a spy-backed
+ * `BlockedServicesService` and `NotificationService`.
+ */
 describe('BlockedServicesComponent', () => {
   let apiSpy: {
     apiBlockedServicesGet: jasmine.Spy;

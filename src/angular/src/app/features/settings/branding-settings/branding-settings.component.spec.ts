@@ -10,17 +10,19 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * This function builds a synthetic DOM change event carrying a real, browser-native `File` --
- * {@link BrandingSettingsComponent.onLogoSelected} only ever reads `event.target.files` and
- * resets `event.target.value`, so a plain object shaped like the relevant slice of
- * `HTMLInputElement` is enough to exercise the real method without rendering an actual
- * `<input type="file">` and trying to script a real file selection into it (not possible from a
- * test at all, browser security restrictions aside).
+ * This helper builds a fake change event carrying a `File`. `onLogoSelected` only reads
+ * `event.target.files` and clears `event.target.value`, so a plain object is enough; a test cannot
+ * script a selection into a real file input.
  */
 function fileSelectedEvent(file: File | null): Event {
   return { target: { files: file ? [file] : [], value: '' } } as unknown as Event;
 }
 
+/**
+ * These tests cover the Branding page: loading, saving (a blank title sent as null), errors and the
+ * logo selection, validation and removal. TestBed with a spy-backed `BrandingSettingsService` and
+ * `NotificationService`.
+ */
 describe('BrandingSettingsComponent', () => {
   let apiSpy: {
     apiBrandingSettingsGet: jasmine.Spy;

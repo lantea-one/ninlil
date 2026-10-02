@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the safe search panel: loading the catalog, enabling (with the rewrite-switch
+ * notice) and disabling an entry, errors, and scoping to a client group. TestBed with a spy-backed
+ * `SafeSearchService` and `NotificationService`.
+ */
 describe('SafeSearchComponent', () => {
   let apiSpy: {
     apiSafeSearchGet: jasmine.Spy;

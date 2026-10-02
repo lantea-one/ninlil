@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the ACME page: loading settings and the certificate list, saving (textareas
+ * split into arrays), errors, issue/renew now and the date display. TestBed with a spy-backed
+ * `AcmeSettingsService` and `NotificationService`.
+ */
 describe('AcmeSettingsComponent', () => {
   let apiSpy: {
     apiAcmeSettingsGet: jasmine.Spy;

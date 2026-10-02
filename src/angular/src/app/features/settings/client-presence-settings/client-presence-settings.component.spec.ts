@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the client presence page: loading, saving with the backend note, a malformed
+ * duration and a backend rejection. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('ClientPresenceSettingsComponent', () => {
   let apiSpy: {
     apiClientPresenceSettingsGet: jasmine.Spy;

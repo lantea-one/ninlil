@@ -24,27 +24,19 @@ import { MODE_OPTIONS, PALETTE_OPTIONS } from '../../../core/theme/theme-palette
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own *global default* appearance -- the palette and
- * light/dark/system mode every signed-in user without a personal override of their own inherits
- * -- via `GET`/`PATCH /api/appearance-settings` (`appearance:read`/`appearance:write`).
+ * This component is the "Appearance" settings page (`/settings/appearance`). It edits the
+ * server-wide default palette and light/dark/system mode, which every user without a personal
+ * choice inherits, through `GET` and `PATCH /api/appearance-settings` (`appearance:read`,
+ * `appearance:write`).
  *
- * <p>This is deliberately distinct from the header's own {@link ThemeSwitcherComponent}, which
- * edits the *current, signed-in caller's own personal override* on top of this default (via
- * `GET`/`PATCH /api/appearance-settings/me`, gated by nothing more than a valid session). Both
- * reuse the same {@link PALETTE_OPTIONS}/{@link MODE_OPTIONS} catalog {@link ThemeService} itself
- * is built on, so the two pickers' own labels/swatches/icons never drift apart -- but this page's
- * own form (a plain settings-style `select[cSelect]` pair inside a settings card, matching every
- * other settings sub-page in this shell) is visually distinct from the switcher's own dropdown-
- * with-swatch-buttons, so an operator can never mistake "I am changing everyone's default" for
- * "I am changing my own preference."
+ * <p>The header's `ThemeSwitcherComponent` is different: through {@link ThemeService} it edits the
+ * signed-in user's personal override (`/api/appearance-settings/me`, open to any signed-in user).
+ * Both use the {@link PALETTE_OPTIONS} and {@link MODE_OPTIONS} catalogs so their labels and
+ * swatches match, but this page uses plain selects in a settings card so it is not mistaken for
+ * the personal picker.
  *
- * <p>Per `AppearanceSettingsController.Patch`'s own doc comment, `AppearanceOptions` is this
- * codebase's first runtime settings class bound via `IOptionsMonitor` rather than the usual,
- * restart-requiring `IOptions` -- so, unlike every other settings sub-page in this shell, a
- * successful save here takes effect immediately, with no restart, and the backend's own
- * `RuntimeSettingsWriteResult.HotReloadedNote` (surfaced verbatim in the success notification,
- * matching every other settings sub-page's own "never suppress the backend's own note" contract)
- * says so explicitly.
+ * <p>The setting is hot-reloaded: a save applies at once, and the backend's note (shown in the
+ * success notification) says so.
  */
 @Component({
   selector: 'app-appearance-settings',
@@ -70,10 +62,10 @@ export class AppearanceSettingsComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Every palette this picker offers, reused from {@link ThemeService}'s own shared catalog. */
+  /** The palettes offered, from the catalog {@link ThemeService} uses. */
   readonly paletteOptions = PALETTE_OPTIONS;
 
-  /** Every mode this picker offers, reused from {@link ThemeService}'s own shared catalog. */
+  /** The modes offered, from the catalog {@link ThemeService} uses. */
   readonly modeOptions = MODE_OPTIONS;
 
   readonly loading = signal(true);
@@ -90,11 +82,9 @@ export class AppearanceSettingsComponent implements OnInit {
   }
 
   /**
-   * This method returns the swatch color of the currently-selected (not-yet-saved) palette, for
-   * a live preview next to the picker -- a plain method rather than a `computed()`, since its own
-   * dependency is a reactive-forms `FormControl.value`, not a signal; Angular's zoneless change
-   * detection still re-invokes it on every change-detection pass a template event binding (the
-   * select's own `(change)`, wired implicitly by `formControlName`) schedules.
+   * This method returns the swatch color of the selected, unsaved palette for the preview beside
+   * the picker. It is a method, not a `computed()`, because it reads a `FormControl` value rather
+   * than a signal; the select's change event triggers change detection, which calls it again.
    */
   selectedSwatch(): string {
     const selected = this.paletteOptions.find(
@@ -103,7 +93,7 @@ export class AppearanceSettingsComponent implements OnInit {
     return selected?.swatch ?? this.paletteOptions[0].swatch;
   }
 
-  /** This method PATCHes both fields this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes both fields, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

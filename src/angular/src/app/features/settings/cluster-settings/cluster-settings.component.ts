@@ -23,18 +23,16 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this node's own `ClusterOptions` via
- * `GET`/`PATCH /api/cluster-settings` -- whether clustering is on at all, this node's own
- * advertised address, and the heartbeat engine's own tuning. An operator must set `enable` and
- * `advertisedHost` here before either inviting or joining a peer can succeed (see the "Cluster"
- * page, `ClusterComponent`); `nodeId` is shown for diagnostic reference only, generated once
- * automatically and never editable. Most fields take effect immediately, with no restart --
- * `heartbeatInterval` is the one exception, read once at startup by the background heartbeat
- * engine. `addressReconcileInterval` is a genuinely distinct backend options class
- * (`CatalogSyncOptions`, not `ClusterOptions` itself) folded into this same form rather than
- * given a settings page of its own -- how often a catalog-managed zone's own NOTIFY/primary
- * address lists are reconciled against this node's own live cluster membership. Like
- * `heartbeatInterval`, it also takes effect only after a restart.
+ * This component is the "Cluster" settings page (`/settings/cluster`). It edits this node's
+ * `ClusterOptions` through `GET` and `PATCH /api/cluster-settings` (`clustersettings:read`,
+ * `clustersettings:write`): whether clustering is on, the advertised address and heartbeat
+ * tuning. `enable` and `advertisedHost` must be set before inviting or joining a peer works on the
+ * Cluster page (`ClusterComponent`). `nodeId` is generated once and shown read-only.
+ *
+ * <p>The form also carries `addressReconcileInterval` from `CatalogSyncOptions`: how often
+ * catalog-managed zones' NOTIFY and primary address lists are matched to the cluster membership.
+ * It and `heartbeatInterval` need a restart; the other fields are hot-reloaded. The backend's note
+ * says which applies.
  */
 @Component({
   selector: 'app-cluster-settings',
@@ -68,7 +66,7 @@ export class ClusterSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** This node's own stable cluster identity -- shown read-only, never part of the editable form. */
+  /** This node's cluster id, shown read-only and not part of the form. */
   readonly nodeId = signal<string | null>(null);
 
   readonly form = this.formBuilder.group({
@@ -85,7 +83,7 @@ export class ClusterSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every editable field this form holds, then surfaces the backend's own reload note. */
+  /** This method PATCHes every editable field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

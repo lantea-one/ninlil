@@ -13,22 +13,12 @@ import {
 } from './settings-nav';
 
 /**
- * This component is the small shell every settings sub-page (presets, the recursive resolver,
- * rate-limiting, event broker, DNS Cookies, query logging, reverse proxy, appearance, storage, DHCP,
- * and the rest of the 38-page catalog) renders under -- one shared `<router-outlet>` beside a
- * grouped, categorized navigation list (8 labeled categories, each a native `<details>`/`<summary>`
- * disclosure so an operator can collapse a category they don't need without any custom
- * open/closed-state tracking), replacing the old flat, wrapping 37-tab row. Mirrors
- * `AppShellComponent`'s own "hide, don't just guard" nav-item pattern at a smaller scale, since
- * these sub-pages sit under one shared top-level nav item ("Presets & Settings") rather than each
- * getting its own.
- *
- * <p>The "Appearance" tab edits this host's own *global default* appearance
- * (`GET`/`PATCH /api/appearance-settings`, `appearance:read`/`appearance:write`) -- distinct from
- * the per-user override the header's own {@link ThemeSwitcherComponent} edits
- * (`GET`/`PATCH /api/appearance-settings/me`), which any signed-in caller can already reach with
- * no `appearance:read` permission at all. This tab is the deliverable an operator with
- * administrative access uses to set the appearance every user without their own override inherits.
+ * This component is the "Presets & Settings" area (`/settings`): every settings page renders in
+ * its `<router-outlet>`, beside a navigation list built from {@link SETTINGS_NAV_GROUPS}. Each
+ * category is a native `<details>` disclosure, so it can be collapsed without extra state. Like
+ * the main navigation in `AppShellComponent`, tabs the user cannot read are hidden, on top of the
+ * route guards. When the user can read but not change the page showing, the shell shows one
+ * read-only notice above it.
  */
 @Component({
   selector: 'app-settings-shell',
@@ -67,10 +57,9 @@ export class SettingsShellComponent {
   );
 
   /**
-   * The permission this session lacks to change the showing page, or `null` when it may change
-   * it. Each page hides its own Save and other changing controls in that case (see
-   * `IfPermissionDirective`); the shell explains why, once, above whichever page it is, rather
-   * than every page carrying its own copy of the notice.
+   * The write permission the user lacks for the page showing, or `null` when they may change it.
+   * Each page hides its Save and other changing controls in that case (see
+   * `IfPermissionDirective`); the shell explains why once, above the page.
    */
   readonly missingWritePermission = computed(() => {
     const tab = this.activeTab();
@@ -80,10 +69,8 @@ export class SettingsShellComponent {
   });
 
   /**
-   * The settings navigation groups the current session's own permissions actually grant access
-   * to -- each group's own `tabs` array is filtered to only the tabs a held permission unlocks,
-   * and a group left with zero visible tabs is dropped entirely rather than rendered as an empty
-   * category header.
+   * The navigation groups with only the tabs the user can read. A group with no readable tab is
+   * left out rather than shown as an empty heading.
    */
   readonly visibleGroups = computed<readonly SettingsNavGroup[]>(() =>
     SETTINGS_NAV_GROUPS.map((group) => ({

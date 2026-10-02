@@ -1,4 +1,7 @@
-/** This interface describes one settings sub-page link inside a {@link SettingsNavGroup}. */
+/**
+ * This interface describes one settings page link inside a {@link SettingsNavGroup}: its label,
+ * route path and the read permission its route guard checks.
+ */
 export interface SettingsTab {
   label: string;
   path: string;
@@ -12,9 +15,8 @@ export interface SettingsTab {
 }
 
 /**
- * This interface describes one labeled category inside {@link SettingsShellComponent}'s own
- * grouped sub-navigation -- a short heading plus the ordered set of settings pages that belong
- * under it. See {@link SETTINGS_NAV_GROUPS}'s own doc comment for the grouping rationale.
+ * This interface describes one labeled category in the settings navigation of
+ * `SettingsShellComponent`: a heading and its pages in order.
  */
 export interface SettingsNavGroup {
   label: string;
@@ -22,72 +24,28 @@ export interface SettingsNavGroup {
 }
 
 /**
- * This constant contains every settings sub-page this shell knows about, organized into 8
- * labeled categories, alongside the specific permission claim gating each tab -- deliberately
- * *not* one shared claim such as `presets:read` (the parent `/settings` route and nav item accept
- * any of these, see {@link SETTINGS_TAB_PERMISSIONS}), since `RateLimitingSettingsController`/`EventBrokerSettingsController`/
- * `DnsCookieSettingsController`/`QueryLoggingSettingsController`/`ReverseProxySettingsController`/
- * `AppearanceSettingsController`/`StorageController`/`RecursiveSettingsController`/
- * `TransportSettingsController`/`FilteringSettingsController`/`ForwardingSettingsController`/
- * `RewriteSettingsController`/`AcmeSettingsController`/`SmtpSettingsController`/
- * `DnssecPolicySettingsController`/`DnssecKeyRolloverSettingsController`/`IdentitySettingsController`/
- * `WebListenSettingsController`/
- * `PtrSyncSettingsController`/`ZoneSigningSettingsController`/`NotifySettingsController`/
- * `ZoneTransferSettingsController`/`ZoneTransferClientSettingsController`/
- * `SecondaryZoneRefreshSettingsController`/`TsigSettingsController`/
- * `WebhookDeliverySettingsController`/`DnsPipelineSettingsController`/`BrandingSettingsController`/
- * `OutboundQuerySettingsController`/`ClientSubnetSettingsController`/`Dns64SettingsController`/
- * `AdminLoginRateLimitSettingsController`/`SelfUpdateSettingsController`/`ClusterSettingsController`/
- * `ClientPresenceSettingsController`/`MacVendorSettingsController`
- * each require their own distinct permission (`ratelimiting:read`/`outboundquerysettings:read`/
- * `clientsubnetsettings:read`/`dns64settings:read`/`selfupdatesettings:read`/
- * `clientpresencesettings:read`/`macvendorsettings:read`/`eventbroker:read`/
- * `dnscookies:read`/`querylog:read`/`reverseproxy:read`/`appearance:read`/`storage:read`/
- * `recursivesettings:read`/`transportsettings:read`/`filteringsettings:read`/
- * `forwardingsettings:read`/`rewritesettings:read`/`acmesettings:read`/`smtpsettings:read`/
- * `ssosettings:read`/`dnssecpolicysettings:read`/`dnsseckeyrolloversettings:read`/
- * `identitysettings:read`/`weblistensettings:read`/
- * `ptrsyncsettings:read`/`zonesigningsettings:read`/`notifysettings:read`/
- * `zonetransfersettings:read`/`zonetransferclientsettings:read`/
- * `secondaryzonerefreshsettings:read`/`tsigsettings:read`/`webhookdeliverysettings:read`/
- * `dnspipelinesettings:read`/`branding:read`/`adminloginratelimit:read`/`clustersettings:read`/
- * `dhcpsettings:read`), not `presets:read` -- confirmed directly against each controller's own `[RequirePermission(...)]`
- * attribute, not assumed from the shared "Presets & Settings" umbrella label. `BlockedServicesController`/
- * `SafeSearchController` are the one exception: their own tabs below deliberately reuse
- * `filterlists:read`/`dnsrewrites:read` (the same permissions `FilteringSettingsController`/
- * `RewriteSettingsController` themselves gate on) rather than a distinct new claim, since both are
- * thin sugar over the ordinary filter-list/rewrite entities those permissions already cover -- see
- * each controller's own doc comment. A tab whose own permission a session lacks is hidden here
- * (mirroring `AppShellComponent`'s own `visibleNavItems`), on top of (not instead of) each child
- * route's own `permissionGuard` actually blocking direct navigation.
+ * This constant lists every settings page, in eight categories, with the permission that gates
+ * each. Each page uses the read permission of its backend controller (for example
+ * `ratelimiting:read` for `RateLimitingSettingsController`, `storage:read` for
+ * `StorageController`), not one shared settings permission. Blocked Services and Safe Search reuse
+ * `filterlists:read` and `dnsrewrites:read`, because those pages only manage ordinary filter lists
+ * and rewrites. `SettingsShellComponent` hides a tab whose permission the user lacks, and each
+ * child route in `app.routes.ts` also has a `permissionGuard` for it.
  *
- * <p><b>Grouping rationale</b> (the fix for a real, live-audited information-architecture problem:
- * this shell used to render all 37 pages as one flat, wrapping row of pill tabs, four full lines
- * deep at desktop width with no categorization at all). The first 7 categories below were
- * derived by reading every one of the original 37 pages' own doc comments to determine what
- * each genuinely configures, then grouping by the real subsystem each page's `Options` class
- * belongs to -- not by superficial name similarity. `Overview` stands alone since
- * it is this shell's own default-route landing page, not a configuration form. `DNS Resolution &
- * Protocol` groups everything that shapes how a query is actually answered end-to-end (the
- * recursive resolver itself, transports, forwarding, the query-processing pipeline, and every
- * query-time hardening/tuning knob -- rate limiting, outbound-query hardening, EDNS Client Subnet,
- * DNS64, DNS Cookies). `Filtering & Privacy` groups the block/allow-list engine and its two curated
- * sugar layers (Blocked Services, Safe Search), the rewrite engine, and the query log's own privacy
- * controls. `Zone Management` groups every zone-transfer/signing/notification-adjacent page,
- * including TSIG (clock-skew tolerance for signed transfers) and DNSSEC Policy (algorithm
- * restrictions for newly-generated zone-signing keys) since both exist in service of zone
- * operations specifically, not as standalone security features. `Identity & Access` groups local
- * account policy, SSO federation, and admin-login brute-force protection -- every page governing
- * who can sign in and how. `Integrations & Delivery` groups every page configuring an outbound
- * connection to something external to the DNS engine itself: the message-broker event transport,
- * the HTTP reverse-proxy trust list, ACME/Let's Encrypt issuance, outbound SMTP, and webhook
- * delivery. `System` groups platform-level, DNS-protocol-agnostic concerns: the storage-engine
- * hot-switch, clustering, the admin API's own web listener, UI appearance/branding defaults, and
- * the self-update checker. `DHCP` is its own eighth, later-added category rather than folded into
- * `DNS Resolution & Protocol` -- DHCP is a whole separate protocol family sharing this same admin
- * process, not a DNS-query-answering concern, and today holds a single settings page
- * (`DhcpSettingsController`'s three sub-resources), so it doesn't yet need the multi-tab breakdown
- * every other category has; a future DHCPv6 settings page belongs here too.
+ * <p><b>Grouping.</b> Pages are grouped by the subsystem they configure:
+ * - `Overview`: the DNS security presets, the landing page at `/settings`.
+ * - `DNS Resolution & Protocol`: how a query is answered (recursive resolver, transports,
+ *   forwarding, pipeline) and query-time tuning (rate limiting, outbound-query hardening, EDNS
+ *   Client Subnet, DNS64, DNS Cookies).
+ * - `Filtering & Privacy`: the filtering engine with Blocked Services and Safe Search, rewrites,
+ *   query logging, client presence and MAC vendor lookup.
+ * - `Zone Management`: DNSSEC policy and key rollover, PTR sync, zone signing, NOTIFY, zone
+ *   transfers, secondary zone refresh and TSIG, which all serve zone operations.
+ * - `Identity & Access`: local account policy, SSO and admin-login rate limiting.
+ * - `Integrations & Delivery`: connections to outside systems (event broker, reverse proxy, ACME,
+ *   SMTP, webhook delivery).
+ * - `System`: storage engine, cluster, web listener, appearance, branding and self-update.
+ * - `DHCP`: the DHCP server settings, a separate protocol family with one page.
  */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
@@ -235,9 +193,9 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
 ];
 
 /**
- * This constant contains every settings tab's read permission. Holding any one of them is enough
- * to open the settings area -- the parent `/settings` route guard and nav item both use it -- and
- * each tab's own route guard still checks that tab's own permission.
+ * This constant contains every settings tab's read permission. Holding any one of them opens the
+ * settings area: the parent `/settings` route guard and the "Presets & Settings" nav item use it.
+ * Each tab's route guard still checks that tab's permission.
  */
 export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_NAV_GROUPS.flatMap((group) =>
   group.tabs.map((tab) => tab.permission),

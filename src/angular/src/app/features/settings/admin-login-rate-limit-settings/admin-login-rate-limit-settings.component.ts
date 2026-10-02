@@ -22,18 +22,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `AdminLoginRateLimitOptions` -- the admin-login
- * brute-force limiter's own attempt threshold and lockout/window duration -- via
- * `GET`/`PATCH /api/admin-login-rate-limit-settings`, mirroring
- * `RateLimitingSettingsComponent`'s own exact shape. No secret material is involved here at all,
- * so every field is a plain read/PATCH-with-current-value round trip.
+ * This component is the "Admin Login Rate Limit" settings page
+ * (`/settings/admin-login-rate-limit`). It edits `AdminLoginRateLimitOptions`, the sign-in
+ * brute-force limiter's attempt limit and window, through `GET` and
+ * `PATCH /api/admin-login-rate-limit-settings` (`adminloginratelimit:read`,
+ * `adminloginratelimit:write`).
  *
- * <p>This is a genuinely different limiter from the "Rate limiting" tab elsewhere in this shell
- * (`DnsRateLimitOptions`, the DNS-query-path limiter): that one deliberately fails *open* past its
- * own cap, since DNS resolution itself must never become unavailable because of it, while this one
- * deliberately fails *closed* -- a login attempt past `permitLimit` within `window` is genuinely
- * rejected with `429`, not merely logged. Every successful `PATCH`'s own "restart required" note is
- * surfaced directly in the success notification, never suppressed.
+ * <p>It is a different limiter from the "Rate limiting" tab (`RateLimitingSettingsComponent`, DNS
+ * queries). A login attempt past `permitLimit` within `window` is refused with 429. Changes need a
+ * restart; the backend's note in the success notification says so.
  */
 @Component({
   selector: 'app-admin-login-rate-limit-settings',
@@ -76,7 +73,7 @@ export class AdminLoginRateLimitSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own restart-required note. */
+  /** This method PATCHes every field, then shows the backend's restart note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -13,6 +13,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Appearance page: loading, saving with the backend note, a save error and
+ * the swatch preview. TestBed with a spy-backed `AppearanceSettingsService` and
+ * `NotificationService`.
+ */
 describe('AppearanceSettingsComponent', () => {
   let apiSpy: {
     apiAppearanceSettingsGet: jasmine.Spy;

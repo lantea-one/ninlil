@@ -27,28 +27,17 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own global branding (`GET`/`PATCH
- * /api/branding-settings`, `branding:read`/`branding:write`): a custom site title/logo
- * (`BrandingOptions`), plus the already-existing `AuthoritativeServerOptions` fields that drive
- * real CHAOS-class `version.bind`/`hostname.bind` TXT query answers -- exposed together here
- * rather than as a second, unrelated page, since the backend itself merges both through the same
- * `PATCH` action. Built from {@link FilteringSettingsComponent}'s own reference pattern (a plain
- * checkbox alongside ordinary text fields).
+ * This component is the "Branding" settings page (`/settings/branding`). Through `GET` and
+ * `PATCH /api/branding-settings` (`branding:read`, `branding:write`) it edits the site title and
+ * logo (`BrandingOptions`) and the `AuthoritativeServerOptions` fields behind CHAOS-class
+ * `version.bind` and `hostname.bind` answers; the backend saves both in one `PATCH`.
  *
- * <p>The logo is never a dedicated file-upload endpoint -- there is no `<input type="file">`-bound
- * form control at all, since a native file input's value cannot be data-bound. Instead,
- * {@link onLogoSelected} reads a browser-selected file into a complete data URI, client-side, via
- * {@link readFileAsDataUri}, and writes that string directly onto the `logoDataUri` form control --
- * from that point on it is just an ordinary string field, sent in the `PATCH` body exactly like
- * `siteTitle`. {@link validateLogoFile} rejects an oversized or non-image file before it is ever
- * read, mirroring `BrandingSettingsController.ValidateLogoDataUri`'s own two server-side checks so
- * a doomed upload never reaches the network at all.
+ * <p>A file input cannot be bound to a form control, so {@link onLogoSelected} checks the chosen
+ * file with {@link validateLogoFile}, reads it into a data URI with {@link readFileAsDataUri} and
+ * puts that string on the `logoDataUri` control. From there it is an ordinary string field sent on
+ * save.
  *
- * <p>Every field on this page takes effect immediately, with no restart -- `BrandingOptions` is
- * bound via `IOptionsMonitor` from the start, and `AuthoritativeServerOptions`'s own real consumer
- * (`AuthoritativeQueryResolver`) was converted to the same live-reload shape alongside this page's
- * own build. The backend's own `PATCH` response note (surfaced directly in the success
- * notification, never suppressed) confirms this explicitly.
+ * <p>Every field is hot-reloaded; the backend's note in the success notification says so.
  */
 @Component({
   selector: 'app-branding-settings',
@@ -84,7 +73,7 @@ export class BrandingSettingsComponent implements OnInit {
   /** A rejection reason for the most recently selected logo file, or `null` when none was rejected. */
   readonly logoFileError = signal<string | null>(null);
 
-  /** The real accepted logo size ceiling, in whole KB, surfaced in this page's own hint text. */
+  /** The logo size limit in whole KB, for the hint text. */
   readonly maxLogoSizeKb = Math.floor(MAX_LOGO_SIZE_BYTES / 1024);
 
   readonly form = this.formBuilder.group({
@@ -100,11 +89,8 @@ export class BrandingSettingsComponent implements OnInit {
   }
 
   /**
-   * This method handles a real `<input type="file">` selection: validates the file client-side
-   * (real image type, within the accepted size), then reads it into a data URI and writes that
-   * string directly onto the `logoDataUri` control. Never touches the network on its own -- the
-   * new logo is only actually saved once {@link save} is called, exactly like every other field on
-   * this form.
+   * This method handles a logo file selection: it validates the file, reads it into a data URI and
+   * sets the `logoDataUri` control. Nothing is sent until {@link save}.
    */
   async onLogoSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -137,7 +123,7 @@ export class BrandingSettingsComponent implements OnInit {
     this.form.controls.logoDataUri.markAsDirty();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -150,9 +136,8 @@ export class BrandingSettingsComponent implements OnInit {
       const result = await firstValueFrom(
         this.brandingApi.apiBrandingSettingsPatch({
           body: {
-            // A blank site title means "use the SPA's own compiled-in default" -- sent as an
-            // explicit null, this project's own established merge-patch "clear this field"
-            // convention, rather than an empty string the backend would otherwise store literally.
+            // A blank title means "use the built-in default": null clears it in a merge patch,
+            // where an empty string would be stored as is.
             siteTitle: value.siteTitle.trim() === '' ? null : value.siteTitle,
             logoDataUri: value.logoDataUri,
             hostnameString: value.hostnameString,

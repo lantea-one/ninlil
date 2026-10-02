@@ -19,13 +19,12 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component lists this project's 5 built-in configuration presets
- * (`Open`/`Baseline`/`Protective`/`Family`/`FIPS`) and lets an operator apply one, via
- * `POST /api/presets/{name}/apply` (see `PresetsController`'s own doc comment). Applying a preset
- * is confirmed first, via {@link ConfirmDialogComponent}, since it overwrites the specific
- * settings the chosen preset names -- and the backend's own "some settings need a restart to take
- * effect" response note is always surfaced directly in the success notification afterward, never
- * suppressed.
+ * This component is the "DNS Security Presets" page, the settings landing page (`/settings`). It
+ * lists the five built-in presets (`Open`, `Baseline`, `Protective`, `Family`, `FIPS`) from
+ * `GET /api/presets` (`presets:read`). With `presets:write` the operator can apply one through
+ * `POST /api/presets/{name}/apply`, after a confirmation, since applying overwrites the settings
+ * and filter-list subscriptions the preset names. The response note, which says which settings
+ * need a restart, is shown in the success notification.
  */
 @Component({
   selector: 'app-preset-list',
@@ -47,7 +46,7 @@ export class PresetListComponent {
   private readonly presetsApi = inject(PresetsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending preset apply. */
+  /** Whether {@link ConfirmDialogComponent} is shown for a pending preset apply. */
   readonly confirmDialogVisible = signal(false);
 
   /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
@@ -65,7 +64,7 @@ export class PresetListComponent {
     void this.loadPresets();
   }
 
-  /** This method confirms, then applies, one named preset. */
+  /** This method asks for confirmation, then applies one preset. */
   async apply(preset: PresetSummary): Promise<void> {
     if (!preset.name) return;
 
@@ -84,7 +83,7 @@ export class PresetListComponent {
       const result = await firstValueFrom(
         this.presetsApi.apiPresetsNameApplyPost({ name: preset.name }),
       );
-      // The backend's own restart-required note is surfaced verbatim, never suppressed.
+      // The backend's note says which settings need a restart; it is shown as is.
       this.notification.success(
         result.note ? `${preset.name} applied. ${result.note}` : `${preset.name} applied.`,
       );
@@ -97,9 +96,7 @@ export class PresetListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);

@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Cluster settings page: loading, saving (including the catalog sync
+ * interval), a blank heartbeat interval and a save error. TestBed with a spy-backed settings
+ * service and `NotificationService`.
+ */
 describe('ClusterSettingsComponent', () => {
   let apiSpy: {
     apiClusterSettingsGet: jasmine.Spy;
@@ -58,8 +63,7 @@ describe('ClusterSettingsComponent', () => {
     expect(apiSpy.apiClusterSettingsGet).toHaveBeenCalled();
     expect(fixture.componentInstance.form.controls.enable.value).toBeFalse();
     expect(fixture.componentInstance.nodeId()).toBe('4d5e6f70-8192-4a3b-b4c5-d6e7f8091a2b');
-    // CatalogSyncOptions' own compiled-in default -- folded into this same form rather than a
-    // settings page of its own, see this component's own doc comment.
+    // CatalogSyncOptions' default, carried on this form.
     expect(fixture.componentInstance.form.controls.addressReconcileInterval.value).toBe('00:01:00');
     expect(fixture.componentInstance.loading()).toBeFalse();
   });

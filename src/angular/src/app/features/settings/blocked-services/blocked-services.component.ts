@@ -17,21 +17,17 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component lists Ninlil's own curated "blocked services" catalog
- * (`BlockedServiceCatalog`/`BlockedServicesController`) and lets an operator toggle each named
- * consumer service on or off with a single click. Enabling a service creates (behind the API) an
- * ordinary, subscribed filter list for that service's own real, independently-sourced domain
- * list -- see `BlockedServiceCatalog`'s own doc comment for the data source and license. No
- * confirmation dialog: unlike applying a preset, toggling one service here is a small, easily
- * reversed action (the same toggle disables it again), so this mirrors the lighter-weight pattern
- * an ordinary settings checkbox already uses rather than {@link PresetListComponent}'s own
- * confirm-first apply flow.
+ * This component is the "Blocked Services" settings page (`/settings/blocked-services`). It lists
+ * the curated catalog from `GET /api/blocked-services` (`filterlists:read`) and, with
+ * `filterlists:write`, blocks or unblocks a service with one click (`POST` or
+ * `DELETE /api/blocked-services/{key}`). Blocking creates an ordinary subscribed filter list for
+ * the service's domain list (see `BlockedServiceCatalog` for the data source and license). There
+ * is no confirmation, since the same button undoes it.
  *
- * <p>Reused as a scoped panel, not just the global Settings page: an optional {@link clientId}/
- * {@link clientGroupId} input (mutually exclusive; set at most one) narrows every toggle to that
- * single target instead of the shared, global default -- see `BlockedServicesController`'s own
- * doc comment for the exact backend contract this thin wrapper follows. Neither set (the global
- * Settings page's own usage) reproduces this component's pre-scoping behavior exactly.
+ * <p>The client and client group forms embed it as a panel with {@link clientId} or
+ * {@link clientGroupId} set (at most one), which scopes every toggle to that target; see
+ * `BlockedServicesController` for the backend rules. On the settings page neither is set and the
+ * toggles act globally.
  */
 @Component({
   selector: 'app-blocked-services',
@@ -54,10 +50,10 @@ export class BlockedServicesComponent implements OnInit {
   private readonly blockedServicesApi = inject(BlockedServicesService);
   private readonly notification = inject(NotificationService);
 
-  /** The single client this panel's every toggle targets, or `undefined` for the shared, global default. */
+  /** The client every toggle targets, or `undefined` for the global setting. */
   @Input() clientId?: string;
 
-  /** The single client group this panel's every toggle targets, or `undefined` for the shared, global default. */
+  /** The client group every toggle targets, or `undefined` for the global setting. */
   @Input() clientGroupId?: string;
 
   readonly services = signal<BlockedServiceDetail[]>([]);
@@ -69,7 +65,7 @@ export class BlockedServicesComponent implements OnInit {
     void this.load();
   }
 
-  /** This method enables or disables a single catalog entry, per its own current state, within this panel's own target scope (if any). */
+  /** This method blocks or unblocks one catalog entry, depending on its state, for this panel's target. */
   async toggle(service: BlockedServiceDetail): Promise<void> {
     const key = service.key;
     if (!key) return;
