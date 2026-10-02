@@ -1,14 +1,15 @@
 #!/bin/sh
 # Fetches the native shared libraries the Ninlil container image needs on top of its chiseled
-# ASP.NET Core base image, for any target architecture, without running anything on that
+# .NET runtime-deps base image, for any target architecture, without running anything on that
 # architecture.
 #
-# The runtime image is shell-less and package-manager-less, so these libraries cannot be
-# installed into it with apt. Instead, this script runs in a build stage on the build machine's
-# own architecture, reads each package's Debian repository index for the *target* architecture,
-# downloads the newest package, verifies it against the SHA256 recorded in that index, and
-# extracts only the shared objects into an output directory the runtime stage copies from. This
-# is what lets one amd64 machine build both the amd64 and arm64 images with no CPU emulation.
+# The runtime image has no shell and no package manager, so these libraries cannot be installed
+# into it with apt. Instead, this script runs in a build stage on the build machine's
+# architecture, reads each package's Debian repository index (Packages.gz, over HTTPS) for the
+# *target* architecture, downloads the newest package, checks it against the SHA256 recorded in
+# that index, and extracts only the shared objects into an output directory the runtime stage
+# copies from. This lets one amd64 machine build both the amd64 and arm64 images with no CPU
+# emulation.
 #
 # Libraries fetched:
 #   libmsquic  -- the QUIC implementation System.Net.Quic loads for DNS-over-QUIC. Without it
@@ -17,6 +18,10 @@
 #                 (libmsquic's other dependency, OpenSSL 3, is already part of the base image.)
 #
 # Usage: fetch-native-libraries.sh <amd64|arm64> <output-directory>
+#
+# Output: the libraries under <output-directory>/usr/lib/<multiarch triplet>/. Exits non-zero for
+# an unknown architecture, a package missing from its index, a failed download or a checksum
+# mismatch. Needs curl, gzip, awk, sort -V, sha256sum and dpkg-deb (buildpack-deps has them).
 
 set -eu
 

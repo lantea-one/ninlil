@@ -1,150 +1,111 @@
 # Ninlil example deployment (Docker Compose).
 #
-# Demonstrates a realistic, production-shaped deployment of the single combined Ninlil host (see
-# Dockerfile) against a real PostgreSQL backing store rather than the zero-config SQLite default,
-# with named volumes for both services' own persistent state. Run it from the repository root:
+# Runs the single Ninlil host (see Dockerfile) against PostgreSQL instead of the zero-config
+# SQLite default, with a named volume for each service's persistent state. Run it from the
+# repository root:
 #
 #   docker compose up --build
 #
+# then open https://localhost:8443 (a self-signed certificate is generated on first run, so the
+# browser warns about it) and sign in with the bootstrap administrator credentials set below.
+#
 # To run a published image instead of building one, replace each `build:` block below with
-# `image: git.lantea.one/lantea.one/ninlil:latest` (or a specific version tag).
-#
-# then open https://localhost:8443 (a self-signed certificate is generated automatically on
-# first run -- your browser will warn about it, which is expected) and sign in with the
-# bootstrap administrator credentials set below. Copy this file, rename it, and adjust the
-# `environment:` block for your own real deployment -- every secret-shaped value below
-# (passwords, the JWT signing key) is a placeholder that must be changed before this is used for
-# anything but a local trial.
+# `image: git.lantea.one/lantea.one/ninlil:latest` (or a specific version tag). For a deployment
+# of your own, copy this file and adjust the `environment:` blocks: every secret-shaped value
+# (passwords, the JWT signing key) is a placeholder that must be changed before anything but a
+# local trial.
 #
 # ---------------------------------------------------------------------------------------------
-# Privileged ports -- read this before touching the `ports:` list below.
+# Privileged ports
 # ---------------------------------------------------------------------------------------------
-# Plain DNS (53/udp+tcp) and the REST API/admin console's own HTTP/HTTPS ports (80/443) are all
-# privileged on Linux (any port 1023 or below). Ninlil's image runs as an unprivileged user
-# (uid 1654, on Microsoft's shell-less "chiseled" base image), and that user can still bind them:
-# on Docker's bridge networking, the Docker Engine lets any process inside a container bind a low
-# port (it sets `net.ipv4.ip_unprivileged_port_start=0` in the container's own network
-# namespace), so the *container's own* bind to 53/80/443 needs no extra capability grant. What
-# actually determines whether an operator needs root/elevated privileges is the *host* side of
-# Docker's own port-publishing (`ports:`), which is an entirely separate question from what the
-# process inside the container does:
+# Plain DNS (53/udp+tcp) and the REST API/admin console (80/443) use ports below 1024. The image
+# runs as an unprivileged user (uid 1654), and it can still bind them inside the container: on a
+# bridge network Docker sets `net.ipv4.ip_unprivileged_port_start=0` in the container's network
+# namespace. What needs privilege is the host side of `ports:`:
 #
-#   - Publishing a privileged host port (e.g. `"53:53/udp"`, `"443:443"`) still needs either the
-#     Docker daemon itself running with sufficient privilege to bind it (true for a normal
-#     root-owned Docker Engine install on Linux, which is the common case) or, for a rootless
-#     Docker Engine install specifically, `CAP_NET_BIND_SERVICE` explicitly granted to
-#     `rootlesskit` -- see Docker's own rootless-mode documentation for that one-time host setup
-#     step, out of scope for this file.
-#   - This example publishes the REST API/admin console on unprivileged *host* ports (8080/8443)
-#     purely so `docker compose up` works with no host-level setup at all, while the *container*
-#     side keeps listening on its real default 80/443 -- Ninlil.Web itself needs no
-#     `NINLIL_DNS_SERVER_WEB_HTTP_PORT`/`..._HTTPS_PORT` override for this, since Docker's own
-#     port mapping already does the remapping.
-#   - Plain DNS (port 53) is different: a DNS client hard-codes port 53, so it cannot be
-#     remapped the way a browser bookmark can. This example publishes 53/udp and 53/tcp directly
-#     on the host, which needs a privileged/root-capable Docker Engine (the common case on a real
-#     Linux host or homelab router) -- if that is not available in your environment, either run
-#     an unprivileged Docker Engine with `CAP_NET_BIND_SERVICE` granted as above, or remap the
-#     container's own Plain DNS port to something unprivileged too (both the host publish *and*
-#     `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT` must change together, e.g. `"5300:5300/udp"` +
-#     `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=5300`) and accept that real LAN clients cannot use
-#     this deployment as their actual resolver without their own client-side port configuration
-#     (most operating systems' own DNS client cannot be told to use a non-53 resolver port at
-#     all) -- appropriate only for local development/testing, not a real deployment.
-#   - A distinct, very common failure mode on a Linux desktop/workstation host specifically (as
-#     opposed to a dedicated server or router, where this rarely applies): `systemd-resolved`
-#     already binds host port 53 itself (typically on 127.0.0.53/127.0.0.54) to provide the local
-#     stub resolver every other process on that machine uses, so publishing `"53:53"` here fails
-#     with "address already in use" -- a host-level conflict with nothing to do with privilege or
-#     Docker at all. Either stop/disable `systemd-resolved`'s own stub listener (out of scope for
-#     this file -- it is that host's own system configuration, not Ninlil's), or remap the
-#     published host port as described above while accepting the same real LAN-client caveat.
+#   - Publishing a host port below 1024 (e.g. `"53:53/udp"`) needs a root-run Docker Engine (the
+#     usual Linux install) or, for rootless Docker, `CAP_NET_BIND_SERVICE` granted to
+#     `rootlesskit` (see Docker's rootless-mode documentation).
+#   - This example publishes the REST API/admin console on host ports 8080/8443 so it runs with
+#     no host setup; the container still listens on 80/443, so no
+#     `NINLIL_DNS_SERVER_WEB_HTTP_PORT`/`..._HTTPS_PORT` override is needed.
+#   - Plain DNS is published on host port 53, because DNS clients use port 53 and most operating
+#     systems cannot be told otherwise. Without a privileged Docker Engine, remap it for local
+#     testing only: change the host publish and `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT` together
+#     (e.g. `"5300:5300/udp"` with `NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT=5300`), and LAN clients
+#     can no longer use it as their resolver.
+#   - On a Linux desktop, `systemd-resolved` usually holds port 53 for its stub listener
+#     (127.0.0.53/127.0.0.54), so publishing `"53:53"` fails with "address already in use".
+#     Disable the stub listener on that host, or remap the port as above.
 #
 # ---------------------------------------------------------------------------------------------
-# DHCP/Router Advertisement and Docker's default bridge networking -- read this if you also want
-# DHCPv4/DHCPv6/RA, not just DNS.
+# DHCP and Router Advertisement
 # ---------------------------------------------------------------------------------------------
-# The `ninlil` service below runs on Docker's default bridge network, with individual container
-# ports published to the host. This works fine for DNS and the REST API/admin console, but a
-# real DHCP/RA server fundamentally needs to see raw broadcast/multicast traffic arriving
-# directly from real LAN clients (a DHCPv4 DISCOVER is a raw broadcast to 255.255.255.255; RA
-# uses ICMPv6 multicast) -- traffic that Docker's default bridge network, sitting behind NAT,
-# generally does not forward from the physical LAN at all. This is a genuine, real-world Docker
-# networking constraint for *any* containerized DHCP/RA server, not something specific to
-# Ninlil. The `ninlil-host-network` service below, gated behind the `host-network` Compose
-# profile, is the realistic alternative for anyone who actually wants DHCP/RA to work: it joins
-# the host's own network namespace directly (`network_mode: host`), so its listeners see real LAN
-# broadcast/multicast traffic exactly as a bare-metal install would. On the host's network the
-# unprivileged-port allowance above no longer applies, and DHCP/RA also need raw sockets, so this
-# service runs the process as root with the NET_ADMIN/NET_RAW capabilities. Host networking and the
-# ordinary bridge-networked `ninlil` service below are mutually exclusive ways of running the
-# same image -- run one or the other, never both at once (they would fight over the same host
-# ports) -- so `ninlil-host-network` is left out of the default `docker compose up` run entirely
-# and only starts if you explicitly request its profile:
+# The `ninlil` service runs on Docker's default bridge network with individual ports published.
+# That works for DNS and the REST API/admin console, but DHCP and RA must see broadcast and
+# multicast traffic from LAN clients (a DHCPv4 DISCOVER goes to 255.255.255.255; RA uses ICMPv6
+# multicast), which the NATed bridge network does not forward. This holds for any containerized
+# DHCP/RA server.
+#
+# The `ninlil-host-network` service, behind the `host-network` Compose profile, is the
+# alternative: it joins the host's network namespace (`network_mode: host`), so its listeners see
+# LAN traffic as a bare-metal install would. On the host's network the unprivileged-port
+# allowance above no longer applies, and DHCP/RA also need raw sockets, so it runs as root with
+# NET_ADMIN and NET_RAW. Run one service or the other, never both (they bind the same host
+# ports); the profile keeps it out of a plain `docker compose up`:
 #
 #   docker compose --profile host-network up --build ninlil-host-network postgres
 #
 # ---------------------------------------------------------------------------------------------
 
 services:
-  # The Ninlil combined host -- REST API, DNS engine, and the Angular admin console, all in one
-  # process. This is the ordinary bridge-networking deployment: DNS/API/admin-console only, no
-  # DHCP/RA (see the host-networking note above for that case).
+  # The Ninlil host -- REST API, DNS engine and the Angular admin console in one process -- on
+  # bridge networking: DNS, API and admin console only, no DHCP/RA (see the note above).
   ninlil:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      # REST API / admin console / SignalR / (once enabled) DNS-over-HTTPS. Remapped to
-      # unprivileged host ports purely so this file runs with no host-level setup; the container
-      # itself still listens on its real default 80/443 internally.
+      # REST API, admin console, SignalR and (when enabled) DNS-over-HTTPS, on unprivileged host
+      # ports; the container listens on its default 80/443.
       - "8080:80"
       - "8443:443"
-      # Plain DNS -- see the "Privileged ports" note above for why this one, unlike 80/443, is
-      # published on its real, un-remapped port.
+      # Plain DNS, on host port 53 (see "Privileged ports" above).
       - "53:53/udp"
       - "53:53/tcp"
     environment:
-      # Point at the real PostgreSQL service below instead of the zero-config SQLite default --
-      # see ENVIRONMENT.md's own Storage section for the other supported engines (MySql,
-      # SqlServer, MongoDb).
+      # The PostgreSQL service below instead of the SQLite default. See the "Storage engine"
+      # section of ENVIRONMENT.md for the other engines (MySql, SqlServer, MongoDb).
       NINLIL_STORAGE_ENGINE: PostgreSql
       NINLIL_STORAGE_CONNECTION_STRING: "Host=postgres;Port=5432;Database=ninlil;Username=ninlil;Password=change-me-too"
-      # The one-time bootstrap administrator account (see README.md's own "Quick start" section)
-      # -- setting the password explicitly here avoids the alternative (a random password printed
-      # once to the container's own log, which `docker compose up`'s scrollback makes easy to
-      # miss). Change this, and consider disabling the bootstrap account entirely once you have
-      # created a real, appropriately-scoped one from the admin console. Whatever you replace it
-      # with must satisfy Ninlil's own password policy (12+ characters, at least one uppercase,
-      # one lowercase, one digit, and one non-alphanumeric character) -- the bootstrap account is
-      # silently never created, with only a log line to explain why, if it does not.
+      # The bootstrap administrator, created on first start. Without a password here, a random
+      # one is printed once to the container log, which is easy to miss in `docker compose up`
+      # output. Change it, and consider disabling the account once you have created a scoped one
+      # in the admin console. The password must meet the default password policy (12+
+      # characters, with an uppercase letter, a lowercase letter, a digit and a non-alphanumeric
+      # character); otherwise the account is not created and only a log line says why.
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_USER_NAME: admin
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD: "Change-Me-Now1!"
-      # Optional: the JWT signing key. Left unset, Ninlil generates one automatically on first
-      # run and persists it under the /app/data volume below, so it survives a container
-      # recreation with no action needed here -- fine for a single-node deployment. Set this
-      # explicitly (32+ bytes once UTF-8 encoded) only if you need a stable, known key ahead of
-      # time -- for example, to pre-provision multiple cluster nodes that must all validate each
-      # other's tokens without first exchanging the auto-generated one.
+      # Optional: the JWT signing key. Left unset, Ninlil generates one on first start and keeps
+      # it in the /app/data volume (jwt-signing-key.txt), so it survives recreating the
+      # container. Set it (32+ bytes once UTF-8 encoded) only when you need a known key ahead of
+      # time.
       # NINLIL_JWT_SIGNING_KEY: "replace-with-a-real-random-secret-at-least-32-bytes-long"
     volumes:
-      # Persists the auto-generated Data Protection key ring, JWT signing key, self-signed TLS
-      # certificate, DNSCrypt provider keys, and (only relevant if you switch back to the
-      # default SQLite engine) the database file itself -- see the Dockerfile's own comments on
-      # /app/data for the full list. Without this, every previously encrypted secret (TSIG keys,
-      # DNSSEC private keys, cloud credentials, TOTP seeds) becomes unreadable the moment the
-      # container is recreated.
+      # Keeps the generated Data Protection key ring, JWT signing key, self-signed TLS
+      # certificate, DNSCrypt provider keys, the runtime appsettings.json and, with the SQLite
+      # engine, the database (see the Dockerfile's comments on /app/data). Without it, every
+      # encrypted secret (TSIG keys, DNSSEC private keys, cloud credentials, TOTP seeds) becomes
+      # unreadable once the container is recreated.
       - ninlil-data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
-  # The alternative, host-networking variant of the same image, for anyone who actually wants
-  # DHCPv4/DHCPv6/Router Advertisement to work -- see the "DHCP/Router Advertisement" note above.
-  # Disabled by default (the `host-network` profile); start explicitly with
-  # `docker compose --profile host-network up ninlil-host-network postgres`, and do not also
-  # start the ordinary `ninlil` service alongside it (both would try to bind the same host ports).
+  # The same image on host networking, for DHCPv4/DHCPv6/Router Advertisement (see "DHCP and
+  # Router Advertisement" above). Starts only with the `host-network` profile; never run it
+  # alongside the `ninlil` service, since both bind the same host ports.
   ninlil-host-network:
     build:
       context: .
@@ -152,25 +113,22 @@ services:
     profiles:
       - host-network
     network_mode: host
-    # Root, plus raw-socket and interface capabilities, for DHCP/RA on the host's own network --
-    # see the "DHCP/Router Advertisement" note above.
+    # Root, plus raw-socket and interface capabilities, for DHCP/RA on the host's network.
     user: "0:0"
     cap_add:
       - NET_ADMIN
       - NET_RAW
     environment:
       NINLIL_STORAGE_ENGINE: PostgreSql
-      # With host networking there is no Docker-managed service-name DNS, so the backing
-      # database must be reached via a real, routable address instead of the `postgres` service
-      # name the bridge-networked example above uses -- e.g. the Docker host's own loopback
-      # address, since `postgres` below still publishes 5432 to the host.
+      # Host networking has no Compose service-name DNS, so the database is addressed through
+      # the host's loopback. The `postgres` service below does not publish 5432, so add
+      # `ports: ["127.0.0.1:5432:5432"]` to it, or point this at another database.
       NINLIL_STORAGE_CONNECTION_STRING: "Host=127.0.0.1;Port=5432;Database=ninlil;Username=ninlil;Password=change-me-too"
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_USER_NAME: admin
       NINLIL_IDENTITY_BOOTSTRAP_ADMINISTRATOR_PASSWORD: "Change-Me-Now1!"
-      # Turn on the local (non-relay) DHCPv4/DHCPv6 engines and Router Advertisement -- all off
-      # by default. See ENVIRONMENT.md's own DHCP section for reservations/scopes/tag rules,
-      # configured afterward through the REST API or admin console, not via environment
-      # variables.
+      # Turn on the local (non-relay) DHCPv4/DHCPv6 engines and Router Advertisement, all off by
+      # default. Scopes, reservations and tag rules are configured afterward through the REST
+      # API or admin console; see the DHCP section of ENVIRONMENT.md.
       NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE: "true"
       NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_ENABLE: "true"
       NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE: "true"
@@ -181,9 +139,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # PostgreSQL backing store for the `ninlil`/`ninlil-host-network` service above. Swap the image
-  # tag, credentials, and `NINLIL_STORAGE_CONNECTION_STRING` together for a real deployment --
-  # these are placeholder values for a local trial only.
+  # PostgreSQL for the `ninlil` service above (and `ninlil-host-network`, once 5432 is
+  # published). The credentials are placeholders for a local trial; change them together with
+  # `NINLIL_STORAGE_CONNECTION_STRING`.
   postgres:
     image: postgres:16
     environment:
@@ -200,7 +158,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  # Ninlil's own persistent state -- see the `ninlil` service's own comment above.
+  # Ninlil's persistent state; see the `ninlil` service's volume comment above.
   ninlil-data:
-  # PostgreSQL's own data directory.
+  # PostgreSQL's data directory.
   postgres-data:

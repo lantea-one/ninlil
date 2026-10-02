@@ -2,16 +2,21 @@
 #
 # Ninlil's container image.
 #
-# Everything else -- the tests, the admin console, the self-contained binaries, and the NuGet
-# packages -- is built directly with the .NET SDK and Node.js (see .forgejo/scripts/). This image
-# is a prebuilt, self-contained ninlil-linux-<arch> executable (REST API, DNS and DHCP engines,
-# and the admin console, all in one file) on Microsoft's chiseled runtime-deps base image, which
-# has no shell and no package manager and runs as a non-root user.
+# Nothing is compiled here. The image is a prebuilt, self-contained ninlil-linux-<arch>
+# executable (REST API, DNS and DHCP engines, and the admin console, all in one file) on
+# Microsoft's chiseled runtime-deps base image, which has no shell and no package manager and
+# runs as a non-root user. The executables, tests and NuGet packages are built with the .NET SDK
+# and Node.js by .forgejo/scripts/.
 #
-# The executables come from a named build context called "binaries", a directory holding
-# ninlil-linux-amd64 and/or ninlil-linux-arm64. The image contains no compiled code of its own,
-# only files copied into place, so a multi-platform build (linux/amd64 + linux/arm64) needs no
-# CPU emulation.
+# Inputs:
+#   build context "binaries"  a directory holding ninlil-linux-amd64 and/or ninlil-linux-arm64
+#   build context "."         the repository (only docker/fetch-native-libraries.sh is used)
+#   build arguments           RUNTIME_IMAGE and FETCH_IMAGE (base images), BUILD_VERSION,
+#                             BUILD_REVISION and BUILD_SOURCE (OCI labels)
+#
+# Output: the "runtime" target. The final stage only copies files and the native-libraries stage
+# runs on the build platform, so a multi-platform build (linux/amd64 + linux/arm64) needs no CPU
+# emulation.
 #
 # Local usage, from the repository root:
 #   .forgejo/scripts/build-admin-console.sh
@@ -22,8 +27,9 @@ ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extr
 ARG FETCH_IMAGE=buildpack-deps:noble-curl
 
 # ---------------------------------------------------------------------------------------------
-# native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target, plus
-# the empty directories the shell-less runtime stage cannot create itself.
+# native-libraries: libmsquic (DNS-over-QUIC) and its libnuma dependency for the target
+# architecture, plus the empty directories the shell-less runtime stage cannot create. It runs on
+# the build platform and downloads the target's packages (see fetch-native-libraries.sh).
 # ---------------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM ${FETCH_IMAGE} AS native-libraries
 
@@ -53,23 +59,24 @@ LABEL org.opencontainers.image.title="Ninlil" \
 COPY --from=native-libraries /native/ /
 
 # The executable stays root-owned and therefore read-only to the non-root user it runs as; only
-# the data directory is writable. The web root is deliberately empty: the admin console is
-# served from inside the executable, and an existing directory keeps ASP.NET Core from trying
-# to create one in the read-only /app.
+# the data directory is writable. The web root is empty on purpose: the admin console is served
+# from inside the executable, and an existing directory keeps ASP.NET Core from trying to create
+# one in the read-only /app.
 COPY --from=binaries --chmod=0755 ninlil-linux-${TARGETARCH} /app/ninlil
 COPY --from=native-libraries /staging/wwwroot/ /app/wwwroot/
 COPY --from=native-libraries --chown=1654:1654 /staging/data/ /app/data/
 
 WORKDIR /app
 
-# The executable extracts its bundled native libraries on first start.
+# The executable extracts its bundled native libraries on first start; /tmp is writable for the
+# non-root user, /app is not.
 ENV DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp
 
 # The base image's non-root "app" user (uid 1654). Docker lets an unprivileged process in a
 # container bind ports below 1024 on bridge networking (it sets ip_unprivileged_port_start=0 in
 # the container's network namespace), so the standard ports below work without root. With
 # host networking, and for DHCP (raw sockets, port 67/547), run the container as root and grant
-# NET_ADMIN/NET_RAW; see README.md.
+# NET_ADMIN/NET_RAW; see README.md and the ninlil-host-network service in docker-compose.yml.
 USER 1654
 
 # The HTTP/HTTPS ports of the REST API and admin console, and plain DNS -- the one DNS transport
@@ -80,7 +87,7 @@ EXPOSE 80/tcp 443/tcp 53/udp 53/tcp
 # Everything the server persists lives here: the SQLite database, the Data Protection key ring
 # (without which every stored secret becomes unreadable), the JWT signing key, certificates, and
 # the appsettings.json the admin console's settings pages write to. Mount a named volume or a
-# host directory here in any real deployment.
+# host directory here in any deployment whose data must outlive the container.
 VOLUME ["/app/data"]
 
 # The server keeps its data directory next to the executable, at /app/data. It doubles as the

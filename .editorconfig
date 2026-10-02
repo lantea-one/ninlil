@@ -1,6 +1,7 @@
-# This file defines the coding conventions for the Ninlil solution. Whitespace and
-# wrapping are owned by CSharpier (run `dotnet csharpier format .`), so the rules below
-# focus on naming, language preferences, and analyzer severities instead of formatting.
+# Coding conventions for the Ninlil solution. CSharpier handles whitespace and wrapping in C#
+# (`dotnet csharpier format .`, checked in CI), so the C# rules below cover naming, language
+# preferences and analyzer severities. The [*] section applies to every file, and the last three
+# set indentation for YAML/JSON, front-end files and SQL.
 
 root = true
 
@@ -14,7 +15,7 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-# Prefer file-scoped namespaces everywhere, matching the existing common libraries.
+# File-scoped namespaces everywhere.
 csharp_style_namespace_declarations = file_scoped:error
 
 # Prefer "var" when the type is apparent, otherwise spell out the type so a reader
