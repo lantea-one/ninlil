@@ -16,6 +16,10 @@ const KSK: DnssecKeyDetail = {
   dsDigest: DIGEST,
 };
 
+/**
+ * These tests cover the records dialog: the DS record, its parts and the DNSKEY shown for a KSK,
+ * only the DNSKEY for a ZSK, and what the copy buttons copy. TestBed with a spy `Clipboard`.
+ */
 describe('DnssecKeyRecordsDialogComponent', () => {
   let clipboardSpy: { copy: jasmine.Spy };
 

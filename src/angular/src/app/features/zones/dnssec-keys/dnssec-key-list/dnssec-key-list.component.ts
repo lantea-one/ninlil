@@ -32,27 +32,23 @@ import { HasPermissionPipe } from '../../../../shared/if-permission/has-permissi
 import { DnssecKeyRecordsDialogComponent } from '../dnssec-key-records-dialog/dnssec-key-records-dialog.component';
 import { DnssecKeyRolloverDialogComponent } from '../dnssec-key-rollover-dialog/dnssec-key-rollover-dialog.component';
 
-/** How many keys one page of this list shows -- matches the backend's own `PaginationQuery` default. */
+/** How many keys one page of this list shows. The backend's `PaginationQuery` default is 50. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every DNSSEC key belonging to one zone, backed by `GET
- * /api/zones/{zoneId}/dnssec-keys`'s own real `skip`/`take` pagination. A key's own private key
- * material is never fetched or shown here, anywhere in this UI, at any point --
- * `DnssecKeyDetail` (the shape this list's own `GET` returns) never carries it at all, per
- * `DnssecKeysController`'s own deliberate, `AskUserQuestion`-confirmed deviation from every other
- * secret-bearing entity type's reveal-once policy (a DNSSEC private key never needs to leave this
- * server, unlike a TSIG secret or a cloud credential). This list therefore only ever shows a
- * key's own metadata -- role, algorithm, key tag, its real RFC 6781 lifecycle state (a color-coded
- * badge, so an operator can see rollover progress across every key at a glance) -- and a
- * "Retire"/"Reactivate" toggle (a single-field `isRetired` merge patch, the same shape
- * `ZoneListComponent`'s own `isDisabled` toggle already established), a "Start rollover" action
- * (available only on the zone's own currently-active key of a role -- see
- * {@link canStartRollover} -- and opening {@link DnssecKeyRolloverDialogComponent}, where the
- * operator can also pick a new algorithm), a "Confirm parent DS updated" action (available only on
- * a Key-Signing Key mid-rollover still awaiting that confirmation -- see
- * {@link awaitingParentDsConfirmation}), a records action showing the DNSKEY and DS data to give
- * the parent zone ({@link DnssecKeyRecordsDialogComponent}), and delete.
+ * This component is a zone's DNSSEC Keys page (`/zones/:zoneId/dnssec-keys`). It lists the keys a
+ * page at a time through `GET /api/zones/{zoneId}/dnssec-keys` and shows each key's role,
+ * algorithm, key tag and RFC 6781 lifecycle state as a colored badge. Private key material is never
+ * shown: `DnssecKeyDetail` does not carry it, since a DNSSEC private key never has to leave the
+ * server (unlike a TSIG secret or a cloud credential).
+ *
+ * Every user with `zones:read` can open {@link DnssecKeyRecordsDialogComponent} to copy the DNSKEY
+ * and DS records for the parent zone. With `zones:write` the operator can also generate a key
+ * (`DnssecKeyFormComponent`), retire or reactivate one (a one-field `isRetired` merge patch), start
+ * a rollover on an active key ({@link canStartRollover}, through
+ * {@link DnssecKeyRolloverDialogComponent}), confirm that a KSK rollover's new DS is live at the
+ * parent ({@link awaitingParentDsConfirmation}) and delete a key. All writes go to
+ * `/api/zones/{zoneId}/dnssec-keys`, which needs `zones:write`.
  */
 @Component({
   selector: 'app-dnssec-key-list',
@@ -139,7 +135,7 @@ export class DnssecKeyListComponent {
     await this.loadPage();
   }
 
-  /** This method toggles a key's own `isRetired` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a key's `isRetired` flag with a one-field RFC 7396 merge patch. */
   async toggleRetired(key: DnssecKeyDetail): Promise<void> {
     if (!key.id) return;
 
@@ -159,9 +155,8 @@ export class DnssecKeyListComponent {
   }
 
   /**
-   * This method opens {@link DnssecKeyRolloverDialogComponent} for a key that is currently its
-   * zone's own canonical, active key of its role (see {@link canStartRollover}). The dialog
-   * confirms, lets the operator choose a new algorithm, and starts the rollover itself.
+   * This method opens {@link DnssecKeyRolloverDialogComponent} for an active key (see
+   * {@link canStartRollover}). The dialog confirms, offers a new algorithm and starts the rollover.
    */
   rollKey(key: DnssecKeyDetail): void {
     if (!key.id) return;
@@ -185,9 +180,9 @@ export class DnssecKeyListComponent {
   }
 
   /**
-   * This method confirms, then records, that an operator has actually published a
-   * Key-Signing Key rollover's own new DS record at a real, externally-hosted parent zone -- see
-   * {@link awaitingParentDsConfirmation} for exactly when this action is available at all.
+   * This method asks for confirmation, then records through `POST .../confirm-parent-ds-updated`
+   * that a KSK rollover's new DS record is published at an external parent zone, which lets the
+   * rollover continue. {@link awaitingParentDsConfirmation} says when the action is offered.
    */
   async confirmParentDsUpdated(key: DnssecKeyDetail): Promise<void> {
     if (!key.id) return;
@@ -219,7 +214,7 @@ export class DnssecKeyListComponent {
     }
   }
 
-  /** This method confirms, then permanently deletes, a DNSSEC key. */
+  /** This method asks for confirmation, then permanently deletes a DNSSEC key. */
   async deleteKey(key: DnssecKeyDetail): Promise<void> {
     if (!key.id) return;
 
@@ -244,9 +239,7 @@ export class DnssecKeyListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -268,8 +261,7 @@ export class DnssecKeyListComponent {
       const zone = await firstValueFrom(this.zonesApi.apiZonesIdGet({ id: this.zoneId }));
       this.zoneName.set(zone.name ?? null);
     } catch {
-      // A missing zone name is only cosmetic (the page heading) -- the key list load below
-      // surfaces its own real error if the zone itself doesn't exist.
+      // The zone name only feeds the heading; the key list load reports a missing zone.
     }
   }
 

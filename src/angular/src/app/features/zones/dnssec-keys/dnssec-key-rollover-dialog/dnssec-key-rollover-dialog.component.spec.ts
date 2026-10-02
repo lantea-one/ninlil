@@ -19,6 +19,11 @@ const KSK: DnssecKeyDetail = {
   lifecycleState: DnssecKeyLifecycleStateEnum.Active,
 };
 
+/**
+ * These tests cover the rollover dialog: the request it sends with and without a new algorithm or
+ * key size, closing and emitting the replacement on success, and showing a refusal. TestBed with a
+ * spy-backed `DnssecKeysService`.
+ */
 describe('DnssecKeyRolloverDialogComponent', () => {
   let apiSpy: { apiZonesZoneIdDnssecKeysIdRollPost: jasmine.Spy };
 

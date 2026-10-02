@@ -6,12 +6,9 @@ import {
 } from '../../../api-client';
 
 /**
- * This function reports whether a given DNSSEC algorithm belongs to the RSA family, the only
- * family `DnssecKeyCreateRequest.KeySizeBits` is meaningful for -- confirmed directly against
- * that field's own doc comment ("meaningful only for the RSA algorithm family; ignored for every
- * other algorithm"), not assumed from the algorithm names alone. Every other algorithm this
- * project implements (DSA, ECDSA, EdDSA) has a key size fixed by the algorithm/curve itself, with
- * no separate size an operator could meaningfully choose.
+ * This function reports whether an algorithm is in the RSA family, the only one that uses
+ * `DnssecKeyCreateRequest.KeySizeBits`. The other algorithms' key sizes are fixed by the algorithm
+ * or curve, so the key forms show a size field only for RSA.
  */
 export function isRsaAlgorithm(algorithm: DnssecAlgorithmEnum): boolean {
   return (
@@ -47,16 +44,14 @@ export function dnssecAlgorithmNumber(algorithm: DnssecAlgorithmEnum | undefined
   return algorithm ? DNSSEC_ALGORITHM_NUMBERS[algorithm] : null;
 }
 
-/** This constant contains a sensible default RSA key size for a freshly generated key, matching this project's own preset conventions. */
+/** This constant contains the RSA key size the key forms start with, the same 2048 bits the backend uses when none is given. */
 export const DEFAULT_RSA_KEY_SIZE_BITS = 2048;
 
 /**
- * This function reports which CoreUI badge color best represents a key's own current RFC 6781
- * lifecycle state (`DnssecKeyEntity.LifecycleState`), so an operator can see rollover progress at
- * a glance from the key list alone -- confirmed directly against that enum's own doc comment for
- * what each state means, not guessed from the state names alone. `Published`/`DoubleSignature`
- * are both real, in-progress rollover states (an incoming key not yet canonical, or two keys of
- * the same role co-signing), so both get an attention-drawing color rather than a neutral one.
+ * This function picks the CoreUI badge color for a key's RFC 6781 lifecycle state, so the key list
+ * shows rollover progress at a glance. `Published` (an incoming key not yet in use) and
+ * `DoubleSignature` (two keys of one role both signing) are rollovers in progress, so they get
+ * attention colors rather than a neutral one.
  */
 export function lifecycleStateBadgeColor(state: DnssecKeyLifecycleStateEnum | undefined): string {
   switch (state) {
@@ -76,27 +71,21 @@ export function lifecycleStateBadgeColor(state: DnssecKeyLifecycleStateEnum | un
 }
 
 /**
- * This function reports whether a key is currently eligible to start a brand-new RFC 6781
- * rollover -- `IDnssecKeyManagementService.StartRolloverAsync`'s own doc comment confirms only a
- * zone's own currently-active key of a role can be rolled at all. This is a client-side
- * convenience only, to gray out an obviously-ineligible action before a round trip; the backend
- * itself remains the real source of truth (it also separately rejects a second concurrent
- * rollover of the same role with a `409`, a case this function does not attempt to predict since
- * doing so would need every sibling key's own state, not just this one key's).
+ * This function reports whether a key can start an RFC 6781 rollover: only an `Active` key can,
+ * as `IDnssecKeyManagementService.StartRolloverAsync` requires. It only disables an obviously
+ * ineligible action. The backend also answers 409 when a rollover of the same role is already in
+ * progress, which this function does not predict since that depends on the other keys.
  */
 export function canStartRollover(key: DnssecKeyDetail): boolean {
   return key.lifecycleState === DnssecKeyLifecycleStateEnum.Active;
 }
 
 /**
- * This function reports whether a key is currently awaiting an operator's confirmation that its
- * own replacement's new DS record has actually been published at a real, externally-hosted
- * parent zone -- `IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync`'s own doc comment
- * confirms this is only ever meaningful for a Key-Signing Key currently mid-rollover
- * (`DoubleSignature`) that has not already been confirmed. This function cannot tell whether the
- * parent zone is actually externally hosted (this project has no such lookup at all), so it stays
- * available even for a KSK whose own parent this same server hosts and signs -- confirming there
- * is simply a harmless no-op from that KSK's own automated rollover walk's point of view.
+ * This function reports whether a key is waiting for the operator to confirm that the new DS
+ * record is published at the parent zone: an unconfirmed KSK in `DoubleSignature`, the case
+ * `IDnssecKeyManagementService.ConfirmParentDsUpdatedAsync` accepts. The UI cannot tell whether
+ * the parent is hosted elsewhere, so the action also shows for a KSK whose parent this server
+ * signs; confirming there is harmless, since that rollover does not wait for it.
  */
 export function awaitingParentDsConfirmation(key: DnssecKeyDetail): boolean {
   return (

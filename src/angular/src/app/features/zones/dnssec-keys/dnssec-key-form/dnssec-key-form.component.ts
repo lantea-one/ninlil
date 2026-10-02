@@ -24,21 +24,16 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { DEFAULT_RSA_KEY_SIZE_BITS, isRsaAlgorithm } from '../dnssec-key.model';
 
 /**
- * This component is both the "generate a DNSSEC key" and "edit a key's own retirement status"
- * page -- one component for both, distinguished by whether the route supplies an `id` (see
- * `app.routes.ts`), mirroring `ZoneFormComponent`'s/`TsigKeyFormComponent`'s own precedent, but
- * with each mode showing a genuinely disjoint field set rather than the same fields in a
- * different state: generate mode shows role/algorithm/key size/comments
- * (`DnssecKeyCreateRequest`'s own full shape); edit mode shows only retirement status/comments
- * (`DnssecKeyWriteRequest`'s own full shape) -- a key's role, algorithm, and key material are
- * permanent once generated, per `DnssecKeysController.Replace`'s own doc comment, so there is
- * nothing else this page could ever let an operator change on an existing key.
+ * This component is both the "Generate key" page (`/zones/:zoneId/dnssec-keys/new`) and the "Edit
+ * key" page (`/zones/:zoneId/dnssec-keys/:keyId/edit`); a `keyId` route parameter selects edit
+ * mode. Both routes need `zones:write`. The two modes show different fields. Generating
+ * (`POST /api/zones/{zoneId}/dnssec-keys`, a `DnssecKeyCreateRequest`) asks for role, algorithm,
+ * RSA key size and comments. Editing (`PUT .../{id}`, a `DnssecKeyWriteRequest`) changes only the
+ * retirement flag and comments, since a key's role, algorithm and key material are fixed once it
+ * is generated.
  *
- * **This page never renders, requests, or receives a key's own private key material at any
- * point** -- `DnssecKeyDetail` (what both the generate response and a later `GET` return) simply
- * never carries it, matching `DnssecKeysController`'s own deliberate exposure policy exactly; the
- * reveal-once secret dialog `TsigKeyFormComponent`/`CloudProviderCredentialFormComponent`
- * establish is never used here, since there is no secret this page could ever reveal.
+ * No private key material is ever sent to this page: `DnssecKeyDetail` does not carry it, so
+ * unlike the TSIG key and cloud credential forms there is no reveal-once secret dialog.
  */
 @Component({
   selector: 'app-dnssec-key-form',
@@ -73,7 +68,7 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly zoneId = this.route.snapshot.paramMap.get('zoneId') ?? '';
   private readonly keyId = this.route.snapshot.paramMap.get('keyId');
 
-  /** Whether this instance is editing an existing key's own retirement status rather than generating a new one. */
+  /** Whether this instance edits an existing key rather than generating one. */
   readonly isEditMode = this.keyId !== null;
 
   readonly roleOptions = Object.values(DnssecKeyRoleEnum);
@@ -83,7 +78,7 @@ export class DnssecKeyFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Read-only context shown alongside the retirement-status form in edit mode -- these fields are never editable. */
+  /** The existing key's role, shown read-only in edit mode (with the algorithm and key tag below). */
   readonly existingRole = signal<DnssecKeyRoleEnum | null>(null);
   readonly existingAlgorithm = signal<DnssecAlgorithmEnum | null>(null);
   readonly existingKeyTag = signal<number | null>(null);
@@ -96,10 +91,10 @@ export class DnssecKeyFormComponent implements OnInit {
     comments: [''],
   });
 
-  /** The algorithm currently selected, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected algorithm, mirrored into a signal since `valueChanges` is not one. */
   readonly selectedAlgorithm = signal<DnssecAlgorithmEnum>(DnssecAlgorithmEnum.Ecdsap256Sha256);
 
-  /** Whether the key-size field is meaningful for the currently selected algorithm -- see `isRsaAlgorithm`'s own doc comment. */
+  /** Whether the key-size field shows: only RSA algorithms take a size (see `isRsaAlgorithm`). */
   readonly showKeySize = computed(() => isRsaAlgorithm(this.selectedAlgorithm()));
 
   constructor() {
@@ -112,7 +107,7 @@ export class DnssecKeyFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingKey();
   }
 
-  /** This method generates (`POST`) a new key, or fully replaces (`PUT`) an existing one's own retirement status/comments. */
+  /** This method generates a key (`POST`), or replaces an existing key's retirement flag and comments (`PUT`). */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

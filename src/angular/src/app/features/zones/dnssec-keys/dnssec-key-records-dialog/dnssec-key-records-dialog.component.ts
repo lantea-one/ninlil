@@ -17,19 +17,20 @@ import { dnssecAlgorithmNumber } from '../dnssec-key.model';
 /** One labeled, copyable value in {@link DnssecKeyRecordsDialogComponent}. */
 interface CopyableField {
   label: string;
-  /** Exactly what is copied. */
+  /** The text that is copied. */
   value: string;
   /** A human-readable gloss shown after the value but never copied, e.g. an algorithm's name. */
   note?: string;
 }
 
 /**
- * This component shows one key's published records -- what an operator hands to the parent zone
- * (a registrar, or whoever hosts the parent) when signing a zone or rolling its KSK. The DS record
- * and its parts come from the API (`DnssecKeyDetail.dsRecord`/`dsDigest`), computed from the same
- * DNSKEY the zone publishes; registrars differ in whether they want the whole DS record, its parts
- * entered separately, or the DNSKEY itself, so each is copyable on its own. A ZSK is never
- * referenced from the parent, so for one the dialog shows only its DNSKEY.
+ * This component is the records dialog of `DnssecKeyListComponent`. It shows one key's published
+ * records: what an operator gives the parent zone (a registrar, or whoever hosts the parent) when
+ * signing a zone or rolling its KSK. The DS record and digest come from the key list response
+ * (`DnssecKeyDetail.dsRecord` and `dsDigest`, a SHA-256 DS computed by the backend from the
+ * published DNSKEY). Registrars want the whole DS record, its parts, or the DNSKEY, so each value
+ * has its own copy button. A ZSK is never referenced from the parent, so for one the dialog shows
+ * only the DNSKEY.
  */
 @Component({
   selector: 'app-dnssec-key-records-dialog',
@@ -51,13 +52,13 @@ interface CopyableField {
 export class DnssecKeyRecordsDialogComponent {
   private readonly clipboard = inject(Clipboard);
 
-  /** Whether this dialog is currently shown -- a caller drives this with its own signal. */
+  /** Whether the dialog is shown; the parent drives it. */
   readonly visible = input<boolean>(false);
 
   /** The key whose records this dialog shows. */
   readonly key = input<DnssecKeyDetail | null>(null);
 
-  /** Emits this dialog's own new visibility -- `false` on every close. */
+  /** Emits the new visibility, `false` on every close. */
   readonly visibleChange = output<boolean>();
 
   readonly isKsk = computed(() => this.key()?.role === DnssecKeyRoleEnum.Ksk);

@@ -27,10 +27,11 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { DEFAULT_RSA_KEY_SIZE_BITS, isRsaAlgorithm } from '../dnssec-key.model';
 
 /**
- * This component starts an RFC 6781 rollover for one active key, from `DnssecKeyListComponent`.
- * It replaces the plain yes/no confirmation the list used to show, because the roll endpoint can
- * also change the key's algorithm (an algorithm rollover) and, for RSA, its key size. Leaving the
- * algorithm on "same as now" sends neither, so the backend reuses the outgoing key's algorithm.
+ * This component is the rollover dialog of `DnssecKeyListComponent`. It starts an RFC 6781
+ * rollover for one active key through `POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`
+ * (`zones:write`), and can also change the algorithm (an algorithm rollover) and, for RSA, the key
+ * size. Leaving the algorithm on "same as now" omits it, so the backend keeps the outgoing key's
+ * algorithm; a key size is sent whenever the new key will be RSA.
  */
 @Component({
   selector: 'app-dnssec-key-rollover-dialog',
@@ -56,7 +57,7 @@ export class DnssecKeyRolloverDialogComponent {
   private readonly dnssecKeysApi = inject(DnssecKeysService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Whether this dialog is currently shown -- a caller drives this with its own signal. */
+  /** Whether the dialog is shown; the parent drives it. */
   readonly visible = input<boolean>(false);
 
   /** The zone the key belongs to. */
@@ -65,7 +66,7 @@ export class DnssecKeyRolloverDialogComponent {
   /** The active key this dialog rolls over. */
   readonly key = input<DnssecKeyDetail | null>(null);
 
-  /** Emits this dialog's own new visibility -- `false` on every close. */
+  /** Emits the new visibility, `false` on every close. */
   readonly visibleChange = output<boolean>();
 
   /** Emits the incoming replacement key once the rollover has started. */
@@ -96,7 +97,7 @@ export class DnssecKeyRolloverDialogComponent {
     return algorithm !== null && isRsaAlgorithm(algorithm);
   });
 
-  /** RFC 6781 scheme the backend picks from the role. */
+  /** The RFC 6781 scheme the backend uses for the key's role, shown in the dialog. */
   readonly scheme = computed(() =>
     this.key()?.role === DnssecKeyRoleEnum.Ksk ? 'Double-Signature' : 'Pre-Publish',
   );
@@ -143,7 +144,7 @@ export class DnssecKeyRolloverDialogComponent {
     }
   }
 
-  /** This method runs when the modal reports a new visibility on its own (a backdrop click or Escape). */
+  /** This method handles the modal closing itself (a backdrop click or Escape). */
   onModalVisibleChange(visible: boolean): void {
     if (!visible) this.visibleChange.emit(false);
   }

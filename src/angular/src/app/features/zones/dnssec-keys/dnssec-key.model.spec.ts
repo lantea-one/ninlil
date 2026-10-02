@@ -12,7 +12,7 @@ import {
   lifecycleStateBadgeColor,
 } from './dnssec-key.model';
 
-/** A minimal, otherwise-valid key used across the eligibility-function tests below, overridden field by field. */
+/** This helper builds a valid Active ZSK, with the given fields overridden. */
 function key(overrides: Partial<DnssecKeyDetail>): DnssecKeyDetail {
   return {
     id: 'key-1',
@@ -26,6 +26,10 @@ function key(overrides: Partial<DnssecKeyDetail>): DnssecKeyDetail {
   };
 }
 
+/**
+ * These tests cover the DNSSEC key helpers: RSA detection, badge colors, rollover and DS
+ * confirmation eligibility, and IANA algorithm numbers. Plain unit tests.
+ */
 describe('dnssec-key.model', () => {
   it('isRsaAlgorithm() is true for every RSA-family algorithm', () => {
     expect(isRsaAlgorithm(DnssecAlgorithmEnum.Rsamd5)).toBeTrue();

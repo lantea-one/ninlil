@@ -17,6 +17,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNSSEC key list: loading and paging, retire/reactivate, delete, the
+ * rollover and records dialogs, the parent DS confirmation, and when each action is offered. TestBed
+ * with spy-backed API services, a stubbed ActivatedRoute and a stubbed `AuthService.hasPermission`.
+ */
 describe('DnssecKeyListComponent', () => {
   // The permissions the signed-in test user lacks; it holds every other one, so each test sees
   // the page as an administrator would unless it denies something first.
@@ -33,7 +38,7 @@ describe('DnssecKeyListComponent', () => {
   let zonesApiSpy: { apiZonesIdGet: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
 
-  /** The default single-page fixture -- overridable per test via `items`. */
+  /** This helper wraps the given keys in a one-page result. */
   function pageOf(items: unknown[]) {
     return { items, skip: 0, take: 25, totalCount: items.length };
   }
@@ -181,8 +186,8 @@ describe('DnssecKeyListComponent', () => {
     await fixture.componentInstance.onRolled({ id: 'key-2', keyTag: 54321 });
 
     expect(notificationSpy.success).toHaveBeenCalledWith(jasmine.stringContaining('54321'));
-    // Reloading the page is what re-fetches the incoming key's own row, so the rollover's
-    // real effect (a brand-new sibling key in a Published/DoubleSignature state) shows up.
+    // The reload fetches the incoming key's row, so the new Published or DoubleSignature key
+    // appears.
     expect(dnssecKeysApiSpy.apiZonesZoneIdDnssecKeysGet).toHaveBeenCalledTimes(2);
   });
 

@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNSSEC key form: generate-mode defaults, the RSA-only key size, the POST
+ * and PUT it sends in each mode, and save errors. TestBed with a spy-backed `DnssecKeysService`,
+ * `NotificationService` and a stubbed ActivatedRoute for the `keyId` parameter.
+ */
 describe('DnssecKeyFormComponent', () => {
   let dnssecKeysApiSpy: {
     apiZonesZoneIdDnssecKeysIdGet: jasmine.Spy;
