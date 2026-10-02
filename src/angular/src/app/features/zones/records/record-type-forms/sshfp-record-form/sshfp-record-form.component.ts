@@ -10,9 +10,8 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.SshfpRecordData` field-for-field --
- * `fingerprint` is the base64 form of the raw hash bytes that field's own JSON representation
- * actually carries.
+ * This interface mirrors the backend's `SshfpRecordData` field for field; `fingerprint` is the
+ * base64 of the hash bytes.
  */
 export interface SshfpRecordFormData {
   algorithm: number;
@@ -21,13 +20,11 @@ export interface SshfpRecordFormData {
 }
 
 /**
- * This component is the `SSHFP` record data form (RFC 4255) -- an SSH host key's fingerprint,
- * letting a client verify a server's key out-of-band from its first connection. `algorithm` and
- * `fingerprintType` are each a narrow, record-specific IANA registry (kept as a raw number on the
- * backend model rather than a shared enum, per `SshfpRecordData`'s own doc comment), offered here
- * as a select of every currently-assigned value. `fingerprint` is shown and accepted as plain
- * hex -- the same form `ssh-keygen -r`'s own output already uses -- converted to and from the
- * base64 the wire format needs via {@link hexToBase64}/{@link base64ToHex}.
+ * This component is the `SSHFP` record data form (RFC 4255): an SSH host key fingerprint, so a
+ * client can check a server's key through DNS on first connection. `algorithm` and
+ * `fingerprintType` are plain numbers on the backend; the form offers the assigned values as
+ * selects. The fingerprint is edited in hex, as `ssh-keygen -r` prints it, and converted with
+ * {@link hexToBase64} and {@link base64ToHex}.
  */
 @Component({
   selector: 'app-sshfp-record-form',

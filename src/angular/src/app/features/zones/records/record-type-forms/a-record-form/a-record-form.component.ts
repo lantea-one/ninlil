@@ -9,14 +9,12 @@ export interface ARecordFormData {
 }
 
 /**
- * This component is the `A` record data form -- the reference shape every other record-type
- * form copies: a signal `initialData` input populated only when editing an existing record, a
- * `NonNullableFormBuilder`-built {@link form}, and {@link getData} shaping the form's value into
- * the exact camelCase JSON `RecordsController` expects. Its own template is the reference CoreUI
- * shape too -- a `.field` div (`cLabel` + `cFormControl`, an inline `.field-error` below on
- * failed validation) inside a `cForm`, matching `ZoneFormComponent`/`DnssecKeyFormComponent`'s
- * own established field pattern one level down, for a component small enough to keep its
- * template/styles inline rather than in separate files.
+ * This component is the `A` record data form and the simplest example of the
+ * {@link RecordDataFormComponent} contract: an `initialData` input set only when editing, a
+ * {@link form} built with `NonNullableFormBuilder`, and {@link getData} returning the camelCase
+ * `data` JSON. Its inline template shows the usual field layout: a `.field` with `cLabel`,
+ * `cFormControl` and a `.field-error` per failed validator, inside a `cForm`.
+ * `RecordFormComponent` hosts it through `RECORD_TYPE_FORM_REGISTRY`.
  */
 @Component({
   selector: 'app-a-record-form',
@@ -50,7 +48,7 @@ export interface ARecordFormData {
   `,
 })
 export class ARecordFormComponent implements RecordDataFormComponent<ARecordFormData> {
-  /** The record's own current data, when editing; `null` when creating a new record. */
+  /** The stored record data when editing; `null` when creating a record. */
   readonly initialData = input<ARecordFormData | null>(null);
 
   private readonly formBuilder = inject(NonNullableFormBuilder);

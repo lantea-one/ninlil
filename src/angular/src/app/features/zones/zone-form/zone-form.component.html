@@ -12,10 +12,7 @@
       }
 
       <form cForm [formGroup]="form" class="zone-form">
-        <!-- The core fields every zone type needs (name, type, disabled, comments) stay
-             always-visible above every collapsible section below -- these are the fields an
-             operator fills in first and most often revisits, so they are never one click away
-             from view the way a type-specific section legitimately can be. -->
+        <!-- The fields every zone type has stay outside the collapsible sections. -->
         <section class="field-row">
           <div class="field">
             <label cLabel for="zone-name">Zone name</label>
@@ -58,11 +55,8 @@
           <textarea cFormControl id="zone-comments" formControlName="comments" rows="2"></textarea>
         </div>
 
-        <!-- Every section below this point is real, type-conditional configuration -- each gets
-             its own collapsible header (open by default; see ZoneFormComponent.isSectionOpen's
-             own doc comment for why nothing starts hidden) rather than the plain <h3> breaks this
-             form used before, so a long, multi-section form reads as real, labeled, scannable
-             structure instead of one unbroken scroll. -->
+        <!-- Type-dependent sections follow, each with a collapsible header that starts open
+             (see ZoneFormComponent.collapsedSections). -->
         @if (showTransferSection()) {
           <section class="form-section">
             <button

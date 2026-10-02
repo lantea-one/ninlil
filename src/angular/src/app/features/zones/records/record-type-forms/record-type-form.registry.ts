@@ -36,32 +36,18 @@ import { Nsec3RecordFormComponent } from './nsec3-record-form/nsec3-record-form.
 import { Nsec3ParamRecordFormComponent } from './nsec3param-record-form/nsec3param-record-form.component';
 
 /**
- * This constant is the pluggable record-type-to-form-component registry every new record-type
- * data-entry form registers itself in, and the reason {@link RecordFormComponent} never needs a
- * giant conditional template: given a {@link DnsResourceRecordTypeEnum}, this map names the one
- * standalone component (conforming to {@link RecordDataFormComponent}) responsible for that
- * type's own data fields. The registry is complete: every one of the 37 record types
- * `Ninlil.Dns.Common.Wire.Records.DnsRecordDataCodecRegistry` registers a real codec for (the
- * source of truth this registry was built directly against, not guessed at) has an entry here.
+ * This constant maps each {@link DnsResourceRecordTypeEnum} to the standalone component (a
+ * {@link RecordDataFormComponent}) that edits that type's data, so `RecordFormComponent` needs no
+ * per-type template. It covers all 37 types that the backend's `DnsRecordDataCodecRegistry`
+ * (`Ninlil.Dns.Common.Wire.Records`) has a codec for.
  *
- * **A single form component can back more than one enum key**: several backend record types
- * share byte-for-byte the same RDATA shape and the same `IDnsRecordDataCodec`-derived data type
- * on the backend (`ServiceBindingRecordData` for `Svcb`/`Https`; `TlsaRecordData` for
- * `Tlsa`/`Smimea`; `DsRecordData` for `Ds`/`Cds`; `DnsKeyRecordData` for `Dnskey`/`Cdnskey`) --
- * see each backend model's own doc comment for why. Rather than hand-writing 4 more
- * near-duplicate form components that would only ever differ in their own selector/class name,
- * this registry simply maps each of those 8 enum keys onto the *same* component instance type,
- * the exact frontend analogue of the backend's own shared-codec pattern. `RecordDataFormComponent`'s
- * own contract needed zero changes to support this -- `RECORD_TYPE_FORM_REGISTRY`'s value type is
- * `Type<RecordDataFormComponent>`, and nothing prevents two keys from naming the same `Type`.
+ * Some types share one component because they share the backend data type and RDATA layout:
+ * `Svcb`/`Https` (`ServiceBindingRecordData`), `Tlsa`/`Smimea` (`TlsaRecordData`), `Ds`/`Cds`
+ * (`DsRecordData`) and `Dnskey`/`Cdnskey` (`DnsKeyRecordData`).
  *
- * **One genuinely rare, "experimental" record type (`Apl`, RFC 3123) still fits the existing
- * contract cleanly** -- its own `AplItem.AddressFamilyDependentPart` is a trimmed-to-significant-
- * bytes `byte[]`, technically just another base64 field, but shown here as plain CIDR notation via
- * a small, dedicated `apl-cidr.util.ts` conversion helper instead, since a raw byte array would
- * be unusable to hand-author. No record type actually requires a deviation from
- * {@link RecordDataFormComponent} itself -- see `record-data-encoding.util.ts` for the
- * hex-vs-base64 convention every other `byte[]`-backed field follows.
+ * `Apl` (RFC 3123) stores each item's address part as trimmed bytes; its form shows CIDR notation
+ * instead and converts with `apl-cidr.util.ts`. Other byte fields follow the hex or base64
+ * convention in `record-data-encoding.util.ts`.
  */
 export const RECORD_TYPE_FORM_REGISTRY: Partial<
   Record<DnsResourceRecordTypeEnum, Type<RecordDataFormComponent>>
@@ -106,13 +92,10 @@ export const RECORD_TYPE_FORM_REGISTRY: Partial<
 };
 
 /**
- * This constant lists every record type {@link RECORD_TYPE_FORM_REGISTRY} currently supports, in
- * a fixed, deliberately curated display order (not alphabetical) matching how an operator most
- * often encounters these types in practice -- used to populate the record-type dropdown in
- * {@link RecordFormComponent}. The 10 most-common types (A/AAAA/CNAME/MX/TXT/NS/SOA/SRV/CAA/PTR)
- * lead the list; the remaining types follow, themselves grouped by rough real-world frequency
- * (general-purpose redirection/service-discovery/legacy types, then DANE/TLS-adjacent types, then
- * the genuinely DNSSEC-internal types an operator only rarely, if ever, hand-authors, last).
+ * This constant lists the record types in {@link RECORD_TYPE_FORM_REGISTRY} in the order the type
+ * select in `RecordFormComponent` shows them. The ten most common types come first, then the
+ * redirection, service-discovery and legacy types, then DANE and certificate types, and last the
+ * DNSSEC types an operator rarely writes by hand.
  */
 export const SUPPORTED_RECORD_TYPES: readonly DnsResourceRecordTypeEnum[] = [
   DnsResourceRecordTypeEnum.A,

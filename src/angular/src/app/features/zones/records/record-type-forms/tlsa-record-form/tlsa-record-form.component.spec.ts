@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TlsaRecordFormComponent } from './tlsa-record-form.component';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the TLSA/SMIMEA form: validation, the hex data sent as base64 and decoded from
+ * initialData. TestBed with the standalone component only.
+ */
 describe('TlsaRecordFormComponent', () => {
   let fixture: ComponentFixture<TlsaRecordFormComponent>;
   let component: TlsaRecordFormComponent;

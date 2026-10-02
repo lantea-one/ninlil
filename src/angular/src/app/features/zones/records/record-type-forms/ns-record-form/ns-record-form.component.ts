@@ -8,7 +8,7 @@ export interface NsRecordFormData {
   nameServer: string;
 }
 
-/** This component is the `NS` record data form. See `a-record-form.component.ts` for the reference shape it copies. */
+/** This component is the `NS` record data form; it follows the pattern of `a-record-form.component.ts`. */
 @Component({
   selector: 'app-ns-record-form',
   imports: [ReactiveFormsModule, FormControlDirective, FormDirective, FormLabelDirective],

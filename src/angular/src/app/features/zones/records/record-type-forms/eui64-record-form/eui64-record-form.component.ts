@@ -5,18 +5,16 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToMac, MAC64_PATTERN, macToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.Eui64RecordData` field-for-field --
- * `identifier` is the base64 form of the 8 raw octets that field's own JSON representation
- * actually carries. See `eui48-record-form.component.ts` for the near-identical shape this copies.
+ * This interface mirrors the backend's `Eui64RecordData` field for field; `identifier` is the
+ * base64 of the eight octets.
  */
 export interface Eui64RecordFormData {
   identifier: string;
 }
 
 /**
- * This component is the `EUI64` record data form (RFC 7043) -- an 8-octet identifier associated
- * with the owner name, shown and accepted in the same colon-separated hex form
- * `Eui48RecordFormComponent` uses, just with 8 groups instead of 6.
+ * This component is the `EUI64` record data form (RFC 7043): a 64-bit identifier for the owner
+ * name, edited as colon-separated hex like `Eui48RecordFormComponent` but with eight groups.
  */
 @Component({
   selector: 'app-eui64-record-form',

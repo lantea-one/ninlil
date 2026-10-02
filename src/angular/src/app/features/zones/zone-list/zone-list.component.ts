@@ -25,17 +25,16 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many zones one page of this list shows -- matches the backend's own `PaginationQuery` default. */
+/** How many zones one page of this list shows. The backend's `PaginationQuery` default is 50. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every zone this server hosts or references, backed by `GET /api/zones`'s
- * own real `skip`/`take` pagination (not a client-side slice of one large fetch), with actions to
- * view/manage a zone's records, edit its metadata, toggle it disabled (via `PATCH`, this feature's
- * own genuine exercise of the merge-patch path alongside `ZoneFormComponent`'s full-replace
- * `PUT`), and delete it (behind a confirmation dialog, since `ZonesController.Delete` also removes
- * every one of the zone's own records and DNSSEC keys -- a fact surfaced directly in the
- * confirmation message, not left implicit).
+ * This component is the Zones page (`/zones`). It lists every zone a page at a time through
+ * `GET /api/zones` with server-side `skip`/`take`, and links to each zone's records, DNSSEC keys
+ * and edit form (`ZoneFormComponent`). Reading needs `zones:read`. With `zones:write` the operator
+ * can also create, enable or disable a zone (a one-field `PATCH /api/zones/{id}`) and delete one
+ * (`DELETE /api/zones/{id}`). The delete confirmation warns that the backend also removes the
+ * zone's records and DNSSEC keys.
  */
 @Component({
   selector: 'app-zone-list',
@@ -90,7 +89,7 @@ export class ZoneListComponent {
     await this.loadPage();
   }
 
-  /** This method toggles a zone's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a zone's `isDisabled` flag with a one-field RFC 7396 merge patch. */
   async toggleDisabled(zone: ZoneDetail): Promise<void> {
     if (!zone.id) return;
 
@@ -105,7 +104,7 @@ export class ZoneListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a zone -- including every one of its own records and DNSSEC keys. */
+  /** This method asks for confirmation, then deletes a zone with its records and DNSSEC keys. */
   async deleteZone(zone: ZoneDetail): Promise<void> {
     if (!zone.id) return;
 
@@ -128,9 +127,7 @@ export class ZoneListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);

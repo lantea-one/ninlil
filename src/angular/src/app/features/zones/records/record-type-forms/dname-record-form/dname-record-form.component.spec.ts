@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DnameRecordFormComponent } from './dname-record-form.component';
 
+/**
+ * These tests cover the DNAME form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('DnameRecordFormComponent', () => {
   let fixture: ComponentFixture<DnameRecordFormComponent>;
   let component: DnameRecordFormComponent;

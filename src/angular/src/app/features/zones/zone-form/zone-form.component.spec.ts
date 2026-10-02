@@ -16,15 +16,20 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the zone create and edit form: field validation, the type-dependent sections,
+ * the request save() builds, the TSIG key and cloud credential pickers (including missing
+ * permissions and failed loads), catalog membership and on-demand CAA/PTR reconciliation. They use
+ * TestBed with spy-backed API services, a stubbed ActivatedRoute for the `zoneId` parameter and a
+ * stubbed `AuthService.hasPermission`.
+ */
 describe('ZoneFormComponent', () => {
   // The permissions the signed-in test user lacks; it holds every other one, so each test sees
   // the page as an administrator would unless it denies something first.
   let deniedPermissions: string[] = [];
   beforeEach(() => (deniedPermissions = []));
 
-  // Loosely-typed spies, not `jasmine.SpyObj<ZonesService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why (the generated service's own
-  // multi-overload methods otherwise infer the wrong, `HttpEvent`-wrapped return type).
+  // Hand-shaped spy types; see zone-list.component.spec.ts for why not `jasmine.SpyObj`.
   let zonesApiSpy: {
     apiZonesIdGet: jasmine.Spy;
     apiZonesPost: jasmine.Spy;
@@ -42,11 +47,9 @@ describe('ZoneFormComponent', () => {
   let navigateSpy: jasmine.Spy;
 
   /**
-   * See `record-form.component.spec.ts`'s own identical helper for why `configureApis` must run
-   * *before* the component is constructed: `ngOnInit` (edit mode) reads `apiZonesIdGet`
-   * immediately, so a test overriding it must do so before this function creates the component,
-   * not after -- and since every spy here is freshly created on every call, a caller configuring
-   * the *previous* call's now-discarded spy instance would silently have no effect.
+   * This helper builds fresh spies, applies `configureApis` and then creates the component.
+   * `configureApis` must run before creation because `ngOnInit` calls the APIs at once, and a spy
+   * from an earlier call is discarded.
    */
   async function createComponent(zoneId: string | null, configureApis?: () => void) {
     zonesApiSpy = jasmine.createSpyObj('ZonesService', [
@@ -66,19 +69,15 @@ describe('ZoneFormComponent', () => {
     ]);
     notificationSpy = jasmine.createSpyObj('NotificationService', ['success', 'error']);
 
-    // A default, empty TSIG key / cloud credential list -- matching
-    // `ClientGroupListAssignmentFormComponent.spec`'s own established shape for a component's
-    // "known-value list" dependencies. Individual tests override these via `configureApis` when
-    // a dropdown's own real options matter.
+    // Empty picker lists by default; tests that need options set them in configureApis.
     tsigKeysApiSpy.apiTsigKeysGet.and.returnValue(
       of({ items: [], skip: 0, take: 500, totalCount: 0 }),
     );
     cloudCredentialsApiSpy.apiCloudProviderCredentialsGet.and.returnValue(
       of({ items: [], skip: 0, take: 500, totalCount: 0 }),
     );
-    // Default, empty results for the catalog-membership section's own background loads --
-    // individual tests override these via `configureApis` when the catalog select's own options,
-    // an existing membership, or a catalog's own member list matters.
+    // Empty catalog data by default; tests that need catalogs or members set them in
+    // configureApis.
     zonesApiSpy.apiZonesGet.and.returnValue(of({ items: [], skip: 0, take: 500, totalCount: 0 }));
     zonesApiSpy.apiZonesIdCatalogMembersGet.and.returnValue(of({ memberZoneNames: [] }));
     zonesApiSpy.apiZonesIdCatalogMembershipPost.and.returnValue(of({}));
@@ -357,7 +356,7 @@ describe('ZoneFormComponent', () => {
     expect(fixture.componentInstance.form.controls.name.value).toBe('example.com');
     expect(fixture.componentInstance.tsigKeysUnavailable()).toBeTrue();
     expect(fixture.componentInstance.cloudCredentialsUnavailable()).toBeTrue();
-    // The existing key is kept, through the picker's own custom-name entry.
+    // The existing key is kept through the picker's custom-name entry.
     expect(fixture.componentInstance.form.controls.tsigKeyName.value).toBe('transfer-key');
     expect(fixture.componentInstance.showCustomTsigKeyField()).toBeTrue();
   });
@@ -607,7 +606,7 @@ describe('ZoneFormComponent', () => {
 
     expect(fixture.componentInstance.showCatalogMembershipSection()).toBeTrue();
     expect(fixture.componentInstance.showCatalogMembersListSection()).toBeFalse();
-    // Only the Catalog-typed zone is offered -- the Secondary zone in the same response is not.
+    // Only the Catalog zone is offered, not the Secondary zone in the same response.
     expect(fixture.componentInstance.catalogOptions().map((zone) => zone.id)).toEqual([
       'catalog-1',
     ]);

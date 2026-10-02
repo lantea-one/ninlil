@@ -3,6 +3,10 @@ import { DsRecordFormComponent } from './ds-record-form.component';
 import { DnssecAlgorithmEnum } from '../../../../../api-client';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the DS/CDS form: validation, the hex digest sent as base64 and decoded back
+ * from initialData. TestBed with the standalone component only.
+ */
 describe('DsRecordFormComponent', () => {
   let fixture: ComponentFixture<DsRecordFormComponent>;
   let component: DsRecordFormComponent;

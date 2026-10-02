@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { UriRecordFormComponent } from './uri-record-form.component';
 
+/**
+ * These tests cover the URI form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('UriRecordFormComponent', () => {
   let fixture: ComponentFixture<UriRecordFormComponent>;
   let component: UriRecordFormComponent;

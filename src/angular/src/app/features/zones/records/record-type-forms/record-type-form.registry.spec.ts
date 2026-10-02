@@ -1,6 +1,11 @@
 import { DnsResourceRecordTypeEnum } from '../../../../api-client';
 import { RECORD_TYPE_FORM_REGISTRY, SUPPORTED_RECORD_TYPES } from './record-type-form.registry';
 
+/**
+ * These tests check that RECORD_TYPE_FORM_REGISTRY and SUPPORTED_RECORD_TYPES list the same 37
+ * types without duplicates and that paired types share a form component. Plain unit tests, no
+ * TestBed.
+ */
 describe('RECORD_TYPE_FORM_REGISTRY', () => {
   it('has exactly one registered form component for every type SUPPORTED_RECORD_TYPES names', () => {
     for (const type of SUPPORTED_RECORD_TYPES) {
@@ -36,7 +41,7 @@ describe('RECORD_TYPE_FORM_REGISTRY', () => {
           DnsResourceRecordTypeEnum.Srv,
           DnsResourceRecordTypeEnum.Caa,
           DnsResourceRecordTypeEnum.Ptr,
-          // The remaining, less-common types.
+          // The less common types.
           DnsResourceRecordTypeEnum.Dname,
           DnsResourceRecordTypeEnum.Svcb,
           DnsResourceRecordTypeEnum.Https,

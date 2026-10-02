@@ -8,7 +8,7 @@ export interface AaaaRecordFormData {
   address: string;
 }
 
-/** This component is the `AAAA` record data form. See `a-record-form.component.ts` for the reference shape it copies. */
+/** This component is the `AAAA` record data form; it follows the pattern of `a-record-form.component.ts`. */
 @Component({
   selector: 'app-aaaa-record-form',
   imports: [ReactiveFormsModule, FormControlDirective, FormDirective, FormLabelDirective],
@@ -46,10 +46,8 @@ export class AaaaRecordFormComponent implements RecordDataFormComponent<AaaaReco
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
   readonly form = this.formBuilder.group({
-    // A deliberately loose IPv6 shape check (hex groups and at least one colon) -- full RFC 4291
-    // validation (compressed-zero-run placement, embedded IPv4 tails) is left to the backend's
-    // own real parser, the same "don't reimplement the authoritative check client-side" stance
-    // this feature takes everywhere else.
+    // A loose check (hex digits and colons only); the backend's parser does the full RFC 4291
+    // validation. It also rejects an embedded IPv4 tail such as "::ffff:192.0.2.1".
     address: ['', [Validators.required, Validators.pattern(/^[0-9a-fA-F:]+$/)]],
   });
 

@@ -59,6 +59,8 @@
           API.
         </c-alert>
       } @else {
+        <!-- The type-specific form from RECORD_TYPE_FORM_REGISTRY; the component reads its form
+             back through #dataFormOutlet. -->
         <ng-container
           #dataFormOutlet="ngComponentOutlet"
           [ngComponentOutlet]="dataFormComponentType()"
@@ -66,6 +68,8 @@
         ></ng-container>
       }
 
+      <!-- A second <form> on the same FormGroup, so the type-specific fields sit between the
+           common fields. -->
       <form cForm [formGroup]="form" class="secondary-fields">
         <c-form-check class="mb-3">
           <input

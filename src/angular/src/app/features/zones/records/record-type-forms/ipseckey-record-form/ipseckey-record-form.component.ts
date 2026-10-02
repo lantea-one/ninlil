@@ -9,9 +9,8 @@ import {
 import { RecordDataFormComponent } from '../record-type-form.model';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.IpSecKeyRecordData` field-for-field
- * -- `publicKey` is base64, matching that field's own real-world presentation convention and the
- * wire format's own default `byte[]` JSON encoding, so no conversion is needed here.
+ * This interface mirrors the backend's `IpSecKeyRecordData` field for field. `publicKey` is
+ * base64, as in zone files and the API.
  */
 export interface IpSecKeyRecordFormData {
   precedence: number;
@@ -23,12 +22,10 @@ export interface IpSecKeyRecordFormData {
 }
 
 /**
- * This component is the `IPSECKEY` record data form (RFC 4025) -- keying material for an IPsec
- * gateway associated with the owner name. `gatewayType` decides which *one* of `gatewayAddress`
- * (an IPv4 or IPv6 literal) or `gatewayName` (a domain name) actually applies -- 0 means no
- * gateway is specified at all -- so this form shows only the field that currently matters, per
- * `gatewayType`'s own selection, and {@link getData} sends `null` for whichever one does not
- * apply, mirroring `IpSecKeyRecordDataCodec.Write`'s own exact same three-way switch.
+ * This component is the `IPSECKEY` record data form (RFC 4025): keying material for an IPsec
+ * gateway for the owner name. `gatewayType` picks which gateway field applies: none (0), an IPv4
+ * or IPv6 address (1 or 2) or a domain name (3). The form shows only that field, and
+ * {@link getData} sends `null` for the other, matching the switch in `IpSecKeyRecordDataCodec`.
  */
 @Component({
   selector: 'app-ipseckey-record-form',
@@ -138,7 +135,7 @@ export class IpSecKeyRecordFormComponent implements RecordDataFormComponent<IpSe
     publicKey: [''],
   });
 
-  /** The gateway type currently selected, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected gateway type, mirrored into a signal since `valueChanges` is not one. */
   private readonly gatewayType = signal(0);
 
   readonly showGatewayAddress = signal(false);

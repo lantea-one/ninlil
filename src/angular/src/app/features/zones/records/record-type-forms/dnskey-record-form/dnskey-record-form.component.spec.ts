@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DnsKeyRecordFormComponent } from './dnskey-record-form.component';
 import { DnssecAlgorithmEnum } from '../../../../../api-client';
 
+/**
+ * These tests cover the DNSKEY/CDNSKEY form: defaults, validation, getData() and loading
+ * initialData. TestBed with the standalone component only.
+ */
 describe('DnsKeyRecordFormComponent', () => {
   let fixture: ComponentFixture<DnsKeyRecordFormComponent>;
   let component: DnsKeyRecordFormComponent;

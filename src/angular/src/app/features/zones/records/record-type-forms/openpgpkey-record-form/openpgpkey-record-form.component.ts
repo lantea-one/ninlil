@@ -4,22 +4,18 @@ import { FormControlDirective, FormDirective, FormLabelDirective } from '@coreui
 import { RecordDataFormComponent } from '../record-type-form.model';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.OpenPgpKeyRecordData`
- * field-for-field -- `keyData` is base64, matching both the wire format's own default `byte[]`
- * JSON encoding and RFC 7929's own base64 presentation-format convention for this exact field, so
- * no conversion is needed here (see `record-data-encoding.util.ts`'s own doc comment).
+ * This interface mirrors the backend's `OpenPgpKeyRecordData` field for field. `keyData` is
+ * base64, the RFC 7929 presentation format and the API encoding alike.
  */
 export interface OpenPgpKeyRecordFormData {
   keyData: string;
 }
 
 /**
- * This component is the `OPENPGPKEY` record data form (RFC 7929) -- an OpenPGP public key
- * published for the owner name (which itself encodes an e-mail address's local part's own SHA-256
- * hash, not the mailbox directly). The RDATA is the raw OpenPGP Transferable Public Key packet
- * sequence with no framing of its own, so this form is a single base64 field -- an operator would
- * ordinarily produce this value with `gpg --export | base64`, matching this field's own real-world
- * presentation convention exactly, unlike the hex-shown fields elsewhere in this feature.
+ * This component is the `OPENPGPKEY` record data form (RFC 7929): an OpenPGP public key for the
+ * owner name, which is built from a hash of the mail address's local part. The data is the
+ * unframed key packet sequence, so the form is one base64 field, e.g. the output of
+ * `gpg --export | base64`.
  */
 @Component({
   selector: 'app-openpgpkey-record-form',

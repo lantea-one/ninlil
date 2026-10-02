@@ -11,7 +11,7 @@ export interface SrvRecordFormData {
   target: string;
 }
 
-/** This component is the `SRV` record data form. See `a-record-form.component.ts` for the reference shape it copies. */
+/** This component is the `SRV` record data form; it follows the pattern of `mx-record-form.component.ts`. */
 @Component({
   selector: 'app-srv-record-form',
   imports: [ReactiveFormsModule, FormControlDirective, FormDirective, FormLabelDirective],

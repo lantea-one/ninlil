@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NaptrRecordFormComponent } from './naptr-record-form.component';
 
+/**
+ * These tests cover the NAPTR form: defaults, range validation, getData() and loading initialData.
+ * TestBed with the standalone component only.
+ */
 describe('NaptrRecordFormComponent', () => {
   let fixture: ComponentFixture<NaptrRecordFormComponent>;
   let component: NaptrRecordFormComponent;

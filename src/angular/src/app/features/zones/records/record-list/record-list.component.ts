@@ -30,15 +30,16 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 
-/** How many records one page of this list shows -- matches the backend's own `PaginationQuery` default. */
+/** How many records one page of this list shows. The backend's `PaginationQuery` default is 50. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every record stored in one zone, backed by `GET
- * /api/zones/{zoneId}/records`'s own real `skip`/`take` pagination. Surfaces
- * `RecordsController.Delete`'s own real rule as genuine UI state rather than a raw 409: a zone's
- * own SOA record's delete button is disabled outright, with a tooltip explaining why, instead of
- * letting an operator click it only to be rejected.
+ * This component is a zone's records page (`/zones/:zoneId/records`). It lists the zone's records
+ * a page at a time through `GET /api/zones/{zoneId}/records` with server-side `skip`/`take`, and
+ * shows the zone name from `GET /api/zones/{id}`. Reading needs `zones:read`. With `zones:write`
+ * the operator can add and edit records (`RecordFormComponent`), enable or disable one (a
+ * one-field `PATCH`) and delete one. `RecordsController.Delete` refuses to delete the SOA with a
+ * 409, so the SOA row's delete button is disabled with a tooltip saying why.
  */
 @Component({
   selector: 'app-record-list',
@@ -75,7 +76,7 @@ export class RecordListComponent {
   /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  /** The `Soa` record type, exposed for the template's own "is this the SOA row?" check. */
+  /** The `Soa` record type, for the template's "is this the SOA row?" check. */
   readonly soaType = DnsResourceRecordTypeEnum.Soa;
 
   readonly zoneId = this.route.snapshot.paramMap.get('zoneId') ?? '';
@@ -102,7 +103,7 @@ export class RecordListComponent {
     await this.loadPage();
   }
 
-  /** This method toggles a record's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a record's `isDisabled` flag with a one-field RFC 7396 merge patch. */
   async toggleDisabled(record: RecordDetail): Promise<void> {
     if (!record.id) return;
 
@@ -121,7 +122,7 @@ export class RecordListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a non-SOA record -- the SOA row's own delete button is disabled in the template. */
+  /** This method asks for confirmation, then deletes a record. It ignores the SOA, which the server will not delete. */
   async deleteRecord(record: RecordDetail): Promise<void> {
     if (!record.id || record.type === this.soaType) return;
 
@@ -145,9 +146,7 @@ export class RecordListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -169,8 +168,7 @@ export class RecordListComponent {
       const zone = await firstValueFrom(this.zonesApi.apiZonesIdGet({ id: this.zoneId }));
       this.zoneName.set(zone.name ?? null);
     } catch {
-      // A missing zone name is only cosmetic (the page heading) -- the record list load below
-      // surfaces its own real error if the zone itself doesn't exist.
+      // The zone name only feeds the heading; the record list load reports a missing zone.
     }
   }
 

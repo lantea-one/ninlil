@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CaaRecordFormComponent } from './caa-record-form.component';
 
+/**
+ * These tests cover the CAA form: defaults, validation, getData() and loading initialData. TestBed
+ * with the standalone component only.
+ */
 describe('CaaRecordFormComponent', () => {
   let fixture: ComponentFixture<CaaRecordFormComponent>;
   let component: CaaRecordFormComponent;

@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AaaaRecordFormComponent } from './aaaa-record-form.component';
 
+/**
+ * These tests cover the AAAA form: address validation, getData() and loading initialData. TestBed
+ * with the standalone component only.
+ */
 describe('AaaaRecordFormComponent', () => {
   let fixture: ComponentFixture<AaaaRecordFormComponent>;
   let component: AaaaRecordFormComponent;

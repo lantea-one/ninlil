@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CertRecordFormComponent } from './cert-record-form.component';
 import { DnssecAlgorithmEnum } from '../../../../../api-client';
 
+/**
+ * These tests cover the CERT form: the "(none)" algorithm sent as null, a chosen algorithm,
+ * validation and loading initialData. TestBed with the standalone component only.
+ */
 describe('CertRecordFormComponent', () => {
   let fixture: ComponentFixture<CertRecordFormComponent>;
   let component: CertRecordFormComponent;

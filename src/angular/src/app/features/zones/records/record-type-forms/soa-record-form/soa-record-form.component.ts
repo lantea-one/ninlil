@@ -15,12 +15,10 @@ export interface SoaRecordFormData {
 }
 
 /**
- * This component is the `SOA` record data form -- the record every zone has exactly one of, at
- * its apex, per RFC 1035 §3.3.13. `RecordFormComponent` forces this type (and disables the type
- * selector entirely) the very first time a caller adds a record to a brand-new zone, mirroring
- * `RecordsController.Create`'s own "a zone's very first record must be its own SOA" rule -- this
- * component itself has no awareness of that bootstrap distinction, it is exactly the same form
- * used to later edit an existing zone's own SOA via PUT/PATCH.
+ * This component is the `SOA` record data form (RFC 1035 §3.3.13), for the one SOA record at a
+ * zone's apex. `RecordFormComponent` locks the type to SOA for a zone's first record, as
+ * `RecordsController.Create` requires; this form is the same whether it creates that record or
+ * edits it later.
  */
 @Component({
   selector: 'app-soa-record-form',
@@ -105,9 +103,7 @@ export class SoaRecordFormComponent implements RecordDataFormComponent<SoaRecord
 
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  // 4294967295 is the real backend bound for every field below: SoaRecordData declares each of
-  // them a 32-bit unsigned integer, and a value outside that range is rejected once it reaches
-  // the REST layer.
+  // SoaRecordData stores every numeric field as a 32-bit unsigned integer.
   private static readonly uint32Range = [
     Validators.required,
     Validators.min(0),

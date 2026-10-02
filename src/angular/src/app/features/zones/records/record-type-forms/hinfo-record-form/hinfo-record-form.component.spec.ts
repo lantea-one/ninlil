@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HinfoRecordFormComponent } from './hinfo-record-form.component';
 
+/**
+ * These tests cover the HINFO form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('HinfoRecordFormComponent', () => {
   let fixture: ComponentFixture<HinfoRecordFormComponent>;
   let component: HinfoRecordFormComponent;

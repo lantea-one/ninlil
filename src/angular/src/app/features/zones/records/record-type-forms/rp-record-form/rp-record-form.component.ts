@@ -10,11 +10,10 @@ export interface RpRecordFormData {
 }
 
 /**
- * This component is the `RP` record data form (RFC 1183 §2) -- who is responsible for the owner
- * name, and where to find more information about them. `mailbox` is written in domain-name form
- * (the first label is the local part, so `admin.example.com` means `admin@example.com`), and
- * `textReference` names a `TXT` record with further information, or the root name (`.`) if none
- * is published.
+ * This component is the `RP` record data form (RFC 1183 §2): who is responsible for the owner
+ * name. `mailbox` is written as a domain name whose first label is the local part
+ * (`admin.example.com` for `admin@example.com`). `textReference` names a TXT record with more
+ * information, or the root name `.` when there is none.
  */
 @Component({
   selector: 'app-rp-record-form',

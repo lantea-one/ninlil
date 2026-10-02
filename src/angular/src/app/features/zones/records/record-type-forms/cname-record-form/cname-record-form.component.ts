@@ -8,7 +8,7 @@ export interface CnameRecordFormData {
   target: string;
 }
 
-/** This component is the `CNAME` record data form. See `a-record-form.component.ts` for the reference shape it copies. */
+/** This component is the `CNAME` record data form; it follows the pattern of `a-record-form.component.ts`. */
 @Component({
   selector: 'app-cname-record-form',
   imports: [ReactiveFormsModule, FormControlDirective, FormDirective, FormLabelDirective],

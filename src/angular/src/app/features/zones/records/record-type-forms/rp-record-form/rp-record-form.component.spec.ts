@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RpRecordFormComponent } from './rp-record-form.component';
 
+/**
+ * These tests cover the RP form: defaults, validation, getData() and loading initialData. TestBed
+ * with the standalone component only.
+ */
 describe('RpRecordFormComponent', () => {
   let fixture: ComponentFixture<RpRecordFormComponent>;
   let component: RpRecordFormComponent;

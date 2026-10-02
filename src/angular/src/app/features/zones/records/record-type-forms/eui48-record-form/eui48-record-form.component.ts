@@ -5,19 +5,17 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToMac, MAC48_PATTERN, macToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.Eui48RecordData` field-for-field --
- * `identifier` is the base64 form of the 6 raw octets that field's own JSON representation
- * actually carries (see `record-data-encoding.util.ts`'s own doc comment for why).
+ * This interface mirrors the backend's `Eui48RecordData` field for field; `identifier` is the
+ * base64 of the six octets (see `record-data-encoding.util.ts`).
  */
 export interface Eui48RecordFormData {
   identifier: string;
 }
 
 /**
- * This component is the `EUI48` record data form (RFC 7043) -- a 48-bit identifier, most often a
- * network interface's own MAC address, associated with the owner name. The form itself accepts
- * and displays the familiar colon-separated MAC address form (`00:1a:2b:3c:4d:5e`), converting to
- * and from the base64 the wire format actually needs via {@link macToBase64}/{@link base64ToMac}.
+ * This component is the `EUI48` record data form (RFC 7043): a 48-bit identifier, usually a MAC
+ * address, for the owner name. It is edited as `00:1a:2b:3c:4d:5e` and converted with
+ * {@link macToBase64} and {@link base64ToMac}.
  */
 @Component({
   selector: 'app-eui48-record-form',

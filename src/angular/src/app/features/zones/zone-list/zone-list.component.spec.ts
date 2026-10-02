@@ -10,19 +10,20 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the zone list: loading a page, the enable/disable toggle, the confirmed delete
+ * and which actions a user without `zones:write` sees. They use TestBed with spy-backed
+ * `ZonesService` and `NotificationService` and a stubbed `AuthService.hasPermission`.
+ */
 describe('ZoneListComponent', () => {
   // The permissions the signed-in test user lacks; it holds every other one, so each test sees
   // the page as an administrator would unless it denies something first.
   let deniedPermissions: string[] = [];
   beforeEach(() => (deniedPermissions = []));
 
-  // A manually-shaped spy interface, not `jasmine.SpyObj<ZonesService>` -- the generated
-  // `ZonesService`'s own methods are each declared with 4 overloads (one per `observe` value plus
-  // the implementation signature), and `jasmine.SpyObj<T>` picks the *last* overload it sees when
-  // deriving each spy's own call signature, which is the `observe: 'events'` one returning
-  // `Observable<HttpEvent<T>>` rather than the plain-body `Observable<T>` this component and every
-  // test double below actually deal in. `dashboard-stats.service.spec.ts` already established
-  // this same loosely-typed-spy convention for exactly this reason.
+  // A hand-shaped spy type rather than `jasmine.SpyObj<ZonesService>`: the generated methods have
+  // one overload per `observe` value, and `SpyObj` takes the last one, which returns
+  // `Observable<HttpEvent<T>>` instead of the plain body the component uses.
   let zonesApiSpy: {
     apiZonesGet: jasmine.Spy;
     apiZonesIdPatch: jasmine.Spy;
@@ -58,9 +59,7 @@ describe('ZoneListComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ZoneListComponent],
       providers: [
-        // ZoneListComponent's own template uses RouterLink, which injects ActivatedRoute/Router
-        // internally regardless of whether this component reads either itself -- provideRouter([])
-        // registers both, matching app.spec.ts's/forbidden.component.spec.ts's own precedent.
+        // The template's RouterLink needs a Router and ActivatedRoute.
         provideRouter([]),
         { provide: ZonesService, useValue: zonesApiSpy },
         { provide: NotificationService, useValue: notificationSpy },
@@ -95,7 +94,7 @@ describe('ZoneListComponent', () => {
     expect(element.querySelector('a[href="/zones/new"]')).toBeNull();
     expect(element.querySelector('a[href="/zones/zone-1/edit"]')).toBeNull();
     expect(element.querySelector('[aria-label="Delete zone"]')).toBeNull();
-    // The status stays visible -- it is also the zone's only enabled/disabled indicator.
+    // The status stays visible: it is also the zone's only enabled/disabled indicator.
     expect(element.querySelector<HTMLButtonElement>('td button')?.textContent).toContain('Enabled');
     expect(element.querySelector<HTMLButtonElement>('td button')?.disabled).toBeTrue();
     // Read-only navigation to the zone's records is still offered.

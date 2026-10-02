@@ -10,9 +10,8 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.TlsaRecordData` field-for-field --
- * `certificateAssociationData` is the base64 form of the raw association bytes that field's own
- * JSON representation actually carries.
+ * This interface mirrors the backend's `TlsaRecordData` field for field;
+ * `certificateAssociationData` is the base64 of the association bytes.
  */
 export interface TlsaRecordFormData {
   certificateUsage: number;
@@ -22,17 +21,10 @@ export interface TlsaRecordFormData {
 }
 
 /**
- * This component is the shared data form for both the `TLSA` record type (RFC 6698's DANE
- * association between a name and a TLS certificate) and the `SMIMEA` record type (RFC 8162's
- * identical association for an S/MIME certificate) -- the two share byte-for-byte the same RDATA
- * shape on the backend (`TlsaRecordData`, reused by both `TlsaRecordDataCodec` and
- * `SmimeaRecordDataCodec`), so `RECORD_TYPE_FORM_REGISTRY` maps both
- * `DnsResourceRecordTypeEnum.Tlsa` and `.Smimea` onto this one component rather than duplicating
- * a second, byte-for-byte identical form file -- the frontend analogue of the backend's own
- * shared-codec pattern (see `Ninlil.Dns.Common.Wire.Records.TlsaCodec`).
- * `certificateAssociationData` is shown and accepted as plain hex, the conventional zone-file
- * presentation for this field, converted to and from the base64 the wire format needs via
- * {@link hexToBase64}/{@link base64ToHex}.
+ * This component is the data form for `TLSA` (RFC 6698, DANE for TLS certificates) and `SMIMEA`
+ * (RFC 8162, the same for S/MIME). Both use `TlsaRecordData` on the backend, so
+ * `RECORD_TYPE_FORM_REGISTRY` maps both types here. The association data is edited in hex, as in
+ * zone files, and converted with {@link hexToBase64} and {@link base64ToHex}.
  */
 @Component({
   selector: 'app-tlsa-record-form',

@@ -10,9 +10,8 @@ export interface KxRecordFormData {
 }
 
 /**
- * This component is the `KX` record data form (RFC 2230) -- the host responsible for key exchange
- * on the owner name's behalf, for a protocol other than e-mail (which uses `MX` instead). See
- * `mx-record-form.component.ts` for the near-identical shape this copies.
+ * This component is the `KX` record data form (RFC 2230): the host that handles key exchange for
+ * the owner name, laid out like the MX form.
  */
 @Component({
   selector: 'app-kx-record-form',

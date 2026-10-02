@@ -10,10 +10,8 @@ export interface MxRecordFormData {
 }
 
 /**
- * This component is the `MX` record data form -- the reference shape for a multi-field record
- * type: a `.field-row` of side-by-side `.field` divs, matching `ZoneFormComponent`'s own
- * multi-field sections one level down. See `a-record-form.component.ts` for the base single-field
- * shape this extends.
+ * This component is the `MX` record data form. It is the simplest multi-field example: a
+ * `.field-row` of side-by-side `.field` divs, otherwise as in `a-record-form.component.ts`.
  */
 @Component({
   selector: 'app-mx-record-form',

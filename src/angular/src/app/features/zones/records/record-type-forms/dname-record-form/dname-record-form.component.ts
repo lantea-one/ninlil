@@ -9,9 +9,8 @@ export interface DnameRecordFormData {
 }
 
 /**
- * This component is the `DNAME` record data form (RFC 6672) -- like `CnameRecordFormComponent`,
- * but redirecting an entire subtree of names rather than a single one. See
- * `a-record-form.component.ts` for the reference shape it copies.
+ * This component is the `DNAME` record data form (RFC 6672). Like CNAME, but it redirects every
+ * name below the owner rather than one name. It follows the pattern of `a-record-form.component.ts`.
  */
 @Component({
   selector: 'app-dname-record-form',

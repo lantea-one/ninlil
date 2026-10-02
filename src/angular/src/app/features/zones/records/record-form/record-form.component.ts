@@ -29,24 +29,20 @@ import {
 } from '../record-type-forms/record-type-form.registry';
 
 /**
- * This component is both the "add a record" and "edit a record" page for a zone -- one component
- * for both, distinguished by whether the route supplies a `recordId` (see `app.routes.ts`), the
- * same shape `ZoneFormComponent` uses for zones themselves. This is the framework's own host: it
- * owns every field common to *every* record type (`name`, `type`, `timeToLiveSeconds`,
- * `isDisabled`, `excludeFromSync`, `comments`), and delegates the record type's own
- * type-specific fields to whichever component {@link RECORD_TYPE_FORM_REGISTRY} names for the
- * currently selected {@link DnsResourceRecordTypeEnum} -- mounted dynamically via
- * `NgComponentOutlet`, read back through its `exportAs="ngComponentOutlet"` template reference's
- * own `componentInstance` getter, per {@link RecordDataFormComponent}'s own contract. This is the
- * one piece of the record-editing UI that never needs to change, no matter how many more record
- * types {@link RECORD_TYPE_FORM_REGISTRY} gains entries for.
+ * This component is both the "add record" page (`/zones/:zoneId/records/new`) and the "edit
+ * record" page (`/zones/:zoneId/records/:recordId/edit`); a `recordId` route parameter selects
+ * edit mode. Both routes need `zones:write`. It saves with `POST /api/zones/{zoneId}/records` or
+ * `PUT /api/zones/{zoneId}/records/{id}` and returns to the record list.
  *
- * Surfaces two of `RecordsController`'s own real validation rules as genuine UI state, not just a
- * raw backend 400/409 message: a zone's very first record must be its own SOA
- * (`RecordsController.Create`), enforced here by forcing and locking the type selector to `SOA`
- * whenever the target zone currently has zero records; and a zone's own SOA record cannot be
- * deleted directly (`RecordsController.Delete`), enforced in `RecordListComponent` rather than
- * here, since that rule only matters for the delete action.
+ * It owns the fields every record type has (`name`, `type`, `timeToLiveSeconds`, `isDisabled`,
+ * `excludeFromSync`, `comments`). The type-specific data fields come from the component that
+ * {@link RECORD_TYPE_FORM_REGISTRY} names for the selected {@link DnsResourceRecordTypeEnum},
+ * mounted with `NgComponentOutlet` and read back through its `componentInstance` as a
+ * {@link RecordDataFormComponent}. A new record type therefore needs only a registry entry.
+ *
+ * `RecordsController.Create` requires a zone's first record to be its SOA, so when the zone is
+ * empty the type select is set to SOA and locked. The rule that the SOA cannot be deleted is
+ * handled in `RecordListComponent`.
  */
 @Component({
   selector: 'app-record-form',
@@ -80,7 +76,7 @@ export class RecordFormComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** The owning zone's own identifier, always present -- every route this component serves is nested under a zone. */
+  /** The owning zone's id; every route this component serves is nested under a zone. */
   readonly zoneId = this.route.snapshot.paramMap.get('zoneId') ?? '';
 
   /** The record being edited, or `null` when this instance is adding a brand-new record. */
@@ -89,10 +85,10 @@ export class RecordFormComponent implements OnInit {
   /** Whether this instance is editing an existing record rather than creating a new one. */
   readonly isEditMode = this.recordId !== null;
 
-  /** The record types this UI can edit the data of -- see the registry's own doc comment. */
+  /** The record types this UI can edit the data of; see `record-type-form.registry.ts`. */
   readonly supportedTypes = SUPPORTED_RECORD_TYPES;
 
-  /** The owning zone's own name, shown in the page heading once loaded. */
+  /** The owning zone's name, shown in the page heading once loaded. */
   readonly zoneName = signal<string | null>(null);
 
   /** Whether this is the very first record being added to an empty zone (create mode only). */
@@ -113,15 +109,14 @@ export class RecordFormComponent implements OnInit {
   readonly form = this.formBuilder.group({
     name: ['', [Validators.required]],
     type: [DnsResourceRecordTypeEnum.A as DnsResourceRecordTypeEnum, [Validators.required]],
-    // 4294967295 is the real backend bound: RecordEntity.TimeToLiveSeconds is a 32-bit unsigned
-    // integer, and a value outside that range is rejected once it reaches the REST layer.
+    // RecordEntity.TimeToLiveSeconds is a 32-bit unsigned integer.
     timeToLiveSeconds: [3600, [Validators.required, Validators.min(0), Validators.max(4294967295)]],
     isDisabled: [false],
     excludeFromSync: [false],
     comments: [''],
   });
 
-  /** The record type currently selected, tracked as a plain field since `valueChanges` isn't a signal. */
+  /** The selected record type, mirrored into a signal since `valueChanges` is not one. */
   readonly selectedType = signal<DnsResourceRecordTypeEnum>(DnsResourceRecordTypeEnum.A);
 
   /** The type-specific form component to mount for {@link selectedType}, or `null` if unsupported. */
@@ -129,7 +124,7 @@ export class RecordFormComponent implements OnInit {
     () => RECORD_TYPE_FORM_REGISTRY[this.selectedType()] ?? null,
   );
 
-  /** A template reference onto the dynamically mounted type-specific form, per `NgComponentOutlet`'s own `exportAs`. */
+  /** The `NgComponentOutlet` that hosts the type-specific form, via its `exportAs` template reference. */
   private readonly dataFormOutlet = viewChild<NgComponentOutlet>('dataFormOutlet');
 
   constructor() {
@@ -144,17 +139,17 @@ export class RecordFormComponent implements OnInit {
     }
   }
 
-  /** This method reads the dynamically mounted type-specific form's own validity, if one is mounted. */
+  /** This method reports whether the mounted type-specific form is valid; `false` if none is mounted. */
   isDataFormValid(): boolean {
     return this.dataFormOutlet()?.componentInstance?.form.valid ?? false;
   }
 
-  /** This method reads whether this record's own type has no registered data-entry form at all. */
+  /** This method reports whether the selected type has no registered data form. */
   isTypeUnsupported(): boolean {
     return this.dataFormComponentType() === null;
   }
 
-  /** This method saves the record -- `POST` when creating, `PUT` (full replace) when editing. */
+  /** This method saves the record: `POST` when creating, `PUT` (full replace) when editing. */
   async save(): Promise<void> {
     const dataFormComponent = this.dataFormOutlet()?.componentInstance as
       RecordDataFormComponent | undefined;
@@ -212,7 +207,7 @@ export class RecordFormComponent implements OnInit {
     }
   }
 
-  /** This method loads the owning zone's own name and, in create mode, whether it's currently empty. */
+  /** This method loads the zone name and, when the zone is empty, locks the type to SOA. */
   private async prepareForCreate(): Promise<void> {
     try {
       const [zone, existingRecords] = await Promise.all([
@@ -237,7 +232,7 @@ export class RecordFormComponent implements OnInit {
     }
   }
 
-  /** This method loads the existing record's own fields and data, for edit mode. */
+  /** This method loads the zone name and the record being edited. */
   private async loadExistingRecord(): Promise<void> {
     if (!this.recordId) return;
 
@@ -263,9 +258,8 @@ export class RecordFormComponent implements OnInit {
         this.selectedType.set(record.type ?? DnsResourceRecordTypeEnum.A);
         this.initialRecordData.set((record.data as Record<string, unknown>) ?? null);
 
-        // A zone's own SOA record cannot ever change into a different type through this form --
-        // RecordsController itself would accept it, but doing so would leave the zone with no
-        // SOA at all until a new one is separately created, which this UI has no reason to allow.
+        // The SOA cannot change type here. RecordsController would accept it and leave the zone
+        // with no SOA.
         if (record.type === DnsResourceRecordTypeEnum.Soa) {
           this.form.controls.type.disable();
         }

@@ -13,9 +13,8 @@ import { DnssecAlgorithmEnum } from '../../../../../api-client';
 import { RecordDataFormComponent } from '../record-type-form.model';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.DnsKeyRecordData` field-for-field --
- * `publicKey` is base64, matching that field's own real-world zone-file presentation convention
- * and the wire format's own default `byte[]` JSON encoding, so no conversion is needed here.
+ * This interface mirrors the backend's `DnsKeyRecordData` field for field. `publicKey` is base64,
+ * as in zone files and the API.
  */
 export interface DnsKeyRecordFormData {
   isZoneKey: boolean;
@@ -26,20 +25,12 @@ export interface DnsKeyRecordFormData {
 }
 
 /**
- * This component is the shared data form for both the `DNSKEY` record type (RFC 4034 §2, what a
- * zone actually publishes) and the `CDNSKEY` record type (RFC 7344, a child zone's own copy of
- * what it wants a parent to pick up as a `DS` record) -- the two share byte-for-byte the same
- * RDATA shape on the backend (`DnsKeyRecordData`), so `RECORD_TYPE_FORM_REGISTRY` maps both
- * `DnsResourceRecordTypeEnum.Dnskey` and `.Cdnskey` onto this one component, mirroring
- * `TlsaRecordFormComponent`'s/`DsRecordFormComponent`'s own identical reasoning.
+ * This component is the data form for `DNSKEY` (RFC 4034 §2) and `CDNSKEY` (RFC 7344, the key a
+ * child asks its parent to turn into a DS record). Both use `DnsKeyRecordData` on the backend, so
+ * `RECORD_TYPE_FORM_REGISTRY` maps both types here.
  *
- * This is one of this feature's own genuinely DNSSEC-internal record types -- `Server.Dnssec`'s
- * own `DnssecKeyManagementService` normally generates and publishes these keys automatically, an
- * operator hand-authoring one through this form being the unusual case rather than the common
- * one. The form is still a complete, real editor (per this project's own confirmed "full typed
- * coverage for every record type" decision), just without any extra guidance/hand-holding UX
- * beyond a plain field per RDATA member -- there is no everyday workflow this needs to be
- * optimized for the way, say, `SshfpRecordFormComponent`'s hex fingerprint field is.
+ * A signed zone's keys normally come from its DNSSEC Keys page (`DnssecKeyManagementService`), so
+ * writing one by hand is unusual. The form is a plain editor with one field per RDATA member.
  */
 @Component({
   selector: 'app-dnskey-record-form',

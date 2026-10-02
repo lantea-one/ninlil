@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SshfpRecordFormComponent } from './sshfp-record-form.component';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the SSHFP form: defaults, validation, the hex fingerprint sent as base64 and
+ * decoded from initialData. TestBed with the standalone component only.
+ */
 describe('SshfpRecordFormComponent', () => {
   let fixture: ComponentFixture<SshfpRecordFormComponent>;
   let component: SshfpRecordFormComponent;

@@ -10,9 +10,8 @@ import { DnsResourceRecordTypeEnum, DnssecAlgorithmEnum } from '../../../../../a
 import { RecordDataFormComponent } from '../record-type-form.model';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.RrSigRecordData` field-for-field --
- * `signature` is base64, matching that field's own real-world zone-file presentation convention
- * and the wire format's own default `byte[]` JSON encoding, so no conversion is needed here.
+ * This interface mirrors the backend's `RrSigRecordData` field for field. `signature` is base64,
+ * as in zone files and the API.
  */
 export interface RrSigRecordFormData {
   typeCovered: DnsResourceRecordTypeEnum;
@@ -27,18 +26,11 @@ export interface RrSigRecordFormData {
 }
 
 /**
- * This component is the `RRSIG` record data form (RFC 4034 §3) -- the cryptographic signature
- * over one complete RRset. Like `DnsKeyRecordFormComponent`, this is a genuinely DNSSEC-internal
- * record type this project's own `ZoneSigningService` normally generates and republishes
- * automatically on every re-sign; a plain, unadorned field-per-RDATA-member form is deliberately
- * all this provides, per this feature's own "read-heavy/informational is fine for a
- * system-managed type" guidance, rather than an elaborate editing UX nothing realistically needs.
- * `typeCovered` offers every record type this project's own wire format recognizes at all (not
- * just this UI's own supported-forms subset), since a signature can legitimately cover any RRset
- * type. `signatureExpiration`/`signatureInception` are entered as raw 32-bit Unix timestamps
- * (seconds since the epoch), exactly the form `RrSigRecordData` itself stores them in, rather than
- * a date picker -- a reasoned choice to keep this system-managed type's form simple, not an
- * oversight.
+ * This component is the `RRSIG` record data form (RFC 4034 §3): the signature over one RRset.
+ * Signed zones get their RRSIGs from `ZoneSigningService` on every re-sign, so this is a plain
+ * field-per-member editor. `typeCovered` offers every `DnsResourceRecordTypeEnum` value, not only
+ * the types this UI has forms for, since a signature can cover any RRset. The expiration and
+ * inception times are 32-bit Unix timestamps, as `RrSigRecordData` stores them, not a date picker.
  */
 @Component({
   selector: 'app-rrsig-record-form',
@@ -156,11 +148,10 @@ export class RrSigRecordFormComponent implements RecordDataFormComponent<RrSigRe
   readonly form = this.formBuilder.group({
     typeCovered: [DnsResourceRecordTypeEnum.A as DnsResourceRecordTypeEnum, [Validators.required]],
     algorithm: [DnssecAlgorithmEnum.Ecdsap256Sha256 as DnssecAlgorithmEnum, [Validators.required]],
-    // 255 is the real backend bound: RrSigRecordData.Labels is a single byte.
+    // RrSigRecordData.Labels is a single byte.
     labels: [2, [Validators.required, Validators.min(0), Validators.max(255)]],
-    // 4294967295 is the real backend bound for each of the three fields below: RrSigRecordData
-    // declares OriginalTimeToLiveSeconds/SignatureExpiration/SignatureInception each a 32-bit
-    // unsigned integer (the latter two as raw Unix timestamps).
+    // RrSigRecordData stores these three as 32-bit unsigned integers (the times as Unix
+    // timestamps).
     originalTimeToLiveSeconds: [
       3600,
       [Validators.required, Validators.min(0), Validators.max(4294967295)],

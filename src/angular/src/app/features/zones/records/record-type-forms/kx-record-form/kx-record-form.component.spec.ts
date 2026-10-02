@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { KxRecordFormComponent } from './kx-record-form.component';
 
+/**
+ * These tests cover the KX form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('KxRecordFormComponent', () => {
   let fixture: ComponentFixture<KxRecordFormComponent>;
   let component: KxRecordFormComponent;

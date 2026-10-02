@@ -6,17 +6,21 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { RecordFormComponent } from './record-form.component';
 
 /**
- * See `dashboard.component.spec.ts`'s own identical helper for why a zoneless app's tests need
- * this rather than `ComponentFixture.whenStable()`.
+ * This helper waits one macrotask so the component's async loads settle. The app is zoneless, so
+ * `whenStable()` does not see them; `dashboard.component.spec.ts` explains this in full.
  */
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the record add and edit form: TTL validation, the SOA lock for an empty zone
+ * and for an existing SOA, loading a record into the common fields and the type-specific form,
+ * and saving. They use TestBed with spy-backed API services and a stubbed ActivatedRoute; the
+ * A-record form is mounted for real through NgComponentOutlet.
+ */
 describe('RecordFormComponent', () => {
-  // Loosely-typed spies, not `jasmine.SpyObj<RecordsService>`/`<ZonesService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why (the generated services' own
-  // multi-overload methods otherwise infer the wrong, `HttpEvent`-wrapped return type).
+  // Hand-shaped spy types; see zone-list.component.spec.ts for why not `jasmine.SpyObj`.
   let recordsApiSpy: {
     apiZonesZoneIdRecordsGet: jasmine.Spy;
     apiZonesZoneIdRecordsIdGet: jasmine.Spy;
@@ -28,12 +32,9 @@ describe('RecordFormComponent', () => {
   let navigateSpy: jasmine.Spy;
 
   /**
-   * This helper creates fresh spies with sensible defaults, then applies `configureApis` (if any)
-   * *before* the component is ever constructed -- necessary because `ngOnInit` reads these APIs
-   * immediately, so a test overriding a return value only for the *initial* load (as opposed to a
-   * later, explicit method call such as `save()`) must configure it before `TestBed.createComponent`
-   * runs, not after. Jasmine's own default random test order means a `let` reused across `it`
-   * blocks cannot safely be pre-configured by a caller before this function itself creates it.
+   * This helper creates fresh spies with defaults, applies `configureApis` and then creates the
+   * component. `ngOnInit` calls the APIs at once, so anything the initial load should see must be
+   * set in `configureApis`, not afterwards.
    */
   async function createComponent(
     params: { zoneId: string; recordId?: string },
@@ -78,7 +79,7 @@ describe('RecordFormComponent', () => {
     return fixture;
   }
 
-  /** This helper reaches into the dynamically-mounted `ARecordFormComponent` -- see its own call sites for why. */
+  /** This helper returns the address control of the mounted `ARecordFormComponent`, so a test can fill it. */
   function addressControlOf(fixture: { componentInstance: unknown }) {
     return (
       fixture.componentInstance as unknown as {
@@ -189,9 +190,8 @@ describe('RecordFormComponent', () => {
     });
     fixture.componentInstance.form.patchValue({ name: 'www', timeToLiveSeconds: 600 });
 
-    // The default selected type is A, so ARecordFormComponent is the real component mounted by
-    // NgComponentOutlet -- filling its own address field exercises the real dynamic-mount wiring,
-    // not a stand-in.
+    // The default type is A, so NgComponentOutlet mounts ARecordFormComponent. Filling its
+    // address field exercises the dynamic mount, not a stand-in.
     addressControlOf(fixture)?.setValue('203.0.113.5');
     fixture.detectChanges();
 

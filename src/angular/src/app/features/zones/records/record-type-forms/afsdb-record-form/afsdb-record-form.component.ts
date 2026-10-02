@@ -10,10 +10,9 @@ export interface AfsdbRecordFormData {
 }
 
 /**
- * This component is the `AFSDB` record data form (RFC 1183 §1) -- the location of a server for
- * the AFS distributed file system (or a similarly-structured cell database) the owner name
- * belongs to. `subtype` names which kind of server `hostname` is, per RFC 1183 §1 (1 is an AFS
- * cell database server, 2 is a DCE authenticated name server).
+ * This component is the `AFSDB` record data form (RFC 1183 §1): a server for the AFS or DCE cell
+ * named by the owner name. `subtype` says what kind of server `hostname` is: 1 for an AFS cell
+ * database server, 2 for a DCE authenticated name server.
  */
 @Component({
   selector: 'app-afsdb-record-form',

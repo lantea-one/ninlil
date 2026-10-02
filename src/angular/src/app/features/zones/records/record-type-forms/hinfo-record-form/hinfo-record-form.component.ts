@@ -10,8 +10,8 @@ export interface HinfoRecordFormData {
 }
 
 /**
- * This component is the `HINFO` record data form (RFC 1035 §3.3.2) -- a short, free-text
- * description of the owner name's own hardware and operating system.
+ * This component is the `HINFO` record data form (RFC 1035 §3.3.2): free text naming the owner
+ * host's CPU and operating system.
  */
 @Component({
   selector: 'app-hinfo-record-form',

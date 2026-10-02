@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ARecordFormComponent } from './a-record-form.component';
 
+/**
+ * These tests cover the A form: address validation, getData() and loading initialData. TestBed with
+ * the standalone component only.
+ */
 describe('ARecordFormComponent', () => {
   let fixture: ComponentFixture<ARecordFormComponent>;
   let component: ARecordFormComponent;

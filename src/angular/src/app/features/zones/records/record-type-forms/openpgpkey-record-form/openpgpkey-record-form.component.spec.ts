@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { OpenPgpKeyRecordFormComponent } from './openpgpkey-record-form.component';
 
+/**
+ * These tests cover the OPENPGPKEY form: validation, getData() and loading initialData. TestBed
+ * with the standalone component only.
+ */
 describe('OpenPgpKeyRecordFormComponent', () => {
   let fixture: ComponentFixture<OpenPgpKeyRecordFormComponent>;
   let component: OpenPgpKeyRecordFormComponent;

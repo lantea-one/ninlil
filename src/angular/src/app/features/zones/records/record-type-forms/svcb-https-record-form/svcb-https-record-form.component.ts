@@ -17,19 +17,15 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.SvcbParameter` field-for-field --
- * `value` is shown and accepted as hex, matching RFC 9460 §2.4's own "generic key definition"
- * presentation form for a parameter this UI does not specifically know the shape of.
+ * This interface mirrors the backend's `SvcbParameter` field for field. `value` is base64; the form
+ * edits it as hex, the RFC 9460 §2.4 generic presentation of a parameter value.
  */
 export interface SvcbParameterFormData {
   key: number;
   value: string;
 }
 
-/**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.ServiceBindingRecordData`
- * field-for-field.
- */
+/** This interface mirrors the backend's `ServiceBindingRecordData` field for field. */
 export interface SvcbHttpsRecordFormData {
   priority: number;
   targetName: string;
@@ -37,11 +33,9 @@ export interface SvcbHttpsRecordFormData {
 }
 
 /**
- * This type alias names one connection-parameter `FormArray` row's own typed shape explicitly
- * (rather than leaving it to loose inference), so `getRawValue()` produces a genuine
- * `{ key: number; valueHex: string }` object instead of a plain index-signature record --
- * `tsconfig.json`'s own `noPropertyAccessFromIndexSignature` flag requires exactly this to allow
- * ordinary dot-notation property access on the result.
+ * This type names one parameter row's shape so `getRawValue()` returns
+ * `{ key: number; valueHex: string }` rather than an index-signature record, which
+ * `noPropertyAccessFromIndexSignature` (tsconfig.json) would not allow dot access on.
  */
 type SvcbParameterGroup = FormGroup<{
   key: FormControl<number>;
@@ -49,17 +43,11 @@ type SvcbParameterGroup = FormGroup<{
 }>;
 
 /**
- * This component is the shared data form for both the `SVCB` and `HTTPS` record types (RFC 9460)
- * -- both share byte-for-byte the same RDATA shape on the backend (`ServiceBindingRecordData`,
- * reused by both `SvcbRecordDataCodec` and `HttpsRecordDataCodec`, differing only in what a client
- * uses each one for), so `RECORD_TYPE_FORM_REGISTRY` maps both `DnsResourceRecordTypeEnum.Svcb`
- * and `.Https` onto this one component, mirroring `TlsaRecordFormComponent`'s/
- * `DsRecordFormComponent`'s own identical reasoning for their own shared-codec record type pairs.
- * `priority` of 0 marks this as an "alias form" record (pointing entirely at `targetName`, with no
- * parameters of its own); any other value is a genuine preference among same-name records. Each
- * connection parameter is a `key`/`value` pair, edited as a small `FormArray` of rows an operator
- * can add to or remove from -- `value` is shown as hex rather than base64, per this module's own
- * documented "opaque/generic binary -> hex" convention.
+ * This component is the data form for `SVCB` and `HTTPS` (RFC 9460). Both use
+ * `ServiceBindingRecordData` on the backend, so `RECORD_TYPE_FORM_REGISTRY` maps both types here.
+ * A `priority` of 0 makes an alias record that points at `targetName` with no parameters; any
+ * other value orders the service records for a name. Parameters are `key`/`value` rows in a
+ * `FormArray`, with values edited as hex (see `record-data-encoding.util.ts`).
  */
 @Component({
   selector: 'app-svcb-https-record-form',
@@ -202,12 +190,12 @@ export class SvcbHttpsRecordFormComponent implements RecordDataFormComponent<Svc
     });
   }
 
-  /** This method appends a new, empty connection-parameter row for the operator to fill in. */
+  /** This method appends an empty parameter row. */
   addParameter(): void {
     this.parameters.push(this.buildParameterGroup(0, ''));
   }
 
-  /** This method removes the connection-parameter row at the given index. */
+  /** This method removes the parameter row at the given index. */
   removeParameter(index: number): void {
     this.parameters.removeAt(index);
   }

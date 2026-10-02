@@ -9,14 +9,12 @@ import {
 import { DnssecAlgorithmEnum } from '../../../../../api-client';
 import { RecordDataFormComponent } from '../record-type-form.model';
 
-/** A sentinel form-control value standing in for "no algorithm used with the certificate". */
+/** The select value that stands for "no algorithm" (sent as `null`). */
 const NO_ALGORITHM = 'NONE';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.CertRecordData` field-for-field --
- * `algorithm` is `null` for RFC 4398 §2.1's own "no algorithm used" zero value, and `certificate`
- * is base64, matching that field's own real-world PEM-without-headers presentation convention and
- * the wire format's own default `byte[]` JSON encoding, so no conversion is needed here.
+ * This interface mirrors the backend's `CertRecordData` field for field. `algorithm` is `null` for
+ * RFC 4398 §2.1's "no algorithm" value 0. `certificate` is base64, as in zone files and the API.
  */
 export interface CertRecordFormData {
   certificateType: number;
@@ -26,12 +24,10 @@ export interface CertRecordFormData {
 }
 
 /**
- * This component is the `CERT` record data form (RFC 4398) -- a certificate or certificate
- * revocation list published for the owner name. `certificateType` is a narrow, IANA-registered
- * numeric value (1 is PKIX/X.509, 3 is PGP, and so on) kept as a plain number rather than a
- * select, since the full "Certificate Type Values" registry is large and this project has no
- * shared enum for it; `algorithm` reuses the same `DnssecAlgorithmEnum` a `DNSKEY`/`DS` record
- * does, plus an explicit "(none)" option for RFC 4398 §2.1's own zero value.
+ * This component is the `CERT` record data form (RFC 4398): a certificate or revocation list
+ * published for the owner name. `certificateType` is a plain number (1 is PKIX/X.509, 3 is PGP,
+ * and so on), since there is no shared enum for the IANA registry. `algorithm` uses
+ * `DnssecAlgorithmEnum`, as DNSKEY and DS do, plus a "(none)" option for the value 0.
  */
 @Component({
   selector: 'app-cert-record-form',

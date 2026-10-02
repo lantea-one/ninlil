@@ -11,15 +11,11 @@ export interface NsecRecordFormData {
 }
 
 /**
- * This component is the `NSEC` record data form (RFC 4034 §4) -- proof that a name does not exist
- * (or exists but lacks a queried type), naming the next owner name in the zone's own canonical
- * order plus every record type genuinely present at this record's own owner name. Like
- * `DnsKeyRecordFormComponent`/`RrSigRecordFormComponent`, this is a genuinely DNSSEC-internal
- * record type `Server.Authoritative`'s own `DenialOfExistenceProofBuilder` normally generates at
- * query time, so `types` is deliberately a plain, comma/space-separated text field an operator
- * types record-type names into (e.g. `A, AAAA, RRSIG`) rather than a multi-select of every
- * registered type, matching this feature's own "read-heavy/informational is fine for a
- * system-managed type" guidance.
+ * This component is the `NSEC` record data form (RFC 4034 §4): the next owner name in canonical
+ * order and the types present at this owner, which together prove a name or type does not exist.
+ * For a signed zone `DenialOfExistenceProofBuilder` generates these at query time, so hand-written
+ * ones are rare and `types` is a plain comma- or space-separated text field (e.g.
+ * `A, AAAA, RRSIG`) rather than a multi-select.
  */
 @Component({
   selector: 'app-nsec-record-form',

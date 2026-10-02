@@ -11,9 +11,8 @@ export interface UriRecordFormData {
 }
 
 /**
- * This component is the `URI` record data form (RFC 7553) -- a URI associated with the owner
- * name. Unlike almost every other type in this feature, `target` is plain text, not a domain
- * name, so it carries no trailing-dot convention of its own.
+ * This component is the `URI` record data form (RFC 7553): a URI for the owner name. `target` is
+ * plain text, not a domain name, so no trailing dot applies.
  */
 @Component({
   selector: 'app-uri-record-form',

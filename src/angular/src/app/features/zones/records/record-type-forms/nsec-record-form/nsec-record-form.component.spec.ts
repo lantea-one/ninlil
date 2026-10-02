@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NsecRecordFormComponent } from './nsec-record-form.component';
 import { DnsResourceRecordTypeEnum } from '../../../../../api-client';
 
+/**
+ * These tests cover the NSEC form: validation, parsing the types text into an array and loading
+ * initialData. TestBed with the standalone component only.
+ */
 describe('NsecRecordFormComponent', () => {
   let fixture: ComponentFixture<NsecRecordFormComponent>;
   let component: NsecRecordFormComponent;

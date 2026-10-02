@@ -3,11 +3,7 @@
   margin: var(--ninlil-space-6) auto;
 }
 
-// A long, multi-section form (Transfer/Forwarding/Cloud/DNSSEC/Dynamic updates/Automatic record
-// management/Security, per the currently selected zone type) genuinely benefits from the widest
-// of this app's three form-width steps -- the old fixed 900px card wasted 40-60% of a wide
-// viewport (the audit's own finding 5) despite this form carrying real, multi-column field rows
-// that want the extra room.
+// The widest of the app's form widths: this form has many sections with multi-column field rows.
 .zone-form-card {
   max-width: var(--ninlil-form-max-width-wide);
   margin: var(--ninlil-space-5) auto;
@@ -39,10 +35,8 @@
   flex-basis: 100%;
 }
 
-// The on-demand "reconcile now" buttons sit visually apart from the ordinary field rows above
-// them (they trigger an immediate action rather than editing a value that's saved together with
-// the rest of the form), so they get a little extra top spacing plus a top border to read as
-// their own small sub-section.
+// The "reconcile now" buttons act immediately instead of editing a saved value, so a top border
+// sets them apart from the field rows above.
 .reconcile-now-row {
   margin-top: var(--ninlil-space-3);
   padding-top: var(--ninlil-space-3);
@@ -69,12 +63,8 @@
   padding-left: var(--ninlil-space-5);
 }
 
-// Every type-conditional block (Transfer source, Forwarding, Cloud sync, DNSSEC signing, Dynamic
-// updates & transfers, Automatic record management, Security, Catalog membership/members) is one
-// of these -- a real, bordered, collapsible section replacing the old plain `<h3>` break, so a
-// long form reads as labeled structure an operator can scan and selectively collapse rather than
-// one unbroken scroll (the audit's own finding 5). Every section starts expanded; see
-// ZoneFormComponent.isSectionOpen's own doc comment for why nothing starts hidden by default.
+// A bordered, collapsible section: Transfer source, Forwarding, Cloud sync, DNSSEC signing,
+// Dynamic updates & transfers, Automatic record management, Security and the catalog sections.
 .form-section {
   margin-bottom: var(--ninlil-space-4);
   border: 1px solid var(--cui-border-color);

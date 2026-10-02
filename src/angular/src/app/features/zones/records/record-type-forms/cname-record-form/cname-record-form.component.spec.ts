@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CnameRecordFormComponent } from './cname-record-form.component';
 
+/**
+ * These tests cover the CNAME form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('CnameRecordFormComponent', () => {
   let fixture: ComponentFixture<CnameRecordFormComponent>;
   let component: CnameRecordFormComponent;

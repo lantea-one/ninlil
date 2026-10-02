@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SvcbHttpsRecordFormComponent } from './svcb-https-record-form.component';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the SVCB/HTTPS form: defaults, adding and removing parameter rows, the hex
+ * values sent as base64 and decoded from initialData. TestBed with the standalone component only.
+ */
 describe('SvcbHttpsRecordFormComponent', () => {
   let fixture: ComponentFixture<SvcbHttpsRecordFormComponent>;
   let component: SvcbHttpsRecordFormComponent;

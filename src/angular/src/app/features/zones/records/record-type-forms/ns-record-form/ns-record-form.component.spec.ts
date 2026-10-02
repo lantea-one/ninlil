@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NsRecordFormComponent } from './ns-record-form.component';
 
+/**
+ * These tests cover the NS form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('NsRecordFormComponent', () => {
   let fixture: ComponentFixture<NsRecordFormComponent>;
   let component: NsRecordFormComponent;

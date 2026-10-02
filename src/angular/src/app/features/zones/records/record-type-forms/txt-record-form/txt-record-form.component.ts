@@ -9,12 +9,10 @@ export interface TxtRecordFormData {
 }
 
 /**
- * This component is the `TXT` record data form. Unlike every other supported record type, a
- * `TXT` record's data is a *list* of character-strings, not a single scalar field -- shown
- * here as one plain-text value per textarea line (the common case; RFC 1035 §3.3.14 in principle
- * allows binary character-strings, out of scope for this UI) rather than a `FormArray` of
- * individual inputs, since an operator almost always pastes or types one value per line anyway
- * (an SPF/DKIM/domain-verification string).
+ * This component is the `TXT` record data form. The data is a list of character-strings, edited as
+ * one value per textarea line rather than a `FormArray`, since values such as SPF, DKIM or
+ * verification strings are usually pasted. Lines are trimmed and blank lines dropped. Binary
+ * character-strings (allowed by RFC 1035 §3.3.14) cannot be entered.
  */
 @Component({
   selector: 'app-txt-record-form',

@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Nsec3ParamRecordFormComponent } from './nsec3param-record-form.component';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the NSEC3PARAM form: defaults, salt validation, the hex salt sent as base64 and
+ * decoded from initialData. TestBed with the standalone component only.
+ */
 describe('Nsec3ParamRecordFormComponent', () => {
   let fixture: ComponentFixture<Nsec3ParamRecordFormComponent>;
   let component: Nsec3ParamRecordFormComponent;

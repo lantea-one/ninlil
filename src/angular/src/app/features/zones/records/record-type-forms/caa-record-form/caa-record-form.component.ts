@@ -19,15 +19,11 @@ export interface CaaRecordFormData {
 }
 
 /**
- * This component is the `CAA` record data form (RFC 8659). `tag` offers the 3 IANA-registered
- * values as a select (`issue`/`issuewild`/`iodef`) rather than a free-text field, since a typo
- * here silently produces a policy tag no certificate authority recognizes -- the same
- * "guide toward a valid value where the valid set is small and known" reasoning
- * `zone-form.component.ts`'s own zone-type select already applies. This is also the record type
- * `CaaRecordReconciliationService` manages automatically for a zone with `AutoManageCaaRecords`
- * enabled (see `zone-form.component.ts`) -- an operator editing a
- * feature-managed `CAA` record by hand here will simply have it overwritten on the next
- * reconciliation pass, exactly as that feature's own known-limitations note documents.
+ * This component is the `CAA` record data form (RFC 8659). `tag` is a select of the three RFC 8659
+ * tags (`issue`, `issuewild`, `iodef`), since a mistyped tag is silently ignored by every
+ * certificate authority. With automatic CAA management on (see `ZoneFormComponent`),
+ * `CaaRecordReconciliationService` maintains its own `issue` records; a hand edit to one of those
+ * is reverted on the next reconciliation, while records added here are left alone.
  */
 @Component({
   selector: 'app-caa-record-form',

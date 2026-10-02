@@ -7,6 +7,7 @@ import {
   MAC48_PATTERN,
 } from './record-data-encoding.util';
 
+/** These tests cover the hex, MAC and base64 conversions and the validation patterns. Plain unit tests. */
 describe('record-data-encoding.util', () => {
   it('round-trips a hex string through hexToBase64/base64ToHex', () => {
     const hex = 'deadbeef';

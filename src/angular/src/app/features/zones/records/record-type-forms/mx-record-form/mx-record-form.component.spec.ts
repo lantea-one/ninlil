@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MxRecordFormComponent } from './mx-record-form.component';
 
+/**
+ * These tests cover the MX form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('MxRecordFormComponent', () => {
   let fixture: ComponentFixture<MxRecordFormComponent>;
   let component: MxRecordFormComponent;

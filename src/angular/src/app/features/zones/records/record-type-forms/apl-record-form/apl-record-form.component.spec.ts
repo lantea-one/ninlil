@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AplRecordFormComponent } from './apl-record-form.component';
 import { parseCidr } from './apl-cidr.util';
 
+/**
+ * These tests cover the APL form: adding and removing prefix rows, CIDR validation, the data
+ * getData() returns and loading initialData. TestBed with the standalone component only.
+ */
 describe('AplRecordFormComponent', () => {
   let fixture: ComponentFixture<AplRecordFormComponent>;
   let component: AplRecordFormComponent;

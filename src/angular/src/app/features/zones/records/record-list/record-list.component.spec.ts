@@ -9,10 +9,14 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a zone's record list: loading the zone name and first page, paging, the
+ * enable/disable toggle and the delete rules for SOA and other records. They use TestBed with
+ * spy-backed `RecordsService`, `ZonesService` and `NotificationService` and a stubbed
+ * ActivatedRoute.
+ */
 describe('RecordListComponent', () => {
-  // Loosely-typed spies, not `jasmine.SpyObj<RecordsService>`/`<ZonesService>` -- see
-  // `zone-list.component.spec.ts`'s own identical note for why (the generated services' own
-  // multi-overload methods otherwise infer the wrong, `HttpEvent`-wrapped return type).
+  // Hand-shaped spy types; see zone-list.component.spec.ts for why not `jasmine.SpyObj`.
   let recordsApiSpy: {
     apiZonesZoneIdRecordsGet: jasmine.Spy;
     apiZonesZoneIdRecordsIdPatch: jasmine.Spy;

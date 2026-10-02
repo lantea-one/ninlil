@@ -21,7 +21,7 @@ import { IconDirective } from '@coreui/icons-angular';
 import { RecordDataFormComponent } from '../record-type-form.model';
 import { formatCidr, parseCidr } from './apl-cidr.util';
 
-/** This function validates that a form control's own value is a well-formed CIDR prefix. */
+/** This function validates that a control's value is a well-formed CIDR prefix. */
 function cidrValidator(control: AbstractControl<string>): ValidationErrors | null {
   try {
     parseCidr(control.value);
@@ -32,8 +32,8 @@ function cidrValidator(control: AbstractControl<string>): ValidationErrors | nul
 }
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.AplItem` field-for-field --
- * `addressFamilyDependentPart` is the base64 form of its own trimmed significant bytes.
+ * This interface mirrors the backend's `AplItem` field for field; `addressFamilyDependentPart` is
+ * the base64 of the address bytes.
  */
 export interface AplItemFormData {
   addressFamily: number;
@@ -42,17 +42,15 @@ export interface AplItemFormData {
   addressFamilyDependentPart: string;
 }
 
-/** This interface mirrors `Ninlil.Dns.Common.Wire.Records.AplRecordData` field-for-field. */
+/** This interface mirrors the backend's `AplRecordData` field for field. */
 export interface AplRecordFormData {
   items: AplItemFormData[];
 }
 
 /**
- * This type alias names one `FormArray` row's own typed shape explicitly (rather than leaving it
- * to loose inference), so `getRawValue()` produces a genuine `{ cidr: string; negated: boolean }`
- * object instead of a plain index-signature record -- `tsconfig.json`'s own
- * `noPropertyAccessFromIndexSignature` flag requires exactly this to allow ordinary dot-notation
- * property access on the result.
+ * This type names one `FormArray` row's shape so `getRawValue()` returns
+ * `{ cidr: string; negated: boolean }` rather than an index-signature record, which
+ * `noPropertyAccessFromIndexSignature` (tsconfig.json) would not allow dot access on.
  */
 type AplItemGroup = FormGroup<{
   cidr: FormControl<string>;
@@ -60,18 +58,11 @@ type AplItemGroup = FormGroup<{
 }>;
 
 /**
- * This component is the `APL` record data form (RFC 3123, an experimental record type this
- * project's own known limitations already flag as rarely deployed) -- a list of address prefixes
- * associated with the owner name. Rather than exposing `AplItem.AddressFamilyDependentPart`'s own
- * raw, trailing-zero-trimmed byte array directly (technically correct, but meaningless to look at
- * -- see `apl-cidr.util.ts`'s own doc comment), each item is edited as the plain CIDR notation
- * (`192.0.2.0/24`, `2001:db8::/32`) any real router/firewall configuration already uses, with
- * {@link parseCidr}/{@link formatCidr} doing the actual address-family/prefix-length/
- * significant-byte-trimming translation in both directions. `negated` is its own checkbox
- * (RFC 3123 §4's own "exclude this prefix" flag, conventionally written as a leading `!` in a
- * zone file's own presentation format) rather than folded into the CIDR text itself, matching
- * `CaaRecordFormComponent`'s own precedent of pulling a record's boolean flag out into its own
- * plain checkbox rather than overloading a text field's own syntax.
+ * This component is the `APL` record data form (RFC 3123, experimental and rarely deployed): a list
+ * of address prefixes for the owner name. Each item is edited as CIDR text (`192.0.2.0/24`,
+ * `2001:db8::/32`) and converted with {@link parseCidr} and {@link formatCidr}. The "negated" flag,
+ * written as a leading `!` in zone files, is a separate checkbox. `RecordFormComponent` hosts it
+ * through `RECORD_TYPE_FORM_REGISTRY`.
  */
 @Component({
   selector: 'app-apl-record-form',

@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LocRecordFormComponent } from './loc-record-form.component';
 
+/**
+ * These tests cover the LOC form: defaults, range validation, getData() and loading initialData.
+ * TestBed with the standalone component only.
+ */
 describe('LocRecordFormComponent', () => {
   let fixture: ComponentFixture<LocRecordFormComponent>;
   let component: LocRecordFormComponent;

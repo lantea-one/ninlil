@@ -3,6 +3,10 @@ import { Nsec3RecordFormComponent } from './nsec3-record-form.component';
 import { DnsResourceRecordTypeEnum } from '../../../../../api-client';
 import { hexToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the NSEC3 form: validation, an empty salt, the hex fields sent as base64 and
+ * decoded from initialData. TestBed with the standalone component only.
+ */
 describe('Nsec3RecordFormComponent', () => {
   let fixture: ComponentFixture<Nsec3RecordFormComponent>;
   let component: Nsec3RecordFormComponent;

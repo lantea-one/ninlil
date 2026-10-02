@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Eui64RecordFormComponent } from './eui64-record-form.component';
 import { macToBase64 } from '../record-data-encoding.util';
 
+/**
+ * These tests cover the EUI64 form: validation (including rejecting a six-octet value), the base64
+ * round trip and loading initialData. TestBed with the standalone component only.
+ */
 describe('Eui64RecordFormComponent', () => {
   let fixture: ComponentFixture<Eui64RecordFormComponent>;
   let component: Eui64RecordFormComponent;

@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TxtRecordFormComponent } from './txt-record-form.component';
 
+/**
+ * These tests cover the TXT form: validation, splitting lines into values, dropping blank lines
+ * and loading initialData. TestBed with the standalone component only.
+ */
 describe('TxtRecordFormComponent', () => {
   let fixture: ComponentFixture<TxtRecordFormComponent>;
   let component: TxtRecordFormComponent;

@@ -2,6 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RrSigRecordFormComponent } from './rrsig-record-form.component';
 import { DnsResourceRecordTypeEnum, DnssecAlgorithmEnum } from '../../../../../api-client';
 
+/**
+ * These tests cover the RRSIG form: validation, including the byte and 32-bit bounds, getData()
+ * and loading initialData. TestBed with the standalone component only.
+ */
 describe('RrSigRecordFormComponent', () => {
   let fixture: ComponentFixture<RrSigRecordFormComponent>;
   let component: RrSigRecordFormComponent;

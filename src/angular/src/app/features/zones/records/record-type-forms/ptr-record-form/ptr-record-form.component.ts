@@ -9,11 +9,10 @@ export interface PtrRecordFormData {
 }
 
 /**
- * This component is the `PTR` record data form. A `PTR` record almost always lives in a
- * `.in-addr.arpa`/`.ip6.arpa` reverse zone (see `PtrSyncService`, which auto-manages these
- * records for an eligible zone), pointing back at a forward hostname -- this form does not
- * attempt to validate that the record's own owner name looks like a reverse-zone name, since a
- * `PTR` record is not restricted to that use by the wire format itself, only by convention.
+ * This component is the `PTR` record data form. PTR records usually sit in an `in-addr.arpa` or
+ * `ip6.arpa` reverse zone and point at a host name; `PtrSyncService` can manage them
+ * automatically. The owner name is not checked to be a reverse name, since that is convention,
+ * not a protocol rule.
  */
 @Component({
   selector: 'app-ptr-record-form',

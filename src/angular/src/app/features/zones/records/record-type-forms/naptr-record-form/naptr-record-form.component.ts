@@ -14,12 +14,10 @@ export interface NaptrRecordFormData {
 }
 
 /**
- * This component is the `NAPTR` record data form (RFC 3403) -- a rule for rewriting a name into
- * a URI, most often seen in ENUM (telephone-number-to-service lookup) and SIP deployments.
- * `flags` controls how the rule is interpreted (for example, `"S"` means the result names an
- * `SRV` record to look up, `"U"` means it is a URI); `regularExpression` is a substitution
- * expression applied to the original query, and `replacement` (the root name, `.`, when
- * `regularExpression` is used) names the next record to look up otherwise.
+ * This component is the `NAPTR` record data form (RFC 3403): a rewrite rule, mostly used by ENUM
+ * and SIP. `flags` says how to read the result (`"S"`: look up an SRV record, `"U"`: it is a
+ * URI). Either `regularExpression` rewrites the query, with `replacement` set to the root name
+ * `.`, or `replacement` names the next record to look up.
  */
 @Component({
   selector: 'app-naptr-record-form',

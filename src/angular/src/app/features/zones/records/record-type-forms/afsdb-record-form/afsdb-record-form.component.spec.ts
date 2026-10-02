@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AfsdbRecordFormComponent } from './afsdb-record-form.component';
 
+/**
+ * These tests cover the AFSDB form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('AfsdbRecordFormComponent', () => {
   let fixture: ComponentFixture<AfsdbRecordFormComponent>;
   let component: AfsdbRecordFormComponent;

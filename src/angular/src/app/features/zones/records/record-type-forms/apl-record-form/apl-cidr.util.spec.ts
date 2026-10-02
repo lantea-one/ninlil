@@ -1,5 +1,6 @@
 import { formatCidr, parseCidr } from './apl-cidr.util';
 
+/** These tests cover CIDR parsing and formatting for APL items, IPv4 and IPv6. Plain unit tests. */
 describe('apl-cidr.util', () => {
   it("parses an IPv4 /24 CIDR into 3 significant bytes, per AplItem's own trailing-zero-trim rule", () => {
     const parts = parseCidr('192.0.2.0/24');

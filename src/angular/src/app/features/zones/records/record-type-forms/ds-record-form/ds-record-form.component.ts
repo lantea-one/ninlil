@@ -11,9 +11,8 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.DsRecordData` field-for-field --
- * `digest` is the base64 form of the raw digest bytes that field's own JSON representation
- * actually carries.
+ * This interface mirrors the backend's `DsRecordData` field for field; `digest` is the base64 of
+ * the digest bytes.
  */
 export interface DsRecordFormData {
   keyTag: number;
@@ -23,17 +22,10 @@ export interface DsRecordFormData {
 }
 
 /**
- * This component is the shared data form for both the `DS` record type (RFC 4034 §5, what a
- * parent zone actually publishes) and the `CDS` record type (RFC 7344, a child zone's own copy of
- * what it wants a parent to publish) -- the two share byte-for-byte the same RDATA shape on the
- * backend (`DsRecordData`, reused by both `DsRecordDataCodec` and `CdsRecordDataCodec`), so
- * `RECORD_TYPE_FORM_REGISTRY` maps both `DnsResourceRecordTypeEnum.Ds` and `.Cds` onto this one
- * component, mirroring `TlsaRecordFormComponent`'s own identical reasoning for `TLSA`/`SMIMEA`.
- * `digest` is shown and accepted as plain hex -- the exact form a domain registrar's own "add a DS
- * record" UI already presents it in -- converted to and from the base64 the wire format needs.
- * These are, more often than not, system-managed by this project's own DNSSEC key-management
- * tooling rather than hand-typed, but the field shape is simple enough that a full editing form
- * costs nothing extra to provide.
+ * This component is the data form for `DS` (RFC 4034 §5, published by the parent zone) and `CDS`
+ * (RFC 7344, the DS a child asks its parent to publish). Both use `DsRecordData` on the backend,
+ * so `RECORD_TYPE_FORM_REGISTRY` maps both types here. The digest is edited in hex, as registrars
+ * show it, and sent as base64.
  */
 @Component({
   selector: 'app-ds-record-form',

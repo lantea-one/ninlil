@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SoaRecordFormComponent } from './soa-record-form.component';
 
+/**
+ * These tests cover the SOA form: defaults, validation including the 32-bit bound, getData() and
+ * loading initialData. TestBed with the standalone component only.
+ */
 describe('SoaRecordFormComponent', () => {
   let fixture: ComponentFixture<SoaRecordFormComponent>;
   let component: SoaRecordFormComponent;

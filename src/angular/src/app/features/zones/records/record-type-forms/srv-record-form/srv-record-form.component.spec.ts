@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SrvRecordFormComponent } from './srv-record-form.component';
 
+/**
+ * These tests cover the SRV form: validation, getData() and loading initialData. TestBed with the
+ * standalone component only.
+ */
 describe('SrvRecordFormComponent', () => {
   let fixture: ComponentFixture<SrvRecordFormComponent>;
   let component: SrvRecordFormComponent;

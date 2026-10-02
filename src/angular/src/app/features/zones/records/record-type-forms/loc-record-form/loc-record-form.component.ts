@@ -14,12 +14,9 @@ export interface LocRecordFormData {
 }
 
 /**
- * This component is the `LOC` record data form (RFC 1876) -- the owner name's physical location
- * on Earth. Every field here is entered in the plain, human-readable units
- * `Ninlil.Dns.Common.Wire.Records.LocRecordData` itself already uses (decimal degrees,
- * meters) -- RFC 1876's own dense, unusual on-the-wire packing (its "unsigned exponential
- * notation" bytes, its zero-offset unsigned angle encoding) is entirely `LocRecordDataCodec`'s
- * own concern, never this form's.
+ * This component is the `LOC` record data form (RFC 1876): the owner's physical location. Fields
+ * use the units of the backend's `LocRecordData` (decimal degrees and meters); the RFC 1876 wire
+ * packing is handled by `LocRecordDataCodec`.
  */
 @Component({
   selector: 'app-loc-record-form',

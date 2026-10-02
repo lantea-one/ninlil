@@ -1,10 +1,9 @@
 import { ZoneTypeEnum } from '../../api-client';
 
 /**
- * This constant lists every {@link ZoneTypeEnum} value in a fixed, curated display order (not
- * alphabetical) for the zone-type select in `ZoneFormComponent` -- primary/secondary roles first,
- * then forwarding, then the cloud-connector roles, matching the order an operator most often
- * considers them in.
+ * This constant lists every {@link ZoneTypeEnum} value in display order for the zone-type select
+ * in `ZoneFormComponent`: primary and secondary roles first, then forwarding, catalog and cloud
+ * types. The order is chosen for the operator, not alphabetical.
  */
 export const ZONE_TYPE_OPTIONS: readonly ZoneTypeEnum[] = [
   ZoneTypeEnum.Primary,
@@ -19,10 +18,9 @@ export const ZONE_TYPE_OPTIONS: readonly ZoneTypeEnum[] = [
 ];
 
 /**
- * This function reports whether a zone type transfers its own content *from* another server,
- * requiring {@link ZoneWriteRequest.PrimaryServerAddresses}: a secondary, a stub (which transfers
- * only the delegation-relevant records), or either of their catalog/forwarder-flavored cousins.
- * Read directly off `ZoneEntity`/`ZonesController`'s own accepted field set, not guessed.
+ * This function reports whether a zone type pulls its content from another server, so the zone
+ * form asks for primary server addresses: a secondary, a stub (which pulls only the delegation
+ * records), a secondary forwarder or a secondary catalog.
  */
 export function requiresPrimaryServerAddresses(type: ZoneTypeEnum): boolean {
   return (
@@ -39,20 +37,19 @@ export function requiresForwarderAddresses(type: ZoneTypeEnum): boolean {
 }
 
 /**
- * This function reports whether a zone type syncs against a cloud DNS provider (via the
- * backend's `CloudSync/` connectors), requiring `CloudProviderCredentialId`/`CloudProviderZoneId`.
+ * This function reports whether a zone type syncs with a cloud DNS provider, so the zone form asks
+ * for a cloud provider credential and the provider's zone id.
  */
 export function isCloudZoneType(type: ZoneTypeEnum): boolean {
   return type === ZoneTypeEnum.CloudPrimary || type === ZoneTypeEnum.CloudSecondary;
 }
 
 /**
- * This function reports whether a zone type is one this server itself originates content for
- * (as opposed to transferring or forwarding it from elsewhere) -- the only zone types eligible
- * for locally-generated DNSSEC signing, RFC 2136 dynamic updates, and the backend's own CAA/PTR
- * auto-management, per `CaaRecordReconciliationService.IsEligibleZoneType`/
- * `PtrSyncService.IsEligibleZoneType` (both scope themselves to exactly `Primary`/`CloudPrimary`,
- * confirmed by reading each directly rather than assumed).
+ * This function reports whether this server originates a zone type's content rather than
+ * transferring or forwarding it. Only these types (`Primary` and `CloudPrimary`) are signed locally
+ * and get CAA and PTR auto-management, matching `CaaRecordReconciliationService.IsEligibleZoneType`
+ * and `PtrSyncService.IsEligibleZoneType`. RFC 2136 dynamic updates are narrower: the backend
+ * accepts them for `Primary` zones only.
  */
 export function isLocallyOriginatedZoneType(type: ZoneTypeEnum): boolean {
   return type === ZoneTypeEnum.Primary || type === ZoneTypeEnum.CloudPrimary;

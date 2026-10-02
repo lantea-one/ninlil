@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IpSecKeyRecordFormComponent } from './ipseckey-record-form.component';
 
+/**
+ * These tests cover the IPSECKEY form: which gateway field shows for each gateway type, the null
+ * sent for the other, and loading initialData. TestBed with the standalone component only.
+ */
 describe('IpSecKeyRecordFormComponent', () => {
   let fixture: ComponentFixture<IpSecKeyRecordFormComponent>;
   let component: IpSecKeyRecordFormComponent;

@@ -5,9 +5,8 @@ import { RecordDataFormComponent } from '../record-type-form.model';
 import { base64ToHex, EVEN_LENGTH_HEX_PATTERN, hexToBase64 } from '../record-data-encoding.util';
 
 /**
- * This interface mirrors `Ninlil.Dns.Common.Wire.Records.Nsec3ParamRecordData`
- * field-for-field -- `salt` is the base64 form of its own raw bytes, shown and accepted here as
- * hex, matching `Nsec3RecordFormComponent`'s own identical field.
+ * This interface mirrors the backend's `Nsec3ParamRecordData` field for field; `salt` is base64
+ * and the form edits it as hex, as in `Nsec3RecordFormComponent`.
  */
 export interface Nsec3ParamRecordFormData {
   hashAlgorithm: number;
@@ -16,11 +15,10 @@ export interface Nsec3ParamRecordFormData {
 }
 
 /**
- * This component is the `NSEC3PARAM` record data form (RFC 5155 §4) -- published at a signed
- * zone's own apex so a resolver knows exactly how to compute a matching `NSEC3` hash itself,
- * without needing to guess the zone's own hash algorithm, iteration count, or salt. The last of
- * this feature's own genuinely DNSSEC-internal record types; see `NsecRecordFormComponent`'s own
- * doc comment for why a plain field-per-RDATA-member form is deliberately all this provides.
+ * This component is the `NSEC3PARAM` record data form (RFC 5155 §4): the hash algorithm,
+ * iterations and salt a signed zone uses for NSEC3, published at the apex so authoritative
+ * servers know how to hash names. Like `NsecRecordFormComponent` it is a plain field-per-member
+ * editor.
  */
 @Component({
   selector: 'app-nsec3param-record-form',
