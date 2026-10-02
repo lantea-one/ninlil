@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />
+    <ProjectReference Include="..\..\src\Ninlil.Dns.Data.EntityFrameworkCore\Ninlil.Dns.Data.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\src\Ninlil.Dns.Server.Cluster\Ninlil.Dns.Server.Cluster.csproj" />
   </ItemGroup>
 </Project>

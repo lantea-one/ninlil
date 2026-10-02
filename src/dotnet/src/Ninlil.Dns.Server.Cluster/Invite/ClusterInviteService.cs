@@ -64,8 +64,6 @@ public class ClusterInviteService(
     /// <returns>The invite code for the joining node's operator.</returns>
     /// <exception cref="ValidationException">
     ///     Thrown when clustering is disabled or <c>ClusterOptions.AdvertisedHost</c> is not set.
-    ///     <c>ClusterOptions.AdvertisedPort</c> is not checked here, but an invite with port 0 is
-    ///     rejected when the joining node decodes it.
     /// </exception>
     public async Task<string> CreateInviteAsync(CancellationToken stoppingToken = default)
     {
@@ -108,7 +106,7 @@ public class ClusterInviteService(
         {
             InviterNodeId = options.NodeId,
             InviterHost = options.AdvertisedHost,
-            InviterPort = options.AdvertisedPort,
+            InviterPort = options.EffectiveAdvertisedPort,
             TsigKeyName = keyName,
             TsigKeySecretBase64 = Convert.ToBase64String(secretBytes),
             InviterCertificateThumbprint = ClusterPeerCertificateValidator.ComputeThumbprint(

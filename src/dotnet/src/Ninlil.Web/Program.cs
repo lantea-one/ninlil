@@ -441,6 +441,12 @@ builder.Services.AddNinlilDnsServerTsig(builder.Configuration);
 // (see ClusterOptions); registering it only makes it available.
 builder.Services.AddNinlilDnsServerCluster(builder.Configuration);
 
+// An AdvertisedPort of 0 means "the HTTPS port peers reach this node on"; Server.Cluster cannot
+// see WebListenOptions, so the port is handed to it here (see ClusterOptions.EffectiveAdvertisedPort).
+builder.Services.PostConfigure<ClusterOptions>(options =>
+    options.UseHttpsListenPortByDefault(webListenOptions.HttpsPort)
+);
+
 // Cluster config sync: the subscribers that send local changes (filter lists, access-control
 // rules, rewrites, forwarders, users, roles and so on) to every peer, and the appliers for
 // incoming ones. Harmless on a single node, since a broadcast does nothing when clustering is

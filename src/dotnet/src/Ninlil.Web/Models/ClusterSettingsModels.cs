@@ -12,7 +12,7 @@ namespace Ninlil.Web.Models;
 /// <param name="Enable">Whether clustering is on. Defaults to <see langword="false" />.</param>
 /// <param name="NodeId">This node's identifier, generated at first startup.</param>
 /// <param name="AdvertisedHost">The host name or address peers use to reach this node. Empty by default, which makes invites fail until it is set.</param>
-/// <param name="AdvertisedPort">The TCP port peers use to reach this node. Defaults to 0, which must be changed before invites work.</param>
+/// <param name="AdvertisedPort">The TCP port peers use to reach this node. Defaults to 0, which means the web server's HTTPS port.</param>
 /// <param name="HeartbeatInterval">How often each peer is probed. Defaults to 30 seconds.</param>
 /// <param name="HeartbeatTimeout">How long one probe may take. Defaults to 10 seconds.</param>
 /// <param name="MissedHeartbeatThreshold">How many consecutive failed probes mark a peer unreachable. Defaults to 3.</param>

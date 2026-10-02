@@ -128,7 +128,7 @@ public class ClusterJoinService(
             new ClusterJoinCompleteRequest(
                 options.NodeId,
                 options.AdvertisedHost,
-                options.AdvertisedPort,
+                options.EffectiveAdvertisedPort,
                 ownThumbprint,
                 displayName
             )

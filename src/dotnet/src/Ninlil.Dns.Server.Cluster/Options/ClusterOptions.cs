@@ -45,11 +45,32 @@ public class ClusterOptions
     ///     This property contains the TCP port peers use to reach this node's cluster channel,
     ///     normally the web server's HTTPS port (<c>WebListenOptions.HttpsPort</c>), since the
     ///     channel is a set of controllers on that listener, or another port where a reverse proxy
-    ///     or NAT forwards to it. The default is <c>0</c>, and nothing replaces 0 with the HTTPS
-    ///     port: it is copied into invites and join callbacks as it is, and an invite with port 0
-    ///     is rejected when decoded, so this must be set.
+    ///     or NAT forwards to it. The default, <c>0</c>, means the HTTPS port; invites and join
+    ///     callbacks use <see cref="EffectiveAdvertisedPort" />, never this value directly.
     /// </summary>
     public int AdvertisedPort { get; set; }
+
+    /// <summary>
+    ///     This field contains the port <see cref="EffectiveAdvertisedPort" /> falls back to,
+    ///     set by <see cref="UseHttpsListenPortByDefault" />. It is a field, not a property, so it
+    ///     is never bound from configuration or listed as an environment variable.
+    /// </summary>
+    private int _httpsListenPort = 443;
+
+    /// <summary>
+    ///     This property contains the port that goes into invites and join callbacks:
+    ///     <see cref="AdvertisedPort" /> when it is set, otherwise the web server's HTTPS port.
+    /// </summary>
+    public int EffectiveAdvertisedPort => AdvertisedPort > 0 ? AdvertisedPort : _httpsListenPort;
+
+    /// <summary>
+    ///     This method sets the HTTPS port that <see cref="EffectiveAdvertisedPort" /> uses while
+    ///     <see cref="AdvertisedPort" /> is 0. <c>Program.cs</c> calls it from a post-configure
+    ///     step with <c>WebListenOptions.HttpsPort</c>, which this project cannot reference.
+    /// </summary>
+    /// <param name="httpsListenPort">The port the web server's HTTPS listener binds.</param>
+    public void UseHttpsListenPortByDefault(int httpsListenPort) =>
+        _httpsListenPort = httpsListenPort;
 
     /// <summary>
     ///     This property contains how often <c>ClusterHeartbeatBackgroundService</c> probes each

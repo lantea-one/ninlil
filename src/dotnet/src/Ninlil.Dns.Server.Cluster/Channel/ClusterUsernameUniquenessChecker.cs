@@ -82,9 +82,7 @@ public class ClusterUsernameUniquenessChecker(
 
     /// <summary>
     ///     This method asks one peer, returning <see langword="false" /> for a rejection or
-    ///     failure, so an unreachable peer never blocks user creation. A timeout is a
-    ///     <see cref="TaskCanceledException" />, which the catch filter does not handle, so it
-    ///     propagates.
+    ///     failure (a timeout included), so an unreachable peer never blocks user creation.
     /// </summary>
     private async Task<bool> CheckOnePeerAsync(
         ClusterNodeEntity peer,
@@ -125,7 +123,12 @@ public class ClusterUsernameUniquenessChecker(
 
             return result?.Exists ?? false;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
+        // (shutdown) propagates, so a peer that times out counts as failed like any other.
+        catch (Exception exception)
+            when (exception is not OperationCanceledException
+                || !stoppingToken.IsCancellationRequested
+            )
         {
             logger.LogWarning(
                 exception,

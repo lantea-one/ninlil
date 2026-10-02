@@ -5,21 +5,22 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Server.Cluster.Invite;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
+using Ninlil.Web.Options;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
 
 /// <summary>
 ///     This class covers <see cref="ClusterController" /> over HTTP on the shared in-process host,
-///     signed in as the bootstrap administrator. Clustering is off in the shared host and a
-///     settings write never reaches its live options (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), so only the
-///     disabled-cluster paths of invite and join can be reached; a successful invite, join or
-///     cross-node round trip needs two separately configured processes and is not tested here.
-///     The class also covers editing and deleting a peer saved directly through the repository,
-///     and the dashboard row for this node.
+///     signed in as the bootstrap administrator. Clustering is off in the shared host; the tests
+///     that need it on use <see cref="LiveClusterOptionsScope" />, since a settings write never
+///     reaches the live options. They cover the invite's advertised-host check and encoding and
+///     the join's invite decoding; a full join or cross-node round trip needs two separately
+///     configured processes and is not tested here. The class also covers editing and deleting
+///     a peer saved directly through the repository, and the dashboard row for this node.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -89,25 +90,50 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
     public async Task CreateInvite_WithNoAdvertisedHostConfigured_ReturnsBadRequest()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
-
-        // The live options never see this write, so clustering stays disabled and the 400 comes
-        // from that check, not from the missing advertised host.
-        HttpResponseMessage enableResponse = await client.SendAsync(
-            PatchRequest("/api/cluster-settings", new { enable = true })
-        );
-        enableResponse.EnsureSuccessStatusCode();
+        using LiveClusterOptionsScope cluster = new(factory, advertisedHost: "");
 
         HttpResponseMessage response = await client.PostAsync("/api/cluster/nodes/invite", null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("AdvertisedHost", body.GetProperty("detail").GetString());
+    }
+
+    /// <summary>
+    ///     This test creates an invite with the default <c>AdvertisedPort</c> of 0 and checks that
+    ///     a joining node can decode it, and that it carries the HTTPS port the host listens on.
+    /// </summary>
+    [Fact]
+    public async Task CreateInvite_WithTheDefaultAdvertisedPort_ProducesADecodableInviteForTheHttpsPort()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        using LiveClusterOptionsScope cluster = new(factory, advertisedHost: "ninlil-a.example");
+
+        HttpResponseMessage response = await client.PostAsync("/api/cluster/nodes/invite", null);
+        response.EnsureSuccessStatusCode();
+        ClusterInviteCreateResponse created =
+            await response.Content.ReadFromJsonAsync<ClusterInviteCreateResponse>();
+
+        Assert.True(
+            ClusterInviteCodec.TryDecode(
+                created.InviteCode,
+                out ClusterInviteCode invite,
+                out string error
+            ),
+            error
+        );
+        Assert.Equal("ninlil-a.example", invite.InviterHost);
+        Assert.Equal(
+            factory.Services.GetRequiredService<WebListenOptions>().HttpsPort,
+            invite.InviterPort
+        );
     }
 
     [Fact]
-    public async Task Join_WithAGarbageInviteCode_ReturnsBadRequest()
+    public async Task Join_WithAGarbageInviteCode_ReturnsBadRequestFromDecoding()
     {
-        // Clustering being disabled is checked before the invite code is decoded, so this 400
-        // comes from the disabled check; the decoding of a bad code is not reached.
         HttpClient client = await CreateAuthenticatedClientAsync();
+        using LiveClusterOptionsScope cluster = new(factory, advertisedHost: "ninlil-b.example");
 
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/cluster/nodes/join",
@@ -115,6 +141,8 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("invite code", body.GetProperty("detail").GetString());
     }
 
     [Fact]

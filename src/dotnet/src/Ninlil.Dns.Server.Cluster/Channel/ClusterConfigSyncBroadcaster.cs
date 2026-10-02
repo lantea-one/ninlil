@@ -87,8 +87,7 @@ public class ClusterConfigSyncBroadcaster(
 
     /// <summary>
     ///     This method delivers one envelope to one peer and logs a rejection or failure instead
-    ///     of throwing (see the class summary). A timeout is a <see cref="TaskCanceledException" />,
-    ///     which the catch filter does not handle, so it propagates.
+    ///     of throwing (see the class summary), a timeout included.
     /// </summary>
     private async Task DeliverToOneAsync(
         ClusterNodeEntity peer,
@@ -123,7 +122,12 @@ public class ClusterConfigSyncBroadcaster(
                     (int)response.StatusCode
                 );
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
+        // (shutdown) propagates, so a peer that times out counts as failed like any other.
+        catch (Exception exception)
+            when (exception is not OperationCanceledException
+                || !stoppingToken.IsCancellationRequested
+            )
         {
             logger.LogWarning(
                 exception,

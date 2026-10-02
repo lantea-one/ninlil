@@ -76,8 +76,7 @@ public class ClusterQueryStatsAggregator(
 
     /// <summary>
     ///     This method collects one peer's snapshot, reporting the peer unreachable when it is not
-    ///     healthy, rejects the request or fails. A timeout is a <see cref="TaskCanceledException" />,
-    ///     which the catch filter does not handle, so it propagates.
+    ///     healthy, rejects the request, fails or times out.
     /// </summary>
     private async Task<ClusterPeerQueryStatsResult> CollectFromOnePeerAsync(
         ClusterNodeEntity peer,
@@ -128,7 +127,12 @@ public class ClusterQueryStatsAggregator(
                 snapshot
             );
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
+        // (shutdown) propagates, so a peer that times out counts as failed like any other.
+        catch (Exception exception)
+            when (exception is not OperationCanceledException
+                || !stoppingToken.IsCancellationRequested
+            )
         {
             logger.LogWarning(
                 exception,

@@ -112,9 +112,9 @@ public class ClusterHeartbeatBackgroundService(
 
     /// <summary>
     ///     This method probes one peer and updates its <see cref="ClusterNodeEntity" /> in memory;
-    ///     the caller saves all peers together. A failure is counted as a missed heartbeat, except
-    ///     an <see cref="OperationCanceledException" />, which also covers the
-    ///     <see cref="TaskCanceledException" /> of a probe timeout and propagates.
+    ///     the caller saves all peers together. Any failure, a probe timeout included, is counted
+    ///     as a missed heartbeat; only shutdown (a cancelled <paramref name="stoppingToken" />)
+    ///     propagates.
     /// </summary>
     private async Task ProbeOneAsync(
         ClusterNodeEntity peer,
@@ -152,7 +152,12 @@ public class ClusterHeartbeatBackgroundService(
 
             RecordMissedHeartbeat(peer, options, $"HTTP {(int)response.StatusCode}");
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        // An HttpClient timeout is a TaskCanceledException too; only a cancelled stoppingToken
+        // (shutdown) propagates, so a peer that times out counts as failed like any other.
+        catch (Exception exception)
+            when (exception is not OperationCanceledException
+                || !stoppingToken.IsCancellationRequested
+            )
         {
             RecordMissedHeartbeat(peer, options, exception.Message);
         }
