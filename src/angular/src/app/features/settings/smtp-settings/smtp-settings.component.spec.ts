@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the SMTP page: loading, saving with and without a new password, validation and
+ * a save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('SmtpSettingsComponent', () => {
   let apiSpy: {
     apiSmtpSettingsGet: jasmine.Spy;
@@ -93,7 +97,7 @@ describe('SmtpSettingsComponent', () => {
 
     const sentBody = apiSpy.apiSmtpSettingsPatch.calls.mostRecent().args[0].body;
     expect(sentBody.password).toBe('a-real-new-password');
-    // Never re-populated from the response -- the password field is cleared back to blank.
+    // The password field is cleared, not filled from the response.
     expect(fixture.componentInstance.form.controls.password.value).toBe('');
     expect(fixture.componentInstance.passwordConfigured()).toBeTrue();
   });

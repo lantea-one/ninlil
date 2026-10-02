@@ -23,23 +23,15 @@ import { buildSmtpSettingsPatchBody } from './smtp-settings.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `EmailSenderOptions` -- the SMTP server that
- * already, genuinely delivers e-mail-based two-factor authentication codes but, before this page
- * existed, had zero admin-facing configuration surface, via `GET`/`PATCH /api/smtp-settings`
- * (`smtpsettings:read`/`smtpsettings:write`). This is the prerequisite a future self-service
- * Forgot Password flow needs, since sending a real reset-token e-mail needs a real,
- * admin-configured SMTP server to send it through.
+ * This component is the "SMTP" settings page (`/settings/smtp`). It edits `EmailSenderOptions`,
+ * the SMTP server used for e-mailed two-factor codes and password reset links, through `GET` and
+ * `PATCH /api/smtp-settings` (`smtpsettings:read`, `smtpsettings:write`).
  *
- * <p>Every field this form edits takes effect immediately, with no restart -- unlike a transport
- * listener's own bound socket, an SMTP send opens a brand new connection every single time, so
- * `SmtpEmailSender` reads its own configuration fresh on every send via `IOptionsMonitor`. The
- * backend's own `PATCH` response note (surfaced directly in the success notification, never
- * suppressed) confirms this explicitly.
+ * <p>Every field is hot-reloaded: each send opens a new connection, and `SmtpEmailSender` reads the
+ * options for every send.
  *
- * <p>Like {@link EventBrokerSettingsComponent}'s own broker password fields, `password` here is a
- * genuine secret this page can never pre-fill (`SmtpSettingsController.Get` never returns it) --
- * leaving it blank on save means "leave the stored password unchanged," never "clear it." See
- * {@link buildSmtpSettingsPatchBody}'s own doc comment for the full reasoning.
+ * <p>The password is never returned, so a blank password field means "keep the stored one" (see
+ * {@link buildSmtpSettingsPatchBody}).
  */
 @Component({
   selector: 'app-smtp-settings',
@@ -72,7 +64,7 @@ export class SmtpSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether a password is currently on file, per the last `Get` -- shown as a hint, never as a value. */
+  /** Whether a password is stored, per the last `Get`; shown as a hint, never as a value. */
   readonly passwordConfigured = signal(false);
 
   readonly form = this.formBuilder.group({
@@ -90,9 +82,8 @@ export class SmtpSettingsComponent implements OnInit {
   }
 
   /**
-   * This method PATCHes every field this form holds, omitting `password` entirely when left
-   * blank (see {@link buildSmtpSettingsPatchBody}), then surfaces the backend's own hot-reload
-   * note.
+   * This method PATCHes every field, leaving out a blank `password` (see
+   * {@link buildSmtpSettingsPatchBody}), then shows the backend's note.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -109,8 +100,7 @@ export class SmtpSettingsComponent implements OnInit {
 
       if (value.password.trim().length > 0) this.passwordConfigured.set(true);
 
-      // Never re-populate the password field from the response -- it is never returned, so
-      // clearing it back to blank keeps this form's own "blank means unchanged" contract honest.
+      // The password is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ password: '' });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save SMTP settings.'));

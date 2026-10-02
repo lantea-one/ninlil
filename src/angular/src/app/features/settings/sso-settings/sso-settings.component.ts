@@ -23,26 +23,18 @@ import { buildClientSecretPatchField, joinScopes, splitScopes } from './sso-sett
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `OidcSsoOptions` -- the generic, standards-
- * compliant OpenID Connect admin-login federation surface, via `GET`/`PATCH /api/sso-settings`
- * (`ssosettings:read`/`ssosettings:write`). Works against any real OIDC issuer (Authelia,
- * Authentik, Keycloak, or any other) -- this form asks only for the standard fields every
- * OpenID Connect client needs (issuer, client id/secret, requested scopes), never anything
- * provider-specific.
+ * This component is the "Single Sign-On" settings page (`/settings/sso`). It edits
+ * `OidcSsoOptions`, OpenID Connect sign-in for the admin console, through `GET` and
+ * `PATCH /api/sso-settings` (`ssosettings:read`, `ssosettings:write`). It asks only for the
+ * standard OIDC client fields (issuer, client id and secret, scopes), so any issuer works
+ * (Authelia, Authentik, Keycloak and others).
  *
- * <p><strong>Every field written here still needs a process restart to actually change whether
- * federated sign-in is available</strong> -- unlike almost every other runtime settings page in
- * this app, `enable`/`authority`/`clientId` are read only once, while the OpenID Connect
- * authentication scheme itself is registered, before this host's own dependency injection
- * container even exists to serve a live settings read. `displayName`/`scopes` alone would take
- * effect immediately, but since a real change to this feature is rarely useful without also
- * touching `enable`/`authority`/`clientId` in the same edit, this page shows the backend's own
- * write-result note verbatim rather than trying to draw that fine distinction in its own copy.
+ * <p>The OpenID Connect scheme is registered at startup, so changes to `enable`, `authority`,
+ * `clientId`, the client secret and scopes need a restart; `displayName` is read live. The page
+ * shows the backend's note as returned.
  *
- * <p>Like {@link SmtpSettingsComponent}'s own `password` field, `clientSecret` here is a genuine
- * secret this page can never pre-fill (`OidcSsoSettingsController.Get` never returns it) --
- * leaving it blank on save means "leave the stored secret unchanged," never "clear it." See
- * {@link buildClientSecretPatchField}'s own doc comment for the full reasoning.
+ * <p>The client secret is never returned, so a blank secret field means "keep the stored one" (see
+ * {@link buildClientSecretPatchField}).
  */
 @Component({
   selector: 'app-sso-settings',
@@ -75,7 +67,7 @@ export class SsoSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether a client secret is currently on file, per the last `Get` -- shown as a hint, never as a value. */
+  /** Whether a client secret is stored, per the last `Get`; shown as a hint, never as a value. */
   readonly clientSecretConfigured = signal(false);
 
   readonly form = this.formBuilder.group({
@@ -92,10 +84,8 @@ export class SsoSettingsComponent implements OnInit {
   }
 
   /**
-   * This method PATCHes every field this form holds, omitting `clientSecret` entirely when left
-   * blank (see {@link buildClientSecretPatchField}), then surfaces the backend's own write-result
-   * note -- including its restart-required caveat, shown to the operator exactly as the backend
-   * phrased it rather than paraphrased here.
+   * This method PATCHes every field, leaving out a blank `clientSecret` (see
+   * {@link buildClientSecretPatchField}) and splitting the scopes, then shows the backend's note.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -116,8 +106,7 @@ export class SsoSettingsComponent implements OnInit {
 
       if (clientSecret.trim().length > 0) this.clientSecretConfigured.set(true);
 
-      // Never re-populate the secret field from the response -- it is never returned, so
-      // clearing it back to blank keeps this form's own "blank means unchanged" contract honest.
+      // The secret is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ clientSecret: '' });
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save SSO settings.'));

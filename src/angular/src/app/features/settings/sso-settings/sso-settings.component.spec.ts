@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Single Sign-On page: loading, saving with and without a new client secret,
+ * validation and a save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('SsoSettingsComponent', () => {
   let apiSpy: {
     apiSsoSettingsGet: jasmine.Spy;
@@ -97,7 +101,7 @@ describe('SsoSettingsComponent', () => {
 
     const sentBody = apiSpy.apiSsoSettingsPatch.calls.mostRecent().args[0].body;
     expect(sentBody.clientSecret).toBe('a-real-new-secret');
-    // Never re-populated from the response -- the secret field is cleared back to blank.
+    // The secret field is cleared, not filled from the response.
     expect(fixture.componentInstance.form.controls.clientSecret.value).toBe('');
     expect(fixture.componentInstance.clientSecretConfigured()).toBeTrue();
   });

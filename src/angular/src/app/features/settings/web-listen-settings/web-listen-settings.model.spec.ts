@@ -5,6 +5,10 @@ import {
   splitListenAddresses,
 } from './web-listen-settings.model';
 
+/**
+ * These tests cover the Web Listener form helpers: line splitting and joining, the PFX password
+ * field and listen addresses. Plain unit tests.
+ */
 describe('web-listen-settings.model', () => {
   it('splitLines trims and drops empty entries', () => {
     expect(splitLines('  localhost  \n\ndns.example.invalid\n')).toEqual([

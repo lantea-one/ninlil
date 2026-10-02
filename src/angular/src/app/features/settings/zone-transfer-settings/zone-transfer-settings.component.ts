@@ -20,11 +20,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `ZoneTransferOptions` (`GET`/`PATCH
- * /api/zone-transfer-settings`) -- how many resource records a single AXFR/IXFR response message
- * this server serves out may carry before starting a new one. No secret material is involved, so
- * this is a plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "Zone Transfer" settings page (`/settings/zone-transfer`). It edits
+ * `ZoneTransferOptions` through `GET` and `PATCH /api/zone-transfer-settings`
+ * (`zonetransfersettings:read`, `zonetransfersettings:write`): how many records one AXFR or IXFR
+ * response message this server sends may carry before it starts another. Changes are
+ * hot-reloaded.
  */
 @Component({
   selector: 'app-zone-transfer-settings',
@@ -63,7 +63,7 @@ export class ZoneTransferSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

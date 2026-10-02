@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Transports page: loading every card, each card's PATCH and note, the
+ * certificate fields and PFX password, listen addresses and errors. TestBed with a spy-backed
+ * `TransportSettingsService` and `NotificationService`.
+ */
 describe('TransportSettingsComponent', () => {
   let apiSpy: {
     apiTransportSettingsPlainGet: jasmine.Spy;
@@ -169,8 +174,8 @@ describe('TransportSettingsComponent', () => {
       }),
     });
 
-    // pfxPassword was left blank -- confirm it was omitted from the certificate sub-object
-    // entirely, not sent as an empty string that would clear a value the backend never revealed.
+    // The blank pfxPassword is left out of the certificate, not sent as an empty string that
+    // would clear the stored password.
     const body = apiSpy.apiTransportSettingsDnsOverTlsPatch.calls.mostRecent().args[0].body;
     expect('pfxPassword' in body.certificate).toBeFalse();
 

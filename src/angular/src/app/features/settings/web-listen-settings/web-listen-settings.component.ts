@@ -33,18 +33,16 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `WebListenOptions` (`GET`/`PATCH
- * /api/web-listen-settings`) -- the admin web listener's own port/certificate configuration,
- * shared by the REST API, the SignalR hub, and DNS-over-HTTPS.
+ * This component is the "Web Listener" settings page (`/settings/web-listen`). It edits
+ * `WebListenOptions`, the address, port and certificate of the web listener shared by the REST
+ * API, the SignalR hub and DNS-over-HTTPS, through `GET` and `PATCH /api/web-listen-settings`
+ * (`weblistensettings:read`, `weblistensettings:write`).
  * <p>
- * <b>Confirm-then-apply-on-restart, never live-apply -- confirmed via `AskUserQuestion`,
- * 2026-09-01.</b> A write persists to the configuration file immediately, exactly like every
- * other settings page in this app, but it can never take effect on this already-running process
- * (see {@link WebListenSettingsController}'s own doc comment for why) -- {@link save} therefore
- * shows {@link ConfirmDialogComponent} before ever submitting, warning the operator they will need
- * to reconnect at the new address only after a manual restart, mirroring `ZoneListComponent`'s own
- * established "confirm, then act" pattern for a destructive action, applied here to a change that
- * could just as easily strand the very session making it.
+ * A save is written to the configuration file but applies only after a restart; the running
+ * listener cannot be rebound (see `WebListenSettingsController`). Because the change can cut off
+ * the session making it, {@link save} first asks for confirmation and warns that the console will
+ * be at the new address after the restart. The PFX password is never returned, so a blank field
+ * means "keep the stored one".
  */
 @Component({
   selector: 'app-web-listen-settings',
@@ -79,7 +77,7 @@ export class WebListenSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether a PFX password is currently configured -- the password itself is never returned by `Get`. */
+  /** Whether a PFX password is configured; `Get` never returns the password itself. */
   readonly pfxPasswordConfigured = signal(false);
 
   readonly confirmDialogVisible = signal(false);
@@ -102,7 +100,7 @@ export class WebListenSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method confirms the operator understands a restart is required, then PATCHes every field this form holds. */
+  /** This method asks the operator to confirm the restart-only change, then PATCHes every field. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

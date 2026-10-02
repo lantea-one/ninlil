@@ -1,8 +1,4 @@
-/**
- * This function splits a textarea's own one-entry-per-line text into a trimmed, non-empty-only
- * array -- the same helper `TransportSettingsComponent`'s own `splitLines` already establishes,
- * applied here to a certificate's own subject alternative names list.
- */
+/** This function splits one-entry-per-line textarea text, such as a certificate's subject alternative names, into trimmed, non-empty entries. */
 export function splitLines(text: string): string[] {
   return text
     .split('\n')
@@ -10,27 +6,24 @@ export function splitLines(text: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-/** This function is {@link splitLines}'s own inverse, used to populate a textarea from a loaded array. */
+/** This function is the inverse of {@link splitLines}, for filling a textarea from a loaded array. */
 export function joinLines(values: readonly string[] | null | undefined): string {
   return (values ?? []).join('\n');
 }
 
 /**
- * This function builds a certificate's own `pfxPassword` field for a web-listen settings `PATCH`
- * body, omitting it entirely whenever the caller left the input blank -- the same reasoning
- * `TransportSettingsComponent`'s own `buildPfxPasswordPatchField` already establishes:
- * `WebListenSettingsController.Get` never returns a certificate's own configured PFX password at
- * all, only whether one is currently configured (`pfxPasswordConfigured`), so this form can never
- * pre-fill it, and leaving it blank on submit must mean "leave unchanged," not "clear it."
+ * This function builds the certificate's `pfxPassword` part of the `PATCH` body, leaving it out
+ * when the input is blank. `WebListenSettingsController.Get` never returns the password (only
+ * `pfxPasswordConfigured`), so a blank input means "keep the stored password".
  */
 export function buildPfxPasswordPatchField(pfxPassword: string): { pfxPassword?: string } {
   return pfxPassword.trim().length > 0 ? { pfxPassword } : {};
 }
 
 /**
- * This function reads the listen-address field into the array the API takes -- the same rules
- * as `TransportSettingsComponent`'s own `splitListenAddresses`: new lines, commas or spaces
- * between addresses, and an empty field (every address) as an empty array.
+ * This function reads the listen-address field into the array the API takes, as the transport
+ * page does: addresses separated by new lines, commas, semicolons or spaces, and an empty field
+ * (every address) as an empty array.
  */
 export function splitListenAddresses(text: string): string[] {
   return text

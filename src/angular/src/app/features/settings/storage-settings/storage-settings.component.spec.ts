@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Storage page: loading the status, per-engine validation, the switch request
+ * and its result, permissions and errors. TestBed with a spy-backed `StorageService`,
+ * `NotificationService` and a stubbed `AuthService`.
+ */
 describe('StorageSettingsComponent', () => {
   let apiSpy: { apiStorageGet: jasmine.Spy; apiStorageSwitchPost: jasmine.Spy };
   let notificationSpy: { success: jasmine.Spy; error: jasmine.Spy };
@@ -79,7 +84,7 @@ describe('StorageSettingsComponent', () => {
 
     // The sqlite-only field is no longer required once a different engine is selected.
     expect(fixture.componentInstance.form.controls.sqliteFilePath.valid).toBeTrue();
-    // But the PostgreSQL section's own required fields are, until filled in.
+    // The PostgreSQL fields are required until filled in.
     expect(fixture.componentInstance.form.valid).toBeFalse();
 
     fixture.componentInstance.form.patchValue({
@@ -151,7 +156,7 @@ describe('StorageSettingsComponent', () => {
       jasmine.stringContaining('no restart required'),
     );
     expect(fixture.componentInstance.lastResult()?.newEngine).toBe(StorageEngineEnum.PostgreSql);
-    // The password is cleared back to blank after a successful switch -- it is never echoed back.
+    // The password is cleared after a successful switch; it is never returned.
     expect(fixture.componentInstance.form.controls.postgreSqlPassword.value).toBe('');
   });
 

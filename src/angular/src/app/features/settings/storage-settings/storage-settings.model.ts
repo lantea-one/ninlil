@@ -5,12 +5,9 @@ import {
 } from '../../../api-client';
 
 /**
- * This interface carries every field {@link StorageSettingsComponent}'s own reactive form exposes
- * -- one section per storage engine, of which only the section matching `targetEngine` is ever
- * actually read by {@link buildStorageSwitchRequest}. Kept as its own named shape (rather than
- * inlining `form.getRawValue()`'s own inferred type at every call site) so
- * {@link buildStorageSwitchRequest} stays independently unit-testable with plain object literals,
- * with no `ReactiveFormsModule` involved at all.
+ * This interface is the value of the `StorageSettingsComponent` form: one section per engine, of
+ * which {@link buildStorageSwitchRequest} reads only the one matching `targetEngine`. It is a named
+ * type so that function can be tested with plain objects.
  */
 export interface StorageSettingsFormValue {
   targetEngine: StorageEngineEnum;
@@ -36,13 +33,10 @@ export interface StorageSettingsFormValue {
 }
 
 /**
- * This constant lists the real, valid `encryptionMode` values for each server-based relational
- * engine, sourced directly from the exact same real values
- * `StorageConnectionStringAssembler` (backend-side) validates against -- Npgsql's own
- * `SslMode` enum, `MySqlConnector`'s own `MySqlSslMode` enum, and
- * `Microsoft.Data.SqlClient`'s own `SqlConnectionEncryptOption` values, respectively. Kept as a
- * literal, hand-copied list rather than fetched from the backend at runtime, the same way
- * {@link StorageEngineEnum}'s own values are already hand-copied into this generated API client.
+ * This constant lists the valid `encryptionMode` values per server engine, the values
+ * `StorageConnectionStringAssembler` accepts: Npgsql's `SslMode`, MySqlConnector's `MySqlSslMode`
+ * and Microsoft.Data.SqlClient's `SqlConnectionEncryptOption`. The API does not expose them, so
+ * they are copied here and must follow the backend.
  */
 export const ENCRYPTION_MODE_OPTIONS_BY_ENGINE: Readonly<
   Record<'postgreSql' | 'mySql' | 'sqlServer', readonly string[]>
@@ -53,14 +47,10 @@ export const ENCRYPTION_MODE_OPTIONS_BY_ENGINE: Readonly<
 };
 
 /**
- * This function builds the real, structured `POST /api/storage/switch` request body from this
- * form's own flat set of per-engine fields, populating only the one section matching
- * `value.targetEngine` -- exactly mirroring `StorageConnectionStringAssembler`'s own backend-side
- * expectation that only the matching section is ever read. A target engine with no structured
- * section defined here at all (in practice, only `StorageEngineEnum.MongoDb` -- never offered as
- * a selectable option in this form's own dropdown, itself populated from the backend's own
- * `liveSwitchSupportedEngines`) falls through to a request naming only `targetEngine`, which
- * `IStorageEngineSwitchService` itself already rejects with its own dedicated, clear message.
+ * This function builds the `POST /api/storage/switch` body from the form value, filling only the
+ * section for `value.targetEngine`, the one `StorageConnectionStringAssembler` reads. An engine with
+ * no section here (only MongoDB, which the form never offers) gets a body with just
+ * `targetEngine`, which `IStorageEngineSwitchService` rejects with its own message.
  */
 export function buildStorageSwitchRequest(
   value: StorageSettingsFormValue,

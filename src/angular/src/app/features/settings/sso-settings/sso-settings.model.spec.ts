@@ -1,5 +1,9 @@
 import { buildClientSecretPatchField, joinScopes, splitScopes } from './sso-settings.model';
 
+/**
+ * These tests cover the SSO form helpers: splitScopes, joinScopes and
+ * buildClientSecretPatchField. Plain unit tests.
+ */
 describe('splitScopes', () => {
   it('splits on whitespace', () => {
     expect(splitScopes('openid profile email')).toEqual(['openid', 'profile', 'email']);

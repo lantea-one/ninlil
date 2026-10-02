@@ -20,11 +20,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `ZoneTransferClientOptions` (`GET`/`PATCH
- * /api/zone-transfer-client-settings`) -- the port and timeouts this server uses while pulling an
- * AXFR/IXFR transfer from a primary as a secondary. No secret material is involved, so this is a
- * plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "Zone Transfer Client" settings page (`/settings/zone-transfer-client`).
+ * It edits `ZoneTransferClientOptions` through `GET` and `PATCH /api/zone-transfer-client-settings`
+ * (`zonetransferclientsettings:read`, `zonetransferclientsettings:write`): the primary's port and
+ * the timeouts used when this server, as a secondary, pulls an AXFR or IXFR. Changes are
+ * hot-reloaded.
  */
 @Component({
   selector: 'app-zone-transfer-client-settings',
@@ -66,7 +66,7 @@ export class ZoneTransferClientSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

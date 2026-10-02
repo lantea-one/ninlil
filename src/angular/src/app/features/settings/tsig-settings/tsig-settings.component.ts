@@ -20,12 +20,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `TsigServiceOptions` (`GET`/`PATCH
- * /api/tsig-settings`) -- the clock-skew tolerance (RFC 8945's own "fudge" field) written into
- * every message this server signs. Deliberately separate from `TsigKeysController`'s own
- * key-management page, which this settings page links to for convenience. No secret material is
- * involved, so this is a plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "TSIG" settings page (`/settings/tsig`). It edits `TsigServiceOptions`
+ * through `GET` and `PATCH /api/tsig-settings` (`tsigsettings:read`, `tsigsettings:write`): the
+ * clock-skew tolerance (the RFC 8945 "fudge" field) written into every message the server signs.
+ * The keys themselves are on the TSIG Keys page, which this page links to. Changes are
+ * hot-reloaded.
  */
 @Component({
   selector: 'app-tsig-settings',
@@ -64,7 +63,7 @@ export class TsigSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes the fudge value, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

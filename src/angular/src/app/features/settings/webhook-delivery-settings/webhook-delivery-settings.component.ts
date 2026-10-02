@@ -20,16 +20,13 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `WebhookDeliveryOptions` (`GET`/`PATCH
- * /api/webhook-delivery-settings`) -- the shared retry/backoff timing and outbound HTTP timeout
- * every webhook subscription's own deliveries use. Deliberately separate from
- * `WebhookSubscriptionsController`'s own per-subscription `MaxDeliveryAttempts`. No secret
- * material is involved, so this is a plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern. `requestTimeout` hot-reloads on a
- * slightly different schedule than the two retry-delay fields (the very next outbound HTTP
- * handler build, roughly every two minutes, not the very next delivery attempt) -- the backend's
- * own returned note names exactly which applies to a given save, so this page surfaces it
- * unconditionally rather than guessing.
+ * This component is the "Webhook Delivery" settings page (`/settings/webhook-delivery`). It edits
+ * `WebhookDeliveryOptions` through `GET` and `PATCH /api/webhook-delivery-settings`
+ * (`webhookdeliverysettings:read`, `webhookdeliverysettings:write`): the retry backoff and HTTP
+ * timeout shared by every webhook delivery. Each subscription's `MaxDeliveryAttempts` is set on
+ * the subscription itself. The retry delays apply to the next attempt; `requestTimeout` applies
+ * when the HTTP handler is next rebuilt (about every two minutes). The backend's note says which
+ * applies.
  */
 @Component({
   selector: 'app-webhook-delivery-settings',
@@ -70,7 +67,7 @@ export class WebhookDeliverySettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own note (which one of its three cases applies depends on which fields changed). */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

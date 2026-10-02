@@ -29,26 +29,20 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes every DNS transport's own configuration
- * (`TransportSettingsController`'s five sub-resources: Plain, DNS-over-TLS, DNS-over-HTTPS,
- * DNS-over-QUIC, DNSCrypt) -- one card per transport, each with its own independent load/save
- * cycle, since each is its own separate `GET`/`PATCH` REST resource rather than one combined form.
+ * This component is the "Transports" settings page (`/settings/transports`). It shows one card per
+ * `TransportSettingsController` sub-resource under `/api/transport-settings` (plain DNS,
+ * DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, DNSCrypt), each loaded and saved on its own, with
+ * `transportsettings:read` to view and `transportsettings:write` to save.
  *
- * <p>Every transport's own `enable` field (Plain has none -- it starts unconditionally, this
- * project's own baseline "this is a DNS server at all" behavior, not a capability-expanding
- * toggle) is genuinely live, with no restart: the backend starts or stops the real,
- * already-running listener(s) to match, through the same Service Lifecycle Management registry
- * `/api/services` itself exposes. Every other field (port, certificate, protocol-specific tuning)
- * is restart-required -- rebinding a socket to a new port fundamentally cannot happen without at
- * least that one transport restarting. Either way, the backend's own `PATCH` response note
- * (surfaced directly in the success notification, never suppressed) says which applies to the
- * exact write just made.
+ * <p>Each transport's `enable` switch applies at once: the backend starts or stops the listener
+ * through the service registry behind `/api/services`. Plain DNS has no switch; it always runs.
+ * Other fields (port, certificate, protocol tuning) apply when that transport's service restarts
+ * (from the Services page) or the server restarts. The backend's note in the success notification
+ * says which applies.
  *
- * <p>A TLS-based transport's own certificate is configured as a path/reference (an operator-
- * provided PFX file, or a self-managed self-signed certificate), never raw key material uploaded
- * through this form -- matching `TlsCertificateOptions` itself. Its own `pfxPassword` follows this
- * project's established reveal-once secret pattern (see `ReverseProxySettingsComponent`'s own
- * `sharedSecret` field): never pre-filled, and left blank on save means "leave unchanged."
+ * <p>A TLS transport's certificate is a PFX file path or a self-signed certificate the server
+ * manages, as in `TlsCertificateOptions`; no key material is uploaded here. The PFX password is
+ * never returned, so a blank field means "keep the stored one" (see `buildPfxPasswordPatchField`).
  */
 @Component({
   selector: 'app-transport-settings',
@@ -157,7 +151,7 @@ export class TransportSettingsComponent implements OnInit {
     void this.loadAll();
   }
 
-  /** This method PATCHes Plain DNS's own restart-required fields. */
+  /** This method PATCHes the plain DNS settings, which all need a restart. */
   async savePlain(): Promise<void> {
     if (this.plainForm.invalid || this.plainSubmitting()) return;
 
@@ -181,7 +175,7 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes DNS-over-TLS's own settings, including its own certificate sub-object. */
+  /** This method PATCHes the DNS-over-TLS settings, including the certificate. */
   async saveDnsOverTls(): Promise<void> {
     if (this.dnsOverTlsForm.invalid || this.dnsOverTlsSubmitting()) return;
 
@@ -225,7 +219,7 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes DNS-over-HTTPS's own settings. */
+  /** This method PATCHes the DNS-over-HTTPS settings. */
   async saveDnsOverHttps(): Promise<void> {
     if (this.dnsOverHttpsForm.invalid || this.dnsOverHttpsSubmitting()) return;
 
@@ -248,7 +242,7 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes DNS-over-QUIC's own settings, including its own certificate sub-object. */
+  /** This method PATCHes the DNS-over-QUIC settings, including the certificate. */
   async saveDnsOverQuic(): Promise<void> {
     if (this.dnsOverQuicForm.invalid || this.dnsOverQuicSubmitting()) return;
 
@@ -292,7 +286,7 @@ export class TransportSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes DNSCrypt's own settings. */
+  /** This method PATCHes the DNSCrypt settings. */
   async saveDnsCrypt(): Promise<void> {
     if (this.dnsCryptForm.invalid || this.dnsCryptSubmitting()) return;
 

@@ -29,6 +29,9 @@ function baseFormValue(
   };
 }
 
+/**
+ * These tests cover buildStorageSwitchRequest for each engine. Plain unit tests.
+ */
 describe('storage-settings.model', () => {
   it('builds a SQLite request with only the sqlite section populated', () => {
     const request = buildStorageSwitchRequest(

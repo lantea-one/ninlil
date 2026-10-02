@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Web Listener page: loading, the confirmation before saving, the PATCH with
+ * and without a PFX password, and a save error. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('WebListenSettingsComponent', () => {
   let apiSpy: {
     apiWebListenSettingsGet: jasmine.Spy;

@@ -19,11 +19,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `ZoneSigningOptions` (`GET`/`PATCH
- * /api/zone-signing-settings`) -- the DNSSEC signature validity/inception/refresh timing
- * `ZoneSigningService`/`DnssecResigningBackgroundService` both consult. No secret material is
- * involved, so every field is a plain read/PATCH-with-current-value round trip -- built from
- * {@link RateLimitingSettingsComponent}'s own reference pattern for its duration-string fields.
+ * This component is the "Zone Signing" settings page (`/settings/zone-signing`). It edits
+ * `ZoneSigningOptions` through `GET` and `PATCH /api/zone-signing-settings`
+ * (`zonesigningsettings:read`, `zonesigningsettings:write`): the DNSSEC signature validity,
+ * inception offset, re-sign margin and poll interval that `ZoneSigningService` and
+ * `DnssecResigningBackgroundService` use. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-zone-signing-settings',
@@ -64,7 +64,7 @@ export class ZoneSigningSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
