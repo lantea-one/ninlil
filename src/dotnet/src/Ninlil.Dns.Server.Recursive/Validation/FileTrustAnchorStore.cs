@@ -59,9 +59,9 @@ public sealed class FileTrustAnchorStore(
 
     /// <summary>
     ///     This method loads the state file, or seeds a new one from the configured (or built-in)
-    ///     trust anchors if the file does not exist, is empty, or throws an
-    ///     <see cref="IOException" /> or <see cref="FormatException" /> while loading. Other
-    ///     exceptions, such as a JSON parse error, propagate.
+    ///     trust anchors if the file does not exist, is empty, cannot be read or is not valid
+    ///     JSON. A corrupt file must not stop the resolver from starting, and the seed is the
+    ///     same starting point a first run uses.
     /// </summary>
     private static List<PersistedTrustAnchor> LoadOrSeed(
         RecursiveServerOptions options,
@@ -81,7 +81,8 @@ public sealed class FileTrustAnchorStore(
                 if (loaded is { Count: > 0 })
                     return loaded;
             }
-            catch (Exception exception) when (exception is IOException or FormatException)
+            catch (Exception exception)
+                when (exception is IOException or FormatException or System.Text.Json.JsonException)
             {
                 logger.LogWarning(
                     exception,

@@ -26,9 +26,11 @@ namespace Ninlil.Dns.Server.Recursive.Caching;
 ///     <see cref="IOptionsMonitor{TOptions}" /> so settings changes apply without a restart.
 /// </param>
 /// <param name="eventPublisher">The publisher this cache reports evictions through.</param>
+/// <param name="timeProvider">The clock, replaceable in tests; the system clock by default.</param>
 public sealed class RecursiveCache(
     IOptionsMonitor<RecursiveServerOptions> options,
-    IDnsServerEventPublisher eventPublisher
+    IDnsServerEventPublisher eventPublisher,
+    TimeProvider timeProvider = null
 ) : IRecursiveCache, IDnsCache
 {
     /// <summary>
@@ -50,7 +52,8 @@ public sealed class RecursiveCache(
                 ? options.CurrentValue.MaxStaleServeAge
                 : TimeSpan.Zero,
         eventPublisher,
-        "expired-or-capacity"
+        "expired-or-capacity",
+        timeProvider
     );
 
     /// <inheritdoc />
@@ -62,7 +65,9 @@ public sealed class RecursiveCache(
         DnsResourceRecordTypeEnum type,
         DnsClassEnum recordClass
     ) =>
-        _store.TryGetFresh((name, type, recordClass), out RecursiveCacheEntry entry) ? entry : null;
+        _store.TryGetFresh((name, type, recordClass), out RecursiveCacheEntry entry)
+            ? entry.AgedTo(_store.UtcNow)
+            : null;
 
     /// <inheritdoc />
     public RecursiveCacheEntry TryGetStale(
@@ -88,6 +93,7 @@ public sealed class RecursiveCache(
             return;
 
         uint ttlSeconds = records.Min(record => record.TimeToLive);
+        DateTimeOffset now = _store.UtcNow;
 
         _store.Set(
             (name, type, recordClass),
@@ -97,7 +103,8 @@ public sealed class RecursiveCache(
                 dnssecRecords,
                 DnsResponseCodeEnum.NoError,
                 null,
-                _store.UtcNow.AddSeconds(ttlSeconds)
+                now.AddSeconds(ttlSeconds),
+                now
             )
         );
     }
@@ -119,6 +126,7 @@ public sealed class RecursiveCache(
             return;
 
         uint ttlSeconds = Math.Min(soa.TimeToLive, soaData.MinimumTtlSeconds);
+        DateTimeOffset now = _store.UtcNow;
 
         _store.Set(
             (name, type, recordClass),
@@ -128,7 +136,8 @@ public sealed class RecursiveCache(
                 dnssecRecords,
                 responseCode,
                 soa,
-                _store.UtcNow.AddSeconds(ttlSeconds)
+                now.AddSeconds(ttlSeconds),
+                now
             )
         );
     }

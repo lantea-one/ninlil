@@ -548,4 +548,48 @@ public class RecursiveCacheTests
         Assert.Null(cache.TryGet(name, DnsResourceRecordTypeEnum.Aaaa, DnsClassEnum.Internet));
         Assert.NotNull(cache.TryGet(other, DnsResourceRecordTypeEnum.A, DnsClassEnum.Internet));
     }
+
+    [Fact]
+    public void TryGetReducesTheTtlsByTheTimeTheEntryHasBeenCached()
+    {
+        ManualTimeProvider clock = new();
+        RecursiveCache cache = new(
+            new StaticOptionsMonitor<RecursiveServerOptions>(new RecursiveServerOptions()),
+            new RecordingEventPublisher(),
+            clock
+        );
+        DnsName name = DnsName.Parse("example.com");
+        DnsName missing = DnsName.Parse("missing.example.com");
+        cache.StorePositive(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            [BuildARecord(name, 300)],
+            []
+        );
+        cache.StoreNegative(
+            missing,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet,
+            DnsResponseCodeEnum.NxDomain,
+            BuildSoaRecord(name, 600),
+            []
+        );
+
+        clock.Advance(TimeSpan.FromSeconds(100));
+
+        RecursiveCacheEntry positive = cache.TryGet(
+            name,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet
+        );
+        RecursiveCacheEntry negative = cache.TryGet(
+            missing,
+            DnsResourceRecordTypeEnum.A,
+            DnsClassEnum.Internet
+        );
+
+        Assert.Equal(200u, Assert.Single(positive.Records).TimeToLive);
+        Assert.Equal(3500u, negative.Soa.TimeToLive);
+    }
 }

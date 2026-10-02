@@ -30,13 +30,15 @@ namespace Ninlil.Dns.Server.Recursive.Caching;
 ///     positive entry.
 /// </param>
 /// <param name="ExpiresAtUtc">When this entry stops being fresh.</param>
+/// <param name="StoredAtUtc">When this entry was stored, which its records' TTLs count down from.</param>
 public sealed record RecursiveCacheEntry(
     bool IsNegative,
     IReadOnlyList<DnsResourceRecord> Records,
     IReadOnlyList<DnsResourceRecord> DnssecRecords,
     DnsResponseCodeEnum NegativeResponseCode,
     DnsResourceRecord Soa,
-    DateTimeOffset ExpiresAtUtc
+    DateTimeOffset ExpiresAtUtc,
+    DateTimeOffset StoredAtUtc
 ) : IDnsCacheEntry
 {
     /// <summary>
@@ -44,4 +46,35 @@ public sealed record RecursiveCacheEntry(
     ///     cache store's clock).
     /// </summary>
     public bool IsExpired => DateTimeOffset.UtcNow >= ExpiresAtUtc;
+
+    /// <summary>
+    ///     This method returns a copy of this entry with every record's TTL reduced by how long
+    ///     the entry has been cached, so no client or downstream cache keeps the data longer than
+    ///     its owner allowed. A TTL never goes below zero.
+    /// </summary>
+    /// <param name="now">The current time on the cache's clock.</param>
+    /// <returns>The aged copy, or this entry itself when no whole second has passed.</returns>
+    public RecursiveCacheEntry AgedTo(DateTimeOffset now)
+    {
+        uint elapsedSeconds = (uint)Math.Clamp((now - StoredAtUtc).TotalSeconds, 0, uint.MaxValue);
+
+        if (elapsedSeconds == 0)
+            return this;
+
+        DnsResourceRecord Age(DnsResourceRecord record) =>
+            new(
+                record.Name,
+                record.Type,
+                record.Class,
+                record.TimeToLive > elapsedSeconds ? record.TimeToLive - elapsedSeconds : 0,
+                record.Data
+            );
+
+        return this with
+        {
+            Records = [.. Records.Select(Age)],
+            DnssecRecords = [.. DnssecRecords.Select(Age)],
+            Soa = Soa is null ? null : Age(Soa),
+        };
+    }
 }

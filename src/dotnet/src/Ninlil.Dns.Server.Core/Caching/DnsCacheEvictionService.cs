@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Core.Caching;
@@ -9,14 +10,16 @@ namespace Ninlil.Dns.Server.Core.Caching;
 ///     question is asked again, so its memory could be held indefinitely.
 /// </summary>
 /// <param name="caches">Every cache this service sweeps.</param>
-public sealed class DnsCacheEvictionService(IEnumerable<IDnsCache> caches) : BackgroundService
+/// <param name="logger">The logger this service records a failed sweep to.</param>
+/// <param name="sweepInterval">How often to sweep the caches. Defaults to one minute.</param>
+public sealed class DnsCacheEvictionService(
+    IEnumerable<IDnsCache> caches,
+    ILogger<DnsCacheEvictionService> logger,
+    TimeSpan? sweepInterval = null
+) : BackgroundService
 {
-    /// <summary>
-    ///     This field contains how often this service sweeps the caches.
-    /// </summary>
-    private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(1);
-
     private readonly IReadOnlyList<IDnsCache> _caches = [.. caches];
+    private readonly TimeSpan _sweepInterval = sweepInterval ?? TimeSpan.FromMinutes(1);
 
     /// <summary>
     ///     This method runs one sweep over every cache. Public so a test can drive a sweep
@@ -32,12 +35,19 @@ public sealed class DnsCacheEvictionService(IEnumerable<IDnsCache> caches) : Bac
         {
             try
             {
-                await Task.Delay(SweepInterval, stoppingToken);
+                await Task.Delay(_sweepInterval, stoppingToken);
                 SweepOnce();
             }
             catch (OperationCanceledException)
             {
                 // Expected during a graceful shutdown.
+            }
+            catch (Exception exception)
+            {
+                // A failed sweep must not end this loop: an unhandled exception would stop the
+                // host (BackgroundServiceExceptionBehavior.StopHost), and the caches would
+                // never be swept again. The next sweep tries again.
+                logger.LogError(exception, "Sweeping the DNS caches failed.");
             }
         }
     }

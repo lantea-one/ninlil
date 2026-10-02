@@ -9,7 +9,8 @@ namespace Ninlil.Dns.Server.Recursive.Caching;
 ///     type, class). It is both the answer cache and, since NS and address RRsets are cached like
 ///     any other type, the store of known name servers that lets
 ///     <see cref="Resolution.IterativeResolutionEngine" /> start below the root.
-///     <see cref="RecursiveCache" /> implements it; cached TTLs are returned as stored.
+///     <see cref="RecursiveCache" /> implements it. A fresh hit's TTLs are reduced by the time the
+///     entry has spent cached; a stale hit's are returned as stored.
 /// </summary>
 public interface IRecursiveCache
 {
@@ -19,7 +20,10 @@ public interface IRecursiveCache
     /// <param name="name">The name to look up.</param>
     /// <param name="type">The record type to look up.</param>
     /// <param name="recordClass">The class to look up.</param>
-    /// <returns>The cached entry, or <see langword="null" /> if nothing is cached, or the cached entry has expired.</returns>
+    /// <returns>
+    ///     The cached entry with its TTLs reduced by the time it has spent cached, or
+    ///     <see langword="null" /> if nothing is cached, or the cached entry has expired.
+    /// </returns>
     RecursiveCacheEntry TryGet(
         DnsName name,
         DnsResourceRecordTypeEnum type,

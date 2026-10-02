@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Events;
@@ -223,14 +224,40 @@ public class DnsCacheStoreTests
         FakeCache first = new("first", evicts: 2);
         FakeCache second = new("second", evicts: 3);
 
-        DnsCacheEvictionService service = new([first, second]);
+        DnsCacheEvictionService service = new(
+            [first, second],
+            NullLogger<DnsCacheEvictionService>.Instance
+        );
 
         Assert.Equal(5, service.SweepOnce());
         Assert.Equal(1, first.Sweeps);
         Assert.Equal(1, second.Sweeps);
     }
 
-    private sealed class FakeCache(string name, int evicts) : IDnsCache
+    [Fact]
+    public async Task DnsCacheEvictionService_KeepsSweepingAfterASweepThrows()
+    {
+        FakeCache cache = new("throws-once", evicts: 1, throwOnFirstSweep: true);
+        DnsCacheEvictionService service = new(
+            [cache],
+            NullLogger<DnsCacheEvictionService>.Instance,
+            TimeSpan.FromMilliseconds(10)
+        );
+
+        await service.StartAsync(CancellationToken.None);
+
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (cache.Sweeps < 3 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.True(cache.Sweeps >= 3, $"Only {cache.Sweeps} sweep(s) ran.");
+    }
+
+    private sealed class FakeCache(string name, int evicts, bool throwOnFirstSweep = false)
+        : IDnsCache
     {
         public int Sweeps { get; private set; }
 
@@ -245,6 +272,10 @@ public class DnsCacheStoreTests
         public int EvictExpiredAndOverCapacity()
         {
             Sweeps++;
+
+            if (throwOnFirstSweep && Sweeps == 1)
+                throw new InvalidOperationException("A broken cache.");
+
             return evicts;
         }
     }
