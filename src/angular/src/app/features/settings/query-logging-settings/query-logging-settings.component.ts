@@ -23,12 +23,10 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This picker's own privacy level catalog: each level's own label and a one-line description of
- * what it does and does not retain, shown directly under the select so an operator never has to
- * guess what a level number means. Deliberately worded as a single, unified 0-3 scale rather than
- * a separate "anonymize client IPs" toggle -- level {@link QueryLogPrivacyLevelEnum.ClientAnonymized}
- * here is exactly what a standalone toggle like that would have done, folded into this one
- * mechanism instead of sitting beside it as a second, potentially-conflicting setting.
+ * This constant lists the query log privacy levels with a label and a one-line description of what
+ * each keeps, shown under the select. It is one 0-3 scale rather than a separate "anonymize client
+ * addresses" switch; {@link QueryLogPrivacyLevelEnum.ClientAnonymized} covers that case without a
+ * second, possibly conflicting setting.
  */
 const PRIVACY_LEVEL_OPTIONS: {
   value: QueryLogPrivacyLevelEnum;
@@ -61,17 +59,13 @@ const PRIVACY_LEVEL_OPTIONS: {
 ];
 
 /**
- * This component reads and writes this host's own `QueryLoggingOptions` (whether an answered
- * query is ever persisted to the searchable query log at all, how long/how much of it is kept,
- * and this scale's own graduated privacy level) via `GET`/`PATCH /api/query-logging-settings`,
- * mirroring `RateLimitingSettingsComponent`'s own exact shape. No secret material is involved
- * here at all, so every field is a plain read/PATCH-with-current-value round trip.
+ * This component is the "Query logging" settings page (`/settings/query-logging`). It edits
+ * `QueryLoggingOptions` through `GET` and `PATCH /api/query-logging-settings` (`querylog:read`,
+ * `querylog:write`, the query log's permissions): whether answered queries are logged, how long
+ * and how many entries are kept, the cleanup interval and the privacy level.
  *
- * <p>Unlike every other field on this form, `privacyLevel` takes effect immediately, with no
- * restart -- `QueryLoggingSettingsController` reads it live via `IOptionsMonitor`. Every
- * successful `PATCH`'s own note (naming exactly which fields hot-reload and which still need a
- * restart, whenever a single save touches both kinds at once) is surfaced directly in the success
- * notification, never suppressed or paraphrased.
+ * <p>Only `privacyLevel` is hot-reloaded; the other fields need a restart. The backend's note in
+ * the success notification says which applies.
  */
 @Component({
   selector: 'app-query-logging-settings',
@@ -101,7 +95,7 @@ export class QueryLoggingSettingsComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Every privacy level this picker offers, each with its own operator-facing description. */
+  /** The privacy levels offered, each with its description. */
   readonly privacyLevelOptions = PRIVACY_LEVEL_OPTIONS;
 
   readonly loading = signal(true);
@@ -116,7 +110,7 @@ export class QueryLoggingSettingsComponent implements OnInit {
     privacyLevel: [QueryLogPrivacyLevelEnum.Full as QueryLogPrivacyLevelEnum],
   });
 
-  /** This method returns the description shown under the picker for the currently-selected (not-yet-saved) level. */
+  /** This method returns the description for the selected, unsaved level. */
   selectedPrivacyLevelDescription(): string {
     const selected = this.privacyLevelOptions.find(
       (option) => option.value === this.form.controls.privacyLevel.value,
@@ -128,7 +122,7 @@ export class QueryLoggingSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own restart-required note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

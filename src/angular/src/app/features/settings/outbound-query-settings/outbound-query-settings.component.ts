@@ -23,11 +23,10 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `OutboundQueryOptions` (UDP source-port
- * randomization/pooling for this server's own outbound recursive/forwarded queries) via
- * `GET`/`PATCH /api/outbound-query-settings`. No secret material is involved. Every field takes
- * effect immediately, with no restart, since the backend reads this options class live via
- * `IOptionsMonitor`.
+ * This component is the "Outbound Query Hardening" settings page (`/settings/outbound-query`). It
+ * edits `OutboundQueryOptions`, the UDP source-port pool used for the server's recursive and
+ * forwarded queries, through `GET` and `PATCH /api/outbound-query-settings`
+ * (`outboundquerysettings:read`, `outboundquerysettings:write`). Every field is hot-reloaded.
  */
 @Component({
   selector: 'app-outbound-query-settings',
@@ -71,7 +70,7 @@ export class OutboundQuerySettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field (excluded ports one per line), then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

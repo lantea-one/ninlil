@@ -24,12 +24,11 @@ import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/clus
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnsRateLimitOptions` (RFC-agnostic, per-client
- * token-bucket rate limiting) via `GET`/`PATCH /api/rate-limiting-settings`. No secret material is
- * involved here at all, so every field is a plain read/PATCH-with-current-value round trip --
- * unlike {@link EventBrokerSettingsComponent}'s own password field, nothing here needs a "leave
- * blank to mean unchanged" special case. Every successful `PATCH`'s own "restart required" note is
- * surfaced directly in the success notification, never suppressed.
+ * This component is the "Rate limiting" settings page (`/settings/rate-limiting`). It edits
+ * `DnsRateLimitOptions`, the per-client token bucket and per-subnet limits for DNS queries,
+ * through `GET` and `PATCH /api/rate-limiting-settings` (`ratelimiting:read`,
+ * `ratelimiting:write`). Bypass CIDRs are one per line. Changes need a restart; the backend's note
+ * in the success notification says so.
  */
 @Component({
   selector: 'app-rate-limiting-settings',
@@ -64,7 +63,7 @@ export class RateLimitingSettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** When this settings section was last written and by which cluster node, per the cluster's own config-sync mechanism. */
+  /** When this section was last written, from the cluster config sync; {@link originatingNodeId} names the node. */
   readonly lastModifiedUtc = signal<string | null | undefined>(null);
   readonly originatingNodeId = signal<string | null | undefined>(null);
 
@@ -88,7 +87,7 @@ export class RateLimitingSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own restart-required note. */
+  /** This method PATCHes every field, shows the backend's restart note and reloads. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -109,10 +108,8 @@ export class RateLimitingSettingsComponent implements OnInit {
         this.rateLimitingApi.apiRateLimitingSettingsPatch({ body }),
       );
       this.notification.success(result.note ?? 'Rate limiting settings saved.');
-      // The cluster's own sync bookkeeping is written synchronously alongside the settings file
-      // itself, so a fresh GET right after a successful PATCH always reflects it -- unlike the
-      // settings values themselves, which this project's own IOptions-vs-IOptionsMonitor
-      // distinction may still require a restart for.
+      // The cluster sync record is written with the settings file, so a GET right after the
+      // PATCH shows the new last-modified time even though the values wait for a restart.
       await this.loadSettings();
     } catch (error) {
       this.errorMessage.set(extractErrorMessage(error, 'Could not save rate limiting settings.'));

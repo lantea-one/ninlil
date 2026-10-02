@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Reverse proxy page: loading, saving with and without a new shared secret,
+ * the DNS-over-TLS section and a save error. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('ReverseProxySettingsComponent', () => {
   let apiSpy: {
     apiReverseProxySettingsGet: jasmine.Spy;

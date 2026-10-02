@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the MAC Vendors page: loading the settings and data status, saving,
+ * validation, a backend rejection, "Refresh now" and its permission. TestBed with a spy-backed
+ * settings service, `NotificationService` and a stubbed `AuthService.hasPermission`.
+ */
 describe('MacVendorSettingsComponent', () => {
   let apiSpy: {
     apiMacVendorSettingsGet: jasmine.Spy;

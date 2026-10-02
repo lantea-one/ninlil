@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Outbound Query Hardening page: loading, saving the excluded ports as
+ * numbers and a save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('OutboundQuerySettingsComponent', () => {
   let apiSpy: {
     apiOutboundQuerySettingsGet: jasmine.Spy;

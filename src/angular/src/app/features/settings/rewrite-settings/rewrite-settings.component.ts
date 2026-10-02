@@ -22,17 +22,13 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `DnsRewriteOptions` -- the engine-level toggle
- * and synthesized-answer TTL for DNS rewrites, via `GET`/`PATCH /api/rewrite-settings`
- * (`rewritesettings:read`/`rewritesettings:write`). Rewrite entries themselves (each individual
- * domain/target override) are a separate page (Rewrites); this page covers only whether the
- * rewrite engine consults them at query time at all.
+ * This component is the "DNS Rewrites" settings page (`/settings/rewrites`). It edits
+ * `DnsRewriteOptions` through `GET` and `PATCH /api/rewrite-settings` (`rewritesettings:read`,
+ * `rewritesettings:write`): whether rewrites are applied and the TTL of rewritten answers. The
+ * rewrites themselves are on the DNS Rewrites page.
  *
- * <p>Every field this form edits takes effect immediately, with no restart -- `DnsRewriteEngine`
- * is now always constructed and consulted by the query pipeline regardless of `Enable`'s own value
- * at process startup, reading its own live `Enable`/TTL configuration fresh on every check via
- * `IOptionsMonitor`. The backend's own PATCH response note (surfaced directly in the success
- * notification, never suppressed) confirms this explicitly.
+ * <p>Both fields are hot-reloaded: `DnsRewriteEngine` is always in the query pipeline and reads
+ * these options on each check, whatever `Enable` was at startup.
  */
 @Component({
   selector: 'app-rewrite-settings',
@@ -67,8 +63,7 @@ export class RewriteSettingsComponent implements OnInit {
 
   readonly form = this.formBuilder.group({
     enable: [false],
-    // 4294967295 is the real backend bound: DnsRewriteOptions.TimeToLiveSeconds is a 32-bit
-    // unsigned integer.
+    // DnsRewriteOptions.TimeToLiveSeconds is a 32-bit unsigned integer.
     timeToLiveSeconds: [300, [Validators.required, Validators.min(0), Validators.max(4294967295)]],
   });
 
@@ -76,7 +71,7 @@ export class RewriteSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes both fields, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

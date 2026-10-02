@@ -20,11 +20,10 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `NotifyOptions` (`GET`/`PATCH
- * /api/notify-settings`) -- how many times, how often, and to what port this server sends RFC
- * 1996 NOTIFY messages to a zone's configured secondaries. No secret material is involved, so
- * this is a plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "NOTIFY" settings page (`/settings/notify`). It edits `NotifyOptions`
+ * through `GET` and `PATCH /api/notify-settings` (`notifysettings:read`, `notifysettings:write`):
+ * how many times, how often and to which port the server sends RFC 1996 NOTIFY messages to a
+ * zone's secondaries. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-notify-settings',
@@ -66,7 +65,7 @@ export class NotifySettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -25,28 +25,20 @@ import { buildSharedSecretPatchField, joinLines, splitLines } from './reverse-pr
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `ReverseProxyOptions` -- whether the shared
- * Kestrel HTTP/HTTPS listener trusts a reverse proxy's own `X-Forwarded-For`/`X-Forwarded-Proto`
- * headers, via `GET`/`PATCH /api/reverse-proxy-settings`. `knownProxies`/`knownNetworks` are each
- * edited as a one-entry-per-line textarea (see `splitLines`/`joinLines`), the same convention
- * `ZoneFormComponent`'s own `primaryServerAddresses`/`forwarderAddresses` fields already
- * establish, rather than a raw JSON array a caller would otherwise have to hand-author.
- * `sharedSecret` follows `EventBrokerSettingsComponent`'s own broker `password` field exactly:
- * `ReverseProxySettingsController.Get` never returns it at all, only whether one is currently
- * configured (`sharedSecretConfigured`), so this form can never pre-fill it, and leaving it blank
- * on submit must mean "leave unchanged," never "clear it" -- see
- * `buildSharedSecretPatchField`'s own doc comment for the full reasoning. Every successful
- * `PATCH`'s own "restart required" note is surfaced directly in the success notification, never
- * suppressed.
+ * This component is the "Reverse proxy" settings page (`/settings/reverse-proxy`). It edits
+ * `ReverseProxyOptions` through `GET` and `PATCH /api/reverse-proxy-settings` (`reverseproxy:read`,
+ * `reverseproxy:write`): whether the web listener trusts a reverse proxy's `X-Forwarded-For` and
+ * `X-Forwarded-Proto` headers, and from which proxies and networks (one per line, see
+ * `splitLines`). The shared secret is never returned, only whether one is set
+ * (`sharedSecretConfigured`), so a blank secret field means "keep the stored one" (see
+ * `buildSharedSecretPatchField`).
  *
- * A second, separate section of this same form edits DNS-over-TLS's own PROXY protocol trust
- * configuration (`dnsOverTlsEnable`/`dnsOverTlsKnownProxiesText`/`dnsOverTlsKnownNetworksText`,
- * always sent together as one `dnsOverTls` sub-object) -- an entirely different allowlist from
- * the HTTP one above, since a raw TCP-level proxy in front of DNS-over-TLS is not guaranteed to
- * be the same upstream as an HTTP-mode reverse proxy, even though it very often is. It has no
- * shared-secret field of its own at all: the PROXY protocol's own fixed v1/v2 header framing has
- * no natural place to carry one, so the IP/CIDR allowlist alone is that section's entire trust
- * boundary.
+ * <p>A second section edits the PROXY protocol allowlist for DNS-over-TLS, sent as one `dnsOverTls`
+ * object. It is separate because a TCP proxy in front of DNS-over-TLS need not be the HTTP proxy.
+ * It has no shared secret, since the PROXY protocol header has no standard field for one; the
+ * address allowlist is the whole trust boundary.
+ *
+ * <p>Changes need a restart; the backend's note in the success notification says so.
  */
 @Component({
   selector: 'app-reverse-proxy-settings',
@@ -81,10 +73,10 @@ export class ReverseProxySettingsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether a shared secret is currently configured -- read directly from the backend, never guessed from this form's own blank secret input. */
+  /** Whether a shared secret is configured, as the backend reports (the secret field is always blank). */
   readonly sharedSecretConfigured = signal(false);
 
-  /** When this settings section was last written and by which cluster node, per the cluster's own config-sync mechanism. */
+  /** When this section was last written, from the cluster config sync; {@link originatingNodeId} names the node. */
   readonly lastModifiedUtc = signal<string | null | undefined>(null);
   readonly originatingNodeId = signal<string | null | undefined>(null);
 
@@ -104,8 +96,8 @@ export class ReverseProxySettingsComponent implements OnInit {
   }
 
   /**
-   * This method PATCHes every field this form holds, omitting `sharedSecret` entirely when its
-   * own input was left blank so the stored value is left untouched rather than cleared.
+   * This method PATCHes every field, leaving out a blank `sharedSecret` so the stored one is kept,
+   * then reloads.
    */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
@@ -132,8 +124,7 @@ export class ReverseProxySettingsComponent implements OnInit {
         this.reverseProxyApi.apiReverseProxySettingsPatch({ body }),
       );
       this.notification.success(result.note ?? 'Reverse-proxy settings saved.');
-      // Never re-populate the secret field from the response -- it is never returned, so
-      // clearing it back to blank keeps this form's own "blank means unchanged" contract honest.
+      // The secret is never returned; clearing the field keeps "blank means unchanged" true.
       this.form.patchValue({ sharedSecret: '' });
       await this.loadSettings();
     } catch (error) {

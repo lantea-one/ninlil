@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Self-Update page: loading settings and status, saving, "Check now", the
+ * release notes and errors. TestBed with spy-backed `SelfUpdateSettingsService`, `SelfUpdateService`
+ * and `NotificationService`.
+ */
 describe('SelfUpdateSettingsComponent', () => {
   let settingsApiSpy: {
     apiSelfUpdateSettingsGet: jasmine.Spy;

@@ -1,5 +1,9 @@
 import { buildSharedSecretPatchField, joinLines, splitLines } from './reverse-proxy-settings.model';
 
+/**
+ * These tests cover the line splitting and joining helpers and buildSharedSecretPatchField. Plain
+ * unit tests.
+ */
 describe('reverse-proxy-settings.model', () => {
   describe('splitLines', () => {
     it('splits a one-entry-per-line textarea value into a trimmed array', () => {

@@ -30,27 +30,27 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * A .NET `TimeSpan` in its invariant `[d.]hh:mm:ss[.fffffff]` form -- the shape the backend both
- * returns and accepts. The backend itself enforces the one-day minimum refresh interval and
- * rejects anything shorter with a `400` this page surfaces as its own error banner.
+ * This constant matches a .NET `TimeSpan` in its invariant `[d.]hh:mm:ss[.fffffff]` form, as the
+ * backend returns and accepts it. The backend enforces the one-day minimum refresh interval with a
+ * 400, shown as the page's error banner.
  */
 const TIME_SPAN_PATTERN = /^(\d+\.)?\d{1,2}:\d{2}:\d{2}(\.\d+)?$/;
 
-/** An absolute HTTP(S) URL -- shape only; the backend repeats this check authoritatively. */
+/** This constant matches an absolute HTTP(S) URL by shape only; the backend checks it fully. */
 const HTTP_URL_PATTERN = /^https?:\/\/\S+$/i;
 
 /**
- * This component reads and writes MAC vendor lookup's own `MacVendorLookupOptions` via `GET`/`PATCH
- * /api/mac-vendor-settings`, and reports the vendor data currently loaded: whether it is the
- * snapshot compiled into this build or a newer download, when it was generated, how many
- * prefixes each IEEE registry contributes, and how the last refresh went.
+ * This component is the "MAC Vendors" settings page (`/settings/mac-vendors`). It edits
+ * `MacVendorLookupOptions` through `GET` and `PATCH /api/mac-vendor-settings`
+ * (`macvendorsettings:read`, `macvendorsettings:write`) and shows the vendor data loaded: the
+ * built-in snapshot or a newer download, when it was generated, how many prefixes each IEEE
+ * registry contributes and how the last refresh went.
  * <p>
- * Vendor lookup itself needs no configuration -- it works offline from the embedded snapshot --
- * so every setting here concerns only the automatic refresh from the IEEE's own published
- * registry files. "Refresh now" (`POST .../refresh`, gated on `macvendorsettings:manage` and
- * hidden without it) runs one immediately; a failed or implausible download is reported in the
- * status panel and never replaces the loaded data. The persisted data path is shown read-only,
- * since it is configuration-file-only on the backend.
+ * Lookup works offline from the built-in snapshot, so the settings only control the automatic
+ * refresh from the IEEE registry files. "Refresh now" (`POST /api/mac-vendor-settings/refresh`,
+ * shown only with `macvendorsettings:manage`) runs one at once; a failed or implausible download
+ * is reported and never replaces the loaded data. The data file path is shown read-only, since it
+ * can only be set in the configuration file. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-mac-vendor-settings',
@@ -92,7 +92,7 @@ export class MacVendorSettingsComponent implements OnInit {
   /** The loaded vendor data and its refresh history, as last reported by the backend. */
   readonly status = signal<MacVendorDataStatusDetail | null>(null);
 
-  /** Where refreshed data is persisted -- read-only, configuration-file-only on the backend. */
+  /** Where refreshed data is saved; read-only, set only in the configuration file. */
   readonly dataFilePath = signal<string | null>(null);
 
   /** Whether this session may trigger an immediate refresh. */
@@ -124,7 +124,7 @@ export class MacVendorSettingsComponent implements OnInit {
     void this.load();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the DNS Rewrites settings page: loading, saving, TTL validation and a save
+ * error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('RewriteSettingsComponent', () => {
   let apiSpy: {
     apiRewriteSettingsGet: jasmine.Spy;

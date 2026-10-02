@@ -29,18 +29,17 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `SelfUpdateOptions` (whether, how often, and
- * against what feed this server checks for a newer release of itself) via `GET`/`PATCH
- * /api/self-update-settings`, and separately surfaces the checker's own currently-known status
- * (`GET /api/self-update`) plus a real, on-demand "Check now" action (`POST
- * /api/self-update/check`) -- deliberately **not** an "update now" button, since this server has
- * no safe, in-process way to replace its own running binary yet; see the backend's own
- * `SelfUpdateController.Get` doc comment for the full reasoning this page's own status card
- * mirrors in `updateInstructions`.
+ * This component is the "Self-Update" settings page (`/settings/self-update`). It edits
+ * `SelfUpdateOptions` (whether, how often and against which feed the server checks for a newer
+ * release) through `GET` and `PATCH /api/self-update-settings` (`selfupdatesettings:read`,
+ * `selfupdatesettings:write`; hot-reloaded). It also shows the checker's status from
+ * `GET /api/self-update` (`selfupdate:read`) and offers "Check now"
+ * (`POST /api/self-update/check`, `selfupdate:manage`). There is no "update now": the server cannot
+ * replace its own running binary, so the status card shows the backend's `updateInstructions`
+ * instead (see `SelfUpdateController.Get`).
  * <p>
- * Checking is on by default (a pure availability/correctness notice, no new attack surface) but
- * has nothing to check against until an operator sets a release feed URL here -- this project has
- * no fixed release-hosting location of its own yet.
+ * Checking is on by default but does nothing until a release feed URL is set here, since there is
+ * no built-in release location.
  */
 @Component({
   selector: 'app-self-update-settings',
@@ -78,7 +77,7 @@ export class SelfUpdateSettingsComponent implements OnInit {
   readonly checking = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** This host's own currently-known update status, or `null` until the first read completes. */
+  /** The running version, from the update status; `null` until the first read completes. */
   readonly currentVersion = signal<string | null>(null);
   readonly latestKnownVersion = signal<string | null>(null);
   readonly updateAvailable = signal(false);
@@ -99,7 +98,7 @@ export class SelfUpdateSettingsComponent implements OnInit {
     void this.loadStatus();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload note. */
+  /** This method PATCHes every field, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -120,7 +119,7 @@ export class SelfUpdateSettingsComponent implements OnInit {
     }
   }
 
-  /** This method triggers a real, immediate check against the currently-configured feed and reloads this page's own status display with the result. */
+  /** This method checks the configured feed now and shows the resulting status. */
   async checkNow(): Promise<void> {
     if (this.checking()) return;
 
@@ -165,8 +164,7 @@ export class SelfUpdateSettingsComponent implements OnInit {
       const status = await firstValueFrom(this.selfUpdateApi.apiSelfUpdateGet());
       this.applyStatus(status);
     } catch {
-      // A status read failure is surfaced only through the settings form's own error banner --
-      // the status card simply stays at its own initial, empty state.
+      // A failed status read is not reported; the status card stays empty.
     }
   }
 

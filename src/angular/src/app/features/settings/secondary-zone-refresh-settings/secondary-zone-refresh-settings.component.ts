@@ -20,11 +20,11 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `SecondaryZoneRefreshOptions` (`GET`/`PATCH
- * /api/secondary-zone-refresh-settings`) -- how often the background loop that checks whether a
- * secondary zone is due for a refresh wakes up. No secret material is involved, so this is a
- * plain read/PATCH-with-current-value round trip -- built from
- * {@link ZoneSigningSettingsComponent}'s own reference pattern.
+ * This component is the "Secondary Zone Refresh" settings page (`/settings/secondary-zone-refresh`).
+ * It edits `SecondaryZoneRefreshOptions` through `GET` and
+ * `PATCH /api/secondary-zone-refresh-settings` (`secondaryzonerefreshsettings:read`,
+ * `secondaryzonerefreshsettings:write`): how often the loop that checks whether a secondary zone
+ * is due for a refresh wakes up, and the default retry interval. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-secondary-zone-refresh-settings',
@@ -64,7 +64,7 @@ export class SecondaryZoneRefreshSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes both fields, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

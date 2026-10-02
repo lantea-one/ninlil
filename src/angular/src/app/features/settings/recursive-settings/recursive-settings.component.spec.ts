@@ -13,6 +13,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Recursive Resolver page: loading, saving, when the root hint and trust
+ * anchor lists are sent, the cache card and errors, plus the row conversion helpers. TestBed with a
+ * spy-backed settings service and `NotificationService`.
+ */
 describe('RecursiveSettingsComponent', () => {
   let apiSpy: {
     apiRecursiveSettingsGet: jasmine.Spy;

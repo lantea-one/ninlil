@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Query logging page: loading, saving with the backend note, the privacy
+ * level description and a save error. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('QueryLoggingSettingsComponent', () => {
   let apiSpy: {
     apiQueryLoggingSettingsGet: jasmine.Spy;

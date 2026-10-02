@@ -66,25 +66,18 @@ const TRUST_ANCHOR_ALGORITHMS: DnssecAlgorithmEnum[] = [
 ];
 
 /**
- * This component reads and writes this host's own `RecursiveServerOptions` (recursion on/off,
- * DNSSEC validation, resolution timeouts and bounds, and automatic RFC 5011 trust anchor update)
- * via `GET`/`PATCH /api/recursive-settings` -- the single highest-priority gap a full REST/UI
- * configuration-completeness audit found: a fresh install starts with recursion off (the correct,
- * documented default) and, before this page existed, had no way to turn it on short of
- * hand-editing the configuration file and restarting this host's own process.
+ * This component is the "Recursive Resolver" settings page (`/settings/recursive`). It edits
+ * `RecursiveServerOptions` through `GET` and `PATCH /api/recursive-settings`
+ * (`recursivesettings:read`, `recursivesettings:write`): recursion on or off (off on a fresh
+ * install), DNSSEC validation, timeouts and limits, the cache, serve-stale, prefetch and RFC 5011
+ * automatic trust anchor updates.
  *
- * <p>Almost every field this form edits takes effect immediately, with no restart -- the backend
- * reads `RecursiveServerOptions` live via `IOptionsMonitor` everywhere it actually matters for a
- * query already in flight. The backend's own PATCH response note (surfaced directly in the
- * success notification, never suppressed) says so explicitly, and calls out the two fields that
- * are the deliberate exception: the root-hints/trust-anchor override lists, each read once at
- * startup or first seed by design. Those two lists are edited as repeatable rows at the bottom of
- * the form, and are only sent when they actually changed, so saving an unrelated field never
- * triggers the backend's restart-required note.
+ * <p>Every field is hot-reloaded except the root hint and trust anchor override lists, which are
+ * read at startup. Those lists are edited as rows at the bottom of the form and sent only when
+ * they changed, so saving another field does not produce the restart note.
  *
- * <p>Below the form, {@link DnsCacheCardComponent} shows the answer caches themselves (forwarded and
- * recursive) and lets an operator flush them -- this page already owns the cache size and
- * serve-stale settings, and its permissions are the ones the cache endpoints use.
+ * <p>Below the form, {@link DnsCacheCardComponent} shows the forwarded and recursive answer caches
+ * and can flush them; it uses this page's permissions.
  */
 @Component({
   selector: 'app-recursive-settings',
@@ -144,10 +137,10 @@ export class RecursiveSettingsComponent implements OnInit {
     trustAnchors: this.formBuilder.array<TrustAnchorFormGroup>([]),
   });
 
-  /** The algorithms a trust anchor row offers -- every algorithm still in real-world use. */
+  /** The algorithms a trust anchor row offers (see `TRUST_ANCHOR_ALGORITHMS`). */
   readonly trustAnchorAlgorithms = TRUST_ANCHOR_ALGORITHMS;
 
-  /** The two override lists exactly as last loaded, to tell whether a save needs to send them. */
+  /** The two override lists as last loaded or saved, to tell whether a save must send them. */
   private loadedOverrides = { rootHints: '[]', trustAnchors: '[]' };
 
   /** Every root hint server row. */
@@ -180,7 +173,7 @@ export class RecursiveSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes every field this form holds, then surfaces the backend's own hot-reload/restart-required note. */
+  /** This method PATCHes every field (the override lists only when changed), then shows the backend's note. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the PTR Sync page: loading, saving, prefix-length validation and a save error.
+ * TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('PtrSyncSettingsComponent', () => {
   let apiSpy: {
     apiPtrSyncSettingsGet: jasmine.Spy;

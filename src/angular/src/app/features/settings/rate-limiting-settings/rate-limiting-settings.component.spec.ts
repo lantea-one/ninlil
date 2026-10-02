@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Rate limiting page: loading, saving (bypass CIDRs split into a list) with
+ * the restart note and a save error. TestBed with a spy-backed settings service and
+ * `NotificationService`.
+ */
 describe('RateLimitingSettingsComponent', () => {
   let apiSpy: {
     apiRateLimitingSettingsGet: jasmine.Spy;

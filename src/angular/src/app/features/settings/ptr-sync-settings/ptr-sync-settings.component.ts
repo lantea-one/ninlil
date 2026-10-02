@@ -22,15 +22,13 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
- * This component reads and writes this host's own `PtrSyncOptions` global defaults (`GET`/`PATCH
- * /api/ptr-sync-settings`): whether a `Primary`/`CloudPrimary` zone's own A/AAAA record set is
- * automatically mirrored into its enclosing reverse zone, and the IPv4/IPv6 reverse-zone grouping
- * granularity used whenever a zone's own per-zone overrides (`ZoneEntity.AutoManagePtrRecords`/
- * `PtrIpv4PrefixLength`/`PtrIpv6PrefixLength`, all already editable through the zone form itself)
- * are left unset. The enable toggle mirrors {@link FilteringSettingsComponent}'s own single-
- * `Enable`-toggle reference pattern; the two prefix-length fields are new, validated numeric
- * inputs sharing the exact same 24-30 (IPv4) / 16-124-multiple-of-4 (IPv6) bounds the zone form's
- * own per-zone override fields already enforce.
+ * This component is the "PTR Sync" settings page (`/settings/ptr-sync`). It edits the
+ * `PtrSyncOptions` defaults through `GET` and `PATCH /api/ptr-sync-settings`
+ * (`ptrsyncsettings:read`, `ptrsyncsettings:write`): whether a Primary or CloudPrimary zone's A and
+ * AAAA records are mirrored as PTR records into the reverse zone, and the IPv4 and IPv6
+ * reverse-zone prefix lengths. A zone's own overrides on the zone form take precedence. The
+ * prefix fields use the zone form's ranges (IPv4 24 to 30, IPv6 16 to 124); the backend also
+ * requires the IPv6 length to be a multiple of 4. Changes are hot-reloaded.
  */
 @Component({
   selector: 'app-ptr-sync-settings',
@@ -73,7 +71,7 @@ export class PtrSyncSettingsComponent implements OnInit {
     void this.loadSettings();
   }
 
-  /** This method PATCHes the global default, then surfaces the backend's own hot-reloaded note. */
+  /** This method PATCHes the defaults, then shows the backend's note. */
   async save(): Promise<void> {
     if (this.submitting()) return;
 

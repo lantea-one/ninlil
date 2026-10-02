@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the Secondary Zone Refresh page: loading, saving with the backend note and a
+ * save error. TestBed with a spy-backed settings service and `NotificationService`.
+ */
 describe('SecondaryZoneRefreshSettingsComponent', () => {
   let apiSpy: {
     apiSecondaryZoneRefreshSettingsGet: jasmine.Spy;
