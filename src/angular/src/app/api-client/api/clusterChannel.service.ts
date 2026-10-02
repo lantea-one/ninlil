@@ -124,7 +124,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action answers a peer\&#39;s heartbeat with 200. Passing authentication is all it checks. Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports.
+     * This action answers a peer\&#39;s heartbeat with 200, after checking that the body names the peer the key belongs to and storing a newly announced certificate thumbprint (see Ninlil.Dns.Server.Cluster.Heartbeat.ClusterHeartbeatReceiver). Each node\&#39;s &#x60;ClusterHeartbeatBackgroundService&#x60; sets a peer\&#39;s Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that peer succeeded, so each node trusts its own view of a peer\&#39;s health rather than anything the peer reports. An invite key cannot reach this action.
      * @endpoint post /api/cluster/channel/heartbeat
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -192,7 +192,7 @@ export class ClusterChannelService extends BaseService implements ClusterChannel
     }
 
     /**
-     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes from the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never from the request body.
+     * This action receives the joining node\&#39;s callback, the second half of the join handshake (see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes from the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never from the request body. It is the one action an unused, unexpired invite key may sign; the route must stay Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationDefaults.JoinCompletePath.
      * @endpoint post /api/cluster/channel/join-complete
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

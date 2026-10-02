@@ -26,7 +26,7 @@ export interface ClusterSettingsDetail {
      */
     advertisedHost?: string | null;
     /**
-     * The TCP port peers use to reach this node. Defaults to 0, which must be changed before invites work.
+     * The TCP port peers use to reach this node. Defaults to 0, which means the web server\'s HTTPS port.
      */
     advertisedPort?: number;
     /**

@@ -12,5 +12,6 @@
 export interface ClusterHeartbeatRequest { 
     senderNodeId?: string;
     sentAtUtc?: string;
+    senderCertificateThumbprint?: string | null;
 }
 

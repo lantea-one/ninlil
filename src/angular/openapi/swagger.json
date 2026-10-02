@@ -8546,7 +8546,7 @@
         "tags": [
           "ClusterChannel"
         ],
-        "summary": "This action answers a peer's heartbeat with 200. Passing authentication is all it\nchecks. Each node's `ClusterHeartbeatBackgroundService` sets a peer's\nNinlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that peer\nsucceeded, so each node trusts its own view of a peer's health rather than anything the\npeer reports.",
+        "summary": "This action answers a peer's heartbeat with 200, after checking that the body names the\npeer the key belongs to and storing a newly announced certificate thumbprint (see\nNinlil.Dns.Server.Cluster.Heartbeat.ClusterHeartbeatReceiver). Each node's `ClusterHeartbeatBackgroundService`\nsets a peer's Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity.Status from whether its own probe of that\npeer succeeded, so each node trusts its own view of a peer's health rather than\nanything the peer reports. An invite key cannot reach this action.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8578,7 +8578,7 @@
         "tags": [
           "ClusterChannel"
         ],
-        "summary": "This action receives the joining node's callback, the second half of the join handshake\n(see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes\nfrom the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never\nfrom the request body.",
+        "summary": "This action receives the joining node's callback, the second half of the join handshake\n(see M:Ninlil.Dns.Server.Cluster.Join.ClusterJoinService.HandleJoinCompleteAsync(System.String,Ninlil.Dns.Server.Cluster.Channel.ClusterJoinCompleteRequest,System.Threading.CancellationToken)). The TSIG key name comes\nfrom the identity Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationHandler authenticated, never\nfrom the request body. It is the one action an unused, unexpired invite key may sign;\nthe route must stay Ninlil.Dns.Server.Cluster.Authentication.ClusterTsigAuthenticationDefaults.JoinCompletePath.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -39306,6 +39306,10 @@
           "sentAtUtc": {
             "type": "string",
             "format": "date-time"
+          },
+          "senderCertificateThumbprint": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -39532,7 +39536,7 @@
           },
           "advertisedPort": {
             "type": "integer",
-            "description": "The TCP port peers use to reach this node. Defaults to 0, which must be changed before invites work.",
+            "description": "The TCP port peers use to reach this node. Defaults to 0, which means the web server's HTTPS port.",
             "format": "int32"
           },
           "heartbeatInterval": {
