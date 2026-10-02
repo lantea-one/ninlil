@@ -1,18 +1,13 @@
 /**
- * This resource block defines the resource to bootstrap the output directory on a Windows system.
+ * Empties the output directory on Windows.
  */
 resource "null_resource" "bootstrap-dos" {
-
-  // Define whether to include this resource or not.
   count = (local.is_windows ? 1 : 0)
 
-  // Define the local execution provisioner for this resource.
   provisioner "local-exec" {
-
-    // We're on a UNIX system, so we'll use bash to execute our script.
+    // Windows, so the commands are PowerShell.
     interpreter = ["PowerShell", "-Command"]
 
-    // Define the command to bootstrap our output directory.
     command = join(" ; ", [
       format("Remove-Item -ErrorAction SilentlyContinue -Force -Path '%s' -Recurse",
         local.output_path),
@@ -20,39 +15,30 @@ resource "null_resource" "bootstrap-dos" {
     ])
   }
 
-  // Define the triggers for this resource
   triggers = {
-
-    // We'll always want this to trigger
+    // Runs again whenever var.trigger changes.
     always_run = local.trigger
   }
 }
 
 /**
- * This resource block defines the resource to bootstrap the output directory on a UNIX system.
+ * Empties the output directory on Linux and macOS.
  */
 resource "null_resource" "bootstrap-unix" {
-
-  // Define whether to include this resource or not.
   count = (local.is_windows ? 0 : 1)
 
-  // Define the local execution provisioner for this resource.
   provisioner "local-exec" {
-
-    // We're on a UNIX system, so we'll use bash to execute our script.
+    // Not Windows, so the commands run in bash.
     interpreter = ["/bin/bash", "-c"]
 
-    // Define the command to bootstrap our output directory.
     command = join(" ; ", [
       format("rm -force --recursive '%s' 2> /dev/null", local.output_path),
       format("mkdir -p '%s'", local.output_path)
     ])
   }
 
-  // Define the triggers for this resource
   triggers = {
-
-    // We'll always want this to trigger
+    // Runs again whenever var.trigger changes.
     always_run = local.trigger
   }
 }
@@ -61,24 +47,17 @@ resource "null_resource" "bootstrap-unix" {
  * This resource block defines the resource to clean the .NET project or solution before publishing.
  */
 resource "null_resource" "clean" {
-
-  // We'll need the restore resource to run before this one
   depends_on = [null_resource.restore]
 
-  // Define the local execution provisioner for this resource
   provisioner "local-exec" {
-
-    // Build our dotnet clean command to be executed
     command = join(" ", [
       "dotnet clean", var.project,
       "--configuration", coalesce(var.configuration, "Release"),
       "--nologo", "--runtime", var.runtime, "--verbosity", var.verbosity])
   }
 
-  // Define the triggers for this resource
   triggers = {
-
-    // We'll always want this to trigger
+    // Runs again whenever var.trigger changes.
     always_run = local.trigger
   }
 }
@@ -87,14 +66,9 @@ resource "null_resource" "clean" {
  * This resource block defines the resource to publish the .NET project or solution to the specified output directory.
  */
 resource "null_resource" "publish" {
-
-  // We'll need the clean resource to run before this one
   depends_on = [null_resource.clean]
 
-  // Define the local execution provisioner for this resource
   provisioner "local-exec" {
-
-    // Build our dotnet publish command to be executed
     command = join(" ", [
       "dotnet publish", var.project,
       "--configuration", coalesce(var.configuration, "Release"),
@@ -106,26 +80,20 @@ resource "null_resource" "publish" {
     ])
   }
 
-  // Define the triggers for this resource
   triggers = {
-
-    // We'll always want this to trigger
+    // Runs again whenever var.trigger changes.
     always_run = local.trigger
   }
 }
 
 /**
- * This resource block defines the resource to restore the .NET project or solution before publishing.
+ * This resource block defines the resource to restore the .NET project or solution before publishing,
+ * bypassing the HTTP cache and using var.nuget-config-file when one is given.
  */
 resource "null_resource" "restore" {
-
-  // We'll need the environment file to run before this one
   depends_on = null_resource.bootstrap-dos, null_resource.bootstrap-unix]
 
-  // Define the local execution provisioner for this resource
   provisioner "local-exec" {
-
-    // Build our dotnet restore command to be executed
     command = join(" ", concat([
       "dotnet restore", var.project, "--no-cache",
       "--runtime", var.runtime,
@@ -133,10 +101,8 @@ resource "null_resource" "restore" {
     ], (coalesce(var.nuget-config-file, "_") == "_" ? [] : ["--configfile", abspath(var.nuget-config-file)])))
   }
 
-  // Define the triggers for this resource
   triggers = {
-
-    // We'll always want this to trigger
+    // Runs again whenever var.trigger changes.
     always_run = local.trigger
   }
 }

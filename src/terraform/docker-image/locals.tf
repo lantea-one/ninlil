@@ -1,16 +1,13 @@
 /**
- * This local block defines the local variables used during the Docker build process.
+ * Image naming. name-with-tag is "<name>:<tag>", or only the tag when no name is given; url is
+ * "<registry url>:<name-with-tag>" when a registry URL is set, otherwise name-with-tag.
  */
 locals {
-
-  // Define the name of our image with the tag.
   name-with-tag = (coalesce(var.name, "_") != "_" ?
     format("%s:%s", trimspace(var.name), trimspace(var.tag)) : trimspace(var.tag))
 
-  // Define the trigger for our image build.
   trigger = var.trigger
 
-  // Define the full URL of our image.
   url = (coalesce(var.registry.url, "_") != "_" ?
     format("%s:%s", var.registry.url, local.name-with-tag) : local.name-with-tag)
 }

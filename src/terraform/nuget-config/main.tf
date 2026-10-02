@@ -1,11 +1,10 @@
 /**
- * This Terraform module is responsible for configuring NuGet settings for a project.
- * It ensures that the necessary NuGet configuration files are created and managed,
- * allowing for consistent package management across different environments.
- * The module can be customized to specify package sources, credentials, and other relevant settings as needed.
+ * Writes a nuget.config into var.workspace from a template (nuget.config.tfpl by default, which
+ * has no sources), then adds NuGet.org and each entry of var.sources with `dotnet nuget add
+ * source`. A source that authenticates has its password stored in clear text in the file. Its
+ * outputs are the file's path and its contents (marked sensitive).
+ * Nothing in this repository's pipeline uses this module.
  */
 terraform {
-
-  // Define the required Terraform version.
   required_version = ">= 1.16.0"
 }

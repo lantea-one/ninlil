@@ -1,49 +1,38 @@
 /**
- * This resource block defines the Docker build process for the image defined by the input variables.
+ * Builds the image from var.context and var.dockerfile for var.platform, named local.url.
  */
 resource "docker_image" "build-image" {
-
-  // Define the build configuration for the image
   build {
-
-    // Define our build arguments
     build_args = var.build-arguments
 
-    // Define allowed cache sources
     cache_from = var.sources
 
-    // Define the context build directory
     context = var.context
 
-    // Define the dockerfile to use
     dockerfile = var.dockerfile
 
-    // Always pull the latest images
+    // Skip the build cache (true by default).
     no_cache = var.no-cache
 
-    // Define the build platform
     platform = var.platform
 
-    // Define whether or not to pull the parent image
+    // Pull the base image only when no cache source images are given.
     pull_parent = (length(var.sources) == 0 ? true : false)
 
-    // We'll want to remove any ephemeral containers and images
+    // Remove intermediate containers after the build.
     remove = true
   }
 
-  // We'll want to force the removal of the image
+  // On destroy, remove the image even when a container still uses it...
   force_remove = true
 
-  // We don't want to keep the image locally
+  // ...and do not keep it in the local image store.
   keep_locally = false
 
-  // Define the name of our image
   name = local.url
 
-  // Define the triggers for the image
   triggers = {
-
-    // Trigger always
+    // Rebuilds whenever var.trigger changes.
     always_run = local.trigger
   }
 }

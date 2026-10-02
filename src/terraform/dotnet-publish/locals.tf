@@ -1,14 +1,11 @@
 /**
- * This file contains local values used in the code-dotnet-publish module.
+ * Local values for the dotnet-publish module.
  */
 locals {
-
-  // Define our Windows OS determinant.
+  // A drive-letter output path (c:...) means the module runs on Windows.
   is-windows = (length(regexall("^[a-z]:", lower(local.output-path))) > 0 ? true : false)
 
-  // Define our absolute output path.
   output-path = abspath(var.output)
 
-  // Define our trigger to force re-publishing the project or solution.
   trigger = var.trigger
 }

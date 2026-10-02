@@ -1,19 +1,19 @@
-// This script provisions a fresh MongoDB server for Ninlil. Run it once, connected as a user
-// with the userAdmin (or root) role (for example, via `mongosh --file init.js`), before ever
-// starting the application against this server.
+// Provisions a fresh MongoDB server for Ninlil. Run it once, connected as a user with the
+// userAdmin (or root) role (for example, `mongosh --file init.js`), before the application first
+// starts against this server.
 //
-// Unlike the relational engines, MongoDB has no separate "create the tables" step for Ninlil
-// to run later: collections and their indexes are created automatically the first time the
-// application writes to them, using the same class maps and conventions registered by
-// Ninlil.Dns.Data.MongoDb. This script only needs to create the database (which MongoDB does
-// implicitly, the moment something is written into it) and the login the application will use.
+// Input: none; edit the password below first. Output: the "ninlil" login, with readWrite on the
+// "ninlil" database. Point NINLIL_STORAGE_CONNECTION_STRING at that database and login.
+//
+// MongoDB needs no schema step: collections are created the first time the application writes
+// to them, using the class maps registered by Ninlil.Dns.Data.MongoDb and
+// Ninlil.Dhcp.Data.MongoDb, and the repositories that need indexes (the query log, webhook
+// delivery attempts) create them on first use. The database itself appears on the first write.
 
-// Switch into the database the application stores everything in. MongoDB does not actually
-// create the database until the first write happens inside it, which is expected.
+// Switch into the application's database. MongoDB creates it on the first write inside it.
 db = db.getSiblingDB("ninlil");
 
-// Create the login the application itself will connect as, scoped to read and write only inside
-// its own database.
+// Create the login the application connects as, able to read and write only in its database.
 // Change this password before running the script against anything but a local, throwaway
 // development server.
 db.createUser({
