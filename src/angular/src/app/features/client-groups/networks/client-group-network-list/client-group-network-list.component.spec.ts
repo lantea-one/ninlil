@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the group networks page: loading rows and the group name, and deleting with
+ * the confirmation accepted or dismissed. TestBed with spy-backed API services.
+ */
 describe('ClientGroupNetworkListComponent', () => {
   let networksApiSpy: {
     apiClientGroupsGroupIdNetworksGet: jasmine.Spy;

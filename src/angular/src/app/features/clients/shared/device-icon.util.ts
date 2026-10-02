@@ -2,9 +2,8 @@ import { DnsClientDeviceIconEnum } from '../../../api-client';
 import { DEVICE_ICON_CATALOG, DeviceIconOption } from './device-icon.model';
 
 /**
- * This function finds a device icon's catalog entry, or `undefined` for an unset (or unknown) key
- * -- shared by the picker and any page that draws a client's icon, so the key-to-glyph mapping
- * lives in exactly one place (`DEVICE_ICON_CATALOG`).
+ * This function finds a key's entry in `DEVICE_ICON_CATALOG`, or `undefined` for an unset or
+ * unknown key. The picker and the client list both use it, so the mapping lives in one place.
  */
 export function findDeviceIcon(
   key: DnsClientDeviceIconEnum | null | undefined,
@@ -13,10 +12,9 @@ export function findDeviceIcon(
 }
 
 /**
- * This function picks the icon a device is drawn with anywhere in a list or summary: the
- * operator's explicit choice when there is one, otherwise the backend's vendor-based suggestion,
- * otherwise the generic device glyph -- the same precedence the icon picker's "Automatic" tile
- * describes, so a device looks the same on the list as it does on its own form.
+ * This function picks the icon a device is drawn with: the operator's choice, else the backend's
+ * vendor-based suggestion, else the generic device. This is the order the picker's "Automatic"
+ * tile describes, so a device looks the same in the list as on its form.
  *
  * @param explicitKey The device's stored `deviceIconKey`, if any.
  * @param suggestedKey The device's read-time `suggestedDeviceIconKey`, if any.

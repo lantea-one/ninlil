@@ -19,21 +19,19 @@ import { ClientGroupNetworksService } from '../../../../api-client';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 
-/** The two mutually-exclusive shapes a `DnsClientGroupNetworkEntity` row can take. */
+/** The two kinds of match a group network row can be; a row is one or the other. */
 type NetworkMatchKind = 'cidr' | 'clientId';
 
 /**
- * This component is both the "add a network" and "edit a network" page for a client group -- one
- * component for both, distinguished by whether the route supplies a `networkId` (see
- * `app.routes.ts`). A row matches a client either by CIDR (its own source address) or by a
- * DNS-over-HTTPS ClientID label -- exactly one of the two, per
- * `DnsClientGroupNetworkEntity`'s own doc comment -- so this form is a mode select plus whichever
- * single field that mode needs, rather than two always-visible fields an operator could
- * (invalidly) fill in both at once. Neither field's own format is validated client-side beyond
- * "required": the CIDR is only validated by the real backend parser
- * (`System.Net.IPNetwork.TryParse`), and a ClientID is free text with no format of its own, so a
- * caller always sees the exact same acceptance rule `DnsFilterEngine` itself matches against at
- * query time.
+ * This component is the add and edit page for a client group's network
+ * (`/client-groups/:groupId/networks/new` and `.../networks/:networkId/edit`,
+ * `clientgroups:write`); edit mode is chosen by the `networkId` route parameter. It saves with
+ * `POST` or `PUT /api/client-groups/{groupId}/networks/{id}`.
+ *
+ * <p>A row matches clients either by source address (a CIDR) or by the ClientID a DNS-over-HTTPS
+ * client sends in the `/dns-query/{clientid}` path, never both. The form has a kind select and
+ * shows only the field that kind needs. Fields are only checked as required here; the backend
+ * parses the CIDR (`IPNetwork.TryParse`) and a ClientID is free text.
  */
 @Component({
   selector: 'app-client-group-network-form',
@@ -78,15 +76,14 @@ export class ClientGroupNetworkFormComponent implements OnInit {
     clientId: [''],
   });
 
-  /** Which of {@link cidr}/`clientId`'s own fields is currently the active one, tracked as a plain signal since `valueChanges` isn't one. */
+  /** The selected match kind as a signal (the form's `valueChanges` is not one), which decides the field shown. */
   readonly matchKind = signal<NetworkMatchKind>('cidr');
   readonly showCidrField = computed(() => this.matchKind() === 'cidr');
   readonly showClientIdField = computed(() => this.matchKind() === 'clientId');
 
   constructor() {
-    // Switching mode clears the field that mode no longer uses, and re-requires the one it does
-    // -- so save() never accidentally submits both, or neither, and the disabled field never
-    // shows stale leftover text from before the switch.
+    // Switching kind clears the unused field and makes the other one required, so save() sends
+    // exactly one and no stale text is left behind.
     this.form.controls.matchKind.valueChanges.subscribe((kind) => {
       this.matchKind.set(kind);
 
@@ -109,7 +106,7 @@ export class ClientGroupNetworkFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingNetwork();
   }
 
-  /** This method adds (`POST`) or fully replaces (`PUT`) the network, per {@link isEditMode}. */
+  /** This method adds the network (`POST`) or replaces it (`PUT`), then returns to the network list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the client group form: create and edit modes, saving, errors and validation.
+ * TestBed with a spy-backed `ClientGroupsService` and a stubbed route.
+ */
 describe('ClientGroupFormComponent', () => {
   let clientGroupsApiSpy: {
     apiClientGroupsIdGet: jasmine.Spy;

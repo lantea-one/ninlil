@@ -39,6 +39,11 @@ const IPV6_ADDRESS: ClientAddressDetail = {
   vendor: 'Raspberry Pi Foundation',
 };
 
+/**
+ * These tests cover a client's identifiers page: the rows, adding (trimmed) and removing with
+ * confirmation, backend refusals, and hiding write controls without `clients:write`. TestBed with
+ * spy-backed API services and a fake `AuthService`.
+ */
 describe('ClientAddressListComponent', () => {
   let addressesApiSpy: {
     apiClientsClientIdAddressesGet: jasmine.Spy;

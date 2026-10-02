@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a group's schedules page: loading and deleting with the confirmation
+ * accepted or dismissed. TestBed with spy-backed API services.
+ */
 describe('ClientGroupScheduleListComponent', () => {
   let schedulesApiSpy: {
     apiClientGroupsGroupIdSchedulesGet: jasmine.Spy;

@@ -53,7 +53,7 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 import { AuthService } from '../../../core/auth/auth.service';
 
-/** How many known clients one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
@@ -72,25 +72,23 @@ interface ClientRow {
 }
 
 /**
- * This component is the Client Management overview: a row of summary cards (total, online,
- * offline, new today, favorites -- `GET /api/clients/summary`) above a device list backed by
- * `GET /api/clients`'s own pushed-down pagination, presence/favorite/new filters, and ordering.
+ * This component is the Clients page (`/clients`, `clients:read`). Summary cards (total, online,
+ * offline, new today, favorites, from `GET /api/clients/summary`) sit above the device list from
+ * `GET /api/clients`, which the server pages, filters (presence, favorites, new) and sorts.
  *
- * <p>Each device is one row regardless of how many identifiers it answers to: every address it
- * owns -- IPv4 and IPv6 alike -- is listed under that one row, with its last-known IP address and
- * the identifier behind it. A row also shows the device's icon (the operator's explicit choice,
- * else the backend's vendor-based suggestion), its hardware vendor (or that its MAC address is
- * randomized), whether it is online now and when it was last seen, and a favorite star that
- * toggles in place.
+ * <p>Each device is one row, however many identifiers it has: every IPv4 and IPv6 address is
+ * listed in that row with its last IP address and identifier. A row also shows the device icon
+ * (the operator's choice, else the backend's vendor-based suggestion), the vendor or a randomized
+ * MAC note, whether it is online and when it was last seen, and a favorite star. With
+ * `clients:write` the star and the enable/disable button work in place (`PATCH /api/clients/{id}`)
+ * and edit and delete are offered; without it they are disabled or hidden.
  *
- * <p>The selected card (the filter) and ordering are mirrored into the URL's query string
- * (`?filter=online&sort=LastSeen`), so a filtered view survives a reload and can be linked to. The
- * "new today" card counts from the viewer's own local midnight, and the list it opens filters from
- * that exact same instant, so the card's count and the list always agree.
+ * <p>The selected card and the sort are kept in the query string (`?filter=online&sort=LastSeen`),
+ * so a filtered view survives a reload and can be linked to. "New today" counts from the viewer's
+ * local midnight, and the filtered list uses the same instant, so the count and the list agree.
  *
- * <p>Since `ClientDetail` carries only a raw, optional `clientGroupId`, this component resolves
- * each client's group name by fetching every client group once and looking each id up in that set
- * -- acceptable at this project's own homelab/small-org target scale.
+ * <p>A client carries only a `clientGroupId`, so the page loads the client groups once to show
+ * names. Without `clientgroups:read` the Group column is left out.
  */
 @Component({
   selector: 'app-client-list',
@@ -123,22 +121,22 @@ export class ClientListComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  /** Exposes the enum to this component's own template, for the origin badge. */
+  /** The enum, exposed to the template for the origin badge. */
   readonly DnsClientOriginEnum = DnsClientOriginEnum;
 
-  /** Exposes the enum to this component's own template, for each address's protocol badge. */
+  /** The enum, exposed to the template for each address's protocol badge. */
   readonly InternetProtocolVersionEnum = InternetProtocolVersionEnum;
 
   /** The orderings the sort control offers. */
   readonly sortOptions = CLIENT_SORT_OPTIONS;
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   /**
@@ -177,8 +175,8 @@ export class ClientListComponent {
   readonly sort = signal<DnsClientSortOrderEnum>(CLIENT_SORT_OPTIONS[0].value);
 
   /**
-   * The instant "new today" is counted from, fixed for one load so the summary card and a "new"
-   * filtered list use exactly the same cutoff.
+   * The instant "new today" counts from. It is fixed per reload, so the summary card and the
+   * "new" filter use the same cutoff.
    */
   private newSinceUtc = startOfLocalDayIso();
 
@@ -210,20 +208,20 @@ export class ClientListComponent {
     await this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method re-fetches both the summary counts and the current page, e.g. to pick up new sightings. */
+  /** This method reloads the summary counts and the current page, e.g. to pick up new sightings. */
   async reload(): Promise<void> {
     this.newSinceUtc = startOfLocalDayIso();
     await Promise.all([this.loadSummary(), this.loadPage()]);
   }
 
-  /** This method toggles a client's favorite star via a single-field RFC 7396 merge patch. */
+  /** This method flips a client's favorite star with a one-field merge patch (RFC 7396). */
   async toggleFavorite(row: ClientRow): Promise<void> {
     if (!row.client.id) return;
 
@@ -240,7 +238,7 @@ export class ClientListComponent {
     }
   }
 
-  /** This method toggles a client's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a client's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(row: ClientRow): Promise<void> {
     if (!row.client.id) return;
 
@@ -258,7 +256,7 @@ export class ClientListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a known client. */
+  /** This method asks for confirmation, then deletes a client. */
   async deleteClient(row: ClientRow): Promise<void> {
     if (!row.client.id) return;
 
@@ -291,7 +289,7 @@ export class ClientListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -337,7 +335,7 @@ export class ClientListComponent {
     return request;
   }
 
-  /** This method fetches the summary counts; a failure leaves the cards showing dashes, never blocking the list. */
+  /** This method fetches the summary counts. On failure the cards show dashes and the list still loads. */
   private async loadSummary(): Promise<void> {
     try {
       this.summary.set(
@@ -351,9 +349,9 @@ export class ClientListComponent {
   }
 
   /**
-   * This method fetches every client group, only to name each client's group, or returns `null`
-   * when this session can't read client groups (skipping a request the API would refuse) or the
-   * request fails -- the client list itself never depends on it.
+   * This method fetches the client groups (up to 500) to name each client's group. It returns
+   * `null` without `clientgroups:read` (the API would refuse) or when the request fails; the
+   * client list loads either way.
    */
   private async loadGroups(): Promise<ClientGroupDetail[] | null> {
     if (!this.authService.hasPermission('clientgroups:read')) return null;
@@ -404,7 +402,8 @@ export class ClientListComponent {
                 ? (groupNamesById.get(client.clientGroupId) ?? '(unknown group)')
                 : null,
             icon: resolveDisplayedDeviceIcon(client.deviceIconKey, client.suggestedDeviceIconKey),
-            // An unnamed device is shown by its most recent IP address, else its first identifier.
+            // An unnamed device is shown by its first known IP address (IPv4 first), else its
+            // first identifier.
             title:
               client.displayName ||
               addresses.find((address) => address.address)?.address ||

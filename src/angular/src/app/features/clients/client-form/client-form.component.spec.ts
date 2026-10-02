@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the client form: register and edit modes, the locked identifier in edit
+ * mode, the vendor and icon suggestion, saving and errors. TestBed with spy-backed
+ * `ClientsService` and `ClientGroupsService` and a stubbed route.
+ */
 describe('ClientFormComponent', () => {
   let clientsApiSpy: {
     apiClientsIdGet: jasmine.Spy;

@@ -30,7 +30,7 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { AuthService } from '../../../../core/auth/auth.service';
 
-/** How many assignments one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /** This interface pairs one raw assignment with the filter list name resolved for display. */
@@ -40,20 +40,14 @@ interface AssignmentRow {
 }
 
 /**
- * This component lists every filter list assigned directly to one known client, backed by
- * `GET /api/clients/{clientId}/list-assignments`'s own real `skip`/`take` pagination -- the
- * client-level analogue of `ClientGroupListAssignmentListComponent`, mirroring its shape exactly.
- * A client's own direct assignments here are unioned with whatever its matched client group
- * already contributes (see `DnsFilterEngine.ResolveApplicableListsAsync`'s own doc comment), never
- * a replacement for it. There is no `PUT`/`PATCH` here, matching
- * `ClientListAssignmentsController`'s own contract -- an assignment is just a join with no mutable
- * field of its own; changing which list is assigned means deleting one assignment and creating
- * another.
+ * This component is a client's filter list assignments page
+ * (`/clients/:clientId/list-assignments`, `clients:read`). It works like
+ * `ClientGroupListAssignmentListComponent`, against `/api/clients/{clientId}/list-assignments`
+ * and with `clients:write` for adding and removing.
  *
- * Since `ClientListAssignmentDetail` carries only a raw `listId`, this component resolves each
- * assignment's own list name for display by fetching every filter list once and looking each
- * assignment's `listId` up in that set -- the same in-memory-lookup pattern
- * `ClientGroupListAssignmentListComponent` already establishes.
+ * <p>These direct assignments are added to the lists the client's group contributes; they do not
+ * replace them (`DnsFilterEngine.ResolveApplicableListsAsync`). List names come from loading the
+ * filter lists once, or the ids without `filterlists:read`.
  */
 @Component({
   selector: 'app-client-list-assignment-list',
@@ -81,13 +75,13 @@ export class ClientListAssignmentListComponent {
   private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending assignment removal. */
+  /** Whether the remove confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly clientId = this.route.snapshot.paramMap.get('clientId') ?? '';
@@ -110,14 +104,14 @@ export class ClientListAssignmentListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then removes, one filter list assignment from this client. */
+  /** This method asks for confirmation, then removes an assignment from the client. */
   async deleteAssignment(row: AssignmentRow): Promise<void> {
     if (!row.assignment.id) return;
 
@@ -145,9 +139,7 @@ export class ClientListAssignmentListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -157,7 +149,7 @@ export class ClientListAssignmentListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -169,15 +161,14 @@ export class ClientListAssignmentListComponent {
       const client = await firstValueFrom(this.clientsApi.apiClientsIdGet({ id: this.clientId }));
       this.clientLabel.set(client.displayName ?? client.addresses?.[0]?.clientIdentifier ?? null);
     } catch {
-      // A missing client label is only cosmetic here -- the assignment list load below surfaces
-      // its own real error if the owning client itself doesn't exist.
+      // The label is only for the heading; if the client is missing, loadPage() shows the error.
     }
   }
 
   /**
-   * This method fetches every filter list, only to name each assignment's list, or returns
-   * `null` when this session can't read filter lists (skipping a request the API would refuse) or
-   * the request fails -- the assignments themselves never depend on it.
+   * This method fetches the filter lists (up to 500) to name each assignment's list. It returns
+   * `null` without `filterlists:read` (the API would refuse) or when the request fails; the
+   * assignments load either way.
    */
   private async loadFilterLists(): Promise<FilterListDetail[] | null> {
     if (!this.authService.hasPermission('filterlists:read')) return null;

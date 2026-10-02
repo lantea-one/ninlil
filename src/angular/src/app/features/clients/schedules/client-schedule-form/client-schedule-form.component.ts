@@ -23,9 +23,8 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 
 /**
- * This tuple names the seven ordinary form controls this component's own `daysOfWeek` checkbox
- * group is built from, in the same Sunday-first order the backend's own
- * `DnsScheduleDayOfWeekEnum` and `DnsScheduleWindowEvaluator` use.
+ * This tuple names the seven day checkbox controls, Sunday first, the order of the backend's
+ * `DnsScheduleDayOfWeekEnum`.
  */
 const DAY_CONTROL_NAMES = [
   'sunday',
@@ -37,7 +36,7 @@ const DAY_CONTROL_NAMES = [
   'saturday',
 ] as const;
 
-/** This record pairs each day control's own form-control name with its short display label. */
+/** This record maps each day control to its short label. */
 const DAY_LABELS: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
   sunday: 'Sun',
   monday: 'Mon',
@@ -48,11 +47,7 @@ const DAY_LABELS: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
   saturday: 'Sat',
 };
 
-/**
- * This record pairs each day control's own form-control name with the full day name the wire's
- * own `daysOfWeek` string uses -- kept separate from {@link DAY_LABELS}' own short UI labels
- * since the two serve genuinely different purposes.
- */
+/** This record maps each day control to the day name used in the `daysOfWeek` wire string. */
 const DAY_FULL_NAMES: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
   sunday: 'Sunday',
   monday: 'Monday',
@@ -64,26 +59,20 @@ const DAY_FULL_NAMES: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
 };
 
 /**
- * This component is both the "add a schedule" and "edit a schedule" page for a known client's
- * own time-of-day parental-control schedule -- one component for both, distinguished by whether
- * the route supplies a `scheduleId` (see `app.routes.ts`), the same shape
- * `DhcpReservationFormComponent` already establishes for a "real child resource with its own
- * fields" nested under a parent.
+ * This component is the add and edit page for a client's schedule
+ * (`/clients/:clientId/schedules/new` and `.../schedules/:scheduleId/edit`, `clients:write`); edit
+ * mode is chosen by the `scheduleId` route parameter. A schedule is a time-of-day window, on chosen
+ * days and in a chosen time zone, during which the client's queries are blocked. It saves with
+ * `POST` or `PUT /api/clients/{clientId}/schedules/{id}`.
  *
- * <p><strong>`daysOfWeek` is a `[Flags]` enum on the wire</strong> (a comma-separated string such
- * as `"Sunday, Monday"`), but OpenAPI/Swashbuckle has no native notion of a combined-flags value,
- * so the generated `DnsScheduleDayOfWeekEnum` TypeScript type is a plain single-value string
- * union -- it cannot type a combined value at all. This component therefore works with
- * `daysOfWeek` as a plain `string` throughout its own form model, building/parsing the
- * comma-separated wire value directly from/to seven ordinary checkbox controls
- * ({@link DAY_CONTROL_NAMES}), and casts only at the two points a real
- * `ClientScheduleWriteRequest` is actually built.</p>
+ * <p><strong>`daysOfWeek` is a flags enum</strong> sent as a comma-separated string such as
+ * `"Sunday, Monday"`. The generated `DnsScheduleDayOfWeekEnum` type only allows a single value,
+ * so the form keeps seven checkboxes ({@link DAY_CONTROL_NAMES}), builds the string itself and
+ * casts it when building the request.
  *
- * <p><strong>Time zone selection</strong> uses the real, complete IANA time zone database this
- * browser ships (`Intl.supportedValuesOf('timeZone')`) when available, falling back to a small
- * curated list of common zones on an older browser that lacks it -- either way, the backend's own
- * `TimeZoneInfo.FindSystemTimeZoneById` validation is the actual source of truth for whether a
- * submitted id is real, this list only narrows the operator's typical choice down to a dropdown.</p>
+ * <p>The time zone select lists the browser's IANA zones (`Intl.supportedValuesOf('timeZone')`),
+ * or a short fallback list in a browser without it. The backend checks the id with
+ * `TimeZoneInfo.FindSystemTimeZoneById`.
  */
 @Component({
   selector: 'app-client-schedule-form',
@@ -125,11 +114,11 @@ export class ClientScheduleFormComponent implements OnInit {
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** The seven day-of-week checkbox controls' own names, for the template's own `*ngFor`-free repeat. */
+  /** The day control names, for the template's `@for`. */
   readonly dayControlNames = DAY_CONTROL_NAMES;
   readonly dayLabels = DAY_LABELS;
 
-  /** The time zone ids this form's own `<select>` offers -- see this class's own doc comment. */
+  /** The time zone ids the select offers; see the class comment. */
   readonly timeZoneOptions = resolveTimeZoneOptions();
 
   readonly form = this.formBuilder.group({
@@ -151,7 +140,10 @@ export class ClientScheduleFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingSchedule();
   }
 
-  /** This method adds (`POST`) or fully replaces (`PUT`) the schedule, per {@link isEditMode}. */
+  /**
+   * This method checks that at least one day is chosen and that start and end differ, then adds
+   * the schedule (`POST`) or replaces it (`PUT`) and returns to the schedule list.
+   */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -232,11 +224,8 @@ export class ClientScheduleFormComponent implements OnInit {
           .filter((day) => day.length > 0),
       );
 
-      // A stored value of "All" (DnsScheduleDayOfWeekEnum.All) is a real, valid combined value
-      // this form's own UI never produces directly (it always submits the fully expanded day
-      // list), but a row created some other way (a future bulk-apply feature, a direct API call)
-      // could still hold it -- checked alongside each individual day name so loading one still
-      // shows every box checked correctly.
+      // This form always sends the separate day names, but a schedule created through the API
+      // may hold "All" (DnsScheduleDayOfWeekEnum.All), which checks every box.
       this.form.patchValue({
         sunday: selectedDays.has('Sunday') || selectedDays.has('All'),
         monday: selectedDays.has('Monday') || selectedDays.has('All'),
@@ -283,9 +272,8 @@ const FALLBACK_TIME_ZONES = [
 ];
 
 /**
- * This function resolves the real, complete IANA time zone list via
- * `Intl.supportedValuesOf('timeZone')` when this runtime supports it, falling back to
- * {@link FALLBACK_TIME_ZONES} otherwise -- see this file's own component doc comment.
+ * This function returns the browser's IANA time zone list from `Intl.supportedValuesOf`, or
+ * {@link FALLBACK_TIME_ZONES} when that is unavailable.
  */
 function resolveTimeZoneOptions(): string[] {
   const intlWithSupportedValuesOf = Intl as unknown as {
@@ -296,7 +284,7 @@ function resolveTimeZoneOptions(): string[] {
     const zones = intlWithSupportedValuesOf.supportedValuesOf?.('timeZone');
     if (zones && zones.length > 0) return zones;
   } catch {
-    // Fall through to the curated fallback list below.
+    // Use the fallback list below.
   }
 
   return FALLBACK_TIME_ZONES;

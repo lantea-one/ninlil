@@ -26,10 +26,12 @@ import { extractErrorMessage } from '../../../shared/http-error/http-error.util'
 import { NotificationService } from '../../../shared/notification/notification.service';
 
 /**
- * This component is both the "create a mapping" and "edit a mapping" page -- one component for
- * both, distinguished by whether the route supplies an `id` (see `app.routes.ts`), mirroring
- * `AccessControlRuleFormComponent`'s own shape exactly since this is likewise a flat,
- * single-entity, no-secrets form.
+ * This component is the create and edit page for a static address mapping
+ * (`/client-static-address-mappings/new` and `.../:id/edit`, `clients:write`); edit mode is chosen
+ * by the `id` route parameter. A mapping tells the server that queries from an address or network
+ * come from the client with a given identifier (MAC or DUID), for devices that never take a DHCP
+ * lease from this server. It saves with `POST` or
+ * `PUT /api/client-static-address-mappings/{id}`.
  */
 @Component({
   selector: 'app-static-address-mapping-form',
@@ -82,7 +84,7 @@ export class StaticAddressMappingFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingMapping();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the mapping, per {@link isEditMode}. */
+  /** This method creates the mapping (`POST`) or replaces it (`PUT`), then returns to the list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

@@ -33,25 +33,25 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { formatRelativeTime } from '../../shared/relative-time.util';
 
 /**
- * The most identifiers one device realistically answers to; the whole set is fetched as one page,
- * since a device's addresses are a handful, not a paged collection.
+ * The most identifiers fetched for one device. A device has a handful, so the page loads them all
+ * in one request instead of paging.
  */
 const MAX_ADDRESSES = 100;
 
 /**
- * This component manages one known device's own identifiers (`/api/clients/{clientId}/addresses`):
- * every MAC address or DUID the device answers to, each with the IP address it was last seen at,
- * the MAC it embeds and that MAC's hardware vendor, and when it was first and last seen.
+ * This component is a client's identifiers page (`/clients/:clientId/addresses`,
+ * `clients:read`). It lists every MAC address or DUID the device answers to, with the IP address
+ * it was last seen at, the MAC it embeds and that MAC's vendor, and when it was first and last
+ * seen (`GET /api/clients/{clientId}/addresses`).
  *
- * <p>An identifier is immutable once added -- it is the key every identity lookup and DHCP
- * auto-population decision matches on -- so this page offers only "add" and "remove", never edit,
- * mirroring `ClientAddressesController` exactly. Adding one links a further identity to this same
- * device (for example the DHCPv6 DUID of a dual-stack host whose DHCPv4 MAC is already here), so
- * both resolve to one device for filtering, schedules, and activity. The server refuses to remove
- * a device's last identifier (a device with none could never be resolved), and refuses an
- * identifier some device already answers to; either refusal is shown as-is.
+ * <p>Identity lookups and DHCP auto-registration match on the identifier, so it cannot be edited;
+ * the page only adds (`POST`) and removes (`DELETE .../addresses/{id}`). Adding one links another
+ * identity to the same device, such as the DHCPv6 DUID of a dual-stack host whose DHCPv4 MAC is
+ * already here, so both count as one device for filtering, schedules and activity. The backend
+ * answers 409 for an identifier another device already has, shown as a toast. Removing the last
+ * identifier is refused too, so its remove button is disabled.
  *
- * <p>The add form and every remove action appear only for a session holding `clients:write`.
+ * <p>The add form and remove buttons appear only with `clients:write`.
  */
 @Component({
   selector: 'app-client-address-list',
@@ -84,7 +84,7 @@ export class ClientAddressListComponent {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** Exposes the enum to this component's own template, for the protocol select and badges. */
+  /** The enum, exposed to the template for the protocol select and badges. */
   readonly InternetProtocolVersionEnum = InternetProtocolVersionEnum;
 
   /** Whether this session may add or remove identifiers. */
@@ -100,16 +100,16 @@ export class ClientAddressListComponent {
   readonly saving = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for a pending removal. */
+  /** Whether the remove confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
-  /** The add-identifier form: the identifier itself and which protocol's identifier space it belongs to. */
+  /** The add form: the identifier and the protocol (IPv4 MAC or IPv6 DUID) it belongs to. */
   readonly form = this.formBuilder.group({
     clientIdentifier: ['', [Validators.required, Validators.maxLength(256)]],
     protocolVersion: [InternetProtocolVersionEnum.Ipv4 as InternetProtocolVersionEnum],
@@ -154,7 +154,7 @@ export class ClientAddressListComponent {
     }
   }
 
-  /** This method confirms, then removes, one identifier from this device. */
+  /** This method asks for confirmation, then removes an identifier from the device. */
   async removeAddress(address: ClientAddressDetail): Promise<void> {
     if (!address.id) return;
 
@@ -188,7 +188,7 @@ export class ClientAddressListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -200,7 +200,7 @@ export class ClientAddressListComponent {
       const client = await firstValueFrom(this.clientsApi.apiClientsIdGet({ id: this.clientId }));
       this.clientLabel.set(client.displayName || client.addresses?.[0]?.clientIdentifier || null);
     } catch {
-      // The heading simply falls back to a generic title; the address list reports its own errors.
+      // The heading falls back to a generic title; loadAddresses() reports errors.
       this.clientLabel.set(null);
     }
   }

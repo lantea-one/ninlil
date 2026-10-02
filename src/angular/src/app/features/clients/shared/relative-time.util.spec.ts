@@ -1,5 +1,6 @@
 import { describeTimeSpan, formatRelativeTime, startOfLocalDayIso } from './relative-time.util';
 
+/** These tests cover the coarse "time ago" text, missing values and clock skew. */
 describe('formatRelativeTime', () => {
   const now = new Date('2026-09-23T12:00:00Z');
 
@@ -22,6 +23,7 @@ describe('formatRelativeTime', () => {
   });
 });
 
+/** This test checks that the local midnight is returned as a UTC ISO string. */
 describe('startOfLocalDayIso', () => {
   it('returns local midnight of the given day', () => {
     const now = new Date(2026, 8, 23, 15, 42, 7);
@@ -35,6 +37,7 @@ describe('startOfLocalDayIso', () => {
   });
 });
 
+/** These tests cover turning a serialized `TimeSpan` into words, and malformed input. */
 describe('describeTimeSpan', () => {
   it('describes a serialized TimeSpan in words', () => {
     expect(describeTimeSpan('00:10:00')).toBe('10 minutes');

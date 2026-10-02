@@ -1,10 +1,10 @@
 import { DnsClientSortOrderEnum } from '../../../api-client';
 
 /**
- * The quick filters the client list offers, one per summary card: every device, only devices
- * online now, only offline ones, only those registered since local midnight, or only favorites.
- * Each maps onto exactly the query parameters `GET /api/clients/summary` counted it with, so a
- * card's count and the list it opens always describe the same devices.
+ * The quick filters the client list offers, one per summary card: every device, online now,
+ * offline, registered since local midnight, or favorites. `ClientListComponent` maps each to the
+ * `GET /api/clients` parameters matching what `GET /api/clients/summary` counted, so a card's
+ * count and the list it opens describe the same devices.
  */
 export type ClientListFilter = 'all' | 'online' | 'offline' | 'new' | 'favorites';
 
@@ -23,7 +23,7 @@ export interface ClientSortOption {
   readonly label: string;
 }
 
-/** The orderings the client list offers, most useful first -- the first is the default. */
+/** The orderings the client list offers, most useful first; the first is the default. */
 export const CLIENT_SORT_OPTIONS: readonly ClientSortOption[] = [
   { value: DnsClientSortOrderEnum.LastSeen, label: 'Recently seen' },
   { value: DnsClientSortOrderEnum.DisplayName, label: 'Name' },

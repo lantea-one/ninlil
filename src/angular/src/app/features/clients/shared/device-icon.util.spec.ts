@@ -1,6 +1,7 @@
 import { DnsClientDeviceIconEnum } from '../../../api-client';
 import { resolveDisplayedDeviceIcon } from './device-icon.util';
 
+/** These tests cover the icon precedence: explicit choice, then suggestion, then generic. */
 describe('device-icon.util', () => {
   it('resolveDisplayedDeviceIcon prefers the explicit choice over the suggestion', () => {
     expect(

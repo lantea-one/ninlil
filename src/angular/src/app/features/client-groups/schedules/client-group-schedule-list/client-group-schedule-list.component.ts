@@ -27,15 +27,14 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 
-/** How many schedules one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every time-of-day parental-control schedule assigned to one client
- * group, backed by `GET /api/client-groups/{groupId}/schedules`'s own real `skip`/`take`
- * pagination -- mirrors `ClientScheduleListComponent` exactly, keyed by client group instead of a
- * single client. Every client resolved into this group is blocked by an active schedule here,
- * independently of (unioned with) its own direct schedule.
+ * This component is a client group's schedules page (`/client-groups/:groupId/schedules`,
+ * `clientgroups:read`). It works like `ClientScheduleListComponent`, against
+ * `/api/client-groups/{groupId}/schedules` and with `clientgroups:write` for changes. A group's
+ * active schedule blocks every client in the group, in addition to each client's schedules.
  */
 @Component({
   selector: 'app-client-group-schedule-list',
@@ -61,13 +60,13 @@ export class ClientGroupScheduleListComponent {
   private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly groupId = this.route.snapshot.paramMap.get('groupId') ?? '';
@@ -87,14 +86,14 @@ export class ClientGroupScheduleListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then deletes, one schedule from this client group. */
+  /** This method asks for confirmation, then deletes a schedule from the group. */
   async deleteSchedule(schedule: ClientGroupScheduleDetail): Promise<void> {
     if (!schedule.id) return;
 
@@ -128,7 +127,7 @@ export class ClientGroupScheduleListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -142,8 +141,7 @@ export class ClientGroupScheduleListComponent {
       );
       this.groupName.set(group.name ?? null);
     } catch {
-      // A missing group name is only cosmetic here -- the schedule list load below surfaces its
-      // own real error if the owning group itself doesn't exist.
+      // The name is only for the heading; if the group is missing, loadPage() shows the error.
     }
   }
 

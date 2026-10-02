@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ClientSummaryCardsComponent } from './client-summary-cards.component';
 import { ClientListFilter } from '../shared/client-list-filter.model';
 
+/** These tests cover the summary cards: counts or dashes, the pressed card and the emitted filter. */
 describe('ClientSummaryCardsComponent', () => {
   function create(summary: object | null, activeFilter: ClientListFilter = 'all') {
     TestBed.configureTestingModule({ imports: [ClientSummaryCardsComponent] });

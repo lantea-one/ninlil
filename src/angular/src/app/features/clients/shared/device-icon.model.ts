@@ -1,9 +1,8 @@
 import { DnsClientDeviceIconEnum } from '../../../api-client';
 
 /**
- * One entry of the fixed device-icon catalog: the backend's own `DnsClientDeviceIconEnum` key, the
- * human-readable label this app shows for it, and the free CoreUI icon (`@coreui/icons`, registered
- * in `app.config.ts`) it is drawn with.
+ * One entry of the device icon catalog: the backend's `DnsClientDeviceIconEnum` key, its label,
+ * and the `@coreui/icons` icon it is drawn with (which must be registered in `app.config.ts`).
  */
 export interface DeviceIconOption {
   readonly key: DnsClientDeviceIconEnum;
@@ -12,10 +11,10 @@ export interface DeviceIconOption {
 }
 
 /**
- * The full device-icon catalog, in the order the picker offers it. The backend stores only the
- * `key` and never depends on a glyph name, so which CoreUI icon draws a kind of device is purely
- * this app's own presentation choice, changeable here without touching any stored data. Every
- * member of `DnsClientDeviceIconEnum` must appear exactly once -- the picker's own spec pins that.
+ * The device icon catalog, in the order the picker offers it. The backend stores only the `key`,
+ * so the icon for each kind of device can change here without touching stored data. Every
+ * `DnsClientDeviceIconEnum` member must appear once; the picker's spec checks this. The first
+ * entry must stay the generic device, the fallback in `resolveDisplayedDeviceIcon`.
  */
 export const DEVICE_ICON_CATALOG: readonly DeviceIconOption[] = [
   { key: DnsClientDeviceIconEnum.Generic, label: 'Generic device', icon: 'cilDevices' },

@@ -27,14 +27,14 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 
-/** How many networks one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every CIDR network that matches a client into one client group, backed by
- * `GET /api/client-groups/{groupId}/networks`'s own real `skip`/`take` pagination. There is no
- * `PATCH` here, matching `ClientGroupNetworksController`'s own contract -- a network has exactly
- * one field, so a partial update would be indistinguishable from a full replace.
+ * This component is a client group's networks page (`/client-groups/:groupId/networks`,
+ * `clientgroups:read`). It lists the group's match rows (CIDR or ClientID) a page at a time from
+ * `GET /api/client-groups/{groupId}/networks`. With `clientgroups:write` it links to add and edit
+ * and deletes a row (`DELETE .../networks/{id}`).
  */
 @Component({
   selector: 'app-client-group-network-list',
@@ -60,13 +60,13 @@ export class ClientGroupNetworkListComponent {
   private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending network delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly groupId = this.route.snapshot.paramMap.get('groupId') ?? '';
@@ -86,14 +86,14 @@ export class ClientGroupNetworkListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then deletes, one CIDR network from this client group. */
+  /** This method asks for confirmation, then deletes a network row from the group. */
   async deleteNetwork(network: ClientGroupNetworkDetail): Promise<void> {
     if (!network.id) return;
 
@@ -120,9 +120,7 @@ export class ClientGroupNetworkListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -132,7 +130,7 @@ export class ClientGroupNetworkListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -146,8 +144,7 @@ export class ClientGroupNetworkListComponent {
       );
       this.groupName.set(group.name ?? null);
     } catch {
-      // A missing group name is only cosmetic here -- the network list load below surfaces its
-      // own real error if the owning group itself doesn't exist.
+      // The name is only for the heading; if the group is missing, loadPage() shows the error.
     }
   }
 

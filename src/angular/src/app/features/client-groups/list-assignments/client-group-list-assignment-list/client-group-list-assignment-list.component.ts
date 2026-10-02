@@ -30,7 +30,7 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { AuthService } from '../../../../core/auth/auth.service';
 
-/** How many assignments one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /** This interface pairs one raw assignment with the filter list name resolved for display. */
@@ -40,17 +40,14 @@ interface AssignmentRow {
 }
 
 /**
- * This component lists every filter list currently assigned to one client group, backed by
- * `GET /api/client-groups/{groupId}/list-assignments`'s own real `skip`/`take` pagination. There
- * is no `PUT`/`PATCH` here, matching `ClientGroupListAssignmentsController`'s own contract -- an
- * assignment is just a join with no mutable field of its own; changing which list is assigned
- * means deleting one assignment and creating another.
+ * This component is a client group's filter list assignments page
+ * (`/client-groups/:groupId/list-assignments`, `clientgroups:read`). It lists assignments a page
+ * at a time from `GET /api/client-groups/{groupId}/list-assignments` and, with
+ * `clientgroups:write`, adds one or removes one (`DELETE .../list-assignments/{id}`). An
+ * assignment has no editable field, so there is no edit action.
  *
- * Since `ClientGroupListAssignmentDetail` carries only a raw `listId`, this component resolves
- * each assignment's own list name for display by fetching every filter list once and looking each
- * assignment's `listId` up in that set -- acceptable at this project's own homelab/small-org
- * target scale, the same in-memory-lookup reasoning `ForwardersController`'s own name lookup
- * already applies server-side.
+ * <p>An assignment carries only a `listId`, so the page loads the filter lists once to show their
+ * names. Without `filterlists:read` it shows the ids instead.
  */
 @Component({
   selector: 'app-client-group-list-assignment-list',
@@ -78,13 +75,13 @@ export class ClientGroupListAssignmentListComponent {
   private readonly authService = inject(AuthService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending assignment removal. */
+  /** Whether the remove confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly groupId = this.route.snapshot.paramMap.get('groupId') ?? '';
@@ -107,14 +104,14 @@ export class ClientGroupListAssignmentListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then removes, one filter list assignment from this client group. */
+  /** This method asks for confirmation, then removes an assignment from the group. */
   async deleteAssignment(row: AssignmentRow): Promise<void> {
     if (!row.assignment.id) return;
 
@@ -142,9 +139,7 @@ export class ClientGroupListAssignmentListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -154,7 +149,7 @@ export class ClientGroupListAssignmentListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -168,15 +163,14 @@ export class ClientGroupListAssignmentListComponent {
       );
       this.groupName.set(group.name ?? null);
     } catch {
-      // A missing group name is only cosmetic here -- the assignment list load below surfaces
-      // its own real error if the owning group itself doesn't exist.
+      // The name is only for the heading; if the group is missing, loadPage() shows the error.
     }
   }
 
   /**
-   * This method fetches every filter list, only to name each assignment's list, or returns
-   * `null` when this session can't read filter lists (skipping a request the API would refuse) or
-   * the request fails -- the assignments themselves never depend on it.
+   * This method fetches the filter lists (up to 500) to name each assignment's list. It returns
+   * `null` without `filterlists:read` (the API would refuse) or when the request fails; the
+   * assignments load either way.
    */
   private async loadFilterLists(): Promise<FilterListDetail[] | null> {
     if (!this.authService.hasPermission('filterlists:read')) return null;

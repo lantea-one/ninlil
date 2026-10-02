@@ -80,9 +80,15 @@ const SUMMARY = {
   onlineWindow: '00:10:00',
 };
 
+/**
+ * These tests cover the Clients page: rows with addresses, presence, vendor and icon, the summary
+ * cards as filters (and the query string), sorting, permission-dependent links and columns, the
+ * favorite and enable toggles, delete, and failure states. TestBed with spy-backed API services,
+ * a fake `AuthService` that denies chosen permissions and a stubbed route.
+ */
 describe('ClientListComponent', () => {
-  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
-  // the page as an administrator would unless it denies something first.
+  // The permissions the test user lacks. It holds all others, so a test sees the page as an
+  // administrator would unless it denies something first.
   let deniedPermissions: string[] = [];
   beforeEach(() => (deniedPermissions = []));
 

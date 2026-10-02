@@ -25,15 +25,15 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 
-/** How many client groups one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every client group this server knows about, backed by
- * `GET /api/client-groups`'s own real `skip`/`take` pagination, with actions to manage a group's
- * own networks and filter-list assignments, edit its metadata, toggle it disabled (via `PATCH`),
- * and delete it (behind a confirmation dialog, since `ClientGroupsController.Delete` also removes
- * every network and list assignment the group holds).
+ * This component is the Client Groups page (`/client-groups`, `clientgroups:read`). It lists
+ * groups a page at a time from `GET /api/client-groups` (`skip`/`take`) and links to each
+ * group's networks, list assignments and schedules. With `clientgroups:write` it offers create,
+ * edit, delete, "make default" and an enable/disable toggle (`PATCH /api/client-groups/{id}`);
+ * without it the status buttons are disabled and the other write actions hidden.
  */
 @Component({
   selector: 'app-client-group-list',
@@ -59,13 +59,13 @@ export class ClientGroupListComponent {
   private readonly clientGroupsApi = inject(ClientGroupsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending make-default or delete action. */
+  /** Whether the confirmation dialog for "make default" or delete is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly displayedColumns = ['name', 'default', 'disabled', 'actions'];
@@ -81,14 +81,14 @@ export class ClientGroupListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method toggles a client group's own `isDisabled` flag via a single-field RFC 7396 merge patch. */
+  /** This method flips a group's `isDisabled` with a one-field merge patch (RFC 7396). */
   async toggleDisabled(group: ClientGroupDetail): Promise<void> {
     if (!group.id) return;
 
@@ -109,10 +109,8 @@ export class ClientGroupListComponent {
   }
 
   /**
-   * This method promotes a client group to be the default fallback -- via a single-field merge
-   * patch, surfacing `ClientGroupsController`'s own real demote-the-existing-default behavior as
-   * a clear, explicit confirmation prompt first, so an operator is never surprised by another
-   * group silently losing its own default status.
+   * This method makes a group the default fallback with a one-field merge patch. The backend
+   * takes the status from the current default group, so the page asks for confirmation first.
    */
   async makeDefault(group: ClientGroupDetail): Promise<void> {
     if (!group.id || group.isDefault) return;
@@ -137,7 +135,7 @@ export class ClientGroupListComponent {
     }
   }
 
-  /** This method confirms, then deletes, a client group -- including every network and list assignment it holds. */
+  /** This method asks for confirmation, then deletes a group; the backend also deletes its networks and list assignments. */
   async deleteGroup(group: ClientGroupDetail): Promise<void> {
     if (!group.id) return;
 
@@ -160,9 +158,7 @@ export class ClientGroupListComponent {
 
   /**
    * This method shows {@link ConfirmDialogComponent} with the given text and resolves once the
-   * operator confirms or dismisses it -- the declarative analogue of the old
-   * `MatDialog.open(ConfirmDialogComponent, { data }).afterClosed()` this project used before
-   * migrating onto CoreUI for Angular.
+   * operator confirms or dismisses it.
    */
   private confirm(data: ConfirmDialogData): Promise<boolean> {
     this.confirmDialogData.set(data);
@@ -172,7 +168,7 @@ export class ClientGroupListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);

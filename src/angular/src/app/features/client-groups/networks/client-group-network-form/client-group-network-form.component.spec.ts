@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the group network form: loading CIDR and ClientID rows, saving each kind in
+ * create and edit mode, switching kind and validation. TestBed with a spy-backed
+ * `ClientGroupNetworksService` and a stubbed route.
+ */
 describe('ClientGroupNetworkFormComponent', () => {
   let networksApiSpy: {
     apiClientGroupsGroupIdNetworksIdGet: jasmine.Spy;

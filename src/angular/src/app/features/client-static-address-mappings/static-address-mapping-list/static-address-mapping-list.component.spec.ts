@@ -10,6 +10,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the static mapping list: loading, the enable/disable toggle and delete with
+ * its confirmation. TestBed with a spy-backed mappings service and `NotificationService`.
+ */
 describe('StaticAddressMappingListComponent', () => {
   let apiSpy: {
     apiClientStaticAddressMappingsGet: jasmine.Spy;

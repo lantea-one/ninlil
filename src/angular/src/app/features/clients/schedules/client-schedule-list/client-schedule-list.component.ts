@@ -27,16 +27,14 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 
-/** How many schedules one page of this list shows -- matches every other list page's own precedent. */
+/** The page size the list starts with, as on the other list pages. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component lists every time-of-day parental-control schedule assigned directly to one
- * known client, backed by `GET /api/clients/{clientId}/schedules`'s own real `skip`/`take`
- * pagination -- the client-level analogue of `ClientGroupScheduleListComponent`, mirroring its
- * shape exactly. Unlike `ClientListAssignmentListComponent`'s own pure-join resource, a schedule
- * has real, mutable fields of its own, so this list's own "manage" action links to a real edit
- * route rather than only offering delete.
+ * This component is a client's schedules page (`/clients/:clientId/schedules`, `clients:read`).
+ * It lists the client's blocking schedules a page at a time from
+ * `GET /api/clients/{clientId}/schedules`. With `clients:write` it links to add and edit and
+ * deletes a schedule (`DELETE .../schedules/{id}`).
  */
 @Component({
   selector: 'app-client-schedule-list',
@@ -62,13 +60,13 @@ export class ClientScheduleListComponent {
   private readonly clientsApi = inject(ClientsService);
   private readonly notification = inject(NotificationService);
 
-  /** Whether {@link ConfirmDialogComponent} is currently shown for this list's pending delete. */
+  /** Whether the delete confirmation dialog is shown. */
   readonly confirmDialogVisible = signal(false);
 
-  /** The text {@link ConfirmDialogComponent} is currently showing, if any. */
+  /** The text the confirmation dialog shows, if any. */
   readonly confirmDialogData = signal<ConfirmDialogData | null>(null);
 
-  /** Resolves the {@link confirm} promise currently awaiting the operator's choice, if any. */
+  /** Settles the pending {@link confirm} promise, if any. */
   private confirmResolve: ((confirmed: boolean) => void) | null = null;
 
   readonly clientId = this.route.snapshot.paramMap.get('clientId') ?? '';
@@ -88,14 +86,14 @@ export class ClientScheduleListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method confirms, then deletes, one schedule from this client. */
+  /** This method asks for confirmation, then deletes a schedule from the client. */
   async deleteSchedule(schedule: ClientScheduleDetail): Promise<void> {
     if (!schedule.id) return;
 
@@ -129,7 +127,7 @@ export class ClientScheduleListComponent {
     });
   }
 
-  /** This method runs once {@link ConfirmDialogComponent} resolves, hiding it and settling the pending {@link confirm} promise. */
+  /** This method hides the confirmation dialog and settles the pending {@link confirm} promise. */
   onConfirmDialogResolved(confirmed: boolean): void {
     this.confirmDialogVisible.set(false);
     this.confirmResolve?.(confirmed);
@@ -141,8 +139,7 @@ export class ClientScheduleListComponent {
       const client = await firstValueFrom(this.clientsApi.apiClientsIdGet({ id: this.clientId }));
       this.clientLabel.set(client.displayName ?? client.addresses?.[0]?.clientIdentifier ?? null);
     } catch {
-      // A missing client label is only cosmetic here -- the schedule list load below surfaces
-      // its own real error if the owning client itself doesn't exist.
+      // The label is only for the heading; if the client is missing, loadPage() shows the error.
     }
   }
 

@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the group schedule form: building the day string, rejecting no days, loading
+ * an "All" schedule in edit mode and validation. TestBed with a spy-backed
+ * `ClientGroupSchedulesService` and a stubbed route.
+ */
 describe('ClientGroupScheduleFormComponent', () => {
   let schedulesApiSpy: {
     apiClientGroupsGroupIdSchedulesPost: jasmine.Spy;

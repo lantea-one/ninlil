@@ -8,6 +8,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a client's activity page: loading a page, paging, refresh and errors.
+ * TestBed with spy-backed `ClientActivityService` and `ClientsService` and a stubbed route.
+ */
 describe('ClientActivityListComponent', () => {
   let activityApiSpy: { apiClientsClientIdActivityGet: jasmine.Spy };
   let clientsApiSpy: { apiClientsIdGet: jasmine.Spy };

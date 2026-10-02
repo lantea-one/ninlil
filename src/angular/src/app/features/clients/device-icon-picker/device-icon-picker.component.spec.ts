@@ -17,6 +17,11 @@ class HostComponent {
   suggested: DnsClientDeviceIconEnum | null = null;
 }
 
+/**
+ * These tests cover the icon picker: the catalog matches the backend enum and uses real CoreUI
+ * icons, the form value round trip, "Automatic" and its suggestion, and the disabled state.
+ * TestBed with the picker in a reactive form.
+ */
 describe('DeviceIconPickerComponent', () => {
   async function createHost(configure?: (host: HostComponent) => void) {
     await TestBed.configureTestingModule({ imports: [HostComponent] }).compileComponents();
@@ -35,8 +40,8 @@ describe('DeviceIconPickerComponent', () => {
 
   it('draws only icons this app actually registers with CoreUI', async () => {
     await createHost();
-    // The real app registers its icon set in app.config.ts; the test bed does not, so check the
-    // catalog's glyph names against the real @coreui/icons exports instead.
+    // The test bed does not run the app.config.ts icon registration, so check the names against
+    // the @coreui/icons exports.
     const icons = await import('@coreui/icons');
     for (const option of DEVICE_ICON_CATALOG) {
       expect((icons as Record<string, unknown>)[option.icon])

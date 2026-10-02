@@ -17,20 +17,18 @@ import {
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 
-/** How many activity entries one page of this list shows -- matches `QueryLogListComponent`'s own default. */
+/** The page size the list starts with, the same as the query log page. */
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
- * This component shows one known client's own slice of the persistent query log, backed by
- * `GET /api/clients/{clientId}/activity`'s own real `skip`/`take` pagination -- the client-level
- * analogue of `QueryLogListComponent`, reusing the exact same column set/table conventions rather
- * than inventing a second, parallel table. Unlike that component, this one has no filter form and
- * no "clear log" action at all: it is scoped to exactly one client by its own route, and a log
- * entry is server-written history, never an operator-editable resource (the same read-only,
- * "server-written data" posture `QueryLogListComponent`'s own doc comment already establishes).
- * `DnsQueryLogEntryDetail.clientIdentifier`/`clientProtocolVersion` are deliberately not shown as
- * their own columns here -- every row is already known to belong to this one client by
- * construction, so repeating its own identity on every row would add noise, not information.
+ * This component is a client's activity page (`/clients/:clientId/activity`). It shows the
+ * client's entries from the query log a page at a time, from
+ * `GET /api/clients/{clientId}/activity`, which needs `querylog:read` (the route checks it on top
+ * of `clients:read`). It uses the query log page's columns, without its filters or "Clear log",
+ * and is read-only.
+ *
+ * <p>The client identifier and protocol version columns are left out, since every row belongs to
+ * the same client.
  */
 @Component({
   selector: 'app-client-activity-list',
@@ -78,14 +76,14 @@ export class ClientActivityListComponent {
     void this.loadPage();
   }
 
-  /** This method reloads the current page after a {@link CoreuiPaginationComponent} page/size change. */
+  /** This method loads the page the pagination bar asks for. */
   async onPageChange(event: PageChangeEvent): Promise<void> {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     await this.loadPage();
   }
 
-  /** This method reloads the current page from the server -- exposed for a manual "refresh" action. */
+  /** This method reloads the current page, for the Refresh button. */
   async refresh(): Promise<void> {
     await this.loadPage();
   }
@@ -95,8 +93,7 @@ export class ClientActivityListComponent {
       const client = await firstValueFrom(this.clientsApi.apiClientsIdGet({ id: this.clientId }));
       this.clientLabel.set(client.displayName ?? client.addresses?.[0]?.clientIdentifier ?? null);
     } catch {
-      // A missing client label is only cosmetic here -- the activity load below surfaces its own
-      // real error if the owning client itself doesn't exist.
+      // The label is only for the heading; if the client is missing, loadPage() shows the error.
     }
   }
 

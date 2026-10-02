@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the client group list: loading, the enable/disable toggle, "make default"
+ * and delete with their confirmations. TestBed with a spy-backed `ClientGroupsService` and
+ * `NotificationService`.
+ */
 describe('ClientGroupListComponent', () => {
   let clientGroupsApiSpy: {
     apiClientGroupsGet: jasmine.Spy;

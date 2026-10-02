@@ -13,12 +13,11 @@ interface SummaryCard {
 }
 
 /**
- * This component renders the known-client registry's headline counts -- total, online, offline,
- * new today, and favorites -- as a row of cards above the client list. Each card is also the
- * list's quick filter: selecting one emits its {@link ClientListFilter}, and the card matching the
- * list's current filter is shown as pressed. A card whose count has not loaded (or failed to)
- * shows an em dash rather than a misleading `0`, the same convention the dashboard's own quick
- * stats use.
+ * This component shows the client counts (total, online, offline, new today, favorites) as a row
+ * of cards above the client list on the Clients page. Each card is also a filter: selecting one
+ * emits its {@link ClientListFilter}, and the card of the current filter is shown as pressed. A
+ * count that has not loaded, or failed to, shows an em dash instead of a misleading `0`, as the
+ * dashboard's quick stats do.
  */
 @Component({
   selector: 'app-client-summary-cards',

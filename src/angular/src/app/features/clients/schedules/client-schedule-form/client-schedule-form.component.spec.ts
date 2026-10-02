@@ -9,6 +9,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the client schedule form: building the day string in wire order, rejecting
+ * no days or equal times, loading in edit mode and validation. TestBed with a spy-backed
+ * `ClientSchedulesService` and a stubbed route.
+ */
 describe('ClientScheduleFormComponent', () => {
   let schedulesApiSpy: {
     apiClientsClientIdSchedulesPost: jasmine.Spy;

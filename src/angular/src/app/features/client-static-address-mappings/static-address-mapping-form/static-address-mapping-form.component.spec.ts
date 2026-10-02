@@ -10,6 +10,11 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover the static mapping form: create and edit modes, saving, errors and
+ * validation. TestBed with a spy-backed `DnsClientStaticAddressMappingsService` and a stubbed
+ * route.
+ */
 describe('StaticAddressMappingFormComponent', () => {
   let apiSpy: {
     apiClientStaticAddressMappingsIdGet: jasmine.Spy;

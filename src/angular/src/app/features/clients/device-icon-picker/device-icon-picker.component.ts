@@ -6,14 +6,12 @@ import { DEVICE_ICON_CATALOG } from '../shared/device-icon.model';
 import { findDeviceIcon } from '../shared/device-icon.util';
 
 /**
- * This component is a reactive-forms control for choosing a known client's device icon: a compact
- * grid of every `DEVICE_ICON_CATALOG` entry drawn with its own CoreUI glyph, plus an "Automatic"
- * choice meaning no explicit icon (`null`).
+ * This component is a form control for choosing a client's device icon, used on the client form:
+ * a grid of every `DEVICE_ICON_CATALOG` entry plus "Automatic", meaning no explicit icon (`null`).
  *
- * <p>With no explicit choice, the backend's own read-time, vendor-based suggestion applies; when
- * the parent passes that suggestion in via `suggestedKey`, the "Automatic" tile draws the
- * suggested glyph and names it, so an operator can see exactly what leaving the choice unset
- * means -- while a chosen icon and a merely suggested one stay visibly distinct.
+ * <p>Without an explicit icon, the backend's vendor-based suggestion applies. When the parent
+ * passes it in `suggestedKey`, the "Automatic" tile draws and names it, so the operator sees what
+ * "Automatic" means while a chosen icon still looks different from a suggested one.
  */
 @Component({
   selector: 'app-device-icon-picker',
@@ -44,7 +42,7 @@ export class DeviceIconPickerComponent implements ControlValueAccessor {
   private onChange: (value: DnsClientDeviceIconEnum | null) => void = () => undefined;
   private onTouched: () => void = () => undefined;
 
-  /** The catalog entry of the current suggestion, for the "Automatic" tile's own glyph/label. */
+  /** This method returns the catalog entry of the suggestion, for the "Automatic" tile. */
   suggestion() {
     return findDeviceIcon(this.suggestedKey());
   }

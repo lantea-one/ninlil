@@ -24,11 +24,14 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
- * This component assigns one existing filter list to a client group -- there is no edit mode,
- * matching `ClientGroupListAssignmentsController`'s own contract (no `PUT`/`PATCH`; changing
- * which list is assigned means deleting the old assignment and creating a new one). The select's
- * own options exclude a list already assigned to this group, so the backend's own duplicate-
- * assignment `409 Conflict` is avoided by construction rather than only caught after the fact.
+ * This component is the page that assigns a filter list to a client group
+ * (`/client-groups/:groupId/list-assignments/new`, `clientgroups:write`). It saves with
+ * `POST /api/client-groups/{groupId}/list-assignments`. There is no edit mode: the controller has
+ * no `PUT` or `PATCH`, so changing the list means removing the assignment and adding another.
+ *
+ * <p>The select offers only lists not yet assigned to the group (from `GET /api/filter-lists`),
+ * so the backend's 409 for a duplicate cannot happen. Without `filterlists:read` the page says no
+ * lists can be offered.
  */
 @Component({
   selector: 'app-client-group-list-assignment-form',
@@ -60,7 +63,7 @@ export class ClientGroupListAssignmentFormComponent implements OnInit {
 
   readonly groupId = this.route.snapshot.paramMap.get('groupId') ?? '';
 
-  /** The filter lists this group is not yet assigned, offered as the select's own options. */
+  /** The filter lists not yet assigned to this group, offered in the select. */
   readonly availableLists = signal<FilterListDetail[]>([]);
 
   /** Whether this session can't read filter lists (no `filterlists:read`), so has none to pick. */

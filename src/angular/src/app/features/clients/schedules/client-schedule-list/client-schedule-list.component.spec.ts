@@ -9,6 +9,10 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a client's schedules page: loading and deleting with the confirmation
+ * accepted or dismissed. TestBed with spy-backed API services.
+ */
 describe('ClientScheduleListComponent', () => {
   let schedulesApiSpy: {
     apiClientsClientIdSchedulesGet: jasmine.Spy;
@@ -78,9 +82,8 @@ describe('ClientScheduleListComponent', () => {
     const fixture = await createComponent();
 
     expect(fixture.componentInstance.schedules().length).toBe(1);
-    // Cast for the same reason ClientScheduleFormComponent's own doc comment explains: the wire
-    // value is a combined-flags comma-separated string, but the generated
-    // DnsScheduleDayOfWeekEnum TypeScript type only allows one discrete value.
+    // Cast because the wire value is a comma-separated flags string, while the generated
+    // DnsScheduleDayOfWeekEnum type allows a single value (see ClientScheduleFormComponent).
     expect(fixture.componentInstance.schedules()[0].daysOfWeek as unknown as string).toBe(
       'Sunday, Monday',
     );

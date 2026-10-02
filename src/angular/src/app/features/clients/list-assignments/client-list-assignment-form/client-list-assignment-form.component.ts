@@ -24,13 +24,12 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
- * This component assigns one existing filter list directly to a known client -- the client-level
- * analogue of `ClientGroupListAssignmentFormComponent`, mirroring its shape exactly. There is no
- * edit mode, matching `ClientListAssignmentsController`'s own contract (no `PUT`/`PATCH`; changing
- * which list is assigned means deleting the old assignment and creating a new one). The select's
- * own options exclude a list already assigned directly to this client, so the backend's own
- * duplicate-assignment `409 Conflict` is avoided by construction rather than only caught after the
- * fact.
+ * This component is the page that assigns a filter list directly to a client
+ * (`/clients/:clientId/list-assignments/new`, `clients:write`). It saves with
+ * `POST /api/clients/{clientId}/list-assignments` and works like
+ * `ClientGroupListAssignmentFormComponent`: no edit mode, since the controller has no `PUT` or
+ * `PATCH`, and the select offers only lists not yet assigned to the client. Without
+ * `filterlists:read` the page says no lists can be offered.
  */
 @Component({
   selector: 'app-client-list-assignment-form',
@@ -62,7 +61,7 @@ export class ClientListAssignmentFormComponent implements OnInit {
 
   readonly clientId = this.route.snapshot.paramMap.get('clientId') ?? '';
 
-  /** The filter lists this client is not yet directly assigned, offered as the select's own options. */
+  /** The filter lists not yet assigned to this client, offered in the select. */
   readonly availableLists = signal<FilterListDetail[]>([]);
 
   /** Whether this session can't read filter lists (no `filterlists:read`), so has none to pick. */

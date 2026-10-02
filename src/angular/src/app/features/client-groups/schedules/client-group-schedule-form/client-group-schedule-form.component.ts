@@ -22,7 +22,7 @@ import { ClientGroupSchedulesService, DnsScheduleDayOfWeekEnum } from '../../../
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
 
-/** See `ClientScheduleFormComponent`'s own identical constant for the full reasoning. */
+/** The seven day checkbox controls, Sunday first; see `ClientScheduleFormComponent`. */
 const DAY_CONTROL_NAMES = [
   'sunday',
   'monday',
@@ -54,10 +54,11 @@ const DAY_FULL_NAMES: Record<(typeof DAY_CONTROL_NAMES)[number], string> = {
 };
 
 /**
- * This component is both the "add a schedule" and "edit a schedule" page for a client group's own
- * time-of-day parental-control schedule -- mirrors `ClientScheduleFormComponent` exactly, keyed
- * by client group instead of a single client; see that component's own doc comment for the full
- * `daysOfWeek`-as-plain-string and time-zone-selection reasoning, identical here.
+ * This component is the add and edit page for a client group's schedule
+ * (`/client-groups/:groupId/schedules/new` and `.../schedules/:scheduleId/edit`,
+ * `clientgroups:write`). It saves with `POST` or `PUT /api/client-groups/{groupId}/schedules/{id}`
+ * and works like `ClientScheduleFormComponent`, which explains the `daysOfWeek` string and the
+ * time zone list.
  */
 @Component({
   selector: 'app-client-group-schedule-form',
@@ -123,7 +124,10 @@ export class ClientGroupScheduleFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingSchedule();
   }
 
-  /** This method adds (`POST`) or fully replaces (`PUT`) the schedule, per {@link isEditMode}. */
+  /**
+   * This method checks that at least one day is chosen and that start and end differ, then adds
+   * the schedule (`POST`) or replaces it (`PUT`) and returns to the schedule list.
+   */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -204,7 +208,7 @@ export class ClientGroupScheduleFormComponent implements OnInit {
           .filter((day) => day.length > 0),
       );
 
-      // See ClientScheduleFormComponent's own identical comment about the "All" value.
+      // A schedule created through the API may hold "All", which checks every box.
       this.form.patchValue({
         sunday: selectedDays.has('Sunday') || selectedDays.has('All'),
         monday: selectedDays.has('Monday') || selectedDays.has('All'),
@@ -250,7 +254,7 @@ const FALLBACK_TIME_ZONES = [
   'Pacific/Auckland',
 ];
 
-/** See `ClientScheduleFormComponent`'s own identical function for the full reasoning. */
+/** This function returns the browser's IANA time zone list, or {@link FALLBACK_TIME_ZONES}. */
 function resolveTimeZoneOptions(): string[] {
   const intlWithSupportedValuesOf = Intl as unknown as {
     supportedValuesOf?: (key: string) => string[];
@@ -260,7 +264,7 @@ function resolveTimeZoneOptions(): string[] {
     const zones = intlWithSupportedValuesOf.supportedValuesOf?.('timeZone');
     if (zones && zones.length > 0) return zones;
   } catch {
-    // Fall through to the curated fallback list below.
+    // Use the fallback list below.
   }
 
   return FALLBACK_TIME_ZONES;

@@ -35,29 +35,22 @@ import { SafeSearchComponent } from '../../settings/safe-search/safe-search.comp
 import { DeviceIconPickerComponent } from '../device-icon-picker/device-icon-picker.component';
 
 /**
- * This component is both the "register a client" and "edit a client" page -- one component for
- * both, distinguished by whether the route supplies a `clientId` (see `app.routes.ts`).
+ * This component is the register and edit page for a client (`/clients/new` and
+ * `/clients/:clientId/edit`, `clients:write`); edit mode is chosen by the `clientId` route
+ * parameter. It saves with `POST /api/clients` or `PUT /api/clients/{id}`. In edit mode it also
+ * shows the instant pause, Blocked Services and Safe Search panels for the client.
  *
- * <p><b>`clientIdentifier`/`protocolVersion` are locked once a client is registered.</b> Together
- * they are the device's own first address -- the pair `ClientsController` looks a device up by,
- * and the pair the DHCP-driven auto-population feature uses to decide whether it has seen a
- * device before. Both fields are shown, but disabled, in edit mode (reflecting the device's own
- * first-registered address, `addresses[0]`): showing them (rather than hiding them entirely) keeps
- * the identity visible for reference while making unmistakably clear neither can be changed here
- * -- see `ClientsController`'s own doc comment for the full reasoning. A device with more than one
- * address still shows only its first one here; the form links to `ClientAddressListComponent`
- * (`/clients/{id}/addresses`), where the device's full identifier set is added to and removed from.
+ * <p><b>The identifier and protocol cannot change after registration.</b> They are the device's
+ * first address, which device lookups and DHCP auto-registration match on, so the `PUT` request
+ * has no field for them. In edit mode both are shown disabled, from `addresses[0]`. A device with
+ * several identifiers shows only the first here; the form links to the identifiers page
+ * (`ClientAddressListComponent`) for the full set.
  *
- * <p>`clientGroupId` is an optional dropdown, populated from a one-time client-groups fetch, the
- * same "optional dropdown resolved from a one-time fetch" pattern `DhcpScopeFormComponent`'s own
- * `dnsZoneId` dropdown already establishes.
- *
- * <p>`deviceIconKey`/`isFavorite` are the device's own presentation metadata: an explicit icon
- * choice (via `DeviceIconPickerComponent`, `null` meaning "Automatic") and a favorite star. In edit
- * mode this form also shows the device's read-time MAC vendor (or that its MAC is randomized) and
- * passes the backend's vendor-based icon suggestion to the picker, so leaving the icon on
- * "Automatic" visibly means that suggestion. Neither the vendor nor the suggestion is ever sent
- * back -- both are computed by the backend on every read.
+ * <p>The client group is an optional select filled from `GET /api/client-groups`. The icon
+ * (`DeviceIconPickerComponent`, `null` for "Automatic") and the favorite star are display
+ * settings. In edit mode the form shows the device's MAC vendor (or that its MAC is randomized)
+ * and passes the backend's vendor-based icon suggestion to the picker. The backend computes
+ * vendor and suggestion on every read, so neither is sent back.
  */
 @Component({
   selector: 'app-client-form',
@@ -96,7 +89,7 @@ export class ClientFormComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** The route's own `clientId`, or `null` when registering a new client -- also the id `BlockedServicesComponent`/`SafeSearchComponent` scope their own panel to below. */
+  /** The `clientId` route parameter, or `null` when registering; the edit-mode panels use it too. */
   readonly clientId = this.route.snapshot.paramMap.get('clientId');
 
   /** Whether this instance is editing an existing client rather than registering a new one. */
@@ -109,16 +102,16 @@ export class ClientFormComponent implements OnInit {
   /** The backend's vendor-based icon suggestion for this device, shown on the picker's "Automatic" tile. */
   readonly suggestedDeviceIconKey = signal<DnsClientDeviceIconEnum | null>(null);
 
-  /** This device's hardware vendor, resolved by the backend at read time, or `null` when unknown. */
+  /** The device's hardware vendor, looked up by the backend on read, or `null` when unknown. */
   readonly vendor = signal<string | null>(null);
 
   /** Whether every MAC address this device presents is randomized, so no vendor can be known. */
   readonly isRandomizedMacAddress = signal(false);
 
-  /** How many identifiers this device answers to, for the edit form's link to its addresses page. */
+  /** How many identifiers the device has, for the link to its identifiers page. */
   readonly addressCount = signal(0);
 
-  /** Every client group this client's own optional `clientGroupId` can designate. */
+  /** The client groups offered in the group select (up to 500). */
   readonly clientGroups = signal<ClientGroupDetail[]>([]);
 
   readonly form = this.formBuilder.group({
@@ -139,15 +132,14 @@ export class ClientFormComponent implements OnInit {
     void this.loadClientGroups();
 
     if (this.isEditMode) {
-      // clientIdentifier/protocolVersion are this row's own entire identity and can never change
-      // once it exists -- see this class's own doc comment for why.
+      // The identifier and protocol cannot change after registration; see the class comment.
       this.form.controls.clientIdentifier.disable();
       this.form.controls.protocolVersion.disable();
       void this.loadExistingClient();
     }
   }
 
-  /** This method registers (`POST`) or fully replaces the editable fields of (`PUT`) the client, per {@link isEditMode}. */
+  /** This method registers the client (`POST`) or replaces its editable fields (`PUT`), then returns to the list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 
@@ -158,8 +150,7 @@ export class ClientFormComponent implements OnInit {
 
     try {
       if (this.isEditMode && this.clientId) {
-        // ClientWriteRequest deliberately carries no clientIdentifier/protocolVersion at all --
-        // see ClientsController's own doc comment.
+        // ClientWriteRequest has no identifier or protocol; they are fixed at registration.
         await firstValueFrom(
           this.clientsApi.apiClientsIdPut({
             id: this.clientId,
@@ -210,9 +201,8 @@ export class ClientFormComponent implements OnInit {
       );
       this.clientGroups.set(page.items ?? []);
     } catch {
-      // A failed group lookup only narrows this form's own optional group dropdown -- the rest
-      // of the form remains usable, and a genuinely invalid clientGroupId is still rejected
-      // server-side.
+      // Without the groups (e.g. no clientgroups:read) the select is empty but the rest of the
+      // form works, and the loaded group id is kept; the backend rejects an unknown id.
     }
   }
 

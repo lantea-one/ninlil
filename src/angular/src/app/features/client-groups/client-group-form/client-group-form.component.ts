@@ -25,14 +25,15 @@ import { BlockedServicesComponent } from '../../settings/blocked-services/blocke
 import { SafeSearchComponent } from '../../settings/safe-search/safe-search.component';
 
 /**
- * This component is both the "create a client group" and "edit a client group" page -- one
- * component for both, distinguished by whether the route supplies a `groupId` (see
- * `app.routes.ts`). A group's own networks and filter-list assignments are managed separately,
- * through `ClientGroupNetworkListComponent`/`ClientGroupListAssignmentListComponent`.
+ * This component is the create and edit page for a client group (`/client-groups/new` and
+ * `/client-groups/:groupId/edit`); edit mode is chosen by the `groupId` route parameter. It saves
+ * with `POST /api/client-groups` or `PUT /api/client-groups/{id}` (`clientgroups:write`, which
+ * the routes also require).
  *
- * Checking "Default fallback group" here shows a hint explaining that `ClientGroupsController`'s
- * own real server-side behavior will demote whichever other group currently holds that status --
- * so an operator is never surprised by it happening silently.
+ * <p>In edit mode the page also shows the instant pause, Blocked Services and Safe Search panels
+ * for the group. Networks, list assignments and schedules have their own pages, linked from the
+ * group list. Checking "Default fallback group" shows a hint that the backend will take that
+ * status from whichever group holds it now.
  */
 @Component({
   selector: 'app-client-group-form',
@@ -66,7 +67,7 @@ export class ClientGroupFormComponent implements OnInit {
   private readonly notification = inject(NotificationService);
   private readonly formBuilder = inject(NonNullableFormBuilder);
 
-  /** The route's own `groupId`, or `null` when creating a new group -- also the id `BlockedServicesComponent`/`SafeSearchComponent` scope their own panel to below. */
+  /** The `groupId` route parameter, or `null` when creating; the edit-mode panels use it too. */
   readonly groupId = this.route.snapshot.paramMap.get('groupId');
 
   /** Whether this instance is editing an existing client group rather than creating a new one. */
@@ -86,7 +87,7 @@ export class ClientGroupFormComponent implements OnInit {
     if (this.isEditMode) void this.loadExistingGroup();
   }
 
-  /** This method creates (`POST`) or fully replaces (`PUT`) the client group, per {@link isEditMode}. */
+  /** This method creates the group (`POST`) or replaces it (`PUT`), then returns to the list. */
   async save(): Promise<void> {
     if (this.form.invalid || this.submitting()) return;
 

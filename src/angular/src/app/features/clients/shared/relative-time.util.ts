@@ -1,8 +1,7 @@
 /**
- * This function renders how long ago an instant was, coarsely -- "just now", "5 min ago",
- * "3 h ago", "2 d ago" -- the at-a-glance form a device list wants for "last seen", with the exact
- * timestamp left to a tooltip. An instant slightly in the future (clock skew between this browser
- * and the server) reads as "just now" rather than a negative age.
+ * This function renders how long ago an instant was, coarsely ("just now", "5 min ago", "3 h ago",
+ * "2 d ago", "1 y ago"), for a "last seen" column whose tooltip has the exact time. An instant
+ * slightly in the future, from clock skew between browser and server, reads as "just now".
  *
  * @param instant An ISO-8601 timestamp, or `null`/`undefined` for "never".
  * @param now The instant to measure from; injectable so a test can pin it.
@@ -32,8 +31,8 @@ export function formatRelativeTime(
 
 /**
  * This function returns the start of the local calendar day containing `now`, as an ISO-8601 UTC
- * timestamp -- what "new today" means to the person looking at the page, which the server cannot
- * know on its own since it has no idea of the viewer's time zone.
+ * timestamp. "New today" means the viewer's day, and the server does not know the viewer's time
+ * zone, so the page sends this instant.
  *
  * @param now The instant whose local day to use; injectable so a test can pin it.
  */
@@ -43,9 +42,8 @@ export function startOfLocalDayIso(now: Date = new Date()): string {
 }
 
 /**
- * This function renders a .NET `TimeSpan` as it arrives over JSON (`[d.]hh:mm:ss[.fffffff]`) in
- * plain words -- "10 minutes", "1 hour 30 minutes", "2 days" -- for describing a configured
- * window rather than showing its raw wire form. Fractional seconds are dropped.
+ * This function renders a .NET `TimeSpan` as sent in JSON (`[d.]hh:mm:ss[.fffffff]`) in plain
+ * words, such as "10 minutes", "1 hour 30 minutes" or "2 days". Fractional seconds are dropped.
  *
  * @param value The serialized `TimeSpan`, or `null`/`undefined`.
  * @returns The description, or `null` when the value is missing or not a `TimeSpan`.

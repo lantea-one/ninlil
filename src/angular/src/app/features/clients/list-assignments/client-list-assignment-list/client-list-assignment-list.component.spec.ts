@@ -14,9 +14,14 @@ function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * These tests cover a client's list assignments page: list names (or ids without
+ * `filterlists:read`) and removal with the confirmation accepted or dismissed. TestBed with
+ * spy-backed API services and a fake `AuthService` that denies chosen permissions.
+ */
 describe('ClientListAssignmentListComponent', () => {
-  // The permissions the signed-in test user lacks; it holds every other one, so each test sees
-  // the page as an administrator would unless it denies something first.
+  // The permissions the test user lacks. It holds all others, so a test sees the page as an
+  // administrator would unless it denies something first.
   let deniedPermissions: string[] = [];
   beforeEach(() => (deniedPermissions = []));
 
