@@ -9,11 +9,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="BlockedServicesController" /> end to end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- confirming a catalog toggle really does create/remove an ordinary, subscribed
-///     <see cref="FilterListsController" /> entity rather than some parallel mechanism, and that
-///     enable/disable are both idempotent.
+///     This class covers <see cref="BlockedServicesController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. It checks that turning a catalog
+///     entry on creates an ordinary subscribed block list (visible through
+///     <see cref="FilterListsController" />) and turning it off removes it, that both are
+///     idempotent, and that a client or client-group target adds an assignment of the shared list
+///     for that target only. Each test turns its entries off again in a <c>finally</c> block,
+///     since the database is shared with every other test class.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -107,7 +109,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
             Assert.Equal(DnsFilterListActionEnum.Block, managedList.Action);
             Assert.Equal(enabled.SubscriptionUrl, managedList.SubscriptionUrl);
 
-            // Enabling an already-enabled entry is idempotent -- same list, not a second one.
+            // Enabling an enabled entry is idempotent: the same list, not a second one.
             HttpResponseMessage reEnableResponse = await client.PostAsync(
                 "/api/blocked-services/twitter",
                 content: null
@@ -136,10 +138,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
         }
         finally
         {
-            // Restore before returning -- this factory's own database is shared across every
-            // test in WebTestCollection (see RewriteSettingsControllerTests's own identical
-            // precedent), so a catalog entry left enabled here would otherwise leak into another
-            // test.
+            // Turn the entry off again, since the database is shared with every other test.
             await client.DeleteAsync("/api/blocked-services/twitter");
         }
     }
@@ -168,13 +167,11 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
     }
 
     /// <summary>
-    ///     This test proves the real per-client targeting Phase 15e adds: enabling a catalog entry
-    ///     for one specific client creates that client's own assignment of the shared managed
-    ///     list, reported as enabled only for that client (not globally, and not for an unrelated
-    ///     client); disabling it for that same client removes only its own assignment, leaving the
-    ///     shared managed list itself in place -- confirmed by re-enabling it for a second,
-    ///     unrelated client afterward and seeing the very same list id reused rather than a fresh
-    ///     one being created.
+    ///     This test checks per-client targeting. Enabling an entry for one client assigns the
+    ///     shared managed list to that client, and the entry reads as enabled for it but not for
+    ///     another client. Enabling it for the second client reuses the same list. Disabling it
+    ///     for the first client removes only that client's assignment: the list remains and the
+    ///     second client still has it.
     /// </summary>
     [Fact]
     public async Task Enable_WithAClientTarget_BlocksOnlyThatClient_AndDisableLeavesTheSharedListInPlace()
@@ -195,11 +192,8 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
             Assert.True(enabledForFirstClient.IsEnabled);
             Assert.NotNull(enabledForFirstClient.FilterListId);
 
-            // For the unrelated second client, this entry must still report disabled -- a
-            // targeted enable never leaks into another target. (The plain, no-target `List`
-            // reports on the shared managed list's own state alone, exactly as it always has --
-            // it already reported "enabled" the instant a plain, unassigned global Enable created
-            // the list, long before this sub-phase, so it is not this test's own concern here.)
+            // For the second client the entry must still read as disabled. The untargeted List
+            // reports only whether the shared list exists, so it is not checked here.
             HttpResponseMessage secondClientListResponse = await client.GetAsync(
                 $"/api/blocked-services?clientId={secondClientId}"
             );
@@ -209,8 +203,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
                 >();
             Assert.False(secondClientCatalog.Single(entry => entry.Key == "whatsapp").IsEnabled);
 
-            // A direct client-list-assignment now really exists, via the exact same mechanism
-            // ClientListAssignmentsController itself exposes.
+            // The assignment is an ordinary one, visible through ClientListAssignmentsController.
             HttpResponseMessage assignmentsResponse = await client.GetAsync(
                 $"/api/clients/{firstClientId}/list-assignments"
             );
@@ -224,7 +217,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
                 assignment => assignment.ListId == enabledForFirstClient.FilterListId
             );
 
-            // Enabling the same entry for the second client reuses the very same shared list.
+            // Enabling the entry for the second client reuses the same shared list.
             HttpResponseMessage enableForSecondResponse = await client.PostAsync(
                 $"/api/blocked-services/whatsapp?clientId={secondClientId}",
                 content: null
@@ -234,8 +227,8 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
                 await enableForSecondResponse.Content.ReadFromJsonAsync<BlockedServiceDetail>();
             Assert.Equal(enabledForFirstClient.FilterListId, enabledForSecondClient.FilterListId);
 
-            // Disabling for the first client only removes its own assignment -- the shared list,
-            // and the second client's own assignment, stay untouched.
+            // Disabling for the first client removes only its assignment; the shared list and the
+            // second client's assignment stay.
             HttpResponseMessage disableForFirstResponse = await client.DeleteAsync(
                 $"/api/blocked-services/whatsapp?clientId={firstClientId}"
             );
@@ -270,8 +263,7 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
         }
         finally
         {
-            // Fully clean up -- both targeted assignments, and the shared list itself (the plain,
-            // no-target disable already established as this project's own real cleanup shape).
+            // Remove both assignments, then the shared list with an untargeted disable.
             await client.DeleteAsync($"/api/blocked-services/whatsapp?clientId={firstClientId}");
             await client.DeleteAsync($"/api/blocked-services/whatsapp?clientId={secondClientId}");
             await client.DeleteAsync("/api/blocked-services/whatsapp");
@@ -281,8 +273,8 @@ public class BlockedServicesControllerTests(NinlilDnsWebApplicationFactory facto
     }
 
     /// <summary>
-    ///     This test proves the same targeting contract for a client-group target, and that
-    ///     naming both a client and a group at once is rejected.
+    ///     This test checks that a client-group target assigns the list to the group, and that
+    ///     naming both a client and a group is rejected.
     /// </summary>
     [Fact]
     public async Task Enable_WithAClientGroupTarget_AssignsTheGroup_AndBothTargetsAtOnceIsRejected()

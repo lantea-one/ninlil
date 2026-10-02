@@ -13,28 +13,27 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the real, end-to-end HTTP shape a caller now sees from
+///     This class checks the error responses of the administrative controllers over HTTP on the
+///     shared in-process host, signed in as the bootstrap administrator. Each test provokes a
+///     not-found, conflict, validation or internal error and checks that the response is an
+///     RFC 7807 <c>application/problem+json</c> body, written by
+///     <see cref="Ninlil.Web.ExceptionHandling.NinlilExceptionHandler" /> from the exception the
+///     controller threw, with the right status and the details a caller needs (entity type and
+///     identifier, or a message naming the problem). It covers
 ///     <see cref="Controllers.ZonesController" />, <see cref="Controllers.TsigKeysController" />,
 ///     <see cref="Controllers.DnssecKeysController" />, <see cref="Controllers.CloudProviderCredentialsController" />,
 ///     <see cref="Controllers.RecordsController" />, <see cref="Controllers.FilterListsController" />,
 ///     <see cref="Controllers.FilterListEntriesController" />, <see cref="Controllers.ClientGroupsController" />,
 ///     <see cref="Controllers.ClientGroupNetworksController" />,
-///     <see cref="Controllers.ClientGroupListAssignmentsController" />, and
+///     <see cref="Controllers.ClientGroupListAssignmentsController" />,
 ///     <see cref="Controllers.ForwardersController" />, <see cref="Controllers.WebhooksController" />,
 ///     <see cref="Controllers.PresetsController" />, <see cref="Controllers.EventBrokerSettingsController" />,
 ///     <see cref="Controllers.RateLimitingSettingsController" />,
 ///     <see cref="Controllers.DnsCookieSettingsController" />,
 ///     <see cref="Controllers.DnsRewritesController" />, <see cref="Controllers.QueryLogController" />,
-///     <see cref="Controllers.QueryLoggingSettingsController" />, <see cref="Controllers.BackupController" />,
-///     and <see cref="Controllers.ReverseProxySettingsController" />, once each was converted to
-///     throw this project's own custom exception hierarchy instead of hand-rolling its own error
-///     result -- the zone-level/key-management/cloud-credential/record-level/filtering/forwarding/
-///     webhook/preset/settings/rewrites/query-log/backup/reverse-proxy half of that conversion,
-///     the same way <see cref="IdentityErrorResponseTests" /> already covers the Identity/Auth
-///     half. Every response asserted on here is real RFC 7807
-///     <c>application/problem+json</c>, produced by the real, registered
-///     <see cref="Ninlil.Web.ExceptionHandling.NinlilExceptionHandler" /> -- not a
-///     mocked or hand-constructed body.
+///     <see cref="Controllers.BackupController" /> and
+///     <see cref="Controllers.ReverseProxySettingsController" />. <see cref="IdentityErrorResponseTests" />
+///     does the same for the identity and authentication controllers.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory factory)
@@ -128,10 +127,9 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A DNS label may be at most 63 octets -- this one is 64, guaranteed invalid regardless
-        // of which characters DnsName.TryParse otherwise tolerates (it deliberately allows most
-        // byte values in a label, since the wire format itself imposes no character restriction),
-        // matching ZoneAndRecordCrudTests's own identical technique for triggering this rejection.
+        // A DNS label may be at most 63 octets, so a 64-octet label is invalid whatever
+        // characters DnsName.TryParse accepts (the wire format restricts none), as in
+        // ZoneAndRecordCrudTests.
         string invalidName = $"{new string('a', 64)}.example.com";
 
         HttpResponseMessage response = await client.PostAsJsonAsync(
@@ -264,10 +262,8 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
     {
         (HttpClient client, ZoneDetail zone) = await CreateZoneAsync();
 
-        // Algorithm 12 (ECC-GOST) is a real, IANA-registered DNSSEC algorithm this project's own
-        // DnssecAlgorithmRegistry deliberately excludes -- see that class's own doc comment --
-        // so it is a real, reachable ValidationException from DnssecKeyManagementService itself,
-        // not a value invented purely for this test.
+        // Algorithm 12 (ECC-GOST) is IANA-registered but left out of DnssecAlgorithmRegistry
+        // (see its summary), so DnssecKeyManagementService rejects it with a ValidationException.
         HttpResponseMessage response = await client.PostAsJsonAsync(
             $"/api/zones/{zone.Id}/dnssec-keys",
             new { role = "KSK", algorithm = "ECC-GOST" }
@@ -347,7 +343,7 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
             {
                 name = $"error-response-{Guid.NewGuid():N}",
                 providerType = "Route53",
-                // Route 53 requires both AccessKeyId and SecretAccessKey -- only one is supplied.
+                // Route 53 requires both AccessKeyId and SecretAccessKey; only one is supplied.
                 credentials = new Dictionary<string, string> { ["AccessKeyId"] = "AKIAEXAMPLE" },
             }
         );
@@ -501,9 +497,8 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
                 name = $"www.{zone.Name}",
                 type = "A",
                 timeToLiveSeconds = 300,
-                // An A record's own data must deserialize from a JSON object; a bare JSON string
-                // can never do that, so RecordDataValidator.EncodeDataOrThrow's own codec-level
-                // shape check rejects it.
+                // An A record's data must be a JSON object, so a bare JSON string fails the shape
+                // check in RecordDataValidator.EncodeDataOrThrow.
                 data = "this is not a valid A record shape",
             }
         );
@@ -609,14 +604,12 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         createResponse.EnsureSuccessStatusCode();
         RecordDetail aRecord = await createResponse.Content.ReadFromJsonAsync<RecordDetail>();
 
-        // Corrupt the zone's own SOA record directly, bypassing every REST-level validation --
-        // the only realistic, deterministic way to reach IZoneUpdateService.LoadSoaAsync's own
-        // "SOA record that could not be decoded" InvalidOperationException without inducing a
-        // genuine concurrency race, which this project's own real-integration-test convention
-        // has no established way to do deterministically. This exercises
-        // RecordsController.TranslateZoneUpdateFailure's own catch-all branch: an internal state
-        // this caller's own request could not have caused is still reported as a clean, specific
-        // ProblemDetails body, not the framework's own bare unhandled-exception fallback.
+        // Corrupt the zone's SOA record in storage, bypassing the API's validation. This is the
+        // deterministic way to reach the "SOA record that could not be decoded"
+        // InvalidOperationException in IZoneUpdateService.LoadSoaAsync without a concurrency
+        // race. It exercises the catch-all branch of RecordsController.TranslateZoneUpdateFailure:
+        // a broken internal state the request did not cause still gets a specific ProblemDetails
+        // body, not the framework's generic unhandled-exception response.
         using (IServiceScope scope = factory.Services.CreateScope())
         {
             IRecordRepository recordRepository =
@@ -629,11 +622,9 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
                 DnsResourceRecordTypeEnum.Soa
             );
             RecordEntity soaRecord = Assert.Single(soaRecords);
-            // The literal JSON null deserializes to a C# null without throwing, so this is a
-            // genuine, deterministic InvalidOperationException from LoadSoaAsync's own
-            // "could not be decoded" check -- not a JsonException from malformed JSON syntax,
-            // which RecordsController's own catch (InvalidOperationException) would not catch at
-            // all, letting it fall through to the generic unhandled-exception branch instead.
+            // JSON null deserializes to a C# null without throwing, so LoadSoaAsync raises its
+            // "could not be decoded" InvalidOperationException. Malformed JSON would raise a
+            // JsonException instead, which RecordsController does not catch.
             soaRecord.DataJson = "null";
             recordRepository.Update(soaRecord);
             await unitOfWork.SaveChangesAsync();
@@ -740,9 +731,8 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
         listResponse.EnsureSuccessStatusCode();
         FilterListDetail list = await listResponse.Content.ReadFromJsonAsync<FilterListDetail>();
 
-        // A manual write against a Subscribed list is rejected -- the entry set is wholesale
-        // replaced on the list's own refresh schedule, so a manual edit would otherwise be
-        // silently discarded with no warning at the very next refresh.
+        // A manual write to a Subscribed list is rejected, because the next refresh replaces
+        // the whole entry set and would silently discard the edit.
         HttpResponseMessage entryResponse = await client.PostAsJsonAsync(
             $"/api/filter-lists/{list.Id}/entries",
             new { value = "manual.example.com" }
@@ -1260,10 +1250,9 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // A DNS label may not exceed 63 octets (DnsName.MaximumLabelLength) -- a single,
-        // 300-character label is genuinely invalid, unlike a stray punctuation character, which
-        // this project's own loose label-content parsing (matching real-world DNS's own lack of
-        // a character-set restriction on a label) happily accepts.
+        // A DNS label may not exceed 63 octets (DnsName.MaximumLabelLength), so a 300-character
+        // label is invalid. A stray punctuation character would not be, since DNS restricts no
+        // characters in a label.
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/dns-rewrites",
             new { domain = new string('a', 300), target = "203.0.113.62" }
@@ -1325,12 +1314,10 @@ public class AdministrativeErrorResponseTests(NinlilDnsWebApplicationFactory fac
             restoreContent
         );
 
-        // BackupDecryptionFailedException is a dedicated Server.Backup exception type, left
-        // untouched by this project's own exception hierarchy -- BackupController translates it
-        // into a ValidationException at the REST boundary instead. This test exists to confirm
-        // that translation, not to re-cover every rejection scenario BackupCrudTests already
-        // does (a wrong passphrase leaving the database untouched, a too-short passphrase, a
-        // missing archive file).
+        // BackupDecryptionFailedException belongs to Server.Backup, outside the Ninlil exception
+        // hierarchy, and BackupController translates it into a ValidationException. This test
+        // checks that translation; BackupCrudTests covers the other rejections (the database
+        // left untouched after a wrong passphrase, a too-short passphrase, a missing archive).
         Assert.Equal(HttpStatusCode.BadRequest, restoreResponse.StatusCode);
         Assert.Equal(
             "application/problem+json",

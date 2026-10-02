@@ -8,16 +8,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the access-control rule CRUD REST endpoints
-///     (<see cref="DnsAccessControlRulesController" />) end to end, against a real, in-process
-///     host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- a
-///     full create/list/get/PUT/delete lifecycle, the array-of-strings capability projection round
-///     -tripping correctly (including the combined-capabilities case), CIDR/capability-name
-///     validation, and the unauthenticated-request rejection every other controller already gets
-///     covered for. The real end-to-end proof that a created rule actually changes DNS-answering
-///     behavior (not just that the REST layer stores it correctly) lives in
-///     <see cref="AccessControlRuleEndToEndTests" /> instead, against the same shared host's real
-///     Plain DNS listener.
+///     This class covers the access-control rule endpoints of
+///     <see cref="DnsAccessControlRulesController" /> over HTTP on the shared in-process host
+///     (see <see cref="NinlilDnsWebApplicationFactory" />), signed in as the bootstrap
+///     administrator. It runs the create, list, get, replace and delete lifecycle, checks that
+///     capabilities round-trip as an array of names, rejects unknown capability names and bad
+///     CIDRs, and rejects requests without a token. Whether a rule changes DNS answers is
+///     covered by <see cref="AccessControlRuleEndToEndTests" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -71,8 +68,8 @@ public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.False(created.IsDisabled);
 
-        // The cluster's own operational config sync stamps every create with the local node's
-        // own cluster identity, regardless of whether clustering is actually enabled.
+        // Every create is stamped with the local node's cluster identity, whether or not
+        // clustering is enabled.
         Assert.NotNull(created.OriginatingNodeId);
 
         // Listing reflects it, with pagination fields present.
@@ -152,11 +149,10 @@ public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // "RecursionAccess, RateLimitBypass" as a single element (rather than two separate array
-        // entries) parses as the combined bitmask value via Enum.TryParse's own flags-aware
-        // grammar, but Enum.IsDefined rejects it since no member is actually named that -- this
-        // proves the controller enforces one recognized name per array element, not merely "some
-        // token Enum.TryParse can make sense of."
+        // "RecursionAccess, RateLimitBypass" as one element parses as the combined flags value
+        // with Enum.TryParse, but Enum.IsDefined rejects it because no member has that value.
+        // The controller must accept one name per array element. Despite the test name, only
+        // the combined form is sent; a numeric string is not tried.
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/access-control-rules",
             new

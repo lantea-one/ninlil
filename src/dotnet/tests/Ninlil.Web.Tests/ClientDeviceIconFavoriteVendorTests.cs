@@ -11,12 +11,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the device icon, favorite star, and read-time MAC vendor fields
-///     <see cref="ClientsController" /> carries: create/replace/patch round trips, strict
-///     icon-name validation, the pushed-down favorites filter, a real vendor resolved from the
-///     embedded IEEE snapshot (for a plain MAC and a DUID-LL alike), a vendor-based icon suggestion
-///     reported alongside rather than instead of an explicit choice, and a randomized MAC reported
-///     as such instead of as an unknown vendor.
+///     This class covers the device icon, favorite star and read-time MAC vendor fields of
+///     <see cref="ClientsController" /> over HTTP on the shared in-process host, signed in as the
+///     bootstrap administrator: create, replace and patch round trips, strict icon-name
+///     validation, the favorites filter and its total, a vendor resolved from the embedded IEEE
+///     snapshot (for a plain MAC and a DUID-LL), a vendor-based icon suggestion reported beside an
+///     explicit choice rather than replacing it, and a randomized MAC reported as such instead of
+///     as an unknown vendor. The host never downloads vendor data (see
+///     <see cref="NinlilDnsWebApplicationFactory" />), so the snapshot answers every lookup.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientDeviceIconFavoriteVendorTests(NinlilDnsWebApplicationFactory factory)

@@ -8,22 +8,14 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     rather than through the full HTTP host, that <see cref="BrandingOptions" /> genuinely
-///     hot-reloads: a write <see cref="PresetConfigurationFileApplier" /> merges into a JSON file
-///     (the exact mechanism <see cref="Controllers.BrandingSettingsController.Patch" /> itself
-///     calls) is visible on <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c>
-///     with no restart -- including a real, well-formed data URI for <see cref="BrandingOptions.LogoDataUri" />,
-///     not just a plain string field.
-///     <para>
-///         This is deliberately not exercised through <see cref="NinlilDnsWebApplicationFactory" />
-///         -- see <see cref="AppearanceOptionsHotReloadTests" />'s own doc comment (the same
-///         "isolated runtime settings file is never wired back in as a live configuration source"
-///         limitation applies here identically) for the full reasoning behind reconstructing the
-///         real-deployment shape directly instead: one file, added as a genuine reload-on-change
-///         configuration source, written to via the exact same
-///         <see cref="PresetConfigurationFileApplier" /> mechanism the real controller calls.
-///     </para>
+///     This class checks that <see cref="BrandingOptions" /> hot-reloads: a write that
+///     <see cref="PresetConfigurationFileApplier" /> merges into a JSON file (the call
+///     <see cref="Controllers.BrandingSettingsController.Patch" /> makes) shows up on
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> without a restart, including a
+///     well-formed data URI for <see cref="BrandingOptions.LogoDataUri" />. Like
+///     <see cref="AppearanceOptionsHotReloadTests" /> (which explains why), it builds its own
+///     configuration root with one reload-on-change file instead of using
+///     <see cref="NinlilDnsWebApplicationFactory" />.
 /// </summary>
 public class BrandingOptionsHotReloadTests
 {
@@ -40,9 +32,8 @@ public class BrandingOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the kind WebApplicationBuilder.CreateBuilder()
+            // adds for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -57,15 +48,14 @@ public class BrandingOptionsHotReloadTests
                 IOptionsMonitor<BrandingOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // defaults, exactly as a fresh installation would see them.
+            // The file does not exist yet, so these are the compiled-in defaults.
             Assert.Null(monitor.CurrentValue.SiteTitle);
             Assert.Null(monitor.CurrentValue.LogoDataUri);
 
             TaskCompletionSource reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using IDisposable subscription = monitor.OnChange(_ => reloaded.TrySetResult());
 
-            // The exact same write mechanism BrandingSettingsController.Patch itself calls.
+            // The same call BrandingSettingsController.Patch makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new PresetConfigurationSetting(
@@ -82,17 +72,15 @@ public class BrandingOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay.
+            // The JSON configuration provider debounces file-change notifications by a few
+            // hundred milliseconds, so wait for the reload event rather than a fixed delay.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
             );
             Assert.Same(reloaded.Task, completed);
 
-            // A fresh read of the same, already-existing IOptionsMonitor instance -- constructed
-            // before the write -- genuinely reflects both new values, with no restart of any kind.
+            // The monitor created before the write now reports both new values.
             Assert.Equal("Acme Corp DNS", monitor.CurrentValue.SiteTitle);
             Assert.Equal(logoDataUri, monitor.CurrentValue.LogoDataUri);
         }
@@ -104,7 +92,7 @@ public class BrandingOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }

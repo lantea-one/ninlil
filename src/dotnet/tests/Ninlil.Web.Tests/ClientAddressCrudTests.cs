@@ -8,11 +8,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClientAddressesController" /> end to end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) --
-///     adding a further address to an existing known client, listing/single-item reads, a
-///     duplicate identifier/protocol pair rejected <c>409</c>, an unknown owning client rejected
-///     <c>404</c>, and the "never leave a device with zero addresses" guard on delete.
+///     This class covers <see cref="ClientAddressesController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: adding an address to a known
+///     client (read back through the client's detail), a duplicate identifier and protocol pair
+///     rejected with <c>409</c>, an unknown client rejected with <c>404</c>, and the rule that a
+///     device may not lose its last address.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -50,9 +50,8 @@ public class ClientAddressCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the whole dual-stack merge story this sub-phase exists for: a client
-    ///     registered with one IPv4 address can have a second, IPv6 address added directly, and
-    ///     both then show up as one device's own address set.
+    ///     This test checks dual-stack merging: a client registered with an IPv4 identifier can
+    ///     have an IPv6 identifier added, and both then belong to the one device.
     /// </summary>
     [Fact]
     public async Task AddAddress_ToAnExistingClient_MergesUnderOneDevice()

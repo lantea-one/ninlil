@@ -12,12 +12,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterController" /> end to end, against a real, in-process
-///     host and an isolated, throwaway JSON configuration file. A real cross-node join round trip
-///     (this action's own outbound callback reaching a second, genuinely separate node) needs two
-///     real running processes -- covered by a throwaway smoke test outside this suite, per this
-///     project's own "no two <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}" />
-///     instances concurrently" constraint (concurrent factories corrupt shared host-builder state).
+///     This class covers <see cref="ClusterController" /> over HTTP on the shared in-process host,
+///     signed in as the bootstrap administrator. Clustering is off in the shared host and a
+///     settings write never reaches its live options (see
+///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), so only the
+///     disabled-cluster paths of invite and join can be reached; a successful invite, join or
+///     cross-node round trip needs two separately configured processes and is not tested here.
+///     The class also covers editing and deleting a peer saved directly through the repository,
+///     and the dashboard row for this node.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -57,9 +59,8 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task List_ReturnsARealPageShapeAndNeverIncludesAFabricatedId()
     {
-        // This test suite shares one database across every test class (WebTestCollection), so
-        // this asserts the response's own real shape rather than an exact count -- another test
-        // may have already registered a peer of its own before this one runs.
+        // The database is shared with every other test class, so another test may have saved a
+        // peer already. The test only checks that the page parses and has no empty identifier.
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         HttpResponseMessage response = await client.GetAsync("/api/cluster/nodes");
@@ -89,6 +90,8 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
+        // The live options never see this write, so clustering stays disabled and the 400 comes
+        // from that check, not from the missing advertised host.
         HttpResponseMessage enableResponse = await client.SendAsync(
             PatchRequest("/api/cluster-settings", new { enable = true })
         );
@@ -99,21 +102,11 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // A "clustering fully configured, invite/join actually succeeds" test deliberately does not
-    // live here: ClusterInviteService/ClusterJoinService both read ClusterOptions via
-    // IOptionsMonitor, and this suite's own shared NinlilDnsWebApplicationFactory has a real,
-    // already-documented limitation (see RecursiveOptionsHotReloadTests' own doc comment) where
-    // its isolated runtime-settings file is never registered as its own reload-on-change
-    // IConfiguration source -- a PATCH here writes the file correctly, but the already-running
-    // host's own live options never observe it. Proving the real, fully-configured
-    // invite/join/heartbeat path therefore happens in a real, separate two-process smoke test
-    // instead, not through this shared factory.
-
     [Fact]
     public async Task Join_WithAGarbageInviteCode_ReturnsBadRequest()
     {
-        // Clustering being disabled is checked before the invite code is even decoded, so this
-        // needs no live configuration at all to exercise a real BadRequest path.
+        // Clustering being disabled is checked before the invite code is decoded, so this 400
+        // comes from the disabled check; the decoding of a bad code is not reached.
         HttpClient client = await CreateAuthenticatedClientAsync();
 
         HttpResponseMessage response = await client.PostAsJsonAsync(
@@ -180,12 +173,9 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the aggregate cluster dashboard endpoint always includes
-    ///     this node's own row (<c>isSelf: true</c>, always reachable), regardless of whether
-    ///     clustering is enabled or any peer is currently known -- a real per-peer network fan-out
-    ///     against a genuinely separate second node is instead covered by a real, separate
-    ///     two/three-process smoke test, per this suite's own "no live cross-node round
-    ///     trip" constraint documented at the top of this class.
+    ///     This test checks that the cluster dashboard always includes this node's row
+    ///     (<c>isSelf: true</c>, reachable), even with clustering off and no peers. Querying real
+    ///     peers is not tested (see the class summary).
     /// </summary>
     [Fact]
     public async Task Stats_AlwaysIncludesARealSelfRow()

@@ -11,9 +11,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="ClusterSettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: the compiled-in defaults,
+///     patches checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) together with
+///     the returned reload note, and input validation.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -69,8 +71,8 @@ public class ClusterSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         Assert.Equal(TimeSpan.FromSeconds(10), detail.HeartbeatTimeout);
         Assert.Equal(3, detail.MissedHeartbeatThreshold);
 
-        // CatalogSyncOptions' own compiled-in default -- folded into this same settings surface
-        // rather than a controller/page of its own, see ClusterSettingsDetail's own doc comment.
+        // The compiled-in default of CatalogSyncOptions, which this controller also edits (see
+        // ClusterSettingsDetail).
         Assert.Equal(TimeSpan.FromMinutes(1), detail.AddressReconcileInterval);
     }
 
@@ -95,10 +97,10 @@ public class ClusterSettingsControllerTests(NinlilDnsWebApplicationFactory facto
 
         RuntimeSettingsWriteResult result =
             await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
-        // This one PATCH touches both a hot-reloading field (missedHeartbeatThreshold) and a
-        // restart-requiring one (addressReconcileInterval -- CatalogClusterAddressSyncService
-        // reads it once into its own PeriodicTimer at startup, exactly like
-        // ClusterOptions.HeartbeatInterval already does), so the mixed note is expected.
+        // The patch has a hot-reloading field (missedHeartbeatThreshold) and one that needs a
+        // restart (addressReconcileInterval, which CatalogClusterAddressSyncService reads into its
+        // PeriodicTimer at startup, as with ClusterOptions.HeartbeatInterval), so the mixed note
+        // is expected.
         Assert.Equal(RuntimeSettingsWriteResult.MixedReloadNote, result.Note);
 
         JsonObject root = (JsonObject)
@@ -108,8 +110,8 @@ public class ClusterSettingsControllerTests(NinlilDnsWebApplicationFactory facto
         Assert.Equal("10.0.1.10", section["AdvertisedHost"].GetValue<string>());
         Assert.Equal(5, section["MissedHeartbeatThreshold"].GetValue<int>());
 
-        // AddressReconcileInterval lives in its own, separate top-level "CatalogSync" section --
-        // CatalogSyncOptions.SectionName is "CatalogSync", not nested under "Cluster".
+        // AddressReconcileInterval lives in the top-level "CatalogSync" section
+        // (CatalogSyncOptions.SectionName), not under "Cluster".
         JsonObject catalogSyncSection = (JsonObject)root["CatalogSync"];
         Assert.Equal("00:02:00", catalogSyncSection["AddressReconcileInterval"].GetValue<string>());
     }

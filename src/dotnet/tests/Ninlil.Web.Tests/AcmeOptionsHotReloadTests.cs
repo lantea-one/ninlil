@@ -8,23 +8,18 @@ using Ninlil.Dns.Server.Presets;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     rather than through the full HTTP host, that <see cref="AcmeOptions" /> genuinely
-///     hot-reloads: a write <see cref="PresetConfigurationFileApplier" /> merges into a JSON file
-///     (the exact mechanism <see cref="Controllers.AcmeSettingsController.Patch" /> itself calls)
-///     is visible on <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c> with no
-///     restart -- the same real functional gap this project's own hot-reload fixes each closed
-///     for their own singleton, closed here for <see cref="AcmeCertificateRenewalService" />'s own
-///     poll loop and <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" />.
+///     This class checks that <see cref="AcmeOptions" /> hot-reloads: a write that
+///     <see cref="PresetConfigurationFileApplier" /> merges into a JSON file (the call
+///     <see cref="Controllers.AcmeSettingsController.Patch" /> makes) shows up on
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> without a restart.
+///     <see cref="AcmeCertificateRenewalService" /> reads <c>CurrentValue</c> on each poll and
+///     each renewal, so a live write reaches it; the service itself is not run here.
 ///     <para>
-///         Deliberately not exercised through <see cref="NinlilDnsWebApplicationFactory" /> --
-///         see <see cref="AcmeSettingsControllerTests" />'s own doc comment and
-///         <see cref="AppearanceOptionsHotReloadTests" />'s own doc comment for exactly why that
-///         factory's own isolated runtime settings file is never actually wired back in as a real
-///         configuration source. This test reconstructs a real deployment's own shape directly:
-///         one file, added as a genuine reload-on-change configuration source, written to via the
-///         exact same <see cref="PresetConfigurationFileApplier" /> mechanism the real controller
-///         itself calls.
+///         The test builds a configuration root and service collection of its own instead of
+///         using <see cref="NinlilDnsWebApplicationFactory" />, whose runtime settings file is not
+///         loaded back as a configuration source (see <see cref="AppearanceOptionsHotReloadTests" />).
+///         Like a deployment, it has one JSON file added as a reload-on-change source and written
+///         through <see cref="PresetConfigurationFileApplier" />.
 ///     </para>
 /// </summary>
 public class AcmeOptionsHotReloadTests
@@ -39,9 +34,8 @@ public class AcmeOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the kind WebApplicationBuilder.CreateBuilder()
+            // adds for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -54,9 +48,8 @@ public class AcmeOptionsHotReloadTests
                 IOptionsMonitor<AcmeOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // defaults, exactly as a fresh installation would see them: ACME off, no domains
-            // configured.
+            // The file does not exist yet, so these are the compiled-in defaults a fresh
+            // installation sees: ACME off and no domains.
             Assert.False(monitor.CurrentValue.Enable);
             Assert.Empty(monitor.CurrentValue.Domains);
 
@@ -65,7 +58,7 @@ public class AcmeOptionsHotReloadTests
 
             const string domain = "acme-hot-reload-tests.invalid";
 
-            // The exact same write mechanism AcmeSettingsController.Patch itself calls.
+            // The same call AcmeSettingsController.Patch makes.
             await PresetConfigurationFileApplier.ApplyAsync(
                 [
                     new PresetConfigurationSetting(
@@ -82,10 +75,9 @@ public class AcmeOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay, which would either be flaky (too
-            // short) or slow every test run down for no reason (too long).
+            // The JSON configuration provider debounces file-change notifications by a few
+            // hundred milliseconds. Waiting for the reload event avoids a fixed delay, which would
+            // be either flaky or needlessly slow.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
@@ -94,12 +86,6 @@ public class AcmeOptionsHotReloadTests
 
             Assert.True(monitor.CurrentValue.Enable);
             Assert.Contains(domain, monitor.CurrentValue.Domains);
-
-            // AcmeCertificateRenewalService.ExecuteAsync/RenewDueDomainsAsync/RenewOneDomainAsync
-            // all read this exact same monitor's own CurrentValue on every iteration/call, not a
-            // snapshot cached at construction -- this is the real proof the controller's own
-            // doc comment claims: the identical singleton this project's DI container
-            // constructs once genuinely observes a live AcmeSettingsController.Patch write.
         }
         finally
         {
@@ -109,7 +95,7 @@ public class AcmeOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }

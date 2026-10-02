@@ -11,12 +11,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the known-client registry CRUD REST endpoints end to end, against a
-///     real, in-process host and a real SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- a full lifecycle for
-///     <see cref="ClientsController" />, a duplicate <c>(clientIdentifier, protocolVersion)</c>
-///     create rejected <c>409</c>, an invalid <c>clientGroupId</c> rejected <c>400</c>, a missing
-///     <c>clientIdentifier</c> rejected <c>400</c>, and real, pushed-down pagination.
+///     This class covers the known-client registry of <see cref="ClientsController" /> over HTTP
+///     on the shared in-process host, signed in as the bootstrap administrator: the create, read,
+///     replace, patch and delete lifecycle, a duplicate <c>(clientIdentifier, protocolVersion)</c>
+///     rejected with <c>409</c>, an unknown <c>clientGroupId</c> or a missing
+///     <c>clientIdentifier</c> rejected with <c>400</c>, re-registering a deleted identifier,
+///     pagination that returns non-overlapping pages, and pausing and resuming a client and a
+///     client group.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -88,7 +89,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
         ClientDetail fetched = await getResponse.Content.ReadFromJsonAsync<ClientDetail>();
         Assert.Equal(created.Id, fetched.Id);
 
-        // PUT fully replaces the client's own editable metadata, keeping its identity.
+        // PUT replaces the client's editable metadata and keeps its identity.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/clients/{created.Id}",
             new
@@ -213,10 +214,9 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // The same identifier under the OTHER protocol version is a genuinely different client,
-        // and must be allowed -- a dual-stack device's own IPv4 MAC and IPv6 DUID are two
-        // different strings in practice, but nothing here should reject a coincidentally
-        // matching string under a different protocol version.
+        // The same identifier under the other protocol version is a different client and must be
+        // allowed. A dual-stack device's MAC and DUID normally differ, but a matching string under
+        // another protocol version is not a duplicate.
         HttpResponseMessage otherProtocolResponse = await client.PostAsJsonAsync(
             "/api/clients",
             new { clientIdentifier = identifier, protocolVersion = "IPv6" }
@@ -318,9 +318,8 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test covers a client's own instant pause end to end: pausing sets a real, future
-    ///     <c>pausedUntilUtc</c> that persists across a fresh <c>GET</c>, and resuming genuinely
-    ///     clears it back to <see langword="null" /> immediately, not merely eventually.
+    ///     This test covers pausing a client: pausing sets a future <c>pausedUntilUtc</c> that a
+    ///     later <c>GET</c> also shows, and resuming clears it to <see langword="null" /> at once.
     /// </summary>
     [Fact]
     public async Task ClientPause_PauseThenResume_WorksEndToEnd()
@@ -347,7 +346,7 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.NotNull(paused.PausedUntilUtc);
         Assert.True(paused.PausedUntilUtc > beforePause.AddMinutes(29));
 
-        // The pause must be visible on a fresh GET too, not only the pause action's own response.
+        // The pause must show on a later GET too, not only in the pause response.
         HttpResponseMessage afterPauseResponse = await client.GetAsync(
             $"/api/clients/{created.Id}"
         );
@@ -409,9 +408,9 @@ public class ClientCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test covers a client group's own instant pause end to end -- the identical
-    ///     pause/resume contract as <see cref="ClientPause_PauseThenResume_WorksEndToEnd" />, one
-    ///     level up.
+    ///     This test covers pausing and resuming a client group, as
+    ///     <see cref="ClientPause_PauseThenResume_WorksEndToEnd" /> does for a client. It does not
+    ///     re-read the group with a <c>GET</c>.
     /// </summary>
     [Fact]
     public async Task ClientGroupPause_PauseThenResume_WorksEndToEnd()

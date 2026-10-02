@@ -11,26 +11,22 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="BrandingSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- covers
-///     <c>BrandingOptions</c> (site title/logo) alongside the already-existing
-///     <c>AuthoritativeServerOptions</c> CHAOS-query fields, both merged through the same
-///     <c>PATCH</c> action. Genuine <c>IOptionsMonitor</c> hot-reload for the CHAOS-query fields
-///     is proved separately, end to end against the real .NET configuration/options binding
-///     pipeline, by <c>AuthoritativeQueryResolverChaosHotReloadTests</c> (in
-///     <c>Ninlil.Dns.Server.Authoritative.Tests</c>) -- see
-///     <see cref="TsigSettingsControllerTests" />'s own doc comment for why that proof does not
-///     run through this shared HTTP fixture instead.
+///     This class covers <see cref="BrandingSettingsController" /> over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: one <c>PATCH</c> that writes both
+///     <c>BrandingOptions</c> (site title and logo) and the CHAOS-query fields of
+///     <c>AuthoritativeServerOptions</c>, checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), plus input
+///     validation and the self-service <c>effective</c> action, which a user with no permissions
+///     may read. The hot reload is covered by <see cref="BrandingOptionsHotReloadTests" /> and,
+///     for the CHAOS fields, <c>AuthoritativeQueryResolverChaosHotReloadTests</c> in
+///     <c>Ninlil.Dns.Server.Authoritative.Tests</c>.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class BrandingSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 {
     /// <summary>
-    ///     This constant contains a tiny (1x1 transparent PNG), genuinely valid, well-formed data
-    ///     URI -- real enough to exercise <see cref="Ninlil.Common.Serializer.Model.DataUriModel" />'s
-    ///     own parsing rather than a synthetic string this project's own validation would accept
-    ///     for the wrong reason.
+    ///     This constant contains a valid data URI for a 1x1 transparent PNG, so the logo passes
+    ///     <see cref="Ninlil.Common.Serializer.Model.DataUriModel" /> parsing for the right reason.
     /// </summary>
     private const string ValidPngLogoDataUri =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -60,11 +56,10 @@ public class BrandingSettingsControllerTests(NinlilDnsWebApplicationFactory fact
     }
 
     /// <summary>
-    ///     This method creates a fresh, dedicated, ordinary (non-administrative, no permissions of
-    ///     its own) user account and returns a client already authenticated as it -- mirrors
-    ///     <see cref="AppearanceSettingsControllerTests.CreateOrdinaryUserClientAsync" />'s own
-    ///     setup shape, used here to prove <see cref="BrandingSettingsController.GetEffective" />
-    ///     needs no specific permission at all, unlike <see cref="BrandingSettingsController.Get" />.
+    ///     This method creates a new user with no permissions and returns a client signed in as
+    ///     it, as <see cref="AppearanceSettingsControllerTests.CreateOrdinaryUserClientAsync" />
+    ///     does. It shows that <see cref="BrandingSettingsController.GetEffective" /> needs no
+    ///     permission, unlike <see cref="BrandingSettingsController.Get" />.
     /// </summary>
     private async Task<HttpClient> CreateOrdinaryUserClientAsync(string userNameSuffix)
     {
@@ -178,14 +173,8 @@ public class BrandingSettingsControllerTests(NinlilDnsWebApplicationFactory fact
             );
             response.EnsureSuccessStatusCode();
 
-            // This checks only the raw configuration file, never a live GET immediately after
-            // this same PATCH -- NinlilDnsWebApplicationFactory's own isolated runtime settings
-            // file is never separately registered as its own reload-on-change IConfiguration
-            // source, a real, confirmed test-harness limitation TsigSettingsControllerTests'/
-            // AppearanceSettingsControllerTests' own doc comments already document. Genuine
-            // IOptionsMonitor hot-reload for AuthoritativeServerOptions is proved instead,
-            // directly, by AuthoritativeQueryResolverChaosHotReloadTests (in
-            // Ninlil.Dns.Server.Authoritative.Tests).
+            // Only the file is checked; a GET would still show the old values (see
+            // NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath).
             JsonObject root = (JsonObject)
                 JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
             JsonObject section = (JsonObject)root["DnsServer"]["Authoritative"];
@@ -278,13 +267,9 @@ public class BrandingSettingsControllerTests(NinlilDnsWebApplicationFactory fact
 
         try
         {
-            // This reads the current live value directly (never assumes a specific value written
-            // by a PATCH earlier in this same test would already be observable here -- see
-            // Patch_WithHostnameAndChaosToggle_WritesBothToTheAuthoritativeSection's own comment
-            // on why a live GET can't reliably observe a same-process PATCH in this shared
-            // harness), so this test's own real point -- that an ordinary user with no
-            // branding:read permission is nonetheless served the exact same current value through
-            // the self-service action -- holds regardless of what that value currently is.
+            // Read the current value instead of assuming one, since a GET does not see PATCH
+            // writes in this host. The point is that a user without branding:read is served the
+            // same values through the self-service action, whatever they are.
             HttpResponseMessage adminGetResponse = await adminClient.GetAsync(
                 "/api/branding-settings"
             );
@@ -296,16 +281,14 @@ public class BrandingSettingsControllerTests(NinlilDnsWebApplicationFactory fact
                 Guid.NewGuid().ToString("N")
             );
 
-            // Confirms this ordinary user genuinely lacks branding:read -- the admin-only action
-            // is forbidden...
+            // The user lacks branding:read, so the admin action is forbidden...
             HttpResponseMessage adminActionResponse = await userClient.GetAsync(
                 "/api/branding-settings"
             );
             Assert.Equal(HttpStatusCode.Forbidden, adminActionResponse.StatusCode);
 
-            // ...yet the self-service "effective" action, gated by [Authorize] alone, still
-            // succeeds for that same permission-less caller and reports the exact same live
-            // values the admin-only action just reported.
+            // ...but the "effective" action, which needs only [Authorize], succeeds and reports
+            // the same values.
             HttpResponseMessage effectiveResponse = await userClient.GetAsync(
                 "/api/branding-settings/effective"
             );

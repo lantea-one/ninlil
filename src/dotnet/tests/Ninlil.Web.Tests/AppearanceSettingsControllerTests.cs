@@ -12,21 +12,14 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="AppearanceSettingsController" /> end to end, against a real,
-///     in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- the two
-///     admin actions (global default palette/mode, closely mirroring
-///     <see cref="RateLimitingSettingsControllerTests" />) and the two self-service actions (a
-///     signed-in caller's own preference override, mirroring the dedicated-user pattern
-///     <see cref="TwoFactorRecoveryCodeTests" /> already establishes). One property is unique to
-///     this controller among every other runtime settings controller in this project: its own
-///     write is visible on the very next read with no restart, since <c>AppearanceOptions</c> is
-///     this codebase's first options class bound via <c>IOptionsMonitor</c> rather than the usual
-///     <c>IOptions</c> -- this class only confirms the write itself and this controller's own
-///     accurate no-restart-needed message; <see cref="AppearanceOptionsHotReloadTests" /> is the
-///     dedicated test that actually proves the live reload happens, end to end, against the real
-///     .NET configuration/options binding pipeline (see that class's own doc comment for why it
-///     is not exercised through this shared HTTP fixture instead).
+///     This class covers <see cref="AppearanceSettingsController" /> over HTTP on the shared
+///     in-process host: the two admin actions for the global default palette and mode (signed in
+///     as the bootstrap administrator), and the two self-service actions for a user's own
+///     override (signed in as a new user with no permissions, created per test). Admin patches are
+///     checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned note. <c>AppearanceOptions</c> is read through <c>IOptionsMonitor</c>, so a write
+///     needs no restart; <see cref="AppearanceOptionsHotReloadTests" /> checks that reload.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -56,11 +49,9 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
     }
 
     /// <summary>
-    ///     This method creates a fresh, dedicated, ordinary (non-administrative) user account and
-    ///     returns a client already authenticated as it -- never the shared bootstrap
-    ///     administrator, so this test's own preference writes can never affect any other test in
-    ///     this shared fixture. Mirrors <c>TwoFactorRecoveryCodeTests.CreateTwoFactorEnrolledUserAsync</c>'s
-    ///     own setup shape.
+    ///     This method creates a new user with no permissions and returns a client signed in as
+    ///     it, so preference writes never touch the bootstrap administrator that other tests use.
+    ///     It follows the setup in <c>TwoFactorRecoveryCodeTests.CreateTwoFactorEnrolledUserAsync</c>.
     /// </summary>
     private async Task<HttpClient> CreateOrdinaryUserClientAsync(string userNameSuffix)
     {
@@ -109,9 +100,8 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
     [Fact]
     public async Task Get_ReturnsTheCompiledInDefaultsWhenNothingHasBeenConfigured()
     {
-        // A dedicated, isolated runtime configuration file backs this factory (see its own doc
-        // comment), so this is the very first read against it -- genuinely the compiled-in
-        // AppearanceOptions defaults, not whatever an earlier test in this shared fixture wrote.
+        // The host's settings file is not a configuration source, so this returns the
+        // compiled-in defaults even after another test has patched the settings.
         HttpClient client = await CreateAuthenticatedAdminClientAsync();
 
         HttpResponseMessage response = await client.GetAsync("/api/appearance-settings");
@@ -137,21 +127,14 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         RuntimeSettingsWriteResult patchResult =
             await patchResponse.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
 
-        // The one behavior that sets this controller apart from every other runtime settings
-        // controller in this project: no "restart required" caveat, because AppearanceOptions is
-        // read back via IOptionsMonitor. HotReloadedNote's own text still mentions "restart" (to
-        // say none is required), so this compares against the exact, distinct constant rather
-        // than a loose substring check against RestartRequiredNote's own wording.
+        // No restart is needed, because AppearanceOptions is read through IOptionsMonitor.
+        // HotReloadedNote also mentions "restart" (to say none is needed), so the test compares
+        // the constant rather than searching for a word.
         Assert.Equal(RuntimeSettingsWriteResult.HotReloadedNote, patchResult.Note);
         Assert.Contains("immediately", patchResult.Note, StringComparison.OrdinalIgnoreCase);
 
-        // The write actually landed in the configuration file this factory points every runtime
-        // settings controller at. This factory's own isolated runtime settings file is
-        // deliberately never wired back in as a live configuration source for this same
-        // in-process host (see NinlilDnsWebApplicationFactory's own doc comment on why), so
-        // the genuine end-to-end proof that a write here needs no restart lives in
-        // AppearanceOptionsHotReloadTests instead, which reconstructs the real-deployment shape
-        // directly (one file, both written to and bound live via IOptionsMonitor).
+        // The write landed in the host's settings file. The reload itself is checked by
+        // AppearanceOptionsHotReloadTests.
         JsonObject root = (JsonObject)
             JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
         JsonObject section = (JsonObject)root["DnsServer"]["Appearance"];
@@ -224,9 +207,8 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
         UserAppearancePreferenceDetail mine =
             await mineResponse.Content.ReadFromJsonAsync<UserAppearancePreferenceDetail>();
 
-        // A brand-new account has never set an override of its own -- both fields are null, and
-        // the effective value inherited is exactly whatever this host's own current global
-        // default is right now.
+        // A new account has no override, so both fields are null and the effective values are
+        // the current global default.
         Assert.Null(mine.Palette);
         Assert.Null(mine.Mode);
         Assert.Equal(globalDefault.Palette, mine.EffectivePalette);
@@ -278,9 +260,8 @@ public class AppearanceSettingsControllerTests(NinlilDnsWebApplicationFactory fa
             await setResponse.Content.ReadFromJsonAsync<UserAppearancePreferenceDetail>();
         Assert.Equal(UiThemePaletteEnum.Emerald, afterSet.Palette);
 
-        // A JSON `null` value for a present field, per this project's own RFC 7396 merge-patch
-        // convention, clears the field's own override entirely -- not "no change" (an absent
-        // field) and not "set it to some literal null palette" (which does not exist).
+        // Under RFC 7396 merge-patch, a field present with a JSON null clears the override; an
+        // absent field means no change.
         HttpResponseMessage clearResponse = await userClient.SendAsync(
             new HttpRequestMessage(HttpMethod.Patch, "/api/appearance-settings/me")
             {

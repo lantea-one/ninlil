@@ -18,33 +18,27 @@ using Ninlil.Web.Controllers;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClusterChannelController" />'s own TSIG authentication path
-///     end to end -- the peer-to-peer half of the cluster channel, distinct from
-///     <see cref="ClusterController" />'s own JWT-authenticated, human-operator surface. Every
-///     request here is built and signed by hand, exactly the way
-///     <c>ClusterPeerHttpClientFactory.SendSignedAsync</c> itself would, rather than going
-///     through that class directly, so these tests exercise the real wire format
-///     <see cref="ClusterTsigAuthenticationHandler" /> actually parses.
+///     This class covers the TSIG-authenticated peer endpoints of
+///     <see cref="ClusterChannelController" /> over HTTP on the shared in-process host, as opposed
+///     to the operator endpoints of <see cref="ClusterController" />, which use a JWT. Each test
+///     saves a TSIG key directly through the repository (not linked to any cluster node) and signs
+///     its request by hand, as <c>ClusterPeerHttpClientFactory.SendSignedAsync</c> would, so the
+///     tests exercise the header format <see cref="ClusterTsigAuthenticationHandler" /> parses.
+///     They cover heartbeat, config-sync for filter lists, users and unknown entity types,
+///     username checks and query statistics, each with a valid signature and without one.
 ///     <para>
-///         <c>JoinComplete</c>'s own success path deliberately has no test here: it requires
-///         <c>ClusterOptions.Enable</c> to be live-true, and this suite's own shared
-///         <see cref="NinlilDnsWebApplicationFactory" /> has a real, already-documented limitation
-///         (see <c>RecursiveOptionsHotReloadTests</c>' own doc comment) where its isolated
-///         runtime-settings file is never registered as its own reload-on-change
-///         <see cref="Microsoft.Extensions.Configuration.IConfiguration" />
-///         source -- a settings write here reaches the file correctly, but the already-running
-///         host's own live options never observe it. That success path is proven instead by a
-///         real, separate two-process smoke test, which starts each node fresh (reading
-///         its own configuration at real startup, not live-reload) and therefore has no such
-///         limitation.
+///         The success path of <c>JoinComplete</c> is not tested. It needs
+///         <c>ClusterOptions.Enable</c> to be on, and a settings write never reaches the shared
+///         host's live options (see <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factory)
 {
     /// <summary>
-    ///     This method seeds a real, persisted TSIG key -- the local state that exists on a real
-    ///     node the moment it has either created an invite or already joined a cluster.
+    ///     This method saves an enabled TSIG key, the state a node has once it has created an
+    ///     invite or joined a cluster. The handler accepts any enabled TSIG key, so the key is not
+    ///     linked to a cluster node.
     /// </summary>
     private async Task<(string KeyName, byte[] Secret)> SeedTsigKeyAsync()
     {
@@ -192,14 +186,11 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     This test proves the cluster config-sync channel's own inbound dispatch end to end, over the real HTTP +
-    ///     TSIG authentication pipeline, not merely against <see cref="FilterListClusterConfigSyncApplier" />
-    ///     directly (that class's own create/update/delete/last-write-wins logic is already
-    ///     covered exhaustively in <c>Ninlil.Dns.Server.ClusterSync.Tests</c>) -- what this test
-    ///     alone confirms is that <see cref="ClusterChannelController.ConfigSync" /> actually
-    ///     resolves and invokes the right registered <see cref="IClusterConfigSyncApplier" /> for
-    ///     a real <c>"FilterList"</c> envelope, ending in a real, persisted row a fresh repository
-    ///     read can see.
+    ///     This test checks that <see cref="ClusterChannelController.ConfigSync" />, behind TSIG
+    ///     authentication, hands a <c>"FilterList"</c> envelope to the matching
+    ///     <see cref="IClusterConfigSyncApplier" /> and that the list is then saved. The applier's
+    ///     create, update, delete and last-write-wins logic is covered in
+    ///     <c>Ninlil.Dns.Server.ClusterSync.Tests</c>.
     /// </summary>
     [Fact]
     public async Task ConfigSync_WithAValidSignatureAndARecognizedEntityType_PersistsTheChange()
@@ -249,9 +240,9 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     An envelope naming an entity type no registered applier recognizes must still answer
-    ///     <c>200 OK</c> -- see <see cref="ClusterChannelController.ConfigSync" />'s own doc
-    ///     comment for why (a newer peer must never look like a channel failure to an older one).
+    ///     An envelope naming an entity type no applier recognizes must still get <c>200 OK</c>,
+    ///     so a newer peer never looks like a channel failure to an older one (see
+    ///     <see cref="ClusterChannelController.ConfigSync" />).
     /// </summary>
     [Fact]
     public async Task ConfigSync_WithAnUnrecognizedEntityType_StillReturnsOk()
@@ -299,13 +290,9 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     This test proves the cluster config-sync channel's own inbound dispatch for a <c>"User"</c> envelope, over
-    ///     the real HTTP + TSIG authentication pipeline -- <see cref="UserClusterConfigSyncApplier" />'s
-    ///     own create/update/delete/collision logic is already covered exhaustively in
-    ///     <c>Ninlil.Dns.Server.ClusterSync.Tests</c>; what this test alone confirms is that
-    ///     <see cref="ClusterChannelController.ConfigSync" /> actually resolves and invokes the
-    ///     right registered applier for a real <c>"User"</c> entity type, ending in a real,
-    ///     persisted row a fresh repository read can see.
+    ///     This test checks that a <c>"User"</c> envelope reaches
+    ///     <see cref="UserClusterConfigSyncApplier" /> and the account is then saved. The applier's
+    ///     own logic is covered in <c>Ninlil.Dns.Server.ClusterSync.Tests</c>.
     /// </summary>
     [Fact]
     public async Task ConfigSync_WithAUserEntityTypeAndAValidSignature_PersistsTheAccount()
@@ -371,9 +358,8 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     This test proves the cluster's own best-effort cluster-wide username-uniqueness check
-    ///     endpoint, over the real HTTP + TSIG authentication pipeline: a username that already
-    ///     exists locally is reported as existing.
+    ///     This test checks the username check that peers use for best-effort cluster-wide
+    ///     uniqueness: a user name that exists locally is reported as existing.
     /// </summary>
     [Fact]
     public async Task UsernameCheck_ForAnExistingAccount_ReportsExists()
@@ -449,10 +435,9 @@ public class ClusterChannelControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     This test proves the cluster's own aggregate-query-stats channel endpoint over the real
-    ///     HTTP + TSIG authentication pipeline: a validly signed request always receives a real
-    ///     snapshot back, with every count zero-or-greater (this suite's own shared database may
-    ///     already carry query-log rows from another test).
+    ///     This test checks the query statistics endpoint: a signed request gets a snapshot back.
+    ///     The counts are only checked to be zero or more, since other tests may have written
+    ///     query log rows to the shared database.
     /// </summary>
     [Fact]
     public async Task QueryStats_WithAValidSignature_ReturnsARealSnapshot()

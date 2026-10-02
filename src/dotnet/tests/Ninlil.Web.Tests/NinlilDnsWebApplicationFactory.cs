@@ -149,7 +149,10 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
 
     /// <summary>
     ///     This property contains the temporary JSON file the runtime settings controllers write
-    ///     into, so a test can read back what was written.
+    ///     into, so a test can read back what was written. The file is not a configuration source
+    ///     of the test host, so a settings write never changes what the host reads; a GET after a
+    ///     PATCH still returns the old values. <see cref="AppearanceOptionsHotReloadTests" /> shows
+    ///     the reload a deployment gets, where the file is <c>appsettings.json</c>.
     /// </summary>
     public string RuntimeConfigurationFilePath => _runtimeConfigurationFilePath;
 

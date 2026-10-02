@@ -5,6 +5,12 @@ using Ninlil.Web.Models;
 // Define our namespace.
 namespace Ninlil.Web.Tests;
 
+/// <summary>
+///     This class covers sign-in over HTTP on the shared in-process host: password login as the
+///     bootstrap administrator, a wrong password, requests with and without a bearer token,
+///     refresh-token rotation, and authenticator (TOTP) enrollment followed by a two-step login,
+///     with <see cref="TotpGenerator" /> playing the authenticator app.
+/// </summary>
 [Collection(WebTestCollection.Name)]
 public class AuthenticationFlowTests(NinlilDnsWebApplicationFactory factory)
 {
@@ -64,13 +70,11 @@ public class AuthenticationFlowTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task ProtectedEndpointRequiringOnlyAuthenticationSucceedsWithAValidToken()
     {
-        // A direct regression test for a real bug this project's own end-to-end smoke test
-        // found: the JWT bearer handler's default inbound claim mapping silently renamed the
-        // "sub" claim to ClaimTypes.NameIdentifier, so any endpoint reading the current user's
-        // own "sub" claim directly (every [Authorize]-only endpoint, such as this one) returned
-        // an internally-generated Unauthorized() despite a genuinely valid, successfully
-        // authenticated token -- while a [RequirePermission(...)] endpoint, which reads claims a
-        // different way, kept working the whole time and masked the bug.
+        // The JWT bearer handler must keep MapInboundClaims off. Its default mapping renames
+        // "sub" to ClaimTypes.NameIdentifier, and then every [Authorize]-only endpoint that reads
+        // the user's "sub" claim, such as /api/api-tokens, returns 401 for a valid token.
+        // [RequirePermission] endpoints read claims differently and keep working, so only an
+        // endpoint like this one shows the problem.
         HttpClient client = CreateClient();
 
         LoginResponse login = await LoginAsync(client);
@@ -132,8 +136,8 @@ public class AuthenticationFlowTests(NinlilDnsWebApplicationFactory factory)
     [Fact]
     public async Task TwoFactorEnrollmentAndLoginFlowWorksEndToEnd()
     {
-        // Uses a dedicated account (rather than the shared bootstrap administrator) so enabling
-        // two-factor authentication here can never affect any other test in this fixture.
+        // A separate account, so enabling two-factor here never affects the bootstrap
+        // administrator that other tests sign in as.
         HttpClient client = CreateClient();
         LoginResponse adminLogin = await LoginAsync(client);
         client.DefaultRequestHeaders.Authorization =

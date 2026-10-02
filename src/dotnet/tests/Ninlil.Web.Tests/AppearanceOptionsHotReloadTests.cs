@@ -9,29 +9,21 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class proves, directly against the real .NET configuration/options binding pipeline
-///     rather than through the full HTTP host, that <see cref="AppearanceOptions" /> genuinely
-///     hot-reloads: a write <see cref="PresetConfigurationFileApplier" /> merges into a JSON file
-///     is visible on <see cref="IOptionsMonitor{TOptions}" />'s own <c>CurrentValue</c> with no
-///     restart, because that file is registered as a real, reload-on-change configuration source
-///     and read back via <see cref="IOptionsMonitor{TOptions}" /> rather than the usual,
-///     snapshotted <see cref="IOptions{TOptions}" />.
+///     This class checks that <see cref="AppearanceOptions" /> hot-reloads: a write that
+///     <see cref="PresetConfigurationFileApplier" /> merges into a JSON file shows up on
+///     <see cref="IOptionsMonitor{TOptions}.CurrentValue" /> without a restart, because the file
+///     is a reload-on-change configuration source and the options are read through
+///     <see cref="IOptionsMonitor{TOptions}" /> rather than <see cref="IOptions{TOptions}" />.
 ///     <para>
-///         This is deliberately not exercised through <see cref="NinlilDnsWebApplicationFactory" />
-///         (see <see cref="AppearanceSettingsControllerTests" />'s own doc comment): that factory's
-///         own isolated runtime settings file is set only as
-///         <c>RuntimeConfigurationOptions.ConfigurationFilePath</c> (where a write lands), never
-///         wired back in as an actual configuration source the running host's own
-///         <see cref="IConfiguration" /> reads from -- deliberately, so a test mutating a runtime
-///         setting can never leak into the real, shared build-output <c>appsettings.json</c> every
-///         other test class in that shared fixture also runs against. In a real deployment, by
-///         contrast, <c>RuntimeConfigurationOptions.ConfigurationFilePath</c> defaults to that
-///         exact same <c>appsettings.json</c> -- the same file the host's own configuration
-///         pipeline already loads with reload-on-change enabled -- so the two are, in practice,
-///         one and the same file, and this test reconstructs precisely that real-world shape
-///         directly: one file, added as a genuine reload-on-change configuration source, written
-///         to via the exact same <see cref="PresetConfigurationFileApplier" /> mechanism
-///         <see cref="Controllers.AppearanceSettingsController.Patch" /> itself calls.
+///         It builds its own configuration root and service collection instead of using
+///         <see cref="NinlilDnsWebApplicationFactory" />. That host only sets its temporary
+///         settings file as <c>RuntimeConfigurationOptions.ConfigurationFilePath</c> (where writes
+///         land) and never loads it as a configuration source, so test writes cannot leak into the
+///         <c>appsettings.json</c> in the build output. In a deployment the path defaults to
+///         <c>appsettings.json</c>, which the host already loads with reload-on-change, so writes
+///         and reads use one file. This test builds that shape: one file, added as a
+///         reload-on-change source and written through <see cref="PresetConfigurationFileApplier" />,
+///         the call <see cref="Controllers.AppearanceSettingsController.Patch" /> makes.
 ///     </para>
 /// </summary>
 public class AppearanceOptionsHotReloadTests
@@ -46,9 +38,8 @@ public class AppearanceOptionsHotReloadTests
 
         try
         {
-            // A real IConfigurationRoot, backed by a real reload-on-change JSON file provider --
-            // the exact same kind of source WebApplicationBuilder.CreateBuilder() wires up for
-            // appsettings.json in a real deployment.
+            // A reload-on-change JSON file source, the kind WebApplicationBuilder.CreateBuilder()
+            // adds for appsettings.json.
             IConfigurationRoot configuration = new ConfigurationBuilder()
                 .AddJsonFile(path, optional: true, reloadOnChange: true)
                 .Build();
@@ -63,8 +54,8 @@ public class AppearanceOptionsHotReloadTests
                 IOptionsMonitor<AppearanceOptions>
             >();
 
-            // Before any write, the file does not exist yet -- this class's own compiled-in
-            // defaults, exactly as a fresh installation would see them.
+            // The file does not exist yet, so these are the compiled-in defaults a fresh
+            // installation sees.
             Assert.Equal(UiThemePaletteEnum.Teal, monitor.CurrentValue.Palette);
             Assert.Equal(UiThemeModeEnum.System, monitor.CurrentValue.Mode);
 
@@ -87,10 +78,9 @@ public class AppearanceOptionsHotReloadTests
                 path
             );
 
-            // .NET's own JSON configuration provider debounces file-change notifications by a
-            // few hundred milliseconds -- this waits for that real reload to actually happen
-            // rather than asserting against a fixed delay, which would either be flaky (too
-            // short) or slow every test run down for no reason (too long).
+            // The JSON configuration provider debounces file-change notifications by a few
+            // hundred milliseconds. Waiting for the reload event avoids a fixed delay, which would
+            // be either flaky or needlessly slow.
             Task completed = await Task.WhenAny(
                 reloaded.Task,
                 Task.Delay(TimeSpan.FromSeconds(10))
@@ -108,7 +98,7 @@ public class AppearanceOptionsHotReloadTests
             }
             catch (IOException)
             {
-                // Best-effort cleanup only -- a lingering temp file from a test run is harmless.
+                // Best-effort cleanup; a leftover temporary file is harmless.
             }
         }
     }

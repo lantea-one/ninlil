@@ -10,14 +10,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="AdminLoginRateLimitSettingsController" /> end to end, against
-///     a real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- the
-///     REST/UI surface for this host's own admin-login brute-force limiter's attempt threshold and
-///     lockout window. The real lockout/reset/no-op-when-disabled request-time behavior itself is
-///     covered by <c>Ninlil.Dns.Identity.Tests.AdminLoginRateLimitingTests</c> instead, against a
-///     minimal, dedicated host -- see that class's own doc comment for why this shared fixture
-///     cannot exercise that dimension at all.
+///     This class covers <see cref="AdminLoginRateLimitSettingsController" /> (the attempt limit
+///     and window of the admin-login limiter) over HTTP on the shared in-process host, signed in
+///     as the bootstrap administrator. A patch is checked by reading the host's temporary settings
+///     file (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />). The
+///     lockout itself is covered by <c>Ninlil.Dns.Identity.Tests.AdminLoginRateLimitingTests</c>
+///     on a dedicated host, because the shared host turns the limiter off.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class AdminLoginRateLimitSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -55,11 +53,10 @@ public class AdminLoginRateLimitSettingsControllerTests(NinlilDnsWebApplicationF
         };
 
     /// <summary>
-    ///     This test's own expected <c>Enable</c> value is <see langword="false" />, not this
-    ///     class's real compiled-in default of <see langword="true" /> -- see
-    ///     <see cref="NinlilDnsWebApplicationFactory" />'s own constructor for why this shared
-    ///     fixture deliberately overrides it off. <c>PermitLimit</c>/<c>Window</c> are otherwise
-    ///     untouched, so both still reflect their own real compiled-in defaults.
+    ///     This test expects <c>Enable</c> to be <see langword="false" />, not the compiled-in
+    ///     <see langword="true" />, because the <see cref="NinlilDnsWebApplicationFactory" />
+    ///     constructor turns the limiter off. <c>PermitLimit</c> and <c>Window</c> keep their
+    ///     compiled-in defaults.
     /// </summary>
     [Fact]
     public async Task Get_ReturnsTheTestFixturesOwnConfiguration()

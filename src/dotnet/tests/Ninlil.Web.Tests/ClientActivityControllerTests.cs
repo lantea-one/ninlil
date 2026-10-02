@@ -13,13 +13,10 @@ namespace Ninlil.Web.Tests;
 
 /// <summary>
 ///     This class covers <see cref="ClientActivityController" /> (<c>/api/clients/{clientId}/activity</c>)
-///     end to end, against a real, in-process host and a real SQLite database. A query log entry
-///     is a live artifact the query-answering pipeline itself writes, never an operator-created
-///     REST resource, so every entry this test reads back is seeded directly through
-///     <see cref="IDnsQueryLogRepository" /> first -- exactly the same "seed the live artifact
-///     directly, then only prove the REST surface reads it back correctly" shape
-///     <see cref="DhcpLeasesControllerTests" /> already establishes for an identical
-///     engine-written-only resource.
+///     over HTTP on the shared in-process host, signed in as the bootstrap administrator. Query
+///     log entries are written by the DNS pipeline, not through the API, so the tests save them
+///     directly through <see cref="IDnsQueryLogRepository" /> and then check what the endpoint
+///     returns, as <see cref="DhcpLeasesControllerTests" /> does for leases.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factory)
@@ -89,11 +86,9 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
     }
 
     /// <summary>
-    ///     This test proves the full nested-resource contract end to end: a known client's own
-    ///     activity view returns only the log entries this project's own write-time identity
-    ///     resolution attributed to it, correctly paginated, and never leaks an unrelated client's
-    ///     own history into it -- even one whose own identifier happens to differ by only the last
-    ///     character.
+    ///     This test checks that a client's activity holds only the log entries attributed to its
+    ///     identifier, paginated, and nothing from another client with a similar identifier or
+    ///     from an entry with no client identity.
     /// </summary>
     [Fact]
     public async Task List_ReturnsOnlyThisClientsOwnActivity_PaginatedAndUnaffectedByOtherClients()
@@ -110,8 +105,8 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
 
         DateTimeOffset baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
 
-        // Three entries for client A (to exercise real pagination), one for the unrelated client
-        // B, and one with no resolved client identity at all.
+        // Three entries for client A (enough to paginate), one for client B, and one with no
+        // client identity.
         await SeedQueryLogEntryAsync(
             identifierA,
             InternetProtocolVersionEnum.IPv4,
@@ -143,7 +138,7 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
             baseTime.AddSeconds(4)
         );
 
-        // The unfiltered first page (take=2) returns only 2 of client A's own 3 entries.
+        // The first page (take=2) returns 2 of client A's 3 entries.
         HttpResponseMessage firstPageResponse = await client.GetAsync(
             $"/api/clients/{clientA.Id}/activity?skip=0&take=2"
         );
@@ -168,8 +163,7 @@ public class ClientActivityControllerTests(NinlilDnsWebApplicationFactory factor
         Assert.Single(secondPage.Items);
         Assert.Equal(identifierA, secondPage.Items[0].ClientIdentifier);
 
-        // Client B's own activity view sees only its own single entry, never client A's or the
-        // unattributed one.
+        // Client B sees only its own entry, not client A's or the unattributed one.
         HttpResponseMessage clientBResponse = await client.GetAsync(
             $"/api/clients/{clientB.Id}/activity?take=50"
         );

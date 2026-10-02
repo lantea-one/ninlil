@@ -21,41 +21,27 @@ using Ninlil.Web.Options;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="AcmeSettingsController" />'s real per-domain certificate
-///     inventory (<see cref="AcmeSettingsController.Certificates" />) and manual "issue/renew now"
-///     trigger (<see cref="AcmeSettingsController.IssueOrRenewNow" />), constructing the controller
-///     directly rather than driving it through <c>WebApplicationFactory</c> over real HTTP the way
-///     <see cref="AcmeSettingsControllerTests" /> does for <c>Get</c>/<c>Patch</c>.
+///     This class covers the certificate inventory (<see cref="AcmeSettingsController.Certificates" />)
+///     and the manual issue-or-renew trigger (<see cref="AcmeSettingsController.IssueOrRenewNow" />)
+///     of <see cref="AcmeSettingsController" />. It constructs the controller directly instead of
+///     calling it over HTTP as <see cref="AcmeSettingsControllerTests" /> does for <c>Get</c> and
+///     <c>Patch</c>.
 ///     <para>
-///         <b>Why this class exists separately, not folded into <see cref="AcmeSettingsControllerTests" />:</b>
-///         both actions read <see cref="AcmeOptions" /> live via
-///         <see cref="IOptionsMonitor{TOptions}" />, and each test here needs it already reporting a
-///         specific value (a particular set of configured domains; an unreachable
-///         <see cref="AcmeOptions.DirectoryUri" />) the moment the action runs. Driving that through
-///         a real <c>PATCH /api/acme-settings</c> against the shared
-///         <see cref="NinlilDnsWebApplicationFactory" /> host does not work: that host's own
-///         runtime configuration file is overridden to an isolated path via an environment
-///         variable, which <c>Program.cs</c> never separately registers as its own
-///         reload-on-change <see cref="Microsoft.Extensions.Configuration.IConfiguration" />
-///         source (only the default <c>appsettings.json</c> gets that treatment automatically) --
-///         so a write there is never actually observed by <see cref="IOptionsMonitor{TOptions}" />
-///         within that specific host at all, not merely slowly. Constructing the controller
-///         directly against an already-correct value sidesteps that gap entirely, and is a more
-///         precise test of these two actions' own real logic regardless -- neither test is
-///         actually about proving hot-reload (that is a separate, deliberate future concern; see
-///         this class's own note below).
+///         Both actions read <see cref="AcmeOptions" /> through <see cref="IOptionsMonitor{TOptions}" />,
+///         and each test needs a specific value in place (a set of domains, an unreachable
+///         <see cref="AcmeOptions.DirectoryUri" />). A <c>PATCH /api/acme-settings</c> on the
+///         shared <see cref="NinlilDnsWebApplicationFactory" /> host cannot set that up: its
+///         runtime settings file is not registered as a configuration source, so the monitor never
+///         sees the write. Passing a fixed value to the controller avoids that and tests the
+///         actions' logic directly.
 ///     </para>
 ///     <para>
-///         <b>What this class can and cannot verify, stated explicitly:</b> a real end-to-end
-///         order/challenge/finalize round trip against Let's Encrypt (or any other real CA) needs a
-///         real, publicly-resolvable domain this environment does not have -- a documented,
-///         known verification boundary.
+///         A full order, challenge and finalize round trip with a certificate authority needs a
+///         publicly resolvable domain, which the test environment does not have.
 ///         <see cref="IssueOrRenewNow_AgainstAnUnreachableCa_RecordsAndReturnsTheRealFailure" />
-///         instead points <c>directoryUri</c> at a closed loopback port (the same
-///         deterministic-real-network-failure technique
-///         <c>AcmeCertificateRenewalServiceEventTests</c> already established), which proves the
-///         entire DI/failure-recording mechanism this action depends on works end to end without
-///         ever needing the CA call itself to succeed.
+///         instead points <c>directoryUri</c> at a closed loopback port, as
+///         <c>AcmeCertificateRenewalServiceEventTests</c> does, so the failure is recorded and
+///         returned without the CA call ever succeeding.
 ///     </para>
 /// </summary>
 public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
@@ -68,10 +54,10 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
     private IHost _host;
 
     /// <summary>
-    ///     This class stands in for a real, DI-built <see cref="IOptionsMonitor{TOptions}" />: it
-    ///     always reports the same, fixed <see cref="CurrentValue" /> and never actually fires
-    ///     <see cref="OnChange" /> -- mirroring every sibling test project's own identically-named
-    ///     fake (for example <c>Ninlil.Dns.Server.Acme.Tests.Fakes.StaticOptionsMonitor{TOptions}</c>).
+    ///     This class is a fake <see cref="IOptionsMonitor{TOptions}" /> that always reports the
+    ///     same <see cref="CurrentValue" /> and never fires <see cref="OnChange" />, like
+    ///     <see cref="Fakes.StaticOptionsMonitor{TOptions}" /> and the copies in the other test
+    ///     projects.
     /// </summary>
     private sealed class StaticOptionsMonitor<TOptions>(TOptions value) : IOptionsMonitor<TOptions>
     {
@@ -83,12 +69,10 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This class stands in for a real, durable <see cref="IAcmeAccountStore" /> with a plain
-    ///     in-memory dictionary -- the minimal double
-    ///     <see cref="Certificates_ReflectsRealAccountStoreStateForEveryConfiguredDomain" /> needs
-    ///     to seed a specific, arbitrary combination of per-domain state without any real
-    ///     filesystem/<see cref="IDataProtector" /> involvement, since that test never exercises a
-    ///     real issuance/renewal attempt at all.
+    ///     This class is an in-memory <see cref="IAcmeAccountStore" />.
+    ///     <see cref="Certificates_ReflectsRealAccountStoreStateForEveryConfiguredDomain" /> uses it
+    ///     to seed per-domain state without a file or an <see cref="IDataProtector" />, since that
+    ///     test never attempts an issuance.
     /// </summary>
     private sealed class InMemoryAcmeAccountStore : IAcmeAccountStore
     {
@@ -114,13 +98,12 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method builds a real, minimal host providing a genuinely working
-    ///     <see cref="AcmeCertificateIssuer" />/<see cref="AcmeCertificateRenewalService" /> --
-    ///     the same recipe <c>AcmeCertificateRenewalServiceEventTests</c> already establishes,
-    ///     needed here only for
-    ///     <see cref="IssueOrRenewNow_AgainstAnUnreachableCa_RecordsAndReturnsTheRealFailure" />,
-    ///     which drives a real (if deliberately unreachable) network attempt through
-    ///     <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" />.
+    ///     This method builds a minimal host with a working <see cref="AcmeCertificateIssuer" />
+    ///     and <see cref="AcmeCertificateRenewalService" /> on a temporary SQLite database, as
+    ///     <c>AcmeCertificateRenewalServiceEventTests</c> does. The host is built but not started.
+    ///     Only <see cref="IssueOrRenewNow_AgainstAnUnreachableCa_RecordsAndReturnsTheRealFailure" />
+    ///     uses it, to make a network attempt through
+    ///     <see cref="AcmeCertificateRenewalService.RenewOneDomainAsync" /> that fails.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -129,11 +112,8 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerCore(builder.Configuration);
 
-        // No IDnsServerEventPublisher override here -- unlike AcmeCertificateRenewalServiceEventTests,
-        // this class never asserts on a published event, only on IAcmeAccountStore's own durable
-        // record and the controller's own returned inventory entry, so AddNinlilDnsServerCore's
-        // real registration (or none at all, since AcmeCertificateRenewalService's own
-        // eventPublisher parameter defaults to null) is sufficient either way.
+        // Unlike AcmeCertificateRenewalServiceEventTests, no recording event publisher is added:
+        // these tests check the account store and the returned inventory entry, not events.
         builder.Services.AddSingleton<IZoneWriteSerializer, ZoneWriteSerializer>();
         builder.Services.AddScoped<IZoneUpdateService, ZoneUpdateService>();
         builder.Services.AddSingleton<AuthoritativeZoneCache>();
@@ -148,8 +128,8 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         {
             options.Enable = true;
 
-            // A closed loopback port -- Certes's own first HTTP call (fetching the directory to
-            // register/reuse an account) fails immediately with a real connection-refused error.
+            // A closed loopback port, so the first Certes call (fetching the directory) fails at
+            // once with connection refused.
             options.DirectoryUri = new Uri("http://127.0.0.1:1/directory");
             options.Domains = [UnreachableCaDomain];
             options.AccountStateFilePath = Path.Combine(
@@ -257,10 +237,8 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         Assert.True(neverIssued.IsDueForRenewal);
         Assert.Null(neverIssued.LastFailureAtUtc);
 
-        // The genuinely distinct state this class's own coverage requires: a domain that
-        // has never been successfully issued a certificate *and* whose most recent attempt is
-        // known to have failed, distinguishable both from "active" and from "never attempted at
-        // all" (neverIssued, above, which has no failure recorded either).
+        // A domain never issued a certificate whose last attempt failed must be distinguishable
+        // both from an active one and from one never attempted (neverIssued has no failure).
         AcmeCertificateInventoryEntry failed = entries.Single(entry =>
             entry.Domain == failedDomain
         );
@@ -309,9 +287,8 @@ public sealed class AcmeSettingsControllerDirectTests : IAsyncLifetime
         Assert.NotNull(entry.LastFailureAtUtc);
         Assert.False(string.IsNullOrWhiteSpace(entry.LastFailureMessage));
 
-        // The same failure the response body already carries must also be durably recorded,
-        // readable independently through a fresh Certificates() read -- not just returned once
-        // and forgotten.
+        // The failure must also be recorded in the account store, so a later Certificates() read
+        // shows it.
         List<AcmeCertificateInventoryEntry> entries = [.. UnwrapOk(controller.Certificates())];
         AcmeCertificateInventoryEntry persisted = Assert.Single(entries);
         Assert.Equal(entry.LastFailureMessage, persisted.LastFailureMessage);

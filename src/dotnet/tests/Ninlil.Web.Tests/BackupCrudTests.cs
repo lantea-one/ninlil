@@ -9,18 +9,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the full-system backup/restore REST endpoints
-///     (<see cref="BackupController" />) end to end, against a real, in-process host and a real
-///     SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />): a real
-///     <c>POST /api/backup</c> download, a real <c>POST /api/backup/restore</c> upload that
-///     genuinely wipes and re-imports this host's own database, and the rejection paths (a
-///     missing/too-short passphrase, a wrong passphrase on restore, a missing archive file, and
-///     the unauthenticated-request rejection every other controller already gets covered for).
-///     The underlying export/import/encryption engine itself is covered far more thoroughly by
-///     <c>Ninlil.Dns.Server.Backup.Tests</c> -- this class exists to prove the REST layer
-///     wires that engine up correctly, the same "REST CRUD vs. the real underlying behavior are
-///     two separate verification concerns" convention <see cref="DnsRewriteCrudTests" /> already
-///     establishes.
+///     This class covers the backup and restore endpoints of <see cref="BackupController" /> over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator: downloading
+///     an archive from <c>POST /api/backup</c>, uploading it to <c>POST /api/backup/restore</c>
+///     (which wipes and re-imports the host's SQLite database, so a DNS rewrite created first must
+///     come back), and the rejections (a missing or too-short passphrase, a wrong passphrase, a
+///     missing archive, no token). The export, import and encryption are covered in depth by
+///     <c>Ninlil.Dns.Server.Backup.Tests</c>; this class checks the HTTP layer around them.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -111,9 +106,8 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
         HttpClient client = await CreateAuthenticatedClientAsync();
         string domain = $"backup-crud-{Guid.NewGuid():N}.example.com";
 
-        // Create a real, distinctive piece of data through the ordinary REST surface, so a
-        // successful restore can be confirmed against something genuinely round-tripped, not
-        // merely against a non-zero row count.
+        // Create a distinctive rewrite, so the restore is checked against data that round-trips,
+        // not just a non-zero row count.
         HttpResponseMessage createRewriteResponse = await client.PostAsJsonAsync(
             "/api/dns-rewrites",
             new DnsRewriteWriteRequest(domain, "203.0.113.201")
@@ -141,8 +135,8 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.True(summary.EntityCounts["DnsRewrites"] >= 1);
         Assert.Contains("restart", summary.Note, StringComparison.OrdinalIgnoreCase);
 
-        // A restore replaces the underlying database (and, transitively, this host's own bearer
-        // token session store), so re-authenticate before reading the rewrite back.
+        // A restore replaces the whole database, refresh-token sessions included, so sign in
+        // again before reading the rewrite back.
         HttpClient verifyClient = await CreateAuthenticatedClientAsync();
         HttpResponseMessage getRewriteResponse = await verifyClient.GetAsync(
             $"/api/dns-rewrites/{createdRewrite.Id}"
@@ -182,8 +176,7 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, restoreResponse.StatusCode);
 
-        // The rejected restore must never have touched this host's own real database -- the
-        // rewrite created immediately above is still there, unaffected.
+        // The rejected restore must leave the database alone, so the rewrite is still there.
         HttpResponseMessage getRewriteResponse = await client.GetAsync(
             $"/api/dns-rewrites/{createdRewrite.Id}"
         );
@@ -204,8 +197,7 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
         DnsRewriteDetail createdRewrite =
             await createRewriteResponse.Content.ReadFromJsonAsync<DnsRewriteDetail>();
 
-        // No passphrase supplied at all -- a real operator choice to skip encryption, expected
-        // to still succeed and produce a downloadable archive.
+        // No passphrase: the operator may skip encryption, and the backup still succeeds.
         HttpResponseMessage backupResponse = await client.PostAsJsonAsync(
             "/api/backup",
             new BackupCreateRequest(null)

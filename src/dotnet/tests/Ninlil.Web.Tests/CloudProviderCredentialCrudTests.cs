@@ -10,14 +10,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the cloud DNS provider credential CRUD REST endpoints end to
-///     end, against a real, in-process host and a real SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- creating a credential set for each
-///     supported provider shape, confirming its own secret material is revealed exactly once (on
-///     creation) and omitted from every later response, rotating that secret material via
-///     <c>PUT</c> (this entity type's own deliberate deviation from <c>TsigKeysController</c>'s
-///     secret-immutability stance -- see <see cref="Models.CloudProviderCredentialWriteRequest" />),
-///     editing metadata-only via <c>PATCH</c>, and deleting.
+///     This class covers the cloud DNS provider credential endpoints over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator: creating Cloudflare and Route 53
+///     credential sets (DigitalOcean is not tested), the secrets being returned once on creation
+///     and left out of every later response, replacing the secrets with <c>PUT</c> (allowed here,
+///     unlike for TSIG keys; see <see cref="Models.CloudProviderCredentialWriteRequest" />),
+///     editing metadata with <c>PATCH</c>, and deleting. The API never returns stored secrets, so
+///     the tests cannot check that a rotation or a patch stored the right ones.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -61,8 +60,7 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         string name = $"crud-{Guid.NewGuid():N}";
         const string originalToken = "cf-original-token-value";
 
-        // Creating a Cloudflare-shaped credential set reveals its own secret material exactly
-        // once, in this response only.
+        // Creating a Cloudflare credential set returns its secrets in this response only.
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
             "/api/cloud-provider-credentials",
             new
@@ -92,7 +90,7 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         );
         Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
 
-        // The credential set's own secret material is never returned again, from GET.
+        // GET never returns the secrets.
         HttpResponseMessage getResponse = await client.GetAsync(
             $"/api/cloud-provider-credentials/{created.Credential.Id}"
         );
@@ -102,16 +100,15 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         Assert.DoesNotContain("apitoken", getBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("credentials", getBody, StringComparison.OrdinalIgnoreCase);
 
-        // Listing must show the credential set, and must not leak its secret material either.
+        // The list must not include the secrets either.
         HttpResponseMessage listResponse = await client.GetAsync("/api/cloud-provider-credentials");
         listResponse.EnsureSuccessStatusCode();
         string listBody = await listResponse.Content.ReadAsStringAsync();
         Assert.DoesNotContain(originalToken, listBody, StringComparison.Ordinal);
 
-        // PUT fully replaces the credential set, including rotating its own secret material --
-        // unlike a TSIG key's shared secret, this project deliberately allows this, since a
-        // cloud provider credential is operator-supplied and the caller already knows the new
-        // plaintext value they are submitting.
+        // PUT replaces the whole credential set, secrets included. Unlike a TSIG key's secret,
+        // this is allowed, because the operator supplies these credentials and already knows the
+        // new value.
         const string rotatedToken = "cf-rotated-token-value";
         string renamedName = $"renamed-{Guid.NewGuid():N}";
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
@@ -137,12 +134,12 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         Assert.True(replaced.IsDisabled);
         Assert.Equal("replaced via PUT", replaced.Comments);
 
-        // PUT's own response never echoes the rotated secret back either.
+        // The PUT response does not echo the new secret.
         string replaceBody = await replaceResponse.Content.ReadAsStringAsync();
         Assert.DoesNotContain(rotatedToken, replaceBody, StringComparison.Ordinal);
 
-        // PATCH via JSON Merge Patch, omitting 'credentials', only touches metadata -- the
-        // stored secret material (already rotated above) is left untouched.
+        // A JSON Merge Patch without 'credentials' changes only metadata. (The stored secrets are
+        // not readable, so their survival is not checked.)
         HttpResponseMessage patchResponse = await client.SendAsync(
             PatchRequest(
                 $"/api/cloud-provider-credentials/{created.Credential.Id}",
@@ -190,7 +187,7 @@ public class CloudProviderCredentialCrudTests(NinlilDnsWebApplicationFactory fac
         );
         Assert.Equal(HttpStatusCode.BadRequest, missingSecretResponse.StatusCode);
 
-        // Supplying both required fields must succeed, and both are revealed exactly once.
+        // Supplying both required fields succeeds, and both are returned on creation.
         HttpResponseMessage okResponse = await client.PostAsJsonAsync(
             "/api/cloud-provider-credentials",
             new

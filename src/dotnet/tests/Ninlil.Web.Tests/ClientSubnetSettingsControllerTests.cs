@@ -11,9 +11,12 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="ClientSubnetSettingsController" /> end to end, against a
-///     real, in-process host and an isolated, throwaway JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />).
+///     This class covers <see cref="ClientSubnetSettingsController" /> (EDNS Client Subnet) over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator: the
+///     compiled-in defaults, a patch checked by reading the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />), a bad
+///     override address, and rejection without a token. Prefix lengths out of range are not
+///     tested.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientSubnetSettingsControllerTests(NinlilDnsWebApplicationFactory factory)

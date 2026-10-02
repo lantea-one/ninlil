@@ -8,13 +8,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the time-of-day parental-control schedule REST endpoints end to end,
-///     against a real, in-process host and a real SQLite database (see
-///     <see cref="NinlilDnsWebApplicationFactory" />) -- a full lifecycle for both
+///     This class covers the time-of-day schedule endpoints over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator: the lifecycle of
 ///     <see cref="ClientSchedulesController" /> (<c>/api/clients/{clientId}/schedules</c>) and
 ///     <see cref="ClientGroupSchedulesController" /> (<c>/api/client-groups/{groupId}/schedules</c>),
-///     plus the validation rules (<c>daysOfWeek</c> non-zero, a recognized <c>timeZoneId</c>,
-///     <c>startTime</c> differing from <c>endTime</c>) both controllers share.
+///     and the validation rules (<c>daysOfWeek</c> not empty, a known <c>timeZoneId</c>,
+///     <c>startTime</c> different from <c>endTime</c>). All three rules are checked on the client
+///     controller; the group controller is checked only for an empty <c>daysOfWeek</c>.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientScheduleCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -109,7 +109,7 @@ public class ClientScheduleCrudTests(NinlilDnsWebApplicationFactory factory)
             await getResponse.Content.ReadFromJsonAsync<ClientScheduleDetail>();
         Assert.Equal(created.Id, fetched.Id);
 
-        // PUT fully replaces the schedule's own fields.
+        // PUT replaces all of the schedule's fields.
         HttpResponseMessage replaceResponse = await client.PutAsJsonAsync(
             $"/api/clients/{clientId}/schedules/{created.Id}",
             new
@@ -228,10 +228,10 @@ public class ClientScheduleCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves a midnight-wrapping window (<c>endTime</c> earlier than
-    ///     <c>startTime</c>) is genuinely accepted, not rejected as some kind of "invalid range" --
-    ///     see <c>Ninlil.Dns.Server.Core.ClientSchedule.DnsScheduleWindowEvaluator</c>'s own doc
-    ///     comment for why this shape is real and deliberately supported.
+    ///     This test checks that a window wrapping past midnight (<c>endTime</c> earlier than
+    ///     <c>startTime</c>) is accepted, not rejected as an invalid range. See
+    ///     <c>Ninlil.Dns.Server.Core.ClientSchedule.DnsScheduleWindowEvaluator</c> for how such a
+    ///     window is evaluated.
     /// </summary>
     [Fact]
     public async Task CreateClientSchedule_WithAMidnightWrappingWindow_Succeeds()

@@ -8,11 +8,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers the static address mapping CRUD REST endpoints
-///     (<see cref="DnsClientStaticAddressMappingsController" />) end to end, against a real,
-///     in-process host and a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />)
-///     -- a full create/list/get/PUT/delete lifecycle, CIDR/protocol-family-agreement validation,
-///     and the unauthenticated-request rejection every other controller already gets covered for.
+///     This class covers the static address mapping endpoints of
+///     <see cref="DnsClientStaticAddressMappingsController" /> over HTTP on the shared in-process
+///     host, signed in as the bootstrap administrator: the create, list, get, replace and delete
+///     lifecycle, validation of the CIDR, the client identifier and the agreement between address
+///     family and protocol version, acceptance of a bare address, and rejection without a token.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientStaticAddressMappingCrudTests(NinlilDnsWebApplicationFactory factory)
@@ -141,8 +141,8 @@ public class ClientStaticAddressMappingCrudTests(NinlilDnsWebApplicationFactory 
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // An IPv4 network paired with a declared IPv6 protocol version -- the two must agree, per
-        // DnsClientStaticAddressMappingEntity.ProtocolVersion's own doc comment.
+        // An IPv4 network with protocol version IPv6. The two must agree (see
+        // DnsClientStaticAddressMappingEntity.ProtocolVersion).
         HttpResponseMessage response = await client.PostAsJsonAsync(
             "/api/client-static-address-mappings",
             new

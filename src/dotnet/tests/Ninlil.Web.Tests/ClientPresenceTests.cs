@@ -16,10 +16,13 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers passive client presence through the real host: a recorded sighting
-///     flowing through the real flush service into <see cref="ClientsController" />'s own
-///     <c>lastSeenUtc</c>/<c>isOnline</c>, and <see cref="ClientPresenceSettingsController" />'s
-///     read, write, and validation behavior.
+///     This class covers passive client presence on the shared in-process host, signed in as the
+///     bootstrap administrator. A sighting is recorded through the host's
+///     <see cref="IClientPresenceRecorder" /> and saved by calling <c>FlushAsync</c> on its
+///     <see cref="ClientPresenceFlushService" /> directly, instead of waiting for the flush
+///     interval; the tests then check <c>lastSeenUtc</c>, <c>isOnline</c>, the presence filter, the
+///     last-seen sort and the summary counts of <see cref="ClientsController" />. They also cover
+///     reading, writing and validating <see cref="ClientPresenceSettingsController" />.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
@@ -63,8 +66,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
         };
 
     /// <summary>
-    ///     This test proves a never-seen client reports offline, and that a sighting recorded
-    ///     through the real recorder and persisted by the real flush service makes it online.
+    ///     This test checks that a never-seen client reports offline, and that a sighting recorded
+    ///     and flushed makes it online with that time and address.
     /// </summary>
     [Fact]
     public async Task ASightingFlowsThroughTheFlushServiceIntoTheClientsOwnPresence()
@@ -106,8 +109,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the presence filter, the last-seen ordering, and the summary counts
-    ///     all see a real flushed sighting: a new, never-seen client counts as new and offline,
+    ///     This test checks that the presence filter, the last-seen sort and the summary counts
+    ///     all follow a flushed sighting: a new, never-seen client counts as new and offline,
     ///     and once sighted it moves to online, heads the online list sorted by last seen, and
     ///     disappears from the offline list. The shared host holds other tests' clients too, so
     ///     the counts are compared as before/after deltas.
@@ -123,8 +126,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
             .OfType<ClientPresenceFlushService>()
             .Single();
 
-        // Drain any sightings other tests left buffered in the shared host first, so the flush
-        // below persists this test's own sighting alone and the deltas are exact.
+        // Flush any sightings other tests left buffered, so the flush below saves only this
+        // test's sighting and the deltas are exact.
         await flushService.FlushAsync();
 
         ClientSummaryDetail before = await client.GetFromJsonAsync<ClientSummaryDetail>(
@@ -185,8 +188,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves "new" counts from a caller-supplied instant, and that an instant in the
-    ///     future, or an unknown presence/sort value, is rejected with 400.
+    ///     This test checks that "new" counts from a caller-supplied instant, and that an instant
+    ///     in the future, or an unknown presence or sort value, is rejected with 400.
     /// </summary>
     [Fact]
     public async Task Summary_HonorsNewSinceUtc_AndInvalidQueryValuesAreRejected()
@@ -198,8 +201,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
         );
         Assert.Equal(sinceEpoch.TotalCount, sinceEpoch.NewCount);
 
-        // A client registered after a fixed instant is the only one counted as new from that
-        // instant, by both the summary and the list's own createdSinceUtc filter.
+        // A client registered after a fixed instant is the only one counted as new from it, by
+        // both the summary and the list's createdSinceUtc filter.
         DateTimeOffset beforeCreate = DateTimeOffset.UtcNow.AddMilliseconds(-1);
         string suffix = Guid.NewGuid().ToString("N")[..6];
         HttpResponseMessage createResponse = await client.PostAsJsonAsync(
@@ -240,7 +243,7 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves the settings resource reports the shipped defaults.
+    ///     This test checks that the settings resource reports the compiled-in defaults.
     /// </summary>
     [Fact]
     public async Task GetSettings_ReturnsTheDefaults()
@@ -259,8 +262,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves a valid patch is written to the runtime configuration file. It writes
-    ///     the defaults back, so the shared test host's behavior is unchanged afterward.
+    ///     This test checks that a valid patch is written to the runtime configuration file. It
+    ///     writes the default values, so the file is unchanged in effect.
     /// </summary>
     [Fact]
     public async Task PatchSettings_WritesToTheConfigurationFile()
@@ -289,8 +292,8 @@ public class ClientPresenceTests(NinlilDnsWebApplicationFactory factory)
     }
 
     /// <summary>
-    ///     This test proves a non-positive or malformed interval, or a non-boolean toggle, is
-    ///     rejected with 400.
+    ///     This test checks that a non-positive or malformed interval, a number where a TimeSpan
+    ///     string is expected, or a non-boolean toggle is rejected with 400.
     /// </summary>
     [Theory]
     [InlineData("""{ "onlineWindow": "00:00:00" }""")]

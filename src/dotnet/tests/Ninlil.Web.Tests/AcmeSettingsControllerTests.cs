@@ -11,19 +11,18 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="AcmeSettingsController" />'s <c>Get</c>/<c>Patch</c> actions
-///     (ACME/CAA settings) end to end, against a real, in-process host and an isolated, throwaway
-///     JSON configuration file (see
-///     <see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) -- closing
-///     a real "LE Certs" configuration gap: before this
-///     controller existed, ACME/CAA settings had no REST/UI surface at all.
+///     This class covers the <c>Get</c> and <c>Patch</c> actions of
+///     <see cref="AcmeSettingsController" /> (ACME and CAA settings) over HTTP on the shared
+///     in-process host, signed in as the bootstrap administrator. A patch is checked by reading
+///     the host's temporary settings file
+///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
+///     returned reload note, not by a follow-up GET: that file is not a configuration source in
+///     the test host, so <c>Get</c> always shows the compiled-in defaults.
+///     <see cref="AcmeOptionsHotReloadTests" /> covers the hot reload itself.
 ///     <para>
-///         <b>What this class does not cover, and why:</b> <c>Certificates</c>/<c>IssueOrRenewNow</c>
-///         (the real per-domain certificate inventory) live in
-///         <c>AcmeSettingsControllerDirectTests</c> instead -- see that class's own doc comment.
-///         A real end-to-end order/challenge/finalize round trip against Let's Encrypt (or any
-///         other real CA) needs a real, publicly-resolvable domain this environment does not have,
-///         a documented, known verification boundary.
+///         The certificate inventory and the issue-or-renew trigger against a configured domain
+///         are covered by <see cref="AcmeSettingsControllerDirectTests" />, which also explains
+///         why a full round trip with a certificate authority is not tested.
 ///     </para>
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -71,10 +70,8 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         AcmeSettingsDetail detail = await response.Content.ReadFromJsonAsync<AcmeSettingsDetail>();
 
-        // The exact, documented, security-conscious defaults -- see AcmeOptions.Enable's own doc
-        // comment for why ACME itself defaults off while global CAA auto-management (an
-        // improvement in service of an already-explicit ACME opt-in, not a new capability of its
-        // own) defaults on.
+        // ACME defaults off. CAA auto-management defaults on because it writes nothing until an
+        // issuer domain is set (see CaaAutoManagementOptions.DefaultEnabled).
         Assert.False(detail.Enable);
         Assert.Equal(
             new Uri("https://acme-v02.api.letsencrypt.org/directory"),
@@ -115,17 +112,6 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.True(section["Enable"].GetValue<bool>());
         Assert.Equal("20.00:00:00", section["RenewBeforeExpiration"].GetValue<string>());
         Assert.Equal("Acme Settings Tests", section["CsrOrganization"].GetValue<string>());
-
-        // This class deliberately does not also confirm the write via a follow-up GET the way
-        // its own doc comment might suggest -- this shared WebApplicationFactory host's runtime
-        // configuration file is overridden to an isolated path via an environment variable, which
-        // Program.cs never separately registers as its own reload-on-change IConfiguration source
-        // (only the default appsettings.json gets that treatment automatically); a real
-        // deployment's own default path IS auto-watched, so genuinely live IOptionsMonitor
-        // hot-reload is proved instead by a dedicated, lower-level test that builds its own real
-        // IConfigurationRoot directly -- see AcmeOptionsHotReloadTests -- matching
-        // RecursiveSettingsControllerTests/AppearanceSettingsControllerTests's own identical
-        // precedent for their own global (non-per-user) settings.
     }
 
     [Fact]
@@ -158,12 +144,7 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(section["DefaultEnabled"].GetValue<bool>());
         Assert.Equal("letsencrypt.org", section["DefaultIssuerDomain"].GetValue<string>());
 
-        // See Patch_WithNewScalarValues_...'s own comment for why this class checks only the raw
-        // file here, not a follow-up GET -- genuine IOptionsMonitor hot-reload is proved by
-        // AcmeOptionsHotReloadTests instead.
-
-        // Restore the default so a later test in this same shared collection sees the compiled-in
-        // default again.
+        // Put the default back in the shared settings file.
         await client.SendAsync(
             PatchRequest(
                 "/api/acme-settings",
@@ -244,11 +225,9 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
     {
         HttpClient client = await CreateAuthenticatedClientAsync();
 
-        // DnsName.TryParse's real wire-format validation accepts most printable-character labels
-        // (RFC 1035's "preferred name syntax" restriction to letters/digits/hyphens is advisory,
-        // not enforced at parse time) -- a genuinely invalid value needs to violate an actual
-        // hard constraint DnsName.TryParse enforces, such as a label over its own 63-octet
-        // MaximumLabelLength.
+        // DnsName.TryParse accepts most printable labels (RFC 1035's letters, digits and hyphens
+        // rule is advisory), so an invalid name has to break a hard limit, such as the 63-octet
+        // maximum label length.
         string labelOverMaximumLength = new string('a', 64);
 
         HttpResponseMessage response = await client.SendAsync(
@@ -307,13 +286,4 @@ public class AcmeSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
-
-    // Certificates()'s own real per-domain inventory behavior, and IssueOrRenewNow()'s own real
-    // failure-recording behavior against a domain this host's AcmeOptions.Domains genuinely
-    // names, are covered by AcmeSettingsControllerDirectTests instead of here -- both need a
-    // specific, already-live AcmeOptions value (a set of configured domains; an unreachable
-    // directoryUri) that this shared WebApplicationFactory host cannot deliver through a real
-    // PATCH+GET round trip (see Patch_WithNewScalarValues_...'s own comment above), so that class
-    // constructs AcmeSettingsController directly instead, against a fixed, already-correct
-    // IOptionsMonitor<AcmeOptions> -- no reload dependency, no timing race.
 }

@@ -7,12 +7,11 @@ using Ninlil.Web.Models;
 namespace Ninlil.Web.Tests;
 
 /// <summary>
-///     This class covers <see cref="Controllers.ZonesController" />'s own RFC 9432 catalog
-///     membership actions (<c>POST</c>/<c>DELETE /api/zones/{id}/catalog-membership</c>,
-///     <c>GET /api/zones/{id}/catalog-members</c>) end-to-end, against a real, in-process host and
-///     a real SQLite database (see <see cref="NinlilDnsWebApplicationFactory" />) -- mirroring
-///     <see cref="ZoneAndRecordCrudTests" />'s own verification shape for the ordinary zone/record
-///     CRUD endpoints.
+///     This class covers the RFC 9432 catalog membership actions of
+///     <see cref="Controllers.ZonesController" /> (<c>POST</c> and <c>DELETE
+///     /api/zones/{id}/catalog-membership</c>, <c>GET /api/zones/{id}/catalog-members</c>) over
+///     HTTP on the shared in-process host, signed in as the bootstrap administrator: joining,
+///     listing and leaving a catalog, and rejecting a target that is not a catalog zone.
 /// </summary>
 [Collection(WebTestCollection.Name)]
 public class CatalogZoneMembershipEndpointTests(NinlilDnsWebApplicationFactory factory)
@@ -115,7 +114,7 @@ public class CatalogZoneMembershipEndpointTests(NinlilDnsWebApplicationFactory f
             await membersResponse.Content.ReadFromJsonAsync<ZoneCatalogMembersResponse>();
         Assert.Equal([memberName], members.MemberZoneNames);
 
-        // The member zone's own detail now reflects its catalog membership.
+        // The member zone's detail now shows its catalog.
         HttpResponseMessage memberDetailResponse = await client.GetAsync(
             $"/api/zones/{memberZone.Id}"
         );
@@ -123,7 +122,7 @@ public class CatalogZoneMembershipEndpointTests(NinlilDnsWebApplicationFactory f
             await memberDetailResponse.Content.ReadFromJsonAsync<ZoneDetail>();
         Assert.Equal(catalogZone.Id, memberDetailAfterJoin.MemberOfCatalogZoneId);
 
-        // Joining again is a harmless no-op, not a conflict.
+        // Joining again is a no-op, not a conflict.
         HttpResponseMessage rejoinResponse = await client.PostAsJsonAsync(
             $"/api/zones/{memberZone.Id}/catalog-membership",
             new ZoneCatalogMembershipRequest(catalogZone.Id)
