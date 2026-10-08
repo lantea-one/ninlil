@@ -4,8 +4,15 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Ninlil.Dns.Identity.Email;
+using Ninlil.Dns.Identity.Options;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
+using Ninlil.Web.Options;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -14,7 +21,7 @@ namespace Ninlil.Web.Tests;
 ///     This class covers <see cref="SmtpSettingsController" /> (<c>EmailSenderOptions</c>, used for
 ///     e-mailed two-factor codes and password-reset links) over HTTP on the shared in-process
 ///     host, signed in as the bootstrap administrator: the compiled-in defaults, a patch checked
-///     by reading the host's temporary settings file
+///     by reading the host's temporary settings file, the password's encryption there,
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and the
 ///     returned note, and input validation.
 /// </summary>
@@ -110,7 +117,23 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
             Assert.Equal(2525, section["SmtpPort"].GetValue<int>());
             Assert.False(section["UseTls"].GetValue<bool>());
             Assert.Equal("notifications@example.invalid", section["Username"].GetValue<string>());
-            Assert.Equal("a-real-smtp-password", section["Password"].GetValue<string>());
+
+            // The password is encrypted at rest: the plaintext key is blank and the encrypted one
+            // decrypts, with the host's key ring, to what was sent.
+            Assert.Equal("", section["Password"].GetValue<string>());
+            string passwordEncrypted = section["PasswordEncrypted"].GetValue<string>();
+            Assert.NotEmpty(passwordEncrypted);
+            Assert.NotEqual("a-real-smtp-password", passwordEncrypted);
+            Assert.DoesNotContain(
+                "a-real-smtp-password",
+                await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath)
+            );
+            Assert.Equal(
+                "a-real-smtp-password",
+                new SmtpPasswordProtector(
+                    factory.Services.GetRequiredService<IDataProtectionProvider>()
+                ).Unprotect(passwordEncrypted)
+            );
             Assert.Equal(
                 "notifications@example.invalid",
                 section["FromAddress"].GetValue<string>()
@@ -135,6 +158,80 @@ public class SmtpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
                 )
             );
         }
+    }
+
+    [Fact]
+    public async Task Patch_WithABlankPassword_ClearsBothPasswordFields()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            (
+                await client.SendAsync(
+                    PatchRequest("/api/smtp-settings", new { password = "to-be-cleared" })
+                )
+            ).EnsureSuccessStatusCode();
+            (
+                await client.SendAsync(PatchRequest("/api/smtp-settings", new { password = "" }))
+            ).EnsureSuccessStatusCode();
+
+            JsonObject section = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath))[
+                    "Email"
+                ];
+            Assert.Equal("", section["Password"].GetValue<string>());
+            Assert.Equal("", section["PasswordEncrypted"].GetValue<string>());
+        }
+        finally
+        {
+            await client.SendAsync(PatchRequest("/api/smtp-settings", new { password = "" }));
+        }
+    }
+
+    [Theory]
+    [InlineData("plain", "", true)]
+    [InlineData("", "ciphertext", true)]
+    [InlineData("", "", false)]
+    [InlineData(null, null, false)]
+    public void Get_ReportsPasswordConfiguredWhenEitherPasswordFieldHasAValue(
+        string password,
+        string passwordEncrypted,
+        bool expected
+    )
+    {
+        // The test host does not reload its settings file, so the controller is built directly
+        // over the options a reload would produce.
+        SmtpSettingsController controller = new(
+            new FixedOptionsMonitor(
+                new EmailSenderOptions
+                {
+                    Password = password,
+                    PasswordEncrypted = passwordEncrypted,
+                }
+            ),
+            new RuntimeConfigurationOptions(),
+            new EphemeralDataProtectionProvider()
+        );
+
+        SmtpSettingsDetail detail = (SmtpSettingsDetail)
+            ((OkObjectResult)controller.Get().Result).Value;
+
+        Assert.Equal(expected, detail.PasswordConfigured);
+    }
+
+    /// <summary>
+    ///     This class is an <see cref="IOptionsMonitor{TOptions}" /> that always returns one
+    ///     value.
+    /// </summary>
+    private sealed class FixedOptionsMonitor(EmailSenderOptions value)
+        : IOptionsMonitor<EmailSenderOptions>
+    {
+        public EmailSenderOptions CurrentValue => value;
+
+        public EmailSenderOptions Get(string name) => value;
+
+        public IDisposable OnChange(Action<EmailSenderOptions, string> listener) => null;
     }
 
     [Fact]

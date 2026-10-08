@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -54,7 +55,7 @@ public class SmtpEmailSenderHotReloadTests
 
             // One SmtpEmailSender instance is used for both sends, so a change of endpoint can only
             // come from the configuration change reaching that instance.
-            SmtpEmailSender sender = new(monitor);
+            SmtpEmailSender sender = new(monitor, new EphemeralDataProtectionProvider());
 
             await SendAndExpectFailureAsync(sender);
             Assert.Equal(1, endpointA.ConnectionCount);

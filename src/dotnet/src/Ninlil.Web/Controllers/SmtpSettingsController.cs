@@ -1,8 +1,10 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
+using Ninlil.Dns.Identity.Email;
 using Ninlil.Dns.Identity.Options;
 using Ninlil.Dns.Server.Presets;
 using Ninlil.Web.Examples.Settings;
@@ -23,6 +25,12 @@ namespace Ninlil.Web.Controllers;
 ///     <c>UsersController.ResetPassword</c>). Reading needs <c>smtpsettings:read</c> and writing
 ///     needs <c>smtpsettings:write</c>.
 ///     <para>
+///         A password sent to <see cref="Patch" /> is encrypted with
+///         <see cref="SmtpPasswordProtector" /> before it is written, and never returned. The
+///         <c>NINLIL_EMAIL_PASSWORD</c> environment variable stays plaintext and, when set,
+///         overrides the stored password.
+///     </para>
+///     <para>
 ///         <b>Every field takes effect at once, with no restart.</b> <c>SmtpEmailSender</c> reads
 ///         <see cref="IOptionsMonitor{TOptions}" />'s <c>CurrentValue</c> on every send and opens a
 ///         new connection each time, so the next e-mail uses the new settings.
@@ -30,11 +38,13 @@ namespace Ninlil.Web.Controllers;
 /// </summary>
 /// <param name="emailOptions">The current SMTP settings.</param>
 /// <param name="runtimeConfigurationOptions">Names the JSON configuration file a write is merged into.</param>
+/// <param name="dataProtectionProvider">Encrypts the password before it is written.</param>
 [ApiController]
 [Route("api/smtp-settings")]
 public class SmtpSettingsController(
     IOptionsMonitor<EmailSenderOptions> emailOptions,
-    RuntimeConfigurationOptions runtimeConfigurationOptions
+    RuntimeConfigurationOptions runtimeConfigurationOptions,
+    IDataProtectionProvider dataProtectionProvider
 ) : ControllerBase
 {
     /// <summary>
@@ -52,8 +62,8 @@ public class SmtpSettingsController(
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>password</c>, so an operator can
     ///     change only <c>smtpHost</c> without resupplying a password <see cref="Get" /> never
-    ///     shows. The password is stored in plain text in the configuration file. Every field takes
-    ///     effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a
+    ///     shows. A password is encrypted before it is written to the configuration file, and a blank
+    ///     one clears it. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a
     ///     malformed from-address or a <c>publicBaseUrl</c> that is not an absolute http or https
     ///     URL. Requires <c>smtpsettings:write</c>.
     /// </summary>
@@ -116,15 +126,31 @@ public class SmtpSettingsController(
             );
 
         // A blank string is accepted here (unlike 'smtpHost'): it clears the password, which with a
-        // blank 'username' means connecting without authentication.
+        // blank 'username' means connecting without authentication. The plaintext 'Password' key
+        // is always blanked too, so a value an earlier version left in the file cannot outlive
+        // this write.
         if (patch.TryGetMergePatchField("password", out JsonElement passwordElement))
+        {
+            string password = passwordElement.GetString() ?? string.Empty;
+            string passwordEncrypted = string.IsNullOrEmpty(password)
+                ? string.Empty
+                : new SmtpPasswordProtector(dataProtectionProvider).Protect(password);
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    EmailSenderOptions.SectionName,
+                    nameof(EmailSenderOptions.PasswordEncrypted),
+                    passwordEncrypted
+                )
+            );
             settings.Add(
                 new PresetConfigurationSetting(
                     EmailSenderOptions.SectionName,
                     nameof(EmailSenderOptions.Password),
-                    passwordElement.GetString()
+                    string.Empty
                 )
             );
+        }
 
         if (patch.TryGetMergePatchField("fromAddress", out JsonElement fromAddressElement))
         {
@@ -219,7 +245,8 @@ public class SmtpSettingsController(
             options.SmtpPort,
             options.UseTls,
             options.Username,
-            !string.IsNullOrEmpty(options.Password),
+            !string.IsNullOrEmpty(options.Password)
+                || !string.IsNullOrEmpty(options.PasswordEncrypted),
             options.FromAddress,
             options.FromDisplayName,
             options.PublicBaseUrl

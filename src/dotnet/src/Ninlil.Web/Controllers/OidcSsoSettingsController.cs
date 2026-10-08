@@ -31,8 +31,8 @@ namespace Ninlil.Web.Controllers;
 ///     <para>
 ///         The client secret is accepted in plain text, encrypted with
 ///         <see cref="OidcClientSecretProtector" /> before it is written to disk, and never
-///         returned. The SMTP password in <c>EmailSenderOptions.Password</c>, by contrast, is
-///         stored in plain text.
+///         returned. The SMTP password is protected the same way, by
+///         <c>SmtpPasswordProtector</c>.
 ///     </para>
 /// </summary>
 /// <param name="ssoOptions">The current SSO settings.</param>

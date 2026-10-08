@@ -12,8 +12,8 @@ namespace Ninlil.Dns.Identity.Sso;
 ///     <para>
 ///         The client secret lives in the runtime JSON configuration file rather than the
 ///         database, and is encrypted there like the database-backed secrets (TSIG, DNSSEC and
-///         cloud credentials, webhook secrets). <c>EmailSenderOptions.Password</c>, written by
-///         <c>Web.Controllers.SmtpSettingsController</c>, is still stored in plain text.
+///         cloud credentials, webhook secrets). The SMTP password is encrypted the same way, by
+///         <c>Email.SmtpPasswordProtector</c>.
 ///     </para>
 /// </summary>
 /// <param name="dataProtectionProvider">The provider this protector derives its purpose-scoped key from.</param>

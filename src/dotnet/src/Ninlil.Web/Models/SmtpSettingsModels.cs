@@ -12,8 +12,8 @@ namespace Ninlil.Web.Models;
 /// <param name="UseTls">Whether the connection to the SMTP server uses TLS. Defaults to <see langword="true" />.</param>
 /// <param name="Username">The username to authenticate with, or empty if the server accepts anonymous connections.</param>
 /// <param name="PasswordConfigured">
-///     Whether <c>EmailSenderOptions.Password</c> has a value. The password itself is never
-///     returned, as with every other secret.
+///     Whether a password is stored (encrypted) or supplied through the environment. The
+///     password itself is never returned, as with every other secret.
 /// </param>
 /// <param name="FromAddress">The e-mail address messages are sent from.</param>
 /// <param name="FromDisplayName">The display name messages are sent from. Defaults to "Ninlil".</param>

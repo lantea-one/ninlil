@@ -37,10 +37,23 @@ public class EmailSenderOptions
     public string Username { get; set; }
 
     /// <summary>
-    ///     This property contains the password to authenticate to the SMTP server with. It is
-    ///     stored in plain text in the configuration file.
+    ///     This property contains the plaintext password to authenticate to the SMTP server with.
+    ///     It is the source for the <c>NINLIL_EMAIL_PASSWORD</c> environment variable, which is
+    ///     plaintext by nature, and for a plaintext value an earlier version left in the
+    ///     configuration file. The admin console never writes it; it stores
+    ///     <see cref="PasswordEncrypted" /> instead. A non-empty value wins over
+    ///     <see cref="PasswordEncrypted" /> (see <see cref="Email.SmtpPasswordProtector.ResolvePassword" />).
     /// </summary>
     public string Password { get; set; }
+
+    /// <summary>
+    ///     This property contains the SMTP password encrypted with
+    ///     <see cref="Email.SmtpPasswordProtector" />. <c>SmtpSettingsController</c> writes it, and
+    ///     <c>SmtpEmailSender</c> decrypts it when a message is sent. Empty means no stored
+    ///     password. Data Protection keeps the value safe when only the configuration file leaks;
+    ///     it does not help if the key ring in the data directory leaks too.
+    /// </summary>
+    public string PasswordEncrypted { get; set; } = "";
 
     /// <summary>
     ///     This property contains the e-mail address messages are sent from.

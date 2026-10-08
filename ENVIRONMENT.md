@@ -118,7 +118,8 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_EMAIL_SMTP_HOST` | The outbound SMTP host used for 2FA codes/password-reset emails. | *(none)* |
 | `NINLIL_EMAIL_SMTP_PORT` | The SMTP port. | `587` |
 | `NINLIL_EMAIL_USERNAME` | The SMTP authentication username. | *(none)* |
-| `NINLIL_EMAIL_PASSWORD` | The SMTP authentication password. | *(none)* |
+| `NINLIL_EMAIL_PASSWORD` | The SMTP authentication password. Kept in plaintext by nature; prefer the admin console, which stores it encrypted. When set, it overrides a password saved in the admin console. | *(none)* |
+| `NINLIL_EMAIL_PASSWORD_ENCRYPTED` | The SMTP password encrypted with this installation's Data Protection key ring. Written by the admin console; there is no need to set it by hand. | *(none)* |
 | `NINLIL_EMAIL_USE_TLS` | Whether the SMTP connection uses TLS. | `true` |
 | `NINLIL_EMAIL_FROM_ADDRESS` | The `From:` address on outbound mail. | *(none)* |
 | `NINLIL_EMAIL_FROM_DISPLAY_NAME` | The `From:` display name on outbound mail. | `Ninlil` |
