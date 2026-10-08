@@ -14,11 +14,11 @@
  */
 export interface TsigKeyWriteRequest { 
     /**
-     * The key\'s name.
+     * The key\'s name; stored in lowercase.
      */
     name?: string | null;
     /**
-     * The key\'s MAC algorithm; required here, and only `hmac-sha256` is accepted.
+     * The key\'s MAC algorithm; required here. One of `hmac-sha1`, `hmac-sha256`, `hmac-sha384` or `hmac-sha512`.
      */
     algorithmName?: string | null;
     /**

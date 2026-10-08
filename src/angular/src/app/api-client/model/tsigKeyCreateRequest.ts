@@ -14,15 +14,15 @@
  */
 export interface TsigKeyCreateRequest { 
     /**
-     * The key\'s name, matched against the key name in a signed message.
+     * The key\'s name, matched against the key name in a signed message. It is stored and returned in lowercase, because DNS names compare without case and BIND lowercases key names on the wire.
      */
     name?: string | null;
     /**
-     * The key\'s MAC algorithm. Only HMAC-SHA256 (`hmac-sha256`) is implemented, and it is used when this is omitted or blank.
+     * The key\'s MAC algorithm: `hmac-sha1`, `hmac-sha256`, `hmac-sha384` or `hmac-sha512`, with or without the trailing dot. It is stored without the dot, and `hmac-sha256` is used when this is omitted or blank.
      */
     algorithmName?: string | null;
     /**
-     * The shared secret, base64-encoded. When omitted, a random 32-byte secret is generated. Either way the plaintext secret is shown once, in this endpoint\'s response, and never again.
+     * The shared secret, base64-encoded. When omitted, a random secret as long as the algorithm\'s MAC is generated (32 bytes for HMAC-SHA256). Either way the plaintext secret is shown once, in this endpoint\'s response, and never again.
      */
     secret?: string | null;
     /**

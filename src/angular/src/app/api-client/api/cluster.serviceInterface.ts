@@ -58,7 +58,7 @@ export interface ClusterServiceInterface {
     apiClusterNodesGet(requestParameters: ApiClusterNodesGetRequestParams, extraHttpRequestParams?: any): Observable<ClusterNodeDetailPagedResult>;
 
     /**
-     * This action removes a peer from this node\&#39;s registry only. The peer is not told and keeps its own entry for this node, so a clean two-sided break means removing the relationship on both nodes. Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
+     * This action removes a peer from this node\&#39;s registry only. The peer is not told and keeps its own entry for this node, so a clean two-sided break means removing the relationship on both nodes. The peer\&#39;s channel TSIG key goes with it, in the same save, so the peer can no longer authenticate; the key API refuses to delete a cluster key any other way. A key of the same name that is not linked to this peer is left alone. Returns 404 for an unknown id. Requires &#x60;clusternodes:write&#x60;.
      * 
      * @endpoint delete /api/cluster/nodes/{id}
 * @param requestParameters

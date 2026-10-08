@@ -62,7 +62,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysGet(requestParameters: ApiTsigKeysGetRequestParams, extraHttpRequestParams?: any): Observable<TsigKeyDetailPagedResult>;
 
     /**
-     * This action deletes a TSIG key. Zones that still refer to it by name are not checked or blocked; they simply can no longer sign or verify with it. Returns 404 for an unknown id. Requires &#x60;tsigkeys:write&#x60;.
+     * This action deletes a TSIG key. Zones that still refer to it by name are not checked or blocked; they simply can no longer sign or verify with it. Returns 404 for an unknown id and 409 for a cluster key (see the class summary). Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint delete /api/tsig-keys/{id}
 * @param requestParameters
@@ -86,7 +86,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPatch(requestParameters: ApiTsigKeysIdPatchRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action replaces a TSIG key\&#39;s name, algorithm, disabled flag and comments. The secret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an invalid name or algorithm, 404 for an unknown id and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
+     * This action replaces a TSIG key\&#39;s name, algorithm, disabled flag and comments. The secret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an invalid name or algorithm, 404 for an unknown id, and 409 when the name is taken or when a cluster key would be renamed or change algorithm. Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint put /api/tsig-keys/{id}
 * @param requestParameters
@@ -94,7 +94,7 @@ export interface TsigKeysServiceInterface {
     apiTsigKeysIdPut(requestParameters: ApiTsigKeysIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a random 32-byte secret is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
+     * This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a random secret as long as the algorithm\&#39;s MAC (32 bytes for the default) is generated; without an algorithm, &#x60;hmac-sha256&#x60; is used. The name is stored in lowercase. The base64 secret is returned in this response only. Returns 400 for an invalid name, an unsupported algorithm or a secret that is not non-empty base64, and 409 when the name is taken. Requires &#x60;tsigkeys:write&#x60;.
      * 
      * @endpoint post /api/tsig-keys
 * @param requestParameters

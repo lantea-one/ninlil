@@ -725,7 +725,7 @@ export class ZonesService extends BaseService implements ZonesServiceInterface {
     }
 
     /**
-     * This action creates a zone with no records, not even an SOA; add them through Ninlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name or PTR prefix length and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
+     * This action creates a zone with no records, not even an SOA; add them through Ninlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix length or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

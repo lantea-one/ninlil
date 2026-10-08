@@ -13,12 +13,37 @@
  * This class carries a TSIG key without its secret, as returned by the list and get endpoints and nested in Ninlil.Web.Models.TsigKeyCreateResponse, the one response that includes the secret.
  */
 export interface TsigKeyDetail { 
+    /**
+     * The key\'s identifier.
+     */
     id?: string;
+    /**
+     * The key\'s name, in lowercase.
+     */
     name?: string | null;
+    /**
+     * The key\'s MAC algorithm, such as `hmac-sha256`.
+     */
     algorithmName?: string | null;
+    /**
+     * Whether the key is disabled.
+     */
     isDisabled?: boolean;
+    /**
+     * Whether clustering created the key (a peer\'s channel key, or an invite key not yet used). Such a key can be disabled and commented but not renamed or deleted, and it never signs or verifies zone transfers or updates.
+     */
+    isClusterKey?: boolean;
+    /**
+     * Free-form operator notes about the key.
+     */
     comments?: string | null;
+    /**
+     * When the key was created.
+     */
     createdAtUtc?: string;
+    /**
+     * When the key was last changed, or null if never.
+     */
     updatedAtUtc?: string | null;
 }
 

@@ -8280,7 +8280,7 @@
         "tags": [
           "Cluster"
         ],
-        "summary": "This action removes a peer from this node's registry only. The peer is not told and\nkeeps its own entry for this node, so a clean two-sided break means removing the\nrelationship on both nodes. Returns 404 for an unknown id. Requires\n`clusternodes:write`.",
+        "summary": "This action removes a peer from this node's registry only. The peer is not told and\nkeeps its own entry for this node, so a clean two-sided break means removing the\nrelationship on both nodes. The peer's channel TSIG key goes with it, in the same save,\nso the peer can no longer authenticate; the key API refuses to delete a cluster key\nany other way. A key of the same name that is not linked to this peer is left alone.\nReturns 404 for an unknown id. Requires\n`clusternodes:write`.",
         "parameters": [
           {
             "name": "id",
@@ -33296,6 +33296,7 @@
                       "name": "secondary-transfer-key",
                       "algorithmName": "hmac-sha256",
                       "isDisabled": false,
+                      "isClusterKey": false,
                       "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                       "createdAtUtc": "2026-08-01T09:10:00+00:00",
                       "updatedAtUtc": null
@@ -33303,16 +33304,27 @@
                     {
                       "id": "3c4d5e6f-7081-492a-a3b4-c5d6e7f80912",
                       "name": "retired-migration-key",
-                      "algorithmName": "hmac-sha256",
+                      "algorithmName": "hmac-sha512",
                       "isDisabled": true,
+                      "isClusterKey": false,
                       "comments": "No longer used since the old secondary was decommissioned.",
                       "createdAtUtc": "2026-06-10T08:00:00+00:00",
                       "updatedAtUtc": "2026-08-20T11:00:00+00:00"
+                    },
+                    {
+                      "id": "4d5e6f70-8192-4a3b-b4c5-d6e7f8091223",
+                      "name": "cluster-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "algorithmName": "hmac-sha256",
+                      "isDisabled": false,
+                      "isClusterKey": true,
+                      "comments": "Cluster channel key for the peer ns2.",
+                      "createdAtUtc": "2026-08-05T12:00:00+00:00",
+                      "updatedAtUtc": null
                     }
                   ],
                   "skip": 0,
                   "take": 50,
-                  "totalCount": 2
+                  "totalCount": 3
                 }
               },
               "application/json": {
@@ -33326,6 +33338,7 @@
                       "name": "secondary-transfer-key",
                       "algorithmName": "hmac-sha256",
                       "isDisabled": false,
+                      "isClusterKey": false,
                       "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                       "createdAtUtc": "2026-08-01T09:10:00+00:00",
                       "updatedAtUtc": null
@@ -33333,16 +33346,27 @@
                     {
                       "id": "3c4d5e6f-7081-492a-a3b4-c5d6e7f80912",
                       "name": "retired-migration-key",
-                      "algorithmName": "hmac-sha256",
+                      "algorithmName": "hmac-sha512",
                       "isDisabled": true,
+                      "isClusterKey": false,
                       "comments": "No longer used since the old secondary was decommissioned.",
                       "createdAtUtc": "2026-06-10T08:00:00+00:00",
                       "updatedAtUtc": "2026-08-20T11:00:00+00:00"
+                    },
+                    {
+                      "id": "4d5e6f70-8192-4a3b-b4c5-d6e7f8091223",
+                      "name": "cluster-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "algorithmName": "hmac-sha256",
+                      "isDisabled": false,
+                      "isClusterKey": true,
+                      "comments": "Cluster channel key for the peer ns2.",
+                      "createdAtUtc": "2026-08-05T12:00:00+00:00",
+                      "updatedAtUtc": null
                     }
                   ],
                   "skip": 0,
                   "take": 50,
-                  "totalCount": 2
+                  "totalCount": 3
                 }
               },
               "text/json": {
@@ -33356,6 +33380,7 @@
                       "name": "secondary-transfer-key",
                       "algorithmName": "hmac-sha256",
                       "isDisabled": false,
+                      "isClusterKey": false,
                       "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                       "createdAtUtc": "2026-08-01T09:10:00+00:00",
                       "updatedAtUtc": null
@@ -33363,16 +33388,27 @@
                     {
                       "id": "3c4d5e6f-7081-492a-a3b4-c5d6e7f80912",
                       "name": "retired-migration-key",
-                      "algorithmName": "hmac-sha256",
+                      "algorithmName": "hmac-sha512",
                       "isDisabled": true,
+                      "isClusterKey": false,
                       "comments": "No longer used since the old secondary was decommissioned.",
                       "createdAtUtc": "2026-06-10T08:00:00+00:00",
                       "updatedAtUtc": "2026-08-20T11:00:00+00:00"
+                    },
+                    {
+                      "id": "4d5e6f70-8192-4a3b-b4c5-d6e7f8091223",
+                      "name": "cluster-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+                      "algorithmName": "hmac-sha256",
+                      "isDisabled": false,
+                      "isClusterKey": true,
+                      "comments": "Cluster channel key for the peer ns2.",
+                      "createdAtUtc": "2026-08-05T12:00:00+00:00",
+                      "updatedAtUtc": null
                     }
                   ],
                   "skip": 0,
                   "take": 50,
-                  "totalCount": 2
+                  "totalCount": 3
                 }
               }
             }
@@ -33383,7 +33419,7 @@
         "tags": [
           "TsigKeys"
         ],
-        "summary": "This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a\nrandom 32-byte secret is generated; without an algorithm, `hmac-sha256` is used.\nThe base64 secret is returned in this response only. Returns 400 for an invalid name, an\nunsupported algorithm or a secret that is not non-empty base64, and 409 when the name is\ntaken. Requires `tsigkeys:write`.",
+        "summary": "This action creates a TSIG key. Without Ninlil.Web.Models.TsigKeyCreateRequest.Secret, a\nrandom secret as long as the algorithm's MAC (32 bytes for the default) is generated; without an\nalgorithm, `hmac-sha256` is used. The name is stored in lowercase.\nThe base64 secret is returned in this response only. Returns 400 for an invalid name, an\nunsupported algorithm or a secret that is not non-empty base64, and 409 when the name is\ntaken. Requires `tsigkeys:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33438,6 +33474,7 @@
                     "name": "secondary-transfer-key",
                     "algorithmName": "hmac-sha256",
                     "isDisabled": false,
+                    "isClusterKey": false,
                     "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                     "createdAtUtc": "2026-08-01T09:10:00+00:00",
                     "updatedAtUtc": null
@@ -33455,6 +33492,7 @@
                     "name": "secondary-transfer-key",
                     "algorithmName": "hmac-sha256",
                     "isDisabled": false,
+                    "isClusterKey": false,
                     "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                     "createdAtUtc": "2026-08-01T09:10:00+00:00",
                     "updatedAtUtc": null
@@ -33472,6 +33510,7 @@
                     "name": "secondary-transfer-key",
                     "algorithmName": "hmac-sha256",
                     "isDisabled": false,
+                    "isClusterKey": false,
                     "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                     "createdAtUtc": "2026-08-01T09:10:00+00:00",
                     "updatedAtUtc": null
@@ -33514,6 +33553,7 @@
                   "name": "secondary-transfer-key",
                   "algorithmName": "hmac-sha256",
                   "isDisabled": false,
+                  "isClusterKey": false,
                   "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                   "createdAtUtc": "2026-08-01T09:10:00+00:00",
                   "updatedAtUtc": null
@@ -33528,6 +33568,7 @@
                   "name": "secondary-transfer-key",
                   "algorithmName": "hmac-sha256",
                   "isDisabled": false,
+                  "isClusterKey": false,
                   "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                   "createdAtUtc": "2026-08-01T09:10:00+00:00",
                   "updatedAtUtc": null
@@ -33542,6 +33583,7 @@
                   "name": "secondary-transfer-key",
                   "algorithmName": "hmac-sha256",
                   "isDisabled": false,
+                  "isClusterKey": false,
                   "comments": "Used by branch-office.example.com to authenticate its own zone transfer.",
                   "createdAtUtc": "2026-08-01T09:10:00+00:00",
                   "updatedAtUtc": null
@@ -33555,7 +33597,7 @@
         "tags": [
           "TsigKeys"
         ],
-        "summary": "This action replaces a TSIG key's name, algorithm, disabled flag and comments. The\nsecret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an\ninvalid name or algorithm, 404 for an unknown id and 409 when the name is taken.\nRequires `tsigkeys:write`.",
+        "summary": "This action replaces a TSIG key's name, algorithm, disabled flag and comments. The\nsecret is left unchanged (see Ninlil.Web.Models.TsigKeyWriteRequest). Returns 400 for an\ninvalid name or algorithm, 404 for an unknown id, and 409 when the name is taken or when a\ncluster key would be renamed or change algorithm.\nRequires `tsigkeys:write`.",
         "parameters": [
           {
             "name": "id",
@@ -33658,7 +33700,7 @@
         "tags": [
           "TsigKeys"
         ],
-        "summary": "This action deletes a TSIG key. Zones that still refer to it by name are not checked or\nblocked; they simply can no longer sign or verify with it. Returns 404 for an unknown\nid. Requires `tsigkeys:write`.",
+        "summary": "This action deletes a TSIG key. Zones that still refer to it by name are not checked or\nblocked; they simply can no longer sign or verify with it. Returns 404 for an unknown\nid and 409 for a cluster key (see the class summary). Requires `tsigkeys:write`.",
         "parameters": [
           {
             "name": "id",
@@ -36207,7 +36249,7 @@
         "tags": [
           "Zones"
         ],
-        "summary": "This action creates a zone with no records, not even an SOA; add them through\nNinlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name or PTR prefix\nlength and 409 when the name is taken. Requires `zones:write`.",
+        "summary": "This action creates a zone with no records, not even an SOA; add them through\nNinlil.Web.Controllers.RecordsController. Returns 400 for an invalid zone name, a PTR prefix\nlength or a TSIG key name that names a cluster key, and 409 when the name is taken. Requires `zones:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -44279,17 +44321,17 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The key's name, matched against the key name in a signed message.",
+            "description": "The key's name, matched against the key name in a signed message. It is stored and returned\nin lowercase, because DNS names compare without case and BIND lowercases key names on the\nwire.",
             "nullable": true
           },
           "algorithmName": {
             "type": "string",
-            "description": "The key's MAC algorithm. Only HMAC-SHA256 (`hmac-sha256`) is implemented, and it is\nused when this is omitted or blank.",
+            "description": "The key's MAC algorithm: `hmac-sha1`, `hmac-sha256`, `hmac-sha384` or\n`hmac-sha512`, with or without the trailing dot. It is stored without the dot, and\n`hmac-sha256` is used when this is omitted or blank.",
             "nullable": true
           },
           "secret": {
             "type": "string",
-            "description": "The shared secret, base64-encoded. When omitted, a random 32-byte secret is generated.\nEither way the plaintext secret is shown once, in this endpoint's response, and never\nagain.",
+            "description": "The shared secret, base64-encoded. When omitted, a random secret as long as the\nalgorithm's MAC is generated (32 bytes for HMAC-SHA256).\nEither way the plaintext secret is shown once, in this endpoint's response, and never\nagain.",
             "nullable": true
           },
           "isDisabled": {
@@ -44325,29 +44367,40 @@
         "properties": {
           "id": {
             "type": "string",
+            "description": "The key's identifier.",
             "format": "uuid"
           },
           "name": {
             "type": "string",
+            "description": "The key's name, in lowercase.",
             "nullable": true
           },
           "algorithmName": {
             "type": "string",
+            "description": "The key's MAC algorithm, such as `hmac-sha256`.",
             "nullable": true
           },
           "isDisabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the key is disabled."
+          },
+          "isClusterKey": {
+            "type": "boolean",
+            "description": "Whether clustering created the key (a peer's channel key, or an invite key not yet used).\nSuch a key can be disabled and commented but not renamed or deleted, and it never\nsigns or verifies zone transfers or updates."
           },
           "comments": {
             "type": "string",
+            "description": "Free-form operator notes about the key.",
             "nullable": true
           },
           "createdAtUtc": {
             "type": "string",
+            "description": "When the key was created.",
             "format": "date-time"
           },
           "updatedAtUtc": {
             "type": "string",
+            "description": "When the key was last changed, or null if never.",
             "format": "date-time",
             "nullable": true
           }
@@ -44390,12 +44443,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The key's name.",
+            "description": "The key's name; stored in lowercase.",
             "nullable": true
           },
           "algorithmName": {
             "type": "string",
-            "description": "The key's MAC algorithm; required here, and only `hmac-sha256` is accepted.",
+            "description": "The key's MAC algorithm; required here. One of `hmac-sha1`, `hmac-sha256`,\n`hmac-sha384` or `hmac-sha512`.",
             "nullable": true
           },
           "isDisabled": {
