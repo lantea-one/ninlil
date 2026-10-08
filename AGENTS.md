@@ -232,7 +232,9 @@ Every comment is for a reader opening the file cold, today.
 
 - [ ] `dotnet build Ninlil.slnx -p:NinlilSkipAngularBuild=true` reports 0 warnings, 0 errors.
 - [ ] Tests for every project you touched pass (explicit `dotnet test <path>`), plus
-      `Ninlil.Web.Tests` if the host, API or DI wiring changed.
+      `Ninlil.Web.Tests` if the host, API or DI wiring changed. If you changed a shared library
+      (`Ninlil.Common.*`, `Ninlil.Dns.Common`, `Ninlil.Dhcp.Common`, `Ninlil.Dns.Server.Core`),
+      run the whole solution: `dotnet test Ninlil.slnx -p:NinlilSkipAngularBuild=true`.
 - [ ] `dotnet csharpier format` run on the C# files you changed only; `npm run lint` and
       `npm run format:check` clean for Angular changes, and `npm test` for UI logic.
 - [ ] API changed: OpenAPI snapshot regenerated and `npm run generate:api` run, both committed.
