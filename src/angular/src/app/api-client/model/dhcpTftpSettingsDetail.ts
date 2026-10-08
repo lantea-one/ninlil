@@ -33,5 +33,9 @@ export interface DhcpTftpSettingsDetail {
      * How many times one block is sent again before the transfer is abandoned. Defaults to 5.
      */
     maxRetransmissions?: number;
+    /**
+     * How many transfers may run at once, at most 4 per client address. A request over the limit is dropped without a reply. At least 1. Defaults to 50.
+     */
+    maxConcurrentTransfers?: number;
 }
 

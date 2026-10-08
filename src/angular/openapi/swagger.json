@@ -11624,7 +11624,8 @@
                   "port": 69,
                   "rootDirectory": "/var/lib/ninlil/tftp",
                   "retransmitTimeoutSeconds": 2,
-                  "maxRetransmissions": 5
+                  "maxRetransmissions": 5,
+                  "maxConcurrentTransfers": 50
                 }
               },
               "application/json": {
@@ -11636,7 +11637,8 @@
                   "port": 69,
                   "rootDirectory": "/var/lib/ninlil/tftp",
                   "retransmitTimeoutSeconds": 2,
-                  "maxRetransmissions": 5
+                  "maxRetransmissions": 5,
+                  "maxConcurrentTransfers": 50
                 }
               },
               "text/json": {
@@ -11648,7 +11650,8 @@
                   "port": 69,
                   "rootDirectory": "/var/lib/ninlil/tftp",
                   "retransmitTimeoutSeconds": 2,
-                  "maxRetransmissions": 5
+                  "maxRetransmissions": 5,
+                  "maxConcurrentTransfers": 50
                 }
               }
             }
@@ -40963,6 +40966,11 @@
           "maxRetransmissions": {
             "type": "integer",
             "description": "How many times one block is sent again before the transfer is abandoned. Defaults to 5.",
+            "format": "int32"
+          },
+          "maxConcurrentTransfers": {
+            "type": "integer",
+            "description": "How many transfers may run at once, at most 4 per client address. A request over the limit is dropped without a reply. At least 1. Defaults to 50.",
             "format": "int32"
           }
         },
