@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Identity.Email;
@@ -66,19 +67,50 @@ public class TwoFactorController(
     }
 
     /// <summary>
-    ///     This action generates a new TOTP shared secret for the caller, replacing the existing
-    ///     one, and returns it with an <c>otpauth://</c> URI for an authenticator app.
-    ///     <see cref="EnableAuthenticator" /> must confirm it before two-factor sign-in becomes
-    ///     required. If two-factor sign-in is already on, the new secret replaces the old one at
-    ///     once.
+    ///     This action generates a new TOTP shared secret for the caller and returns it with an
+    ///     <c>otpauth://</c> URI for an authenticator app. <see cref="EnableAuthenticator" /> must
+    ///     confirm it before two-factor sign-in becomes required.
+    ///     <para>
+    ///         While two-factor sign-in is on with an authenticator secret, the request must carry
+    ///         a valid current authenticator code or an unused recovery code (which this call
+    ///         uses up) in the body; otherwise this returns 400 and the secret is unchanged. A
+    ///         stolen access token alone then cannot swap in an attacker's secret. First-time
+    ///         setup, or setup while two-factor sign-in is off, needs no body.
+    ///     </para>
     /// </summary>
     [HttpPost("authenticator/setup")]
     [SwaggerResponseExample(StatusCodes.Status200OK, typeof(AuthenticatorSetupResultExample))]
-    public async Task<ActionResult<AuthenticatorSetupResult>> SetUpAuthenticator()
+    public async Task<ActionResult<AuthenticatorSetupResult>> SetUpAuthenticator(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] TwoFactorCodeRequest request
+    )
     {
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
             return Unauthorized();
+
+        if (
+            user.TwoFactorEnabled
+            && !string.IsNullOrEmpty(await userManager.GetAuthenticatorKeyAsync(user))
+        )
+        {
+            // The caller proves control of the current second factor before it is replaced.
+            string code = request?.Code;
+            bool isCurrentCodeValid =
+                !string.IsNullOrWhiteSpace(code)
+                && (
+                    await userManager.VerifyTwoFactorTokenAsync(
+                        user,
+                        TokenOptions.DefaultAuthenticatorProvider,
+                        code
+                    ) || (await userManager.RedeemTwoFactorRecoveryCodeAsync(user, code)).Succeeded
+                );
+
+            if (!isCurrentCodeValid)
+                throw new ValidationException(
+                    "Replacing an active authenticator needs a valid current authenticator code "
+                        + "or a recovery code."
+                );
+        }
 
         await userManager.ResetAuthenticatorKeyAsync(user);
         string sharedKey = await userManager.GetAuthenticatorKeyAsync(user);
@@ -152,7 +184,8 @@ public class TwoFactorController(
     ///     This action e-mails the caller a short-lived verification code from the e-mail token
     ///     provider and returns 202. The account must have a confirmed e-mail address, otherwise
     ///     this returns 400. Because it needs a signed-in caller, it cannot be called during the
-    ///     two-factor step of a sign-in.
+    ///     two-factor step of a sign-in; <see cref="AuthController.SendTwoFactorEmailCode" /> does
+    ///     that.
     /// </summary>
     [HttpPost("email/send")]
     public async Task<IActionResult> SendEmailCode()
