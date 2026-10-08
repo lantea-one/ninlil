@@ -179,6 +179,88 @@ public sealed class Dhcpv4RelayAgentTests
         );
     }
 
+    [Fact]
+    public async Task Reply_FromAnAddressThatIsNotAnUpstreamServer_IsNotRelayedToTheClient()
+    {
+        int clientPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("127.0.0.16");
+
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamServerPort: 67,
+            clientPort: clientPort
+        );
+
+        // The right giaddr, but sent by a host that is not a configured upstream server.
+        await agent.HandleRequestAsync(
+            CreateOffer(relayAddress),
+            new IPEndPoint(IPAddress.Parse("192.0.2.99"), 67),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(300));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await clientSocket.ReceiveAsync(timeout.Token)
+        );
+    }
+
+    [Fact]
+    public async Task Reply_FromAConfiguredUpstreamServer_IsRelayedToTheClient()
+    {
+        int clientPort = GetFreeUdpPort();
+        IPAddress relayAddress = IPAddress.Parse("127.0.0.17");
+
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using Dhcpv4RelayAgent agent = CreateAgent(
+            relayAddress,
+            upstreamServerAddresses: ["127.0.0.1"],
+            upstreamServerPort: 67,
+            clientPort: clientPort
+        );
+
+        // An IPv4-mapped source (a dual-stack listener socket) matches the IPv4 entry.
+        await agent.HandleRequestAsync(
+            CreateOffer(relayAddress),
+            new IPEndPoint(IPAddress.Loopback.MapToIPv6(), 67),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        UdpReceiveResult received = await clientSocket.ReceiveAsync(timeout.Token);
+
+        Assert.True(
+            Dhcpv4MessageReader.TryRead(
+                received.Buffer,
+                out Dhcpv4Message relayed,
+                out string reason
+            ),
+            reason
+        );
+        Assert.Equal(IPAddress.Parse("203.0.113.78"), relayed.YourIpAddress);
+    }
+
+    /// <summary>
+    ///     This method builds an OFFER carrying the given <c>giaddr</c> that the relay delivers by
+    ///     unicast to the loopback address (through <c>ciaddr</c>).
+    /// </summary>
+    private static Dhcpv4Message CreateOffer(IPAddress giaddr)
+    {
+        Dhcpv4Message offer = new()
+        {
+            OperationCode = Dhcpv4OperationCodeEnum.BootReply,
+            TransactionId = 0x9999_0001,
+            HardwareAddressLength = 6,
+            ClientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x07],
+            YourIpAddress = IPAddress.Parse("203.0.113.78"),
+            RelayAgentIpAddress = giaddr,
+            ClientIpAddress = IPAddress.Loopback,
+        };
+        offer.SetMessageType(Dhcpv4MessageTypeEnum.Offer);
+        return offer;
+    }
+
     /// <summary>
     ///     This method builds a <see cref="Dhcpv4RelayAgent" /> by hand, without dependency
     ///     injection, with a fixed relay address and the given upstream servers.
@@ -188,7 +270,8 @@ public sealed class Dhcpv4RelayAgentTests
         IReadOnlyList<string> upstreamServerAddresses,
         int upstreamServerPort,
         string circuitId = null,
-        string remoteId = null
+        string remoteId = null,
+        int clientPort = 68
     ) =>
         new(
             Options.Create(
@@ -201,7 +284,7 @@ public sealed class Dhcpv4RelayAgentTests
                     RelayAgentRemoteId = remoteId,
                 }
             ),
-            Options.Create(new Dhcpv4ProtocolOptions()),
+            Options.Create(new Dhcpv4ProtocolOptions { ClientPort = clientPort }),
             new FixedDhcpv4RelayAgentAddressProvider(relayAddress),
             NullLogger<Dhcpv4RelayAgent>.Instance
         );

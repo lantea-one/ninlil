@@ -101,11 +101,126 @@ public sealed class Dhcpv6RelayAgentTests
         Assert.Null(reply);
     }
 
+    [Fact]
+    public async Task HandleRelayMessageAsync_ReplyFromANonUpstreamSource_IsNotRelayed()
+    {
+        await AssertRelayedAsync(
+            Dhcpv6MessageTypeEnum.Reply,
+            IPAddress.Parse("2001:db8::99"),
+            linkAddress: IPAddress.Parse("2001:db8:1::1"),
+            expectRelayed: false
+        );
+    }
+
+    [Fact]
+    public async Task HandleRelayMessageAsync_ReplyWithAWrongLinkAddress_IsNotRelayed()
+    {
+        await AssertRelayedAsync(
+            Dhcpv6MessageTypeEnum.Reply,
+            IPAddress.IPv6Loopback,
+            linkAddress: IPAddress.Parse("2001:db8:2::1"),
+            expectRelayed: false
+        );
+    }
+
+    [Fact]
+    public async Task HandleRelayMessageAsync_ReplyWrappingASolicit_IsNotRelayed()
+    {
+        await AssertRelayedAsync(
+            Dhcpv6MessageTypeEnum.Solicit,
+            IPAddress.IPv6Loopback,
+            linkAddress: IPAddress.Parse("2001:db8:1::1"),
+            expectRelayed: false
+        );
+    }
+
+    [Theory]
+    [InlineData(Dhcpv6MessageTypeEnum.Advertise)]
+    [InlineData(Dhcpv6MessageTypeEnum.Reply)]
+    [InlineData(Dhcpv6MessageTypeEnum.Reconfigure)]
+    public async Task HandleRelayMessageAsync_AValidReplyFromAnUpstreamServer_IsRelayed(
+        Dhcpv6MessageTypeEnum innerType
+    )
+    {
+        await AssertRelayedAsync(
+            innerType,
+            IPAddress.IPv6Loopback,
+            linkAddress: IPAddress.Parse("2001:db8:1::1"),
+            expectRelayed: true
+        );
+    }
+
+    /// <summary>
+    ///     This method hands the relay a RELAY-REPL addressed to a client socket on the loopback
+    ///     address and says whether the inner message reached that socket.
+    /// </summary>
+    private static async Task AssertRelayedAsync(
+        Dhcpv6MessageTypeEnum innerType,
+        IPAddress source,
+        IPAddress linkAddress,
+        bool expectRelayed
+    )
+    {
+        if (!System.Net.Sockets.Socket.OSSupportsIPv6)
+            return;
+
+        using System.Net.Sockets.UdpClient clientSocket = new(
+            new IPEndPoint(IPAddress.IPv6Loopback, 0)
+        );
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
+
+        using Dhcpv6RelayAgent agent = CreateAgent(
+            upstreamServerAddresses: ["::1"],
+            clientPort: clientPort
+        );
+
+        Dhcpv6Message inner = new() { MessageType = innerType };
+        inner.SetServerIdentifier([0x00, 0x02, 0x00, 0x00, 0xAB, 0xCD]);
+
+        Dhcpv6RelayMessage relayReply = new()
+        {
+            MessageType = Dhcpv6MessageTypeEnum.RelayReply,
+            LinkAddress = linkAddress,
+            PeerAddress = IPAddress.IPv6Loopback,
+        };
+        relayReply.SetRelayMessagePayload(Dhcpv6MessageWriter.Write(inner));
+
+        await agent.HandleRelayMessageAsync(
+            relayReply,
+            new IPEndPoint(source, 547),
+            CancellationToken.None
+        );
+
+        using CancellationTokenSource timeout = new(
+            expectRelayed ? TimeSpan.FromSeconds(5) : TimeSpan.FromMilliseconds(300)
+        );
+
+        if (expectRelayed)
+        {
+            System.Net.Sockets.UdpReceiveResult received = await clientSocket.ReceiveAsync(
+                timeout.Token
+            );
+            Assert.True(
+                Dhcpv6MessageReader.TryRead(received.Buffer, out Dhcpv6Message relayed, out _)
+            );
+            Assert.Equal(innerType, relayed.MessageType);
+        }
+        else
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                await clientSocket.ReceiveAsync(timeout.Token)
+            );
+        }
+    }
+
     /// <summary>
     ///     This method builds a <see cref="Dhcpv6RelayAgent" /> by hand, without dependency
     ///     injection, with a fixed link address and the given upstream servers.
     /// </summary>
-    private static Dhcpv6RelayAgent CreateAgent(IReadOnlyList<string> upstreamServerAddresses) =>
+    private static Dhcpv6RelayAgent CreateAgent(
+        IReadOnlyList<string> upstreamServerAddresses,
+        int clientPort = 546
+    ) =>
         new(
             Options.Create(
                 new Dhcpv6RelayOptions
@@ -116,7 +231,7 @@ public sealed class Dhcpv6RelayAgentTests
                     UpstreamServerPort = GetFreePort(),
                 }
             ),
-            Options.Create(new Dhcpv6ProtocolOptions()),
+            Options.Create(new Dhcpv6ProtocolOptions { ClientPort = clientPort }),
             new FixedDhcpv6RelayAgentAddressProvider(IPAddress.Parse("2001:db8:1::1")),
             NullLogger<Dhcpv6RelayAgent>.Instance
         );

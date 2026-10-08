@@ -33,7 +33,10 @@ public sealed class Dhcpv4RelayOptions
     ///     This property contains the IPv4 addresses of the upstream DHCPv4 servers. Every request
     ///     is sent to all of them, as relay agents usually do, and whichever can serve the client
     ///     answers. Entries that do not parse are skipped with a warning. Left empty (the
-    ///     default), every request is dropped with a warning.
+    ///     default), every request is dropped with a warning. A reply is relayed to the client
+    ///     only when its source address is one of these entries, so a server that answers from a
+    ///     different address than the one configured (multi-homed, virtual IP) must be listed by
+    ///     that address.
     /// </summary>
     public List<string> UpstreamServerAddresses { get; set; } = [];
 

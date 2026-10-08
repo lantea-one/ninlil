@@ -7,6 +7,7 @@ using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv4;
 using Ninlil.Dhcp.Server.Relay.Identity;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Relay;
@@ -94,7 +95,7 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
                 await RelayRequestUpstreamAsync(request, cancellationToken);
                 break;
             case Dhcpv4OperationCodeEnum.BootReply:
-                await RelayReplyDownToClientAsync(request, cancellationToken);
+                await RelayReplyDownToClientAsync(request, remoteEndPoint, cancellationToken);
                 break;
         }
 
@@ -198,7 +199,10 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
 
     /// <summary>
     ///     This method relays an upstream server's OFFER, ACK or NAK to the client (RFC 2131
-    ///     Section 4.1). A reply whose <c>giaddr</c> is not this relay's address is ignored.
+    ///     Section 4.1). A reply is ignored unless it comes from one of the configured upstream
+    ///     servers (by source address; the source port is not checked, since a server may answer
+    ///     from a different socket or sit behind address translation) and its <c>giaddr</c> is
+    ///     this relay's address.
     ///     <para>
     ///         The destination rule is not the one in <c>Dhcpv4UdpListener.SendReplyAsync</c>,
     ///         whose first case (send to <c>giaddr</c>) is how the reply reached this relay. From
@@ -211,11 +215,23 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
     /// </summary>
     private async Task RelayReplyDownToClientAsync(
         Dhcpv4Message reply,
+        IPEndPoint remoteEndPoint,
         CancellationToken cancellationToken
     )
     {
+        // Any host that can reach the server port could send a BootReply, so only the
+        // configured upstream servers are trusted to answer.
+        if (!IsConfiguredUpstream(remoteEndPoint.Address))
+        {
+            _logger.LogDebug(
+                "Ignoring a DHCPv4 reply from {RemoteAddress}, which is not a configured upstream server.",
+                remoteEndPoint.Address
+            );
+            return;
+        }
+
         // A reply without this relay's giaddr is not ours to relay: an unrelated packet or a
-        // forged reply. (The check does not stop a sender who knows the relay address.)
+        // reply meant for another relay.
         if (!reply.RelayAgentIpAddress.Equals(_addressProvider.Value))
         {
             _logger.LogDebug(
@@ -257,6 +273,25 @@ public sealed class Dhcpv4RelayAgent : IDhcpv4RequestHandler, IDisposable
                 destination
             );
         }
+    }
+
+    /// <summary>
+    ///     This method says whether an address is one of the configured upstream servers. Entries
+    ///     that do not parse or are not IPv4 never match.
+    /// </summary>
+    private bool IsConfiguredUpstream(IPAddress sourceAddress)
+    {
+        foreach (string upstreamAddressText in _relayOptions.Value.UpstreamServerAddresses ?? [])
+        {
+            if (
+                IPAddress.TryParse(upstreamAddressText, out IPAddress upstreamAddress)
+                && upstreamAddress.AddressFamily == AddressFamily.InterNetwork
+                && ClientAddress.IsSameAddress(upstreamAddress, sourceAddress)
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />

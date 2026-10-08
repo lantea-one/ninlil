@@ -8,6 +8,7 @@ using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Dhcp.Server.Relay.Identity;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dhcp.Server.Relay;
@@ -277,14 +278,38 @@ public sealed class Dhcpv6RelayAgent
     )
     {
         // Only a RELAY-REPL is an answer to this relay. A RELAY-FORW from another relay is not
-        // handled, since chained relays are not supported. The sender is not checked against
-        // the upstream servers.
+        // handled, since chained relays are not supported.
         if (message.MessageType != Dhcpv6MessageTypeEnum.RelayReply)
         {
             _logger.LogDebug(
                 "Ignoring a {MessageType} received on this relay's own outbound socket from {RemoteEndPoint}; only a RELAY-REPL is ever expected here.",
                 message.MessageType,
                 remoteEndPoint
+            );
+            return null;
+        }
+
+        // Any host that can reach this relay's sockets could send a RELAY-REPL, and the inner
+        // message goes to the peer-address it names, so only the configured upstream servers are
+        // trusted to answer.
+        if (!IsConfiguredUpstream(remoteEndPoint.Address))
+        {
+            _logger.LogDebug(
+                "Ignoring a RELAY-REPL from {RemoteEndPoint}, which is not a configured upstream server.",
+                remoteEndPoint
+            );
+            return null;
+        }
+
+        // The server copies link-address from the RELAY-FORW (RFC 8415 Section 19.3), so a
+        // different value means the packet does not answer a message this relay sent.
+        if (!ClientAddress.IsSameAddress(message.LinkAddress, _addressProvider.Value))
+        {
+            _logger.LogDebug(
+                "Ignoring a RELAY-REPL from {RemoteEndPoint} whose own link-address ({LinkAddress}) does not match this relay's ({RelayAddress}).",
+                remoteEndPoint,
+                message.LinkAddress,
+                _addressProvider.Value
             );
             return null;
         }
@@ -325,6 +350,25 @@ public sealed class Dhcpv6RelayAgent
             return null;
         }
 
+        // Only a message a server sends to a client is relayed; the other types (SOLICIT,
+        // REQUEST and so on) are client messages, which a server never wraps in a RELAY-REPL.
+        if (
+            innerReply.MessageType
+            is not (
+                Dhcpv6MessageTypeEnum.Advertise
+                or Dhcpv6MessageTypeEnum.Reply
+                or Dhcpv6MessageTypeEnum.Reconfigure
+            )
+        )
+        {
+            _logger.LogDebug(
+                "Discarding a RELAY-REPL from {RemoteEndPoint} whose own nested message is a {MessageType}, which a server does not send to a client.",
+                remoteEndPoint,
+                innerReply.MessageType
+            );
+            return null;
+        }
+
         // The server copies peer-address from the RELAY-FORW, so it is the client's address. The
         // relay sends the unwrapped message there (RFC 8415). The address carries no scope ID.
         int clientPort = _protocolOptions.Value.ClientPort;
@@ -351,6 +395,25 @@ public sealed class Dhcpv6RelayAgent
         // The reply has been sent here; neither the listener nor ExecuteAsync has anything to
         // send.
         return null;
+    }
+
+    /// <summary>
+    ///     This method says whether an address is one of the configured upstream servers. Entries
+    ///     that do not parse or are not IPv6 never match; zone ids are ignored.
+    /// </summary>
+    private bool IsConfiguredUpstream(IPAddress sourceAddress)
+    {
+        foreach (string upstreamAddressText in _relayOptions.Value.UpstreamServerAddresses ?? [])
+        {
+            if (
+                IPAddress.TryParse(upstreamAddressText, out IPAddress upstreamAddress)
+                && upstreamAddress.AddressFamily == AddressFamily.InterNetworkV6
+                && ClientAddress.IsSameAddress(upstreamAddress, sourceAddress)
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />

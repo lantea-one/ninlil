@@ -32,7 +32,10 @@ public sealed class Dhcpv6RelayOptions
     /// <summary>
     ///     This property contains the IPv6 addresses of the upstream DHCPv6 servers. Every
     ///     RELAY-FORW is sent to all of them, as for DHCPv4. Left empty (the default), every
-    ///     message is dropped with a warning.
+    ///     message is dropped with a warning. A RELAY-REPL is relayed to the client only when its
+    ///     source address is one of these entries, so a server that answers from a different
+    ///     address than the one configured (multi-homed, virtual IP) must be listed by that
+    ///     address.
     /// </summary>
     public List<string> UpstreamServerAddresses { get; set; } = [];
 
