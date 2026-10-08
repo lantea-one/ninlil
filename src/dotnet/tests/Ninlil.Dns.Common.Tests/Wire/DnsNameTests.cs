@@ -47,4 +47,44 @@ public class DnsNameTests
         Assert.Equal(17, wireBytes.Length);
         Assert.Equal(0, wireBytes[^1]); // Terminating root label.
     }
+
+    [Theory]
+    [InlineData("a..b")]
+    [InlineData(".example")]
+    [InlineData("..")]
+    [InlineData("bücher.example")]
+    [InlineData("\\ü")]
+    [InlineData("Ā")]
+    public void TryParseRejectsEmptyLabelsAndNonAsciiCharacters(string presentation)
+    {
+        Assert.False(DnsName.TryParse(presentation, out _));
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("example.")]
+    [InlineData("a\\.b.example")]
+    [InlineData("\\195\\188.example")]
+    public void TryParseAcceptsRootTrailingDotEscapedDotAndExplicitBytes(string presentation)
+    {
+        Assert.True(DnsName.TryParse(presentation, out _));
+    }
+
+    [Fact]
+    public void ExplicitDecimalEscapesStoreTheRawBytes()
+    {
+        DnsName name = DnsName.Parse("\\195\\188.example");
+
+        Assert.Equal(new byte[] { 195, 188 }, name.Labels[0]);
+    }
+
+    [Fact]
+    public void TheConstructorRejectsAnEmptyLabel()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new DnsName([
+                [],
+            ])
+        );
+    }
 }

@@ -54,17 +54,22 @@ public sealed class DnsName : IEquatable<DnsName>
     /// </summary>
     /// <param name="labels">This name's labels, in left-to-right order.</param>
     /// <exception cref="ArgumentException">
-    ///     Thrown when a label exceeds <see cref="MaximumLabelLength" />, or the name as a whole
+    ///     Thrown when a label is empty or exceeds <see cref="MaximumLabelLength" />, or the name as a whole
     ///     would exceed <see cref="MaximumWireLength" /> once encoded.
     /// </exception>
     public DnsName(IReadOnlyList<byte[]> labels)
     {
         foreach (byte[] label in labels)
+        {
+            if (label.Length == 0)
+                throw new ArgumentException("A DNS label may not be empty.", nameof(labels));
+
             if (label.Length > MaximumLabelLength)
                 throw new ArgumentException(
                     $"A DNS label may not exceed {MaximumLabelLength} octets.",
                     nameof(labels)
                 );
+        }
 
         Labels = labels;
 
@@ -152,6 +157,12 @@ public sealed class DnsName : IEquatable<DnsName>
                 }
                 else if (i + 1 < presentation.Length)
                 {
+                    if (presentation[i + 1] > 0x7F)
+                    {
+                        error = NonAsciiError(presentation, i + 1);
+                        return false;
+                    }
+
                     currentLabel.Add((byte)presentation[i + 1]);
                     i++;
                 }
@@ -163,11 +174,25 @@ public sealed class DnsName : IEquatable<DnsName>
             }
             else if (c == '.')
             {
+                if (currentLabel.Count == 0)
+                {
+                    error = $"'{presentation}' contains an empty label at position {i}.";
+                    return false;
+                }
+
                 labels.Add([.. currentLabel]);
                 currentLabel.Clear();
             }
             else
             {
+                // A char above 0x7F would be truncated to a byte; the caller must convert
+                // Unicode names to the xn-- form first.
+                if (c > 0x7F)
+                {
+                    error = NonAsciiError(presentation, i);
+                    return false;
+                }
+
                 currentLabel.Add((byte)c);
             }
         }
@@ -188,6 +213,12 @@ public sealed class DnsName : IEquatable<DnsName>
             return false;
         }
     }
+
+    /// <summary>
+    ///     This method builds the error for a non-ASCII character in a presentation name.
+    /// </summary>
+    private static string NonAsciiError(string presentation, int position) =>
+        $"'{presentation}' contains a non-ASCII character at position {position}; use the xn-- form or a \\DDD escape.";
 
     /// <inheritdoc />
     public override string ToString()
