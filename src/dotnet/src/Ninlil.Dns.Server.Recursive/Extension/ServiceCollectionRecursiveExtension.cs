@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Server.Core.Caching;
 using Ninlil.Dns.Server.Core.Resolution;
@@ -52,6 +53,9 @@ public static class ServiceCollectionRecursiveExtension
 
         instance.AddSingleton<IUpstreamDnsClient, UpstreamDnsClient>();
         instance.AddSingleton<IIterativeResolutionEngine, IterativeResolutionEngine>();
+
+        // The clock the root hints priming loop delays on.
+        instance.TryAddSingleton(TimeProvider.System);
         instance.AddHostedService<RootHintsPrimingService>();
 
         // A singleton, since the RFC 5011 state is shared by every query and every check.

@@ -199,11 +199,8 @@ public sealed class IterativeResolutionEngine(
             }
         }
 
-        (DnsName zoneCut, List<DnsName> nameServerNames) = FindBestNameServers(
-            name,
-            type,
-            forceRootStart
-        );
+        (DnsName zoneCut, List<DnsName> nameServerNames, List<IPAddress> hintAddresses) =
+            FindBestNameServers(name, type, forceRootStart);
         List<DnsName> zoneCutsTraversed = [zoneCut];
 
         // RFC 9156 QNAME minimization. `minimizationDisabled` starts from the setting and turns
@@ -219,6 +216,7 @@ public sealed class IterativeResolutionEngine(
         {
             List<IPAddress> addresses = await ResolveNameServerAddressesAsync(
                 nameServerNames,
+                hintAddresses,
                 requestDnssec,
                 budget,
                 stoppingToken
@@ -313,6 +311,7 @@ public sealed class IterativeResolutionEngine(
                     CacheReferral(probeReferralZoneCut, probeReferralNameServers, response);
                     zoneCut = probeReferralZoneCut;
                     nameServerNames = probeReferralNameServers;
+                    hintAddresses = [];
                     zoneCutsTraversed.Add(zoneCut);
                     currentProbeName = ExtendTowardTarget(zoneCut, name);
 
@@ -448,6 +447,7 @@ public sealed class IterativeResolutionEngine(
                 CacheReferral(referralZoneCut, referralNameServers, response);
                 zoneCut = referralZoneCut;
                 nameServerNames = referralNameServers;
+                hintAddresses = [];
                 zoneCutsTraversed.Add(zoneCut);
 
                 if (zoneCutsTraversed.Count > options.CurrentValue.MaxReferralDepth)
@@ -683,11 +683,16 @@ public sealed class IterativeResolutionEngine(
     ///     Whether to skip the walk and start from the root name servers (see
     ///     <see cref="IIterativeResolutionEngine.ResolveAsync(DnsName,DnsResourceRecordTypeEnum,DnsClassEnum,bool,QueryBudget,bool,DnsEdnsOption,CancellationToken)" />).
     /// </param>
-    private (DnsName ZoneCut, List<DnsName> NameServerNames) FindBestNameServers(
-        DnsName name,
-        DnsResourceRecordTypeEnum type,
-        bool forceRootStart
-    )
+    /// <returns>
+    ///     The zone cut and its name server names. When the cache holds no root name servers, the
+    ///     third item holds the root hint addresses, which the caller uses when the cache has no
+    ///     address for the names; otherwise it is empty.
+    /// </returns>
+    private (
+        DnsName ZoneCut,
+        List<DnsName> NameServerNames,
+        List<IPAddress> HintAddresses
+    ) FindBestNameServers(DnsName name, DnsResourceRecordTypeEnum type, bool forceRootStart)
     {
         int firstLabelToSkip =
             forceRootStart ? name.Labels.Count
@@ -704,28 +709,32 @@ public sealed class IterativeResolutionEngine(
             );
 
             if (cached is { IsNegative: false } && cached.Records.Count > 0)
-                return (candidate, [.. cached.Records.Select(ExtractNameServerName)]);
+                return (candidate, [.. cached.Records.Select(ExtractNameServerName)], []);
         }
 
-        // Not even the root is cached: before RootHintsPrimingService has run, or after its
-        // six-day entries expired. Fall back to the root hints list.
+        // Not even the root is cached: the entries expired (the hint TTL is six days) or the
+        // cache was flushed. The hint names alone are no use, since looking up their addresses
+        // needs the root, so the addresses travel with them, and the hints go back into the
+        // cache for the next query.
+        IReadOnlyList<RootHintServer> rootServers = RootHints.Resolve(options.CurrentValue);
+        RootHintsSeeder.Seed(cache, rootServers);
+
         return (
             DnsName.Root,
-            [
-                .. RootHints
-                    .Resolve(options.CurrentValue)
-                    .Select(server => DnsName.Parse(server.Name)),
-            ]
+            [.. rootServers.Select(server => DnsName.Parse(server.Name))],
+            [.. rootServers.SelectMany(server => server.Addresses)]
         );
     }
 
     /// <summary>
     ///     This method returns the addresses of a set of name servers. It uses cached A and AAAA
-    ///     records (usually glue) when any are known; otherwise it looks up A records for up to
+    ///     records (usually glue) when any are known, then <paramref name="hintAddresses" />;
+    ///     otherwise it looks up A records for up to
     ///     three of the servers, one at a time, and stops at the first that yields an address.
     /// </summary>
     private async Task<List<IPAddress>> ResolveNameServerAddressesAsync(
         IReadOnlyList<DnsName> nameServerNames,
+        IReadOnlyList<IPAddress> hintAddresses,
         bool requestDnssec,
         QueryBudget budget,
         CancellationToken stoppingToken
@@ -749,6 +758,9 @@ public sealed class IterativeResolutionEngine(
 
         if (addresses.Count > 0)
             return addresses;
+
+        if (hintAddresses.Count > 0)
+            return [.. hintAddresses];
 
         // No address is known for any of these servers: look up a few, one at a time, and stop
         // at the first that yields an address. A server whose address is already being looked

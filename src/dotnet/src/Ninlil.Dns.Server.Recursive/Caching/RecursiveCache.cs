@@ -56,6 +56,12 @@ public sealed class RecursiveCache(
         timeProvider
     );
 
+    /// <summary>
+    ///     This constant contains the TTL, in seconds, of every record in a stale entry:
+    ///     RFC 8767 recommends 30 seconds, so a client or downstream cache retries soon.
+    /// </summary>
+    public const uint StaleAnswerTimeToLive = 30;
+
     /// <inheritdoc />
     public string Name => CacheName;
 
@@ -77,7 +83,7 @@ public sealed class RecursiveCache(
         TimeSpan maxStaleAge
     ) =>
         _store.TryGetStale((name, type, recordClass), maxStaleAge, out RecursiveCacheEntry entry)
-            ? entry
+            ? entry.WithTtl(StaleAnswerTimeToLive)
             : null;
 
     /// <inheritdoc />

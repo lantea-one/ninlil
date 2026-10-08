@@ -77,4 +77,24 @@ public sealed record RecursiveCacheEntry(
             Soa = Soa is null ? null : Age(Soa),
         };
     }
+
+    /// <summary>
+    ///     This method returns a copy of this entry with every record's TTL (records, DNSSEC
+    ///     records and the SOA) set to one value. Serve-stale answers use it so a stale answer
+    ///     is not cached downstream for its original lifetime (RFC 8767).
+    /// </summary>
+    /// <param name="timeToLive">The TTL in seconds to set.</param>
+    /// <returns>The copy.</returns>
+    public RecursiveCacheEntry WithTtl(uint timeToLive)
+    {
+        DnsResourceRecord Set(DnsResourceRecord record) =>
+            new(record.Name, record.Type, record.Class, timeToLive, record.Data);
+
+        return this with
+        {
+            Records = [.. Records.Select(Set)],
+            DnssecRecords = [.. DnssecRecords.Select(Set)],
+            Soa = Soa is null ? null : Set(Soa),
+        };
+    }
 }

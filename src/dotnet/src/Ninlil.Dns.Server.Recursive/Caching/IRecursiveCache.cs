@@ -42,7 +42,8 @@ public interface IRecursiveCache
     /// <param name="recordClass">The class to look up.</param>
     /// <param name="maxStaleAge">How far past its expiry a cache entry may still be served.</param>
     /// <returns>
-    ///     The cached entry, fresh or stale up to <paramref name="maxStaleAge" />, or
+    ///     The cached entry, fresh or stale up to <paramref name="maxStaleAge" />, with every TTL
+    ///     set to <see cref="RecursiveCache.StaleAnswerTimeToLive" /> (RFC 8767), or
     ///     <see langword="null" /> if nothing usable is cached.
     /// </returns>
     RecursiveCacheEntry TryGetStale(
