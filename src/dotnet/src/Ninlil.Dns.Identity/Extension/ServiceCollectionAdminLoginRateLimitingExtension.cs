@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,7 +19,8 @@ namespace Ninlil.Dns.Identity.Extension;
 ///     <see cref="AuthenticationEndpointPolicyName" />) and the Forgot Password request (see
 ///     <see cref="PasswordResetEndpointPolicyName" />), and is separate from the DNS query limiter
 ///     in <c>Server.RateLimiting</c>; <see cref="AdminLoginRateLimitOptions" /> explains why it
-///     fails closed.
+///     fails closed. The limiter counts per client network: the plain IPv4 address, or the /64
+///     of an IPv6 address (see <see cref="AddNinlilDnsAdminLoginRateLimiting" />).
 /// </summary>
 public static class ServiceCollectionAdminLoginRateLimitingExtension
 {
@@ -41,8 +44,8 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
     ///     This method registers <see cref="AdminLoginRateLimitOptions" /> and the
     ///     <see cref="AuthenticationEndpointPolicyName" /> and
     ///     <see cref="PasswordResetEndpointPolicyName" /> policies: each a fixed-window limiter partitioned
-    ///     by client IP address (see <see cref="AdminLoginRateLimitOptions" /> for why not by user
-    ///     name), with <see cref="FixedWindowRateLimiterOptions.QueueLimit" /> zero, so a request over
+    ///     by client IP address, or by the /64 network for an IPv6 client (see
+    ///     <see cref="AdminLoginRateLimitOptions" /> for why not by user name), with <see cref="FixedWindowRateLimiterOptions.QueueLimit" /> zero, so a request over
     ///     the limit gets <c>429 Too Many Requests</c> at once rather than waiting in a queue.
     ///     <para>
     ///         <b>The policy is registered even when <see cref="AdminLoginRateLimitOptions.Enable" />
@@ -82,15 +85,30 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
 
         return instance;
 
+        // Partitioned by client network, never by user name, so an attacker cannot lock a known
+        // administrator out. An IPv4 client (including one on a dual-stack socket) is keyed by
+        // its plain IPv4 address. An IPv6 client is keyed by its /64, the smallest network a
+        // provider normally assigns to one subscriber, because an attacker holding a /64 can
+        // otherwise rotate through 2^64 addresses and never meet the limit. Connections without
+        // a remote address share one "unknown" partition.
+        static string GetPartitionKey(IPAddress remoteAddress)
+        {
+            IPAddress address = ClientAddress.Normalize(remoteAddress);
+
+            if (address is null)
+                return "unknown";
+
+            if (address.AddressFamily != AddressFamily.InterNetworkV6)
+                return address.ToString();
+
+            byte[] network = address.GetAddressBytes();
+            Array.Clear(network, 8, 8);
+            return $"{new IPAddress(network)}/64";
+        }
+
         RateLimitPartition<string> GetPartition(HttpContext httpContext)
         {
-            // Partitioned by remote IP address, never by user name, so an attacker cannot lock a
-            // known administrator out. An IPv4 client on a dual-stack socket is keyed by its plain IPv4
-            // address. Connections without a remote address share one "unknown"
-            // partition.
-            string partitionKey =
-                ClientAddress.Normalize(httpContext.Connection.RemoteIpAddress)?.ToString()
-                ?? "unknown";
+            string partitionKey = GetPartitionKey(httpContext.Connection.RemoteIpAddress);
 
             return options.Enable
                 ? RateLimitPartition.GetFixedWindowLimiter(

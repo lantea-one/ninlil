@@ -20,9 +20,9 @@ namespace Ninlil.Dns.Identity.Options;
 ///         who mistypes a password a few times is an accepted cost.
 ///     </para>
 ///     <para>
-///         Clients are limited per connecting IP address, never per submitted username, so an
-///         attacker cannot lock out an administrator signing in from another address by
-///         submitting that administrator's username.
+///         Clients are limited per connecting IP address (an IPv6 client per its /64 network),
+///         never per submitted username, so an attacker cannot lock out an administrator signing
+///         in from another address by submitting that administrator's username.
 ///     </para>
 /// </summary>
 public sealed class AdminLoginRateLimitOptions

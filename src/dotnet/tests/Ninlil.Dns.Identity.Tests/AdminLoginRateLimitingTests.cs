@@ -26,6 +26,24 @@ namespace Ninlil.Dns.Identity.Tests;
 /// </summary>
 public class AdminLoginRateLimitingTests
 {
+    private const string TestAddressHeader = "X-Test-Remote-Address";
+
+    /// <summary>
+    ///     This method sends one POST to <paramref name="path" /> that the test host treats as
+    ///     coming from <paramref name="remoteAddress" />.
+    /// </summary>
+    private static async Task<HttpStatusCode> PostFromAsync(
+        HttpClient client,
+        string path,
+        string remoteAddress
+    )
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, path);
+        request.Headers.Add(TestAddressHeader, remoteAddress);
+        using HttpResponseMessage response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
     /// <summary>
     ///     This method starts a minimal <see cref="WebApplication" /> with only the rate limiter and
     ///     one endpoint for each of its policies, and returns an <see cref="HttpClient" /> for it over
@@ -47,6 +65,19 @@ public class AdminLoginRateLimitingTests
         builder.Services.AddNinlilDnsAdminLoginRateLimiting(builder.Configuration);
 
         WebApplication app = builder.Build();
+        // TestServer leaves the remote address empty; this lets a test choose one per request.
+        app.Use(
+            (context, next) =>
+            {
+                if (
+                    context.Request.Headers.TryGetValue(TestAddressHeader, out var value)
+                    && IPAddress.TryParse(value, out IPAddress address)
+                )
+                    context.Connection.RemoteIpAddress = address;
+
+                return next(context);
+            }
+        );
         app.UseRateLimiter();
         app.MapPost("/login", () => Results.Ok())
             .RequireRateLimiting(
@@ -214,6 +245,94 @@ public class AdminLoginRateLimitingTests
                 HttpResponseMessage response = await client.PostAsync("/login", content: null);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>
+    ///     This test checks that two IPv6 addresses in one /64 share a partition, so an attacker
+    ///     cannot get a fresh budget by rotating the low 64 bits. It covers both policies.
+    /// </summary>
+    [Theory]
+    [InlineData("/login")]
+    [InlineData("/forgot-password")]
+    public async Task IPv6_AddressesInOneSlash64_ShareAPartition(string path)
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 1,
+            window: TimeSpan.FromMinutes(5)
+        );
+
+        try
+        {
+            Assert.Equal(HttpStatusCode.OK, await PostFromAsync(client, path, "2001:db8:1:2::1"));
+            Assert.Equal(
+                HttpStatusCode.TooManyRequests,
+                await PostFromAsync(client, path, "2001:db8:1:2:aaaa:bbbb:cccc:dddd")
+            );
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>
+    ///     This test checks that IPv6 addresses in different /64 networks do not share a
+    ///     partition, for both policies.
+    /// </summary>
+    [Theory]
+    [InlineData("/login")]
+    [InlineData("/forgot-password")]
+    public async Task IPv6_AddressesInDifferentSlash64s_UseSeparatePartitions(string path)
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 1,
+            window: TimeSpan.FromMinutes(5)
+        );
+
+        try
+        {
+            Assert.Equal(HttpStatusCode.OK, await PostFromAsync(client, path, "2001:db8:1:2::1"));
+            Assert.Equal(HttpStatusCode.OK, await PostFromAsync(client, path, "2001:db8:1:3::1"));
+            Assert.Equal(
+                HttpStatusCode.TooManyRequests,
+                await PostFromAsync(client, path, "2001:db8:1:2::2")
+            );
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>
+    ///     This test checks that an IPv4 client and the same client seen as an IPv4-mapped IPv6
+    ///     address (what a dual-stack socket reports) share one partition, and that a different
+    ///     IPv4 address does not.
+    /// </summary>
+    [Fact]
+    public async Task IPv4AndItsIPv4MappedForm_ShareAPartition()
+    {
+        (WebApplication app, HttpClient client) = await StartHostAsync(
+            enable: true,
+            permitLimit: 1,
+            window: TimeSpan.FromMinutes(5)
+        );
+
+        try
+        {
+            Assert.Equal(HttpStatusCode.OK, await PostFromAsync(client, "/login", "192.0.2.9"));
+            Assert.Equal(
+                HttpStatusCode.TooManyRequests,
+                await PostFromAsync(client, "/login", "::ffff:192.0.2.9")
+            );
+            Assert.Equal(HttpStatusCode.OK, await PostFromAsync(client, "/login", "192.0.2.10"));
         }
         finally
         {
