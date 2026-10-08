@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 using Ninlil.Dns.Server.Backup;
 using Ninlil.Dns.Server.Backup.Crypto;
@@ -83,6 +85,50 @@ public sealed class BackupArchiveCodecTests
         archive[10] ^= 0b0000_0001;
 
         Assert.Throws<BackupDecryptionFailedException>(() =>
+            BackupArchiveCodec.Decrypt(archive, "correct-horse-battery-staple")
+        );
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(99_999)]
+    [InlineData(10_000_001)]
+    [InlineData(int.MaxValue)]
+    public void DecryptWithAnIterationCountOutsideTheAcceptedRangeThrowsBeforeDerivingAKey(
+        int iterations
+    )
+    {
+        byte[] archive = BackupArchiveCodec.Encrypt(
+            Encoding.UTF8.GetBytes("payload"),
+            "correct-horse-battery-staple"
+        );
+
+        // The count follows the 5-byte header and the 16-byte salt.
+        BinaryPrimitives.WriteInt32LittleEndian(archive.AsSpan(21, sizeof(int)), iterations);
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        BackupDecryptionFailedException exception = Assert.Throws<BackupDecryptionFailedException>(
+            () =>
+                BackupArchiveCodec.Decrypt(archive, "correct-horse-battery-staple")
+        );
+
+        Assert.Contains("outside the accepted range", exception.Message);
+        // A derivation of even the lowest count takes longer than this.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public void TheIterationCountIsStoredLittleEndianAndTheCurrentCountStillDecrypts()
+    {
+        byte[] archive = BackupArchiveCodec.Encrypt(
+            Encoding.UTF8.GetBytes("payload"),
+            "correct-horse-battery-staple"
+        );
+
+        Assert.Equal(600_000, BinaryPrimitives.ReadInt32LittleEndian(archive.AsSpan(21, 4)));
+        Assert.Equal(
+            Encoding.UTF8.GetBytes("payload"),
             BackupArchiveCodec.Decrypt(archive, "correct-horse-battery-staple")
         );
     }

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -39,6 +40,22 @@ public static class BackupArchiveCodec
     /// </summary>
     private const int Pbkdf2Iterations = 600_000;
 
+    /// <summary>
+    ///     This constant contains the lowest iteration count <see cref="Decrypt" /> accepts from an
+    ///     archive header. The header is not authenticated before the key is derived, so a count
+    ///     that is too low would let a forged archive weaken the derivation, and zero or a negative
+    ///     count would make the derivation throw.
+    /// </summary>
+    public const int MinimumPbkdf2Iterations = 100_000;
+
+    /// <summary>
+    ///     This constant contains the highest iteration count <see cref="Decrypt" /> accepts from
+    ///     an archive header: 10 million, about ten seconds of work, which leaves room to raise
+    ///     <see cref="Pbkdf2Iterations" /> later but stops a forged header from keeping a core busy
+    ///     for hours.
+    /// </summary>
+    public const int MaximumPbkdf2Iterations = 10_000_000;
+
     private const int SaltSizeBytes = 16;
     private const int NonceSizeBytes = 12;
     private const int TagSizeBytes = 16;
@@ -71,7 +88,9 @@ public static class BackupArchiveCodec
         using MemoryStream output = new();
         output.Write(MagicHeaderEncrypted);
         output.Write(salt);
-        output.Write(BitConverter.GetBytes(Pbkdf2Iterations));
+        Span<byte> iterationBytes = stackalloc byte[sizeof(int)];
+        BinaryPrimitives.WriteInt32LittleEndian(iterationBytes, Pbkdf2Iterations);
+        output.Write(iterationBytes);
         output.Write(nonce);
         output.Write(tag);
         output.Write(ciphertext);
@@ -90,8 +109,9 @@ public static class BackupArchiveCodec
     /// <returns>The decrypted payload bytes.</returns>
     /// <exception cref="BackupDecryptionFailedException">
     ///     Thrown when <paramref name="archive" /> is too short, does not start with the encrypted
-    ///     header, or fails AES-GCM authentication, which happens both for a wrong passphrase and
-    ///     for a changed ciphertext; the two cannot be told apart.
+    ///     header, stores an iteration count outside <see cref="MinimumPbkdf2Iterations" /> to
+    ///     <see cref="MaximumPbkdf2Iterations" />, or fails AES-GCM authentication, which happens
+    ///     both for a wrong passphrase and for a changed ciphertext; the two cannot be told apart.
     /// </exception>
     public static byte[] Decrypt(byte[] archive, string passphrase)
     {
@@ -120,8 +140,17 @@ public static class BackupArchiveCodec
         byte[] salt = archive.AsSpan(offset, SaltSizeBytes).ToArray();
         offset += SaltSizeBytes;
 
-        int iterations = BitConverter.ToInt32(archive, offset);
+        int iterations = BinaryPrimitives.ReadInt32LittleEndian(
+            archive.AsSpan(offset, sizeof(int))
+        );
         offset += sizeof(int);
+
+        // Checked before anything is derived: the count comes from an unauthenticated header.
+        if (iterations is < MinimumPbkdf2Iterations or > MaximumPbkdf2Iterations)
+            throw new BackupDecryptionFailedException(
+                "This archive's key-derivation settings are outside the accepted range; it was "
+                    + "not made by Ninlil or has been altered."
+            );
 
         byte[] nonce = archive.AsSpan(offset, NonceSizeBytes).ToArray();
         offset += NonceSizeBytes;
