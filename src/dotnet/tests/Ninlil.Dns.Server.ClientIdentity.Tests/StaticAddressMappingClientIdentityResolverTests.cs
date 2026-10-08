@@ -203,4 +203,59 @@ public sealed class StaticAddressMappingClientIdentityResolverTests : IAsyncLife
         Assert.NotNull(knownClient);
         Assert.Equal("Guest VLAN printer", knownClient.DisplayName);
     }
+
+    /// <summary>
+    ///     This test checks that queries are answered from the in-memory snapshot: 100 resolves
+    ///     read the repository once.
+    /// </summary>
+    [Fact]
+    public async Task ResolveAsync_ManyCalls_ReadTheRepositoryOnlyOnce()
+    {
+        await _host.SeedMappingAsync(
+            "10.99.0.0/24",
+            "aa:bb:cc:dd:ee:ff",
+            InternetProtocolVersionEnum.IPv4
+        );
+
+        for (int i = 0; i < 100; i++)
+            Assert.NotNull(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
+
+        Assert.Equal(1, _host.RepositoryCalls["ListEnabledAsync"]);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_AfterAMappingChanges_ShowsItOnceTheSnapshotIsRefreshed()
+    {
+        await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42"));
+        await _host.SeedMappingAsync(
+            "10.99.0.42",
+            "aa:bb:cc:dd:ee:ff",
+            InternetProtocolVersionEnum.IPv4
+        );
+
+        // The snapshot is not stale yet, so the new mapping is not visible.
+        Assert.Null(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
+
+        await _host.Resolver.RefreshAsync();
+
+        Assert.NotNull(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_AfterTheTimeToLive_RefreshesInTheBackgroundAndServesTheOldSnapshotMeanwhile()
+    {
+        await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42"));
+        await _host.SeedMappingAsync(
+            "10.99.0.42",
+            "aa:bb:cc:dd:ee:ff",
+            InternetProtocolVersionEnum.IPv4
+        );
+        _host.Time.Advance(StaticAddressMappingClientIdentityResolver.SnapshotTimeToLive);
+
+        // The read that finds the snapshot stale still gets the old answer.
+        Assert.Null(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
+        await _host.Resolver.WhenIdleAsync();
+
+        Assert.NotNull(await _host.Resolver.ResolveAsync(IPAddress.Parse("10.99.0.42")));
+    }
 }

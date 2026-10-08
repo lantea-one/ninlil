@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Server.ClientIdentity;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
 
@@ -116,6 +118,46 @@ public class ClientStaticAddressMappingCrudTests(NinlilDnsWebApplicationFactory 
             $"/api/client-static-address-mappings/{created.Id}"
         );
         Assert.Equal(HttpStatusCode.NotFound, afterDeleteResponse.StatusCode);
+    }
+
+    /// <summary>
+    ///     This test checks that the resolver, which answers from an in-memory snapshot, sees a
+    ///     mapping created through the API on the very next resolve, and stops seeing it once the
+    ///     mapping is deleted.
+    /// </summary>
+    [Fact]
+    public async Task CreateAndDelete_ApplyToTheResolverAtOnce()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        StaticAddressMappingClientIdentityResolver resolver =
+            factory.Services.GetRequiredService<StaticAddressMappingClientIdentityResolver>();
+        IPAddress address = IPAddress.Parse("203.0.113.77");
+        string identifier = $"aa:bb:cc:dd:{Guid.NewGuid():N}"[..17];
+
+        // Load the snapshot first, so the mapping must arrive by refresh and not by first load.
+        Assert.Null(await resolver.ResolveAsync(address));
+
+        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+            "/api/client-static-address-mappings",
+            new
+            {
+                cidr = "203.0.113.77",
+                clientIdentifier = identifier,
+                protocolVersion = "IPv4",
+            }
+        );
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        DnsClientStaticAddressMappingDetail created =
+            await createResponse.Content.ReadFromJsonAsync<DnsClientStaticAddressMappingDetail>();
+
+        Assert.Equal(identifier, (await resolver.ResolveAsync(address))?.ClientIdentifier);
+
+        HttpResponseMessage deleteResponse = await client.DeleteAsync(
+            $"/api/client-static-address-mappings/{created.Id}"
+        );
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        Assert.Null(await resolver.ResolveAsync(address));
     }
 
     [Fact]

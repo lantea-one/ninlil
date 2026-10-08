@@ -23,7 +23,8 @@ public static class ServiceCollectionClientIdentityExtension
     ///     <c>CompositeClientIdentityResolver</c>) and as <see cref="IHostedService" /> (so the host
     ///     starts its refresh loop), as <c>DnsAccessControlRuleCache</c> is registered. It also
     ///     registers <see cref="StaticAddressMappingClientIdentityResolver" /> as a singleton under
-    ///     its concrete type; it reads its repository on every call, so it has no loop to start.
+    ///     its concrete type; it keeps an in-memory snapshot that refreshes on demand, so it has no loop
+    ///     to start.
     ///     <para>
     ///         It does not register <c>Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver</c>
     ///         itself: which resolvers answer it, and in what order, is decided in

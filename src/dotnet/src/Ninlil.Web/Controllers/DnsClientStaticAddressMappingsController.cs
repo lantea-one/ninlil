@@ -5,6 +5,7 @@ using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity.Authorization;
+using Ninlil.Dns.Server.ClientIdentity;
 using Ninlil.Web.Examples.ClientStaticAddressMappings;
 using Ninlil.Web.Models;
 using Swashbuckle.AspNetCore.Filters;
@@ -23,17 +24,22 @@ namespace Ninlil.Web.Controllers;
 ///     is part of managing known clients.
 ///     <para>
 ///         <b>No event is published on a write</b> (unlike
-///         <see cref="DnsAccessControlRulesController" />): the resolver reads its repository on
-///         every call and keeps no snapshot, so there is nothing to refresh.
+///         <see cref="DnsAccessControlRulesController" />). The resolver keeps an in-memory
+///         snapshot of the enabled mappings, so every write waits for
+///         <see cref="StaticAddressMappingClientIdentityResolver.RefreshAsync" /> after the save,
+///         and the next query sees the change. A failed refresh is logged by the resolver and does
+///         not fail the request; the snapshot then catches up at its next refresh.
 ///     </para>
 /// </summary>
 /// <param name="mappingRepository">Reads and writes mappings.</param>
 /// <param name="unitOfWork">Commits staged changes.</param>
+/// <param name="resolver">The resolver whose snapshot is refreshed after every write.</param>
 [ApiController]
 [Route("api/client-static-address-mappings")]
 public class DnsClientStaticAddressMappingsController(
     IDnsClientStaticAddressMappingRepository mappingRepository,
-    IUnitOfWork unitOfWork
+    IUnitOfWork unitOfWork,
+    StaticAddressMappingClientIdentityResolver resolver
 ) : ControllerBase
 {
     /// <summary>
@@ -128,6 +134,7 @@ public class DnsClientStaticAddressMappingsController(
 
         await mappingRepository.AddAsync(mapping, stoppingToken);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        await resolver.RefreshAsync(stoppingToken);
 
         return CreatedAtAction(nameof(Get), new { id = mapping.Id }, ToDetail(mapping));
     }
@@ -167,6 +174,7 @@ public class DnsClientStaticAddressMappingsController(
 
         mappingRepository.Update(mapping);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        await resolver.RefreshAsync(stoppingToken);
 
         return NoContent();
     }
@@ -188,6 +196,7 @@ public class DnsClientStaticAddressMappingsController(
 
         mappingRepository.Remove(mapping);
         await unitOfWork.SaveChangesAsync(stoppingToken);
+        await resolver.RefreshAsync(stoppingToken);
 
         return NoContent();
     }

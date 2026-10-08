@@ -17,7 +17,9 @@ public static class ServiceCollectionDhcpDnsIntegrationExtension
     ///     subscriber (a second reaction to the same event that adds new clients to the client
     ///     registry), and the singleton <see cref="DhcpLeaseClientIdentityResolver" />, under its
     ///     own type only, since <c>Program.cs</c> builds the
-    ///     <c>CompositeClientIdentityResolver</c> itself.
+    ///     <c>CompositeClientIdentityResolver</c> itself, with the
+    ///     <see cref="DhcpLeaseIdentitySnapshotInvalidator" /> subscriber that refreshes its
+    ///     lease snapshot on every lease change.
     ///     <para>
     ///         The caller must already have registered the <c>Ninlil.Dns.Server.Core</c> event bus,
     ///         the DHCP and DNS repositories and <c>IZoneUpdateService</c>, as with other features
@@ -48,9 +50,14 @@ public static class ServiceCollectionDhcpDnsIntegrationExtension
             DhcpClientRegistryAutoPopulationEventSubscriber
         >();
 
-        // Singleton: it creates a scope per call to reach ILeaseRepository, as DnsFilterEngine
-        // does.
+        // Singleton: it keeps an in-memory snapshot of the active leases and creates a scope per
+        // refresh to reach ILeaseRepository. The invalidator refreshes that snapshot on each
+        // lease change; it is a singleton because the resolver is.
         instance.AddSingleton<DhcpLeaseClientIdentityResolver>();
+        instance.AddSingleton<
+            IDnsServerEventSubscriber<DhcpLeaseChangedEvent>,
+            DhcpLeaseIdentitySnapshotInvalidator
+        >();
 
         // We're done, return the IServiceCollection instance.
         return instance;

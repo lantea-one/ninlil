@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -12,10 +13,22 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 ///     This class builds a host with the Entity Framework storage layer on a temporary SQLite
 ///     database file and the <see cref="StaticAddressMappingClientIdentityResolver" /> under test,
 ///     like <c>Ninlil.Dns.Server.QueryLog.Tests.QueryLogTestHost</c>. It seeds and reads rows
-///     through the repositories, each in a new scope.
+///     through the repositories, each in a new scope. The mapping repository is wrapped so
+///     <see cref="RepositoryCalls" /> counts how often the resolver reads it, and the resolver
+///     runs on <see cref="Time" />, a clock the tests move by hand.
 /// </summary>
 public sealed class StaticAddressMappingTestHost : IAsyncDisposable
 {
+    /// <summary>
+    ///     This property counts repository calls by method name.
+    /// </summary>
+    public ConcurrentDictionary<string, int> RepositoryCalls { get; } = new();
+
+    /// <summary>
+    ///     This property is the clock the resolver's snapshot age is measured on.
+    /// </summary>
+    public ManualTimeProvider Time { get; } = new();
+
     private readonly string _databasePath = Path.Combine(
         Path.GetTempPath(),
         $"ninlil-dns-static-address-mapping-tests-{Guid.NewGuid()}.sqlite3"
@@ -42,6 +55,11 @@ public sealed class StaticAddressMappingTestHost : IAsyncDisposable
             Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
+        CallCountingProxy<IDnsClientStaticAddressMappingRepository>.Decorate(
+            builder.Services,
+            RepositoryCalls
+        );
+        builder.Services.AddSingleton<TimeProvider>(Time);
         builder.Services.AddSingleton<StaticAddressMappingClientIdentityResolver>();
 
         Host = builder.Build();
