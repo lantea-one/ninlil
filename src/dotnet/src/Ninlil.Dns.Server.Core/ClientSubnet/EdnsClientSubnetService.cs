@@ -15,9 +15,12 @@ namespace Ninlil.Dns.Server.Core.ClientSubnet;
 ///     <para>
 ///         <b>Precedence when building an outbound option</b> (highest first):
 ///         <see cref="EdnsClientSubnetOptions.OverrideAddress" />, when set, always wins.
-///         Otherwise an ECS option the client supplied is relayed with the client's address and
-///         source prefix length. The configured prefix lengths are not applied to it, and any
-///         client is trusted. Otherwise the option is built from the client's source address, cut
+///         Otherwise an ECS option the client supplied is used when its scope prefix length is 0
+///         (RFC 7871 §6: a query carries 0); an option with another scope is treated as absent.
+///         The outbound source prefix is the smaller of the client's and the configured one for
+///         its family, so a client cannot make this server disclose more than the operator
+///         allows. A client prefix of 0 stays 0 (opt-out, RFC 7871 §7.1.2). Otherwise the option
+///         is built from the client's source address, cut
 ///         to <see cref="EdnsClientSubnetOptions.SourcePrefixLengthIPv4" /> or
 ///         <see cref="EdnsClientSubnetOptions.SourcePrefixLengthIPv6" />.
 ///     </para>
@@ -84,10 +87,14 @@ public sealed class EdnsClientSubnetService(IOptionsMonitor<EdnsClientSubnetOpti
                 downstreamRequest,
                 out EdnsClientSubnetOptionData clientSupplied
             )
+            && clientSupplied.ScopePrefixLength == 0
         )
             return EdnsClientSubnetCodec.Encode(
                 clientSupplied.Address,
-                clientSupplied.SourcePrefixLength,
+                Math.Min(
+                    clientSupplied.SourcePrefixLength,
+                    DefaultSourcePrefixLength(clientSupplied.Address, currentOptions)
+                ),
                 scopePrefixLength: 0
             );
 

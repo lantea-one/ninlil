@@ -247,8 +247,8 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 | `NINLIL_DNS_SERVER_OUTBOUND_QUERY_POOL_SIZE_PER_ADDRESS_FAMILY` | How many source ports are pre-bound per IP address family. | `128` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_ENABLE` | Whether EDNS Client Subnet (ECS) is attached to outbound recursive queries. | `false` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_OVERRIDE_ADDRESS` | A fixed address to report via ECS instead of the real querying client's address. | *(none)* |
-| `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV4` | IPv4 prefix length truncated into the ECS option. | `24` |
-| `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV6` | IPv6 prefix length truncated into the ECS option. | `56` |
+| `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV4` | IPv4 prefix length truncated into the ECS option; also caps an ECS option a client sends. | `24` |
+| `NINLIL_DNS_SERVER_CLIENT_SUBNET_SOURCE_PREFIX_LENGTH_IPV6` | IPv6 prefix length truncated into the ECS option; also caps an ECS option a client sends. | `56` |
 | `NINLIL_DNS_SERVER_DNS64_ENABLE` | Whether DNS64 (synthesizing AAAA from A for an IPv6-only client) is enabled. | `false` |
 | `NINLIL_DNS_SERVER_DNS64_SYNTHESIS_PREFIX` | The NAT64 prefix used to synthesize an AAAA record. | `64:ff9b::/96` |
 

@@ -10,7 +10,8 @@ namespace Ninlil.Dns.Server.Core.Tests;
 /// <summary>
 ///     This class tests <see cref="EdnsClientSubnetService" /> with a fixed options monitor,
 ///     including its precedence: <see cref="EdnsClientSubnetOptions.OverrideAddress" /> wins,
-///     then a client-supplied ECS option is relayed, and only then is one built from the
+///     then a client-supplied ECS option (scope 0 only) is used with its prefix capped by the
+///     configured length, and only then is one built from the
 ///     client's source address.
 /// </summary>
 public class EdnsClientSubnetServiceTests
@@ -66,7 +67,7 @@ public class EdnsClientSubnetServiceTests
     }
 
     [Fact]
-    public void BuildOutboundOptionRelaysAClientSuppliedOptionUnchangedOverTheRealAddress()
+    public void BuildOutboundOptionUsesAClientSuppliedOptionOverTheRealAddress()
     {
         EdnsClientSubnetService service = CreateService(
             new EdnsClientSubnetOptions { Enable = true, SourcePrefixLengthIPv4 = 24 }
@@ -84,9 +85,88 @@ public class EdnsClientSubnetServiceTests
 
         Assert.NotNull(option);
         Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
-        // The client's /16, not the configured /24, and not DownstreamClient's address.
+        // The client's /16 is below the configured /24, and not DownstreamClient's address.
         Assert.Equal(16, data.SourcePrefixLength);
         Assert.Equal(IPAddress.Parse("192.0.0.0"), data.Address);
+    }
+
+    [Theory]
+    [InlineData("192.0.2.200", 32, "192.0.2.0", 24)]
+    [InlineData("192.0.2.200", 16, "192.0.0.0", 16)]
+    [InlineData("2001:db8:1:2ff::1", 128, "2001:db8:1:200::", 56)]
+    [InlineData("192.0.2.200", 0, "0.0.0.0", 0)]
+    public void BuildOutboundOption_ClientPrefix_IsCappedAtTheConfiguredLength(
+        string clientAddress,
+        int clientPrefix,
+        string expectedAddress,
+        int expectedPrefix
+    )
+    {
+        EdnsClientSubnetService service = CreateService(
+            new EdnsClientSubnetOptions
+            {
+                Enable = true,
+                SourcePrefixLengthIPv4 = 24,
+                SourcePrefixLengthIPv6 = 56,
+            }
+        );
+        DnsEdnsOption clientSupplied = EdnsClientSubnetCodec.Encode(
+            IPAddress.Parse(clientAddress),
+            (byte)clientPrefix,
+            scopePrefixLength: 0
+        );
+
+        DnsEdnsOption option = service.BuildOutboundOption(
+            DownstreamClient,
+            BuildQuery(clientSupplied)
+        );
+
+        Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
+        Assert.Equal(expectedPrefix, data.SourcePrefixLength);
+        Assert.Equal(IPAddress.Parse(expectedAddress), data.Address);
+    }
+
+    [Fact]
+    public void BuildOutboundOption_ClientOptionWithNonZeroScope_IsIgnored()
+    {
+        EdnsClientSubnetService service = CreateService(
+            new EdnsClientSubnetOptions { Enable = true, SourcePrefixLengthIPv4 = 24 }
+        );
+        DnsEdnsOption clientSupplied = EdnsClientSubnetCodec.Encode(
+            IPAddress.Parse("192.0.2.200"),
+            24,
+            scopePrefixLength: 8
+        );
+
+        DnsEdnsOption option = service.BuildOutboundOption(
+            DownstreamClient,
+            BuildQuery(clientSupplied)
+        );
+
+        Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
+        Assert.Equal(24, data.SourcePrefixLength);
+        Assert.Equal(IPAddress.Parse("203.0.113.0"), data.Address);
+    }
+
+    [Fact]
+    public void BuildOutboundOption_OverrideAddress_StillWinsOverAClientOption()
+    {
+        EdnsClientSubnetService service = CreateService(
+            new EdnsClientSubnetOptions { Enable = true, OverrideAddress = "198.51.100.9" }
+        );
+        DnsEdnsOption clientSupplied = EdnsClientSubnetCodec.Encode(
+            IPAddress.Parse("192.0.2.200"),
+            16,
+            scopePrefixLength: 0
+        );
+
+        DnsEdnsOption option = service.BuildOutboundOption(
+            DownstreamClient,
+            BuildQuery(clientSupplied)
+        );
+
+        Assert.True(EdnsClientSubnetCodec.TryDecode(option, out EdnsClientSubnetOptionData data));
+        Assert.Equal(IPAddress.Parse("198.51.100.0"), data.Address);
     }
 
     [Fact]

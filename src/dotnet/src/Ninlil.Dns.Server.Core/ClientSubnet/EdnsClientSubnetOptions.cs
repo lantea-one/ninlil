@@ -25,15 +25,16 @@ public sealed class EdnsClientSubnetOptions
     /// <summary>
     ///     This property contains how many leading bits of an IPv4 address are sent upstream when
     ///     the option is built from the client's source address or
-    ///     <see cref="OverrideAddress" />. It does not limit an ECS option the client supplied
-    ///     (see <see cref="EdnsClientSubnetService" />). The default, 24, is the usual choice:
+    ///     <see cref="OverrideAddress" />. It also caps an ECS option the client supplied: the
+    ///     outbound prefix is the smaller of the client's and this value (see
+    ///     <see cref="EdnsClientSubnetService" />). The default, 24, is the usual choice:
     ///     coarse enough to hide the individual address, fine enough for CDN geolocation.
     /// </summary>
     public byte SourcePrefixLengthIPv4 { get; set; } = 24;
 
     /// <summary>
     ///     This property contains the IPv6 counterpart to <see cref="SourcePrefixLengthIPv4" />.
-    ///     The default, 56, is the usual choice; a /56 is typically one home or small site.
+    ///     It caps a client-supplied option the same way. The default, 56, is the usual choice; a /56 is typically one home or small site.
     /// </summary>
     public byte SourcePrefixLengthIPv6 { get; set; } = 56;
 
