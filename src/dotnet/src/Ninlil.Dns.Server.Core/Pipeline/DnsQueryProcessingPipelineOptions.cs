@@ -3,9 +3,10 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 
 /// <summary>
 ///     This class binds to the <c>DnsServer:Pipeline</c> section of the application's
-///     configuration and controls <see cref="DnsQueryProcessingPipeline" />: its worker pool,
-///     queue size and UDP response limits. The DNS pipeline settings endpoint edits it. The UDP
-///     limits apply at once; the worker count and queue size apply when the pipeline restarts.
+///     configuration and controls <see cref="DnsQueryProcessingPipeline" />: its queue readers,
+///     the number of queries answered at once, the queue size and the UDP response limits. The
+///     DNS pipeline settings endpoint edits it. The UDP limits apply at once; the worker count,
+///     concurrency cap and queue size apply when the pipeline restarts.
 /// </summary>
 public class DnsQueryProcessingPipelineOptions
 {
@@ -15,11 +16,21 @@ public class DnsQueryProcessingPipelineOptions
     public const string SectionName = "DnsServer:Pipeline";
 
     /// <summary>
-    ///     This property contains how many worker tasks process queries from the queue at once.
-    ///     The default is one per processor. A worker waits while its query is resolved
-    ///     (including upstream queries), so this also caps how many queries are in progress.
+    ///     This property contains how many tasks take queries off the queue. The default is one
+    ///     per processor. A worker only starts a query and then reads the next one, so this does
+    ///     not limit how many queries are in progress; <see cref="MaxConcurrentQueries" /> does.
     /// </summary>
     public int WorkerCount { get; set; } = Environment.ProcessorCount;
+
+    /// <summary>
+    ///     This property contains how many queries are answered at once, across all workers. A
+    ///     slow query (a recursion that waits on a lame server, or a stream client that does not
+    ///     read its reply) holds one slot instead of a whole worker, so it cannot stall other
+    ///     clients. When every slot is busy the workers stop reading, the queue fills, and
+    ///     transports wait to enqueue (the kernel drops UDP datagrams). The default, 1000,
+    ///     matches the <c>recursive-clients</c> limit of BIND.
+    /// </summary>
+    public int MaxConcurrentQueries { get; set; } = 1000;
 
     /// <summary>
     ///     This property contains how many unprocessed queries may wait in the queue. When it is

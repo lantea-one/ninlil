@@ -16,5 +16,5 @@ public class DnsPipelineSettingsDetailExample : IExamplesProvider<DnsPipelineSet
     ///     <c>WorkerCount</c> is shown as 8; the real default is
     ///     <see cref="Environment.ProcessorCount" />, which varies by machine.
     /// </summary>
-    public DnsPipelineSettingsDetail GetExamples() => new(8, 4096, 1232, 20, 512);
+    public DnsPipelineSettingsDetail GetExamples() => new(8, 1000, 4096, 1232, 20, 512);
 }

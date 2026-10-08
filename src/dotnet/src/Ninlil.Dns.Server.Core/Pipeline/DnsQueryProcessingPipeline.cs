@@ -20,8 +20,16 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC, DNSCrypt) reads a request and calls
 ///     <see cref="EnqueueAsync" /> with a <see cref="DnsInboundMessage" /> that carries a delegate
 ///     for sending the reply. A pool of worker tasks
-///     (<see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />) drains the bounded queue, so a
-///     burst of queries or one slow query does not stop a transport from reading the next one.
+///     (<see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />) drains the bounded queue.
+///     <para>
+///         <b>Queries run concurrently.</b> A worker only starts a query and then reads the next
+///         one, so a slow query (a recursion waiting on a lame server) holds a slot, not a worker.
+///         At most <see cref="DnsQueryProcessingPipelineOptions.MaxConcurrentQueries" /> queries
+///         are in progress. A worker takes a slot before it reads from the queue, so when every
+///         slot is busy the queue fills and transports wait to enqueue. That is the intended
+///         backpressure, as it is for BIND's <c>recursive-clients</c>. <see cref="StopAsync" />
+///         cancels the queries in progress and waits for them to finish.
+///     </para>
 ///     <para>
 ///         <b>Every query is answered or reported.</b> For each message a worker takes off the
 ///         queue, the pipeline calls exactly one of <see cref="DnsInboundMessage.RespondAsync" /> and
@@ -61,7 +69,8 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///         (<see cref="DnsQueryProcessingPipelineOptions.MaxUdpPayloadSizeOctets" />,
 ///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" /> and
 ///         <see cref="DnsQueryProcessingPipelineOptions.MinUdpAmplificationFloorSizeOctets" />) are
-///         read on every query. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" /> and
+///         read on every query. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />,
+///         <see cref="DnsQueryProcessingPipelineOptions.MaxConcurrentQueries" /> and
 ///         <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> are read only in
 ///         <see cref="StartAsync" />, so a change to them needs this service restarted. It is
 ///         registered in <c>Ninlil.Web.Services.ManagedServiceRegistry</c> as
@@ -71,7 +80,7 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     </para>
 /// </summary>
 /// <param name="dispatcher">The dispatcher every query that passes the checks is resolved through.</param>
-/// <param name="options">The worker count, queue capacity and UDP size limits.</param>
+/// <param name="options">The worker count, concurrency cap, queue capacity and UDP size limits.</param>
 /// <param name="logger">The logger this pipeline records per-query failures to.</param>
 /// <param name="filterEngine">
 ///     The block/allow list engine, used for the client check, the domain check and the response
@@ -133,6 +142,13 @@ public sealed class DnsQueryProcessingPipeline(
     private readonly List<Task> _workers = [];
 
     /// <summary>
+    ///     This field counts the queries in progress for the latest <see cref="StartAsync" />, so
+    ///     <see cref="StopAsync" /> can wait for them. It is replaced on each start, so a
+    ///     query left over from an earlier run cannot hold up a later stop.
+    /// </summary>
+    private InFlightTracker _inFlight = new();
+
+    /// <summary>
     ///     This field contains the source that tells the workers to stop. It is recreated by each
     ///     <see cref="StartAsync" /> because a <see cref="CancellationTokenSource" /> cannot be
     ///     cancelled twice.
@@ -176,10 +192,15 @@ public sealed class DnsQueryProcessingPipeline(
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _workers.Clear();
 
+        InFlightTracker inFlight = new();
+        _inFlight = inFlight;
+        SemaphoreSlim slots = new(Math.Max(1, options.CurrentValue.MaxConcurrentQueries));
+        CancellationToken stoppingToken = _stoppingCts.Token;
+
         for (int i = 0; i < options.CurrentValue.WorkerCount; i++)
             _workers.Add(
                 Task.Run(
-                    () => ProcessQueueAsync(channel, _stoppingCts.Token),
+                    () => ProcessQueueAsync(channel, slots, inFlight, stoppingToken),
                     CancellationToken.None
                 )
             );
@@ -190,9 +211,10 @@ public sealed class DnsQueryProcessingPipeline(
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        // Stop accepting work, tell the workers to stop, and wait for them until the host's
-        // shutdown timeout.
-        Volatile.Read(ref _channel).Writer.TryComplete();
+        // Stop accepting work, tell the workers and the queries in progress to stop, and wait
+        // for both until the host's shutdown timeout.
+        Channel<DnsInboundMessage> channel = Volatile.Read(ref _channel);
+        channel.Writer.TryComplete();
 
         // StopAsync can run twice: under WebApplicationFactory, the Program.cs Run() thread and
         // the factory's teardown both stop the same host, and the second call can arrive after
@@ -208,81 +230,196 @@ public sealed class DnsQueryProcessingPipeline(
 
         try
         {
+            // The workers go first: once they have all stopped, no new query can start, so
+            // the in-flight count can only fall.
             await Task.WhenAll(_workers).WaitAsync(cancellationToken);
+            await _inFlight.WhenIdle.WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
-            // The shutdown timeout elapsed before every worker finished.
+            // The shutdown timeout elapsed before every worker or query finished.
         }
+
+        // A message still queued will never be read. Tell its transport, so a request held open
+        // (DNS-over-HTTPS) does not wait for its backstop.
+        while (channel.Reader.TryRead(out DnsInboundMessage abandoned))
+            NotifyDropped(abandoned, DnsQueryDropReasonEnum.Failed);
     }
 
     /// <summary>
-    ///     This method is the body of one worker task: take queries off the queue one at a time
-    ///     until told to stop. It is given the channel its <see cref="StartAsync" /> created
-    ///     rather than reading <c>_channel</c>, which a restart may already have replaced.
+    ///     This method is the body of one worker task: take a slot, read the next query, start it
+    ///     without waiting for it, and repeat until told to stop. The slot comes first so a
+    ///     waiting query stays in the queue, where <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" />
+    ///     bounds it, instead of sitting in a worker. It is given the channel its
+    ///     <see cref="StartAsync" /> created rather than reading <c>_channel</c>, which a restart
+    ///     may already have replaced.
     /// </summary>
     private async Task ProcessQueueAsync(
         Channel<DnsInboundMessage> channel,
+        SemaphoreSlim slots,
+        InFlightTracker inFlight,
         CancellationToken stoppingToken
     )
     {
         try
         {
-            await foreach (DnsInboundMessage queued in channel.Reader.ReadAllAsync(stoppingToken))
+            while (true)
             {
-                // Wrap the message so the pipeline knows whether a step already replied or
-                // reported a drop. The catch blocks below then report Failed only when nothing
-                // else has, which keeps the "exactly one" rule of the class summary.
-                bool settled = false;
-                DnsInboundMessage message = queued with
-                {
-                    RespondAsync = (responseBytes, token) =>
-                    {
-                        settled = true;
-                        return queued.RespondAsync(responseBytes, token);
-                    },
-                    OnDropped = reason =>
-                    {
-                        settled = true;
-                        NotifyDropped(queued, reason);
-                    },
-                };
+                await slots.WaitAsync(stoppingToken);
 
+                DnsInboundMessage queued;
                 try
                 {
-                    await ProcessSingleMessageAsync(message, stoppingToken);
+                    queued = await channel.Reader.ReadAsync(stoppingToken);
                 }
-                catch (OperationCanceledException)
+                catch
                 {
-                    // Shutdown in the middle of a query: tell the transport, then stop the worker.
-                    if (!settled)
-                        NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
-
+                    slots.Release();
                     throw;
                 }
-                catch (Exception exception)
-                {
-                    // One failing query must not stop the worker that serves the rest of the queue.
-                    logger.LogError(
-                        exception,
-                        "Unhandled exception while processing a DNS query from {RemoteAddress}.",
-                        message.RemoteAddress
-                    );
 
-                    if (!settled)
-                        NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
-                }
+                // Counted before the task starts, so StopAsync cannot see "idle" in between.
+                inFlight.Enter();
+                _ = Task.Run(
+                    () => HandleMessageAsync(queued, slots, inFlight, stoppingToken),
+                    CancellationToken.None
+                );
             }
         }
         catch (OperationCanceledException)
         {
             // Expected during a graceful shutdown.
         }
+        catch (ChannelClosedException)
+        {
+            // The queue was completed and is empty.
+        }
     }
 
     /// <summary>
-    ///     This method calls the transport's drop notifier. A notifier that throws must not stop
-    ///     the worker, so the exception is logged and swallowed.
+    ///     This method runs one query as its own task and gives its slot back when done. It never
+    ///     throws, so the task it runs on cannot fault unobserved.
+    /// </summary>
+    private async Task HandleMessageAsync(
+        DnsInboundMessage queued,
+        SemaphoreSlim slots,
+        InFlightTracker inFlight,
+        CancellationToken stoppingToken
+    )
+    {
+        try
+        {
+            // Wrap the message so the pipeline knows whether a step already replied or
+            // reported a drop. The catch blocks below then report Failed only when nothing
+            // else has, which keeps the "exactly one" rule of the class summary.
+            bool settled = false;
+            DnsInboundMessage message = queued with
+            {
+                RespondAsync = (responseBytes, token) =>
+                {
+                    settled = true;
+                    return queued.RespondAsync(responseBytes, token);
+                },
+                OnDropped = reason =>
+                {
+                    settled = true;
+                    NotifyDropped(queued, reason);
+                },
+            };
+
+            try
+            {
+                await ProcessSingleMessageAsync(message, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown in the middle of a query: tell the transport.
+                if (!settled)
+                    NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
+            }
+            catch (Exception exception)
+            {
+                // One failing query must not affect the others.
+                logger.LogError(
+                    exception,
+                    "Unhandled exception while processing a DNS query from {RemoteAddress}.",
+                    message.RemoteAddress
+                );
+
+                if (!settled)
+                    NotifyDropped(queued, DnsQueryDropReasonEnum.Failed);
+            }
+        }
+        catch (Exception exception)
+        {
+            // Not expected: the steps above already catch. Observed here so a fault cannot go
+            // unobserved.
+            logger.LogDebug(exception, "A DNS query task failed while reporting its outcome.");
+        }
+        finally
+        {
+            slots.Release();
+            inFlight.Exit();
+        }
+    }
+
+    /// <summary>
+    ///     This class counts the queries in progress and offers a task that completes when the
+    ///     count is zero. A lock guards it because queries start on a worker and end on the thread
+    ///     pool.
+    /// </summary>
+    private sealed class InFlightTracker
+    {
+        private readonly Lock _lock = new();
+        private int _count;
+        private TaskCompletionSource _idle;
+
+        /// <summary>
+        ///     This property returns a task that is complete while no query is in progress.
+        /// </summary>
+        public Task WhenIdle
+        {
+            get
+            {
+                lock (_lock)
+                    return _count == 0 ? Task.CompletedTask : _idle.Task;
+            }
+        }
+
+        /// <summary>
+        ///     This method records the start of a query.
+        /// </summary>
+        public void Enter()
+        {
+            lock (_lock)
+            {
+                if (_count++ == 0)
+                    _idle = new TaskCompletionSource(
+                        TaskCreationOptions.RunContinuationsAsynchronously
+                    );
+            }
+        }
+
+        /// <summary>
+        ///     This method records the end of a query.
+        /// </summary>
+        public void Exit()
+        {
+            TaskCompletionSource idle = null;
+
+            lock (_lock)
+            {
+                if (--_count == 0)
+                    idle = _idle;
+            }
+
+            idle?.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    ///     This method calls the transport's drop notifier. A notifier that throws must not
+    ///     fail the query task, so the exception is logged and swallowed.
     /// </summary>
     private void NotifyDropped(DnsInboundMessage message, DnsQueryDropReasonEnum reason)
     {

@@ -17,7 +17,7 @@ namespace Ninlil.Web.Controllers;
 
 /// <summary>
 ///     This controller reads and writes <see cref="DnsQueryProcessingPipelineOptions" />: the
-///     query pipeline's worker count and queue size, and its UDP response-size and amplification
+///     query pipeline's worker count, concurrent-query cap and queue size, and its UDP response-size and amplification
 ///     limits. Reading needs <c>dnspipelinesettings:read</c> and writing needs
 ///     <c>dnspipelinesettings:write</c>.
 ///     <para>
@@ -25,9 +25,10 @@ namespace Ninlil.Web.Controllers;
 ///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpPayloadSizeOctets" />,
 ///         <see cref="DnsQueryProcessingPipelineOptions.MaxUdpAmplificationFactor" /> and
 ///         <see cref="DnsQueryProcessingPipelineOptions.MinUdpAmplificationFloorSizeOctets" /> are
-///         read on every query. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" /> and
-///         <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> size the worker pool
-///         and the <see cref="System.Threading.Channels.Channel{T}" /> that
+///         read on every query. <see cref="DnsQueryProcessingPipelineOptions.WorkerCount" />,
+///         <see cref="DnsQueryProcessingPipelineOptions.MaxConcurrentQueries" /> and
+///         <see cref="DnsQueryProcessingPipelineOptions.ChannelCapacity" /> size the worker pool,
+///         the concurrency slots and the <see cref="System.Threading.Channels.Channel{T}" /> that
 ///         <see cref="DnsQueryProcessingPipeline" /> builds in <c>StartAsync</c>, so they apply
 ///         after restarting that service (<c>POST
 ///         /api/services/query-processing-pipeline/restart</c>) or the process. The
@@ -54,6 +55,7 @@ public class DnsPipelineSettingsController(
         Ok(
             new DnsPipelineSettingsDetail(
                 pipelineOptions.CurrentValue.WorkerCount,
+                pipelineOptions.CurrentValue.MaxConcurrentQueries,
                 pipelineOptions.CurrentValue.ChannelCapacity,
                 pipelineOptions.CurrentValue.MaxUdpPayloadSizeOctets,
                 pipelineOptions.CurrentValue.MaxUdpAmplificationFactor,
@@ -64,8 +66,8 @@ public class DnsPipelineSettingsController(
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Pipeline</c> as an RFC 7396 merge
     ///     patch, through <see cref="PresetConfigurationFileApplier" />. The response note depends
-    ///     on whether the worker or queue size, a UDP limit, or both were changed. Returns 400 for
-    ///     a worker count or capacity below 1, a size outside 1-65535, or an amplification factor
+    ///     on whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns
+    ///     400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor
     ///     that is not above 0. Requires <c>dnspipelinesettings:write</c>.
     /// </summary>
     [HttpPatch]
@@ -90,6 +92,28 @@ public class DnsPipelineSettingsController(
                     DnsQueryProcessingPipelineOptions.SectionName,
                     nameof(DnsQueryProcessingPipelineOptions.WorkerCount),
                     workerCount
+                )
+            );
+            touchedRestartRequiredField = true;
+        }
+
+        if (
+            patch.TryGetMergePatchField(
+                "maxConcurrentQueries",
+                out JsonElement maxConcurrentQueriesElement
+            )
+        )
+        {
+            int maxConcurrentQueries = maxConcurrentQueriesElement.GetInt32();
+
+            if (maxConcurrentQueries < 1)
+                throw new ValidationException("'maxConcurrentQueries' must be at least 1.");
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    DnsQueryProcessingPipelineOptions.SectionName,
+                    nameof(DnsQueryProcessingPipelineOptions.MaxConcurrentQueries),
+                    maxConcurrentQueries
                 )
             );
             touchedRestartRequiredField = true;

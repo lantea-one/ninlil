@@ -179,28 +179,28 @@ public record RuntimeSettingsWriteResult(string Note)
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.DnsPipelineSettingsController" />
-    ///     returns when a write changed only <c>workerCount</c> or <c>channelCapacity</c>. Those
-    ///     size the worker pool and the <see cref="System.Threading.Channels.Channel{T}" /> that
+    ///     returns when a write changed only <c>workerCount</c>, <c>maxConcurrentQueries</c> or
+    ///     <c>channelCapacity</c>. Those size the worker pool, the concurrency slots and the <see cref="System.Threading.Channels.Channel{T}" /> that
     ///     <c>DnsQueryProcessingPipeline.StartAsync</c> builds, so they apply when the pipeline
     ///     restarts. The pipeline can be restarted alone: <c>Ninlil.Web.Services.ManagedServiceRegistry</c>
     ///     registers it as <c>"query-processing-pipeline"</c>.
     /// </summary>
     public const string PipelineWorkerRestartRequiredNote =
-        "Written to the configuration file. 'workerCount'/'channelCapacity' size a fixed worker "
-        + "pool and queue built once, when this pipeline's own service starts -- restarting it "
+        "Written to the configuration file. 'workerCount'/'maxConcurrentQueries'/'channelCapacity' "
+        + "size a fixed worker pool, concurrency limit and queue built once, when this pipeline's own service starts -- restarting it "
         + "specifically (POST /api/services/query-processing-pipeline/restart) -- or a full "
         + "process restart -- is needed for this change to take effect.";
 
     /// <summary>
     ///     This constant contains the note <see cref="Controllers.DnsPipelineSettingsController" />
     ///     returns when one write changed a UDP safety field (applied at once) together with
-    ///     <c>workerCount</c> or <c>channelCapacity</c> (see
+    ///     <c>workerCount</c>, <c>maxConcurrentQueries</c> or <c>channelCapacity</c> (see
     ///     <see cref="PipelineWorkerRestartRequiredNote" />).
     /// </summary>
     public const string PipelineMixedReloadNote =
         "Written to the configuration file. 'maxUdpPayloadSizeOctets'/'maxUdpAmplificationFactor'/"
         + "'minUdpAmplificationFloorSizeOctets' took effect immediately, no restart required; "
-        + "'workerCount'/'channelCapacity' in this same write are read once when this pipeline's "
+        + "'workerCount'/'maxConcurrentQueries'/'channelCapacity' in this same write are read once when this pipeline's "
         + "own service starts, so restarting it specifically (POST "
         + "/api/services/query-processing-pipeline/restart) -- or a full process restart -- is "
         + "needed for those changes to take effect.";

@@ -14,7 +14,7 @@ public class DnsPipelineSettingsPatchRequestExample : IExamplesProvider<JsonElem
 {
     /// <summary>
     ///     This method returns a patch that lowers the amplification cap, a field that takes effect
-    ///     at once, unlike <c>workerCount</c> and <c>channelCapacity</c>.
+    ///     at once, unlike <c>workerCount</c>, <c>maxConcurrentQueries</c> and <c>channelCapacity</c>.
     /// </summary>
     public JsonElement GetExamples() =>
         JsonDocument.Parse("""{ "maxUdpAmplificationFactor": 10 }""").RootElement.Clone();

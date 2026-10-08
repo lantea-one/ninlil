@@ -231,7 +231,8 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NINLIL_DNS_SERVER_PIPELINE_WORKER_COUNT` | How many concurrent worker tasks process queued queries. | `16` |
+| `NINLIL_DNS_SERVER_PIPELINE_WORKER_COUNT` | How many tasks take queries off the queue. | processor count |
+| `NINLIL_DNS_SERVER_PIPELINE_MAX_CONCURRENT_QUERIES` | How many queries are answered at once. When all slots are busy, queries wait in the queue (and transports wait to enqueue). | `1000` |
 | `NINLIL_DNS_SERVER_PIPELINE_CHANNEL_CAPACITY` | The bounded channel capacity queries wait in before a worker picks them up. | `4096` |
 | `NINLIL_DNS_SERVER_PIPELINE_MAX_UDP_PAYLOAD_SIZE_OCTETS` | Maximum UDP response size before truncation/EDNS fragmentation logic applies. | `1232` |
 | `NINLIL_DNS_SERVER_PIPELINE_MIN_UDP_AMPLIFICATION_FLOOR_SIZE_OCTETS` | The minimum request size below which the amplification-factor check is skipped entirely. | `512` |

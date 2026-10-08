@@ -274,6 +274,13 @@ public sealed class DnsQueryProcessingPipelineHotReloadTests
                         nameof(DnsQueryProcessingPipelineOptions.WorkerCount),
                         1
                     ),
+                    // One query at a time, so a blocked query A really does leave the queue
+                    // to fill; the default cap would let the worker start B and C as well.
+                    new Server.Presets.PresetConfigurationSetting(
+                        DnsQueryProcessingPipelineOptions.SectionName,
+                        nameof(DnsQueryProcessingPipelineOptions.MaxConcurrentQueries),
+                        1
+                    ),
                     new Server.Presets.PresetConfigurationSetting(
                         DnsQueryProcessingPipelineOptions.SectionName,
                         nameof(DnsQueryProcessingPipelineOptions.ChannelCapacity),

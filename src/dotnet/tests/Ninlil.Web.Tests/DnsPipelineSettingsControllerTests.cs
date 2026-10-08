@@ -16,8 +16,8 @@ namespace Ninlil.Web.Tests;
 ///     in-process host, signed in as the bootstrap administrator. Patches are checked by reading
 ///     the host's temporary settings file
 ///     (<see cref="NinlilDnsWebApplicationFactory.RuntimeConfigurationFilePath" />) and by the
-///     returned note, which has three forms because <c>workerCount</c> and
-///     <c>channelCapacity</c> need a worker restart while the three UDP fields hot-reload. Each
+///     returned note, which has three forms because <c>workerCount</c>,
+///     <c>maxConcurrentQueries</c> and <c>channelCapacity</c> need a worker restart while the three UDP fields hot-reload. Each
 ///     patch test writes the defaults back afterwards.
 /// </summary>
 [Collection(WebTestCollection.Name)]
@@ -69,6 +69,7 @@ public class DnsPipelineSettingsControllerTests(NinlilDnsWebApplicationFactory f
         // The compiled-in defaults. WorkerCount defaults to Environment.ProcessorCount, which
         // varies by machine, so it is only checked to be positive.
         Assert.True(detail.WorkerCount > 0);
+        Assert.Equal(1000, detail.MaxConcurrentQueries);
         Assert.Equal(4096, detail.ChannelCapacity);
         Assert.Equal(1232, detail.MaxUdpPayloadSizeOctets);
         Assert.Equal(20, detail.MaxUdpAmplificationFactor);
@@ -168,6 +169,47 @@ public class DnsPipelineSettingsControllerTests(NinlilDnsWebApplicationFactory f
                 )
             );
         }
+    }
+
+    [Fact]
+    public async Task Patch_WithMaxConcurrentQueries_PersistsItAndReturnsTheWorkerRestartRequiredNote()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        try
+        {
+            HttpResponseMessage response = await client.SendAsync(
+                PatchRequest("/api/dns-pipeline-settings", new { maxConcurrentQueries = 50 })
+            );
+            response.EnsureSuccessStatusCode();
+
+            RuntimeSettingsWriteResult result =
+                await response.Content.ReadFromJsonAsync<RuntimeSettingsWriteResult>();
+            Assert.Equal(RuntimeSettingsWriteResult.PipelineWorkerRestartRequiredNote, result.Note);
+
+            JsonObject root = (JsonObject)
+                JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+            JsonObject section = (JsonObject)root["DnsServer"]["Pipeline"];
+            Assert.Equal(50, section["MaxConcurrentQueries"].GetValue<int>());
+        }
+        finally
+        {
+            await client.SendAsync(
+                PatchRequest("/api/dns-pipeline-settings", new { maxConcurrentQueries = 1000 })
+            );
+        }
+    }
+
+    [Fact]
+    public async Task Patch_WithAZeroMaxConcurrentQueries_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dns-pipeline-settings", new { maxConcurrentQueries = 0 })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
