@@ -26,7 +26,10 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///         an IPv6 neighbor-table entry still marks a device registered only by its IPv4 MAC. A
 ///         source-address sighting is first resolved to an identity through
 ///         <see cref="IClientIdentityResolver" />, once per distinct address per flush rather than
-///         once per query. Only already-known addresses are ever updated; a sighting of an unknown
+///         once per query. The tracker caps that buffer at
+///         <see cref="ClientPresenceTracker.MaxSourceAddressesPerFlush" /> addresses, so a flush
+///         resolves a bounded number; when addresses were refused, the flush logs one warning
+///         with the count. Only already-known addresses are ever updated; a sighting of an unknown
 ///         device is dropped, since presence tracking never registers devices itself.
 ///     </para>
 ///     <para>
@@ -103,6 +106,13 @@ public sealed class ClientPresenceFlushService(
     public async Task<int> FlushAsync(CancellationToken stoppingToken = default)
     {
         ClientPresenceSnapshot snapshot = tracker.Drain();
+        if (snapshot.DroppedSourceAddresses > 0)
+            logger.LogWarning(
+                "Client presence buffer was full: {DroppedCount} new source addresses were not recorded since the last flush (limit {Limit}). Possible spoofed-source flood.",
+                snapshot.DroppedSourceAddresses,
+                ClientPresenceTracker.MaxSourceAddressesPerFlush
+            );
+
         if (snapshot.IsEmpty)
             return 0;
 

@@ -15,9 +15,23 @@ namespace Ninlil.Dns.Server.ClientIdentity.Presence;
 ///     them. Coalescing is what keeps this cheap enough for the hot query path -- a device sending
 ///     a thousand queries between flushes costs one dictionary entry, not a thousand writes.
 ///     Registered as a singleton.
+///     <para>
+///         Source addresses come from the network and can be spoofed, so the source-address buffer
+///         holds at most <see cref="MaxSourceAddressesPerFlush" /> distinct addresses between
+///         flushes. Further new addresses are counted and dropped (see
+///         <see cref="ClientPresenceSnapshot.DroppedSourceAddresses" />), while an address already
+///         in the buffer keeps updating. The identity and hardware buffers are keyed by values
+///         that only trusted sources (DHCP, the neighbor table) produce, so they need no cap.
+///     </para>
 /// </summary>
 public sealed class ClientPresenceTracker : IClientPresenceRecorder
 {
+    /// <summary>
+    ///     This field is the most distinct source addresses buffered between two flushes. At
+    ///     about 100 bytes each, a full buffer is a few megabytes.
+    /// </summary>
+    public const int MaxSourceAddressesPerFlush = 65_536;
+
     /// <summary>
     ///     This field contains pending identity sightings, keyed by protocol version and
     ///     lowercased identifier.
@@ -37,6 +51,19 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
     ///     This field contains pending source-address sightings awaiting identity resolution.
     /// </summary>
     private ConcurrentDictionary<IPAddress, Sighting> _sourceAddresses = new();
+
+    /// <summary>
+    ///     This field counts the distinct entries added to <see cref="_sourceAddresses" />, so
+    ///     the cap check does not lock the whole dictionary the way <c>Count</c> does. Under
+    ///     concurrent adds the buffer can overshoot the cap by a few entries.
+    /// </summary>
+    private int _sourceAddressCount;
+
+    /// <summary>
+    ///     This field counts new source addresses refused since the last drain because the
+    ///     buffer was full.
+    /// </summary>
+    private long _droppedSourceAddresses;
 
     /// <inheritdoc />
     public void RecordIdentity(
@@ -84,7 +111,26 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
             return;
 
         IPAddress normalized = Normalize(address);
-        Record(_sourceAddresses, normalized, new Sighting(normalized, seenAtUtc));
+        Sighting sighting = new(normalized, seenAtUtc);
+        ConcurrentDictionary<IPAddress, Sighting> buffer = _sourceAddresses;
+
+        // A known address only updates its sighting. A new one is stored only below the cap.
+        if (buffer.ContainsKey(normalized))
+        {
+            Record(buffer, normalized, sighting);
+            return;
+        }
+
+        if (Volatile.Read(ref _sourceAddressCount) >= MaxSourceAddressesPerFlush)
+        {
+            Interlocked.Increment(ref _droppedSourceAddresses);
+            return;
+        }
+
+        if (buffer.TryAdd(normalized, sighting))
+            Interlocked.Increment(ref _sourceAddressCount);
+        else
+            Record(buffer, normalized, sighting);
     }
 
     /// <summary>
@@ -95,12 +141,21 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
     ///     restores it.
     /// </summary>
     /// <returns>The drained sightings.</returns>
-    public ClientPresenceSnapshot Drain() =>
-        new(
+    public ClientPresenceSnapshot Drain()
+    {
+        ClientPresenceSnapshot snapshot = new(
             Interlocked.Exchange(ref _identities, NewIdentityBuffer()),
             Interlocked.Exchange(ref _hardwareAddresses, new()),
             Interlocked.Exchange(ref _sourceAddresses, new())
-        );
+        )
+        {
+            DroppedSourceAddresses = Interlocked.Exchange(ref _droppedSourceAddresses, 0),
+        };
+
+        // Reset after the swap; an add racing this reset is counted against the new buffer.
+        Interlocked.Exchange(ref _sourceAddressCount, 0);
+        return snapshot;
+    }
 
     /// <summary>
     ///     This method keeps whichever of the existing and new sighting is more recent.
@@ -151,6 +206,13 @@ public sealed record ClientPresenceSnapshot(
     IReadOnlyDictionary<IPAddress, Sighting> SourceAddresses
 )
 {
+    /// <summary>
+    ///     This property is how many new source addresses were refused because the buffer held
+    ///     <see cref="ClientPresenceTracker.MaxSourceAddressesPerFlush" /> addresses. It is zero
+    ///     in normal use; a non-zero value means a flood of spoofed or rotating sources.
+    /// </summary>
+    public long DroppedSourceAddresses { get; init; }
+
     /// <summary>
     ///     This property indicates whether the snapshot holds no sightings at all.
     /// </summary>

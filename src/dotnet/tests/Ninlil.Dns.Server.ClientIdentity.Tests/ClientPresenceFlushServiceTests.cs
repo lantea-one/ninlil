@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -231,6 +232,54 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
 
         Assert.Equal(0, await _flush.FlushAsync());
         Assert.Equal(newer, (await ReadAsync(ids[0])).LastSeenUtc);
+    }
+
+    /// <summary>
+    ///     This test checks that when the tracker refused source addresses because it was full,
+    ///     the flush logs one warning with the count.
+    /// </summary>
+    [Fact]
+    public async Task AFlushAfterTheSourceBufferOverflowed_LogsOneWarningWithTheDropCount()
+    {
+        RecordingLogger logger = new();
+        ClientPresenceFlushService flush = new(
+            _tracker,
+            _host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new StaticOptionsMonitor<ClientPresenceOptions>(new ClientPresenceOptions()),
+            logger
+        );
+        for (int i = 0; i < ClientPresenceTracker.MaxSourceAddressesPerFlush + 7; i++)
+            _tracker.RecordSourceAddress(
+                new IPAddress([10, (byte)(i >> 16), (byte)(i >> 8), (byte)i]),
+                DateTimeOffset.UtcNow
+            );
+
+        await flush.FlushAsync();
+
+        (LogLevel level, string message) = Assert.Single(logger.Messages);
+        Assert.Equal(LogLevel.Warning, level);
+        Assert.Contains("7 new source addresses", message);
+    }
+
+    /// <summary>
+    ///     This class keeps every message logged to it, rendered.
+    /// </summary>
+    private sealed class RecordingLogger : ILogger<ClientPresenceFlushService>
+    {
+        public List<(LogLevel, string)> Messages { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state)
+            where TState : notnull => NullLogger.Instance.BeginScope(state);
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        ) => Messages.Add((logLevel, formatter(state, exception)));
     }
 
     /// <summary>
