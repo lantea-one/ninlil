@@ -81,6 +81,20 @@ public class BackupCrudTests(NinlilDnsWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Create_WithAWhitespaceOnlyPassphrase_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/backup",
+            new BackupCreateRequest("            ")
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("only spaces", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Create_WithAValidPassphrase_ReturnsADownloadableEncryptedArchive()
     {
         HttpClient client = await CreateAuthenticatedClientAsync();

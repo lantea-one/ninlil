@@ -21,14 +21,15 @@ public interface IBackupService
     ///     encrypted with a weak default key) when it is not.
     /// </summary>
     /// <param name="passphrase">
-    ///     The passphrase to encrypt the archive with, or null or blank for no encryption. It must
-    ///     be at least <c>BackupOptions.MinimumPassphraseLength</c> characters. The server never
-    ///     stores it, so a lost passphrase means the archive cannot be decrypted.
+    ///     The passphrase to encrypt the archive with, or null or empty for no encryption. A
+    ///     passphrase of only whitespace is rejected. It must be at least
+    ///     <c>BackupOptions.MinimumPassphraseLength</c> characters. The server never stores it, so
+    ///     a lost passphrase means the archive cannot be decrypted.
     /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The bytes of the archive file.</returns>
     /// <exception cref="ArgumentException">
-    ///     Thrown when <paramref name="passphrase" /> is given but too short.
+    ///     Thrown when <paramref name="passphrase" /> is given but only whitespace or too short.
     /// </exception>
     Task<byte[]> CreateBackupAsync(string passphrase, CancellationToken stoppingToken = default);
 

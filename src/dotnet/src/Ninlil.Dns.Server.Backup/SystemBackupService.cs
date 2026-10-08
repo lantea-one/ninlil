@@ -105,9 +105,10 @@ public sealed partial class SystemBackupService(
         CancellationToken stoppingToken = default
     )
     {
-        // A null or blank passphrase means the operator chose no encryption, which is not an
-        // error. Only a passphrase that is given but too short is rejected.
-        bool encrypt = !string.IsNullOrWhiteSpace(passphrase);
+        // A null or empty passphrase means the operator chose no encryption, which is not an
+        // error. A passphrase that is given but whitespace only or too short is rejected. It is
+        // never trimmed, because trimming would change the derived key.
+        bool encrypt = !string.IsNullOrEmpty(passphrase);
         if (encrypt)
             ValidatePassphrase(passphrase);
 
@@ -447,15 +448,19 @@ public sealed partial class SystemBackupService(
     /// <summary>
     ///     This method rejects a passphrase shorter than
     ///     <see cref="BackupOptions.MinimumPassphraseLength" />. <see cref="CreateBackupAsync" />
-    ///     calls it only when a passphrase was given. A short passphrase would make the archive
-    ///     easy to brute-force whatever the cipher.
+    ///     calls it only when a non-empty passphrase was given. It also rejects a passphrase of
+    ///     only whitespace, which is almost certainly a slip rather than a chosen secret. A short
+    ///     passphrase would make the archive easy to brute-force whatever the cipher.
     /// </summary>
     private void ValidatePassphrase(string passphrase)
     {
-        if (
-            string.IsNullOrWhiteSpace(passphrase)
-            || passphrase.Length < backupOptions.Value.MinimumPassphraseLength
-        )
+        if (string.IsNullOrWhiteSpace(passphrase))
+            throw new ArgumentException(
+                "A passphrase cannot be only spaces. Leave it empty for an unencrypted backup.",
+                nameof(passphrase)
+            );
+
+        if (passphrase.Length < backupOptions.Value.MinimumPassphraseLength)
             throw new ArgumentException(
                 $"A backup passphrase must be at least {backupOptions.Value.MinimumPassphraseLength} characters long.",
                 nameof(passphrase)

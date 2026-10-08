@@ -566,6 +566,33 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         await Assert.ThrowsAsync<ArgumentException>(() => backupService.CreateBackupAsync("short"));
     }
 
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("            ")]
+    [InlineData("\t \n")]
+    public async Task CreateBackupWithAWhitespaceOnlyPassphraseThrowsArgumentException(
+        string passphrase
+    )
+    {
+        IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
+
+        ArgumentException exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            backupService.CreateBackupAsync(passphrase)
+        );
+
+        Assert.Contains("only spaces", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateBackupWithAnEmptyPassphraseProducesAnUnencryptedArchive()
+    {
+        IBackupService backupService = _host.Services.GetRequiredService<IBackupService>();
+
+        byte[] archive = await backupService.CreateBackupAsync("");
+
+        Assert.Equal(BackupArchiveKind.Unencrypted, BackupArchiveCodec.PeekKind(archive));
+    }
+
     [Fact]
     public async Task CreateBackupWithNoPassphraseProducesAnUnencryptedArchiveThatRestoresWithoutOne()
     {

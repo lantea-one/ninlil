@@ -7,8 +7,9 @@ namespace Ninlil.Web.Models;
 ///     This record is the request body for <see cref="Controllers.BackupController.Create" />.
 /// </summary>
 /// <param name="Passphrase">
-///     The passphrase to encrypt the archive with, or null or blank for an unencrypted archive
-///     whose header marks it as such (no weak or derived default key is used). The server never
+///     The passphrase to encrypt the archive with, or null or empty for an unencrypted archive
+///     whose header marks it as such (no weak or derived default key is used). A passphrase of
+///     only whitespace is rejected. The server never
 ///     stores the passphrase, so losing it means the archive can never be decrypted.
 /// </param>
 public sealed record BackupCreateRequest(string Passphrase);

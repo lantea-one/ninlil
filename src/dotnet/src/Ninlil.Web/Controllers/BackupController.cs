@@ -50,7 +50,7 @@ public class BackupController(IBackupService backupService, ILogger<BackupContro
     ///     (<c>application/octet-stream</c>, <c>ninlil-backup-*.ltbk</c>), not JSON. With
     ///     <see cref="BackupCreateRequest.Passphrase" /> the archive is encrypted with AES-256-GCM;
     ///     without one it is unencrypted and marked as such in its header. Returns 400 when the
-    ///     passphrase is too short. Requires <c>backup:read</c>.
+    ///     passphrase is only whitespace or too short. Requires <c>backup:read</c>.
     /// </summary>
     /// <param name="request">The passphrase to encrypt the archive with; omit it for no encryption.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
