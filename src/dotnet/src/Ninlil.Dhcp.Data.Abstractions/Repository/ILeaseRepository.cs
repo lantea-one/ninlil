@@ -59,7 +59,8 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     ///     This method looks up the active lease, if any, for an IP address across all scopes.
     ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseClientIdentityResolver</c> uses it, since
     ///     it knows only the address a DNS query came from, not the scope. Only the
-    ///     <see cref="LeaseEntity.State" /> is checked, not the expiry time.
+    ///     <see cref="LeaseEntity.State" /> is checked, not the expiry time; use
+    ///     <see cref="ListActiveAsync" /> when expiry matters.
     /// </summary>
     /// <param name="ipAddress">The IP address to look up.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
@@ -69,6 +70,25 @@ public interface ILeaseRepository : IRepository<LeaseEntity>
     /// </returns>
     Task<LeaseEntity> FindActiveByIpAddressAsync(
         string ipAddress,
+        CancellationToken stoppingToken = default
+    );
+
+    /// <summary>
+    ///     This method lists every lease that is active and has not expired, across all scopes,
+    ///     with the filter applied in the database so expired and released rows are never loaded.
+    ///     <c>Ninlil.Dhcp.Server.DnsIntegration.DhcpLeaseClientIdentityResolver</c> keeps the
+    ///     result in memory. A lease with no expiry time counts as not expired.
+    /// </summary>
+    /// <param name="nowUtc">The instant a lease must expire after to count as unexpired.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     Every lease whose <see cref="LeaseEntity.State" /> is
+    ///     <see cref="Ninlil.Dns.Common.Enum.LeaseStateEnum.Active" /> and whose
+    ///     <see cref="LeaseEntity.LeaseExpiresAtUtc" /> is unset or later than
+    ///     <paramref name="nowUtc" />.
+    /// </returns>
+    Task<IReadOnlyList<LeaseEntity>> ListActiveAsync(
+        DateTimeOffset nowUtc,
         CancellationToken stoppingToken = default
     );
 

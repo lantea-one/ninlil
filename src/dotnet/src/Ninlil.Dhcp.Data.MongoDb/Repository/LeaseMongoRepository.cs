@@ -55,6 +55,18 @@ public class LeaseMongoRepository(NinlilDnsMongoContext context, MongoChangeTrac
             .FirstOrDefaultAsync(stoppingToken);
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<LeaseEntity>> ListActiveAsync(
+        DateTimeOffset nowUtc,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Collection
+            .Find(lease =>
+                lease.State == LeaseStateEnum.Active
+                && (lease.LeaseExpiresAtUtc == null || lease.LeaseExpiresAtUtc > nowUtc)
+            )
+            .ToListAsync(stoppingToken);
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<LeaseEntity>> SearchAsync(
         int skip,
         int take,

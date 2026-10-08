@@ -145,4 +145,68 @@ public sealed class LeaseRepositoryTests : IAsyncLifetime
         Assert.Equal(2, scopeLeases.Count);
         Assert.All(scopeLeases, lease => Assert.Equal(scopeName, lease.ScopeName));
     }
+
+    /// <summary>
+    ///     This test checks the query on SQLite: only an Active lease that has not expired (or
+    ///     has no expiry) is returned, and released, expired-state and past-expiry rows are not.
+    /// </summary>
+    [Fact]
+    public async Task ListActiveAsync_ReturnsOnlyActiveLeasesThatHaveNotExpired()
+    {
+        DateTimeOffset now = new(2030, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        await using (AsyncServiceScope writeScope = _testHost.Host.Services.CreateAsyncScope())
+        {
+            ILeaseRepository repository =
+                writeScope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+            IUnitOfWork unitOfWork = writeScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            await repository.AddAsync(
+                NewLease("192.0.2.60", LeaseStateEnum.Active, now.AddHours(1))
+            );
+            await repository.AddAsync(NewLease("192.0.2.61", LeaseStateEnum.Active, null));
+            await repository.AddAsync(
+                NewLease("192.0.2.62", LeaseStateEnum.Active, now.AddHours(-1))
+            );
+            await repository.AddAsync(NewLease("192.0.2.63", LeaseStateEnum.Active, now));
+            await repository.AddAsync(
+                NewLease("192.0.2.64", LeaseStateEnum.Released, now.AddHours(1))
+            );
+            await repository.AddAsync(
+                NewLease("192.0.2.65", LeaseStateEnum.Expired, now.AddHours(1))
+            );
+            await unitOfWork.SaveChangesAsync();
+        }
+
+        await using AsyncServiceScope readScope = _testHost.Host.Services.CreateAsyncScope();
+        ILeaseRepository readRepository =
+            readScope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+
+        IReadOnlyList<LeaseEntity> active = await readRepository.ListActiveAsync(now);
+
+        Assert.Equal(
+            ["192.0.2.60", "192.0.2.61"],
+            active.Select(lease => lease.IpAddress).Order().ToArray()
+        );
+    }
+
+    /// <summary>
+    ///     This method builds a lease with a unique client identifier for the active-lease test.
+    /// </summary>
+    private static LeaseEntity NewLease(
+        string ipAddress,
+        LeaseStateEnum state,
+        DateTimeOffset? expiresAtUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeName = "active-list-scope",
+            ClientIdentifier = $"client-{ipAddress}",
+            IpAddress = ipAddress,
+            State = state,
+            LeaseExpiresAtUtc = expiresAtUtc,
+        };
 }
