@@ -10,7 +10,7 @@ function flushMicrotasks(): Promise<void> {
 }
 
 /**
- * These tests cover the Pipeline page: loading, saving with the backend note and a save error.
+ * These tests cover the Pipeline page: loading, the max concurrent queries field (binding and its minimum), saving with the backend note and a save error.
  * TestBed with a spy-backed settings service and `NotificationService`.
  */
 describe('DnsPipelineSettingsComponent', () => {
@@ -30,6 +30,7 @@ describe('DnsPipelineSettingsComponent', () => {
     apiSpy.apiDnsPipelineSettingsGet.and.returnValue(
       of({
         workerCount: 8,
+        maxConcurrentQueries: 1000,
         channelCapacity: 4096,
         maxUdpPayloadSizeOctets: 1232,
         maxUdpAmplificationFactor: 20,
@@ -58,6 +59,7 @@ describe('DnsPipelineSettingsComponent', () => {
 
     expect(apiSpy.apiDnsPipelineSettingsGet).toHaveBeenCalled();
     expect(fixture.componentInstance.form.controls.workerCount.value).toBe(8);
+    expect(fixture.componentInstance.form.controls.maxConcurrentQueries.value).toBe(1000);
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
@@ -77,6 +79,29 @@ describe('DnsPipelineSettingsComponent', () => {
     expect(notificationSpy.success).toHaveBeenCalledWith(
       jasmine.stringContaining('restart it specifically'),
     );
+  });
+
+  it('binds the max concurrent queries input to its form control', async () => {
+    const fixture = await createComponent();
+
+    const input: HTMLInputElement = fixture.nativeElement.querySelector(
+      '#pipeline-max-concurrent-queries',
+    );
+    expect(input.value).toBe('1000');
+
+    input.value = '50';
+    input.dispatchEvent(new Event('input'));
+    expect(fixture.componentInstance.form.controls.maxConcurrentQueries.value).toBe(50);
+  });
+
+  it('rejects a max concurrent queries value below 1 and sends nothing', async () => {
+    const fixture = await createComponent();
+
+    fixture.componentInstance.form.patchValue({ maxConcurrentQueries: 0 });
+    await fixture.componentInstance.save();
+
+    expect(fixture.componentInstance.form.controls.maxConcurrentQueries.valid).toBeFalse();
+    expect(apiSpy.apiDnsPipelineSettingsPatch).not.toHaveBeenCalled();
   });
 
   it('shows an error message when saving fails', async () => {

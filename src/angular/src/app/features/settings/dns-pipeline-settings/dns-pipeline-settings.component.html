@@ -19,7 +19,19 @@
               cFormControl
               id="pipeline-worker-count"
               type="number"
+              min="1"
               formControlName="workerCount"
+            />
+          </div>
+
+          <div class="field">
+            <label cLabel for="pipeline-max-concurrent-queries">Max concurrent queries</label>
+            <input
+              cFormControl
+              id="pipeline-max-concurrent-queries"
+              type="number"
+              min="1"
+              formControlName="maxConcurrentQueries"
             />
           </div>
 
@@ -35,8 +47,9 @@
         </div>
 
         <div cFormText>
-          Worker count and queue capacity size a fixed pool built once when this pipeline's own
-          service starts -- a change to either needs that one service restarted specifically (from
+          Worker count is how many tasks take queries off the queue; max concurrent queries is how
+          many queries are answered at once. These two and the queue capacity are set when this
+          pipeline's service starts -- a change needs that one service restarted specifically (from
           the Services page), not a full process restart.
         </div>
 

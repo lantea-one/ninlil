@@ -22,13 +22,13 @@ import { IfPermissionDirective } from '../../../shared/if-permission/if-permissi
 /**
  * This component is the "Pipeline" settings page (`/settings/pipeline`). It edits
  * `DnsQueryProcessingPipelineOptions` through `GET` and `PATCH /api/dns-pipeline-settings`
- * (`dnspipelinesettings:read`, `dnspipelinesettings:write`): worker pool and queue size, and the
- * UDP amplification guard.
+ * (`dnspipelinesettings:read`, `dnspipelinesettings:write`): queue readers, the number of queries
+ * answered at once, queue size, and the UDP amplification guard.
  * <p>
- * `workerCount` and `channelCapacity` size a pool and queue built when the pipeline service starts,
- * so they apply after that service is restarted (from the Services page) or the server restarts.
- * The other fields are hot-reloaded. The page shows the backend's note, which says which case
- * applies, and a hint beside the two restart fields.
+ * `workerCount`, `maxConcurrentQueries` and `channelCapacity` size a pool, a set of slots and a
+ * queue built when the pipeline service starts, so they apply after that service is restarted
+ * (from the Services page) or the server restarts. The other fields are hot-reloaded. The page
+ * shows the backend's note, which says which case applies, and a hint beside the restart fields.
  */
 @Component({
   selector: 'app-dns-pipeline-settings',
@@ -61,6 +61,7 @@ export class DnsPipelineSettingsComponent implements OnInit {
 
   readonly form = this.formBuilder.group({
     workerCount: [4, [Validators.required, Validators.min(1)]],
+    maxConcurrentQueries: [1000, [Validators.required, Validators.min(1)]],
     channelCapacity: [4096, [Validators.required, Validators.min(1)]],
     maxUdpPayloadSizeOctets: [
       1232,
@@ -104,6 +105,7 @@ export class DnsPipelineSettingsComponent implements OnInit {
       const settings = await firstValueFrom(this.pipelineApi.apiDnsPipelineSettingsGet());
       this.form.patchValue({
         workerCount: settings.workerCount ?? 4,
+        maxConcurrentQueries: settings.maxConcurrentQueries ?? 1000,
         channelCapacity: settings.channelCapacity ?? 4096,
         maxUdpPayloadSizeOctets: settings.maxUdpPayloadSizeOctets ?? 1232,
         maxUdpAmplificationFactor: settings.maxUdpAmplificationFactor ?? 20,
