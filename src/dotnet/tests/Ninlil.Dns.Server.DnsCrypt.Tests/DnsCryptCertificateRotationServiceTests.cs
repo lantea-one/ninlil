@@ -121,4 +121,54 @@ public class DnsCryptCertificateRotationServiceTests
                 File.Delete(statePath);
         }
     }
+
+    [Fact]
+    public async Task AFailedFirstCheck_DoesNotStopTheServiceAndIsRetried()
+    {
+        string statePath = Path.Combine(
+            Path.GetTempPath(),
+            $"dnscrypt-rotation-retry-test-{Guid.NewGuid():N}.json"
+        );
+
+        try
+        {
+            DnsCryptOptions options = new()
+            {
+                Enable = true,
+                CertificateStateFilePath = statePath,
+                EnabledEsVersions = [DnsCryptEsVersion.XChaCha20Poly1305],
+                // The retry delay is the smaller of this and five minutes.
+                CertificateRotationInterval = TimeSpan.FromMilliseconds(200),
+                CertificateValidityDuration = TimeSpan.FromMinutes(20),
+                CertificateClockSkewTolerance = TimeSpan.Zero,
+            };
+
+            FileDnsCryptCertificateStore inner = new(
+                Options.Create(options),
+                NullLogger<FileDnsCryptCertificateStore>.Instance
+            );
+            FailingFirstReadCertificateStore store = new(inner, failuresBeforeSuccess: 1);
+            DnsCryptCertificateRotationService service = new(
+                store,
+                new StaticOptionsMonitor<DnsCryptOptions>(options),
+                NullLogger<DnsCryptCertificateRotationService>.Instance
+            );
+
+            await service.StartAsync(CancellationToken.None);
+
+            for (int attempt = 0; attempt < 60 && inner.Entries.Count < 1; attempt++)
+                await Task.Delay(50);
+
+            Assert.Single(inner.Entries);
+            Assert.True(service.IsRunning);
+            Assert.False(service.ExecuteTask.IsCompleted);
+
+            await service.StopAsync(CancellationToken.None);
+        }
+        finally
+        {
+            if (File.Exists(statePath))
+                File.Delete(statePath);
+        }
+    }
 }

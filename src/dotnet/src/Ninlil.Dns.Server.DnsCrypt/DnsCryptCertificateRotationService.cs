@@ -45,6 +45,11 @@ public sealed class DnsCryptCertificateRotationService(
     /// </summary>
     public bool IsRunning { get; private set; }
 
+    /// <summary>
+    ///     This field is the longest wait before a failed certificate check is retried.
+    /// </summary>
+    private static readonly TimeSpan FailedCheckRetryInterval = TimeSpan.FromMinutes(5);
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -55,17 +60,17 @@ public sealed class DnsCryptCertificateRotationService(
 
         try
         {
-            EnsureCoverage();
+            TimeSpan delay = TimeSpan.Zero;
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await Task.Delay(
-                        options.CurrentValue.CertificateRotationInterval,
-                        stoppingToken
-                    );
+                    if (delay > TimeSpan.Zero)
+                        await Task.Delay(delay, stoppingToken);
+
                     EnsureCoverage();
+                    delay = options.CurrentValue.CertificateRotationInterval;
                 }
                 catch (OperationCanceledException)
                 {
@@ -73,20 +78,28 @@ public sealed class DnsCryptCertificateRotationService(
                 }
                 catch (Exception exception)
                 {
-                    // A failed check must not stop the service: the next one runs one
-                    // CertificateRotationInterval later, and issued certificates stay valid.
-                    logger.LogWarning(
+                    // A failed check, including the first one at startup, must not stop the
+                    // service or the host. The retry comes after the shorter of the rotation
+                    // interval and FailedCheckRetryInterval, so a transient failure does not
+                    // leave the listeners without a certificate for a whole interval.
+                    delay = TimeSpan.FromTicks(
+                        Math.Min(
+                            options.CurrentValue.CertificateRotationInterval.Ticks,
+                            FailedCheckRetryInterval.Ticks
+                        )
+                    );
+                    logger.LogError(
                         exception,
-                        "A DNSCrypt certificate rotation check failed unexpectedly."
+                        "A DNSCrypt certificate rotation check failed unexpectedly; retrying in {RetryDelay}.",
+                        delay
                     );
                 }
             }
         }
         finally
         {
-            // Reached on shutdown and when the first EnsureCoverage call throws (that exception
-            // then leaves ExecuteAsync). Either way the loop has stopped, so a later enable must
-            // be able to start it again.
+            // Reached on shutdown. The loop has stopped, so a later enable must be able to start
+            // it again.
             IsRunning = false;
         }
     }
