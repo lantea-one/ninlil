@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
@@ -35,7 +36,8 @@ internal static class ZoneTransferPullCodec
         int primaryPort,
         TimeSpan timeout,
         ITsigService tsigService,
-        CancellationToken stoppingToken
+        CancellationToken stoppingToken,
+        ILogger logger = null
     )
     {
         DnsMessage query = new()
@@ -66,7 +68,42 @@ internal static class ZoneTransferPullCodec
                 CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeoutCts.Token);
 
             UdpReceiveResult result = await client.ReceiveAsync(linkedCts.Token);
-            DnsMessage response = DnsMessageReader.Read(result.Buffer);
+            DnsMessage response = DnsMessageReader.Read(result.Buffer, out int tsigOffset);
+
+            // With a key configured the answer must be signed by that key over the query's MAC;
+            // an unsigned or wrongly signed answer could be spoofed, so it yields no serial.
+            if (!string.IsNullOrEmpty(tsigKeyName))
+            {
+                if (response.Tsig is null)
+                {
+                    logger?.LogDebug(
+                        "The SOA answer from {Primary} for {Zone} was not signed, but a TSIG key is configured.",
+                        primaryAddress,
+                        zoneName
+                    );
+                    return null;
+                }
+
+                TsigVerificationResult tsigResult = await tsigService.VerifyResponseAsync(
+                    result.Buffer,
+                    tsigOffset,
+                    response,
+                    query.Tsig.Mac,
+                    tsigKeyName,
+                    stoppingToken
+                );
+
+                if (!tsigResult.IsValid)
+                {
+                    logger?.LogDebug(
+                        "The SOA answer from {Primary} for {Zone} failed TSIG verification: {Error}.",
+                        primaryAddress,
+                        zoneName,
+                        tsigResult.Error
+                    );
+                    return null;
+                }
+            }
 
             return
                 response.Id == query.Id

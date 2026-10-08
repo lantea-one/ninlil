@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -20,9 +21,13 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     The port and timeouts, read through <see cref="IOptionsMonitor{TOptions}" /> on every SOA
 ///     query and pull, so changes apply without a restart.
 /// </param>
+/// <param name="logger">
+///     The logger for the reason an unsigned or wrongly signed SOA answer is ignored. Optional.
+/// </param>
 public class TcpZoneTransferClient(
     ITsigService tsigService,
-    IOptionsMonitor<ZoneTransferClientOptions> options
+    IOptionsMonitor<ZoneTransferClientOptions> options,
+    ILogger<TcpZoneTransferClient> logger = null
 ) : IZoneTransferClient
 {
     /// <inheritdoc />
@@ -42,7 +47,8 @@ public class TcpZoneTransferClient(
             options.CurrentValue.PrimaryPort,
             options.CurrentValue.SoaQueryTimeout,
             tsigService,
-            stoppingToken
+            stoppingToken,
+            logger
         );
 
     /// <inheritdoc />

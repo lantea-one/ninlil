@@ -69,6 +69,7 @@ public sealed class TcpZoneTransferClientHotReloadTests
             int tsigRecordStartOffset,
             DnsMessage message,
             byte[] requestMac,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException();
 
@@ -78,6 +79,7 @@ public sealed class TcpZoneTransferClientHotReloadTests
             DnsMessage message,
             byte[] priorMac,
             IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException();
     }

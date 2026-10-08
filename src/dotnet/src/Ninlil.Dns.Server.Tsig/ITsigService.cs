@@ -169,6 +169,10 @@ public interface ITsigService
     /// </param>
     /// <param name="message"><paramref name="rawMessage" />, already decoded.</param>
     /// <param name="requestMac">The MAC from the request this message claims to answer.</param>
+    /// <param name="expectedKeyName">
+    ///     The name of the key that signed the request. A reply signed with any other key fails
+    ///     with BADKEY, even when that key is enabled and the MAC is right for it.
+    /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The verification outcome.</returns>
     Task<TsigVerificationResult> VerifyResponseAsync(
@@ -176,6 +180,7 @@ public interface ITsigService
         int tsigRecordStartOffset,
         DnsMessage message,
         byte[] requestMac,
+        string expectedKeyName,
         CancellationToken stoppingToken = default
     );
 
@@ -200,6 +205,10 @@ public interface ITsigService
     ///     <paramref name="priorMac" /> came from, in order. Empty when the previous message was
     ///     signed.
     /// </param>
+    /// <param name="expectedKeyName">
+    ///     The name of the key that signed the request. A message signed with any other key fails
+    ///     with BADKEY.
+    /// </param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns>The verification outcome.</returns>
     Task<TsigVerificationResult> VerifyContinuationAsync(
@@ -208,6 +217,7 @@ public interface ITsigService
         DnsMessage message,
         byte[] priorMac,
         IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+        string expectedKeyName,
         CancellationToken stoppingToken = default
     );
 }

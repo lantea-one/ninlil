@@ -345,7 +345,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             rawMessage,
             tsigOffset,
             reparsed,
-            requestMac
+            requestMac,
+            reparsed.Tsig.KeyName.ToString()
         );
 
         Assert.True(result.IsValid);
@@ -377,7 +378,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             rawMessage,
             tsigOffset,
             reparsed,
-            wrongRequestMac
+            wrongRequestMac,
+            reparsed.Tsig.KeyName.ToString()
         );
 
         Assert.False(result.IsValid);
@@ -407,7 +409,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset,
             reparsed,
             priorMac,
-            []
+            [],
+            reparsed.Tsig.KeyName.ToString()
         );
 
         Assert.True(result.IsValid);
@@ -441,7 +444,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset,
             reparsed,
             wrongPriorMac,
-            []
+            [],
+            reparsed.Tsig.KeyName.ToString()
         );
 
         Assert.False(result.IsValid);
@@ -472,7 +476,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             rawMessage1,
             tsigOffset1,
             reparsed1,
-            requestMac
+            requestMac,
+            reparsed1.Tsig.KeyName.ToString()
         );
         Assert.True(result1.IsValid);
 
@@ -488,7 +493,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset2,
             reparsed2,
             reparsed1.Tsig.Mac,
-            []
+            [],
+            reparsed2.Tsig.KeyName.ToString()
         );
         Assert.True(result2.IsValid);
 
@@ -504,7 +510,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset3,
             reparsed3,
             reparsed2.Tsig.Mac,
-            []
+            [],
+            reparsed3.Tsig.KeyName.ToString()
         );
         Assert.True(result3.IsValid);
 
@@ -514,7 +521,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset3,
             reparsed3,
             reparsed1.Tsig.Mac,
-            []
+            [],
+            reparsed3.Tsig.KeyName.ToString()
         );
         Assert.False(skippedResult.IsValid);
     }
@@ -576,7 +584,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset3,
             reparsed3,
             reparsed1.Tsig.Mac,
-            [unsignedMessage2Bytes]
+            [unsignedMessage2Bytes],
+            reparsed3.Tsig.KeyName.ToString()
         );
 
         Assert.True(result.IsValid);
@@ -587,7 +596,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             tsigOffset3,
             reparsed3,
             reparsed1.Tsig.Mac,
-            []
+            [],
+            reparsed3.Tsig.KeyName.ToString()
         );
 
         Assert.False(resultIgnoringGap.IsValid);

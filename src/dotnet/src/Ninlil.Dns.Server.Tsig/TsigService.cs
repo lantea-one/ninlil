@@ -64,6 +64,7 @@ public class TsigService(
             TsigDigestKindEnum.Request,
             chainMac: null,
             unsignedMessages: null,
+            expectedKeyName: null,
             stoppingToken
         );
 
@@ -73,6 +74,7 @@ public class TsigService(
         int tsigRecordStartOffset,
         DnsMessage message,
         byte[] requestMac,
+        string expectedKeyName,
         CancellationToken stoppingToken = default
     ) =>
         VerifyCoreAsync(
@@ -82,6 +84,7 @@ public class TsigService(
             TsigDigestKindEnum.FirstResponse,
             requestMac,
             unsignedMessages: null,
+            expectedKeyName,
             stoppingToken
         );
 
@@ -92,6 +95,7 @@ public class TsigService(
         DnsMessage message,
         byte[] priorMac,
         IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+        string expectedKeyName,
         CancellationToken stoppingToken = default
     ) =>
         VerifyCoreAsync(
@@ -101,6 +105,7 @@ public class TsigService(
             TsigDigestKindEnum.Continuation,
             priorMac,
             unsignedMessageBytesSincePriorTsig,
+            expectedKeyName,
             stoppingToken
         );
 
@@ -217,8 +222,8 @@ public class TsigService(
 
     /// <summary>
     ///     This method does the work for all three verify methods, in the order of RFC 8945 §5.2:
-    ///     a supported algorithm, a known, enabled, non-cluster key of that algorithm, the MAC
-    ///     length, the MAC (compared in constant time) and finally the time window.
+    ///     a supported algorithm, a known, enabled, non-cluster key of that algorithm (and, when
+    ///     <paramref name="expectedKeyName" /> is set, that exact key), the MAC length, the MAC (compared in constant time) and finally the time window.
     /// </summary>
     private async Task<TsigVerificationResult> VerifyCoreAsync(
         byte[] rawMessage,
@@ -227,6 +232,7 @@ public class TsigService(
         TsigDigestKindEnum kind,
         byte[] chainMac,
         IReadOnlyList<byte[]> unsignedMessages,
+        string expectedKeyName,
         CancellationToken stoppingToken
     )
     {
@@ -241,6 +247,11 @@ public class TsigService(
         // An unsupported algorithm is reported as BADKEY, whether or not the key exists.
         TsigAlgorithm algorithm = TsigAlgorithm.Find(tsig.AlgorithmName);
         if (algorithm is null)
+            return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
+
+        // A reply to a request signed with one key must be signed with that key. Another enabled
+        // key is as wrong as an unknown one, so it is BADKEY too (names compare without case).
+        if (expectedKeyName is not null && !tsig.KeyName.Equals(DnsName.Parse(expectedKeyName)))
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
 
         TsigKeyEntity key = await keyCache.FindAsync(

@@ -3,6 +3,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Runtime.Versioning;
 using System.Security.Authentication;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -24,12 +25,16 @@ namespace Ninlil.Dns.Server.Authoritative.Transfer;
 ///     The port, timeouts and certificate check, read through
 ///     <see cref="IOptionsMonitor{TOptions}" /> on every pull.
 /// </param>
+/// <param name="logger">
+///     The logger for the reason an unsigned or wrongly signed SOA answer is ignored. Optional.
+/// </param>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
 [SupportedOSPlatform("windows")]
 public class QuicZoneTransferClient(
     ITsigService tsigService,
-    IOptionsMonitor<ZoneTransferClientOptions> options
+    IOptionsMonitor<ZoneTransferClientOptions> options,
+    ILogger<QuicZoneTransferClient> logger = null
 ) : IZoneTransferClient
 {
     /// <summary>
@@ -55,7 +60,8 @@ public class QuicZoneTransferClient(
             options.CurrentValue.PrimaryPort,
             options.CurrentValue.SoaQueryTimeout,
             tsigService,
-            stoppingToken
+            stoppingToken,
+            logger
         );
 
     /// <inheritdoc />

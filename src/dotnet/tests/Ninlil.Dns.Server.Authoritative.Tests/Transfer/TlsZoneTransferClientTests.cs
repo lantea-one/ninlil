@@ -67,6 +67,7 @@ public class TlsZoneTransferClientTests
             int tsigRecordStartOffset,
             DnsMessage message,
             byte[] requestMac,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
 
@@ -76,6 +77,7 @@ public class TlsZoneTransferClientTests
             DnsMessage message,
             byte[] priorMac,
             IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
     }

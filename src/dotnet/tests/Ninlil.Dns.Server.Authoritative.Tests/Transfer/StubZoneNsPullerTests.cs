@@ -62,6 +62,7 @@ public class StubZoneNsPullerTests
             int tsigRecordStartOffset,
             DnsMessage message,
             byte[] requestMac,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- every test here uses no TSIG key.");
 
@@ -71,6 +72,7 @@ public class StubZoneNsPullerTests
             DnsMessage message,
             byte[] priorMac,
             IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- every test here uses no TSIG key.");
     }

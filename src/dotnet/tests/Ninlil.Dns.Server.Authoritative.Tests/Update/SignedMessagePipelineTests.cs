@@ -207,7 +207,8 @@ public sealed class SignedMessagePipelineTests : IAsyncLifetime
             replyBytes,
             tsigOffset,
             reply,
-            signedRequest.Tsig.Mac
+            signedRequest.Tsig.Mac,
+            reply.Tsig.KeyName.ToString()
         );
 
         Assert.True(result.IsValid, $"The reply's TSIG failed with {result.Error}.");

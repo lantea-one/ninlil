@@ -231,13 +231,15 @@ public class TsigKnownAnswerTests
                 tsigOffset,
                 message,
                 ChainMac(vector),
-                UnsignedMessages(vector)
+                UnsignedMessages(vector),
+                vector.KeyName
             ),
             _ => await harness.Service.VerifyResponseAsync(
                 wire,
                 tsigOffset,
                 message,
-                ChainMac(vector)
+                ChainMac(vector),
+                vector.KeyName
             ),
         };
     }

@@ -28,9 +28,9 @@ public static class StubZoneNsPuller
     /// <param name="primaryAddress">The primary to query.</param>
     /// <param name="zoneName">The delegation to learn the NS records of.</param>
     /// <param name="tsigKeyName">
-    ///     The key to sign the query with, or <see langword="null" /> to send it unsigned. A signed
-    ///     response is verified with this key; an unsigned one is accepted, because Ninlil's
-    ///     resolver does not sign ordinary answers (see the comment in the method).
+    ///     The key to sign the query with, or <see langword="null" /> to send it unsigned and
+    ///     accept an unsigned answer. With a key, the answer must be signed with that key; an
+    ///     unsigned or differently signed answer fails the pull.
     /// </param>
     /// <param name="primaryPort">The port the primary listens for ordinary DNS queries on.</param>
     /// <param name="udpTimeout">How long to wait for the initial UDP response.</param>
@@ -111,16 +111,22 @@ public static class StubZoneNsPuller
                 $"Primary rejected the NS query: {message.ResponseCode}."
             );
 
-        // AuthoritativeQueryResolver answers NS queries and never signs its answers, even to a
-        // signed query; only zone transfer responses are signed. Requiring a signature would reject
-        // a Ninlil primary, so a signed response is verified and an unsigned one is accepted
-        // unverified. With a key configured, an unsigned spoofed answer is therefore not caught.
-        if (!string.IsNullOrEmpty(tsigKeyName) && message.Tsig is not null)
+        // With a key configured the answer must be signed by that key over the query's MAC
+        // (RFC 8945 §5.3). The query pipeline signs the reply to every signed query, so an
+        // unsigned answer is a spoof or a misconfigured primary.
+        if (!string.IsNullOrEmpty(tsigKeyName))
         {
-            TsigVerificationResult tsigResult = await tsigService.VerifyAsync(
+            if (message.Tsig is null)
+                return StubZoneNsPullResult.Failure(
+                    "Primary did not sign its NS query response, but a TSIG key is configured for this zone."
+                );
+
+            TsigVerificationResult tsigResult = await tsigService.VerifyResponseAsync(
                 rawBytes,
                 tsigOffset,
                 message,
+                query.Tsig.Mac,
+                tsigKeyName,
                 stoppingToken
             );
 

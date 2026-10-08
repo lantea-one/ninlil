@@ -68,6 +68,7 @@ public class QuicZoneTransferClientTests
             int tsigRecordStartOffset,
             DnsMessage message,
             byte[] requestMac,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
 
@@ -77,6 +78,7 @@ public class QuicZoneTransferClientTests
             DnsMessage message,
             byte[] priorMac,
             IReadOnlyList<byte[]> unsignedMessageBytesSincePriorTsig,
+            string expectedKeyName,
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
     }

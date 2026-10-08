@@ -37,8 +37,8 @@ internal static class ZoneTransferPullOverStream
     ///     set.
     /// </param>
     /// <param name="tsigKeyName">
-    ///     The pre-shared key every response must verify against, or <see langword="null" /> to
-    ///     accept an unsigned response.
+    ///     The pre-shared key every response must be signed with (a response signed with another
+    ///     key fails with BADKEY), or <see langword="null" /> to accept an unsigned response.
     /// </param>
     /// <param name="requestMac">
     ///     The MAC of the query's TSIG record, used to verify the first response (RFC 8945 §5.3), or
@@ -88,8 +88,8 @@ internal static class ZoneTransferPullOverStream
     /// </summary>
     /// <param name="stream">The already-connected stream to read the transfer response over.</param>
     /// <param name="tsigKeyName">
-    ///     The pre-shared key every response must verify against, or <see langword="null" /> to
-    ///     accept an unsigned response.
+    ///     The pre-shared key every response must be signed with (a response signed with another
+    ///     key fails with BADKEY), or <see langword="null" /> to accept an unsigned response.
     /// </param>
     /// <param name="requestMac">
     ///     The MAC of the query's TSIG record, used to verify the first response (RFC 8945 §5.3), or
@@ -146,9 +146,13 @@ internal static class ZoneTransferPullOverStream
             messageCount++;
             DnsMessage response = DnsMessageReader.Read(responseBytes, out int tsigOffset);
 
+            // An error reply is not verified: the primary does not sign BADKEY or BADSIG answers
+            // (RFC 8945 §5.3.2). The extended TSIG error, when there is one, says why.
             if (response.ResponseCode != DnsResponseCodeEnum.NoError)
                 return ZoneTransferPullResult.Failure(
-                    $"Primary rejected the transfer request: {response.ResponseCode}."
+                    response.Tsig is { Error: not DnsResponseCodeEnum.NoError } errorTsig
+                        ? $"Primary rejected the transfer request: {response.ResponseCode} (TSIG error {errorTsig.Error})."
+                        : $"Primary rejected the transfer request: {response.ResponseCode}."
                 );
 
             if (!string.IsNullOrEmpty(tsigKeyName))
@@ -179,6 +183,7 @@ internal static class ZoneTransferPullOverStream
                             tsigOffset,
                             response,
                             requestMac,
+                            tsigKeyName,
                             stoppingToken
                         )
                         : await tsigService.VerifyContinuationAsync(
@@ -187,6 +192,7 @@ internal static class ZoneTransferPullOverStream
                             response,
                             priorMac,
                             pendingUnsignedMessageBytes,
+                            tsigKeyName,
                             stoppingToken
                         );
 
