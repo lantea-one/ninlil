@@ -97,6 +97,14 @@ export interface ZoneWriteRequest {
      */
     ptrIpv6PrefixLength?: number | null;
     transferTransport?: ZoneTransferTransportEnum;
+    /**
+     * The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An empty list accepts no key.
+     */
+    updateTsigKeyNames?: Array<string> | null;
+    /**
+     * The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.
+     */
+    transferTsigKeyNames?: Array<string> | null;
 }
 export namespace ZoneWriteRequest {
 }

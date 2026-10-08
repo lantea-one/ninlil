@@ -36037,6 +36037,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36069,6 +36075,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36113,6 +36121,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36145,6 +36159,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36189,6 +36205,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36221,6 +36243,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36285,7 +36309,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -36316,7 +36346,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -36354,7 +36386,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -36385,7 +36423,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -36423,7 +36463,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -36454,7 +36500,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -36490,6 +36538,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36525,6 +36579,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36567,6 +36623,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36602,6 +36664,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36644,6 +36708,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36679,6 +36749,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36747,6 +36819,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36782,6 +36860,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36824,6 +36904,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36859,6 +36945,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36901,6 +36989,12 @@
                       ],
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [
+                        "example-update-key"
+                      ],
+                      "transferTsigKeyNames": [
+                        "secondary-transfer-key"
+                      ],
                       "comments": "Primary authoritative zone for the example.com domain.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -36936,6 +37030,8 @@
                       "notifyAddresses": null,
                       "tsigKeyName": "secondary-transfer-key",
                       "dynamicUpdateEnabled": false,
+                      "updateTsigKeyNames": [ ],
+                      "transferTsigKeyNames": [ ],
                       "comments": "Secondary zone transferring from the branch office's own primary server.",
                       "cloudProviderCredentialId": null,
                       "cloudProviderZoneId": null,
@@ -37008,7 +37104,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -37039,7 +37141,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -37077,7 +37181,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -37108,7 +37218,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -37146,7 +37258,13 @@
                     "autoManagePtrRecords": true,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": [
+                      "example-update-key"
+                    ],
+                    "transferTsigKeyNames": [
+                      "secondary-transfer-key"
+                    ]
                   }
                 },
                 "Secondary zone": {
@@ -37177,7 +37295,9 @@
                     "autoManagePtrRecords": null,
                     "ptrIpv4PrefixLength": null,
                     "ptrIpv6PrefixLength": null,
-                    "transferTransport": "Plain"
+                    "transferTransport": "Plain",
+                    "updateTsigKeyNames": null,
+                    "transferTsigKeyNames": null
                   }
                 }
               }
@@ -45315,6 +45435,22 @@
             "type": "boolean",
             "description": "Whether the zone accepts RFC 2136 dynamic updates."
           },
+          "updateTsigKeyNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An\nempty list accepts no key.",
+            "nullable": true
+          },
+          "transferTsigKeyNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.",
+            "nullable": true
+          },
           "comments": {
             "type": "string",
             "description": "Free-form operator notes about the zone.",
@@ -45655,6 +45791,22 @@
           },
           "transferTransport": {
             "$ref": "#/components/schemas/ZoneTransferTransportEnum"
+          },
+          "updateTsigKeyNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The TSIG keys allowed to send dynamic updates to the zone (lowercase, no trailing dot). An\nempty list accepts no key.",
+            "nullable": true
+          },
+          "transferTsigKeyNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The TSIG keys allowed to transfer the zone (AXFR and IXFR). An empty list accepts no key.",
+            "nullable": true
           }
         },
         "additionalProperties": false,
