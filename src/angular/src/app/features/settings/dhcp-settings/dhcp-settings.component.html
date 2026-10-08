@@ -268,11 +268,21 @@
         <div class="field-row">
           <div class="field">
             <label cLabel for="dhcp-relay-circuit-id">Relay Agent Circuit ID</label>
-            <input cFormControl id="dhcp-relay-circuit-id" formControlName="relayAgentCircuitId" />
+            <input
+              cFormControl
+              id="dhcp-relay-circuit-id"
+              formControlName="relayAgentCircuitId"
+              maxlength="253"
+            />
           </div>
           <div class="field">
             <label cLabel for="dhcp-relay-remote-id">Relay Agent Remote ID</label>
-            <input cFormControl id="dhcp-relay-remote-id" formControlName="relayAgentRemoteId" />
+            <input
+              cFormControl
+              id="dhcp-relay-remote-id"
+              formControlName="relayAgentRemoteId"
+              maxlength="253"
+            />
           </div>
         </div>
         <div cFormText class="restart-note">Every field here needs this server to restart.</div>

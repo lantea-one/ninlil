@@ -469,6 +469,24 @@ describe('DhcpSettingsComponent', () => {
     expect(fixture.componentInstance.interfaceOverrides.at(0).controls.linkMtu.valid).toBeTrue();
   });
 
+  it('rejects a relay Circuit ID or Remote ID over 253 characters or with non-ASCII text', async () => {
+    const fixture = await createComponent();
+    const { relayAgentCircuitId, relayAgentRemoteId } =
+      fixture.componentInstance.relayForm.controls;
+
+    relayAgentCircuitId.setValue('a'.repeat(254));
+    relayAgentRemoteId.setValue('r\u00e9mote');
+
+    expect(relayAgentCircuitId.invalid).toBeTrue();
+    expect(relayAgentRemoteId.invalid).toBeTrue();
+
+    relayAgentCircuitId.setValue('a'.repeat(253));
+    relayAgentRemoteId.setValue('remote-99');
+
+    expect(relayAgentCircuitId.valid).toBeTrue();
+    expect(relayAgentRemoteId.valid).toBeTrue();
+  });
+
   it('saveRa() sends every interface override row as a genuine whole-array replace, parsing blank fields to null', async () => {
     const fixture = await createComponent();
     dhcpSettingsApiSpy.apiDhcpSettingsRaPatch.and.returnValue(of({ note: 'Saved.' }));

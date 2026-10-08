@@ -45,6 +45,12 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 
 /**
+ * Validators for the relay Circuit ID and Remote ID: printable ASCII, at most 253 characters
+ * (the server also limits the two together to 251; its 400 message covers that case).
+ */
+const relayAgentIdValidators = [Validators.maxLength(253), Validators.pattern(/^[\x20-\x7E]*$/)];
+
+/**
  * This type names one advertised-route row's shape, so `getRawValue()` allows dot access under
  * `noPropertyAccessFromIndexSignature`.
  */
@@ -178,8 +184,8 @@ export class DhcpSettingsComponent implements OnInit {
     upstreamServerAddresses: [''],
     upstreamServerPort: [67, [Validators.required, Validators.min(1), Validators.max(65535)]],
     relayAgentAddress: [''],
-    relayAgentCircuitId: [''],
-    relayAgentRemoteId: [''],
+    relayAgentCircuitId: ['', relayAgentIdValidators],
+    relayAgentRemoteId: ['', relayAgentIdValidators],
   });
 
   readonly dhcpv6RelayForm = this.formBuilder.group({
