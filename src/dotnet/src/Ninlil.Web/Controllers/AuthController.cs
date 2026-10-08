@@ -57,6 +57,10 @@ namespace Ninlil.Web.Controllers;
 /// <param name="signInManager">Checks a submitted password against the lockout policy.</param>
 /// <param name="jwtTokenService">Issues, validates and revokes access and refresh tokens.</param>
 /// <param name="pendingTwoFactor">Tracks a sign-in that is waiting for its second factor.</param>
+/// <param name="attemptLimiter">
+///     Limits wrong second-factor codes per user, across every client address, on top of the
+///     per-IP rate limit.
+/// </param>
 /// <param name="passwordResetLinkSender">
 ///     Builds and sends the reset e-mail for <see cref="ForgotPassword" />. The <c>EmailLink</c>
 ///     mode of <c>UsersController.ResetPassword</c> uses it too.
@@ -92,6 +96,7 @@ public class AuthController(
     SignInManager<UserEntity> signInManager,
     IJwtTokenService jwtTokenService,
     PendingTwoFactorSignInCache pendingTwoFactor,
+    TwoFactorCodeAttemptLimiter attemptLimiter,
     PasswordResetLinkSender passwordResetLinkSender,
     IEmailSender emailSender,
     IOptionsMonitor<EmailSenderOptions> emailOptions,
@@ -324,9 +329,12 @@ public class AuthController(
     /// <summary>
     ///     This action completes a sign-in that <see cref="Login" /> marked as needing a second
     ///     factor, checking an authenticator code, an e-mailed code or a recovery code against the
-    ///     pending sign-in's account. Each challenge token can be used once. Returns 401 for an
-    ///     unknown or used challenge token or a wrong code. Allows anonymous callers and is rate
-    ///     limited.
+    ///     pending sign-in's account. A challenge token that reaches the code check is spent
+    ///     whether or not the code is right. Returns 401 for an unknown or used challenge token or
+    ///     a wrong code. After 5 wrong codes in 15 minutes for the account (counted across all
+    ///     client addresses and shared with <see cref="TwoFactorController" />) it returns 429
+    ///     with a <c>Retry-After</c> header, without checking the code and without spending the
+    ///     challenge token. Allows anonymous callers and is rate limited per client address.
     /// </summary>
     [HttpPost("login/two-factor")]
     [AllowAnonymous]
@@ -340,6 +348,16 @@ public class AuthController(
         CancellationToken stoppingToken
     )
     {
+        // Peek first, so a throttled attempt answers 429 without spending the pending sign-in:
+        // the user can retry with the same token once the window ends (or within its 5 minutes).
+        // Only an attempt that reaches the code check burns the token.
+        Guid? pendingUserId = pendingTwoFactor.Peek(request.MfaToken);
+        if (pendingUserId is null)
+            return Unauthorized();
+
+        if (attemptLimiter.IsBlocked(pendingUserId.Value, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(this, retryAfter);
+
         Guid? userId = pendingTwoFactor.Consume(request.MfaToken);
         if (userId is null)
             return Unauthorized();
@@ -357,7 +375,12 @@ public class AuthController(
                 request.Code
             );
             if (!redeemResult.Succeeded)
+            {
+                attemptLimiter.RecordFailure(user.Id);
                 return Unauthorized();
+            }
+
+            attemptLimiter.RecordSuccess(user.Id);
 
             return Ok(
                 await IssueLoginResponseAsync(
@@ -383,7 +406,12 @@ public class AuthController(
             request.Code
         );
         if (!isCodeValid)
+        {
+            attemptLimiter.RecordFailure(user.Id);
             return Unauthorized();
+        }
+
+        attemptLimiter.RecordSuccess(user.Id);
 
         return Ok(
             await IssueLoginResponseAsync(

@@ -176,6 +176,7 @@ public class PasswordResetLinkTests(NinlilDnsWebApplicationFactory factory)
             services.GetRequiredService<SignInManager<UserEntity>>(),
             services.GetRequiredService<IJwtTokenService>(),
             services.GetRequiredService<PendingTwoFactorSignInCache>(),
+            new TwoFactorCodeAttemptLimiter(),
             new PasswordResetLinkSender(userManager, emailSender, emailOptions),
             emailSender,
             emailOptions,

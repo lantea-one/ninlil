@@ -9,6 +9,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Web.Examples.TwoFactor;
 using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
+using Ninlil.Web.Services;
 using Swashbuckle.AspNetCore.Filters;
 
 // Define our namespace.
@@ -28,13 +29,18 @@ namespace Ninlil.Web.Controllers;
 ///     copies the account's TOTP secret and recovery codes to the other nodes (re-encrypted under
 ///     each node's key ring), as <see cref="UsersController" /> does for other account changes.
 /// </param>
+/// <param name="attemptLimiter">
+///     Limits wrong authenticator codes per user, so a stolen access token cannot be used to
+///     guess the code.
+/// </param>
 [ApiController]
 [Route("api/auth/two-factor")]
 [Authorize]
 public class TwoFactorController(
     UserManager<UserEntity> userManager,
     IEmailSender emailSender,
-    IDnsServerEventPublisher eventPublisher
+    IDnsServerEventPublisher eventPublisher,
+    TwoFactorCodeAttemptLimiter attemptLimiter
 ) : ControllerBase
 {
     /// <summary>
@@ -73,7 +79,10 @@ public class TwoFactorController(
     ///     <para>
     ///         While two-factor sign-in is on with an authenticator secret, the request must carry
     ///         a valid current authenticator code or an unused recovery code (which this call
-    ///         uses up) in the body; otherwise this returns 400 and the secret is unchanged. A
+    ///         uses up) in the body; otherwise this returns 400 and the secret is unchanged. After
+    ///         5 wrong codes in 15 minutes (shared with the other code checks of this controller
+    ///         and the sign-in) it returns 429 with a <c>Retry-After</c> header, without checking
+    ///         the code. A
     ///         stolen access token alone then cannot swap in an attacker's secret. First-time
     ///         setup, or setup while two-factor sign-in is off, needs no body.
     ///     </para>
@@ -93,6 +102,9 @@ public class TwoFactorController(
             && !string.IsNullOrEmpty(await userManager.GetAuthenticatorKeyAsync(user))
         )
         {
+            if (attemptLimiter.IsBlocked(user.Id, out TimeSpan retryAfter))
+                return TwoFactorCodeAttemptLimiter.TooManyRequests(this, retryAfter);
+
             // The caller proves control of the current second factor before it is replaced.
             string code = request?.Code;
             bool isCurrentCodeValid =
@@ -106,10 +118,15 @@ public class TwoFactorController(
                 );
 
             if (!isCurrentCodeValid)
+            {
+                attemptLimiter.RecordFailure(user.Id);
                 throw new ValidationException(
                     "Replacing an active authenticator needs a valid current authenticator code "
                         + "or a recovery code."
                 );
+            }
+
+            attemptLimiter.RecordSuccess(user.Id);
         }
 
         await userManager.ResetAuthenticatorKeyAsync(user);
@@ -126,7 +143,8 @@ public class TwoFactorController(
 
     /// <summary>
     ///     This action confirms authenticator setup by checking a code from the app, and only then
-    ///     makes a second factor required at sign-in. Returns 400 for a wrong code.
+    ///     makes a second factor required at sign-in. Returns 400 for a wrong code and 429, with a
+    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes.
     /// </summary>
     [HttpPost("authenticator/enable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
@@ -136,6 +154,9 @@ public class TwoFactorController(
         if (user is null)
             return Unauthorized();
 
+        if (attemptLimiter.IsBlocked(user.Id, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(this, retryAfter);
+
         bool isCodeValid = await userManager.VerifyTwoFactorTokenAsync(
             user,
             TokenOptions.DefaultAuthenticatorProvider,
@@ -143,7 +164,12 @@ public class TwoFactorController(
         );
 
         if (!isCodeValid)
+        {
+            attemptLimiter.RecordFailure(user.Id);
             throw new ValidationException("The provided authenticator code is not valid.");
+        }
+
+        attemptLimiter.RecordSuccess(user.Id);
 
         await userManager.SetTwoFactorEnabledAsync(user, true);
 
@@ -154,7 +180,8 @@ public class TwoFactorController(
 
     /// <summary>
     ///     This action stops requiring a second factor at sign-in. It needs a valid authenticator
-    ///     code as well as the access token. Returns 400 for a wrong code.
+    ///     code as well as the access token. Returns 400 for a wrong code and 429, with a
+    ///     <c>Retry-After</c> header, after 5 wrong codes in 15 minutes.
     /// </summary>
     [HttpPost("disable")]
     [SwaggerRequestExample(typeof(TwoFactorCodeRequest), typeof(TwoFactorCodeRequestExample))]
@@ -164,6 +191,9 @@ public class TwoFactorController(
         if (user is null)
             return Unauthorized();
 
+        if (attemptLimiter.IsBlocked(user.Id, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(this, retryAfter);
+
         bool isCodeValid = await userManager.VerifyTwoFactorTokenAsync(
             user,
             TokenOptions.DefaultAuthenticatorProvider,
@@ -171,7 +201,12 @@ public class TwoFactorController(
         );
 
         if (!isCodeValid)
+        {
+            attemptLimiter.RecordFailure(user.Id);
             throw new ValidationException("The provided authenticator code is not valid.");
+        }
+
+        attemptLimiter.RecordSuccess(user.Id);
 
         await userManager.SetTwoFactorEnabledAsync(user, false);
 

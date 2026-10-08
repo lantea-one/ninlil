@@ -192,6 +192,7 @@ public class TwoFactorEmailCodeDuringSignInTests(NinlilDnsWebApplicationFactory 
             services.GetRequiredService<SignInManager<UserEntity>>(),
             services.GetRequiredService<IJwtTokenService>(),
             cache,
+            new TwoFactorCodeAttemptLimiter(),
             new PasswordResetLinkSender(userManager, emailSender, emailOptions),
             emailSender,
             emailOptions,
