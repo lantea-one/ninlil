@@ -26,6 +26,7 @@ namespace Ninlil.Dns.Server.Backup.Tests;
 ///     restore. It also covers the DHCP and client tables, rejected restores, and the
 ///     encrypted/unencrypted envelope handling. The TLS certificate is not covered.
 /// </summary>
+[Collection(BackupRestoreCollection.Name)]
 public sealed class SystemBackupServiceTests : IAsyncLifetime
 {
     private readonly string _databasePath = Path.Combine(

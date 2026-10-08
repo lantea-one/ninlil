@@ -34,10 +34,16 @@ public interface IBackupService
 
     /// <summary>
     ///     This method decrypts or unwraps <paramref name="archiveStream" /> (as its envelope header
-    ///     says) and checks that every required entry is present, then wipes and replaces the
-    ///     backed-up database contents, the Data Protection key ring, the shared TLS certificate
-    ///     and the runtime configuration file. The running process keeps its loaded keys,
-    ///     certificate and settings, so a restart is needed afterwards.
+    ///     says) and checks that every required entry is present and that the bundled files are
+    ///     sound (key ring entries named <c>key-&lt;guid&gt;.xml</c> holding XML, at most one
+    ///     certificate and one configuration entry, the configuration a JSON object, no more than
+    ///     4 GiB when unpacked). It then wipes and replaces the backed-up database contents and
+    ///     replaces the shared TLS certificate and the runtime configuration file; the files are
+    ///     staged first and put in place only after the database import. The archive's Data
+    ///     Protection keys are added to the key ring; keys already there are kept, so a secret the
+    ///     running process protects before the restart stays readable. The running process keeps
+    ///     its loaded keys, certificate and settings, so a restart is needed afterwards. Only one
+    ///     restore runs at a time.
     /// </summary>
     /// <param name="archiveStream">The archive to restore from, encrypted or not.</param>
     /// <param name="passphrase">
@@ -58,8 +64,13 @@ public interface IBackupService
     /// </exception>
     /// <exception cref="BackupArchiveInvalidException">
     ///     Thrown when <paramref name="archiveStream" /> does not carry a recognizable envelope
-    ///     header, or decrypts or unwraps but is not a backup archive this server can import.
-    ///     Nothing is written when this is thrown.
+    ///     header, or decrypts or unwraps but is not a backup archive this server can import
+    ///     (including an unexpected key ring entry, a repeated certificate or configuration entry,
+    ///     a configuration that is not JSON, or too much unpacked data). Nothing is written when
+    ///     this is thrown.
+    /// </exception>
+    /// <exception cref="BackupRestoreInProgressException">
+    ///     Thrown when another restore is still running. Nothing is changed.
     /// </exception>
     Task<BackupRestoreSummary> RestoreBackupAsync(
         Stream archiveStream,

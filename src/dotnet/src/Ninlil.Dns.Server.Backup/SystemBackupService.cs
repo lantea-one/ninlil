@@ -1,9 +1,12 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -28,12 +31,18 @@ namespace Ninlil.Dns.Server.Backup;
 ///     means one passphrase and one authentication tag, and the ZIP is already compressed.
 ///     <para>
 ///         A restore first decrypts or unwraps the archive (as its header says), checks the
-///         manifest, and reads every required entry and file into memory. A wrong passphrase, a
-///         tampered archive or a missing entry is rejected before anything is written. Only then
-///         does it wipe and re-import the database and overwrite the bundled files. The entity
-///         JSON is parsed during the import, and each entity type is committed separately, so a
-///         failure at that stage (malformed entity JSON, a database error) leaves a partly
-///         restored database.
+///         manifest, and reads and validates every entry in memory. A wrong passphrase, a
+///         tampered archive, a missing entry, an unexpected key ring entry, a second
+///         certificate or configuration entry, a configuration that is not a JSON object or
+///         more decompressed data than <see cref="BackupOptions.MaximumRestoredPayloadBytes" />
+///         is rejected before anything is written. The bundled files are then staged next to
+///         their targets, and only after the database import are they renamed into place. The
+///         Data Protection key ring is merged: the archive's keys are added and no existing key
+///         is deleted. The entity JSON is still parsed during the import, and each entity type
+///         is committed separately, so a failure at that stage (malformed entity JSON, a
+///         database error) leaves a partly restored database, but no file has been replaced.
+///         Only one restore runs at a time; a second one is refused with
+///         <see cref="BackupRestoreInProgressException" />.
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">Used to open one dependency injection scope per backup/restore.</param>
@@ -41,7 +50,7 @@ namespace Ninlil.Dns.Server.Backup;
 /// <param name="tlsCertificateOptions">Where the shared TLS certificate lives.</param>
 /// <param name="storageOptions">The active storage engine, recorded in the manifest for reference.</param>
 /// <param name="logger">The logger this service records progress and failures to.</param>
-public sealed class SystemBackupService(
+public sealed partial class SystemBackupService(
     IServiceScopeFactory scopeFactory,
     IOptions<BackupOptions> backupOptions,
     TlsCertificateOptions tlsCertificateOptions,
@@ -61,6 +70,29 @@ public sealed class SystemBackupService(
     private const string KeyRingEntryPrefix = "keyring/";
     private const string CertificateEntryPrefix = "certificate/";
     private const string ConfigurationEntryPrefix = "config/";
+
+    /// <summary>
+    ///     This field is the restore gate. The service is scoped, so the gate is static to cover
+    ///     every request in the process.
+    /// </summary>
+    private static readonly SemaphoreSlim RestoreGate = new(1, 1);
+
+    private static readonly JsonDocumentOptions ConfigurationJsonOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    /// <summary>
+    ///     This method matches the file name ASP.NET Core Data Protection gives a key,
+    ///     <c>key-&lt;guid&gt;.xml</c>. It is the only name a restore writes into the key ring
+    ///     directory, which also holds the database and other secrets.
+    /// </summary>
+    [GeneratedRegex(
+        @"^key-[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\.xml\z",
+        RegexOptions.CultureInvariant
+    )]
+    private static partial Regex KeyRingFileNamePattern();
 
     /// <inheritdoc />
     public async Task<byte[]> CreateBackupAsync(
@@ -157,6 +189,31 @@ public sealed class SystemBackupService(
     {
         ArgumentNullException.ThrowIfNull(archiveStream);
 
+        // A second restore is refused, not queued: it would be working from an archive chosen
+        // before the first one changed the data.
+        if (!RestoreGate.Wait(0, CancellationToken.None))
+            throw new BackupRestoreInProgressException();
+
+        try
+        {
+            return await RestoreCoreAsync(archiveStream, passphrase, stoppingToken);
+        }
+        finally
+        {
+            RestoreGate.Release();
+        }
+    }
+
+    /// <summary>
+    ///     This method does the restore once <see cref="RestoreGate" /> is held: decrypt, validate
+    ///     and read everything, stage the files, change the database, then commit the files.
+    /// </summary>
+    private async Task<BackupRestoreSummary> RestoreCoreAsync(
+        Stream archiveStream,
+        string passphrase,
+        CancellationToken stoppingToken
+    )
+    {
         using MemoryStream buffer = new();
         await archiveStream.CopyToAsync(buffer, stoppingToken);
         byte[] archiveBytes = buffer.ToArray();
@@ -176,8 +233,9 @@ public sealed class SystemBackupService(
         // The reads below are in memory only; nothing is written until they have all succeeded.
         using MemoryStream zipStream = new(plaintext);
         using ZipArchive archive = OpenArchiveOrThrow(zipStream);
+        RestoreReadBudget budget = new(backupOptions.Value.MaximumRestoredPayloadBytes);
 
-        BackupManifest manifest = ReadManifest(archive);
+        BackupManifest manifest = ReadManifest(archive, budget);
         if (manifest.FormatVersion != CurrentPayloadFormatVersion)
             throw new BackupArchiveInvalidException(
                 $"This archive was produced by a format version ({manifest.FormatVersion}) this "
@@ -188,97 +246,101 @@ public sealed class SystemBackupService(
         foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries)
             entityJsonByName[descriptor.Name] = ReadRequiredEntryText(
                 archive,
-                $"database/{descriptor.Name}.json"
+                $"database/{descriptor.Name}.json",
+                budget
             );
 
         string identityRelationshipsJson = ReadRequiredEntryText(
             archive,
-            IdentityRelationshipsEntryName
+            IdentityRelationshipsEntryName,
+            budget
         );
 
-        List<(string FileName, byte[] Bytes)> keyRingFiles =
-        [
-            .. archive
-                .Entries.Where(entry =>
-                    entry.FullName.StartsWith(KeyRingEntryPrefix, StringComparison.Ordinal)
-                )
-                .Select(entry => (FileName: entry.Name, Bytes: ReadEntryBytes(entry))),
-        ];
+        RestoredFiles files = ReadAndValidateFiles(archive, budget);
 
-        List<(string FileName, byte[] Bytes)> certificateCandidates =
-        [
-            .. archive
-                .Entries.Where(entry =>
-                    entry.FullName.StartsWith(CertificateEntryPrefix, StringComparison.Ordinal)
-                )
-                .Select(entry => (FileName: entry.Name, Bytes: ReadEntryBytes(entry))),
-        ];
-        (string FileName, byte[] Bytes)? certificateFile =
-            certificateCandidates.Count > 0 ? certificateCandidates[0] : null;
+        // Every required entry is present and valid. The files are staged next to their targets
+        // first, so a full disk or a permission error aborts here with nothing changed; the
+        // database is changed next; the files are renamed into place last.
+        string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
+        bool restoresConfiguration =
+            files.Configuration is not null && !string.IsNullOrWhiteSpace(configurationPath);
+        SemaphoreSlim configurationLock = restoresConfiguration
+            ? AtomicFile.GetPathLock(configurationPath)
+            : null;
+        List<(string Path, StagedFile File)> stagedFiles = [];
+        bool configurationLocked = false;
 
-        List<(string FileName, byte[] Bytes)> configurationCandidates =
-        [
-            .. archive
-                .Entries.Where(entry =>
-                    entry.FullName.StartsWith(ConfigurationEntryPrefix, StringComparison.Ordinal)
-                )
-                .Select(entry => (FileName: entry.Name, Bytes: ReadEntryBytes(entry))),
-        ];
-        (string FileName, byte[] Bytes)? configurationFile =
-            configurationCandidates.Count > 0 ? configurationCandidates[0] : null;
-
-        // Every required entry is present. From here on the database and files are changed.
-        using IServiceScope scope = scopeFactory.CreateScope();
-        IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-
-        // Role memberships and claims are removed before users and roles, so no relationship is
-        // left pointing at a deleted row (see WipeIdentityRelationshipsAsync).
-        await WipeIdentityRelationshipsAsync(scope.ServiceProvider, stoppingToken);
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        // Entity types are wiped in reverse catalog order, so a referencing row is removed before
-        // the row it references and no foreign key is violated, without relying on cascades
-        // (see BackupEntityCatalog).
-        foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries.Reverse())
+        try
         {
-            await descriptor.WipeAsync(scope.ServiceProvider, stoppingToken);
+            if (configurationLock is not null)
+            {
+                // Held until the end, so a settings save cannot slip between the staging and the
+                // rename and be lost.
+                await configurationLock.WaitAsync(stoppingToken);
+                configurationLocked = true;
+            }
+
+            StageFiles(files, restoresConfiguration, stagedFiles);
+
+            using IServiceScope scope = scopeFactory.CreateScope();
+            IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+            // Role memberships and claims are removed before users and roles, so no relationship is
+            // left pointing at a deleted row (see WipeIdentityRelationshipsAsync).
+            await WipeIdentityRelationshipsAsync(scope.ServiceProvider, stoppingToken);
             await unitOfWork.SaveChangesAsync(stoppingToken);
-        }
 
-        // Entity types are imported in catalog order, so a referenced row (a zone) exists before
-        // the rows that reference it (its records).
-        Dictionary<string, int> importedCounts = new(StringComparer.OrdinalIgnoreCase);
-        foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries)
-        {
-            int imported = await descriptor.ImportJsonAsync(
+            // Entity types are wiped in reverse catalog order, so a referencing row is removed before
+            // the row it references and no foreign key is violated, without relying on cascades
+            // (see BackupEntityCatalog).
+            foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries.Reverse())
+            {
+                await descriptor.WipeAsync(scope.ServiceProvider, stoppingToken);
+                await unitOfWork.SaveChangesAsync(stoppingToken);
+            }
+
+            // Entity types are imported in catalog order, so a referenced row (a zone) exists before
+            // the rows that reference it (its records).
+            Dictionary<string, int> importedCounts = new(StringComparer.OrdinalIgnoreCase);
+            foreach (BackupEntityDescriptor descriptor in BackupEntityCatalog.Entries)
+            {
+                int imported = await descriptor.ImportJsonAsync(
+                    scope.ServiceProvider,
+                    entityJsonByName[descriptor.Name],
+                    stoppingToken
+                );
+                importedCounts[descriptor.Name] = imported;
+                await unitOfWork.SaveChangesAsync(stoppingToken);
+            }
+
+            // Identity relationships are imported last, once every user and role exists again with
+            // its original identifier.
+            await ImportIdentityRelationshipsAsync(
                 scope.ServiceProvider,
-                entityJsonByName[descriptor.Name],
+                identityRelationshipsJson,
                 stoppingToken
             );
-            importedCounts[descriptor.Name] = imported;
             await unitOfWork.SaveChangesAsync(stoppingToken);
+
+            CommitStagedFiles(stagedFiles);
+
+            logger.LogInformation(
+                "Restored a backup archive covering {EntityTypeCount} entity types and {TotalEntities} total rows.",
+                importedCounts.Count,
+                importedCounts.Values.Sum()
+            );
+
+            return new BackupRestoreSummary(importedCounts.Values.Sum(), importedCounts);
         }
+        finally
+        {
+            // A staged file that was committed ignores Dispose; one that was not is deleted.
+            foreach ((string _, StagedFile file) in stagedFiles)
+                file.Dispose();
 
-        // Identity relationships are imported last, once every user and role exists again with
-        // its original identifier.
-        await ImportIdentityRelationshipsAsync(
-            scope.ServiceProvider,
-            identityRelationshipsJson,
-            stoppingToken
-        );
-        await unitOfWork.SaveChangesAsync(stoppingToken);
-
-        RestoreKeyRingFiles(keyRingFiles);
-        RestoreCertificateFile(certificateFile);
-        RestoreConfigurationFile(configurationFile);
-
-        logger.LogInformation(
-            "Restored a backup archive covering {EntityTypeCount} entity types and {TotalEntities} total rows.",
-            importedCounts.Count,
-            importedCounts.Values.Sum()
-        );
-
-        return new BackupRestoreSummary(importedCounts.Values.Sum(), importedCounts);
+            if (configurationLocked)
+                configurationLock.Release();
+        }
     }
 
     /// <summary>
@@ -332,13 +394,21 @@ public sealed class SystemBackupService(
     /// <summary>
     ///     This method lists every Data Protection key ring file in
     ///     <see cref="BackupOptions.DataProtectionKeyRingDirectory" />, matched by the ASP.NET Core
-    ///     <c>key-&lt;guid&gt;.xml</c> naming pattern. The same directory also holds, by default,
-    ///     the SQLite database and the JWT signing key, which must not be picked up.
+    ///     <c>key-&lt;guid&gt;.xml</c> naming pattern, the same pattern a restore requires. The same
+    ///     directory also holds, by default, the SQLite database and the JWT signing key, which
+    ///     must not be picked up.
     /// </summary>
     private IReadOnlyList<string> ListKeyRingFiles()
     {
         string directory = backupOptions.Value.DataProtectionKeyRingDirectory;
-        return Directory.Exists(directory) ? Directory.GetFiles(directory, "key-*.xml") : [];
+        return Directory.Exists(directory)
+            ?
+            [
+                .. Directory
+                    .GetFiles(directory, "key-*.xml")
+                    .Where(path => KeyRingFileNamePattern().IsMatch(Path.GetFileName(path))),
+            ]
+            : [];
     }
 
     /// <summary>
@@ -490,59 +560,281 @@ public sealed class SystemBackupService(
     }
 
     /// <summary>
-    ///     This method deletes the existing key ring files (those matching <c>key-*.xml</c>) and
-    ///     writes the archive's <c>keyring/</c> entries into the key ring directory, readable by
-    ///     the owner only. The entry names are used as they are, without checking the pattern.
+    ///     This method walks the archive's <c>keyring/</c>, <c>certificate/</c> and <c>config/</c>
+    ///     entries, reads them within <paramref name="budget" /> and rejects anything that does not
+    ///     fit the fixed layout a backup writes. Key ring entries must be named exactly
+    ///     <c>keyring/key-&lt;guid&gt;.xml</c> (the name is never taken from the entry's own
+    ///     file-name part, so a crafted entry cannot reach the database or another secret in the
+    ///     same directory) and hold an XML document whose root is <c>key</c>. There is at most one
+    ///     certificate and one configuration entry, directly under their folder; the configuration
+    ///     must be a JSON object, so a restore cannot leave a file the next start cannot read. The
+    ///     certificate is not opened, because its password may come from the restored configuration.
+    ///     Directory entries (a zero-length name ending in a slash) are ignored.
     /// </summary>
-    private void RestoreKeyRingFiles(IReadOnlyList<(string FileName, byte[] Bytes)> keyRingFiles)
+    private static RestoredFiles ReadAndValidateFiles(ZipArchive archive, RestoreReadBudget budget)
     {
-        string directory = backupOptions.Value.DataProtectionKeyRingDirectory;
-        Directory.CreateDirectory(directory);
+        Dictionary<string, byte[]> keyRingFiles = new(StringComparer.OrdinalIgnoreCase);
+        byte[] certificate = null;
+        byte[] configuration = null;
 
-        foreach (string existingFile in ListKeyRingFiles())
-            File.Delete(existingFile);
-
-        foreach ((string fileName, byte[] bytes) in keyRingFiles)
+        foreach (ZipArchiveEntry entry in archive.Entries)
         {
-            string path = Path.Combine(directory, fileName);
-            File.WriteAllBytes(path, bytes);
+            string fullName = entry.FullName;
+            bool isDirectory = fullName.EndsWith('/') && entry.Length == 0;
 
-            if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            if (fullName.StartsWith(KeyRingEntryPrefix, StringComparison.Ordinal))
+            {
+                if (isDirectory)
+                    continue;
+
+                string fileName = fullName[KeyRingEntryPrefix.Length..];
+                if (!KeyRingFileNamePattern().IsMatch(fileName))
+                    throw new BackupArchiveInvalidException(
+                        $"This archive has an unexpected key ring entry '{fullName}'."
+                    );
+
+                if (keyRingFiles.ContainsKey(fileName))
+                    throw new BackupArchiveInvalidException(
+                        $"This archive has the key ring entry '{fullName}' more than once."
+                    );
+
+                byte[] bytes = budget.Read(entry);
+                if (!IsKeyXml(bytes))
+                    throw new BackupArchiveInvalidException(
+                        $"The key ring entry '{fullName}' is not a Data Protection key file."
+                    );
+
+                keyRingFiles[fileName] = bytes;
+            }
+            else if (fullName.StartsWith(CertificateEntryPrefix, StringComparison.Ordinal))
+            {
+                if (isDirectory)
+                    continue;
+
+                RequireDirectChild(fullName, CertificateEntryPrefix);
+                if (certificate is not null)
+                    throw new BackupArchiveInvalidException(
+                        "This archive has more than one 'certificate/' entry."
+                    );
+
+                certificate = budget.Read(entry);
+                if (certificate.Length == 0)
+                    throw new BackupArchiveInvalidException(
+                        $"The certificate entry '{fullName}' is empty."
+                    );
+            }
+            else if (fullName.StartsWith(ConfigurationEntryPrefix, StringComparison.Ordinal))
+            {
+                if (isDirectory)
+                    continue;
+
+                RequireDirectChild(fullName, ConfigurationEntryPrefix);
+                if (configuration is not null)
+                    throw new BackupArchiveInvalidException(
+                        "This archive has more than one 'config/' entry."
+                    );
+
+                configuration = budget.Read(entry);
+                if (!IsJsonObject(configuration))
+                    throw new BackupArchiveInvalidException(
+                        $"The configuration entry '{fullName}' is not a JSON object."
+                    );
+            }
+        }
+
+        return new RestoredFiles(
+            [.. keyRingFiles.Select(pair => (pair.Key, pair.Value))],
+            certificate,
+            configuration
+        );
+    }
+
+    /// <summary>
+    ///     This method rejects an entry that is not directly under <paramref name="prefix" />, or
+    ///     has no file name.
+    /// </summary>
+    private static void RequireDirectChild(string fullName, string prefix)
+    {
+        string rest = fullName[prefix.Length..];
+        if (rest.Length == 0 || rest.Contains('/'))
+            throw new BackupArchiveInvalidException(
+                $"This archive has an unexpected entry '{fullName}'."
+            );
+    }
+
+    /// <summary>
+    ///     This method returns whether <paramref name="bytes" /> is a well-formed XML document with
+    ///     a <c>key</c> root, as every Data Protection key file is. DTDs and external resources are
+    ///     refused, so reading the file cannot reach outside the archive.
+    /// </summary>
+    private static bool IsKeyXml(byte[] bytes)
+    {
+        try
+        {
+            using MemoryStream stream = new(bytes);
+            using XmlReader reader = XmlReader.Create(
+                stream,
+                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null }
+            );
+
+            if (reader.MoveToContent() != XmlNodeType.Element || reader.Name != "key")
+                return false;
+
+            // Reading to the end checks the whole document is well-formed.
+            while (reader.Read()) { }
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
         }
     }
 
     /// <summary>
-    ///     This method overwrites the shared TLS certificate's source file (see
-    ///     <see cref="ResolveTlsCertificatePath" />) with the archive's copy, if there is one. When
-    ///     <see cref="TlsCertificateOptions.PfxPath" /> is set, the copy goes to that path, so the
-    ///     server does not switch to the self-signed certificate path.
+    ///     This method returns whether <paramref name="bytes" /> is a JSON object, read with the
+    ///     options the configuration applier uses (comments and trailing commas allowed).
     /// </summary>
-    private void RestoreCertificateFile((string FileName, byte[] Bytes)? certificateFile)
+    private static bool IsJsonObject(byte[] bytes)
     {
-        if (certificateFile is null)
-            return;
-
-        string path = ResolveTlsCertificatePath();
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, certificateFile.Value.Bytes);
-
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(bytes, ConfigurationJsonOptions);
+            return document.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
-    ///     This method overwrites the runtime configuration file with the archive's copy, when the
-    ///     archive has one and a runtime configuration file is configured.
+    ///     This method writes every file the restore will replace to a temporary file next to its
+    ///     target, in the order they are committed: key ring, certificate, configuration. Key ring
+    ///     and certificate are owner-only; the configuration keeps its existing mode. The caller
+    ///     holds the configuration path lock. Any failure leaves every target unchanged, and the
+    ///     caller deletes the temporary files already staged.
     /// </summary>
-    private void RestoreConfigurationFile((string FileName, byte[] Bytes)? configurationFile)
+    private void StageFiles(
+        RestoredFiles files,
+        bool restoresConfiguration,
+        List<(string Path, StagedFile File)> stagedFiles
+    )
     {
-        string path = backupOptions.Value.RuntimeConfigurationFilePath;
-        if (configurationFile is null || string.IsNullOrWhiteSpace(path))
-            return;
+        string keyRingDirectory = backupOptions.Value.DataProtectionKeyRingDirectory;
+        foreach ((string fileName, byte[] bytes) in files.KeyRing)
+        {
+            string path = Path.Combine(keyRingDirectory, fileName);
+            stagedFiles.Add((path, AtomicFile.Stage(path, bytes, AtomicFilePermissions.OwnerOnly)));
+        }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, configurationFile.Value.Bytes);
+        if (files.Certificate is not null)
+        {
+            string path = ResolveTlsCertificatePath();
+            stagedFiles.Add(
+                (path, AtomicFile.Stage(path, files.Certificate, AtomicFilePermissions.OwnerOnly))
+            );
+        }
+
+        if (restoresConfiguration)
+        {
+            string path = backupOptions.Value.RuntimeConfigurationFilePath;
+            stagedFiles.Add(
+                (
+                    path,
+                    AtomicFile.Stage(
+                        path,
+                        files.Configuration,
+                        AtomicFilePermissions.PreserveExisting
+                    )
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    ///     This method renames the staged files into place. A failure is rare (a rename inside one
+    ///     directory), but the database is already restored then, so the log names the files
+    ///     already replaced and those still pending before the exception is rethrown.
+    /// </summary>
+    private void CommitStagedFiles(List<(string Path, StagedFile File)> stagedFiles)
+    {
+        List<string> done = [];
+        foreach ((string path, StagedFile file) in stagedFiles)
+        {
+            try
+            {
+                file.Commit();
+                done.Add(path);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "The restore replaced the database but failed to replace '{FailedFile}'. "
+                        + "Replaced files: [{DoneFiles}]. Files not replaced: [{PendingFiles}].",
+                    path,
+                    string.Join(", ", done),
+                    string.Join(
+                        ", ",
+                        stagedFiles.Select(item => item.Path).Except(done).Where(p => p != path)
+                    )
+                );
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     This record holds the validated file payload of an archive: the key ring files as
+    ///     (<c>key-&lt;guid&gt;.xml</c> name, content), and the certificate and configuration
+    ///     content, or null when the archive has none.
+    /// </summary>
+    private sealed record RestoredFiles(
+        IReadOnlyList<(string FileName, byte[] Bytes)> KeyRing,
+        byte[] Certificate,
+        byte[] Configuration
+    );
+
+    /// <summary>
+    ///     This class counts the decompressed bytes of one restore against the cap. It counts what
+    ///     is actually produced while an entry is read, never the size the ZIP claims, so a zip
+    ///     bomb is stopped after at most the cap plus one buffer.
+    /// </summary>
+    private sealed class RestoreReadBudget
+    {
+        private readonly long _maximumBytes;
+        private long _remaining;
+
+        public RestoreReadBudget(long maximumBytes)
+        {
+            _maximumBytes = maximumBytes;
+            _remaining = maximumBytes;
+        }
+
+        /// <summary>
+        ///     This method reads one entry completely, failing as soon as the budget (or the
+        ///     largest array .NET can hold) is exceeded.
+        /// </summary>
+        public byte[] Read(ZipArchiveEntry entry)
+        {
+            using Stream entryStream = entry.Open();
+            using MemoryStream output = new();
+            byte[] chunk = new byte[81920];
+            int read;
+            while ((read = entryStream.Read(chunk, 0, chunk.Length)) > 0)
+            {
+                _remaining -= read;
+                if (_remaining < 0 || output.Length + read > Array.MaxLength)
+                    throw new BackupArchiveInvalidException(
+                        "This archive holds more data than a restore accepts "
+                            + $"({_maximumBytes:N0} bytes when unpacked)."
+                    );
+
+                output.Write(chunk, 0, read);
+            }
+
+            return output.ToArray();
+        }
     }
 
     /// <summary>
@@ -569,9 +861,9 @@ public sealed class SystemBackupService(
     ///     This method reads and parses <see cref="ManifestEntryName" />, translating either a
     ///     missing entry or malformed JSON into <see cref="BackupArchiveInvalidException" />.
     /// </summary>
-    private static BackupManifest ReadManifest(ZipArchive archive)
+    private static BackupManifest ReadManifest(ZipArchive archive, RestoreReadBudget budget)
     {
-        string json = ReadRequiredEntryText(archive, ManifestEntryName);
+        string json = ReadRequiredEntryText(archive, ManifestEntryName, budget);
 
         try
         {
@@ -589,10 +881,14 @@ public sealed class SystemBackupService(
     }
 
     /// <summary>
-    ///     This method reads the text of one ZIP entry, throwing
-    ///     <see cref="BackupArchiveInvalidException" /> if the entry is missing.
+    ///     This method reads the text of one ZIP entry within <paramref name="budget" />, throwing
+    ///     <see cref="BackupArchiveInvalidException" /> if the entry is missing or the budget is used up.
     /// </summary>
-    private static string ReadRequiredEntryText(ZipArchive archive, string entryName)
+    private static string ReadRequiredEntryText(
+        ZipArchive archive,
+        string entryName,
+        RestoreReadBudget budget
+    )
     {
         ZipArchiveEntry entry =
             archive.GetEntry(entryName)
@@ -600,20 +896,11 @@ public sealed class SystemBackupService(
                 $"This archive is missing its own required '{entryName}' entry."
             );
 
-        using Stream entryStream = entry.Open();
-        using StreamReader reader = new(entryStream, Encoding.UTF8);
+        // The bytes are counted against the cap first; the reader then drops a UTF-8 byte order
+        // mark as before.
+        using MemoryStream bytes = new(budget.Read(entry));
+        using StreamReader reader = new(bytes, Encoding.UTF8);
         return reader.ReadToEnd();
-    }
-
-    /// <summary>
-    ///     This method reads the bytes of one ZIP entry.
-    /// </summary>
-    private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
-    {
-        using Stream entryStream = entry.Open();
-        using MemoryStream buffer = new();
-        entryStream.CopyTo(buffer);
-        return buffer.ToArray();
     }
 
     /// <summary>

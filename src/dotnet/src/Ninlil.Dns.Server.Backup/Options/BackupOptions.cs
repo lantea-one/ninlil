@@ -41,4 +41,12 @@ public sealed class BackupOptions
     ///     so the path is resolved in one place. When empty, no configuration file is included.
     /// </summary>
     public string RuntimeConfigurationFilePath { get; set; } = "";
+
+    /// <summary>
+    ///     This property contains the most decompressed bytes a restore reads from one archive,
+    ///     summed over all entries: 4 GiB by default. The ZIP's own size fields are not trusted, so
+    ///     the count is made while the entries are read, which also stops a zip bomb. It exists as
+    ///     an option so a test can lower it; there is no reason to change it in production.
+    /// </summary>
+    public long MaximumRestoredPayloadBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 }
