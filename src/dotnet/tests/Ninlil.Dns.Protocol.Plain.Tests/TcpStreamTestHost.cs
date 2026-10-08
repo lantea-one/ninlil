@@ -9,6 +9,7 @@ using Ninlil.Dns.Protocol.Plain.Tests.Fakes;
 using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.Core.Resolution;
 
 // Define our namespace.
@@ -21,7 +22,8 @@ namespace Ninlil.Dns.Protocol.Plain.Tests;
 ///     transfer. A query name decides what the fake resolver does: a name starting with
 ///     <c>slow</c> waits on <see cref="Gate" />, a name starting with <c>big</c> gets a reply of
 ///     about 56 000 octets, and anything else is answered at once. An optional fake
-///     <see cref="IZoneTransferService" /> serves AXFR queries.
+///     <see cref="IZoneTransferService" /> serves AXFR queries, and an optional
+///     <see cref="IDnsRateLimiter" /> is given to the listener for them.
 /// </summary>
 internal sealed class TcpStreamTestHost : IAsyncDisposable
 {
@@ -53,7 +55,8 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
 
     public static async Task<TcpStreamTestHost> StartAsync(
         TimeSpan idleTimeout,
-        IZoneTransferService transferService = null
+        IZoneTransferService transferService = null,
+        IDnsRateLimiter rateLimiter = null
     )
     {
         TcpStreamTestHost host = new() { Port = LocalAddresses.GetFreePort() };
@@ -83,7 +86,8 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
                     TcpIdleTimeout = idleTimeout,
                 }
             ),
-            NullLogger<TcpDnsListener>.Instance
+            NullLogger<TcpDnsListener>.Instance,
+            rateLimiter
         );
         await host._tcp.StartAsync(CancellationToken.None);
 
