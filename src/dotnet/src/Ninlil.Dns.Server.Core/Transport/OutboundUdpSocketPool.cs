@@ -14,8 +14,10 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///     kept for the life of the process, so outbound queries rotate across a fixed set of at most
 ///     <see cref="OutboundQueryOptions.PoolSizePerAddressFamily" /> ports. That set is not
 ///     re-randomized, so it offers fewer possible source ports than a new ephemeral socket per
-///     query; the callers still check each reply's ID and source address. It is a
-///     singleton, shared by every outbound query.
+///     query; the callers still check each reply's ID and source address. The pool is off by
+///     default (<see cref="OutboundQueryOptions.EnableSourcePortPool" />): a new socket per query
+///     gets a fresh random port from the OS, as RFC 5452 asks. Turn it on only when per-query
+///     binds cost too much. It is a singleton, shared by every outbound query.
 /// </summary>
 /// <param name="options">
 ///     The pool settings. The enable switch and excluded ports are read on each use; the pool

@@ -22,6 +22,18 @@ public class OutboundUdpSocketPoolTests
     private static int LocalPortOf(Socket socket) => ((IPEndPoint)socket.LocalEndPoint).Port;
 
     [Fact]
+    public async Task DefaultOptions_TwoRents_GiveTwoDifferentSockets()
+    {
+        using OutboundUdpSocketPool pool = CreatePool(new OutboundQueryOptions());
+
+        using OutboundUdpSocketLease first = await pool.RentAsync(AddressFamily.InterNetwork);
+        using OutboundUdpSocketLease second = await pool.RentAsync(AddressFamily.InterNetwork);
+
+        Assert.False(new OutboundQueryOptions().EnableSourcePortPool);
+        Assert.NotSame(first.Socket, second.Socket);
+    }
+
+    [Fact]
     public async Task DisablingThePoolHandsBackAFreshSocketEveryTime()
     {
         using OutboundUdpSocketPool pool = CreatePool(
@@ -42,7 +54,9 @@ public class OutboundUdpSocketPoolTests
     [Fact]
     public async Task ARentedThenHealthilyReturnedSocketIsReusedByALaterRent()
     {
-        using OutboundUdpSocketPool pool = CreatePool(new OutboundQueryOptions());
+        using OutboundUdpSocketPool pool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = true }
+        );
 
         OutboundUdpSocketLease first = await pool.RentAsync(AddressFamily.InterNetwork);
         Socket firstSocket = first.Socket;
@@ -56,7 +70,9 @@ public class OutboundUdpSocketPoolTests
     [Fact]
     public async Task MarkUnhealthyMeansTheSocketIsDisposedRatherThanReused()
     {
-        using OutboundUdpSocketPool pool = CreatePool(new OutboundQueryOptions());
+        using OutboundUdpSocketPool pool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = true }
+        );
 
         OutboundUdpSocketLease first = await pool.RentAsync(AddressFamily.InterNetwork);
         Socket firstSocket = first.Socket;
@@ -72,7 +88,9 @@ public class OutboundUdpSocketPoolTests
     [Fact]
     public async Task RentedSocketsAreBoundAndReadyToSendFrom()
     {
-        using OutboundUdpSocketPool pool = CreatePool(new OutboundQueryOptions());
+        using OutboundUdpSocketPool pool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = true }
+        );
 
         using OutboundUdpSocketLease lease = await pool.RentAsync(AddressFamily.InterNetwork);
 
@@ -82,7 +100,9 @@ public class OutboundUdpSocketPoolTests
     [Fact]
     public async Task ExcludedSourcePortsAreActuallyAvoided()
     {
-        using OutboundUdpSocketPool discoveryPool = CreatePool(new OutboundQueryOptions());
+        using OutboundUdpSocketPool discoveryPool = CreatePool(
+            new OutboundQueryOptions { EnableSourcePortPool = true }
+        );
         int discoveredPort;
 
         using (
@@ -93,7 +113,11 @@ public class OutboundUdpSocketPoolTests
             discoveredPort = LocalPortOf(discovery.Socket);
 
         using OutboundUdpSocketPool excludingPool = CreatePool(
-            new OutboundQueryOptions { ExcludedSourcePorts = [discoveredPort] }
+            new OutboundQueryOptions
+            {
+                EnableSourcePortPool = true,
+                ExcludedSourcePorts = [discoveredPort],
+            }
         );
         using OutboundUdpSocketLease excluded = await excludingPool.RentAsync(
             AddressFamily.InterNetwork

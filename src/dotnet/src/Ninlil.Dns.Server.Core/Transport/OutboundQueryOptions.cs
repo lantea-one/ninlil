@@ -16,15 +16,15 @@ public sealed class OutboundQueryOptions
 
     /// <summary>
     ///     This property controls whether outbound UDP queries reuse sockets from
-    ///     <see cref="OutboundUdpSocketPool" />. On by default. When on, queries rotate across a
-    ///     fixed set of at most <see cref="PoolSizePerAddressFamily" /> source ports that avoid
-    ///     <see cref="ExcludedSourcePorts" />. When off, each query in
+    ///     <see cref="OutboundUdpSocketPool" />. Off by default. When off, each query in
     ///     <c>Ninlil.Dns.Server.Recursive.Transport.UpstreamDnsClient</c> and
-    ///     <c>Ninlil.Dns.Server.Forwarding.Clients.PlainForwarderClient</c> gets a new socket on a
-    ///     random ephemeral port (still avoiding excluded ports), which gives more source-port
-    ///     randomness per query than the pool does.
+    ///     <c>Ninlil.Dns.Server.Forwarding.Clients.PlainForwarderClient</c> gets a new socket, so
+    ///     the OS picks a fresh random source port every time (RFC 5452; ports in
+    ///     <see cref="ExcludedSourcePorts" /> are still avoided). Turn it on only when binding a
+    ///     socket per query costs too much. When on, queries rotate across a fixed set of at most
+    ///     <see cref="PoolSizePerAddressFamily" /> source ports, which offers fewer possible ports.
     /// </summary>
-    public bool EnableSourcePortPool { get; set; } = true;
+    public bool EnableSourcePortPool { get; set; } = false;
 
     /// <summary>
     ///     This property contains how many sockets the pool keeps per address family (IPv4 and

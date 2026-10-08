@@ -63,7 +63,7 @@ public class OutboundQuerySettingsControllerTests(NinlilDnsWebApplicationFactory
         OutboundQuerySettingsDetail detail =
             await response.Content.ReadFromJsonAsync<OutboundQuerySettingsDetail>();
 
-        Assert.True(detail.EnableSourcePortPool);
+        Assert.False(detail.EnableSourcePortPool);
         Assert.Equal(128, detail.PoolSizePerAddressFamily);
         Assert.Empty(detail.ExcludedSourcePorts);
     }

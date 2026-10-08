@@ -243,7 +243,7 @@ Cookies, source-port pooling, EDNS Client Subnet, and DNS64.
 | `NINLIL_DNS_SERVER_COOKIES_ENABLE` | Whether RFC 7873 DNS Cookies are supported. | `true` |
 | `NINLIL_DNS_SERVER_COOKIES_REQUIRE` | Whether a valid cookie is required to answer a query (stricter anti-spoofing posture). | `false` |
 | `NINLIL_DNS_SERVER_COOKIES_SECRET_ROTATION_INTERVAL` | How often the server-side cookie secret is rotated. | `1.00:00:00` |
-| `NINLIL_DNS_SERVER_OUTBOUND_QUERY_ENABLE_SOURCE_PORT_POOL` | Whether outbound (recursive/forwarder) queries draw from a pre-bound pool of source ports rather than binding a fresh ephemeral port per query. | `true` |
+| `NINLIL_DNS_SERVER_OUTBOUND_QUERY_ENABLE_SOURCE_PORT_POOL` | Whether outbound (recursive/forwarder) queries draw from a pre-bound pool of source ports rather than binding a fresh ephemeral port per query. Off by default so every query gets a fresh random source port; turn on only when per-query binds cost too much. | `false` |
 | `NINLIL_DNS_SERVER_OUTBOUND_QUERY_POOL_SIZE_PER_ADDRESS_FAMILY` | How many source ports are pre-bound per IP address family. | `128` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_ENABLE` | Whether EDNS Client Subnet (ECS) is attached to outbound recursive queries. | `false` |
 | `NINLIL_DNS_SERVER_CLIENT_SUBNET_OVERRIDE_ADDRESS` | A fixed address to report via ECS instead of the real querying client's address. | *(none)* |
