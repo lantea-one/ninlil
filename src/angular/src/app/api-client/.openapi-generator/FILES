@@ -417,6 +417,7 @@ model/tsigKeyDetailPagedResult.ts
 model/tsigKeyWriteRequest.ts
 model/tsigSettingsDetail.ts
 model/twoFactorCodeRequest.ts
+model/twoFactorEmailCodeRequest.ts
 model/twoFactorLoginRequest.ts
 model/twoFactorStatus.ts
 model/uiThemeModeEnum.ts

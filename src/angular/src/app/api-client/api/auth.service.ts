@@ -31,6 +31,8 @@ import { LoginResponse } from '../model/loginResponse';
 // @ts-ignore
 import { RefreshRequest } from '../model/refreshRequest';
 // @ts-ignore
+import { TwoFactorEmailCodeRequest } from '../model/twoFactorEmailCodeRequest';
+// @ts-ignore
 import { TwoFactorLoginRequest } from '../model/twoFactorLoginRequest';
 
 // @ts-ignore
@@ -41,6 +43,7 @@ import {
     AuthServiceInterface,
     ApiAuthForgotPasswordPostRequestParams,
     ApiAuthLoginPostRequestParams,
+    ApiAuthLoginTwoFactorEmailCodePostRequestParams,
     ApiAuthLoginTwoFactorPostRequestParams,
     ApiAuthLogoutPostRequestParams,
     ApiAuthRefreshPostRequestParams,
@@ -190,6 +193,74 @@ export class AuthService extends BaseService implements AuthServiceInterface {
             {
                 context: localVarHttpContext,
                 body: loginRequest,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * This action e-mails the account a short-lived verification code during the pending second-factor step of a sign-in, for the &#x60;\&quot;Email\&quot;&#x60; provider of M:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). The pending-sign-in token from M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) authorizes it (the caller has no session yet) and stays valid, so the code can be submitted afterwards. Returns 202 on success; 401 for an unknown, expired or used token; 400 when the account has no confirmed e-mail address. Allows anonymous callers and is rate limited like the other sign-in actions.
+     * @endpoint post /api/auth/login/two-factor/email-code
+     * @param requestParameters
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public apiAuthLoginTwoFactorEmailCodePost(requestParameters?: ApiAuthLoginTwoFactorEmailCodePostRequestParams, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any>;
+    public apiAuthLoginTwoFactorEmailCodePost(requestParameters?: ApiAuthLoginTwoFactorEmailCodePostRequestParams, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<any>>;
+    public apiAuthLoginTwoFactorEmailCodePost(requestParameters?: ApiAuthLoginTwoFactorEmailCodePostRequestParams, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<any>>;
+    public apiAuthLoginTwoFactorEmailCodePost(requestParameters?: ApiAuthLoginTwoFactorEmailCodePostRequestParams, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: undefined, context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        const twoFactorEmailCodeRequest = requestParameters?.twoFactorEmailCodeRequest;
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (Bearer) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        // to determine the Content-Type header
+        const consumes: string[] = [
+            'application/json',
+            'text/json',
+            'application/*+json'
+        ];
+        const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+        if (httpContentTypeSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+        }
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/auth/login/two-factor/email-code`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<any>('post', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                body: twoFactorEmailCodeRequest,
                 responseType: <any>responseType_,
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
@@ -411,7 +482,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action sets a new password from a password-reset token. It is the second step of both M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the &#x60;EmailLink&#x60; mode of &#x60;UsersController.ResetPassword&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; Ninlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists.
+     * This action sets a new password from a password-reset token. It is the second step of both M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the &#x60;EmailLink&#x60; mode of &#x60;UsersController.ResetPassword&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; Ninlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists. A successful reset revokes every refresh token of the account.
      * @endpoint post /api/auth/reset-password
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

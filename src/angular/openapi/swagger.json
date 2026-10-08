@@ -1075,6 +1075,38 @@
         }
       }
     },
+    "/api/auth/login/two-factor/email-code": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "This action e-mails the account a short-lived verification code during the pending\nsecond-factor step of a sign-in, for the `\"Email\"` provider of\nM:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). The pending-sign-in token from M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken)\nauthorizes it (the caller has no session yet) and stays valid, so the code can be\nsubmitted afterwards. Returns 202 on success; 401 for an unknown, expired or used\ntoken; 400 when the account has no confirmed e-mail address. Allows anonymous callers\nand is rate limited like the other sign-in actions.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorEmailCodeRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorEmailCodeRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorEmailCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/auth/login/two-factor": {
       "post": {
         "tags": [
@@ -1285,7 +1317,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\nNinlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists.",
+        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\nNinlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists. A successful reset revokes every\nrefresh token of the account.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -31191,7 +31223,7 @@
         "tags": [
           "Roles"
         ],
-        "summary": "This action grants a role a permission, giving it to every user who holds the role. The\npermission string is not checked against `GET /api/permissions`. Requires\n`roles:write`.",
+        "summary": "This action grants a role a permission, giving it to every user who holds the role. The\npermission string is not checked against `GET /api/permissions`. Requires\n`roles:write`, and the caller must hold the permission it grants (only a holder of\n`*` can grant `*`); otherwise this returns 403 naming the missing permission.",
         "parameters": [
           {
             "name": "id",
@@ -33787,7 +33819,35 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action generates a new TOTP shared secret for the caller, replacing the existing\none, and returns it with an `otpauth://` URI for an authenticator app.\nM:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must confirm it before two-factor sign-in becomes\nrequired. If two-factor sign-in is already on, the new secret replaces the old one at\nonce.",
+        "summary": "This action generates a new TOTP shared secret for the caller and returns it with an\n`otpauth://` URI for an authenticator app. M:Ninlil.Web.Controllers.TwoFactorController.EnableAuthenticator(Ninlil.Web.Models.TwoFactorCodeRequest) must\nconfirm it before two-factor sign-in becomes required.\n\nWhile two-factor sign-in is on with an authenticator secret, the request must carry\n    a valid current authenticator code or an unused recovery code (which this call\n    uses up) in the body; otherwise this returns 400 and the secret is unchanged. A\n    stolen access token alone then cannot swap in an attacker's secret. First-time\n    setup, or setup while two-factor sign-in is off, needs no body.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorCodeRequest"
+              },
+              "example": {
+                "code": "123456"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorCodeRequest"
+              },
+              "example": {
+                "code": "123456"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorCodeRequest"
+              },
+              "example": {
+                "code": "123456"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -33911,7 +33971,7 @@
         "tags": [
           "TwoFactor"
         ],
-        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Because it needs a signed-in caller, it cannot be called during the\ntwo-factor step of a sign-in.",
+        "summary": "This action e-mails the caller a short-lived verification code from the e-mail token\nprovider and returns 202. The account must have a confirmed e-mail address, otherwise\nthis returns 400. Because it needs a signed-in caller, it cannot be called during the\ntwo-factor step of a sign-in; M:Ninlil.Web.Controllers.AuthController.SendTwoFactorEmailCode(Ninlil.Web.Models.TwoFactorEmailCodeRequest,System.Threading.CancellationToken) does\nthat.",
         "responses": {
           "200": {
             "description": "OK"
@@ -34369,7 +34429,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action updates an account's display name, e-mail address and disabled flag. A\ndisabled account cannot sign in or refresh its session. Passwords are changed through\nM:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest). Requires\n`users:write`.",
+        "summary": "This action updates an account's display name, e-mail address and disabled flag. A\ndisabled account cannot sign in or refresh its session. Passwords are changed through\nM:Ninlil.Web.Controllers.UsersController.ResetPassword(System.Guid,Ninlil.Web.Models.AdminResetPasswordRequest,System.Threading.CancellationToken) or M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken). Requires\n`users:write`.",
         "parameters": [
           {
             "name": "id",
@@ -34449,7 +34509,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action adds a user to a role, by role name. Returns 400 when the role does not\nexist or the user already holds it. Requires `users:write`.",
+        "summary": "This action adds a user to a role, by role name. Returns 400 when the role does not\nexist or the user already holds it. Requires `users:write`, and the caller must\nhold every permission the role carries (a role holding `*` needs a `*`\nholder); otherwise this returns 403 naming the missing permissions.",
         "parameters": [
           {
             "name": "id",
@@ -34533,7 +34593,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action grants a user a permission directly, independent of their roles. The\npermission string is not checked against `GET /api/permissions`. Requires\n`users:write`.",
+        "summary": "This action grants a user a permission directly, independent of their roles. The\npermission string is not checked against `GET /api/permissions`. Requires\n`users:write`, and the caller must hold the permission it grants (only a holder of\n`*` can grant `*`); otherwise this returns 403 naming the missing permission.",
         "parameters": [
           {
             "name": "id",
@@ -34760,7 +34820,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action changes the caller's password. It requires the current password; a wrong one\nreturns 400 with Identity's `PasswordMismatch` error. Requires only a signed-in\ncaller.",
+        "summary": "This action changes the caller's password. It requires the current password; a wrong one\nreturns 400 with Identity's `PasswordMismatch` error. A successful change revokes\nevery refresh token of the account, including the caller's own session: the request\ndoes not say which session it belongs to, so the caller's access token works until it\nexpires and the caller then signs in again with the new password. Requires only a\nsigned-in caller.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -34804,7 +34864,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest) requires.\nNinlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see\nNinlil.Web.Models.AdminPasswordResetMode). Requires `users:write`.\n<list type=\"bullet\"><item>Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only.\n    </item><item>Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `SmtpSettingsController`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
+        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken) requires.\nNinlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see\nNinlil.Web.Models.AdminPasswordResetMode). Requires `users:write`.\n<list type=\"bullet\"><item>Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only. It also revokes\n        every refresh token of the account.\n    </item><item>Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest,System.Threading.CancellationToken). The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `SmtpSettingsController`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
         "parameters": [
           {
             "name": "id",
@@ -38153,7 +38213,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the caller's self-service password change\n(M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest)). Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword\nis required and checked by `UserManager<TUser>.ChangePasswordAsync`: unlike an\nadministrator's reset, a caller changing their own password must prove they know it."
+        "description": "This class carries the caller's self-service password change\n(M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken)). Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword\nis required and checked by `UserManager<TUser>.ChangePasswordAsync`: unlike an\nadministrator's reset, a caller changing their own password must prove they know it."
       },
       "ClientAddressDetail": {
         "type": "object",
@@ -39608,7 +39668,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The page serves\nboth the reset e-mail an administrator sends (`UsersController.ResetPassword` in\n`EmailLink` mode) and the self-service\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) request. Nobody is signed in at\nthis point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with\nNinlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization."
+        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest,System.Threading.CancellationToken). The page serves\nboth the reset e-mail an administrator sends (`UsersController.ResetPassword` in\n`EmailLink` mode) and the self-service\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) request. Nobody is signed in at\nthis point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with\nNinlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization."
       },
       "CreateApiTokenRequest": {
         "type": "object",
@@ -44350,6 +44410,18 @@
         },
         "additionalProperties": false,
         "description": "This class carries one verification code, used to confirm a newly enrolled authenticator\nand to disable two-factor authentication."
+      },
+      "TwoFactorEmailCodeRequest": {
+        "type": "object",
+        "properties": {
+          "mfaToken": {
+            "type": "string",
+            "description": "The opaque token Ninlil.Web.Models.LoginResponse.MfaToken returned.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "This class carries the request for an e-mailed second-factor code during the pending\nsecond-factor step of a sign-in."
       },
       "TwoFactorLoginRequest": {
         "type": "object",

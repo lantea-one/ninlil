@@ -235,6 +235,7 @@ export * from './tsigKeyDetailPagedResult';
 export * from './tsigKeyWriteRequest';
 export * from './tsigSettingsDetail';
 export * from './twoFactorCodeRequest';
+export * from './twoFactorEmailCodeRequest';
 export * from './twoFactorLoginRequest';
 export * from './twoFactorStatus';
 export * from './uiThemeModeEnum';

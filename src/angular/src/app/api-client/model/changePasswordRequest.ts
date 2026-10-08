@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the caller\'s self-service password change (M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest)). Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword is required and checked by `UserManager<TUser>.ChangePasswordAsync`: unlike an administrator\'s reset, a caller changing their own password must prove they know it.
+ * This class carries the caller\'s self-service password change (M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest,System.Threading.CancellationToken)). Ninlil.Web.Models.ChangePasswordRequest.CurrentPassword is required and checked by `UserManager<TUser>.ChangePasswordAsync`: unlike an administrator\'s reset, a caller changing their own password must prove they know it.
  */
 export interface ChangePasswordRequest { 
     /**

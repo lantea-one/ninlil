@@ -328,7 +328,7 @@ export class RolesService extends BaseService implements RolesServiceInterface {
     }
 
     /**
-     * This action grants a role a permission, giving it to every user who holds the role. The permission string is not checked against &#x60;GET /api/permissions&#x60;. Requires &#x60;roles:write&#x60;.
+     * This action grants a role a permission, giving it to every user who holds the role. The permission string is not checked against &#x60;GET /api/permissions&#x60;. Requires &#x60;roles:write&#x60;, and the caller must hold the permission it grants (only a holder of &#x60;*&#x60; can grant &#x60;*&#x60;); otherwise this returns 403 naming the missing permission.
      * @endpoint post /api/roles/{id}/permissions
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

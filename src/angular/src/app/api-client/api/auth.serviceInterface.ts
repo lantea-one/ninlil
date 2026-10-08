@@ -18,6 +18,7 @@ import { ForgotPasswordResult } from '../model/models';
 import { LoginRequest } from '../model/models';
 import { LoginResponse } from '../model/models';
 import { RefreshRequest } from '../model/models';
+import { TwoFactorEmailCodeRequest } from '../model/models';
 import { TwoFactorLoginRequest } from '../model/models';
 
 
@@ -30,6 +31,10 @@ export interface ApiAuthForgotPasswordPostRequestParams {
 
 export interface ApiAuthLoginPostRequestParams {
     loginRequest?: LoginRequest;
+}
+
+export interface ApiAuthLoginTwoFactorEmailCodePostRequestParams {
+    twoFactorEmailCodeRequest?: TwoFactorEmailCodeRequest;
 }
 
 export interface ApiAuthLoginTwoFactorPostRequestParams {
@@ -70,6 +75,14 @@ export interface AuthServiceInterface {
     apiAuthLoginPost(requestParameters: ApiAuthLoginPostRequestParams, extraHttpRequestParams?: any): Observable<LoginResponse>;
 
     /**
+     * This action e-mails the account a short-lived verification code during the pending second-factor step of a sign-in, for the &#x60;\&quot;Email\&quot;&#x60; provider of M:Ninlil.Web.Controllers.AuthController.TwoFactorLogin(Ninlil.Web.Models.TwoFactorLoginRequest,System.Threading.CancellationToken). The pending-sign-in token from M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) authorizes it (the caller has no session yet) and stays valid, so the code can be submitted afterwards. Returns 202 on success; 401 for an unknown, expired or used token; 400 when the account has no confirmed e-mail address. Allows anonymous callers and is rate limited like the other sign-in actions.
+     * 
+     * @endpoint post /api/auth/login/two-factor/email-code
+* @param requestParameters
+     */
+    apiAuthLoginTwoFactorEmailCodePost(requestParameters: ApiAuthLoginTwoFactorEmailCodePostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
+
+    /**
      * This action completes a sign-in that M:Ninlil.Web.Controllers.AuthController.Login(Ninlil.Web.Models.LoginRequest,System.Threading.CancellationToken) marked as needing a second factor, checking an authenticator code, an e-mailed code or a recovery code against the pending sign-in\&#39;s account. Each challenge token can be used once. Returns 401 for an unknown or used challenge token or a wrong code. Allows anonymous callers and is rate limited.
      * 
      * @endpoint post /api/auth/login/two-factor
@@ -94,7 +107,7 @@ export interface AuthServiceInterface {
     apiAuthRefreshPost(requestParameters: ApiAuthRefreshPostRequestParams, extraHttpRequestParams?: any): Observable<AuthenticationResult>;
 
     /**
-     * This action sets a new password from a password-reset token. It is the second step of both M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the &#x60;EmailLink&#x60; mode of &#x60;UsersController.ResetPassword&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; Ninlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists.
+     * This action sets a new password from a password-reset token. It is the second step of both M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the &#x60;EmailLink&#x60; mode of &#x60;UsersController.ResetPassword&#x60;, called from the admin console\&#39;s \&quot;set new password\&quot; page. The caller is not signed in, so it allows anonymous callers; Ninlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) rejects a wrong, expired or used token. An unknown account and an undecodable token return the same 400 message, so the response does not reveal whether an account exists. A successful reset revokes every refresh token of the account.
      * 
      * @endpoint post /api/auth/reset-password
 * @param requestParameters
