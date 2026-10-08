@@ -202,12 +202,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration["Cluster:NodeId"]))
 {
     string nodeIdFilePath = Path.Combine(dataDirectory, "cluster-node-id.txt");
 
-    string nodeId = File.Exists(nodeIdFilePath)
-        ? File.ReadAllText(nodeIdFilePath).Trim()
-        : Guid.NewGuid().ToString();
-
-    if (!File.Exists(nodeIdFilePath))
-        File.WriteAllText(nodeIdFilePath, nodeId);
+    // A blank existing file stops startup instead of getting a new id (see ClusterNodeIdFile).
+    string nodeId = ClusterNodeIdFile.ReadOrCreate(nodeIdFilePath);
 
     builder.Configuration["Cluster:NodeId"] = nodeId;
 }
