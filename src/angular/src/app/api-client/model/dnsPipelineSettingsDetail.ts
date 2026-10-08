@@ -10,13 +10,17 @@
 
 
 /**
- * This record is the REST shape of the query pipeline settings (`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings` returns: worker pool and queue sizing, and the UDP amplification guard. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the query pipeline settings (`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings` returns: queue readers, concurrency cap and queue sizing, and the UDP amplification guard. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface DnsPipelineSettingsDetail { 
     /**
-     * How many workers process queries in parallel. Defaults to the processor count.
+     * How many tasks take queries off the queue. Defaults to the processor count.
      */
     workerCount?: number;
+    /**
+     * How many queries are answered at once. Defaults to 1000.
+     */
+    maxConcurrentQueries?: number;
     /**
      * How many received queries may wait in the queue for a worker. Defaults to 4096.
      */

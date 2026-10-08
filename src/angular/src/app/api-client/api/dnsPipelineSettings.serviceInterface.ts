@@ -35,7 +35,7 @@ export interface DnsPipelineSettingsServiceInterface {
     apiDnsPipelineSettingsGet(extraHttpRequestParams?: any): Observable<DnsPipelineSettingsDetail>;
 
     /**
-     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends on whether the worker or queue size, a UDP limit, or both were changed. Returns 400 for a worker count or capacity below 1, a size outside 1-65535, or an amplification factor that is not above 0. Requires &#x60;dnspipelinesettings:write&#x60;.
+     * This action merges a partial update into &#x60;DnsServer:Pipeline&#x60; as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends on whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns 400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor that is not above 0. Requires &#x60;dnspipelinesettings:write&#x60;.
      * 
      * @endpoint patch /api/dns-pipeline-settings
 * @param requestParameters

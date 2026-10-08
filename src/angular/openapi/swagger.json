@@ -14404,6 +14404,7 @@
                 },
                 "example": {
                   "workerCount": 8,
+                  "maxConcurrentQueries": 1000,
                   "channelCapacity": 4096,
                   "maxUdpPayloadSizeOctets": 1232,
                   "maxUdpAmplificationFactor": 20,
@@ -14416,6 +14417,7 @@
                 },
                 "example": {
                   "workerCount": 8,
+                  "maxConcurrentQueries": 1000,
                   "channelCapacity": 4096,
                   "maxUdpPayloadSizeOctets": 1232,
                   "maxUdpAmplificationFactor": 20,
@@ -14428,6 +14430,7 @@
                 },
                 "example": {
                   "workerCount": 8,
+                  "maxConcurrentQueries": 1000,
                   "channelCapacity": 4096,
                   "maxUdpPayloadSizeOctets": 1232,
                   "maxUdpAmplificationFactor": 20,
@@ -14442,7 +14445,7 @@
         "tags": [
           "DnsPipelineSettings"
         ],
-        "summary": "This action merges a partial update into `DnsServer:Pipeline` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends\non whether the worker or queue size, a UDP limit, or both were changed. Returns 400 for\na worker count or capacity below 1, a size outside 1-65535, or an amplification factor\nthat is not above 0. Requires `dnspipelinesettings:write`.",
+        "summary": "This action merges a partial update into `DnsServer:Pipeline` as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. The response note depends\non whether the worker, concurrency or queue size, a UDP limit, or both were changed. Returns\n400 for a worker count, concurrent-query cap or capacity below 1, a size outside 1-65535, or an amplification factor\nthat is not above 0. Requires `dnspipelinesettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -41620,7 +41623,12 @@
         "properties": {
           "workerCount": {
             "type": "integer",
-            "description": "How many workers process queries in parallel. Defaults to the processor count.",
+            "description": "How many tasks take queries off the queue. Defaults to the processor count.",
+            "format": "int32"
+          },
+          "maxConcurrentQueries": {
+            "type": "integer",
+            "description": "How many queries are answered at once. Defaults to 1000.",
             "format": "int32"
           },
           "channelCapacity": {
@@ -41645,7 +41653,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This record is the REST shape of the query pipeline settings\n(`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings`\nreturns: worker pool and queue sizing, and the UDP amplification guard. A `PATCH` to\nthe same endpoint accepts the same fields."
+        "description": "This record is the REST shape of the query pipeline settings\n(`DnsQueryProcessingPipelineOptions`) that `GET /api/dns-pipeline-settings`\nreturns: queue readers, concurrency cap and queue sizing, and the UDP amplification guard. A `PATCH` to\nthe same endpoint accepts the same fields."
       },
       "DnsQueryLogEntryDetail": {
         "type": "object",
