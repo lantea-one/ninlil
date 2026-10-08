@@ -1,3 +1,4 @@
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -344,6 +345,69 @@ describe('LoginComponent', () => {
 
     expect(fixture.componentInstance.emailCodeState()).toBe('idle');
     expect(fixture.componentInstance.errorMessage()).toContain('could not be sent');
+  });
+
+  it('tells the user to wait when the e-mailed code was requested too soon', async () => {
+    const fixture = await createComponent();
+    authServiceFake.login.and.resolveTo({ requiresTwoFactor: true, mfaToken: 'pending-token' });
+    fixture.componentInstance.credentialsForm.patchValue({
+      userName: 'someone',
+      password: 'correct-password',
+    });
+    await fixture.componentInstance.submitCredentials();
+    authApiSpy.apiAuthLoginTwoFactorEmailCodePost.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 429 })),
+    );
+
+    await fixture.componentInstance.sendEmailCode();
+
+    expect(fixture.componentInstance.emailCodeState()).toBe('idle');
+    expect(fixture.componentInstance.errorMessage()).toContain('Wait a minute');
+  });
+
+  it('says how long to wait when the two-factor code check answers 429', async () => {
+    const fixture = await createComponent();
+    authServiceFake.login.and.resolveTo({ requiresTwoFactor: true, mfaToken: 'pending-token' });
+    fixture.componentInstance.credentialsForm.patchValue({
+      userName: 'someone',
+      password: 'correct-password',
+    });
+    await fixture.componentInstance.submitCredentials();
+
+    authServiceFake.completeTwoFactorLogin.and.rejectWith(
+      new HttpErrorResponse({ status: 429, headers: new HttpHeaders({ 'Retry-After': '840' }) }),
+    );
+    fixture.componentInstance.twoFactorForm.setValue({
+      code: '000000',
+      provider: 'Authenticator',
+    });
+    await fixture.componentInstance.submitTwoFactorCode();
+
+    expect(fixture.componentInstance.step()).toBe('two-factor');
+    expect(fixture.componentInstance.errorMessage()).toBe(
+      'Too many attempts. Try again in 14 minutes.',
+    );
+  });
+
+  it('falls back to a general wait when the 429 has no Retry-After header', async () => {
+    const fixture = await createComponent();
+    authServiceFake.login.and.resolveTo({ requiresTwoFactor: true, mfaToken: 'pending-token' });
+    fixture.componentInstance.credentialsForm.patchValue({
+      userName: 'someone',
+      password: 'correct-password',
+    });
+    await fixture.componentInstance.submitCredentials();
+
+    authServiceFake.completeTwoFactorLogin.and.rejectWith(new HttpErrorResponse({ status: 429 }));
+    fixture.componentInstance.twoFactorForm.setValue({
+      code: '000000',
+      provider: 'Authenticator',
+    });
+    await fixture.componentInstance.submitTwoFactorCode();
+
+    expect(fixture.componentInstance.errorMessage()).toBe(
+      'Too many attempts. Try again in a few minutes.',
+    );
   });
 
   it('shows an error and stays on the two-factor step when the code is rejected', async () => {

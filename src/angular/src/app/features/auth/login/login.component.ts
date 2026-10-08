@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -22,6 +23,23 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { BrandingService } from '../../../core/branding/branding.service';
 import { BrowserNavigationService } from '../../../core/browser/browser-navigation.service';
 import { ThemeService } from '../../../core/theme/theme.service';
+
+/** This function reports whether an error is an HTTP 429 (too many requests) response. */
+function isTooManyRequests(error: unknown): error is HttpErrorResponse {
+  return error instanceof HttpErrorResponse && error.status === 429;
+}
+
+/**
+ * This function words the wait that a 429's `Retry-After` header (in seconds) asks for, rounded
+ * up to whole minutes. Without a usable header it says "a few minutes".
+ */
+function waitMinutes(error: HttpErrorResponse): string {
+  const seconds = Number(error.headers?.get('Retry-After'));
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'a few minutes';
+
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
 
 /**
  * This component is the public login page (`/login`). It has two steps on one page:
@@ -175,8 +193,12 @@ export class LoginComponent implements OnInit {
       const { code, provider } = this.twoFactorForm.getRawValue();
       await this.authService.completeTwoFactorLogin(this.mfaToken, code, provider);
       await this.navigateAfterSignIn();
-    } catch {
-      this.errorMessage.set('That code was not accepted. Please try again.');
+    } catch (error) {
+      this.errorMessage.set(
+        isTooManyRequests(error)
+          ? `Too many attempts. Try again in ${waitMinutes(error)}.`
+          : 'That code was not accepted. Please try again.',
+      );
     } finally {
       this.submitting.set(false);
     }
@@ -203,10 +225,12 @@ export class LoginComponent implements OnInit {
         }),
       );
       this.emailCodeState.set('sent');
-    } catch {
+    } catch (error) {
       this.emailCodeState.set('idle');
       this.errorMessage.set(
-        'A code could not be sent. The account may have no confirmed e-mail address.',
+        isTooManyRequests(error)
+          ? 'A code was sent recently. Wait a minute before asking for another.'
+          : 'A code could not be sent. The account may have no confirmed e-mail address.',
       );
     }
   }
