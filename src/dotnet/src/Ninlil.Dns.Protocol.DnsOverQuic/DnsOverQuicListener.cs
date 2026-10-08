@@ -14,7 +14,9 @@ using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Certificates;
+using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Core.Transport;
 
@@ -55,6 +57,15 @@ namespace Ninlil.Dns.Protocol.DnsOverQuic;
 ///     <c>Ninlil.Dns.Protocol.DnsOverTls.DnsOverTlsListener</c>).
 /// </param>
 /// <param name="logger">The logger this listener records startup failures and connection-level failures to.</param>
+/// <param name="rateLimiter">
+///     The rate limiter shared with the query pipeline, applied to zone transfers before the
+///     transfer service runs (see <see cref="ZoneTransferRequestRunner" />).
+///     <see langword="null" /> skips rate limiting.
+/// </param>
+/// <param name="eventPublisher">
+///     The publisher the answered event of each zone transfer goes to, so transfers reach the
+///     query log. <see langword="null" /> publishes nothing.
+/// </param>
 [SupportedOSPlatform("linux")]
 [SupportedOSPlatform("macos")]
 [SupportedOSPlatform("windows")]
@@ -62,9 +73,21 @@ public sealed class DnsOverQuicListener(
     DnsQueryProcessingPipeline pipeline,
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<DnsOverQuicOptions> options,
-    ILogger<DnsOverQuicListener> logger
+    ILogger<DnsOverQuicListener> logger,
+    IDnsRateLimiter rateLimiter = null,
+    IDnsServerEventPublisher eventPublisher = null
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This field runs zone transfers, which this listener answers itself, through the shared
+    ///     rate limit and query-log steps.
+    /// </summary>
+    private readonly ZoneTransferRequestRunner _transferRunner = new(
+        scopeFactory,
+        rateLimiter,
+        eventPublisher
+    );
+
     /// <summary>
     ///     This field contains the ALPN token RFC 9250 registers for DNS-over-QUIC ("doq").
     /// </summary>
@@ -585,42 +608,40 @@ public sealed class DnsOverQuicListener(
         );
         CancellationToken transferToken = transferCts.Token;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IZoneTransferService transferService =
-            scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
-
-        DnsQueryContext context = new(
-            request,
-            DnsTransportProtocolEnum.Quic,
-            remoteAddress,
-            DateTimeOffset.UtcNow,
-            rawMessage,
-            tsigRecordStartOffset
-        );
-
-        IAsyncEnumerable<DnsMessage> responses =
-            questionType == DnsResourceRecordTypeEnum.Axfr
-                ? transferService.CreateAxfrResponseAsync(context, transferToken)
-                : transferService.CreateIxfrResponseAsync(context, transferToken);
-
         // Every response message goes on this stream, since RFC 9250 §4.2 gives each query
         // one stream and a transfer is the answer to one query. Only the last message closes
         // the stream's write side, so each message is held back one step until the next
         // arrives.
         byte[] pendingFrame = null;
 
-        await foreach (DnsMessage responseMessage in responses.WithCancellation(transferToken))
-        {
-            if (pendingFrame is not null)
-                await WriteAsync(
-                    stream,
-                    pendingFrame,
-                    completeWrites: false,
-                    writeDeadline,
-                    transferToken
-                );
+        bool served = await _transferRunner.RunAsync(
+            request,
+            rawMessage,
+            tsigRecordStartOffset,
+            remoteAddress,
+            DnsTransportProtocolEnum.Quic,
+            questionType,
+            async (messageBytes, token) =>
+            {
+                if (pendingFrame is not null)
+                    await WriteAsync(
+                        stream,
+                        pendingFrame,
+                        completeWrites: false,
+                        writeDeadline,
+                        token
+                    );
 
-            pendingFrame = Frame(DnsMessageWriter.Write(responseMessage));
+                pendingFrame = Frame(messageBytes);
+            },
+            transferToken
+        );
+
+        if (!served)
+        {
+            // Rate limited: reset the stream without a reply, as for a throttled ordinary query.
+            AbortQuietly(stream, DoqExcessiveLoad);
+            return;
         }
 
         if (pendingFrame is not null)

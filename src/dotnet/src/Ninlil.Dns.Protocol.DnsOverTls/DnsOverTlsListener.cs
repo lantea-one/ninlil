@@ -12,7 +12,9 @@ using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
 using Ninlil.Dns.Server.Authoritative.Transfer;
 using Ninlil.Dns.Server.Core.Certificates;
+using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Pipeline;
+using Ninlil.Dns.Server.Core.RateLimiting;
 using Ninlil.Dns.Server.Core.Resolution;
 using Ninlil.Dns.Server.Core.Transport;
 
@@ -45,13 +47,34 @@ namespace Ninlil.Dns.Protocol.DnsOverTls;
 ///     one from process startup.
 /// </param>
 /// <param name="logger">The logger this listener records connection-level failures to.</param>
+/// <param name="rateLimiter">
+///     The rate limiter shared with the query pipeline, applied to zone transfers before the
+///     transfer service runs (see <see cref="ZoneTransferRequestRunner" />).
+///     <see langword="null" /> skips rate limiting.
+/// </param>
+/// <param name="eventPublisher">
+///     The publisher the answered event of each zone transfer goes to, so transfers reach the
+///     query log. <see langword="null" /> publishes nothing.
+/// </param>
 public sealed class DnsOverTlsListener(
     DnsQueryProcessingPipeline pipeline,
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<DnsOverTlsOptions> options,
-    ILogger<DnsOverTlsListener> logger
+    ILogger<DnsOverTlsListener> logger,
+    IDnsRateLimiter rateLimiter = null,
+    IDnsServerEventPublisher eventPublisher = null
 ) : BackgroundService
 {
+    /// <summary>
+    ///     This field runs zone transfers, which this listener answers itself, through the shared
+    ///     rate limit and query-log steps.
+    /// </summary>
+    private readonly ZoneTransferRequestRunner _transferRunner = new(
+        scopeFactory,
+        rateLimiter,
+        eventPublisher
+    );
+
     /// <summary>
     ///     This field contains the listening sockets, one per listen address (or a single
     ///     dual-stack one when none are configured). <see cref="StopAsync" /> closes them, which
@@ -401,26 +424,17 @@ public sealed class DnsOverTlsListener(
         );
         CancellationToken transferToken = transferCts.Token;
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IZoneTransferService transferService =
-            scope.ServiceProvider.GetRequiredService<IZoneTransferService>();
-
-        DnsQueryContext context = new(
+        // A rate-limited transfer writes nothing; the caller closes the connection after it.
+        await _transferRunner.RunAsync(
             request,
-            DnsTransportProtocolEnum.Tls,
-            remoteAddress,
-            DateTimeOffset.UtcNow,
             rawMessage,
-            tsigRecordStartOffset
+            tsigRecordStartOffset,
+            remoteAddress,
+            DnsTransportProtocolEnum.Tls,
+            questionType,
+            (messageBytes, token) => session.SendAsync(messageBytes, token),
+            transferToken
         );
-
-        IAsyncEnumerable<DnsMessage> responses =
-            questionType == DnsResourceRecordTypeEnum.Axfr
-                ? transferService.CreateAxfrResponseAsync(context, transferToken)
-                : transferService.CreateIxfrResponseAsync(context, transferToken);
-
-        await foreach (DnsMessage responseMessage in responses.WithCancellation(transferToken))
-            await session.SendAsync(DnsMessageWriter.Write(responseMessage), transferToken);
     }
 
     /// <summary>
