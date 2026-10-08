@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -28,6 +29,7 @@ using Ninlil.Dhcp.Server.Relay;
 using Ninlil.Dhcp.Server.Relay.Extension;
 using Ninlil.Dhcp.Server.Tftp.Extension;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Options;
 using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
@@ -176,20 +178,18 @@ if (string.IsNullOrWhiteSpace(signingKey))
 {
     string signingKeyFilePath = Path.Combine(dataDirectory, "jwt-signing-key.txt");
 
-    if (File.Exists(signingKeyFilePath))
-    {
-        signingKey = File.ReadAllText(signingKeyFilePath).Trim();
-    }
-    else
+    // A blank existing file (an interrupted write by an older version) would give an empty
+    // signing key, so it is regenerated like a missing one.
+    signingKey = File.Exists(signingKeyFilePath) ? File.ReadAllText(signingKeyFilePath).Trim() : "";
+
+    if (signingKey.Length == 0)
     {
         signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        File.WriteAllText(signingKeyFilePath, signingKey);
-
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(
-                signingKeyFilePath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite
-            );
+        AtomicFile.WriteAllBytes(
+            signingKeyFilePath,
+            Encoding.UTF8.GetBytes(signingKey),
+            AtomicFilePermissions.OwnerOnly
+        );
     }
 
     builder.Configuration["Jwt:SigningKey"] = signingKey;

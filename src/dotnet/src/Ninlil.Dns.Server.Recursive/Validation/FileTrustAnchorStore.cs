@@ -1,6 +1,8 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Common.Serializer;
+using Ninlil.Dns.Common.IO;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Recursive.Validation;
@@ -114,7 +116,8 @@ public sealed class FileTrustAnchorStore(
     }
 
     /// <summary>
-    ///     This method writes the state file, creating its directory if needed.
+    ///     This method writes the state file through <see cref="AtomicFile" />, which creates its
+    ///     directory if needed, writes atomically and keeps the file's existing mode.
     /// </summary>
     private static void WriteFile(
         string path,
@@ -124,14 +127,13 @@ public sealed class FileTrustAnchorStore(
     {
         try
         {
-            string directory = Path.GetDirectoryName(path);
-
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            File.WriteAllText(path, JsonSerializer.SerializePretty(anchors));
+            AtomicFile.WriteAllBytes(
+                path,
+                Encoding.UTF8.GetBytes(JsonSerializer.SerializePretty(anchors)),
+                AtomicFilePermissions.PreserveExisting
+            );
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The in-memory state stays correct for this process, so a failed write is only a
             // warning; the change is lost at restart unless a later write succeeds.

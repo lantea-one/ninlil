@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
+using Ninlil.Dns.Common.IO;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Core.Certificates;
@@ -104,24 +105,21 @@ public static class TlsCertificateLoader
     }
 
     /// <summary>
-    ///     This method saves a certificate with its private key as an unencrypted PFX and, on
-    ///     non-Windows platforms, limits the file to its owner.
+    ///     This method saves a certificate with its private key as an unencrypted PFX through
+    ///     <see cref="AtomicFile" />, which writes it atomically and, on non-Windows platforms,
+    ///     limits the file to its owner from the moment it exists.
     /// </summary>
     private static void Persist(X509Certificate2 certificate, string path, ILogger logger)
     {
         try
         {
-            string directory = Path.GetDirectoryName(path);
-
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            File.WriteAllBytes(path, certificate.Export(X509ContentType.Pfx));
-
-            if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            AtomicFile.WriteAllBytes(
+                path,
+                certificate.Export(X509ContentType.Pfx),
+                AtomicFilePermissions.OwnerOnly
+            );
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The in-memory certificate still works for this run; the next start just
             // generates a new one, so this is only a warning.

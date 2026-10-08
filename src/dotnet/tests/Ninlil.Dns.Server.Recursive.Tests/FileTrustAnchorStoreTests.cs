@@ -44,4 +44,30 @@ public sealed class FileTrustAnchorStoreTests : IDisposable
             reloaded.GetAll().Select(anchor => anchor.KeyTag)
         );
     }
+
+    [Fact]
+    public void ASavedStateRoundTripsAndLeavesNoTempFile()
+    {
+        FileTrustAnchorStore store = new(
+            Options.Create(new RecursiveServerOptions { TrustAnchorStateFilePath = _statePath }),
+            NullLogger<FileTrustAnchorStore>.Instance
+        );
+        store.Save([.. store.GetAll().Take(1)]);
+
+        FileTrustAnchorStore reloaded = new(
+            Options.Create(new RecursiveServerOptions { TrustAnchorStateFilePath = _statePath }),
+            NullLogger<FileTrustAnchorStore>.Instance
+        );
+
+        Assert.Equal(
+            store.GetAll().Select(anchor => anchor.KeyTag),
+            reloaded.GetAll().Select(anchor => anchor.KeyTag)
+        );
+        Assert.Empty(
+            Directory.GetFiles(
+                Path.GetDirectoryName(_statePath),
+                $".{Path.GetFileName(_statePath)}.*"
+            )
+        );
+    }
 }
