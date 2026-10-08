@@ -563,7 +563,7 @@ export class DnssecKeysService extends BaseService implements DnssecKeysServiceI
     }
 
     /**
-     * This action generates a new DNSSEC key for the zone, active at once, and has the zone re-signed. Returns 400 for an algorithm the server\&#39;s policy disallows or cannot sign with, and 404 for an unknown zone. Requires &#x60;zones:write&#x60;.
+     * This action generates a new DNSSEC key for the zone, active at once, and has the zone re-signed. Returns 400 for an algorithm the server\&#39;s policy disallows, cannot sign with or prohibits for signing (RSAMD5, DSA, RSASHA1, DSA-NSEC3-SHA1, RSASHA1-NSEC3-SHA1, ECC-GOST), and 404 for an unknown zone. Requires &#x60;zones:write&#x60;.
      * @endpoint post /api/zones/{zoneId}/dnssec-keys
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
