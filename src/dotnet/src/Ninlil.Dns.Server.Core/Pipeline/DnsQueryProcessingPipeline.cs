@@ -47,6 +47,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             <item>The client access check (<see cref="IDnsFilterEngine.EvaluateClientAsync" />),
 ///             also before decoding. A denied client is dropped without a reply.</item>
 ///             <item>Decoding. A malformed message is dropped.</item>
+///             <item>TSIG (<see cref="IDnsTransactionSignatureService" />, RFC 8945): a signed
+///             request is verified, and a failed one is answered with the TSIG error reply and
+///             skips every step up to the final one.</item>
 ///             <item>DNS Cookies (<see cref="DnsCookieService" />, RFC 7873), which can answer
 ///             REFUSED or BADCOOKIE when cookies are required.</item>
 ///             <item>Client pause and time-of-day schedule (<see cref="IDnsClientScheduleEngine" />).</item>
@@ -60,7 +63,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             already a denial, including rewrite answers.</item>
 ///             <item>Attaching a fresh server cookie, publishing
 ///             <see cref="DnsQueryAnsweredEvent" />, truncating an oversized datagram reply
-///             (<see cref="DnsInboundMessage.IsDatagram" />), and sending it. A reply still larger
+///             (<see cref="DnsInboundMessage.IsDatagram" />) with room left for the TSIG record,
+///             signing the reply (the last change to it, because any later one would break the
+///             MAC), and sending it. A reply still larger
 ///             than <see cref="DnsInboundMessage.MaxResponseOctets" /> is dropped instead.</item>
 ///         </list>
 ///     </para>
@@ -113,6 +118,10 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///     Dropped queries (rate limit, client denial, malformed) publish nothing.
 ///     <see langword="null" /> publishes nothing.
 /// </param>
+/// <param name="transactionSignatureService">
+///     The TSIG service. <c>AddNinlilDnsServerTsig</c> registers it; <see langword="null" />
+///     (a test building the pipeline directly) ignores TSIG records, and replies go out unsigned.
+/// </param>
 public sealed class DnsQueryProcessingPipeline(
     IDnsQueryDispatcher dispatcher,
     IOptionsMonitor<DnsQueryProcessingPipelineOptions> options,
@@ -122,7 +131,8 @@ public sealed class DnsQueryProcessingPipeline(
     DnsCookieService cookieService = null,
     IDnsRewriteEngine rewriteEngine = null,
     IDnsClientScheduleEngine scheduleEngine = null,
-    IDnsServerEventPublisher eventPublisher = null
+    IDnsServerEventPublisher eventPublisher = null,
+    IDnsTransactionSignatureService transactionSignatureService = null
 ) : IHostedService, IAsyncDisposable
 {
     /// <summary>
@@ -562,11 +572,43 @@ public sealed class DnsQueryProcessingPipeline(
 
         DnsMessage response = null;
         bool alreadyDenied = false;
+        bool signatureFailed = false;
+
+        // A signed request is verified before anything else looks at it. The outcome rides on the
+        // context so a resolver that requires TSIG (dynamic update) can rely on it.
+        if (request.Tsig is not null && transactionSignatureService is not null)
+        {
+            DnsTransactionSignature signature = await transactionSignatureService.VerifyAsync(
+                context,
+                stoppingToken
+            );
+            context = context with { TransactionSignature = signature };
+
+            if (!signature.IsVerified)
+            {
+                logger.LogDebug(
+                    "Rejecting a query from {RemoteAddress}: its TSIG signature failed with {Error}.",
+                    message.RemoteAddress,
+                    signature.Error
+                );
+
+                // The service turns this placeholder into the RFC 8945 §5.3.2 reply when it signs.
+                response = WithResponseCode(
+                    request,
+                    signature.Error == DnsResponseCodeEnum.FormatError
+                        ? DnsResponseCodeEnum.FormatError
+                        : DnsResponseCodeEnum.NotAuthoritative
+                );
+                alreadyDenied = true;
+                signatureFailed = true;
+            }
+        }
+
         DnsCookieOutcome cookieOutcome = cookieService?.Evaluate(request, message.RemoteAddress);
 
         // RFC 7873 §5.2: when cookies are required, a query without a valid one is answered
-        // here and never reaches a resolver.
-        if (cookieOutcome is { ShouldRefuse: true })
+        // here and never reaches a resolver. A failed signature already has its answer.
+        if (!signatureFailed && cookieOutcome is { ShouldRefuse: true })
         {
             logger.LogDebug(
                 "Refusing a query from {RemoteAddress}: no usable DNS Cookie, and cookies are required.",
@@ -575,7 +617,7 @@ public sealed class DnsQueryProcessingPipeline(
             response = WithResponseCode(request, DnsResponseCodeEnum.Refused);
             alreadyDenied = true;
         }
-        else if (cookieOutcome is { ShouldRespondBadCookie: true })
+        else if (!signatureFailed && cookieOutcome is { ShouldRespondBadCookie: true })
         {
             logger.LogDebug(
                 "Answering BADCOOKIE to a query from {RemoteAddress}: cookies are required and none it presented is currently valid.",
@@ -725,6 +767,14 @@ public sealed class DnsQueryProcessingPipeline(
 
         byte[] responseBytes = DnsMessageWriter.Write(response);
 
+        // The TSIG record is added last, so a datagram reply must leave room for it.
+        DnsTransactionSignature replySignature = transactionSignatureService is not null
+            ? context.TransactionSignature
+            : null;
+        int signatureLength = replySignature is null
+            ? 0
+            : transactionSignatureService.GetSignatureLength(replySignature);
+
         // RFC 1035 §4.2.1: a datagram response that is too large is truncated (all records
         // dropped, TC set) so the client retries over TCP (§4.2.2). The other transports carry
         // large responses and skip this.
@@ -750,6 +800,8 @@ public sealed class DnsQueryProcessingPipeline(
             if (message.MaxResponseOctets is { } transportLimit)
                 effectiveMaxSize = Math.Min(effectiveMaxSize, transportLimit);
 
+            effectiveMaxSize = Math.Max(0, effectiveMaxSize - signatureLength);
+
             if (responseBytes.Length > effectiveMaxSize)
             {
                 response.Answers.Clear();
@@ -758,6 +810,18 @@ public sealed class DnsQueryProcessingPipeline(
                 response.IsTruncated = true;
                 responseBytes = DnsMessageWriter.Write(response);
             }
+        }
+
+        // RFC 8945 §5.3: a truncated reply is signed too. The service signs a copy, so a cached
+        // message never gains a TSIG record.
+        if (replySignature is not null)
+        {
+            response = await transactionSignatureService.SignAsync(
+                response,
+                replySignature,
+                stoppingToken
+            );
+            responseBytes = DnsMessageWriter.Write(response);
         }
 
         // Even the truncated reply may not fit the transport (or a stream transport has a cap

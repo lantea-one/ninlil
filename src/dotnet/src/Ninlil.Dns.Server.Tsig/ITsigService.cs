@@ -5,8 +5,9 @@ namespace Ninlil.Dns.Server.Tsig;
 
 /// <summary>
 ///     This interface is the TSIG (RFC 8945) engine. It signs outgoing messages with a
-///     pre-shared key and verifies incoming ones against the key they name. Zone transfers
-///     (<c>ZoneTransferService</c>) and dynamic updates (<c>DynamicUpdateQueryResolver</c>) both
+///     pre-shared key and verifies incoming ones against the key they name. The query pipeline
+///     verifies signed QUERY, NOTIFY and UPDATE requests and signs their replies through
+///     <see cref="TsigTransactionSignatureService" />. Zone transfers (<c>ZoneTransferService</c>)
 ///     refuse a request without a valid TSIG signature; the zone transfer clients use it to sign
 ///     their requests and verify the responses. Keys come from
 ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />.

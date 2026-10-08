@@ -6,7 +6,6 @@ using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Authoritative.Journal;
 using Ninlil.Dns.Server.Core.Resolution;
-using Ninlil.Dns.Server.Tsig;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Authoritative.Update;
@@ -14,8 +13,8 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 /// <summary>
 ///     This class is the <see cref="IDnsQueryResolver" /> for RFC 2136 dynamic update (the
 ///     UPDATE opcode). It requires the zone to be a Primary with
-///     <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request to carry a valid TSIG
-///     signature, checks the prerequisites and update section with
+///     <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request to carry a TSIG signature
+///     that the pipeline verified (<see cref="DnsQueryContext.TransactionSignature" />), checks the prerequisites and update section with
 ///     <see cref="DynamicUpdateProcessor" />, and applies the result through
 ///     <see cref="IZoneUpdateService" />.
 ///     <para>
@@ -25,10 +24,15 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 ///         prerequisites must be checked against current data and the cache is updated later
 ///         through the event bus.
 ///     </para>
+///     <para>
+///         Replies are plain messages. The pipeline signs them as its last step
+///         (<see cref="IDnsTransactionSignatureService" />), and a request whose signature fails
+///         never reaches this class: the pipeline answers it with the RFC 8945 §5.3.2 error reply.
+///     </para>
 /// </summary>
 /// <param name="zoneCache">The cache used to find the zone an update names.</param>
 /// <param name="scopeFactory">
-///     The factory used to create a scope for the repositories, the TSIG service and
+///     The factory used to create a scope for the repositories and
 ///     <see cref="IZoneUpdateService" />.
 /// </param>
 public class DynamicUpdateQueryResolver(
@@ -76,22 +80,12 @@ public class DynamicUpdateQueryResolver(
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
         // Dynamic update always requires TSIG; there is no address-based allowance, as for zone
-        // transfers.
-        if (request.Tsig is null)
+        // transfers. The pipeline verified the signature; without that outcome (no TSIG service
+        // registered) the update is refused rather than applied unauthenticated.
+        if (request.Tsig is null || context.TransactionSignature is not { IsVerified: true })
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
-
-        TsigVerificationResult tsigResult = await tsigService.VerifyAsync(
-            context.RawMessage,
-            context.TsigRecordStartOffset,
-            request,
-            stoppingToken
-        );
-
-        if (!tsigResult.IsValid)
-            return DnsQueryResolution.Handled(ErrorResponse(request, tsigResult.Error));
 
         IRecordRepository recordRepository =
             scope.ServiceProvider.GetRequiredService<IRecordRepository>();
@@ -159,9 +153,9 @@ public class DynamicUpdateQueryResolver(
         };
 
     /// <summary>
-    ///     This method builds the reply to a rejected update, echoing the question. Error replies
-    ///     are never signed, which also covers the RFC 8945 §5.2 rule against signing with an
-    ///     unknown key. Successful replies are not TSIG-signed either.
+    ///     This method builds the reply to a rejected update, echoing the question. The response
+    ///     code is a plain RCODE; TSIG errors never reach this method, because the pipeline
+    ///     answers them. The pipeline signs the reply.
     /// </summary>
     private static DnsMessage ErrorResponse(DnsMessage request, DnsResponseCodeEnum responseCode) =>
         new()

@@ -47,6 +47,14 @@ public record DnsQueryContext(
 )
 {
     /// <summary>
+    ///     This property contains the outcome of checking the request's TSIG record, or
+    ///     <see langword="null" /> when the request is unsigned or the pipeline has no
+    ///     <see cref="IDnsTransactionSignatureService" />. A resolver that requires TSIG (dynamic
+    ///     update) must treat anything but <c>IsVerified: true</c> as unauthenticated.
+    /// </summary>
+    public DnsTransactionSignature TransactionSignature { get; init; }
+
+    /// <summary>
     ///     This property contains the client's IP address in canonical form; see the
     ///     <c>RemoteAddress</c> parameter. The initializer covers the constructor, and the
     ///     <see langword="init" /> accessor covers <c>with</c> expressions.
