@@ -95,7 +95,11 @@ public class AuthenticationFlowTests(NinlilDnsWebApplicationFactory factory)
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", login.AccessToken);
 
-        HttpResponseMessage response = await client.GetAsync("/api/users");
+        // The shared host holds every user the other tests create, so ask for the largest page
+        // to keep the administrator on it.
+        HttpResponseMessage response = await client.GetAsync(
+            $"/api/users?take={PaginationQuery.MaxTake}"
+        );
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
