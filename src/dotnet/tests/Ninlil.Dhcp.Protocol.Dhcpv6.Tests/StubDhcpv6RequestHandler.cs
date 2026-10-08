@@ -30,6 +30,13 @@ internal sealed class StubDhcpv6RequestHandler : IDhcpv6RequestHandler
     /// </summary>
     public bool ReceivedRequest { get; private set; }
 
+    /// <summary>
+    ///     This property, when set, replaces the fixed ADVERTISE: <see cref="HandleRequestAsync" />
+    ///     returns whatever the function returns (or lets it throw). A resilience test uses it to
+    ///     make the handler misbehave on chosen requests.
+    /// </summary>
+    public Func<Dhcpv6Message, Dhcpv6Message> Override { get; set; }
+
     /// <inheritdoc />
     public ValueTask<Dhcpv6Message> HandleRequestAsync(
         Dhcpv6Message request,
@@ -38,6 +45,9 @@ internal sealed class StubDhcpv6RequestHandler : IDhcpv6RequestHandler
     )
     {
         ReceivedRequest = true;
+
+        if (Override is not null)
+            return ValueTask.FromResult(Override(request));
 
         if (request.MessageType != Dhcpv6MessageTypeEnum.Solicit)
             return ValueTask.FromResult<Dhcpv6Message>(null);

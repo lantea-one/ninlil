@@ -85,13 +85,25 @@ public sealed class Dhcpv6UdpListener(
     private IDhcpv6RelayMessageHandler _relayMessageHandler;
 
     /// <summary>
-    ///     This property reports whether the socket is bound. As in the DHCPv4 listener, it is
-    ///     not cleared if the receive loop ends on an unexpected exception.
+    ///     This property reports whether the socket is bound. As in the DHCPv4 listener, it stays
+    ///     true if the receive loop ends unexpectedly, so <see cref="StopAsync" /> can still
+    ///     release the socket; use <see cref="IDhcpProtocolService.IsRunning" /> to learn whether
+    ///     datagrams are being served.
     /// </summary>
     public bool IsListening { get; private set; }
 
-    /// <inheritdoc />
-    bool IDhcpProtocolService.IsRunning => IsListening;
+    /// <summary>
+    ///     This property reports whether the socket is bound and the receive loop is still
+    ///     running, so a dead loop is not reported as a healthy listener.
+    /// </summary>
+    bool IDhcpProtocolService.IsRunning
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return IsListening && _receiveLoopTask is { IsCompleted: false };
+        }
+    }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -103,7 +115,24 @@ public sealed class Dhcpv6UdpListener(
         {
             // Starting a running listener does nothing (see IDhcpProtocolService).
             if (IsListening)
-                return Task.CompletedTask;
+            {
+                if (_receiveLoopTask is { IsCompleted: false })
+                    return Task.CompletedTask;
+
+                // The receive loop ended on its own, so the listener is bound but deaf. Release
+                // the old socket (and its multicast memberships) and bind again.
+                logger.LogWarning(
+                    "The DHCPv6 receive loop is not running; releasing the old socket and starting again."
+                );
+
+                _socket.Dispose();
+                _receiveLoopCts.Dispose();
+
+                _socket = null;
+                _receiveLoopCts = null;
+                _receiveLoopTask = null;
+                IsListening = false;
+            }
 
             // The relay handler is optional, so it is looked up rather than injected.
             _relayMessageHandler = serviceProvider?.GetService<IDhcpv6RelayMessageHandler>();
@@ -169,26 +198,36 @@ public sealed class Dhcpv6UdpListener(
             IsListening = false;
         }
 
-        // Cancel the token and close the socket. Closing unblocks a pending ReceiveFromAsync and
-        // drops the multicast memberships, which belong to the socket.
-        await receiveLoopCts.CancelAsync();
-        socket.Close();
-
-        if (receiveLoopTask is not null)
+        try
         {
-            try
+            // Cancel the token and close the socket. Closing unblocks a pending ReceiveFromAsync
+            // and drops the multicast memberships, which belong to the socket.
+            await receiveLoopCts.CancelAsync();
+            socket.Close();
+
+            if (receiveLoopTask is not null)
             {
-                await receiveLoopTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // Either the caller's token fired while waiting or the loop ended by cancellation.
-                // The socket is already closed, so the loop can no longer use it.
+                try
+                {
+                    await receiveLoopTask.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Either the caller's token fired while waiting or the loop ended by
+                    // cancellation. The socket is already closed, so the loop can no longer use it.
+                }
+                catch (Exception exception)
+                {
+                    // A loop that faulted must not skip the disposals below.
+                    logger.LogError(exception, "The DHCPv6 receive loop ended with an error.");
+                }
             }
         }
-
-        receiveLoopCts.Dispose();
-        socket.Dispose();
+        finally
+        {
+            receiveLoopCts.Dispose();
+            socket.Dispose();
+        }
 
         logger.LogInformation("The DHCPv6 listener stopped and released its bound socket.");
     }
@@ -239,9 +278,31 @@ public sealed class Dhcpv6UdpListener(
     /// <summary>
     ///     This method runs the receive loop for one start/stop cycle, as
     ///     <c>Dhcpv4UdpListener.RunReceiveLoopAsync</c> does, with the socket and token passed in
-    ///     for the same reason.
+    ///     for the same reason. A loop that ends while no stop was requested logs a Critical
+    ///     entry and <see cref="IDhcpProtocolService.IsRunning" /> turns false.
     /// </summary>
     private async Task RunReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await ReceiveDatagramsAsync(socket, stoppingToken);
+        }
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogCritical(exception, "The DHCPv6 receive loop stopped unexpectedly.");
+            return;
+        }
+
+        if (!stoppingToken.IsCancellationRequested)
+            logger.LogCritical("The DHCPv6 receive loop stopped unexpectedly.");
+    }
+
+    /// <summary>
+    ///     This method reads datagrams until a stop is requested or the socket is closed, giving
+    ///     each its own try/catch so one bad datagram never ends the loop. It is the body of
+    ///     <see cref="RunReceiveLoopAsync" />.
+    /// </summary>
+    private async Task ReceiveDatagramsAsync(Socket socket, CancellationToken stoppingToken)
     {
         byte[] receiveBuffer = new byte[MaximumDatagramSize];
 
@@ -278,7 +339,24 @@ public sealed class Dhcpv6UdpListener(
             byte[] datagram = receiveBuffer[..result.ReceivedBytes];
             IPEndPoint remoteEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
-            await ProcessDatagramAsync(socket, datagram, remoteEndPoint, stoppingToken);
+            try
+            {
+                await ProcessDatagramAsync(socket, datagram, remoteEndPoint, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                // One datagram must never end the loop: that would silence the server for every
+                // client. Log it and read the next one.
+                logger.LogError(
+                    exception,
+                    "Processing a DHCPv6 datagram from {RemoteEndPoint} failed.",
+                    remoteEndPoint
+                );
+            }
         }
     }
 
@@ -309,7 +387,8 @@ public sealed class Dhcpv6UdpListener(
             )
         )
         {
-            logger.LogWarning(
+            // Any host on the network can send junk, so this is not worth a warning.
+            logger.LogDebug(
                 "Discarding an unparseable DHCPv6 datagram from {RemoteEndPoint}: {Reason}",
                 remoteEndPoint,
                 failureReason
@@ -323,8 +402,10 @@ public sealed class Dhcpv6UdpListener(
         {
             reply = await handler.HandleRequestAsync(request, remoteEndPoint, stoppingToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
+            // This includes a handler that times out with an OperationCanceledException: only a
+            // stop request may end the loop.
             logger.LogError(
                 exception,
                 "The DHCPv6 request handler threw while handling a request from {RemoteEndPoint}.",
@@ -349,8 +430,8 @@ public sealed class Dhcpv6UdpListener(
     /// <summary>
     ///     This method decodes one RELAY-FORW or RELAY-REPL, calls the registered
     ///     <see cref="IDhcpv6RelayMessageHandler" /> (if any) and sends any reply straight back to
-    ///     <paramref name="remoteEndPoint" />, the relay agent's address and port. Unlike
-    ///     <see cref="SendReplyAsync" />, an encoding failure is caught and logged.
+    ///     <paramref name="remoteEndPoint" />, the relay agent's address and port. A reply that
+    ///     cannot be encoded is logged and dropped, as in <see cref="SendReplyAsync" />.
     /// </summary>
     private async Task ProcessRelayDatagramAsync(
         Socket socket,
@@ -377,7 +458,8 @@ public sealed class Dhcpv6UdpListener(
             )
         )
         {
-            logger.LogWarning(
+            // Any host on the network can send junk, so this is not worth a warning.
+            logger.LogDebug(
                 "Discarding an unparseable DHCPv6 relay datagram from {RemoteEndPoint}: {Reason}",
                 remoteEndPoint,
                 failureReason
@@ -395,7 +477,7 @@ public sealed class Dhcpv6UdpListener(
                 stoppingToken
             );
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
             logger.LogError(
                 exception,
@@ -439,7 +521,8 @@ public sealed class Dhcpv6UdpListener(
 
     /// <summary>
     ///     This method encodes the reply and unicasts it to the request's source address on the
-    ///     client port. As in the DHCPv4 listener, encoding happens outside the try/catch.
+    ///     client port. A reply the writer rejects (an option longer than 65 535 bytes, for
+    ///     example) is logged and dropped.
     ///     <para>
     ///         Unlike DHCPv4 (see <c>Dhcpv4UdpListener.SendReplyAsync</c>), no destination choice
     ///         is needed: a DHCPv6 client always has a link-local address, which IPv6 configures
@@ -456,7 +539,23 @@ public sealed class Dhcpv6UdpListener(
         CancellationToken stoppingToken
     )
     {
-        byte[] replyBytes = Dhcpv6MessageWriter.Write(reply);
+        byte[] replyBytes;
+
+        try
+        {
+            replyBytes = Dhcpv6MessageWriter.Write(reply);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Could not encode the DHCPv6 {MessageType} reply to a request from {RemoteEndPoint}; no reply is sent.",
+                reply.MessageType,
+                remoteEndPoint
+            );
+            return;
+        }
+
         IPEndPoint destination = new(remoteEndPoint.Address, options.Value.ClientPort);
 
         try
