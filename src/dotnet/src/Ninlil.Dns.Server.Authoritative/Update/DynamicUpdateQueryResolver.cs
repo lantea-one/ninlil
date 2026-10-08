@@ -12,11 +12,13 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 
 /// <summary>
 ///     This class is the <see cref="IDnsQueryResolver" /> for RFC 2136 dynamic update (the
-///     UPDATE opcode). It requires the zone to be a Primary with
-///     <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request to carry a TSIG signature
-///     that the pipeline verified (<see cref="DnsQueryContext.TransactionSignature" />), checks the prerequisites and update section with
-///     <see cref="DynamicUpdateProcessor" />, and applies the result through
-///     <see cref="IZoneUpdateService" />.
+///     UPDATE opcode). It answers FORMERR unless the Zone Section is one SOA/IN question, NOTAUTH
+///     when this server does not host that zone or the name is not its apex, and REFUSED unless
+///     the zone is a Primary with <see cref="ZoneEntity.DynamicUpdateEnabled" /> and the request
+///     carries a TSIG signature that the pipeline verified
+///     (<see cref="DnsQueryContext.TransactionSignature" />). It then checks the prerequisites
+///     and prescans the update section with <see cref="DynamicUpdateProcessor" /> and applies
+///     the result through <see cref="IZoneUpdateService" />.
 ///     <para>
 ///         The enable flag and apex come from <see cref="AuthoritativeZoneCache" />, which may be
 ///         briefly stale; that only moves the moment an update starts or stops being accepted.
@@ -51,12 +53,13 @@ public class DynamicUpdateQueryResolver(
         if (request.Opcode != DnsOpcodeEnum.Update)
             return DnsQueryResolution.NotHandled;
 
-        if (request.Questions.Count == 0)
+        // RFC 2136 §3.1.1: the Zone Section holds exactly one entry.
+        if (request.Questions.Count != 1)
             return DnsQueryResolution.Handled(
                 ErrorResponse(request, DnsResponseCodeEnum.FormatError)
             );
 
-        // RFC 2136 §3.1: the Zone Section names the zone by SOA/IN, not an arbitrary query type.
+        // RFC 2136 §3.1.1: the Zone Section names the zone by SOA/IN, not an arbitrary query type.
         DnsQuestion zoneSection = request.Questions[0];
 
         if (
@@ -69,19 +72,23 @@ public class DynamicUpdateQueryResolver(
 
         CachedZone zone = zoneCache.FindZone(zoneSection.Name);
 
+        // RFC 2136 §3.1.2: a server that does not host the named zone, or is given a name that is
+        // not the zone's apex, answers NOTAUTH.
+        if (zone is null || zone.ApexName != zoneSection.Name)
+            return DnsQueryResolution.Handled(
+                ErrorResponse(request, DnsResponseCodeEnum.NotAuthoritative)
+            );
+
         // Only a Primary zone accepts updates; forwarding updates from a secondary to its
         // primary is not supported.
-        if (
-            zone is null
-            || zone.ApexName != zoneSection.Name
-            || zone.Zone.Type != ZoneTypeEnum.Primary
-            || !zone.Zone.DynamicUpdateEnabled
-        )
+        if (zone.Zone.Type != ZoneTypeEnum.Primary || !zone.Zone.DynamicUpdateEnabled)
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
         // Dynamic update always requires TSIG; there is no address-based allowance, as for zone
         // transfers. The pipeline verified the signature; without that outcome (no TSIG service
-        // registered) the update is refused rather than applied unauthenticated.
+        // registered) the update is refused rather than applied unauthenticated. RFC 2136 §3.3
+        // checks permission after the prerequisites; this check comes first on purpose, so a
+        // sender without a valid key learns nothing about the zone from prerequisite results.
         if (request.Tsig is null || context.TransactionSignature is not { IsVerified: true })
             return DnsQueryResolution.Handled(ErrorResponse(request, DnsResponseCodeEnum.Refused));
 
@@ -98,22 +105,22 @@ public class DynamicUpdateQueryResolver(
         // zone before any update is applied.
         DnsResponseCodeEnum prerequisiteResult = DynamicUpdateProcessor.CheckPrerequisites(
             request.Answers,
-            currentRecords
+            currentRecords,
+            zone.ApexName
         );
 
         if (prerequisiteResult != DnsResponseCodeEnum.NoError)
             return DnsQueryResolution.Handled(ErrorResponse(request, prerequisiteResult));
 
-        // The Update section is the request's Authority section.
-        if (
-            !DynamicUpdateProcessor.IsUpdateSectionValid(
-                request.AuthorityRecords,
-                zoneSection.Class
-            )
-        )
-            return DnsQueryResolution.Handled(
-                ErrorResponse(request, DnsResponseCodeEnum.FormatError)
-            );
+        // The Update section is the request's Authority section (RFC 2136 §3.4.1 prescan).
+        DnsResponseCodeEnum prescanResult = DynamicUpdateProcessor.PrescanUpdateSection(
+            request.AuthorityRecords,
+            zoneSection.Class,
+            zone.ApexName
+        );
+
+        if (prescanResult != DnsResponseCodeEnum.NoError)
+            return DnsQueryResolution.Handled(ErrorResponse(request, prescanResult));
 
         (List<RecordEntity> toAdd, List<RecordEntity> toRemove) =
             DynamicUpdateProcessor.ComputeDiff(

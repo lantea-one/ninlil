@@ -11,7 +11,8 @@ namespace Ninlil.Dns.Server.Authoritative.Update;
 ///     prescan and computing the record diff) apart from <see cref="DynamicUpdateQueryResolver" />,
 ///     so it can be tested with plain data. RFC 2136's Prerequisite section is
 ///     <see cref="DnsMessage.Answers" /> and its Update section is
-///     <see cref="DnsMessage.AuthorityRecords" />. Names are not checked to lie inside the zone.
+///     <see cref="DnsMessage.AuthorityRecords" />. The prerequisite check and the prescan reject
+///     owner names outside the zone with NOTZONE; the diff assumes the prescan passed.
 /// </summary>
 public static class DynamicUpdateProcessor
 {
@@ -21,15 +22,37 @@ public static class DynamicUpdateProcessor
     /// </summary>
     /// <param name="prerequisites">The prerequisite section (the request's Answer section).</param>
     /// <param name="currentRecords">The zone's current records, before any update is applied.</param>
+    /// <param name="zoneApexName">The zone's apex name; every prerequisite must lie at or below it.</param>
     /// <returns>
     ///     <see cref="DnsResponseCodeEnum.NoError" /> if every prerequisite holds, otherwise the
-    ///     RFC 2136 response code for the first one that fails.
+    ///     RFC 2136 response code for the first one that fails: FORMERR for a prerequisite with a
+    ///     non-zero TTL, an unknown class or RDATA on a CLASS ANY or NONE record, NOTZONE for an
+    ///     owner outside the zone, then NXDOMAIN, YXDOMAIN, NXRRSET or YXRRSET.
     /// </returns>
     public static DnsResponseCodeEnum CheckPrerequisites(
         IReadOnlyList<DnsResourceRecord> prerequisites,
-        IReadOnlyList<RecordEntity> currentRecords
+        IReadOnlyList<RecordEntity> currentRecords,
+        DnsName zoneApexName
     )
     {
+        // RFC 2136 §3.2.1 to §3.2.5: the form of every prerequisite is checked before any value
+        // is compared with the zone, so a malformed section never depends on zone content.
+        foreach (DnsResourceRecord prerequisite in prerequisites)
+        {
+            if (prerequisite.TimeToLive != 0)
+                return DnsResponseCodeEnum.FormatError;
+
+            if (!IsAtOrBelow(prerequisite.Name, zoneApexName))
+                return DnsResponseCodeEnum.NotZone;
+
+            if (
+                prerequisite.Class is DnsClassEnum.Any or DnsClassEnum.None
+                    ? prerequisite.Data.Length != 0
+                    : prerequisite.Class != DnsClassEnum.Internet
+            )
+                return DnsResponseCodeEnum.FormatError;
+        }
+
         List<DnsResourceRecord> currentWire = ToWireRecords(currentRecords);
 
         // Value-dependent prerequisites are grouped by name and type: RFC 2136 §2.4.2 requires
@@ -115,43 +138,56 @@ public static class DynamicUpdateProcessor
     }
 
     /// <summary>
-    ///     This method checks that each update RR has the shape of one of the four RFC 2136 §2.5
-    ///     operations (the §3.4.1 prescan).
+    ///     This method runs the RFC 2136 §3.4.1 prescan: each update RR must lie inside the zone
+    ///     and have the shape of one of the four §2.5 operations.
     /// </summary>
     /// <param name="updates">The update section (the request's Authority section).</param>
     /// <param name="zoneClass">The zone's class, in practice <see cref="DnsClassEnum.Internet" />.</param>
-    public static bool IsUpdateSectionValid(
+    /// <param name="zoneApexName">The zone's apex name.</param>
+    /// <returns>
+    ///     <see cref="DnsResponseCodeEnum.NoError" /> if every RR passes, NOTZONE for the first
+    ///     owner outside the zone, FORMERR for the first malformed RR.
+    /// </returns>
+    public static DnsResponseCodeEnum PrescanUpdateSection(
         IReadOnlyList<DnsResourceRecord> updates,
-        DnsClassEnum zoneClass
+        DnsClassEnum zoneClass,
+        DnsName zoneApexName
     )
     {
         foreach (DnsResourceRecord update in updates)
         {
+            if (!IsAtOrBelow(update.Name, zoneApexName))
+                return DnsResponseCodeEnum.NotZone;
+
             if (update.Class == zoneClass)
-                continue; // Add to an RRset.
-
-            if (update.Class == DnsClassEnum.Any)
             {
-                // Delete an RRset, or every RRset at a name: no RDATA and TTL 0.
-                if (update.TimeToLive != 0 || update.Data.Length != 0)
-                    return false;
-
-                continue;
+                // Add to an RRset: a concrete type only.
+                if (IsMetaType(update.Type) || update.Type == DnsResourceRecordTypeEnum.Any)
+                    return DnsResponseCodeEnum.FormatError;
             }
-
-            if (update.Class == DnsClassEnum.None)
+            else if (update.Class == DnsClassEnum.Any)
             {
-                // Delete one RR: TTL 0, with the RDATA to match.
-                if (update.TimeToLive != 0)
-                    return false;
-
-                continue;
+                // Delete an RRset, or every RRset at a name (type ANY): no RDATA and TTL 0.
+                if (update.TimeToLive != 0 || update.Data.Length != 0 || IsMetaType(update.Type))
+                    return DnsResponseCodeEnum.FormatError;
             }
-
-            return false;
+            else if (update.Class == DnsClassEnum.None)
+            {
+                // Delete one RR: TTL 0, with the RDATA to match, and a concrete type.
+                if (
+                    update.TimeToLive != 0
+                    || IsMetaType(update.Type)
+                    || update.Type == DnsResourceRecordTypeEnum.Any
+                )
+                    return DnsResponseCodeEnum.FormatError;
+            }
+            else
+            {
+                return DnsResponseCodeEnum.FormatError;
+            }
         }
 
-        return true;
+        return DnsResponseCodeEnum.NoError;
     }
 
     /// <summary>
@@ -189,12 +225,12 @@ public static class DynamicUpdateProcessor
             if (update.Type == DnsResourceRecordTypeEnum.Soa)
                 continue;
 
+            bool isApex = update.Name == zoneApexName;
+
             if (update.Type == DnsResourceRecordTypeEnum.Any && update.Class == DnsClassEnum.Any)
             {
                 // Delete every RRset at this name, except SOA and NS at the apex (RFC 2136
                 // §3.4.2.3).
-                bool isApex = update.Name == zoneApexName;
-
                 working.RemoveAll(pair =>
                     pair.Wire.Name == update.Name
                     && !(
@@ -208,34 +244,91 @@ public static class DynamicUpdateProcessor
             }
             else if (update.Class == DnsClassEnum.Any)
             {
-                // Delete the whole RRset of this type.
+                // Delete the whole RRset of this type. The apex NS RRset is never deleted
+                // (RFC 2136 §3.4.2.3); the SOA is skipped above.
+                if (isApex && update.Type == DnsResourceRecordTypeEnum.NS)
+                    continue;
+
                 working.RemoveAll(pair =>
                     pair.Wire.Name == update.Name && pair.Wire.Type == update.Type
                 );
             }
             else if (update.Class == DnsClassEnum.None)
             {
-                // Delete one specific RR.
+                // Delete one specific RR. The last NS RR at the apex stays (RFC 2136 §3.4.2.4).
+                if (
+                    isApex
+                    && update.Type == DnsResourceRecordTypeEnum.NS
+                    && working.Count(pair =>
+                        pair.Wire.Name == update.Name
+                        && pair.Wire.Type == DnsResourceRecordTypeEnum.NS
+                    ) <= 1
+                )
+                    continue;
+
                 working.RemoveAll(pair => RecordContentEquals(pair.Wire, update));
             }
             else
             {
-                // Add to an RRset. A second CNAME at a name is ignored, as is an exact duplicate.
-                // A CNAME next to other data is not rejected.
-                bool cnameAlreadyExists =
-                    update.Type == DnsResourceRecordTypeEnum.Cname
-                    && working.Any(pair =>
-                        pair.Wire.Name == update.Name
-                        && pair.Wire.Type == DnsResourceRecordTypeEnum.Cname
-                    );
+                // Add to an RRset (RFC 2136 §3.4.2.2). The CNAME rules come first: a CNAME is
+                // ignored where other data exists and other data is ignored where a CNAME
+                // exists. RRSIG and NSEC may sit beside a CNAME, because DNSSEC requires it.
+                bool isCname = update.Type == DnsResourceRecordTypeEnum.Cname;
+                bool coexistsWithCname =
+                    update.Type
+                    is DnsResourceRecordTypeEnum.RrSig
+                        or DnsResourceRecordTypeEnum.Nsec;
+                IEnumerable<DnsResourceRecord> atName = working
+                    .Select(pair => pair.Wire)
+                    .Where(wire => wire.Name == update.Name);
 
                 if (
-                    cnameAlreadyExists
-                    || working.Any(pair => RecordContentEquals(pair.Wire, update))
+                    isCname
+                    && atName.Any(wire =>
+                        wire.Type
+                            is not (
+                                DnsResourceRecordTypeEnum.Cname
+                                or DnsResourceRecordTypeEnum.RrSig
+                                or DnsResourceRecordTypeEnum.Nsec
+                            )
+                    )
                 )
                     continue;
 
-                working.Add((RecordEntityCodec.FromWireRecord(update, zoneId), update));
+                if (
+                    !isCname
+                    && !coexistsWithCname
+                    && atName.Any(wire => wire.Type == DnsResourceRecordTypeEnum.Cname)
+                )
+                    continue;
+
+                // A CNAME replaces the one that exists; an RR equal in owner, type and RDATA is
+                // replaced so the update's TTL wins. FromWireRecord always assigns a new Id, so
+                // a replace is a remove of the old row and an add of the new one. An identical
+                // TTL changes nothing and is skipped to avoid a journal entry.
+                (RecordEntity Entity, DnsResourceRecord Wire) existing = working.FirstOrDefault(
+                    pair =>
+                        isCname
+                            ? pair.Wire.Name == update.Name
+                                && pair.Wire.Type == DnsResourceRecordTypeEnum.Cname
+                            : RecordContentEquals(pair.Wire, update)
+                );
+
+                if (existing.Entity is not null)
+                {
+                    if (
+                        existing.Wire.TimeToLive == update.TimeToLive
+                        && existing.Wire.Data.AsSpan().SequenceEqual(update.Data)
+                    )
+                        continue;
+
+                    working.Remove(existing);
+                }
+
+                RecordEntity added = RecordEntityCodec.FromWireRecord(update, zoneId);
+
+                if (added is not null)
+                    working.Add((added, update));
             }
         }
 
@@ -255,6 +348,26 @@ public static class DynamicUpdateProcessor
 
         return (toAdd, toRemove);
     }
+
+    /// <summary>
+    ///     This method reports whether <paramref name="name" /> is the zone apex or lies below it,
+    ///     the RFC 2136 test for "within the zone". The zone's own cut-outs are not considered.
+    /// </summary>
+    private static bool IsAtOrBelow(DnsName name, DnsName zoneApexName)
+    {
+        int skip = name.Labels.Count - zoneApexName.Labels.Count;
+
+        return skip >= 0 && new DnsName([.. name.Labels.Skip(skip)]) == zoneApexName;
+    }
+
+    /// <summary>
+    ///     This method reports whether a type is a query-only meta type that RFC 2136 §3.4.1
+    ///     forbids in an update: IXFR, AXFR, MAILB (253) or MAILA (254). ANY is handled by the
+    ///     caller, because CLASS ANY allows it.
+    /// </summary>
+    private static bool IsMetaType(DnsResourceRecordTypeEnum type) =>
+        type is DnsResourceRecordTypeEnum.Ixfr or DnsResourceRecordTypeEnum.Axfr
+        || (ushort)type is 253 or 254;
 
     /// <summary>
     ///     This method compares two records as RFC 2136 value matching does: by owner name, type
