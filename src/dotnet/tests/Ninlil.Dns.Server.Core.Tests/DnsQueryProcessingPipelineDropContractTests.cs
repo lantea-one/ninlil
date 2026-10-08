@@ -269,6 +269,32 @@ public sealed class DnsQueryProcessingPipelineDropContractTests
     }
 
     [Fact]
+    public async Task AQueryWithA256OctetNameReportsMalformedAndLogsNothingAboveDebug()
+    {
+        // Header (one question) + four labels of 63, 63, 63 and 62 octets (256 with the root) +
+        // QTYPE A + QCLASS IN.
+        List<byte> request = [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+        foreach (int length in new[] { 63, 63, 63, 62 })
+        {
+            request.Add((byte)length);
+            request.AddRange(Enumerable.Repeat((byte)'a', length));
+        }
+
+        request.AddRange([0, 0, 1, 0, 1]);
+        CapturingLogger<DnsQueryProcessingPipeline> logger = new();
+
+        Outcome outcome = await RunAsync(
+            new AnswerResolver(1),
+            requestBytes: [.. request],
+            logger: logger
+        );
+
+        Assert.Equal([DnsQueryDropReasonEnum.Malformed], outcome.Drops);
+        Assert.Empty(outcome.Responses);
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level > LogLevel.Debug);
+    }
+
+    [Fact]
     public async Task AThrowingResolverReportsFailedOnceAndNeverResponds()
     {
         Outcome outcome = await RunAsync(new ThrowingResolver());

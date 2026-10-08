@@ -51,13 +51,21 @@ public static class DnsMessageReader
             return ReadCore(buffer, out tsigRecordStartOffset);
         }
         catch (Exception exception)
-            when (exception is IndexOutOfRangeException or ArgumentOutOfRangeException)
+            when (exception
+                    is IndexOutOfRangeException
+                        or ArgumentException
+                        or NotSupportedException
+                        or OverflowException
+            )
         {
-            // A buffer shorter than its header or section counts claim is a malformed message,
-            // not a bug in this reader. Callers such as DnsQueryProcessingPipeline drop a message
-            // silently only on FormatException, so the index exceptions are translated to it.
+            // The bytes are untrusted, so every decoding failure means "malformed", never a bug
+            // in this reader: a buffer shorter than its counts claim, a name or record-data
+            // codec that rejects its input (ArgumentException includes
+            // ArgumentOutOfRangeException), or a compressed name where only an uncompressed one
+            // is allowed. Callers such as DnsQueryProcessingPipeline drop a message silently
+            // only on FormatException, so anything else would reach their error log.
             throw new FormatException(
-                "The buffer is too short to contain a complete DNS message.",
+                "The message is malformed or too short to contain a complete DNS message.",
                 exception
             );
         }
@@ -113,8 +121,12 @@ public static class DnsMessageReader
 
         // The Additional section needs special handling. An OPT pseudo-record carries the
         // EDNS(0) extension and the upper 8 bits of the response code, and a TSIG
-        // pseudo-record (the last record of the section, per RFC 8945 §5.2) carries
-        // transaction authentication. Neither is an ordinary record.
+        // pseudo-record carries transaction authentication. Neither is an ordinary record.
+        // RFC 8945 §5.2 makes the TSIG the last record of the message, so that the MAC covers
+        // every other record; RFC 6891 §6.1.1 allows one OPT. A message that breaks either
+        // rule, or whose TSIG has a CLASS other than ANY or a TTL other than 0, throws
+        // FormatException. RFC 8945 asks for FORMERR, but the pipeline drops malformed
+        // messages without a reply.
         byte extendedResponseCode = 0;
         tsigRecordStartOffset = -1;
 
@@ -123,8 +135,14 @@ public static class DnsMessageReader
             int recordStartOffset = offset;
             DnsResourceRecord record = ReadResourceRecord(buffer, ref offset);
 
+            if (tsigRecordStartOffset >= 0)
+                throw new FormatException("A TSIG record must be the last record of the message.");
+
             if (record.Type == DnsResourceRecordTypeEnum.Tsig)
             {
+                if (record.Class != DnsClassEnum.Any || record.TimeToLive != 0)
+                    throw new FormatException("A TSIG record must have CLASS ANY and TTL 0.");
+
                 message.Tsig = ReadTsigRecord(record);
                 tsigRecordStartOffset = recordStartOffset;
                 continue;
@@ -135,6 +153,9 @@ public static class DnsMessageReader
                 message.AdditionalRecords.Add(record);
                 continue;
             }
+
+            if (message.Edns != null)
+                throw new FormatException("A message may carry only one OPT record.");
 
             // The OPT record uses CLASS as the requester's UDP payload size, and TTL as three
             // packed fields: extended response code, EDNS version and flags (only the top bit,
@@ -291,6 +312,9 @@ public static class DnsMessageReader
     internal static DnsName ReadName(ReadOnlySpan<byte> buffer, ref int offset)
     {
         List<byte[]> labels = [];
+        // The running uncompressed wire length: the root octet plus 1 + length per label. It is
+        // checked before the name is built so a long pointer-free name costs no allocation.
+        int wireLength = 1;
         int currentOffset = offset;
         int? returnOffset = null;
         int jumps = 0;
@@ -338,6 +362,13 @@ public static class DnsMessageReader
                 currentOffset += 1;
                 break;
             }
+
+            wireLength += 1 + lengthOrPointer;
+
+            if (wireLength > DnsName.MaximumWireLength)
+                throw new FormatException(
+                    $"A DNS name may not exceed {DnsName.MaximumWireLength} octets once encoded."
+                );
 
             labels.Add(buffer.Slice(currentOffset + 1, lengthOrPointer).ToArray());
             currentOffset += 1 + lengthOrPointer;
