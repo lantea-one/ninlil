@@ -1,5 +1,6 @@
 using System.Net;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Server.Authoritative.Cache;
 using Ninlil.Dns.Server.Core.Resolution;
@@ -62,7 +63,7 @@ public class NotifyQueryResolver(
 
         bool senderIsKnownPrimary = zone.Zone.PrimaryServerAddresses.Any(address =>
             IPAddress.TryParse(address, out IPAddress primaryAddress)
-            && primaryAddress.Equals(context.RemoteAddress)
+            && ClientAddress.IsSameAddress(primaryAddress, context.RemoteAddress)
         );
 
         if (!senderIsKnownPrimary)

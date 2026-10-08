@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Server.Core.AccessControl;
 using Ninlil.Dns.Server.Core.RateLimiting;
 
@@ -233,6 +234,13 @@ public sealed class TokenBucketDnsRateLimiter(
             )
                 continue;
 
+            // An entry written as an IPv4-mapped network (::ffff:192.0.2.0/120) names the same
+            // hosts as the IPv4 one (/24): drop the 96 mapped bits from the prefix.
+            if (network.IsIPv4MappedToIPv6 && prefixLength >= 96)
+                prefixLength -= 96;
+
+            network = ClientAddress.Normalize(network);
+
             if (network.AddressFamily != address.AddressFamily)
                 continue;
 
@@ -247,7 +255,8 @@ public sealed class TokenBucketDnsRateLimiter(
     ///     This method masks <paramref name="address" /> to its network portion, keeping
     ///     <paramref name="prefixLengthIPv4" /> or <paramref name="prefixLengthIPv6" /> leading
     ///     bits and zeroing the rest. The result is the subnet window key: addresses with the same
-    ///     masked value share a window. An IPv4-mapped IPv6 address is treated as IPv6.
+    ///     masked value share a window. The pipeline passes normalized addresses, so an IPv4 client on a
+    ///     dual-stack socket is masked as IPv4.
     /// </summary>
     private static IPAddress MaskToPrefix(
         IPAddress address,

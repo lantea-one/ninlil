@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Identity.Email;
 using Ninlil.Dns.Identity.Extension;
@@ -625,7 +626,8 @@ public class AuthController(
         );
         RefreshTokenResult refreshToken = await jwtTokenService.CreateRefreshTokenAsync(
             user.Id,
-            HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            ClientAddress.Normalize(HttpContext.Connection.RemoteIpAddress)?.ToString()
+                ?? "unknown",
             Request.Headers.UserAgent.ToString(),
             isPersistent,
             stoppingToken

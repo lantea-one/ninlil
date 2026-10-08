@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Identity.Options;
 
 // Define our namespace.
@@ -84,9 +85,12 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
         RateLimitPartition<string> GetPartition(HttpContext httpContext)
         {
             // Partitioned by remote IP address, never by user name, so an attacker cannot lock a
-            // known administrator out. Connections without a remote address share one "unknown"
+            // known administrator out. An IPv4 client on a dual-stack socket is keyed by its plain IPv4
+            // address. Connections without a remote address share one "unknown"
             // partition.
-            string partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            string partitionKey =
+                ClientAddress.Normalize(httpContext.Connection.RemoteIpAddress)?.ToString()
+                ?? "unknown";
 
             return options.Enable
                 ? RateLimitPartition.GetFixedWindowLimiter(

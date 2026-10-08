@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Options;
@@ -214,7 +215,9 @@ public static class ServiceCollectionAuthenticationExtension
                             RefreshTokenResult refreshToken =
                                 await jwtTokenService.CreateRefreshTokenAsync(
                                     user.Id,
-                                    context.HttpContext.Connection.RemoteIpAddress?.ToString()
+                                    ClientAddress
+                                        .Normalize(context.HttpContext.Connection.RemoteIpAddress)
+                                        ?.ToString()
                                         ?? "unknown",
                                     context.HttpContext.Request.Headers.UserAgent.ToString(),
                                     rememberMe,

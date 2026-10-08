@@ -451,6 +451,35 @@ public class TokenBucketDnsRateLimiterSubnetTests
     }
 
     [Fact]
+    public async Task AnIPv4MappedBypassCidrCoversTheSameHostsAsTheIPv4Form()
+    {
+        TokenBucketDnsRateLimiter limiter = CreateLimiter(
+            new DnsRateLimitOptions
+            {
+                Enable = true,
+                SubnetUdpQueryLimit = 1,
+                SubnetSampleWindow = TimeSpan.FromHours(1),
+                SubnetTruncatePercentage = 0,
+                SubnetBypassCidrs = ["::ffff:203.0.113.0/120"],
+            }
+        );
+
+        for (int i = 0; i < 10; i++)
+            Assert.Equal(
+                DnsSubnetRateLimitDecisionEnum.Allow,
+                await limiter.CheckSubnetLimitAsync(ClientA, isUdp: true)
+            );
+
+        // A different /24 is not covered, so its second query is over the limit of 1.
+        IPAddress other = IPAddress.Parse("198.51.100.5");
+        await limiter.CheckSubnetLimitAsync(other, isUdp: true);
+        Assert.Equal(
+            DnsSubnetRateLimitDecisionEnum.Drop,
+            await limiter.CheckSubnetLimitAsync(other, isUdp: true)
+        );
+    }
+
+    [Fact]
     public async Task FailsOpenOnceTheSubnetTrackingTableIsFull()
     {
         TokenBucketDnsRateLimiter limiter = CreateLimiter(

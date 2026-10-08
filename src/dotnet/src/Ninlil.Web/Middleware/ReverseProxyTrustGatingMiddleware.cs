@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Web.Options;
 
 // Define our namespace.
@@ -114,31 +115,23 @@ public sealed class ReverseProxyTrustGatingMiddleware(
     ///     <see cref="ForwardedHeadersOptions.KnownProxies" /> (exact match) and
     ///     <see cref="ForwardedHeadersOptions.KnownIPNetworks" /> (CIDR containment). Kestrel's
     ///     IPv6 socket also accepts IPv4 connections in mapped form (<c>::ffff:a.b.c.d</c>), so the
-    ///     unmapped IPv4 address is checked too, and a plain IPv4 proxy address or network still
-    ///     matches.
+    ///     <see cref="ClientAddress.Normalize" /> form is checked too, and a plain IPv4 proxy
+    ///     address or network still matches.
     /// </summary>
     private bool IsKnownProxySource(IPAddress remoteAddress)
     {
         ForwardedHeadersOptions options = forwardedHeadersOptions.Value;
-        IPAddress mappedAddress = remoteAddress.IsIPv4MappedToIPv6
-            ? remoteAddress.MapToIPv4()
-            : null;
+        IPAddress normalizedAddress = ClientAddress.Normalize(remoteAddress);
 
         foreach (IPAddress knownProxy in options.KnownProxies)
         {
-            if (
-                knownProxy.Equals(remoteAddress)
-                || (mappedAddress is not null && knownProxy.Equals(mappedAddress))
-            )
+            if (knownProxy.Equals(remoteAddress) || knownProxy.Equals(normalizedAddress))
                 return true;
         }
 
         foreach (IPNetwork knownNetwork in options.KnownIPNetworks)
         {
-            if (
-                knownNetwork.Contains(remoteAddress)
-                || (mappedAddress is not null && knownNetwork.Contains(mappedAddress))
-            )
+            if (knownNetwork.Contains(remoteAddress) || knownNetwork.Contains(normalizedAddress))
                 return true;
         }
 

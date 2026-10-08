@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
+using Ninlil.Dns.Common.Net;
 
 // Define our namespace.
 namespace Ninlil.Dns.Protocol.DnsOverTls.ProxyProtocol;
@@ -62,9 +63,9 @@ public static class ProxyProtocolTrustEvaluator
     /// <summary>
     ///     This method checks a peer address against <paramref name="knownAddresses" /> (exact
     ///     match) and <paramref name="knownNetworks" /> (CIDR containment). It tries the address as
-    ///     reported and, for an IPv4-mapped IPv6 address (<c>::ffff:a.b.c.d</c>, as the default
-    ///     dual-stack socket reports IPv4 peers), its IPv4 form, so a plain IPv4 proxy entry
-    ///     matches either way.
+    ///     reported and in its <see cref="ClientAddress.Normalize" /> form (an IPv4-mapped
+    ///     <c>::ffff:a.b.c.d</c>, as the default dual-stack socket reports IPv4 peers, becomes
+    ///     plain IPv4), so a plain IPv4 proxy entry matches either way.
     /// </summary>
     public static bool IsKnownSource(
         IPAddress remoteAddress,
@@ -72,25 +73,17 @@ public static class ProxyProtocolTrustEvaluator
         IReadOnlyList<IPNetwork> knownNetworks
     )
     {
-        IPAddress mappedAddress = remoteAddress.IsIPv4MappedToIPv6
-            ? remoteAddress.MapToIPv4()
-            : null;
+        IPAddress normalizedAddress = ClientAddress.Normalize(remoteAddress);
 
         foreach (IPAddress knownAddress in knownAddresses)
         {
-            if (
-                knownAddress.Equals(remoteAddress)
-                || (mappedAddress is not null && knownAddress.Equals(mappedAddress))
-            )
+            if (knownAddress.Equals(remoteAddress) || knownAddress.Equals(normalizedAddress))
                 return true;
         }
 
         foreach (IPNetwork knownNetwork in knownNetworks)
         {
-            if (
-                knownNetwork.Contains(remoteAddress)
-                || (mappedAddress is not null && knownNetwork.Contains(mappedAddress))
-            )
+            if (knownNetwork.Contains(remoteAddress) || knownNetwork.Contains(normalizedAddress))
                 return true;
         }
 
