@@ -150,6 +150,17 @@ public sealed class TftpServerRoundTripTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ReadRequest_WithALeadingSlash_ServesTheFileFromTheRoot()
+    {
+        byte[] content = "rooted"u8.ToArray();
+        File.WriteAllBytes(Path.Combine(_rootDirectory, "file.bin"), content);
+
+        byte[] received = await DownloadAsync("/file.bin");
+
+        Assert.Equal(content, received);
+    }
+
+    [Fact]
     public async Task WriteRequest_IsAlwaysRejected()
     {
         using UdpClient client = new();

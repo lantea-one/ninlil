@@ -28,10 +28,11 @@ public sealed class TftpServerOptions
     public int Port { get; set; } = 69;
 
     /// <summary>
-    ///     This property contains the directory files are served from. A request for an
-    ///     absolute path, or for a path that resolves outside this directory through <c>..</c>
-    ///     segments, gets an Access Violation error. Symbolic links inside the directory are
-    ///     followed, even when they point outside it. Left empty (the default) or pointing at a
+    ///     This property contains the directory files are served from. A leading <c>/</c>
+    ///     in a requested name means this directory. A request for a path that resolves outside it
+    ///     through <c>..</c> segments gets an Access Violation error. A symbolic link is followed
+    ///     only when its target and every step on the way stay inside the directory; the directory
+    ///     itself may be a link. Left empty (the default) or pointing at a
     ///     missing directory, <see cref="TftpServer" /> logs a warning and does not bind, even
     ///     when <see cref="Enable" /> is <see langword="true" />.
     /// </summary>

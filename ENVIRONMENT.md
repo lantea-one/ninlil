@@ -458,7 +458,7 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_RA_DNS_SEARCH_LIST_LIFETIME` | Reserved lifetime value for a future DNS Search List option (DNSSL itself is not yet implemented — see `README.md`'s known-limitations note). | `00:30:00` |
 | `NINLIL_DHCP_SERVER_TFTP_ENABLE` | Whether the read-only PXE-boot TFTP server is active. | `false` |
 | `NINLIL_DHCP_SERVER_TFTP_PORT` | The TFTP UDP port. | `69` |
-| `NINLIL_DHCP_SERVER_TFTP_ROOT_DIRECTORY` | The filesystem root TFTP serves boot files from (a path outside this root is always rejected). | *(empty)* |
+| `NINLIL_DHCP_SERVER_TFTP_ROOT_DIRECTORY` | The filesystem root TFTP serves boot files from (a leading `/` means this root; a path or link leading outside it is always rejected). | *(empty)* |
 | `NINLIL_DHCP_SERVER_TFTP_RETRANSMIT_TIMEOUT` | Per-block retransmit timeout. | `00:00:02` |
 | `NINLIL_DHCP_SERVER_TFTP_MAX_RETRANSMISSIONS` | Max retransmissions before giving up on a transfer. | `5` |
 

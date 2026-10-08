@@ -26,10 +26,9 @@ namespace Ninlil.Dhcp.Server.Tftp;
 ///         <c>tsize</c>) are ignored, so every transfer uses 512-byte blocks.
 ///     </para>
 ///     <para>
-///         <b>Path confinement.</b> <see cref="TryResolveRequestedFile" /> rejects absolute paths,
-///         combines the filename with the root directory, normalizes the result with
-///         <see cref="Path.GetFullPath(string)" /> and rejects anything outside the root. The check
-///         works on the path text only; symbolic links inside the root are followed.
+///         <b>Path confinement.</b> <see cref="TftpPathResolver" /> treats a leading <c>/</c> as
+///         the root, rejects <c>..</c> escapes and follows a symbolic link only when every step and
+///         the final real path stay inside the real root directory.
 ///     </para>
 ///     <para>
 ///         <b>Restartable.</b> The class is an <see cref="IDhcpProtocolService" />:
@@ -144,8 +143,8 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 return Task.CompletedTask;
             }
 
-            if (!rootDirectory.EndsWith(Path.DirectorySeparatorChar))
-                rootDirectory += Path.DirectorySeparatorChar;
+            // Resolve the root's own links once; every request is checked against this real path.
+            rootDirectory = TftpPathResolver.ResolveRealRoot(rootDirectory);
 
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
@@ -379,14 +378,27 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             }
 
             if (
-                !TryResolveRequestedFile(
+                !TftpPathResolver.TryResolve(
                     rootDirectory,
                     request.Filename,
                     out string resolvedPath,
-                    out string rejectReason
+                    out string rejectReason,
+                    out bool notFound
                 )
             )
             {
+                if (notFound)
+                {
+                    await SendErrorAsync(
+                        transferSocket,
+                        clientEndPoint,
+                        TftpErrorCodeEnum.FileNotFound,
+                        $"'{request.Filename}' does not exist.",
+                        stoppingToken
+                    );
+                    return;
+                }
+
                 logger.LogWarning(
                     "Rejecting a TFTP request from {RemoteEndPoint} for '{Filename}': {Reason}",
                     clientEndPoint,
@@ -398,18 +410,6 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                     clientEndPoint,
                     TftpErrorCodeEnum.AccessViolation,
                     rejectReason,
-                    stoppingToken
-                );
-                return;
-            }
-
-            if (!File.Exists(resolvedPath))
-            {
-                await SendErrorAsync(
-                    transferSocket,
-                    clientEndPoint,
-                    TftpErrorCodeEnum.FileNotFound,
-                    $"'{request.Filename}' does not exist.",
                     stoppingToken
                 );
                 return;
@@ -634,48 +634,5 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
         }
 
         return totalRead;
-    }
-
-    /// <summary>
-    ///     This method resolves a requested filename inside the root directory. It rejects an
-    ///     empty name and an absolute path (including a leading <c>/</c>), and rejects a path that
-    ///     <see cref="Path.GetFullPath(string)" /> resolves to outside the root, for example
-    ///     through <c>..</c> segments. Symbolic links are not resolved.
-    /// </summary>
-    private static bool TryResolveRequestedFile(
-        string rootDirectoryWithTrailingSeparator,
-        string requestedFilename,
-        out string resolvedPath,
-        out string rejectReason
-    )
-    {
-        resolvedPath = null;
-        rejectReason = null;
-
-        if (string.IsNullOrWhiteSpace(requestedFilename))
-        {
-            rejectReason = "No filename was given.";
-            return false;
-        }
-
-        if (Path.IsPathRooted(requestedFilename))
-        {
-            rejectReason = "Absolute paths are not permitted.";
-            return false;
-        }
-
-        string fullPath = Path.GetFullPath(
-            Path.Combine(rootDirectoryWithTrailingSeparator, requestedFilename)
-        );
-
-        if (!fullPath.StartsWith(rootDirectoryWithTrailingSeparator, StringComparison.Ordinal))
-        {
-            rejectReason =
-                "The requested path is outside this server's own configured root directory.";
-            return false;
-        }
-
-        resolvedPath = fullPath;
-        return true;
     }
 }
