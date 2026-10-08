@@ -22,8 +22,9 @@ public class TsigKeyEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property contains the MAC algorithm's name, in domain-name presentation form.
-    ///     It is always <c>hmac-sha256.</c>, since Ninlil implements only HMAC-SHA256, but it is a
-    ///     column so another algorithm can be added without a schema change.
+    ///     <c>hmac-sha1</c>, <c>hmac-sha256</c>, <c>hmac-sha384</c> and <c>hmac-sha512</c> are
+    ///     implemented, with or without the trailing dot. A signed message must name the same
+    ///     algorithm as its key.
     /// </summary>
     public string AlgorithmName { get; set; }
 
@@ -36,7 +37,9 @@ public class TsigKeyEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property indicates whether the key is disabled. A disabled key is kept but treated as
-    ///     unknown: signing or verifying with it fails with a TSIG BADKEY error.
+    ///     unknown: signing or verifying with it fails with a TSIG BADKEY error. Key lookups are cached
+    ///     for up to 10 seconds (<c>TsigKeyLookupCache</c>), so disabling or deleting a key takes up
+    ///     to that long to stop it verifying.
     /// </summary>
     public bool IsDisabled { get; set; }
 

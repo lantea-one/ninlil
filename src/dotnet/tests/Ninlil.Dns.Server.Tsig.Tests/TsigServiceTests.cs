@@ -166,29 +166,25 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
         ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
-        // TsigService checks the time before computing the MAC, so a correctly sized but
-        // meaningless MAC is enough to reach the check.
-        DnsMessage message = BuildMessage(3);
-        message.Tsig = new DnsTsigOptions(
-            DnsName.Parse(key.Name),
-            DnsTsigOptions.HmacSha256AlgorithmName,
-            (ulong)DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds(),
-            300,
-            new byte[32],
-            message.Id,
-            DnsResponseCodeEnum.NoError,
-            []
-        );
-        (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(message);
+        DnsMessage signed = await tsigService.SignAsync(BuildMessage(3), key.Name, 3);
+        (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(signed);
 
-        TsigVerificationResult result = await tsigService.VerifyAsync(
-            rawMessage,
-            tsigOffset,
-            reparsed
-        );
+        // The MAC is checked before the time, so only a correctly signed message reaches BADTIME.
+        // The clock moves forward an hour and back again because the fixture shares it.
+        fixture.Clock.Advance(TimeSpan.FromHours(1));
+        TsigVerificationResult result;
+        try
+        {
+            result = await tsigService.VerifyAsync(rawMessage, tsigOffset, reparsed);
+        }
+        finally
+        {
+            fixture.Clock.Advance(TimeSpan.FromHours(-1));
+        }
 
         Assert.False(result.IsValid);
         Assert.Equal(DnsResponseCodeEnum.BadTime, result.Error);
+        Assert.Equal(key.Id, result.Key.Id);
     }
 
     [Fact]
@@ -201,7 +197,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         message.Tsig = new DnsTsigOptions(
             DnsName.Parse($"nonexistent-key-{Guid.NewGuid()}"),
             DnsTsigOptions.HmacSha256AlgorithmName,
-            (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            (ulong)fixture.Clock.GetUtcNow().ToUnixTimeSeconds(),
             300,
             new byte[32],
             message.Id,
@@ -249,6 +245,9 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             await unitOfWork.SaveChangesAsync();
         }
 
+        // The key lookup cache keeps the enabled verdict for 10 seconds; let it expire.
+        fixture.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+
         // Verify in a new scope: signScope's DbContext still tracks the old, enabled copy of the
         // key and would return it instead of re-reading the database.
         await using AsyncServiceScope verifyScope = fixture.Services.CreateAsyncScope();
@@ -274,8 +273,8 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         DnsMessage message = BuildMessage(6);
         message.Tsig = new DnsTsigOptions(
             DnsName.Parse(key.Name),
-            DnsName.Parse("hmac-sha1"), // Not supported; only HMAC-SHA256 is.
-            (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            DnsName.Parse("hmac-md5.sig-alg.reg.int"), // Not supported.
+            (ulong)fixture.Clock.GetUtcNow().ToUnixTimeSeconds(),
             300,
             new byte[32],
             message.Id,
@@ -305,9 +304,9 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         message.Tsig = new DnsTsigOptions(
             DnsName.Parse(key.Name),
             DnsTsigOptions.HmacSha256AlgorithmName,
-            (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            (ulong)fixture.Clock.GetUtcNow().ToUnixTimeSeconds(),
             300,
-            new byte[16], // HMAC-SHA256 produces 32 bytes.
+            new byte[16], // HMAC-SHA256 produces 32 bytes; truncated MACs are not supported.
             message.Id,
             DnsResponseCodeEnum.NoError,
             []
@@ -321,7 +320,7 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
         );
 
         Assert.False(result.IsValid);
-        Assert.Equal(DnsResponseCodeEnum.BadVersionOrBadSignature, result.Error);
+        Assert.Equal(DnsResponseCodeEnum.BadTruncation, result.Error);
     }
 
     [Fact]
@@ -544,14 +543,15 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
 
         // Message 3: signed. Its digest is message 1's MAC, then message 2's bytes, then message
         // 3's bytes, then the timers (RFC 8945 §5.3.1). It is computed by hand here rather than
-        // through TsigService. Like TsigService, it uses the raw MAC without its size field.
+        // through TsigService. The prior MAC carries its two-octet size.
         DnsMessage message3 = BuildMessage(13);
         byte[] message3Bytes = DnsMessageWriter.Write(message3);
-        ulong timeSigned = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        ulong timeSigned = (ulong)fixture.Clock.GetUtcNow().ToUnixTimeSeconds();
         ushort fudge = 300;
         byte[] timersOnly = TsigCodec.BuildTimersOnly(timeSigned, fudge);
         byte[] expectedMacInput =
         [
+            .. new byte[] { 0, (byte)reparsed1.Tsig.Mac.Length },
             .. reparsed1.Tsig.Mac,
             .. unsignedMessage2Bytes,
             .. message3Bytes,

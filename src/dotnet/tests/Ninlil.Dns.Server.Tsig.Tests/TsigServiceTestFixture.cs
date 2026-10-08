@@ -24,6 +24,12 @@ public sealed class TsigServiceTestFixture : IAsyncLifetime
     private IHost _host;
 
     /// <summary>
+    ///     This property contains the clock the service under test uses. It starts at the real
+    ///     time. Tests advance it forward only, because they share it.
+    /// </summary>
+    public ManualTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+
+    /// <summary>
     ///     This property contains the root service provider tests create their scopes from.
     /// </summary>
     public IServiceProvider Services { get; private set; }
@@ -33,6 +39,8 @@ public sealed class TsigServiceTestFixture : IAsyncLifetime
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         builder.Configuration["Storage:ConnectionString"] = $"Data Source={_databasePath}";
+        builder.Services.AddSingleton(Clock);
+        builder.Services.AddSingleton<TimeProvider>(Clock);
         builder.Services.AddNinlilDnsEntityFrameworkCore(builder.Configuration);
         builder.Services.AddNinlilDnsServerTsig(builder.Configuration);
 

@@ -14,7 +14,10 @@ namespace Ninlil.Dns.Server.Tsig;
 public interface ITsigService
 {
     /// <summary>
-    ///     This method verifies a signed message.
+    ///     This method verifies a signed message, in the order of RFC 8945 §5.2: algorithm and key
+    ///     (unknown, disabled, cluster or of another algorithm: BADKEY), MAC length (FORMERR or
+    ///     BADTRUNC), MAC (BADSIG), then time (BADTIME). Key lookups are cached for a few seconds
+    ///     (<see cref="TsigKeyLookupCache" />).
     /// </summary>
     /// <param name="rawMessage">The complete message as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">
@@ -52,7 +55,8 @@ public interface ITsigService
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns><paramref name="message" />, with <see cref="DnsMessage.Tsig" /> now set.</returns>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled.
+    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled, or it
+    ///     is a cluster key (a peer's key or an invite key), which only the cluster channel may use.
     /// </exception>
     Task<DnsMessage> SignAsync(
         DnsMessage message,
@@ -68,9 +72,8 @@ public interface ITsigService
     ///     request that produced it.
     /// </summary>
     /// <remarks>
-    ///     The request MAC is digested as raw MAC bytes, without the two-byte MAC Size field.
-    ///     <see cref="VerifyResponseAsync" /> does the same, so both ends of a Ninlil-to-Ninlil
-    ///     transfer agree.
+    ///     The request MAC is digested with its two-octet MAC Size in front, as RFC 8945 §5.3
+    ///     requires, so other implementations (BIND, dnspython) verify the answer.
     /// </remarks>
     /// <param name="message">The response message to sign, not yet carrying a TSIG record.</param>
     /// <param name="keyName">The name of the pre-shared key to sign with.</param>
@@ -82,7 +85,8 @@ public interface ITsigService
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns><paramref name="message" />, with <see cref="DnsMessage.Tsig" /> now set.</returns>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled.
+    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled, or it
+    ///     is a cluster key (a peer's key or an invite key), which only the cluster channel may use.
     /// </exception>
     Task<DnsMessage> SignResponseAsync(
         DnsMessage message,
@@ -95,7 +99,8 @@ public interface ITsigService
     /// <summary>
     ///     This method signs the second or a later message of a multi-message answer, per RFC 8945
     ///     §5.3.1. The digest is the prior MAC, then this message's bytes, then only the TSIG
-    ///     Timers (Time Signed and Fudge), not the full TSIG Variables. The outbound zone transfer
+    ///     Timers (Time Signed and Fudge), not the full TSIG Variables. The prior MAC carries its
+    ///     two-octet MAC Size. The outbound zone transfer
     ///     path signs every message, so no unsigned messages ever sit between two signed ones
     ///     here; <see cref="VerifyContinuationAsync" /> still has to allow for them from peers.
     /// </summary>
@@ -108,13 +113,47 @@ public interface ITsigService
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     /// <returns><paramref name="message" />, with <see cref="DnsMessage.Tsig" /> now set.</returns>
     /// <exception cref="InvalidOperationException">
-    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled.
+    ///     Thrown when no key named <paramref name="keyName" /> exists, or it is disabled, or it
+    ///     is a cluster key (a peer's key or an invite key), which only the cluster channel may use.
     /// </exception>
     Task<DnsMessage> SignContinuationAsync(
         DnsMessage message,
         string keyName,
         ushort originalId,
         byte[] priorMac,
+        CancellationToken stoppingToken = default
+    );
+
+    /// <summary>
+    ///     This method turns <paramref name="response" /> into the reply to a request whose TSIG
+    ///     failed verification (RFC 8945 §5.3.2). The result depends on the failure:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             FORMERR: the RCODE is FORMERR and the reply has no TSIG record.
+    ///         </item>
+    ///         <item>
+    ///             BADKEY, BADSIG, BADTRUNC: the RCODE is NOTAUTH and the TSIG record carries the
+    ///             request's key and algorithm names, the current time, an empty MAC (size 0), the
+    ///             response ID as Original ID and the error code. The reply is never signed.
+    ///         </item>
+    ///         <item>
+    ///             BADTIME (RFC 8945 §5.2.3): the RCODE is NOTAUTH and the reply is signed as a
+    ///             first response over the request MAC. Time Signed is the request's, Other Data is
+    ///             the server's current time. The sender proved it holds the key, so it may learn
+    ///             the server time.
+    ///         </item>
+    ///     </list>
+    ///     The extended codes never go into the header RCODE, which has four bits.
+    /// </summary>
+    /// <param name="response">The reply to fill in; its ID and question are already set.</param>
+    /// <param name="requestTsig">The TSIG record of the failed request.</param>
+    /// <param name="failure">The failed verification result.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns><paramref name="response" />, with its RCODE and TSIG set as above.</returns>
+    Task<DnsMessage> SignErrorResponseAsync(
+        DnsMessage response,
+        DnsTsigOptions requestTsig,
+        TsigVerificationResult failure,
         CancellationToken stoppingToken = default
     );
 

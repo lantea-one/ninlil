@@ -34,6 +34,13 @@ public sealed class TcpZoneTransferClientHotReloadTests
             CancellationToken stoppingToken = default
         ) => Task.FromResult(message);
 
+        public Task<DnsMessage> SignErrorResponseAsync(
+            DnsMessage response,
+            DnsTsigOptions requestTsig,
+            TsigVerificationResult failure,
+            CancellationToken stoppingToken = default
+        ) => throw new NotSupportedException();
+
         public Task<TsigVerificationResult> VerifyAsync(
             byte[] rawMessage,
             int tsigRecordStartOffset,

@@ -21,8 +21,8 @@ namespace Ninlil.Dns.Common.Wire;
 ///     configured. It need not be a resolvable domain name.
 /// </param>
 /// <param name="algorithmName">
-///     The MAC algorithm, written as a domain name as RFC 8945 does. Ninlil only produces and
-///     accepts <see cref="HmacSha256AlgorithmName" />.
+///     The MAC algorithm, written as a domain name as RFC 8945 does. Ninlil produces and accepts
+///     the HMAC-SHA1, -SHA256, -SHA384 and -SHA512 names declared on this class.
 /// </param>
 /// <param name="timeSigned">
 ///     When the MAC was generated, as seconds since the Unix epoch. Only the low 48 bits are
@@ -32,13 +32,15 @@ namespace Ninlil.Dns.Common.Wire;
 /// <param name="mac">The message authentication code.</param>
 /// <param name="originalId">
 ///     The message ID at signing time. RFC 8945 carries it so a verifier can restore it if a
-///     forwarder rewrote the header ID.
+///     forwarder rewrote the header ID; the MAC is computed over the message with this ID in the
+///     header (see <see cref="TsigCodec.ExtractSignedMessageBytes" />).
 /// </param>
 /// <param name="error">
 ///     The TSIG outcome (RFC 8945 §5.3): <see cref="DnsResponseCodeEnum.NoError" /> for a verified
 ///     request, or <see cref="DnsResponseCodeEnum.BadVersionOrBadSignature" /> (BADSIG, which shares
-///     its value with the EDNS BADVERS code), <see cref="DnsResponseCodeEnum.BadKey" /> or
-///     <see cref="DnsResponseCodeEnum.BadTime" /> when a server rejects a signed request.
+///     its value with the EDNS BADVERS code), <see cref="DnsResponseCodeEnum.BadKey" />,
+///     <see cref="DnsResponseCodeEnum.BadTruncation" /> or <see cref="DnsResponseCodeEnum.BadTime" />
+///     when a server rejects a signed request.
 /// </param>
 /// <param name="otherData">
 ///     Extra data for <see cref="Error" />. It is only filled when <see cref="Error" /> is
@@ -57,10 +59,25 @@ public class DnsTsigOptions(
 ) : IEquatable<DnsTsigOptions>
 {
     /// <summary>
-    ///     This property contains the algorithm name for HMAC-SHA256, the only MAC algorithm Ninlil
-    ///     implements. The older HMAC-SHA1 and HMAC-MD5 algorithms are not accepted.
+    ///     This property contains the algorithm name for HMAC-SHA1, which RFC 8945 §6 lists as
+    ///     mandatory to implement.
+    /// </summary>
+    public static DnsName HmacSha1AlgorithmName { get; } = DnsName.Parse("hmac-sha1");
+
+    /// <summary>
+    ///     This property contains the algorithm name for HMAC-SHA256, the default for a new key.
     /// </summary>
     public static DnsName HmacSha256AlgorithmName { get; } = DnsName.Parse("hmac-sha256");
+
+    /// <summary>
+    ///     This property contains the algorithm name for HMAC-SHA384.
+    /// </summary>
+    public static DnsName HmacSha384AlgorithmName { get; } = DnsName.Parse("hmac-sha384");
+
+    /// <summary>
+    ///     This property contains the algorithm name for HMAC-SHA512.
+    /// </summary>
+    public static DnsName HmacSha512AlgorithmName { get; } = DnsName.Parse("hmac-sha512");
 
     /// <summary>
     ///     This property contains the name identifying which shared secret was used.

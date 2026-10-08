@@ -33,6 +33,13 @@ public class QuicZoneTransferClientTests
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
 
+        public Task<DnsMessage> SignErrorResponseAsync(
+            DnsMessage response,
+            DnsTsigOptions requestTsig,
+            TsigVerificationResult failure,
+            CancellationToken stoppingToken = default
+        ) => throw new NotSupportedException("Not exercised -- this test uses no TSIG key.");
+
         public Task<TsigVerificationResult> VerifyAsync(
             byte[] rawMessage,
             int tsigRecordStartOffset,

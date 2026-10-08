@@ -98,7 +98,13 @@ public sealed class TsigServiceHotReloadTests
                 IsDisabled = false,
             };
 
-            TsigService service = new(new SingleKeyTsigKeyRepository(key), protector, monitor);
+            TsigService service = new(
+                new SingleKeyTsigKeyRepository(key),
+                protector,
+                monitor,
+                new TsigKeyLookupCache(TimeProvider.System),
+                TimeProvider.System
+            );
 
             DnsMessage before = await service.SignAsync(
                 new DnsMessage { Id = 1, IsResponse = true },

@@ -7,7 +7,8 @@ namespace Ninlil.Dns.Server.Tsig;
 /// <summary>
 ///     This class carries the outcome of an <see cref="ITsigService" /> verification: either the
 ///     signature was valid, or it was rejected with an RFC 8945 §5.2 error (BADKEY, BADSIG,
-///     BADTIME) that the caller can report back to the sender.
+///     BADTRUNC, BADTIME, or FORMERR for a malformed MAC) that the caller reports through
+///     <see cref="ITsigService.SignErrorResponseAsync" />.
 /// </summary>
 public sealed class TsigVerificationResult
 {
@@ -24,9 +25,10 @@ public sealed class TsigVerificationResult
     public DnsResponseCodeEnum Error { get; }
 
     /// <summary>
-    ///     This property contains the key named in the message's TSIG record, when that key exists,
-    ///     is enabled and the check got far enough to look it up. It is set on a BADTIME or BADSIG
-    ///     failure and <see langword="null" /> on a BADKEY failure.
+    ///     This property contains the key named in the message's TSIG record, when that key is
+    ///     usable and the MAC check was reached. It is set on a BADSIG or BADTIME failure and
+    ///     <see langword="null" /> on BADKEY, FORMERR and BADTRUNC. A BADTIME failure comes only
+    ///     after the MAC matched.
     /// </summary>
     public TsigKeyEntity Key { get; }
 

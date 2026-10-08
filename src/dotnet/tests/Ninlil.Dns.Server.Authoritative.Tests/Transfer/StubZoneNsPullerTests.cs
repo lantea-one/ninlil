@@ -27,6 +27,13 @@ public class StubZoneNsPullerTests
             CancellationToken stoppingToken = default
         ) => throw new NotSupportedException("Not exercised -- every test here uses no TSIG key.");
 
+        public Task<DnsMessage> SignErrorResponseAsync(
+            DnsMessage response,
+            DnsTsigOptions requestTsig,
+            TsigVerificationResult failure,
+            CancellationToken stoppingToken = default
+        ) => throw new NotSupportedException("Not exercised -- every test here uses no TSIG key.");
+
         public Task<TsigVerificationResult> VerifyAsync(
             byte[] rawMessage,
             int tsigRecordStartOffset,
