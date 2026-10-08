@@ -220,6 +220,81 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AClientWithTheWrongAlpn_DoesNotStopTheListenerServingTheNextClient()
+    {
+        if (!IsQuicAvailable())
+            return;
+
+        // The handshake fails on the server (no shared application protocol). That failure must
+        // end only this connection, not the accept loop.
+        try
+        {
+            await using QuicConnection wrong = await QuicConnection.ConnectAsync(
+                new QuicClientConnectionOptions
+                {
+                    RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, _options.Port),
+                    ClientAuthenticationOptions = new SslClientAuthenticationOptions
+                    {
+                        ApplicationProtocols = [new SslApplicationProtocol("h3")],
+                        TargetHost = "localhost",
+                        RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                    },
+                    DefaultCloseErrorCode = 0,
+                    DefaultStreamErrorCode = 0,
+                }
+            );
+        }
+        catch (Exception exception)
+            when (exception
+                    is QuicException
+                        or System.Security.Authentication.AuthenticationException
+            ) { }
+
+        DnsMessage response = await TryQueryAsync(IPAddress.Loopback, _options.Port);
+
+        Assert.NotNull(response);
+        Assert.True(_listener.IsListening);
+    }
+
+    [Fact]
+    public async Task TheAcceptLoop_SurvivesFailedHandshakesAndKeepsAccepting()
+    {
+        // No QUIC peer is involved: the accept call is a delegate that fails the way
+        // QuicListener.AcceptConnectionAsync does for a connection whose handshake failed.
+        using CancellationTokenSource stop = new();
+        int calls = 0;
+        TaskCompletionSource reachedThirdCall = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+
+        ValueTask<QuicConnection> Accept(CancellationToken token)
+        {
+            switch (Interlocked.Increment(ref calls))
+            {
+                case 1:
+                    throw new QuicException(QuicError.ConnectionAborted, 120, "handshake failed");
+                case 2:
+                    throw new System.Security.Authentication.AuthenticationException(
+                        "handshake failed"
+                    );
+                default:
+                    reachedThirdCall.TrySetResult();
+                    return new ValueTask<QuicConnection>(
+                        Task.Delay(Timeout.Infinite, token).ContinueWith<QuicConnection>(_ => null)
+                    );
+            }
+        }
+
+        Task loop = _listener.AcceptLoopAsync(Accept, stop.Token);
+        Task finished = await Task.WhenAny(reachedThirdCall.Task, loop);
+
+        Assert.Same(reachedThirdCall.Task, finished);
+
+        await stop.CancelAsync();
+        await loop.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task ListenAddresses_LoopbackOnly_AnswersThereButNotOnAnotherLocalAddress()
     {
         IPAddress other = LocalAddresses.OtherLoopback();

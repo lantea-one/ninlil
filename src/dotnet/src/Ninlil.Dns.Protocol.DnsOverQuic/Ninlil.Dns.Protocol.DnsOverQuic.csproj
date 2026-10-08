@@ -30,6 +30,11 @@
       the ordinary net10.0 TargetFramework every project already has.
     -->
 
+  <!-- The tests drive the accept loop through an internal seam (see DnsOverQuicListener). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Protocol.DnsOverQuic.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageReference

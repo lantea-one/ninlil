@@ -4,6 +4,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -259,7 +260,17 @@ public sealed class DnsOverQuicListener(
     ///     This method accepts connections on one QUIC listener until shutdown; each listen
     ///     address gets its own loop.
     /// </summary>
-    private async Task AcceptLoopAsync(QuicListener listener, CancellationToken stoppingToken)
+    private Task AcceptLoopAsync(QuicListener listener, CancellationToken stoppingToken) =>
+        AcceptLoopAsync(listener.AcceptConnectionAsync, stoppingToken);
+
+    /// <summary>
+    ///     This method is the accept loop itself, taking the accept call as a delegate so a test
+    ///     can make it fail without a failing QUIC peer.
+    /// </summary>
+    internal async Task AcceptLoopAsync(
+        Func<CancellationToken, ValueTask<QuicConnection>> acceptAsync,
+        CancellationToken stoppingToken
+    )
     {
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -267,11 +278,22 @@ public sealed class DnsOverQuicListener(
 
             try
             {
-                connection = await listener.AcceptConnectionAsync(stoppingToken);
+                connection = await acceptAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (Exception exception) when (exception is QuicException or AuthenticationException)
+            {
+                // One peer's failed handshake (for example a certificate or protocol error)
+                // must end only that connection. Ending the loop would stop this listener
+                // address for everyone.
+                logger.LogDebug(
+                    exception,
+                    "A DNS-over-QUIC connection failed before it was accepted."
+                );
+                continue;
             }
 
             _ = HandleConnectionAsync(connection, stoppingToken);
