@@ -158,4 +158,86 @@ public sealed class PresetConfigurationFileApplierTests : IDisposable
 
         Assert.Equal(firstApply, secondApply);
     }
+
+    [Fact]
+    public async Task ParallelAppliesWithDistinctKeysKeepEveryKey()
+    {
+        await Task.WhenAll(
+            Enumerable
+                .Range(0, 32)
+                .Select(index =>
+                    Task.Run(() =>
+                        PresetConfigurationFileApplier.ApplyAsync(
+                            [new PresetConfigurationSetting("Parallel", $"Key{index}", index)],
+                            ConfigPath
+                        )
+                    )
+                )
+        );
+
+        JsonObject root = await ReadBackAsync();
+
+        for (int index = 0; index < 32; index++)
+            Assert.Equal(index, root["Parallel"][$"Key{index}"].GetValue<int>());
+    }
+
+    [Fact]
+    public async Task AFileWithCommentsAndTrailingCommasIsMerged()
+    {
+        await File.WriteAllTextAsync(
+            ConfigPath,
+            """
+            {
+                // A comment the rewrite drops.
+                "Existing": { "Kept": "yes", },
+            }
+            """
+        );
+
+        await PresetConfigurationFileApplier.ApplyAsync(
+            [new PresetConfigurationSetting("Added", "Key", "value")],
+            ConfigPath
+        );
+
+        JsonObject root = await ReadBackAsync();
+
+        Assert.Equal("yes", root["Existing"]["Kept"].GetValue<string>());
+        Assert.Equal("value", root["Added"]["Key"].GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AnOwnerOnlyFileStaysOwnerOnly()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        await File.WriteAllTextAsync(ConfigPath, "{}");
+        UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        File.SetUnixFileMode(ConfigPath, mode);
+
+        await PresetConfigurationFileApplier.ApplyAsync(
+            [new PresetConfigurationSetting("Section", "Key", "value")],
+            ConfigPath
+        );
+
+        Assert.Equal(mode, File.GetUnixFileMode(ConfigPath));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("{ this is not json")]
+    public async Task AFileThatIsNotAJsonObjectIsRefusedAndLeftUnchanged(string content)
+    {
+        await File.WriteAllTextAsync(ConfigPath, content);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            PresetConfigurationFileApplier.ApplyAsync(
+                [new PresetConfigurationSetting("Section", "Key", "value")],
+                ConfigPath
+            )
+        );
+
+        Assert.Equal(content, await File.ReadAllTextAsync(ConfigPath));
+    }
 }

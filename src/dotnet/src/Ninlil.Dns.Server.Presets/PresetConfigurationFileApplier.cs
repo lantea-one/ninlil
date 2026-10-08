@@ -2,6 +2,7 @@ using System.Collections;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Ninlil.Dns.Common.IO;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Presets;
@@ -12,6 +13,14 @@ namespace Ninlil.Dns.Server.Presets;
 ///     setting in the file, in the same section or another, is kept. Presets use it through
 ///     <see cref="PresetApplier" />, and the runtime settings controllers in <c>Ninlil.Web</c> and
 ///     the cluster settings sync use the settings-list overload directly.
+///     <para>
+///         Each apply holds a per-file lock around its read, merge and write, so concurrent
+///         applies (two settings saves, or a save and a cluster sync) cannot lose each other's
+///         keys. The file is parsed leniently: comments and trailing commas are accepted, but a
+///         rewrite drops the comments. A file that is not a JSON object is never overwritten; the
+///         apply fails instead, because replacing it would lose its content. The file keeps its
+///         Unix mode, so a 0600 file stays 0600.
+///     </para>
 /// </summary>
 public static class PresetConfigurationFileApplier
 {
@@ -34,27 +43,44 @@ public static class PresetConfigurationFileApplier
     /// </summary>
     /// <param name="settings">Every configuration leaf to overwrite.</param>
     /// <param name="configurationFilePath">The JSON configuration file to read from and write back to.</param>
+    /// <exception cref="InvalidDataException">
+    ///     The existing file is not empty and is not a JSON object. The file is left as it is.
+    /// </exception>
     public static async Task ApplyAsync(
         IReadOnlyList<PresetConfigurationSetting> settings,
         string configurationFilePath
     )
     {
-        // The whole file is read once and each setting is merged into it, creating missing
-        // sections on the way, so everything the settings do not name is written back as it was.
-        JsonObject root = await ReadExistingRootAsync(configurationFilePath);
+        SemaphoreSlim fileLock = AtomicFile.GetPathLock(configurationFilePath);
+        await fileLock.WaitAsync();
 
-        foreach (PresetConfigurationSetting setting in settings)
+        try
         {
-            JsonObject section = NavigateToSection(root, setting.SectionPath);
-            section[setting.Key] = ToJsonNode(setting.Value);
-        }
+            // The whole file is read once and each setting is merged into it, creating missing
+            // sections on the way, so everything the settings do not name is written back as it
+            // was.
+            JsonObject root = await ReadExistingRootAsync(configurationFilePath);
 
-        await WriteAtomicallyAsync(configurationFilePath, root);
+            foreach (PresetConfigurationSetting setting in settings)
+            {
+                JsonObject section = NavigateToSection(root, setting.SectionPath);
+                section[setting.Key] = ToJsonNode(setting.Value);
+            }
+
+            await WriteAtomicallyAsync(configurationFilePath, root);
+        }
+        finally
+        {
+            fileLock.Release();
+        }
     }
 
     /// <summary>
     ///     This method reads and parses the existing configuration file, or starts from an empty
-    ///     object if the file does not exist yet (or is itself empty).
+    ///     object if the file does not exist yet (or is itself empty). Comments and trailing
+    ///     commas are accepted, as the configuration system accepts them. Any other content,
+    ///     including a top level of <c>[]</c> or <c>null</c>, throws so the caller never replaces
+    ///     a file it could not understand.
     /// </summary>
     private static async Task<JsonObject> ReadExistingRootAsync(string configurationFilePath)
     {
@@ -66,9 +92,30 @@ public static class PresetConfigurationFileApplier
         if (string.IsNullOrWhiteSpace(existingContent))
             return new JsonObject();
 
-        JsonNode parsed = JsonNode.Parse(existingContent);
-        return parsed as JsonObject ?? new JsonObject();
+        JsonNode parsed;
+
+        try
+        {
+            parsed = JsonNode.Parse(
+                existingContent,
+                documentOptions: new JsonDocumentOptions
+                {
+                    CommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true,
+                }
+            );
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException(NotAnObjectMessage(configurationFilePath), exception);
+        }
+
+        return parsed as JsonObject
+            ?? throw new InvalidDataException(NotAnObjectMessage(configurationFilePath));
     }
+
+    private static string NotAnObjectMessage(string configurationFilePath) =>
+        $"'{configurationFilePath}' is not a JSON object; fix or remove it before saving settings.";
 
     /// <summary>
     ///     This method walks (creating, when necessary) every nested <see cref="JsonObject" />
@@ -112,26 +159,17 @@ public static class PresetConfigurationFileApplier
         };
 
     /// <summary>
-    ///     This method writes the merged configuration to a temporary file in the same directory
-    ///     and then moves it over the target path, so a reader never sees a half-written file and
-    ///     a failed write leaves the previous file in place.
+    ///     This method writes the merged configuration through <see cref="AtomicFile" />, so a
+    ///     reader never sees a half-written file, a failed write leaves the previous file in
+    ///     place and the file keeps its mode.
     /// </summary>
-    private static async Task WriteAtomicallyAsync(string configurationFilePath, JsonObject root)
-    {
-        string directory = Path.GetDirectoryName(Path.GetFullPath(configurationFilePath));
-
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
-        string tempPath = Path.Combine(directory ?? ".", $"{Guid.NewGuid():N}.tmp");
-
-        await using (FileStream stream = File.Create(tempPath))
-            await JsonSerializer.SerializeAsync(
-                stream,
+    private static Task WriteAtomicallyAsync(string configurationFilePath, JsonObject root) =>
+        AtomicFile.WriteAllBytesAsync(
+            configurationFilePath,
+            JsonSerializer.SerializeToUtf8Bytes(
                 root,
                 new JsonSerializerOptions { WriteIndented = true }
-            );
-
-        File.Move(tempPath, configurationFilePath, overwrite: true);
-    }
+            ),
+            AtomicFilePermissions.PreserveExisting
+        );
 }
