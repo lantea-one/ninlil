@@ -246,8 +246,7 @@ public sealed class TcpDnsListener(
                 tsigRecordStartOffset,
                 remoteAddress,
                 questionType.Value,
-                session,
-                sessionToken
+                session
             );
             return FrameOutcomeEnum.CloseAfterDrain;
         }
@@ -275,7 +274,8 @@ public sealed class TcpDnsListener(
     ///     This method streams an AXFR or IXFR response back, one length-prefixed message at a
     ///     time, in the order <see cref="IZoneTransferService" /> yields them. The messages go
     ///     through <see cref="FramedDnsStreamSession.SendAsync" />, so a secondary that stops
-    ///     reading is cut by the session's write deadline.
+    ///     reading is cut by the session's write deadline, and the transfer is limited to
+    ///     <see cref="FramedDnsStreamSession.MaxTransferDuration" />.
     /// </summary>
     private async Task HandleZoneTransferAsync(
         DnsMessage request,
@@ -283,10 +283,15 @@ public sealed class TcpDnsListener(
         int tsigRecordStartOffset,
         IPAddress remoteAddress,
         DnsResourceRecordTypeEnum questionType,
-        FramedDnsStreamSession session,
-        CancellationToken transferToken
+        FramedDnsStreamSession session
     )
     {
+        // A transfer is bounded by its own two-hour limit, not by the read-idle timeout.
+        using CancellationTokenSource transferCts = session.CreateTransferTokenSource(
+            FramedDnsStreamSession.MaxTransferDuration
+        );
+        CancellationToken transferToken = transferCts.Token;
+
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneTransferService transferService =
             scope.ServiceProvider.GetRequiredService<IZoneTransferService>();

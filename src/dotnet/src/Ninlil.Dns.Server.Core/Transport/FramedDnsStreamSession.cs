@@ -169,6 +169,23 @@ public sealed class FramedDnsStreamSession
     }
 
     /// <summary>
+    ///     This method creates the token a zone transfer runs on: it is cancelled when the
+    ///     session ends or after <paramref name="maxDuration" />, whichever comes first. The
+    ///     read-idle timeout does not apply, because a transfer is long by nature; a secondary
+    ///     that stops reading is cut by the write deadline instead. The caller disposes the
+    ///     source.
+    /// </summary>
+    /// <param name="maxDuration">
+    ///     The longest the transfer may take; callers pass <see cref="MaxTransferDuration" />.
+    /// </param>
+    public CancellationTokenSource CreateTransferTokenSource(TimeSpan maxDuration)
+    {
+        CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(Lifetime);
+        source.CancelAfter(maxDuration);
+        return source;
+    }
+
+    /// <summary>
     ///     This method returns the delegate that sends a reply for the message the handler is
     ///     processing. It queues the frame and returns at once, so a pipeline slot never waits on
     ///     a socket. The slot of the message is released when the frame has been written, or when

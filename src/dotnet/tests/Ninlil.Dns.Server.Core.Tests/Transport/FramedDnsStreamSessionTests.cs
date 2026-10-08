@@ -290,6 +290,29 @@ public sealed class FramedDnsStreamSessionTests
         await harness.RunTask.WaitAsync(SafetyTimeout);
     }
 
+    [Fact]
+    public async Task TheTransferToken_IsCancelledAtItsLimit_AndByAnAbort()
+    {
+        await using Harness harness = await Harness.StartAsync(TimeSpan.FromSeconds(30));
+
+        using CancellationTokenSource limited = harness.Session.CreateTransferTokenSource(
+            TimeSpan.FromMilliseconds(200)
+        );
+
+        // The two-hour limit is far from reached after the short one has passed.
+        using CancellationTokenSource transfer = harness.Session.CreateTransferTokenSource(
+            FramedDnsStreamSession.MaxTransferDuration
+        );
+        Assert.Equal(TimeSpan.FromHours(2), FramedDnsStreamSession.MaxTransferDuration);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        Assert.True(limited.IsCancellationRequested);
+        Assert.False(transfer.IsCancellationRequested);
+
+        harness.Session.Abort();
+        Assert.True(transfer.IsCancellationRequested);
+    }
+
     /// <summary>
     ///     This record is one message the harness handler received, with the callbacks the
     ///     session created for it.
