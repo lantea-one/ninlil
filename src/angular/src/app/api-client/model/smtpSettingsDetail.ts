@@ -41,5 +41,9 @@ export interface SmtpSettingsDetail {
      * The display name messages are sent from. Defaults to \"Ninlil\".
      */
     fromDisplayName?: string | null;
+    /**
+     * The address users open the admin console at, which password-reset links point to. Empty means no reset link can be sent. Links never use the request\'s Host header.
+     */
+    publicBaseUrl?: string | null;
 }
 

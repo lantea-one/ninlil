@@ -35,7 +35,7 @@ export interface SmtpSettingsServiceInterface {
     apiSmtpSettingsGet(extraHttpRequestParams?: any): Observable<SmtpSettingsDetail>;
 
     /**
-     * This action merges a partial update into the &#x60;Email&#x60; section as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;password&#x60;, so an operator can change only &#x60;smtpHost&#x60; without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never shows. The password is stored in plain text in the configuration file. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535 or a malformed from-address. Requires &#x60;smtpsettings:write&#x60;.
+     * This action merges a partial update into the &#x60;Email&#x60; section as an RFC 7396 merge patch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from patch keeps its value, including &#x60;password&#x60;, so an operator can change only &#x60;smtpHost&#x60; without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never shows. The password is stored in plain text in the configuration file. Every field takes effect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a malformed from-address or a &#x60;publicBaseUrl&#x60; that is not an absolute http or https URL. Requires &#x60;smtpsettings:write&#x60;.
      * 
      * @endpoint patch /api/smtp-settings
 * @param requestParameters

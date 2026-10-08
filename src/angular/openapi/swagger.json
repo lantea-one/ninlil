@@ -925,7 +925,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action starts a self-service password reset. Given an e-mail address and no\nsign-in, it sends a reset-link e-mail through Ninlil.Web.Services.PasswordResetLinkSender\nwhen a matching account exists, is not disabled, has an e-mail address, and SMTP is\nconfigured. Allows anonymous callers.\n\n<b>The response never varies.</b> It is always 200 with the same\n    Ninlil.Web.Models.ForgotPasswordResult, whichever condition failed, including \"no\n    account has this address\". An administrator using\n    `UsersController.ResetPassword` may learn whether an account has an e-mail\n    address or whether SMTP is configured, but an anonymous caller must not be able to\n    tell from the response which addresses have accounts. A delivery failure (the SMTP\n    server rejects the message, say) is logged rather than returned as a 500 for the\n    same reason.",
+        "summary": "This action starts a self-service password reset. Given an e-mail address and no\nsign-in, it sends a reset-link e-mail through Ninlil.Web.Services.PasswordResetLinkSender\nwhen a matching account exists, is not disabled, has an e-mail address, and SMTP and\nthe public base URL are configured. Allows anonymous callers and is rate limited.\n\n<b>The response never varies.</b> It is always 200 with the same\n    Ninlil.Web.Models.ForgotPasswordResult, whichever condition failed, including \"no\n    account has this address\". An administrator using\n    `UsersController.ResetPassword` may learn whether an account has an e-mail\n    address or whether SMTP is configured, but an anonymous caller must not be able to\n    tell from the response which addresses have accounts. A delivery failure (the SMTP\n    server rejects the message, say) is logged rather than returned as a 500 for the\n    same reason.\n<b>Neither does its timing, as far as is practical.</b> The e-mail is sent in the\n    background after the response, so a slow SMTP conversation cannot reveal that an\n    account exists. Only the account lookup and the token generation run inline.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1285,7 +1285,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken) and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\nNinlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists.",
+        "summary": "This action sets a new password from a password-reset token. It is the second step of\nboth M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) and the `EmailLink` mode of\n`UsersController.ResetPassword`, called from the admin console's \"set new password\"\npage. The caller is not signed in, so it allows anonymous callers;\nNinlil.Web.Models.ConfirmPasswordResetRequest.Token is the only proof of authorization, and\nM:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) rejects a wrong, expired or used\ntoken. An unknown account and an undecodable token return the same 400 message, so the\nresponse does not reveal whether an account exists.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32201,7 +32201,8 @@
                   "username": "notifications@example.com",
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
-                  "fromDisplayName": "Ninlil"
+                  "fromDisplayName": "Ninlil",
+                  "publicBaseUrl": "https://dns.example.com"
                 }
               },
               "application/json": {
@@ -32215,7 +32216,8 @@
                   "username": "notifications@example.com",
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
-                  "fromDisplayName": "Ninlil"
+                  "fromDisplayName": "Ninlil",
+                  "publicBaseUrl": "https://dns.example.com"
                 }
               },
               "text/json": {
@@ -32229,7 +32231,8 @@
                   "username": "notifications@example.com",
                   "passwordConfigured": true,
                   "fromAddress": "notifications@example.com",
-                  "fromDisplayName": "Ninlil"
+                  "fromDisplayName": "Ninlil",
+                  "publicBaseUrl": "https://dns.example.com"
                 }
               }
             }
@@ -32240,7 +32243,7 @@
         "tags": [
           "SmtpSettings"
         ],
-        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. The password is stored in plain text in the configuration file. Every field takes\neffect at once. Returns 400 for a blank host or display name, a port outside 1-65535 or\na malformed from-address. Requires `smtpsettings:write`.",
+        "summary": "This action merges a partial update into the `Email` section as an RFC 7396 merge\npatch, through Ninlil.Dns.Server.Presets.PresetConfigurationFileApplier. A field absent from\npatch keeps its value, including `password`, so an operator can\nchange only `smtpHost` without resupplying a password M:Ninlil.Web.Controllers.SmtpSettingsController.Get never\nshows. The password is stored in plain text in the configuration file. Every field takes\neffect at once. Returns 400 for a blank host or display name, a port outside 1-65535, a\nmalformed from-address or a `publicBaseUrl` that is not an absolute http or https\nURL. Requires `smtpsettings:write`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -32252,7 +32255,8 @@
                 "username": "notifications@example.com",
                 "password": "a-real-smtp-password",
                 "fromAddress": "notifications@example.com",
-                "fromDisplayName": "Ninlil"
+                "fromDisplayName": "Ninlil",
+                "publicBaseUrl": "https://dns.example.com"
               }
             },
             "text/json": {
@@ -32264,7 +32268,8 @@
                 "username": "notifications@example.com",
                 "password": "a-real-smtp-password",
                 "fromAddress": "notifications@example.com",
-                "fromDisplayName": "Ninlil"
+                "fromDisplayName": "Ninlil",
+                "publicBaseUrl": "https://dns.example.com"
               }
             },
             "application/*+json": {
@@ -32276,7 +32281,8 @@
                 "username": "notifications@example.com",
                 "password": "a-real-smtp-password",
                 "fromAddress": "notifications@example.com",
-                "fromDisplayName": "Ninlil"
+                "fromDisplayName": "Ninlil",
+                "publicBaseUrl": "https://dns.example.com"
               }
             }
           }
@@ -34798,7 +34804,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest) requires.\nNinlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see\nNinlil.Web.Models.AdminPasswordResetMode). Requires `users:write`.\n<list type=\"bullet\"><item>Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only.\n    </item><item>Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail\n        address and SMTP must be configured (see `SmtpSettingsController`);\n        otherwise this returns 400 with a clear message.\n    </item></list>",
+        "summary": "This action resets an account's password for an administrator, for an account that\ncannot supply its current password as M:Ninlil.Web.Controllers.UsersController.ChangeMyPassword(Ninlil.Web.Models.ChangePasswordRequest) requires.\nNinlil.Web.Models.AdminResetPasswordRequest.Mode picks one of two modes (see\nNinlil.Web.Models.AdminPasswordResetMode). Requires `users:write`.\n<list type=\"bullet\"><item>Ninlil.Web.Models.AdminPasswordResetMode.AutoGenerate sets a generated strong\n        password at once, through a reset token and\n        M:Microsoft.AspNetCore.Identity.UserManager`1.ResetPasswordAsync(`0,System.String,System.String) so Identity's usual\n        validation and hashing apply, and returns it in this response only.\n    </item><item>Ninlil.Web.Models.AdminPasswordResetMode.EmailLink e-mails the account a link to\n        the admin console's \"set new password\" page, which submits to\n        M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The link carries an\n        Identity reset token, Base64Url-encoded for the query string (see\n        Ninlil.Web.Models.ConfirmPasswordResetRequest). The account must have an e-mail\n        address, and SMTP and the public base URL the link points at must be\n        configured (see `SmtpSettingsController`); otherwise this returns 400\n        with a clear message.\n    </item></list>",
         "parameters": [
           {
             "name": "id",
@@ -39602,7 +39608,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The page serves\nboth the reset e-mail an administrator sends (`UsersController.ResetPassword` in\n`EmailLink` mode) and the self-service\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken) request. Nobody is signed in at\nthis point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with\nNinlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization."
+        "description": "This class carries a token-based password reset, submitted from the \"set new password\"\nlanding page to M:Ninlil.Web.Controllers.AuthController.ResetPassword(Ninlil.Web.Models.ConfirmPasswordResetRequest). The page serves\nboth the reset e-mail an administrator sends (`UsersController.ResetPassword` in\n`EmailLink` mode) and the self-service\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest) request. Nobody is signed in at\nthis point, so the action is `[AllowAnonymous]` and Ninlil.Web.Models.ConfirmPasswordResetRequest.Token with\nNinlil.Web.Models.ConfirmPasswordResetRequest.UserId is its only proof of authorization."
       },
       "CreateApiTokenRequest": {
         "type": "object",
@@ -42509,12 +42515,12 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "The e-mail address to look up. The response never says whether it matches an account (see\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)).",
+            "description": "The e-mail address to look up. The response never says whether it matches an account (see\nM:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest)).",
             "nullable": true
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the e-mail address an anonymous, self-service Forgot Password request\nsubmits to M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken)."
+        "description": "This class carries the e-mail address an anonymous, self-service Forgot Password request\nsubmits to M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest)."
       },
       "ForgotPasswordResult": {
         "type": "object",
@@ -42526,7 +42532,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "This class carries the response of M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest,System.Threading.CancellationToken).\nNinlil.Web.Models.ForgotPasswordResult.Message is the same whether or not a reset link was sent, so a caller cannot\ntell the two apart."
+        "description": "This class carries the response of M:Ninlil.Web.Controllers.AuthController.ForgotPassword(Ninlil.Web.Models.ForgotPasswordRequest).\nNinlil.Web.Models.ForgotPasswordResult.Message is the same whether or not a reset link was sent, so a caller cannot\ntell the two apart."
       },
       "ForwarderDetail": {
         "type": "object",
@@ -43970,6 +43976,11 @@
           "fromDisplayName": {
             "type": "string",
             "description": "The display name messages are sent from. Defaults to \"Ninlil\".",
+            "nullable": true
+          },
+          "publicBaseUrl": {
+            "type": "string",
+            "description": "The address users open the admin console at, which password-reset links point to. Empty\nmeans no reset link can be sent. Links never use the request's Host header.",
             "nullable": true
           }
         },
