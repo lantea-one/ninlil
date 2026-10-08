@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dhcp.Data.Abstractions.Repository;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 
 // Define our namespace.
@@ -40,12 +41,9 @@ public sealed class DhcpLeaseClientIdentityResolver(IServiceScopeFactory scopeFa
         if (remoteAddress == null)
             return null;
 
-        // The DNS listeners are dual-stack sockets, so an IPv4 client arrives as an IPv4-mapped
-        // IPv6 address ("::ffff:x.x.x.x"), while leases store dotted-quad strings. Unmap it so
-        // the string comparison below can match.
-        IPAddress normalizedAddress = remoteAddress.IsIPv4MappedToIPv6
-            ? remoteAddress.MapToIPv4()
-            : remoteAddress;
+        // Leases store dotted-quad strings. Pipeline callers already pass a normalized address;
+        // the presence flush passes stored ones, so normalize again here.
+        IPAddress normalizedAddress = ClientAddress.Normalize(remoteAddress);
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         ILeaseRepository leaseRepository =

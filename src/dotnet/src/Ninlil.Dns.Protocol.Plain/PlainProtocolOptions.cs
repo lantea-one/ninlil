@@ -25,8 +25,9 @@ public class PlainProtocolOptions
     ///     comma-separated: for example <c>"192.168.1.1, fd00::1"</c>, or <c>"127.0.0.1"</c> to keep
     ///     plain DNS off every network interface. <c>0.0.0.0</c> and <c>::</c> mean every IPv4 or
     ///     every IPv6 address. Empty (the default) listens on every address of both families
-    ///     through one dual-stack socket, which reports IPv4 clients as IPv4-mapped IPv6
-    ///     addresses. See <c>Ninlil.Dns.Server.Core.Transport.ListenAddressList</c> for why this is
+    ///     through one dual-stack socket. The socket reports IPv4 clients as IPv4-mapped IPv6
+    ///     addresses; the pipeline turns them back into plain IPv4, so rules and limits written
+    ///     for IPv4 apply to them. See <c>Ninlil.Dns.Server.Core.Transport.ListenAddressList</c> for why this is
     ///     one comma-separated string per transport and why only IP literals are accepted.
     /// </summary>
     public string ListenAddresses { get; set; } = string.Empty;

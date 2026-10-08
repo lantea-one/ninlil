@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 
 // Define our namespace.
@@ -66,11 +67,10 @@ public sealed class ArpNeighborTableClientIdentityResolver(
         CancellationToken stoppingToken = default
     )
     {
-        // With no listen addresses configured, the listeners use one dual-stack socket, so an
-        // IPv4 client arrives as an IPv4-mapped IPv6 address ("::ffff:x.x.x.x"). Unmap it so the
-        // family check and the lookup (keyed by the plain IPv4 addresses in /proc/net/arp) match.
-        IPAddress normalizedAddress =
-            remoteAddress?.IsIPv4MappedToIPv6 == true ? remoteAddress.MapToIPv4() : remoteAddress;
+        // The lookup is keyed by the plain IPv4 addresses in /proc/net/arp. Pipeline callers
+        // already pass a normalized address; the presence flush passes stored ones, so normalize
+        // again here.
+        IPAddress normalizedAddress = ClientAddress.Normalize(remoteAddress);
 
         // ARP resolves only IPv4 addresses, so an IPv6 address is answered null at once.
         if (

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 
 // Define our namespace.
@@ -116,12 +117,10 @@ public sealed class ClientPresenceTracker : IClientPresenceRecorder
         );
 
     /// <summary>
-    ///     This method unmaps an IPv4-mapped IPv6 address back to plain IPv4. A dual-stack listener
-    ///     reports an IPv4 client in the mapped (<c>::ffff:a.b.c.d</c>) form, which would otherwise
-    ///     never be recorded against an IPv4 identity.
+    ///     This method puts an address in canonical form (see <see cref="ClientAddress" />), so
+    ///     an IPv4 client seen on a dual-stack socket is recorded against its IPv4 identity.
     /// </summary>
-    private static IPAddress Normalize(IPAddress address) =>
-        address is { IsIPv4MappedToIPv6: true } ? address.MapToIPv4() : address;
+    private static IPAddress Normalize(IPAddress address) => ClientAddress.Normalize(address);
 
     /// <summary>
     ///     This method creates an empty identity buffer.

@@ -123,6 +123,30 @@ public sealed class DnsAccessControlRuleCacheEventTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnIPv4MappedClientMatchesTheRulesWrittenForThePlainForm()
+    {
+        await _host.StartAsync();
+
+        IDnsAccessControlEngine engine =
+            _host.Services.GetRequiredService<IDnsAccessControlEngine>();
+
+        // A dual-stack socket reports 203.0.113.10 as ::ffff:203.0.113.10; the rule is the
+        // IPv4 network 203.0.113.0/24.
+        Assert.True(
+            await engine.HasCapabilityAsync(
+                IPAddress.Parse("::ffff:203.0.113.10"),
+                DnsAccessControlCapabilityEnum.RecursionAccess
+            )
+        );
+        Assert.False(
+            await engine.HasCapabilityAsync(
+                IPAddress.Parse("::ffff:198.51.100.10"),
+                DnsAccessControlCapabilityEnum.RecursionAccess
+            )
+        );
+    }
+
+    [Fact]
     public async Task PublishingAChangedEventReloadsTheWholeSetExactlyOnce()
     {
         await _host.StartAsync();

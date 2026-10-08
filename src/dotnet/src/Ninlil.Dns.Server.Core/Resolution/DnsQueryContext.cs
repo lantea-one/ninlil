@@ -1,5 +1,6 @@
 using System.Net;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Common.Wire;
 
 // Define our namespace.
@@ -13,8 +14,11 @@ namespace Ninlil.Dns.Server.Core.Resolution;
 /// <param name="Request">The decoded query.</param>
 /// <param name="Protocol">The transport the query arrived over.</param>
 /// <param name="RemoteAddress">
-///     The client's IP address. The port is left out because only the transport needs it to
-///     reply, and resolvers decide on the address alone (access control, for example).
+///     The client's IP address in canonical form (<see cref="ClientAddress.Normalize" />): an
+///     IPv4-mapped IPv6 address is plain IPv4 and an IPv6 scope id is dropped, so resolvers match
+///     it against configured addresses and networks without unmapping. The port is left out
+///     because only the transport needs it to reply, and resolvers decide on the address alone
+///     (access control, for example).
 /// </param>
 /// <param name="ReceivedAtUtc">The UTC date and time the query was received.</param>
 /// <param name="RawMessage">
@@ -40,4 +44,16 @@ public record DnsQueryContext(
     byte[] RawMessage = null,
     int TsigRecordStartOffset = -1,
     string ClientId = null
-);
+)
+{
+    /// <summary>
+    ///     This property contains the client's IP address in canonical form; see the
+    ///     <c>RemoteAddress</c> parameter. The initializer covers the constructor, and the
+    ///     <see langword="init" /> accessor covers <c>with</c> expressions.
+    /// </summary>
+    public IPAddress RemoteAddress
+    {
+        get;
+        init => field = ClientAddress.Normalize(value);
+    } = ClientAddress.Normalize(RemoteAddress);
+}

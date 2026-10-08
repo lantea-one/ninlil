@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
@@ -45,13 +46,9 @@ public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFact
         if (remoteAddress == null)
             return null;
 
-        // With no listen addresses configured, the listeners use one dual-stack socket, so an
-        // IPv4 client arrives as an IPv4-mapped IPv6 address ("::ffff:x.x.x.x") rather than the
-        // dotted-quad form an operator types into a mapping. Unmap it so the exact match and the
-        // CIDR check below work; the other resolvers in the chain do the same.
-        IPAddress normalizedAddress = remoteAddress.IsIPv4MappedToIPv6
-            ? remoteAddress.MapToIPv4()
-            : remoteAddress;
+        // Pipeline callers already pass a normalized address; the presence flush passes stored
+        // ones, so normalize again here (IPv4-mapped to IPv4, scope id dropped).
+        IPAddress normalizedAddress = ClientAddress.Normalize(remoteAddress);
 
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDnsClientStaticAddressMappingRepository repository =
@@ -62,7 +59,7 @@ public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFact
 
         foreach (DnsClientStaticAddressMappingEntity mapping in mappings)
         {
-            if (NetworkContains(mapping.Cidr, normalizedAddress))
+            if (ClientAddress.NetworkContains(mapping.Cidr, normalizedAddress))
                 return new ClientIdentityResolution(
                     mapping.ClientIdentifier,
                     mapping.ProtocolVersion
@@ -70,30 +67,5 @@ public sealed class StaticAddressMappingClientIdentityResolver(IServiceScopeFact
         }
 
         return null;
-    }
-
-    /// <summary>
-    ///     This method checks whether a mapping's <see cref="DnsClientStaticAddressMappingEntity.Cidr" />
-    ///     (a bare address, matched exactly, or a CIDR network, matched by containment) covers an
-    ///     address. A value that does not parse matches nothing. It is a copy of the private helper
-    ///     in <c>Ninlil.Dns.Server.Filtering.DnsFilterEngine</c>; there is no shared utility for
-    ///     this.
-    /// </summary>
-    private static bool NetworkContains(string entry, IPAddress address)
-    {
-        if (string.IsNullOrWhiteSpace(entry))
-            return false;
-
-        try
-        {
-            if (entry.Contains('/'))
-                return IPNetwork.Parse(entry).Contains(address);
-
-            return IPAddress.Parse(entry).Equals(address);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 }

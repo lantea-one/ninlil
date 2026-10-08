@@ -15,8 +15,9 @@ namespace Ninlil.Dns.Protocol.Plain;
 ///     response per datagram. It only receives bytes and hands them to
 ///     <see cref="DnsQueryProcessingPipeline" />, which decodes, resolves, encodes and applies
 ///     RFC 1035 §4.2.1 truncation (see that class). The client address it passes on is the
-///     sender's address as the socket reports it, so on the default dual-stack socket an IPv4
-///     client appears as an IPv4-mapped IPv6 address.
+///     sender's address as the socket reports it; on the default dual-stack socket an IPv4
+///     client appears as an IPv4-mapped IPv6 address, which <see cref="DnsInboundMessage" />
+///     turns into plain IPv4. The raw endpoint is kept to send the reply.
 /// </summary>
 /// <param name="pipeline">The pipeline every received datagram is enqueued onto.</param>
 /// <param name="options">

@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -470,7 +471,7 @@ public sealed class DnsFilterEngine(
             // matching the ClientID from a DNS-over-HTTPS URL path (see
             // DnsClientGroupNetworkEntity.ClientId).
             bool matchesNetwork = networks.Any(network =>
-                NetworkContains(network.Cidr, remoteAddress)
+                ClientAddress.NetworkContains(network.Cidr, remoteAddress)
             );
             bool matchesClientId =
                 clientId is not null
@@ -598,8 +599,8 @@ public sealed class DnsFilterEngine(
     /// <summary>
     ///     This method checks one IP address against already-resolved network lists
     ///     (<see cref="DnsFilterListKindEnum.ClientSource" /> or <see cref="DnsFilterListKindEnum.ResponseIp" />).
-    ///     Entries are compared as parsed; an IPv4-mapped IPv6 address does not match an IPv4
-    ///     entry.
+    ///     Entries are matched with <see cref="ClientAddress.NetworkContains" />, which treats
+    ///     an IPv4-mapped IPv6 address as its IPv4 form.
     /// </summary>
     private async Task<DnsFilterDecision> EvaluateNetworkListsAsync(
         AsyncServiceScope scope,
@@ -618,7 +619,9 @@ public sealed class DnsFilterEngine(
             IReadOnlyList<DnsFilterListEntryEntity> entries =
                 await entryRepository.ListByListIdAsync(list.Id, stoppingToken);
 
-            bool matches = entries.Any(entry => NetworkContains(entry.Value, address));
+            bool matches = entries.Any(entry =>
+                ClientAddress.NetworkContains(entry.Value, address)
+            );
 
             if (!matches)
                 continue;
@@ -630,28 +633,6 @@ public sealed class DnsFilterEngine(
         }
 
         return Resolve(blockMatch, allowMatch, "a network filter list");
-    }
-
-    /// <summary>
-    ///     This method checks whether a network entry (a bare address or a CIDR network)
-    ///     contains a single address.
-    /// </summary>
-    private static bool NetworkContains(string entry, IPAddress address)
-    {
-        if (string.IsNullOrWhiteSpace(entry))
-            return false;
-
-        try
-        {
-            if (entry.Contains('/'))
-                return IPNetwork.Parse(entry).Contains(address);
-
-            return IPAddress.Parse(entry).Equals(address);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 
     /// <summary>

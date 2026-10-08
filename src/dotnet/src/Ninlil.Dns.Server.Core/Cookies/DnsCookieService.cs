@@ -201,7 +201,8 @@ public sealed class DnsCookieService(IOptions<DnsCookieOptions> options) : IDisp
     /// <summary>
     ///     This method derives a server cookie: HMAC-SHA256 over the client cookie and source
     ///     address, keyed by <paramref name="secret" /> and truncated to
-    ///     <see cref="ServerCookieLength" /> bytes. RFC 7873 only asks for a pseudorandom
+    ///     <see cref="ServerCookieLength" /> bytes. The address is the normalized client address,
+    ///     so an IPv4 client hashes as 4 bytes whether or not the socket is dual-stack. RFC 7873 only asks for a pseudorandom
     ///     function of the client and a server secret; this is not the RFC 9018 interoperable
     ///     format, so cookies are not shared across servers.
     /// </summary>

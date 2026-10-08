@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
@@ -52,7 +53,7 @@ namespace Ninlil.Dns.Server.QueryLog;
 ///         logged address at read time could attribute history to the wrong client.
 ///         <see cref="DnsQueryLogEntryEntity.ClientIdentifier" /> and
 ///         <see cref="DnsQueryLogEntryEntity.ClientProtocolVersion" /> are filled from
-///         <see cref="IClientIdentityResolver" />, which also unmaps IPv4-mapped IPv6 addresses.
+///         <see cref="IClientIdentityResolver" />, which resolves the normalized client address.
 ///         The resolver is optional: without one, or for an address it cannot resolve, both fields
 ///         stay <see langword="null" />.
 ///     </para>
@@ -118,9 +119,13 @@ public sealed class DnsQueryLogSubscriber(
             // as the one below it.
             bool redactDomain = privacyLevel >= QueryLogPrivacyLevelEnum.DomainRedacted;
 
+            // The pipeline already normalizes the address; this covers an event published from
+            // anywhere else, so an IPv4-mapped address is logged and truncated as IPv4.
+            IPAddress clientAddress = ClientAddress.Normalize(domainEvent.RemoteAddress);
+
             // Client identity is dropped from ClientAnonymized up (see the class summary).
             ClientIdentityResolution resolution = await ResolveClientIdentityAsync(
-                domainEvent.RemoteAddress,
+                clientAddress,
                 privacyLevel,
                 stoppingToken
             );
@@ -130,7 +135,7 @@ public sealed class DnsQueryLogSubscriber(
                 Id = Guid.NewGuid(),
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 OccurredAtUtc = domainEvent.OccurredAtUtc,
-                ClientAddress = RedactClientAddress(domainEvent.RemoteAddress, privacyLevel),
+                ClientAddress = RedactClientAddress(clientAddress, privacyLevel),
                 Protocol = domainEvent.Protocol,
                 QueriedName = redactDomain ? null : domainEvent.QueriedName,
                 QueriedType = domainEvent.QueriedType,
@@ -208,8 +213,8 @@ public sealed class DnsQueryLogSubscriber(
     /// <summary>
     ///     This method zeroes the host part of <paramref name="address" />: the last octet of an
     ///     IPv4 address (/24) or the last 64 bits of an IPv6 address (/64). The result names the
-    ///     subnet, not the client. An IPv4-mapped IPv6 address is treated as IPv6, so its whole
-    ///     IPv4 part is zeroed.
+    ///     subnet, not the client. The caller passes a normalized address, so an IPv4 client on a
+    ///     dual-stack socket is truncated as IPv4.
     /// </summary>
     private static IPAddress TruncateToSubnet(IPAddress address)
     {

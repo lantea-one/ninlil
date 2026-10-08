@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Common.Enum;
+using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 
@@ -59,7 +60,7 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
             if (!rule.Capabilities.HasFlag(capability))
                 continue;
 
-            if (NetworkContains(rule.Cidr, remoteAddress))
+            if (ClientAddress.NetworkContains(rule.Cidr, remoteAddress))
                 return true;
         }
 
@@ -78,29 +79,5 @@ public sealed class DnsAccessControlRuleCache(IServiceScopeFactory scopeFactory)
             scope.ServiceProvider.GetRequiredService<IDnsAccessControlRuleRepository>();
 
         _rules = await repository.ListEnabledAsync(stoppingToken);
-    }
-
-    /// <summary>
-    ///     This method checks whether a network entry (a bare address or a CIDR network) contains
-    ///     an address. The controller validates <see cref="DnsAccessControlRuleEntity.Cidr" />,
-    ///     but the parsing stays tolerant, as in <c>DnsFilterEngine.NetworkContains</c>: a value
-    ///     that does not parse matches nothing. The comparison is exact, so an IPv4-mapped IPv6
-    ///     address does not match an IPv4 network.
-    /// </summary>
-    private static bool NetworkContains(string cidr, IPAddress address)
-    {
-        if (string.IsNullOrWhiteSpace(cidr))
-            return false;
-
-        try
-        {
-            return cidr.Contains('/')
-                ? IPNetwork.Parse(cidr).Contains(address)
-                : IPAddress.Parse(cidr).Equals(address);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 }

@@ -218,6 +218,41 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This test checks that an IPv4-mapped IPv6 client address (what a dual-stack socket
+    ///     reports for an IPv4 client) is truncated as IPv4, not as IPv6, which would have logged
+    ///     <c>::</c> for every IPv4 client.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4MappedAddressAsIPv4()
+    {
+        DnsQueryLogSubscriber subscriber = new(
+            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new StaticOptionsMonitor<QueryLoggingOptions>(
+                new QueryLoggingOptions
+                {
+                    Enable = true,
+                    PrivacyLevel = QueryLogPrivacyLevelEnum.ClientAnonymized,
+                }
+            ),
+            NullLogger<DnsQueryLogSubscriber>.Instance
+        );
+
+        await subscriber.HandleAsync(
+            NewAnsweredEvent() with
+            {
+                RemoteAddress = IPAddress.Parse("::ffff:192.0.2.9"),
+            },
+            CancellationToken.None
+        );
+
+        IReadOnlyList<DnsQueryLogEntryEntity> entries = await WaitForEntriesAsync(
+            _testHost.Host.Services
+        );
+
+        Assert.Equal("192.0.2.0", Assert.Single(entries).ClientAddress);
+    }
+
+    /// <summary>
     ///     This test checks the same truncation for an IPv6 client address: the last 64 bits (the
     ///     last four groups) are zeroed, leaving the /64 prefix.
     /// </summary>

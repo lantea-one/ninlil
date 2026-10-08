@@ -31,8 +31,9 @@ namespace Ninlil.Dns.Protocol.DnsOverTls;
 ///     transfer; TLS adds confidentiality.
 ///     <para>
 ///         A trusted TCP proxy can pass the client address with a PROXY protocol header (see
-///         <see cref="ProxyProtocolOptions" />). Otherwise the client address is the socket peer,
-///         which on the default dual-stack socket is IPv4-mapped for IPv4 clients.
+///         <see cref="ProxyProtocolOptions" />). Otherwise the client address is the socket peer.
+///         On the default dual-stack socket that is IPv4-mapped for IPv4 clients, and
+///         <see cref="DnsInboundMessage" /> turns it into plain IPv4.
 ///     </para>
 /// </summary>
 /// <param name="pipeline">The pipeline every ordinary (non-transfer) query is enqueued onto.</param>
