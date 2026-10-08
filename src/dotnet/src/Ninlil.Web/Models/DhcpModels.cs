@@ -416,12 +416,14 @@ public record Dhcpv6RelaySettingsDetail(
 /// <param name="RootDirectory">The directory files are served from. Empty by default.</param>
 /// <param name="RetransmitTimeoutSeconds">How long, in seconds, to wait for an acknowledgment before sending a block again. Defaults to 2.</param>
 /// <param name="MaxRetransmissions">How many times one block is sent again before the transfer is abandoned. Defaults to 5.</param>
+/// <param name="MaxConcurrentTransfers">How many transfers may run at once, at most 4 per client address. A request over the limit is dropped without a reply. At least 1. Defaults to 50.</param>
 public record DhcpTftpSettingsDetail(
     bool Enable,
     int Port,
     string RootDirectory,
     double RetransmitTimeoutSeconds,
-    int MaxRetransmissions
+    int MaxRetransmissions,
+    int MaxConcurrentTransfers
 );
 
 /// <summary>

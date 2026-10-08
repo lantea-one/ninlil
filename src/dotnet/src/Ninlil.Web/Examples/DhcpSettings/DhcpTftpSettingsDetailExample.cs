@@ -14,5 +14,5 @@ public class DhcpTftpSettingsDetailExample : IExamplesProvider<DhcpTftpSettingsD
     ///     This method returns the TFTP server enabled with a boot-file directory, on the default
     ///     port, timeout and retry count.
     /// </summary>
-    public DhcpTftpSettingsDetail GetExamples() => new(true, 69, "/var/lib/ninlil/tftp", 2, 5);
+    public DhcpTftpSettingsDetail GetExamples() => new(true, 69, "/var/lib/ninlil/tftp", 2, 5, 50);
 }

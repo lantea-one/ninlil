@@ -397,6 +397,7 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         Assert.False(detail.Enable);
         Assert.Equal(69, detail.Port);
         Assert.Equal(5, detail.MaxRetransmissions);
+        Assert.Equal(50, detail.MaxConcurrentTransfers);
     }
 
     [Fact]
@@ -433,6 +434,34 @@ public class DhcpSettingsControllerTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchTftp_WithAnInvalidMaxConcurrentTransfers_ReturnsBadRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/tftp", new { maxConcurrentTransfers = 0 })
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchTftp_WithMaxConcurrentTransfers_WritesItToTheConfigurationFile()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.SendAsync(
+            PatchRequest("/api/dhcp-settings/tftp", new { maxConcurrentTransfers = 10 })
+        );
+        response.EnsureSuccessStatusCode();
+
+        JsonObject root = (JsonObject)
+            JsonNode.Parse(await File.ReadAllTextAsync(factory.RuntimeConfigurationFilePath));
+        JsonObject section = (JsonObject)root["DhcpServer"]["Tftp"];
+        Assert.Equal(10, section["MaxConcurrentTransfers"].GetValue<int>());
     }
 
     [Fact]

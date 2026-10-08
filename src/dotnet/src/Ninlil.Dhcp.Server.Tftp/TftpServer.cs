@@ -20,6 +20,15 @@ namespace Ninlil.Dhcp.Server.Tftp;
 ///         so every accepted request gets a separate socket and background task.
 ///     </para>
 ///     <para>
+///         <b>Caps.</b> The receive loop parses a request before it spends anything on it, so a
+///         malformed datagram costs no socket. A valid request then needs a slot out of
+///         <see cref="TftpServerOptions.MaxConcurrentTransfers" /> and one out of
+///         <see cref="MaxTransfersPerClient" /> for its source address. Without both, the request
+///         is dropped silently (an Error reply would be reflection toward a spoofed source) and
+///         counted; one warning per <see cref="DropReportInterval" /> reports the count. Error
+///         replies hold a slot too, because they use a transfer socket.
+///     </para>
+///     <para>
 ///         <b>Octet mode only.</b> A request for <c>netascii</c> or <c>mail</c> gets an Illegal
 ///         Operation error. Boot files are binary, and <c>netascii</c> exists only to translate
 ///         text line endings between hosts. TFTP options (RFC 2347, such as <c>blksize</c> and
@@ -49,7 +58,7 @@ namespace Ninlil.Dhcp.Server.Tftp;
 ///         finish and release its socket.
 ///     </para>
 /// </summary>
-/// <param name="options">The port, root directory and retransmission settings.</param>
+/// <param name="options">The port, root directory, retransmission and transfer cap settings.</param>
 /// <param name="logger">The logger request and transfer failures are recorded to.</param>
 public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<TftpServer> logger)
     : IDhcpProtocolService
@@ -80,6 +89,28 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     /// </summary>
     private readonly ConcurrentDictionary<Task, byte> _activeTransferTasks = new();
 
+    /// <summary>
+    ///     This field contains how many transfers each client address has in flight. It is read
+    ///     and changed only under its own lock. An address is removed when its count reaches 0.
+    /// </summary>
+    private readonly Dictionary<IPAddress, int> _clientTransferCounts = new();
+
+    /// <summary>
+    ///     This field contains the number of requests dropped for being over a cap since the start
+    ///     of the run. Only the receive loop touches it.
+    /// </summary>
+    private long _droppedCount;
+
+    /// <summary>
+    ///     This field contains the value of <see cref="_droppedCount" /> at the last report.
+    /// </summary>
+    private long _reportedDropped;
+
+    /// <summary>
+    ///     This field contains when the dropped count was last reported, or when the run started.
+    /// </summary>
+    private DateTime _lastDropReportUtc;
+
     private Socket _socket;
 
     /// <summary>
@@ -94,6 +125,24 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     ///     loop is no longer using <see cref="_socket" /> when the socket is disposed.
     /// </summary>
     private Task _receiveLoopTask;
+
+    /// <summary>
+    ///     This property contains how many transfers one client address may have in flight at the
+    ///     same time. Tests lower it.
+    /// </summary>
+    internal int MaxTransfersPerClient { get; set; } = 4;
+
+    /// <summary>
+    ///     This property contains the minimum time between two warnings about dropped requests.
+    ///     Tests shorten it.
+    /// </summary>
+    internal TimeSpan DropReportInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    ///     This property contains how many transfer tasks are in flight. Tests read it to check
+    ///     that rejected datagrams start nothing.
+    /// </summary>
+    internal int ActiveTransferCount => _activeTransferTasks.Count;
 
     /// <summary>
     ///     This property reports whether the listening socket is bound and accepting requests.
@@ -115,6 +164,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     {
         Socket socket;
         CancellationTokenSource receiveLoopCts;
+        SemaphoreSlim transferSlots;
 
         lock (_lifecycleLock)
         {
@@ -168,6 +218,14 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
 
             receiveLoopCts = new CancellationTokenSource();
 
+            // A hand-edited value below 1 would make every request wait for a slot that never
+            // frees, so it is raised to 1.
+            transferSlots = new SemaphoreSlim(Math.Max(1, options.Value.MaxConcurrentTransfers));
+            _clientTransferCounts.Clear();
+            _droppedCount = 0;
+            _reportedDropped = 0;
+            _lastDropReportUtc = DateTime.UtcNow;
+
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
             IsListening = true;
@@ -178,7 +236,7 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             );
 
             _receiveLoopTask = Task.Run(() =>
-                RunReceiveLoopAsync(socket, rootDirectory, receiveLoopCts.Token)
+                RunReceiveLoopAsync(socket, rootDirectory, transferSlots, receiveLoopCts.Token)
             );
         }
 
@@ -255,11 +313,13 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
     ///     and token are passed in, not read from fields, so a later cycle's values cannot leak
     ///     in, as in <c>Dhcpv6UdpListener.RunReceiveLoopAsync</c>. Each datagram is handled by a
     ///     tracked background task (see <see cref="_activeTransferTasks" />), so a slow client
-    ///     does not block the loop. There is no limit on concurrent transfers.
+    ///     does not block the loop. The loop parses the request and takes the transfer slots
+    ///     before it starts that task (see the class summary).
     /// </summary>
     private async Task RunReceiveLoopAsync(
         Socket socket,
         string rootDirectory,
+        SemaphoreSlim transferSlots,
         CancellationToken stoppingToken
     )
     {
@@ -297,31 +357,130 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
             byte[] datagram = receiveBuffer[..result.ReceivedBytes];
             IPEndPoint clientEndPoint = (IPEndPoint)result.RemoteEndPoint;
 
+            if (
+                !TftpPacketReader.TryReadRequest(
+                    datagram,
+                    out TftpRequestPacket request,
+                    out string failureReason
+                )
+            )
+            {
+                // No socket and no reply: garbage is not worth either.
+                logger.LogDebug(
+                    "Discarding an unparseable TFTP datagram from {RemoteEndPoint}: {Reason}",
+                    clientEndPoint,
+                    failureReason
+                );
+                ReportDropped(force: false);
+                continue;
+            }
+
+            if (!TryTakeSlots(transferSlots, clientEndPoint.Address))
+            {
+                _droppedCount++;
+                ReportDropped(force: false);
+                continue;
+            }
+
             // Not awaited, so the loop can take the next request; tracked so StopAsync can wait.
             // HandleRequestAsync runs on this thread until its first await.
             Task transferTask = HandleRequestAsync(
-                datagram,
+                request,
                 clientEndPoint,
                 rootDirectory,
                 stoppingToken
             );
             _activeTransferTasks[transferTask] = 0;
             _ = transferTask.ContinueWith(
-                completed => _activeTransferTasks.TryRemove(completed, out _),
+                completed =>
+                {
+                    _activeTransferTasks.TryRemove(completed, out _);
+                    ReleaseSlots(transferSlots, clientEndPoint.Address);
+                },
                 TaskScheduler.Default
             );
         }
+
+        ReportDropped(force: true);
     }
 
     /// <summary>
-    ///     This method handles one datagram from the listening socket. It decodes the request,
-    ///     answers with an Error packet when the request is a write, uses another mode than octet,
-    ///     names a path outside the root or names a missing file, and otherwise sends the file.
+    ///     This method takes one global slot and one slot for <paramref name="clientAddress" />
+    ///     without waiting. It returns <see langword="false" /> and holds nothing when either cap
+    ///     is reached.
+    /// </summary>
+    private bool TryTakeSlots(SemaphoreSlim transferSlots, IPAddress clientAddress)
+    {
+        if (!transferSlots.Wait(0))
+            return false;
+
+        lock (_clientTransferCounts)
+        {
+            _clientTransferCounts.TryGetValue(clientAddress, out int count);
+
+            if (count >= MaxTransfersPerClient)
+            {
+                transferSlots.Release();
+                return false;
+            }
+
+            _clientTransferCounts[clientAddress] = count + 1;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     This method gives back the slots <see cref="TryTakeSlots" /> took.
+    /// </summary>
+    private void ReleaseSlots(SemaphoreSlim transferSlots, IPAddress clientAddress)
+    {
+        lock (_clientTransferCounts)
+        {
+            if (_clientTransferCounts.TryGetValue(clientAddress, out int count) && count > 1)
+                _clientTransferCounts[clientAddress] = count - 1;
+            else
+                _clientTransferCounts.Remove(clientAddress);
+        }
+
+        transferSlots.Release();
+    }
+
+    /// <summary>
+    ///     This method logs how many requests were dropped since the last report, if any, and if
+    ///     <see cref="DropReportInterval" /> has passed or <paramref name="force" /> is set. The
+    ///     receive loop calls it on every datagram and when it ends, so the count of a quiet
+    ///     period is reported with the next datagram or at the latest when the server stops.
+    /// </summary>
+    private void ReportDropped(bool force)
+    {
+        DateTime now = DateTime.UtcNow;
+
+        if (!force && now - _lastDropReportUtc < DropReportInterval)
+            return;
+
+        long newlyDropped = _droppedCount - _reportedDropped;
+
+        if (newlyDropped <= 0)
+            return;
+
+        _reportedDropped = _droppedCount;
+        _lastDropReportUtc = now;
+        logger.LogWarning(
+            "The TFTP server was at a transfer limit; {Count} requests were dropped since the last report.",
+            newlyDropped
+        );
+    }
+
+    /// <summary>
+    ///     This method handles one parsed request from the listening socket. It answers with an Error
+    ///     packet when the request is a write, uses another mode than octet, names a path outside
+    ///     the root or names a missing file, and otherwise sends the file.
     ///     Every reply goes from a new per-transfer socket. All exceptions are caught and logged,
     ///     so one bad request cannot affect another.
     /// </summary>
     private async Task HandleRequestAsync(
-        byte[] datagram,
+        TftpRequestPacket request,
         IPEndPoint clientEndPoint,
         string rootDirectory,
         CancellationToken stoppingToken
@@ -336,22 +495,6 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
         try
         {
             transferSocket.Bind(new IPEndPoint(IPAddress.Any, 0));
-
-            if (
-                !TftpPacketReader.TryReadRequest(
-                    datagram,
-                    out TftpRequestPacket request,
-                    out string failureReason
-                )
-            )
-            {
-                logger.LogWarning(
-                    "Discarding an unparseable TFTP datagram from {RemoteEndPoint}: {Reason}",
-                    clientEndPoint,
-                    failureReason
-                );
-                return;
-            }
 
             if (request.Opcode == TftpOpcodeEnum.WriteRequest)
             {

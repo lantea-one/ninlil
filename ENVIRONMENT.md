@@ -31,9 +31,9 @@ finite environment-variable name to assign — ASP.NET Core's configuration bind
 as an unbounded run of index-suffixed keys. Every such setting is still fully reachable through the
 configuration file or the REST API/admin console.
 
-Total: **294 individual settings** across 57 bound configuration classes, plus **2 standalone**
+Total: **295 individual settings** across 57 bound configuration classes, plus **2 standalone**
 bootstrap-credential variables read directly by configuration key, plus **7 framework-level**
-variables that redirect onto .NET's own real, unprefixed equivalents — **303 environment variables
+variables that redirect onto .NET's own real, unprefixed equivalents — **304 environment variables
 in total**.
 
 A file-based alternative to any of these exists too: every setting below also has a matching key
@@ -461,6 +461,7 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_TFTP_ROOT_DIRECTORY` | The filesystem root TFTP serves boot files from (a leading `/` means this root; a path or link leading outside it is always rejected). | *(empty)* |
 | `NINLIL_DHCP_SERVER_TFTP_RETRANSMIT_TIMEOUT` | Per-block retransmit timeout. | `00:00:02` |
 | `NINLIL_DHCP_SERVER_TFTP_MAX_RETRANSMISSIONS` | Max retransmissions before giving up on a transfer. | `5` |
+| `NINLIL_DHCP_SERVER_TFTP_MAX_CONCURRENT_TRANSFERS` | Max simultaneous transfers (at most 4 per client address, at least 1). A request over a limit is dropped without a reply and counted in a warning once a minute. | `50` |
 
 ## Web host (Kestrel, reverse proxy, branding)
 

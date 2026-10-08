@@ -49,4 +49,16 @@ public sealed class TftpServerOptions
     ///     abandoned, so an unresponsive client cannot hold a socket and task open forever.
     /// </summary>
     public int MaxRetransmissions { get; set; } = 5;
+
+    /// <summary>
+    ///     This property contains how many transfers may run at the same time; 50 is the usual
+    ///     TFTP server default. A request that arrives while all slots are taken is dropped
+    ///     without a reply: an Error packet to a spoofed source address would be reflected
+    ///     traffic. Each transfer holds one socket and one task, and a spoofed request makes the
+    ///     server send up to <see cref="MaxRetransmissions" /> + 1 blocks to the victim, so this
+    ///     cap also limits the traffic the server can be made to send. At most 4 of the transfers
+    ///     can belong to one client address. The value is read when the server starts and must be
+    ///     at least 1.
+    /// </summary>
+    public int MaxConcurrentTransfers { get; set; } = 50;
 }

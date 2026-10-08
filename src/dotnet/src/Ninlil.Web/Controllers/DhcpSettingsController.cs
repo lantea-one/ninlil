@@ -655,7 +655,8 @@ public class DhcpSettingsController(
                 tftpOptions.Value.Port,
                 tftpOptions.Value.RootDirectory,
                 tftpOptions.Value.RetransmitTimeout.TotalSeconds,
-                tftpOptions.Value.MaxRetransmissions
+                tftpOptions.Value.MaxRetransmissions,
+                tftpOptions.Value.MaxConcurrentTransfers
             )
         );
 
@@ -740,6 +741,26 @@ public class DhcpSettingsController(
                 new PresetConfigurationSetting(
                     TftpServerOptions.SectionName,
                     nameof(TftpServerOptions.MaxRetransmissions),
+                    parsed
+                )
+            );
+        }
+
+        if (
+            patch.TryGetMergePatchField(
+                "maxConcurrentTransfers",
+                out JsonElement maxConcurrentTransfers
+            )
+        )
+        {
+            int parsed = maxConcurrentTransfers.GetInt32();
+            if (parsed < 1)
+                throw new ValidationException("'maxConcurrentTransfers' must be at least 1.");
+
+            settings.Add(
+                new PresetConfigurationSetting(
+                    TftpServerOptions.SectionName,
+                    nameof(TftpServerOptions.MaxConcurrentTransfers),
                     parsed
                 )
             );
