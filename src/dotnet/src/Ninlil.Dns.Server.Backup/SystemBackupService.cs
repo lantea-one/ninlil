@@ -36,7 +36,8 @@ namespace Ninlil.Dns.Server.Backup;
 ///         certificate or configuration entry, a configuration that is not a JSON object or
 ///         more decompressed data than <see cref="BackupOptions.MaximumRestoredPayloadBytes" />
 ///         is rejected before anything is written, and so is entity JSON that does not parse.
-///         The bundled files are then staged next to their
+///         A TsigKeys list from before the cluster key link is re-linked to its peers while the
+///         archive is still only in memory. The bundled files are then staged next to their
 ///         targets. The existing rows are wiped and the archive's rows imported inside one
 ///         database transaction (<see cref="IUnitOfWorkTransactionFactory" />), and only after
 ///         that transaction commits are the staged files renamed into place, so a failure rolls
@@ -295,6 +296,25 @@ public sealed partial class SystemBackupService(
                 return bundle;
             }
         );
+
+        // An archive from before the cluster key link has TsigKeys without a ClusterNodeId
+        // property; link those keys to their peers, as the migration did for a live database.
+        // The copied list holds the same entity objects, so linking a key changes the parsed row.
+        List<TsigKeyEntity> tsigKeys = [.. parsedByName["TsigKeys"].Cast<TsigKeyEntity>()];
+        List<ClusterNodeEntity> clusterNodes =
+        [
+            .. parsedByName["ClusterNodes"].Cast<ClusterNodeEntity>(),
+        ];
+        int linkedClusterKeys = BackupLegacyFixups.LinkClusterKeys(
+            entityJsonByName["TsigKeys"],
+            tsigKeys,
+            clusterNodes
+        );
+        if (linkedClusterKeys > 0)
+            logger.LogInformation(
+                "Linked {LinkedKeyCount} cluster TSIG keys to their peers in an archive that predates the link.",
+                linkedClusterKeys
+            );
 
         // Every required entry is present and valid. The files are staged next to their targets
         // first, so a full disk or a permission error aborts here with nothing changed; the

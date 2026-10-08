@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,7 +22,8 @@ namespace Ninlil.Dns.Server.Backup.Tests;
 /// <summary>
 ///     This class tests that <see cref="SystemBackupService" /> restores all or nothing on SQLite:
 ///     malformed entity JSON is rejected before the wipe, a database failure in the middle of the
-///     import rolls the wipe back and leaves the staged files uncommitted.
+///     import rolls the wipe back and leaves the staged files uncommitted, and an archive from
+///     before the cluster key link gets its peer keys linked.
 /// </summary>
 [Collection(BackupRestoreCollection.Name)]
 public sealed class SystemBackupServiceAtomicRestoreTests : IAsyncLifetime
@@ -139,6 +141,78 @@ public sealed class SystemBackupServiceAtomicRestoreTests : IAsyncLifetime
         Assert.Equal(contentsBefore, ListFiles().Select(File.ReadAllText));
         Assert.Equal(OriginalConfiguration, await File.ReadAllTextAsync(_configurationPath));
         Assert.Empty(Directory.GetFiles(_rootDirectory, "*.tmp", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task AnArchiveFromBeforeTheClusterKeyLinkRestoresWithThePeerKeyLinked()
+    {
+        Guid nodeId = Guid.NewGuid();
+        await using (AsyncServiceScope scope = _host.Services.CreateAsyncScope())
+        {
+            IServiceProvider services = scope.ServiceProvider;
+            await services
+                .GetRequiredService<IClusterNodeRepository>()
+                .AddAsync(
+                    new ClusterNodeEntity
+                    {
+                        Id = nodeId,
+                        Name = "peer",
+                        Host = "peer.example",
+                        Port = 5380,
+                        RemoteNodeId = Guid.NewGuid(),
+                        TsigKeyName = "peer-key",
+                        TlsCertificateThumbprint = "ab",
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            foreach (string name in new[] { "peer-key", "invite-key" })
+                await services
+                    .GetRequiredService<ITsigKeyRepository>()
+                    .AddAsync(
+                        new TsigKeyEntity
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = name,
+                            AlgorithmName = "hmac-sha256",
+                            SecretEncrypted = "x",
+                            CreatedAtUtc = DateTimeOffset.UtcNow,
+                        }
+                    );
+            await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        // Remove the property from every element, as an archive from before the upgrade lacks it.
+        byte[] archive = EditArchive(
+            await CreateArchiveAsync(),
+            zip =>
+            {
+                ZipArchiveEntry entry = zip.GetEntry("database/TsigKeys.json");
+                JsonArray keys;
+                using (StreamReader reader = new(entry.Open()))
+                    keys = JsonNode.Parse(reader.ReadToEnd()).AsArray();
+
+                foreach (JsonNode key in keys)
+                {
+                    JsonObject keyObject = key.AsObject();
+                    string propertyName = keyObject
+                        .Select(pair => pair.Key)
+                        .Single(name =>
+                            string.Equals(name, "ClusterNodeId", StringComparison.OrdinalIgnoreCase)
+                        );
+                    keyObject.Remove(propertyName);
+                }
+
+                ReplaceEntry(zip, "database/TsigKeys.json", keys.ToJsonString());
+            }
+        );
+
+        await RestoreAsync(archive);
+
+        await using AsyncServiceScope restored = _host.Services.CreateAsyncScope();
+        ITsigKeyRepository repository =
+            restored.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+        Assert.Equal(nodeId, (await repository.FindByNameAsync("peer-key")).ClusterNodeId);
+        Assert.Null((await repository.FindByNameAsync("invite-key")).ClusterNodeId);
     }
 
     private static LeaseEntity NewLease(Guid id, string address) =>
