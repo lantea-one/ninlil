@@ -452,6 +452,23 @@ describe('DhcpSettingsComponent', () => {
     expect(fixture.componentInstance.interfaceOverrides.length).toBe(0);
   });
 
+  it('rejects a link MTU below the IPv6 minimum of 1280, globally and in an override', async () => {
+    const fixture = await createComponent();
+    fixture.componentInstance.addInterfaceOverride();
+
+    fixture.componentInstance.raForm.controls.linkMtu.setValue(1000);
+    fixture.componentInstance.interfaceOverrides.at(0).controls.linkMtu.setValue('1000');
+
+    expect(fixture.componentInstance.raForm.controls.linkMtu.invalid).toBeTrue();
+    expect(fixture.componentInstance.interfaceOverrides.at(0).controls.linkMtu.invalid).toBeTrue();
+
+    fixture.componentInstance.raForm.controls.linkMtu.setValue(1280);
+    fixture.componentInstance.interfaceOverrides.at(0).controls.linkMtu.setValue('');
+
+    expect(fixture.componentInstance.raForm.controls.linkMtu.valid).toBeTrue();
+    expect(fixture.componentInstance.interfaceOverrides.at(0).controls.linkMtu.valid).toBeTrue();
+  });
+
   it('saveRa() sends every interface override row as a genuine whole-array replace, parsing blank fields to null', async () => {
     const fixture = await createComponent();
     dhcpSettingsApiSpy.apiDhcpSettingsRaPatch.and.returnValue(of({ note: 'Saved.' }));
