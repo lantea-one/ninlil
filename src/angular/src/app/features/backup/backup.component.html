@@ -30,7 +30,11 @@
           formControlName="passphrase"
           autocomplete="new-password"
         />
-        @if (createForm.controls.passphrase.hasError('minlength')) {
+        @if (createForm.controls.passphrase.hasError('blank')) {
+          <div class="field-error">
+            A passphrase cannot be only spaces. Leave it empty for an unencrypted backup.
+          </div>
+        } @else if (createForm.controls.passphrase.hasError('minlength')) {
           <div class="field-error">
             If set, the passphrase must be at least {{ minimumPassphraseLength }} characters long.
           </div>
@@ -67,7 +71,12 @@
       }
 
       <div>
-        <button cButton color="primary" type="submit" [disabled]="creatingBackup()">
+        <button
+          cButton
+          color="primary"
+          type="submit"
+          [disabled]="creatingBackup() || createForm.invalid"
+        >
           @if (creatingBackup()) {
             <c-spinner size="sm" />
             Creating backup...

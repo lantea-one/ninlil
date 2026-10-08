@@ -1,5 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import {
   AlertComponent,
@@ -29,6 +35,15 @@ import {
   buildBackupFileName,
   triggerBlobDownload,
 } from './backup.model';
+
+/**
+ * Rejects a passphrase that is not empty but only whitespace, as the backend does with a 400.
+ * An empty value passes, since that means an unencrypted backup. The value is never trimmed.
+ */
+function notBlank(control: AbstractControl<string>): ValidationErrors | null {
+  const value = control.value;
+  return value.length > 0 && value.trim().length === 0 ? { blank: true } : null;
+}
 
 /**
  * This component is the Backup & Restore page (`/backup`, `backup:read`). "Create a backup"
@@ -94,7 +109,7 @@ export class BackupComponent {
    * instead of a validation error.
    */
   readonly createForm = this.formBuilder.group({
-    passphrase: ['', [Validators.minLength(MINIMUM_BACKUP_PASSPHRASE_LENGTH)]],
+    passphrase: ['', [notBlank, Validators.minLength(MINIMUM_BACKUP_PASSPHRASE_LENGTH)]],
     confirmPassphrase: [''],
   });
 

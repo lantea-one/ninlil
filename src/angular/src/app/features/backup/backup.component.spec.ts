@@ -133,6 +133,37 @@ describe('BackupComponent', () => {
     expect(component.createForm.controls.passphrase.hasError('minlength')).toBeTrue();
   });
 
+  it('rejects a whitespace-only passphrase with the blank error and disables Create', async () => {
+    const fixture = await createComponent(true);
+    const component = fixture.componentInstance;
+    const spaces = ' '.repeat(12);
+
+    component.createForm.setValue({ passphrase: spaces, confirmPassphrase: spaces });
+    fixture.detectChanges();
+
+    expect(component.createForm.controls.passphrase.hasError('blank')).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('A passphrase cannot be only spaces.');
+    const submit = fixture.nativeElement.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement | null;
+    expect(submit?.disabled).toBeTrue();
+
+    await component.createBackup();
+    expect(backupDownloadSpy.downloadBackup).not.toHaveBeenCalled();
+  });
+
+  it('still shows the unencrypted warning and no blank error for an empty passphrase', async () => {
+    const fixture = await createComponent(true);
+    const component = fixture.componentInstance;
+
+    component.createForm.setValue({ passphrase: '', confirmPassphrase: '' });
+    fixture.detectChanges();
+
+    expect(component.createForm.controls.passphrase.hasError('blank')).toBeFalse();
+    expect(component.passphraseOmitted()).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('this backup will NOT be encrypted');
+  });
+
   it('surfaces a failed backup creation as a visible error message, not a toast', async () => {
     const fixture = await createComponent(true);
     const component = fixture.componentInstance;
