@@ -15,16 +15,39 @@ namespace Ninlil.Dns.Server.QueryLog.Tests;
 ///     This class tests <see cref="DnsQueryLogSubscriber" />: that an answered event becomes a
 ///     correctly mapped row, that nothing is written when logging is disabled, what each privacy
 ///     level stores, and when client identity is stored. The subscriber is constructed directly
-///     against <see cref="QueryLogTestHost" /> (SQLite), with a fixed options monitor and, where
-///     needed, a fake identity resolver.
+///     with a fixed options monitor and, where needed, a fake identity resolver. It fills a
+///     <see cref="DnsQueryLogQueue" /> that a running <see cref="DnsQueryLogWriterService" />
+///     drains into <see cref="QueryLogTestHost" /> (SQLite), so the tests read rows back from the
+///     database.
 /// </summary>
 public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
 {
     private readonly QueryLogTestHost _testHost = new();
 
-    public Task InitializeAsync() => _testHost.InitializeAsync();
+    private readonly DnsQueryLogQueue _queue = new();
+    private DnsQueryLogWriterService _writer;
 
-    public Task DisposeAsync() => _testHost.DisposeAsync().AsTask();
+    public async Task InitializeAsync()
+    {
+        await _testHost.InitializeAsync();
+
+        // A short flush interval keeps the tests from waiting a second for each batch.
+        _writer = new DnsQueryLogWriterService(
+            _queue,
+            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<DnsQueryLogWriterService>.Instance
+        )
+        {
+            FlushInterval = TimeSpan.FromMilliseconds(10),
+        };
+        await _writer.StartAsync(CancellationToken.None);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _writer.StopAsync(CancellationToken.None);
+        await _testHost.DisposeAsync();
+    }
 
     private static DnsQueryAnsweredEvent NewAnsweredEvent() =>
         new(
@@ -38,15 +61,15 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
     /// <summary>
-    ///     This method polls for up to about a second until the log has entries.
-    ///     <see cref="DnsQueryLogSubscriber.HandleAsync" /> starts the write in the background and
-    ///     returns at once, so the test has to wait for it.
+    ///     This method polls for up to about two seconds until the log has entries.
+    ///     <see cref="DnsQueryLogSubscriber.HandleAsync" /> only queues the entry and returns at
+    ///     once, so the test has to wait for the writer to save it.
     /// </summary>
     private static async Task<IReadOnlyList<DnsQueryLogEntryEntity>> WaitForEntriesAsync(
         IServiceProvider services
     )
     {
-        for (int attempt = 0; attempt < 50; attempt++)
+        for (int attempt = 0; attempt < 100; attempt++)
         {
             await using AsyncServiceScope scope = services.CreateAsyncScope();
             IDnsQueryLogRepository repository =
@@ -69,7 +92,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_WhenEnabled_PersistsAMatchingEntry()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = true }
             ),
@@ -97,7 +120,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_WhenDisabled_PersistsNothingAtAll()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = false }
             ),
@@ -106,7 +129,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
 
         await subscriber.HandleAsync(NewAnsweredEvent(), CancellationToken.None);
 
-        // A disabled subscriber starts no write. A poll-until-non-empty loop cannot show that
+        // A disabled subscriber queues nothing. A poll-until-non-empty loop cannot show that
         // nothing happens, so wait a fixed time and check the log is still empty.
         await Task.Delay(200);
 
@@ -122,7 +145,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_WithNoRemoteAddress_PersistsANullClientAddress()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = true }
             ),
@@ -161,7 +184,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_AtDomainRedactedLevel_OmitsOnlyTheDomainName()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -195,7 +218,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4AddressToItsSubnet()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -226,7 +249,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv4MappedAddressAsIPv4()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -260,7 +283,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_AtClientAnonymizedLevel_TruncatesAnIPv6AddressToItsSubnet()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -295,7 +318,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_AtFullyAnonymousLevel_PersistsNeitherClientNorDomain()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -335,7 +358,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = true }
             ),
@@ -362,7 +385,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
     public async Task HandleAsync_WithNoClientIdentityResolverConfigured_LeavesIdentityFieldsNull()
     {
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = true }
             ),
@@ -393,7 +416,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions { Enable = true }
             ),
@@ -428,7 +451,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -468,7 +491,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {
@@ -508,7 +531,7 @@ public sealed class DnsQueryLogSubscriberTests : IAsyncLifetime
         );
 
         DnsQueryLogSubscriber subscriber = new(
-            _testHost.Host.Services.GetRequiredService<IServiceScopeFactory>(),
+            _queue,
             new StaticOptionsMonitor<QueryLoggingOptions>(
                 new QueryLoggingOptions
                 {

@@ -12,6 +12,11 @@
     <PackageId>Ninlil.Dns.Server.QueryLog</PackageId>
   </PropertyGroup>
 
+  <!-- The tests shrink the queue capacity and the writer's timings. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ninlil.Dns.Server.QueryLog.Tests" />
+  </ItemGroup>
+
   <!-- ConditionalPackageProject:Ninlil.Dns.Common -->
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj')">
     <ProjectReference Include="..\Ninlil.Dns.Common\Ninlil.Dns.Common.csproj" />

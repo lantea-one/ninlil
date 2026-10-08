@@ -14,8 +14,10 @@ public static class ServiceCollectionQueryLogExtension
     /// <summary>
     ///     This method binds <see cref="QueryLoggingOptions" /> and registers
     ///     <see cref="DnsQueryLogCleanupService" />, which runs even while logging is off so
-    ///     existing entries still age out. <see cref="DnsQueryLogSubscriber" /> is registered only
-    ///     when <see cref="QueryLoggingOptions.Enable" /> is <see langword="true" /> at startup.
+    ///     existing entries still age out. <see cref="DnsQueryLogSubscriber" />, the
+    ///     <see cref="DnsQueryLogQueue" /> it fills and the <see cref="DnsQueryLogWriterService" />
+    ///     that drains it are registered only when <see cref="QueryLoggingOptions.Enable" /> is
+    ///     <see langword="true" /> at startup.
     ///     The composition root must register an
     ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IDnsQueryLogRepository" />.
     /// </summary>
@@ -36,10 +38,14 @@ public static class ServiceCollectionQueryLogExtension
             ?? new QueryLoggingOptions();
 
         if (options.Enable)
+        {
+            instance.AddSingleton<DnsQueryLogQueue>();
+            instance.AddHostedService<DnsQueryLogWriterService>();
             instance.AddSingleton<
                 IDnsServerEventSubscriber<DnsQueryAnsweredEvent>,
                 DnsQueryLogSubscriber
             >();
+        }
 
         instance.AddHostedService<DnsQueryLogCleanupService>();
 

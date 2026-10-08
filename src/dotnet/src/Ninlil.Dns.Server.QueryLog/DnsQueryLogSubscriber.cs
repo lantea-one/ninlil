@@ -1,11 +1,9 @@
 using System.Net;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Net;
 using Ninlil.Dns.Data.Abstractions.Entity;
-using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.ClientIdentity;
 using Ninlil.Dns.Server.Core.Events;
 
@@ -25,11 +23,11 @@ namespace Ninlil.Dns.Server.QueryLog;
 ///         messages) are not logged.
 ///     </para>
 ///     <para>
-///         The write runs in a detached task rather than being awaited in
-///         <see cref="HandleAsync" />: <c>DnsServerEventDispatcher</c> delivers events one at a
-///         time, so a slow database write must not hold up other subscribers. The task opens its
-///         own dependency injection scope, since the dispatcher's scope is disposed once every
-///         subscriber has returned.
+///         The subscriber never touches the database. It builds the entry and hands it to
+///         <see cref="DnsQueryLogQueue" /> without waiting; <see cref="DnsQueryLogWriterService" />
+///         saves entries in batches. <c>DnsServerEventDispatcher</c> delivers events one at a
+///         time, so a slow database must not hold up other subscribers. When the queue is full
+///         the entry is dropped and counted (see <see cref="DnsQueryLogQueue.TryEnqueue" />).
 ///     </para>
 ///     <para>
 ///         <b><see cref="QueryLoggingOptions.PrivacyLevel" /> is applied when the entry is
@@ -66,9 +64,9 @@ namespace Ninlil.Dns.Server.QueryLog;
 ///         At those levels the resolver is not called at all.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to open a scope for the repository per entry.</param>
+/// <param name="queue">The queue the entries are handed to.</param>
 /// <param name="options">The on/off switch and the privacy level, read live.</param>
-/// <param name="logger">The logger used to report a failed write.</param>
+/// <param name="logger">The logger used to report an entry that could not be built.</param>
 /// <param name="clientIdentityResolver">
 ///     The optional resolver that turns a source address into a persistent client identifier.
 ///     With <see langword="null" /> (the default),
@@ -76,82 +74,79 @@ namespace Ninlil.Dns.Server.QueryLog;
 ///     <see cref="DnsQueryLogEntryEntity.ClientProtocolVersion" /> are never set.
 /// </param>
 public sealed class DnsQueryLogSubscriber(
-    IServiceScopeFactory scopeFactory,
+    DnsQueryLogQueue queue,
     IOptionsMonitor<QueryLoggingOptions> options,
     ILogger<DnsQueryLogSubscriber> logger,
     IClientIdentityResolver clientIdentityResolver = null
 ) : IDnsServerEventSubscriber<DnsQueryAnsweredEvent>
 {
     /// <inheritdoc />
-    public ValueTask HandleAsync(DnsQueryAnsweredEvent domainEvent, CancellationToken stoppingToken)
+    public async ValueTask HandleAsync(
+        DnsQueryAnsweredEvent domainEvent,
+        CancellationToken stoppingToken
+    )
     {
         // With logging off, return before doing any work. Enable is read live, so turning it off
         // stops writes at once; turning it on when the subscriber was not registered at startup
         // still needs a restart (see ServiceCollectionQueryLogExtension).
         if (!options.CurrentValue.Enable)
-            return ValueTask.CompletedTask;
+            return;
 
-        _ = PersistAsync(domainEvent, options.CurrentValue.PrivacyLevel, stoppingToken);
-        return ValueTask.CompletedTask;
+        try
+        {
+            queue.TryEnqueue(
+                await BuildEntryAsync(domainEvent, options.CurrentValue.PrivacyLevel, stoppingToken)
+            );
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "Unhandled exception while building a query log entry.");
+        }
     }
 
     /// <summary>
-    ///     This method opens a scope, maps the event onto a new
-    ///     <see cref="DnsQueryLogEntryEntity" />, redacts it for <paramref name="privacyLevel" /> and
-    ///     saves it. <see cref="HandleAsync" /> reads <paramref name="privacyLevel" /> when the event
-    ///     arrives rather than here, so a level change during a pending write does not apply a
-    ///     different level to that query. A failure is logged, not thrown.
+    ///     This method maps the event onto a new <see cref="DnsQueryLogEntryEntity" /> and redacts
+    ///     it for <paramref name="privacyLevel" />. <see cref="HandleAsync" /> reads
+    ///     <paramref name="privacyLevel" /> when the event arrives rather than here, so a level
+    ///     change during a pending lookup does not apply a different level to that query.
     /// </summary>
-    private async Task PersistAsync(
+    private async Task<DnsQueryLogEntryEntity> BuildEntryAsync(
         DnsQueryAnsweredEvent domainEvent,
         QueryLogPrivacyLevelEnum privacyLevel,
         CancellationToken stoppingToken
     )
     {
-        try
+        // Domain names are removed from DomainRedacted up; each level is at least as private
+        // as the one below it.
+        bool redactDomain = privacyLevel >= QueryLogPrivacyLevelEnum.DomainRedacted;
+
+        // The pipeline already normalizes the address; this covers an event published from
+        // anywhere else, so an IPv4-mapped address is logged and truncated as IPv4.
+        IPAddress clientAddress = ClientAddress.Normalize(domainEvent.RemoteAddress);
+
+        // Client identity is dropped from ClientAnonymized up (see the class summary).
+        ClientIdentityResolution resolution = await ResolveClientIdentityAsync(
+            clientAddress,
+            privacyLevel,
+            stoppingToken
+        );
+
+        DnsQueryLogEntryEntity entry = new()
         {
-            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-            IDnsQueryLogRepository repository =
-                scope.ServiceProvider.GetRequiredService<IDnsQueryLogRepository>();
-            IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            Id = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            OccurredAtUtc = domainEvent.OccurredAtUtc,
+            ClientAddress = RedactClientAddress(clientAddress, privacyLevel),
+            Protocol = domainEvent.Protocol,
+            QueriedName = redactDomain ? null : domainEvent.QueriedName,
+            QueriedType = domainEvent.QueriedType,
+            ResponseCode = domainEvent.ResponseCode,
+            AnswerCount = domainEvent.AnswerCount,
+            ClientIdentifier = resolution?.ClientIdentifier,
+            ClientProtocolVersion = resolution?.ProtocolVersion,
+        };
 
-            // Domain names are removed from DomainRedacted up; each level is at least as private
-            // as the one below it.
-            bool redactDomain = privacyLevel >= QueryLogPrivacyLevelEnum.DomainRedacted;
-
-            // The pipeline already normalizes the address; this covers an event published from
-            // anywhere else, so an IPv4-mapped address is logged and truncated as IPv4.
-            IPAddress clientAddress = ClientAddress.Normalize(domainEvent.RemoteAddress);
-
-            // Client identity is dropped from ClientAnonymized up (see the class summary).
-            ClientIdentityResolution resolution = await ResolveClientIdentityAsync(
-                clientAddress,
-                privacyLevel,
-                stoppingToken
-            );
-
-            DnsQueryLogEntryEntity entry = new()
-            {
-                Id = Guid.NewGuid(),
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-                OccurredAtUtc = domainEvent.OccurredAtUtc,
-                ClientAddress = RedactClientAddress(clientAddress, privacyLevel),
-                Protocol = domainEvent.Protocol,
-                QueriedName = redactDomain ? null : domainEvent.QueriedName,
-                QueriedType = domainEvent.QueriedType,
-                ResponseCode = domainEvent.ResponseCode,
-                AnswerCount = domainEvent.AnswerCount,
-                ClientIdentifier = resolution?.ClientIdentifier,
-                ClientProtocolVersion = resolution?.ProtocolVersion,
-            };
-
-            await repository.AddAsync(entry, stoppingToken);
-            await unitOfWork.SaveChangesAsync(stoppingToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger.LogError(exception, "Unhandled exception while persisting a query log entry.");
-        }
+        return entry;
     }
 
     /// <summary>
