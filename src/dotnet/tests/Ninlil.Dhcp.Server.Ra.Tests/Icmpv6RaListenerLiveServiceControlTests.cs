@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Ninlil.Dhcp.Common.Control;
 using Ninlil.Dhcp.Common.Wire.Ra;
 using Ninlil.Dhcp.Protocol.Ra;
 
@@ -71,6 +72,51 @@ public sealed class Icmpv6RaListenerLiveServiceControlTests
         {
             await listener.StopAsync(CancellationToken.None);
         }
+    }
+
+    [Fact]
+    public async Task Listener_WithAProviderThatFailsAtFirst_AnswersOnceItRecovers_AndStopsCleanly()
+    {
+        if (!CanOpenRawIcmpv6Socket())
+            return;
+
+        FlakyProvider provider = new() { Failing = true };
+        Icmpv6RaListener listener = new(
+            provider,
+            Options.Create(new RaProtocolOptions { Enable = true }),
+            NullLogger<Icmpv6RaListener>.Instance
+        );
+
+        await listener.StartAsync(CancellationToken.None);
+
+        try
+        {
+            // While the provider throws, nothing is answered but the loops keep running.
+            Assert.False(await TrySolicitAndReceiveAdvertisementAsync());
+            Assert.True(((IDhcpProtocolService)listener).IsRunning);
+
+            provider.Failing = false;
+            Assert.True(await TrySolicitAndReceiveAdvertisementAsync());
+        }
+        finally
+        {
+            await listener.StopAsync(CancellationToken.None);
+        }
+
+        Assert.False(listener.IsListening);
+    }
+
+    /// <summary>
+    ///     This class is a provider that throws while <see cref="Failing" /> is set.
+    /// </summary>
+    private sealed class FlakyProvider : IRaAdvertisementProvider
+    {
+        public volatile bool Failing;
+
+        public RouterAdvertisementMessage BuildCurrentAdvertisement(string interfaceName = null) =>
+            Failing
+                ? throw new InvalidOperationException("The provider failed.")
+                : new RouterAdvertisementMessage { RouterLifetime = TimeSpan.FromSeconds(1800) };
     }
 
     /// <summary>

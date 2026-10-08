@@ -35,9 +35,25 @@ namespace Ninlil.Dhcp.Protocol.Ra;
 ///     </para>
 ///     <para>
 ///         <b>Hop Limit 255.</b> RFC 4861 Sections 6.1.1 and 6.1.2 require every Neighbor
-///         Discovery message to carry Hop Limit 255 and receivers to drop any that do not, which
-///         proves the message was not forwarded from another link. The socket's unicast and
-///         multicast hop limits are set to 255 when it is created.
+///         Discovery message to carry Hop Limit 255. The socket's unicast and multicast hop
+///         limits are set to 255 when it is created, so every advertisement it sends complies.
+///     </para>
+///     <para>
+///         <b>Solicitations are checked by source address, not hop limit.</b> Section 6.1.1
+///         tells a router to drop a solicitation whose hop limit is not 255, which proves the
+///         packet was not forwarded from another link. .NET cannot read the hop limit of a
+///         received packet on a raw ICMPv6 socket (it has no hop-limit control message, and
+///         <c>IPV6_RECVPKTINFO</c> already fails there), and reading it would need native
+///         <c>recvmsg</c> interop that differs per operating system. This listener instead
+///         accepts a solicitation only from a link-local (<c>fe80::/10</c>) or unspecified
+///         (<c>::</c>) source (see <see cref="IsAcceptableSolicitation" />). A router never
+///         forwards a packet with a link-local source (RFC 4291 Section 2.5.6), so such a
+///         packet came from the local link, the guarantee the hop-limit check exists to give.
+///         The loopback address <c>::1</c> is accepted too, since a packet from it cannot
+///         leave its host (RFC 4291 Section 2.5.3). This is a deviation from Section 6.1.1: a
+///         host on the link can forge a link-local source, exactly as it could forge a hop
+///         limit of 255. As in the RFC, a solicitation from <c>::</c> must not carry a Source
+///         Link-Layer Address option.
 ///     </para>
 ///     <para>
 ///         <b>Solicited replies do not know the arrival interface.</b> That would need
@@ -96,6 +112,13 @@ public sealed class Icmpv6RaListener(
     private const int RequiredHopLimit = 255;
 
     /// <summary>
+    ///     This constant contains the most solicited replies that may wait for their random delay
+    ///     or their send at one time. A solicitation over the limit is dropped, since the client
+    ///     retransmits it and a flood of solicitations would otherwise start one task each.
+    /// </summary>
+    internal const int MaxPendingSolicitedReplies = 16;
+
+    /// <summary>
     ///     This constant contains the receive buffer size. A Router Solicitation is far smaller;
     ///     a longer datagram is truncated, which is harmless since only solicitations are decoded.
     /// </summary>
@@ -135,13 +158,52 @@ public sealed class Icmpv6RaListener(
     private DateTime _lastSentAtUtc = DateTime.MinValue;
 
     /// <summary>
-    ///     This property reports whether the socket is open. It is not cleared if a loop ends on
-    ///     an unexpected exception.
+    ///     This field counts the detached solicited replies that have not finished, which
+    ///     <see cref="MaxPendingSolicitedReplies" /> limits. It is only changed with
+    ///     <see cref="Interlocked" />.
+    /// </summary>
+    private int _pendingSolicitedReplies;
+
+    /// <summary>
+    ///     This field is 1 while a multicast reply to a solicitation from <c>::</c> is pending.
+    ///     Another such solicitation then adds nothing, because one multicast advertisement
+    ///     answers all of them (RFC 4861 Section 6.2.6). It is only changed with
+    ///     <see cref="Interlocked" />.
+    /// </summary>
+    private int _multicastReplyPending;
+
+    /// <summary>
+    ///     This lock guards <see cref="_lastBuildFailureMessage" />.
+    /// </summary>
+    private readonly Lock _buildFailureLock = new();
+
+    /// <summary>
+    ///     This field contains the message of the exception that made the last advertisement
+    ///     build fail, or <see langword="null" /> after a build succeeds. It keeps a persistent
+    ///     failure from logging an Error every few seconds (see
+    ///     <see cref="TryBuildAdvertisement" />).
+    /// </summary>
+    private string _lastBuildFailureMessage;
+
+    /// <summary>
+    ///     This property reports whether the socket is open. It stays true if a loop ends
+    ///     unexpectedly, so <see cref="StopAsync" /> can still release the socket; use
+    ///     <see cref="IDhcpProtocolService.IsRunning" /> to learn whether the loops are running.
     /// </summary>
     public bool IsListening { get; private set; }
 
-    /// <inheritdoc />
-    bool IDhcpProtocolService.IsRunning => IsListening;
+    /// <summary>
+    ///     This property reports whether the socket is open and the loops are still running, so
+    ///     a listener whose loops ended is not reported as healthy.
+    /// </summary>
+    bool IDhcpProtocolService.IsRunning
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return IsListening && _executionTask is { IsCompleted: false };
+        }
+    }
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -153,7 +215,24 @@ public sealed class Icmpv6RaListener(
         {
             // Starting a running listener does nothing (see IDhcpProtocolService).
             if (IsListening)
-                return Task.CompletedTask;
+            {
+                if (_executionTask is { IsCompleted: false })
+                    return Task.CompletedTask;
+
+                // The loops ended on their own, so the listener is bound but deaf. Release the
+                // old socket and bind again.
+                logger.LogWarning(
+                    "The Router Advertisement loops are not running; releasing the old socket and starting again."
+                );
+
+                _socket.Dispose();
+                _executionCts.Dispose();
+
+                _socket = null;
+                _executionCts = null;
+                _executionTask = null;
+                IsListening = false;
+            }
 
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Raw, ProtocolType.IcmpV6);
 
@@ -228,26 +307,39 @@ public sealed class Icmpv6RaListener(
             IsListening = false;
         }
 
-        // Cancel the shared token and close the socket. Closing unblocks a pending
-        // ReceiveFromAsync and drops the multicast memberships, which belong to the socket.
-        await executionCts.CancelAsync();
-        socket.Close();
-
-        if (executionTask is not null)
+        try
         {
-            try
+            // Cancel the shared token and close the socket. Closing unblocks a pending
+            // ReceiveFromAsync and drops the multicast memberships, which belong to the socket.
+            await executionCts.CancelAsync();
+            socket.Close();
+
+            if (executionTask is not null)
             {
-                await executionTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                // Either the caller's token fired while waiting or the loops ended by
-                // cancellation. The socket is already closed, so they can no longer use it.
+                try
+                {
+                    await executionTask.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Either the caller's token fired while waiting or the loops ended by
+                    // cancellation. The socket is already closed, so they can no longer use it.
+                }
+                catch (Exception exception)
+                {
+                    // A loop that faulted must not skip the disposals below.
+                    logger.LogError(
+                        exception,
+                        "The Router Advertisement loops ended with an error."
+                    );
+                }
             }
         }
-
-        executionCts.Dispose();
-        socket.Dispose();
+        finally
+        {
+            executionCts.Dispose();
+            socket.Dispose();
+        }
 
         logger.LogInformation(
             "The Router Advertisement listener stopped and released its bound socket."
@@ -258,21 +350,68 @@ public sealed class Icmpv6RaListener(
     ///     This method runs the receive loop and the unsolicited-send loop of one start/stop cycle
     ///     and returns when both have stopped. The socket and token are passed in, as in
     ///     <c>Dhcpv6UdpListener.RunReceiveLoopAsync</c>, so a later cycle's fields never leak in.
-    ///     Only cancellation is caught; any other exception ends both loops.
+    ///     Each loop handles its own failures (one bad advertisement or datagram never ends it).
+    ///     If a loop ends while no stop was requested, this method logs a Critical entry, stops
+    ///     the other loop and returns, so <see cref="IDhcpProtocolService.IsRunning" /> turns
+    ///     false rather than reporting half a listener as healthy.
     /// </summary>
     private async Task RunLoopsAsync(Socket socket, CancellationToken stoppingToken)
     {
+        using CancellationTokenSource loopsCts = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken
+        );
+
+        Task receiveLoop = GuardLoopAsync(
+            "receive",
+            () => ReceiveLoopAsync(socket, loopsCts.Token),
+            stoppingToken
+        );
+        Task sendLoop = GuardLoopAsync(
+            "unsolicited-send",
+            () => UnsolicitedSendLoopAsync(socket, loopsCts.Token),
+            stoppingToken
+        );
+
+        // The first loop to end (normally both end together, on stop) takes the other with it.
+        await Task.WhenAny(receiveLoop, sendLoop);
+        await loopsCts.CancelAsync();
+        await Task.WhenAll(receiveLoop, sendLoop);
+    }
+
+    /// <summary>
+    ///     This method runs one loop and never throws. An exception, or a normal return, while no
+    ///     stop was requested is logged as Critical.
+    /// </summary>
+    private async Task GuardLoopAsync(
+        string loopName,
+        Func<Task> loop,
+        CancellationToken stoppingToken
+    )
+    {
         try
         {
-            await Task.WhenAll(
-                ReceiveLoopAsync(socket, stoppingToken),
-                UnsolicitedSendLoopAsync(socket, stoppingToken)
-            );
+            await loop();
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
-            // Expected on stop.
+            logger.LogCritical(
+                exception,
+                "The Router Advertisement {Loop} loop stopped unexpectedly.",
+                loopName
+            );
+            return;
         }
+        catch (Exception)
+        {
+            // An exception during a stop is the stop itself (cancellation or a closed socket).
+            return;
+        }
+
+        if (!stoppingToken.IsCancellationRequested)
+            logger.LogCritical(
+                "The Router Advertisement {Loop} loop stopped unexpectedly.",
+                loopName
+            );
     }
 
     /// <summary>
@@ -346,7 +485,8 @@ public sealed class Icmpv6RaListener(
     ///     between <see cref="RaProtocolOptions.MinRouterAdvertisementInterval" /> and
     ///     <see cref="RaProtocolOptions.MaxRouterAdvertisementInterval" /> later. The randomness
     ///     keeps routers on a link from synchronizing. The next time is scheduled even when the
-    ///     send was skipped by <see cref="MinimumDelayBetweenAdvertisements" />.
+    ///     send was skipped by <see cref="MinimumDelayBetweenAdvertisements" /> or failed: a
+    ///     failing interface never ends the loop.
     /// </summary>
     private async Task UnsolicitedSendLoopAsync(Socket socket, CancellationToken stoppingToken)
     {
@@ -356,7 +496,19 @@ public sealed class Icmpv6RaListener(
         {
             DateTime now = DateTime.UtcNow;
 
-            foreach ((int interfaceIndex, string interfaceName) in EnumerateUsableInterfaces())
+            List<(int Index, string Name)> interfaces;
+
+            try
+            {
+                interfaces = EnumerateUsableInterfaces().ToList();
+            }
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(exception, "Listing the network interfaces failed.");
+                interfaces = [];
+            }
+
+            foreach ((int interfaceIndex, string interfaceName) in interfaces)
             {
                 if (
                     nextSendAtUtcByInterfaceIndex.TryGetValue(
@@ -367,13 +519,25 @@ public sealed class Icmpv6RaListener(
                 )
                     continue;
 
-                await SendAdvertisementAsync(
-                    socket,
-                    interfaceIndex,
-                    interfaceName,
-                    RaMulticastGroups.AllNodes,
-                    stoppingToken
-                );
+                try
+                {
+                    await SendAdvertisementAsync(
+                        socket,
+                        interfaceIndex,
+                        interfaceName,
+                        RaMulticastGroups.AllNodes,
+                        stoppingToken
+                    );
+                }
+                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogError(
+                        exception,
+                        "Sending the periodic Router Advertisement on interface {InterfaceName} failed.",
+                        interfaceName
+                    );
+                }
+
                 nextSendAtUtcByInterfaceIndex[interfaceIndex] = now.Add(NextUnsolicitedInterval());
             }
 
@@ -408,8 +572,10 @@ public sealed class Icmpv6RaListener(
     /// <summary>
     ///     This method runs the receive loop. A raw ICMPv6 socket receives every ICMPv6 message on
     ///     the host, so anything that is not a valid Router Solicitation is skipped without
-    ///     logging. Each solicitation is answered by <see cref="HandleSolicitationAsync" />, started
-    ///     without awaiting. The IPv6 hop limit of a solicitation is not checked.
+    ///     logging. A solicitation that fails <see cref="IsAcceptableSolicitation" />, or that
+    ///     arrives while too many replies are pending, is dropped with a Debug entry. Each other
+    ///     solicitation is answered by <see cref="HandleSolicitationAsync" />, started without
+    ///     awaiting.
     /// </summary>
     private async Task ReceiveLoopAsync(Socket socket, CancellationToken stoppingToken)
     {
@@ -453,10 +619,46 @@ public sealed class Icmpv6RaListener(
             )
                 continue;
 
-            if (!RaMessageReader.TryReadRouterSolicitation(datagram, out _, out _))
+            if (
+                !RaMessageReader.TryReadRouterSolicitation(
+                    datagram,
+                    out RouterSolicitationMessage solicitation,
+                    out _
+                )
+            )
                 continue;
 
             IPAddress solicitationSource = ((IPEndPoint)result.RemoteEndPoint).Address;
+
+            if (!IsAcceptableSolicitation(solicitationSource, solicitation))
+            {
+                logger.LogDebug(
+                    "Dropped a Router Solicitation from {Source}: it is not from the local link.",
+                    solicitationSource
+                );
+                continue;
+            }
+
+            bool isMulticastReply = solicitationSource.Equals(IPAddress.IPv6Any);
+
+            // One pending multicast reply answers every solicitation from "::" that arrives
+            // before it is sent (RFC 4861 Section 6.2.6).
+            if (isMulticastReply && Interlocked.Exchange(ref _multicastReplyPending, 1) == 1)
+                continue;
+
+            if (Interlocked.Increment(ref _pendingSolicitedReplies) > MaxPendingSolicitedReplies)
+            {
+                Interlocked.Decrement(ref _pendingSolicitedReplies);
+
+                if (isMulticastReply)
+                    Volatile.Write(ref _multicastReplyPending, 0);
+
+                logger.LogDebug(
+                    "Dropped a Router Solicitation from {Source}: too many replies are pending.",
+                    solicitationSource
+                );
+                continue;
+            }
 
             _ = HandleSolicitationAsync(socket, solicitationSource, stoppingToken);
         }
@@ -468,7 +670,8 @@ public sealed class Icmpv6RaListener(
     ///     an address (the scope ID routes the reply), or by multicast to
     ///     <see cref="RaMulticastGroups.AllNodes" /> on every usable interface when it came from
     ///     <c>::</c> (see the class summary). <see cref="ReceiveLoopAsync" /> does not await it,
-    ///     so the delay does not hold up the next receive.
+    ///     so the delay does not hold up the next receive. It runs detached, so it catches every
+    ///     exception, and it releases the pending-reply slot the receive loop took.
     /// </summary>
     private async Task HandleSolicitationAsync(
         Socket socket,
@@ -509,18 +712,118 @@ public sealed class Icmpv6RaListener(
                     stoppingToken
                 );
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Expected on stop.
+        }
+        catch (Exception exception)
+        {
+            // Nothing observes this task, so an exception must end here.
+            logger.LogError(
+                exception,
+                "Answering a Router Solicitation from {Source} failed.",
+                solicitationSource
+            );
+        }
+        finally
+        {
+            if (solicitationSource.Equals(IPAddress.IPv6Any))
+                Volatile.Write(ref _multicastReplyPending, 0);
+
+            Interlocked.Decrement(ref _pendingSolicitedReplies);
         }
     }
 
     /// <summary>
-    ///     This method asks <see cref="IRaAdvertisementProvider" /> for the advertisement and sends
-    ///     it, unless the last send was less than <see cref="MinimumDelayBetweenAdvertisements" />
-    ///     ago or the provider returns <see langword="null" />. Building and encoding the
-    ///     advertisement happen outside the try/catch, so an exception there propagates to the
-    ///     calling loop.
+    ///     This method decides whether a Router Solicitation is accepted. It must come from a
+    ///     link-local unicast address (<c>fe80::/10</c>), the loopback address, or the
+    ///     unspecified address <c>::</c>; with <c>::</c> it must not carry a Source Link-Layer
+    ///     Address option (RFC 4861 Section 6.1.1). This replaces the hop-limit check of that
+    ///     section (see the class summary).
+    /// </summary>
+    /// <param name="source">The source address of the datagram.</param>
+    /// <param name="solicitation">The decoded solicitation.</param>
+    internal static bool IsAcceptableSolicitation(
+        IPAddress source,
+        RouterSolicitationMessage solicitation
+    )
+    {
+        if (source.AddressFamily != AddressFamily.InterNetworkV6)
+            return false;
+
+        if (source.Equals(IPAddress.IPv6Any))
+            return !solicitation.Options.Any(option =>
+                option.Type == (byte)Common.Enum.RaOptionCodeEnum.SourceLinkLayerAddress
+            );
+
+        return source.IsIPv6LinkLocal || IPAddress.IsLoopback(source);
+    }
+
+    /// <summary>
+    ///     This method builds and encodes the advertisement for one interface. It returns
+    ///     <see langword="false" /> with no bytes when the provider returns <see langword="null" />
+    ///     (an excluded interface), and also when the provider or the encoder throws: the
+    ///     exception is logged and never propagates, because a bad configuration must not end a
+    ///     loop. A failure logs an Error the first time; the same failure again logs only at
+    ///     Debug until a build succeeds, so one bad setting is reported once, not every few
+    ///     seconds.
+    /// </summary>
+    /// <param name="interfaceName">
+    ///     The interface to build for, or <see langword="null" /> for the default content.
+    /// </param>
+    /// <param name="bytes">The encoded advertisement when this method returns true.</param>
+    internal bool TryBuildAdvertisement(string interfaceName, out byte[] bytes)
+    {
+        bytes = null;
+
+        try
+        {
+            RouterAdvertisementMessage advertisement =
+                advertisementProvider.BuildCurrentAdvertisement(interfaceName);
+
+            if (advertisement is null)
+                return false;
+
+            bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
+        }
+        catch (Exception exception)
+        {
+            bool isRepeat;
+
+            lock (_buildFailureLock)
+            {
+                isRepeat = _lastBuildFailureMessage == exception.Message;
+                _lastBuildFailureMessage = exception.Message;
+            }
+
+            if (isRepeat)
+                logger.LogDebug(
+                    exception,
+                    "Building the Router Advertisement for interface {InterfaceName} failed again.",
+                    interfaceName
+                );
+            else
+                logger.LogError(
+                    exception,
+                    "Building the Router Advertisement for interface {InterfaceName} failed; no advertisement is sent until the configuration is fixed.",
+                    interfaceName
+                );
+
+            bytes = null;
+            return false;
+        }
+
+        lock (_buildFailureLock)
+            _lastBuildFailureMessage = null;
+
+        return true;
+    }
+
+    /// <summary>
+    ///     This method builds the advertisement (see <see cref="TryBuildAdvertisement" />) and
+    ///     sends it, unless the last send was less than
+    ///     <see cref="MinimumDelayBetweenAdvertisements" /> ago or there is nothing to send. A
+    ///     build failure or a send error is logged and reported as <see langword="false" />.
     /// </summary>
     /// <param name="socket">The socket to send on.</param>
     /// <param name="interfaceIndex">
@@ -534,7 +837,8 @@ public sealed class Icmpv6RaListener(
     /// </param>
     /// <param name="destination">Where to send the advertisement.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    private async Task SendAdvertisementAsync(
+    /// <returns>Whether an advertisement was sent.</returns>
+    private async Task<bool> SendAdvertisementAsync(
         Socket socket,
         int? interfaceIndex,
         string interfaceName,
@@ -545,16 +849,10 @@ public sealed class Icmpv6RaListener(
         DateTime now = DateTime.UtcNow;
 
         if (now - _lastSentAtUtc < MinimumDelayBetweenAdvertisements)
-            return;
+            return false;
 
-        RouterAdvertisementMessage advertisement = advertisementProvider.BuildCurrentAdvertisement(
-            interfaceName
-        );
-
-        if (advertisement is null)
-            return;
-
-        byte[] bytes = RaMessageWriter.WriteRouterAdvertisement(advertisement);
+        if (!TryBuildAdvertisement(interfaceName, out byte[] bytes))
+            return false;
 
         try
         {
@@ -567,6 +865,7 @@ public sealed class Icmpv6RaListener(
 
             await socket.SendToAsync(bytes, new IPEndPoint(destination, 0), stoppingToken);
             _lastSentAtUtc = now;
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -575,6 +874,7 @@ public sealed class Icmpv6RaListener(
                 "Error sending a Router Advertisement to {Destination}.",
                 destination
             );
+            return false;
         }
     }
 }
