@@ -172,6 +172,101 @@ public sealed class DnsCryptListenerTests(DnsCryptListenerTestFixture fixture)
     }
 
     [Fact]
+    public async Task Tcp_AnswersEveryQueryOfAPipelinedBurstLargerThanTheConnectionLimit()
+    {
+        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
+            DnsCryptEsVersion.XChaCha20Poly1305
+        ];
+
+        using TcpClient client = new();
+        await client.ConnectAsync(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
+        using NetworkStream stream = client.GetStream();
+
+        // Forty queries are written before any answer is read; a connection holds at most sixteen
+        // in flight and reads on as answers are written.
+        Dictionary<ushort, DnsCryptWireTestHelper.ClientQuerySession> sessions = [];
+
+        for (ushort id = 1; id <= 40; id++)
+        {
+            (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+                DnsCryptWireTestHelper.BuildEncryptedQueryPacket(
+                    certificateEntry,
+                    DnsCryptWireTestHelper.BuildEchoQuery(id)
+                );
+            sessions[id] = session;
+            await WriteFramedAsync(stream, packet);
+        }
+
+        HashSet<ushort> answered = [];
+
+        for (int count = 0; count < 40; count++)
+        {
+            byte[] responsePacket = await ReadFramedAsync(stream);
+
+            // The answers may arrive in any order, so try each outstanding session.
+            DnsMessage response = null;
+
+            foreach ((ushort id, DnsCryptWireTestHelper.ClientQuerySession session) in sessions)
+            {
+                try
+                {
+                    response = DnsCryptWireTestHelper.DecryptResponsePacket(
+                        certificateEntry,
+                        session,
+                        responsePacket,
+                        out _,
+                        out _
+                    );
+                    break;
+                }
+                catch (Exception)
+                {
+                    // Not this query's answer.
+                }
+            }
+
+            Assert.NotNull(response);
+            answered.Add(response.Id);
+        }
+
+        Assert.Equal(40, answered.Count);
+    }
+
+    [Fact]
+    public async Task Tcp_PacketsThatAreNotAnsweredDoNotUseUpTheConnectionsQuerySlots()
+    {
+        DnsCryptCertificateEntry certificateEntry = fixture.CertificatesByEsVersion[
+            DnsCryptEsVersion.XChaCha20Poly1305
+        ];
+
+        using TcpClient client = new();
+        await client.ConnectAsync(IPAddress.Loopback, DnsCryptListenerTestFixture.Port);
+        using NetworkStream stream = client.GetStream();
+
+        // More junk packets than the connection's limit, none of which gets a reply.
+        for (int count = 0; count < 40; count++)
+            await WriteFramedAsync(
+                stream,
+                System.Security.Cryptography.RandomNumberGenerator.GetBytes(120)
+            );
+
+        DnsMessage query = DnsCryptWireTestHelper.BuildEchoQuery(5);
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(certificateEntry, query);
+        await WriteFramedAsync(stream, packet);
+
+        DnsMessage response = DnsCryptWireTestHelper.DecryptResponsePacket(
+            certificateEntry,
+            session,
+            await ReadFramedAsync(stream),
+            out _,
+            out _
+        );
+
+        Assert.Equal(5, response.Id);
+    }
+
+    [Fact]
     public async Task UnrecognizedClientMagic_ProducesNoResponse()
     {
         byte[] bogusPacket =

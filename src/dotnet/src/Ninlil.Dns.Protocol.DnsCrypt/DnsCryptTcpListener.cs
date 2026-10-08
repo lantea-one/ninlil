@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Hosting;
@@ -153,9 +152,13 @@ public sealed class DnsCryptTcpListener(
     }
 
     /// <summary>
-    ///     This method serves one accepted connection: it reads each length-prefixed packet and
-    ///     routes it through <see cref="DnsCryptQueryHandler" /> until the idle timeout passes or
-    ///     the client disconnects.
+    ///     This method serves one accepted connection through a
+    ///     <see cref="FramedDnsStreamSession" />: it routes each length-prefixed packet through
+    ///     <see cref="DnsCryptQueryHandler" /> until <c>DnsCryptOptions.TcpIdleTimeout</c> passes
+    ///     with no complete packet, the client disconnects, or a write to the client misses that
+    ///     same timeout. The session owns the per-connection limits (16 queries in flight, one
+    ///     writer task); a query still outstanding when the connection goes idle is answered
+    ///     first.
     /// </summary>
     private async Task HandleConnectionAsync(
         Socket connection,
@@ -164,42 +167,38 @@ public sealed class DnsCryptTcpListener(
     )
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
-        SemaphoreSlim writeLock = new(1, 1);
 
         try
         {
-            using CancellationTokenSource idleCts = CancellationTokenSource.CreateLinkedTokenSource(
+            using NetworkStream stream = new(connection, ownsSocket: false);
+            FramedDnsStreamSession session = new(
+                stream,
+                remoteEndpoint.Address,
+                options.CurrentValue.TcpIdleTimeout,
+                logger,
                 stoppingToken
             );
 
-            while (true)
-            {
-                idleCts.CancelAfter(options.CurrentValue.TcpIdleTimeout);
-
-                byte[] lengthPrefix = new byte[2];
-
-                if (!await ReadExactAsync(connection, lengthPrefix, idleCts.Token))
-                    break;
-
-                ushort packetLength = BinaryPrimitives.ReadUInt16BigEndian(lengthPrefix);
-                byte[] packetBuffer = new byte[packetLength];
-
-                if (!await ReadExactAsync(connection, packetBuffer, idleCts.Token))
-                    break;
-
-                await DnsCryptQueryHandler.HandlePacketAsync(
-                    packetBuffer,
-                    remoteEndpoint.Address,
-                    DnsTransportProtocolEnum.DnsCrypt,
-                    providerCertificateName,
-                    pipeline,
-                    store,
-                    logger,
-                    (responseBytes, sendToken) =>
-                        WriteFramedAsync(connection, writeLock, responseBytes, sendToken),
-                    idleCts.Token
-                );
-            }
+            await session.RunAsync(
+                async (packetBuffer, _, sessionToken) =>
+                    await DnsCryptQueryHandler.HandlePacketAsync(
+                        packetBuffer,
+                        remoteEndpoint.Address,
+                        DnsTransportProtocolEnum.DnsCrypt,
+                        providerCertificateName,
+                        pipeline,
+                        store,
+                        logger,
+                        // Only a certificate discovery answer takes this path; queued without a
+                        // slot, since the packet's slot is released when the handler returns.
+                        (responseBytes, sendToken) => session.SendAsync(responseBytes, sendToken),
+                        sessionToken,
+                        session.CreateResponder(),
+                        session.CreateDropNotifier()
+                    )
+                        ? FrameOutcomeEnum.Enqueued
+                        : FrameOutcomeEnum.Handled
+            );
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -214,63 +213,6 @@ public sealed class DnsCryptTcpListener(
             connection.Close();
             _connectionLimiter.Release();
         }
-    }
-
-    /// <summary>
-    ///     This method writes one length-prefixed packet to a connection, one writer at a time,
-    ///     for the reason given on the matching method of
-    ///     <c>Ninlil.Dns.Protocol.Plain.TcpDnsListener</c>.
-    /// </summary>
-    private static async ValueTask WriteFramedAsync(
-        Socket connection,
-        SemaphoreSlim writeLock,
-        ReadOnlyMemory<byte> packetBytes,
-        CancellationToken stoppingToken
-    )
-    {
-        await writeLock.WaitAsync(stoppingToken);
-
-        try
-        {
-            byte[] lengthPrefix = new byte[2];
-            BinaryPrimitives.WriteUInt16BigEndian(lengthPrefix, (ushort)packetBytes.Length);
-
-            await connection.SendAsync(lengthPrefix, stoppingToken);
-            await connection.SendAsync(packetBytes, stoppingToken);
-        }
-        finally
-        {
-            writeLock.Release();
-        }
-    }
-
-    /// <summary>
-    ///     This method fills a buffer completely from a socket, or reports a clean disconnect.
-    /// </summary>
-    private static async ValueTask<bool> ReadExactAsync(
-        Socket connection,
-        byte[] buffer,
-        CancellationToken stoppingToken
-    )
-    {
-        int totalRead = 0;
-
-        while (totalRead < buffer.Length)
-        {
-            int read = await connection.ReceiveAsync(buffer.AsMemory(totalRead), stoppingToken);
-
-            if (read == 0)
-            {
-                if (totalRead == 0)
-                    return false;
-
-                throw new IOException("The connection closed partway through a DNSCrypt packet.");
-            }
-
-            totalRead += read;
-        }
-
-        return true;
     }
 
     /// <inheritdoc />
