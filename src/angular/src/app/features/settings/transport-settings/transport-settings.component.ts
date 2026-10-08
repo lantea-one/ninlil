@@ -125,6 +125,7 @@ export class TransportSettingsComponent implements OnInit {
     listenAddresses: [''],
     idleTimeout: ['00:00:30', [Validators.required]],
     maxConcurrentBidirectionalStreams: [100, [Validators.required, Validators.min(1)]],
+    maxConcurrentConnections: [512, [Validators.required, Validators.min(1)]],
     pfxPath: [''],
     pfxPassword: [''],
     selfSignedSubjectAlternativeNames: ['localhost'],
@@ -260,6 +261,7 @@ export class TransportSettingsComponent implements OnInit {
             listenAddresses: splitListenAddresses(value.listenAddresses),
             idleTimeout: value.idleTimeout,
             maxConcurrentBidirectionalStreams: value.maxConcurrentBidirectionalStreams,
+            maxConcurrentConnections: value.maxConcurrentConnections,
             certificate: {
               pfxPath: value.pfxPath,
               ...buildPfxPasswordPatchField(value.pfxPassword),
@@ -379,6 +381,7 @@ export class TransportSettingsComponent implements OnInit {
         listenAddresses: joinLines(dnsOverQuic.listenAddresses),
         idleTimeout: dnsOverQuic.idleTimeout ?? '00:00:30',
         maxConcurrentBidirectionalStreams: dnsOverQuic.maxConcurrentBidirectionalStreams ?? 100,
+        maxConcurrentConnections: dnsOverQuic.maxConcurrentConnections ?? 512,
         pfxPath: dnsOverQuic.certificate?.pfxPath ?? '',
         selfSignedSubjectAlternativeNames: joinLines(
           dnsOverQuic.certificate?.selfSignedSubjectAlternativeNames,

@@ -76,6 +76,7 @@ describe('TransportSettingsComponent', () => {
         port: 853,
         idleTimeout: '00:00:30',
         maxConcurrentBidirectionalStreams: 100,
+        maxConcurrentConnections: 512,
         certificate: {
           pfxPath: '',
           pfxPasswordConfigured: false,
@@ -194,6 +195,26 @@ describe('TransportSettingsComponent', () => {
 
     const body = apiSpy.apiTransportSettingsDnsOverTlsPatch.calls.mostRecent().args[0].body;
     expect(body.certificate.pfxPassword).toBe('a-real-password');
+  });
+
+  it('saveDnsOverQuic() loads the connection limit and sends an edited value, and rejects 0', async () => {
+    const fixture = await createComponent(() => {
+      apiSpy.apiTransportSettingsDnsOverQuicPatch.and.returnValue(of({ note: 'ok' }));
+    });
+
+    expect(fixture.componentInstance.dnsOverQuicForm.controls.maxConcurrentConnections.value).toBe(
+      512,
+    );
+
+    fixture.componentInstance.dnsOverQuicForm.patchValue({ maxConcurrentConnections: 0 });
+    expect(fixture.componentInstance.dnsOverQuicForm.invalid).toBeTrue();
+
+    fixture.componentInstance.dnsOverQuicForm.patchValue({ maxConcurrentConnections: 64 });
+    await fixture.componentInstance.saveDnsOverQuic();
+
+    expect(apiSpy.apiTransportSettingsDnsOverQuicPatch).toHaveBeenCalledWith({
+      body: jasmine.objectContaining({ maxConcurrentConnections: 64 }),
+    });
   });
 
   it('saveDnsCrypt() builds enabledEsVersions from the checked ciphers', async () => {
