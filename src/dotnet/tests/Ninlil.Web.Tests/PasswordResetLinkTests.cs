@@ -177,6 +177,7 @@ public class PasswordResetLinkTests(NinlilDnsWebApplicationFactory factory)
             services.GetRequiredService<IJwtTokenService>(),
             services.GetRequiredService<PendingTwoFactorSignInCache>(),
             new PasswordResetLinkSender(userManager, emailSender, emailOptions),
+            emailSender,
             emailOptions,
             services.GetRequiredService<IDnsServerEventPublisher>(),
             services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),

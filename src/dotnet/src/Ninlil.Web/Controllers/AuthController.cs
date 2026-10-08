@@ -61,6 +61,9 @@ namespace Ninlil.Web.Controllers;
 ///     Builds and sends the reset e-mail for <see cref="ForgotPassword" />. The <c>EmailLink</c>
 ///     mode of <c>UsersController.ResetPassword</c> uses it too.
 /// </param>
+/// <param name="emailSender">
+///     Delivers the e-mailed second-factor code that <see cref="SendTwoFactorEmailCode" /> sends.
+/// </param>
 /// <param name="emailOptions">
 ///     The current SMTP settings, read on every <see cref="ForgotPassword" /> request so the
 ///     "can a link be sent" check reflects the latest <c>SmtpSettingsController.Patch</c>.
@@ -90,6 +93,7 @@ public class AuthController(
     IJwtTokenService jwtTokenService,
     PendingTwoFactorSignInCache pendingTwoFactor,
     PasswordResetLinkSender passwordResetLinkSender,
+    IEmailSender emailSender,
     IOptionsMonitor<EmailSenderOptions> emailOptions,
     IDnsServerEventPublisher eventPublisher,
     IOptionsMonitor<ClusterOptions> clusterOptions,
@@ -268,6 +272,53 @@ public class AuthController(
                 stoppingToken
             )
         );
+    }
+
+    /// <summary>
+    ///     This action e-mails the account a short-lived verification code during the pending
+    ///     second-factor step of a sign-in, for the <c>"Email"</c> provider of
+    ///     <see cref="TwoFactorLogin" />. The pending-sign-in token from <see cref="Login" />
+    ///     authorizes it (the caller has no session yet) and stays valid, so the code can be
+    ///     submitted afterwards. Returns 202 on success; 401 for an unknown, expired or used
+    ///     token; 400 when the account has no confirmed e-mail address. Allows anonymous callers
+    ///     and is rate limited like the other sign-in actions.
+    /// </summary>
+    [HttpPost("login/two-factor/email-code")]
+    [AllowAnonymous]
+    [EnableRateLimiting(
+        ServiceCollectionAdminLoginRateLimitingExtension.AuthenticationEndpointPolicyName
+    )]
+    public async Task<IActionResult> SendTwoFactorEmailCode(
+        TwoFactorEmailCodeRequest request,
+        CancellationToken stoppingToken
+    )
+    {
+        Guid? userId = pendingTwoFactor.Peek(request.MfaToken);
+        if (userId is null)
+            return Unauthorized();
+
+        UserEntity user = await userManager.FindByIdAsync(userId.Value.ToString());
+        if (user is null || user.IsDisabled)
+            return Unauthorized();
+
+        if (!user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
+            throw new ValidationException(
+                "This account has no confirmed e-mail address to send a code to."
+            );
+
+        string code = await userManager.GenerateTwoFactorTokenAsync(
+            user,
+            TokenOptions.DefaultEmailProvider
+        );
+
+        await emailSender.SendAsync(
+            user.Email,
+            "Your Ninlil sign-in code",
+            $"<p>Your verification code is <strong>{code}</strong>. It expires shortly.</p>",
+            stoppingToken
+        );
+
+        return Accepted();
     }
 
     /// <summary>

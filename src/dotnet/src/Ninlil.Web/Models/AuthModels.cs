@@ -76,6 +76,13 @@ public record TwoFactorLoginRequest(
 );
 
 /// <summary>
+///     This class carries the request for an e-mailed second-factor code during the pending
+///     second-factor step of a sign-in.
+/// </summary>
+/// <param name="MfaToken">The opaque token <see cref="LoginResponse.MfaToken" /> returned.</param>
+public record TwoFactorEmailCodeRequest(string MfaToken);
+
+/// <summary>
 ///     This class carries a completed sign-in's issued credentials.
 /// </summary>
 /// <param name="AccessToken">The signed JSON Web Token access token.</param>

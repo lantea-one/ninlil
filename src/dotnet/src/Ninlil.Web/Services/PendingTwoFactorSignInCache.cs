@@ -35,9 +35,16 @@ public sealed class PendingTwoFactorSignInCache(IMemoryCache cache)
     }
 
     /// <summary>
+    ///     This field serializes <see cref="Consume" />, so the lookup and the removal behave as
+    ///     one step. <see cref="IMemoryCache" /> has no atomic remove-and-return, and without
+    ///     the lock two concurrent requests could both redeem one token.
+    /// </summary>
+    private readonly object _consumeLock = new();
+
+    /// <summary>
     ///     This method looks up a pending sign-in's token and removes it, so it is redeemed once
-    ///     whether or not the code that comes with it is correct. The lookup and removal are two
-    ///     steps, so two requests at the same moment could both redeem it.
+    ///     whether or not the code that comes with it is correct. Of any number of concurrent
+    ///     calls with the same token, at most one succeeds.
     /// </summary>
     /// <param name="token">The token to redeem.</param>
     /// <returns>The pending sign-in's user identifier, or <see langword="null" /> if the token is missing, expired or already used.</returns>
@@ -48,12 +55,29 @@ public sealed class PendingTwoFactorSignInCache(IMemoryCache cache)
 
         string key = CacheKey(token);
 
-        if (!cache.TryGetValue(key, out Guid userId))
+        lock (_consumeLock)
+        {
+            if (!cache.TryGetValue(key, out Guid userId))
+                return null;
+
+            cache.Remove(key);
+
+            return userId;
+        }
+    }
+
+    /// <summary>
+    ///     This method looks up a pending sign-in's token without redeeming it. The request for an
+    ///     e-mailed code uses it: the token must stay valid for the code submission that follows.
+    /// </summary>
+    /// <param name="token">The token to look up.</param>
+    /// <returns>The pending sign-in's user identifier, or <see langword="null" /> if the token is missing, expired or already used.</returns>
+    public Guid? Peek(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
             return null;
 
-        cache.Remove(key);
-
-        return userId;
+        return cache.TryGetValue(CacheKey(token), out Guid userId) ? userId : null;
     }
 
     /// <summary>
